@@ -1,0 +1,5 @@
+C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\C#\MeStreamNLX\bin\x86\Debug\MeStreamNLX.exe.config
+C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\C#\MeStreamNLX\obj\x86\Debug\Interop.MLApp.dll
+C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\C#\MeStreamNLX\obj\x86\Debug\MeStreamNLX.csproj.ResolveComReference.cache
+C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\C#\MeStreamNLX\obj\x86\Debug\MeStreamNLX.exe
+C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\C#\MeStreamNLX\obj\x86\Debug\MeStreamNLX.pdb

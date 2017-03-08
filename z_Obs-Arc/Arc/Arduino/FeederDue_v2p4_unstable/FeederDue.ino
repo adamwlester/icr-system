@@ -1,0 +1,1809 @@
+
+//-------FeederDue-------
+
+#pragma region ---------VARIABLE DECLARATION---------
+
+
+//-------SOFTWARE RESET----------
+#define SYSRESETREQ    (1<<2)
+#define VECTKEY        (0x05fa0000UL)
+#define VECTKEY_MASK   (0x0000ffffUL)
+#define AIRCR          (*(uint32_t*)0xe000ed0cUL) // fixed arch-defined address
+#define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
+
+//----------LIBRARIES------------
+// General
+#include <string.h>
+// AutoDriver
+#include <SPI.h>
+#include "AutoDriver_Due.h"
+// Pixy
+#include <Wire.h>
+#include <PixyI2C.h>
+// LCD
+#include <LCD5110_Graph.h>
+// TinyEKF
+#define N 4     // States
+#define M 6     // Measurements
+#include <TinyEKF.h>
+
+//----------DEFINE PINS---------
+
+// Autodriver
+const int pin_AD_CSP = 5;
+//const int pin_AD_Busy = 4;
+const int pin_AD_Reset = 3;
+
+// Display
+const int pin_Disp_Power = A0;
+const int pin_Disp_SCK = 8;
+const int pin_Disp_MOSI = 9;
+const int pin_Disp_DC = 10;
+const int pin_Disp_RST = 11;
+const int pin_Disp_CS = 12;
+const int pin_Disp_LED = 13;
+
+// LEDs
+const int pin_TrackLED = 6;
+const int pin_RewLED = 7;
+
+// Relays
+const int pin_Rel_1 = 44;
+const int pin_Rel_2 = 45;
+
+// Note: pins bellow are all used for external interupts 
+// and must all be members of the same port (PortA)
+// IR Senosors
+const int pin_IR_Rt = 42;
+const int pin_IR_Lft = 43;
+
+// Buttons
+const int pin_Btn[4] = { A4, A3, A2, A1 };
+volatile uint32_t t_debounce[3] = { millis(), millis(), millis() };
+
+//----------VARIABLE SETUP----------
+
+// Bool flow control
+const bool doPrintFlow = false;
+const bool doPrintRcvdPack = false;
+const bool doPrintSentPack = false;
+const bool doPrintDropped = false;
+bool isFirstPass = true;
+bool runPID = false;
+bool doHalt = false;
+bool isHalted = false;
+bool doTrackRat = false;
+bool doRewTone = true;
+bool doStreamCheck = false;
+bool doQuit = false;
+bool isStreaming = false;
+bool doMove = false;
+bool isTargSet = false;
+bool isTargReached = false;
+volatile bool isIRTripped = false;
+volatile bool doRew = false;
+bool cueRew = false;
+bool isRewarding = false;
+bool doCheckDoneRcvd = false;
+
+// Start/Quit
+byte setupCmd[2];
+uint32_t t_quitCmd;
+
+// Serial from CS
+const char c2r_head[2] = { '_', '<' };
+const char c2r_foot = '>';
+const char c2r_id[9] = {
+	'S', // start session
+	'Q', // quit session
+	'M', // move to position
+	'R', // dispense reward
+	'H', // halt movement
+	'I', // start/end pid
+	'P', // position data
+	'C', // request stream status
+	'Y', // confirm done recieved
+};
+char msg_id = ' ';
+bool msg_pass = false;
+uint32_t t_doneResend = millis();
+
+// Serial to CS
+const char r2c_head = '{';
+const char r2c_foot = '}';
+const char r2c_id[8] = {
+	'S', // start session
+	'Q', // quit session
+	'M', // move to position
+	'R', // dispense reward
+	'H', // halt movement
+	'I', // start/end pid
+	'D', // execution done
+	'C', // connected and streaming
+};
+
+// Serial to other ard
+const char r2a_head = '[';
+const char r2a_foot = ']';
+byte r2a_msg[3];
+const char r2a_id[4] = {
+	't', // reward tone
+	'w', // white noise on
+	'o', // white noise off
+	'q', // quit/reset
+};
+
+// Serial packet tracking
+uint16_t packNow;
+uint16_t packLast = 0;
+int packTot = 0;
+int droppedPackTot;
+// last packet
+const int c2r_idLng = sizeof(c2r_id) / sizeof(c2r_id[0]);
+const int r2c_idLng = sizeof(r2c_id) / sizeof(r2c_id[0]);
+const int r2a_idLng = sizeof(r2a_id) / sizeof(r2a_id[0]);
+uint16_t c2r_packLast[c2r_idLng];
+uint16_t r2c_packLast[r2c_idLng];
+// packet history
+uint16_t c2r_packHist[10];
+uint16_t r2c_packHist[10];
+const int c2r_phLng = sizeof(c2r_packHist) / sizeof(c2r_packHist[0]);
+const int r2c_phLng = sizeof(r2c_packHist) / sizeof(r2c_packHist[0]);
+
+// Serial VT
+byte vtEnt;
+float vtCM[2];
+uint32_t vtTS[2];
+
+// Pixy
+const float pixyTarg = 15; // (cm)
+const double pixyCoeff[5] = {
+	0.000000064751850,
+	-0.000029178819914,
+	0.005627883140337,
+	-0.690663759936117,
+	38.949828090278942
+};
+float pixyPosRel;
+uint32_t  pixyTS;
+
+// AutoDriver
+const float cm2stp = 200 / (9 * PI);
+const float stp2cm = (9 * PI) / 200;
+const float maxSpeed = 80; // (cm)
+const float maxAcc = 80; // (cm)
+const float maxDec = 80; // (cm)
+
+// Kalman model measures
+float ekf_ratPos = 0;
+float ekf_robPos = 0;
+float ekf_ratVel = 0;
+float ekf_robVel = 0;
+
+// PID Settings
+bool do_includeTerm[2] = { true, true };
+const uint32_t loopTim = 60; // pid sample rate (ms)
+const float kC = 5; // critical gain kC = 5 * (1 / 0.6)
+const float pC = 3; // oscillation period          
+
+// MoveTo 
+float moveSpeed = maxSpeed;
+float movePos;
+float moveSum;
+float moveDist;
+char moveDir;
+float moveStart;
+float baseSpeed;
+
+// Reward
+const uint32_t solDir = 500; // (ms) on duration
+volatile byte solState = HIGH;
+uint32_t t_rewStop = millis();
+float t_rewStr;
+float rewPos;
+
+// LEDs
+const int rewLEDDuty = 50; // value between 0 and 255
+const int trackLEDDuty = 75; // value between 0 and 255
+
+// LCD
+extern unsigned char SmallFont[];
+extern unsigned char TinyFont[];
+volatile bool lndLedOn = false;
+uint32_t t_printNext = millis();
+
+//----------INITILIZE OBJECTS----------
+// AutoDriver
+AutoDriver_Due board(pin_AD_CSP, pin_AD_Reset);
+// Pixy
+PixyI2C pixy(0x54);
+// LCD
+LCD5110 myGLCD(pin_Disp_CS, pin_Disp_RST, pin_Disp_DC, pin_Disp_MOSI, pin_Disp_SCK);
+
+#pragma endregion 
+
+
+#pragma region ---------CONSTRUCT CLASSES---------
+
+//----------CLASS: PosDat----------
+class PosDat
+{
+private:
+
+	char objID;
+	int nSamp;
+	float posArr[6];
+	uint32_t tsArr[6];
+	int t_skip = 0;
+
+public:
+
+	float velNow = 0.0f;
+	float posNow = 0.0f;
+	float nLaps = 0;
+	int sampCnt = 0;
+	bool datReady = false;
+	bool newData = false;
+
+	// constructor
+	PosDat(char id, int l)
+	{
+		this->objID = id;
+		this->nSamp = l;
+		for (int i = 0; i < l; i++) this->posArr[i] = 0.0f;
+	}
+
+	void UpdatePosVel(float posNew, uint32_t tsNew)
+	{
+		// Update itteration count
+		this->sampCnt++;
+
+		// Shift and add data
+		for (int i = 0; i < this->nSamp - 1; i++)
+		{
+			this->posArr[i] = this->posArr[i + 1];
+			this->tsArr[i] = this->tsArr[i + 1];
+		}
+		// Add new variables
+		this->posArr[nSamp - 1] = posNew;
+		this->tsArr[nSamp - 1] = tsNew;
+
+		// Do not use early samples
+		if (this->sampCnt < this->nSamp * 2)
+		{
+			this->posNow = posNew;
+			this->velNow = 0.0f;
+			newData = false;
+			datReady = false;
+		}
+		else
+		{
+			newData = true;
+			datReady = true;
+			// COMPUTE TOTAL DISTANCE RAN
+
+			// Get dif of current pos and last pos
+			float posDiff = posNew - this->posArr[this->nSamp - 2];
+			if (abs(posDiff) > 140 * (PI / 2))
+			{
+				if (posDiff < 0) // crossed over
+				{
+					this->nLaps++;
+				}
+				else // crossed back
+				{
+					this->nLaps--;
+				}
+			}
+			this->posNow = posNew + this->nLaps*(140 * PI);
+
+			// COMPUTE VELOCITY
+
+			float dist;
+			float distSum = 0;
+			int dt;
+			float dtSum = 0;
+			float vel;
+			for (int i = 0; i < this->nSamp - 1; i++)
+			{
+				// compute distance
+				dist = this->posArr[i + 1] - this->posArr[i];
+				distSum += dist;
+				// compute dt
+				dt = this->tsArr[i + 1] - this->tsArr[i];
+				dtSum += (float)dt;
+			}
+			// compute vel
+			vel = distSum / (dtSum / 1000.0f);
+
+			// ignore outlyer values unless too many frames discarted
+			if (this->t_skip > 500 || abs(this->velNow - vel) < 150)
+			{
+				this->velNow = vel;
+				this->t_skip = 0;
+			}
+			// add to skip time
+			else this->t_skip += dt;
+		}
+	}
+
+	float GetPos()
+	{
+		newData = false;
+		return posNow;
+	}
+
+	float GetVel()
+	{
+		return velNow;
+	}
+
+	void ResetLap(float n_laps)
+	{
+		sampCnt = 0;
+		datReady = false;
+		newData = false;
+		nLaps = n_laps;
+	}
+
+};
+// Initialize and define
+PosDat pos_ratVT('A', 4);
+PosDat pos_robVT('C', 4);
+PosDat pos_ratPixy('B', 6);
+
+//----------CLASS: PID----------
+class PID
+{
+
+private:
+	uint32_t t_lastLoop = 0;
+	float dtLoop;
+	bool wasLoopRan = false;
+	bool waitPassSetpoint = false;
+	float error = 0;
+	float last_error = 0;
+	float integral = 0;
+	float derivative = 0;
+	float p_term;
+	float i_term;
+	float d_term;
+	float set_pos;
+	float vel_update;
+
+public:
+	float dT;
+	float kP;
+	float kI;
+	float kD;
+	float setPoint = 0.81 * ((140 * PI) / (2 * PI));
+	float runSpeed = 0;
+	String modeNow = "Manual";
+	String modeLast = "Manual";
+	// ekf
+	uint32_t t_ekfStr = 0;
+	bool ekfReady = false;
+	bool ekfNew = false;
+	// rew
+	uint32_t t_holdForRewTill;
+	bool isHoldingForRew = false;
+
+	// constructor
+	PID(const float kC, const float pC)
+	{
+		this->kP = 0.6 * kC; // proportional constant
+		this->kI = 2 * kP / pC; // integral constant
+		this->kD = kP*pC / 8; // derivative constant
+	}
+
+	void UpdatePID(float rat_pos, float rob_pos, float rat_vel, float rob_vel)
+	{
+
+		// Check for holding
+		CheckHoldTim();
+
+		// Compute new error 
+		set_pos = rob_pos + setPoint;
+		error = rat_pos - set_pos;
+
+		// Check if rat stopped behind setpoint halt running
+		if (rat_vel < 1 && error < 0 && !waitPassSetpoint)
+		{
+			HardStop();
+		}
+
+		// Check if rat has moved back in front of setpoint
+		if (waitPassSetpoint && (error > 0))
+		{
+			waitPassSetpoint = false;
+		}
+
+		// Update PID and speed
+		if (
+			modeNow == "Automatic" && // pid modeNow is auto
+			!waitPassSetpoint && // not waiting for setpoint pass
+			ekfNew && // New EKF data 
+			ekfReady // ekf is usable
+			)
+		{
+
+			// Compute new integral
+			if (do_includeTerm[0])
+			{
+				// Catch zero crossing
+				if ((abs(error) + abs(last_error)) > abs(error + last_error))
+				{
+					integral = 0;
+				}
+				//else if (error < 0) integral = integral + error * 5;
+				else integral = integral + error;
+			}
+			else integral = 0;
+
+			// Compute new derivative
+			if (do_includeTerm[1])
+			{
+				derivative = error - last_error;
+			}
+			else derivative = 0;
+
+			// Compute new terms
+			p_term = kP*error;
+			i_term = kI*dtLoop*integral;
+			d_term = kD/dtLoop*derivative;
+			//if (error < 0) d_term = d_term * 2.0f;
+
+			// Compute updated vel
+			vel_update = p_term + i_term + d_term;
+
+			// Get new run speed
+			runSpeed = rob_vel + vel_update;
+
+			// Keep speed in range [0, maxSpeed]
+			if (runSpeed > maxSpeed) runSpeed = maxSpeed;
+			else if (runSpeed < 0) runSpeed = 0;
+
+			last_error = error;
+			wasLoopRan = true;
+			ekfNew = false;
+
+			// Update run speed
+			UpdateSpeed();
+		}
+
+	}
+
+	void HardStop()
+	{
+		board.hardStop();
+		ResetPID();
+	}
+
+	void StoreLoopTime(uint32_t now_ms)
+	{
+		ekfNew = true;
+		if (wasLoopRan)
+		{
+			dtLoop = (float)(now_ms - t_lastLoop);
+			wasLoopRan = false;
+			t_lastLoop = now_ms;
+		}
+	}
+
+	void UpdateSpeed()
+	{
+		board.run(FWD, runSpeed*cm2stp);
+	}
+
+	void ResetPID()
+	{
+		integral = 0;
+		t_lastLoop = millis();
+		waitPassSetpoint = true;
+	}
+
+	void Manual()
+	{
+		ResetPID();
+		modeLast = modeNow;
+		modeNow = "Manual";
+		PrintState("PID MANUAL");
+	}
+
+	void Automatic(String last_mode = "Automatic")
+	{
+		ResetPID();
+		if (last_mode == "Automatic")
+		{
+			modeLast = modeNow;
+			modeNow = "Automatic";
+			PrintState("PID AUTOMATIC");
+		}
+	}
+
+	void CheckEKF(uint32_t now_ms)
+	{
+		if (!ekfReady)
+		{
+			if ((now_ms - t_ekfStr) > 10000)
+			{
+				ekfReady = true;
+			}
+		}
+	}
+
+	void SetHoldTim(uint32_t dt)
+	{
+		if (modeNow == "Automatic")
+		{
+			t_holdForRewTill = millis() + dt;
+			isHoldingForRew = true;
+			Manual();
+		}
+	}
+
+	void CheckHoldTim()
+	{
+		if (isHoldingForRew && millis() > t_holdForRewTill)
+		{
+			isHoldingForRew = false;
+			Automatic();
+		}
+	}
+
+	void RunCalibration()
+	{
+		float PcCount = 0;  // oscillation count
+		uint32_t t_Pc[2] = { 0, 0 }; // oscillation period sum
+		uint32_t PcSum = 0; // oscillation period sum
+		float PcAvg;
+		float PcNow;
+		float errCount = 0;
+		float errSum = 0;
+		float errAvg;
+		float errMax = 0;
+		float errMin = 0;
+		if (last_error > 0 && error < 0)
+		{
+			t_Pc[0] = t_Pc[1];
+			t_Pc[1] = millis() / 1000;
+			if (t_Pc[0] > 0 && t_Pc[1] > 0)
+			{
+				PcCount++;
+				PcNow = t_Pc[1] - t_Pc[0];
+				PcSum += PcNow;
+				PcAvg = (float)(PcSum) / PcCount;
+			}
+		}
+		errCount++;
+		errSum += abs(error);
+		errAvg = errSum / errCount;
+		errMax = max(errMax, error);
+		errMin = max(errMin, error);
+
+		// If robot runs over rat
+		if (error < setPoint*-1);
+	}
+
+};
+// Initialize and define
+PID pid(kC, pC);
+
+//----------CLASS: Fuser----------
+class Fuser : public TinyEKF
+{
+
+public:
+
+	Fuser()
+	{
+		// We approximate the process noise using a small constant
+		this->setQ(0, 0, .0001);
+		this->setQ(1, 1, .0001);
+		this->setQ(2, 2, .0001);
+		this->setQ(3, 3, .0001);
+
+		// Same for measurement noise
+		this->setR(0, 0, .01);
+		this->setR(1, 1, .01);
+		this->setR(2, 2, .01);
+		this->setR(3, 3, .01);
+		this->setR(4, 4, .01);
+		this->setR(5, 5, .01);
+	}
+
+protected:
+
+	void model(double fx[N], double F[N][N], double hx[M], double H[M][N])
+	{
+		// Process model is f(x) = x
+		fx[0] = this->x[0];
+		fx[1] = this->x[1];
+		fx[2] = this->x[2];
+		fx[3] = this->x[3];
+
+		// So process model Jacobian is identity matrix
+		F[0][0] = 1;
+		F[1][1] = 1;
+		F[2][2] = 1;
+		F[3][3] = 1;
+
+		// Measurement function
+		hx[0] = this->x[0]; // Rat pos vt from previous state
+		hx[1] = this->x[0]; // Rat pos pixy from previous state
+		hx[2] = this->x[1]; // Rob pos vt from previous state
+		hx[3] = this->x[2]; // Rat vel vt from previous state
+		hx[4] = this->x[2]; // Rat vel pixy from previous state
+		hx[5] = this->x[3]; // Rob vel vt from previous state
+
+							// Jacobian of measurement function
+		H[0][0] = 1; // Rat pos vt from previous state
+		H[1][0] = 1; // Rat pos pixy from previous state
+		H[2][1] = 1; // Rob pos vt from previous state
+		H[3][2] = 1; // Rat vel vt from previous state
+		H[4][2] = 1; // Rat vel pixy from previous state
+		H[5][3] = 1; // Rob vel vt from previous state
+	}
+};
+// TinyEKF
+Fuser ekf;
+
+
+//----------CLASS: union----------
+union u_tag {
+	byte b[4]; // (byte) 1 byte
+	char c[4]; // (char) 1 byte
+	uint16_t i16[2]; // (int16) 2 byte
+	uint32_t i32; // (int32) 4 byte
+	long l; // (long) 4 byte
+	float f; // (float) 4 byte
+} u;
+
+#pragma endregion 
+
+
+//---------SETUP---------
+void setup() {
+	delayMicroseconds(100);
+	//while (!SerialUSB);
+	SerialUSB.begin(0);
+	PrintState("SETUP");
+
+	// XBee
+	Serial1.begin(57600);
+
+	// Set button pins enable internal pullup
+	for (int i = 0; i <= 3; i++) {
+		pinMode(pin_Btn[i], INPUT_PULLUP);
+	}
+
+	// Set output/power pins
+	pinMode(pin_Rel_1, OUTPUT);
+	pinMode(pin_Rel_2, OUTPUT);
+	digitalWrite(pin_Rel_1, LOW);
+	digitalWrite(pin_Rel_2, LOW);
+	pinMode(pin_Disp_Power, OUTPUT);
+	digitalWrite(pin_Disp_Power, HIGH);
+
+	// Define external interrupt
+	attachInterrupt(digitalPinToInterrupt(pin_Btn[0]), Interupt_Btn1, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_Btn[1]), Interupt_Btn2, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_Btn[2]), Interupt_Btn3, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_IR_Rt), Interupt_Halt, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_IR_Lft), Interupt_Halt, FALLING);
+
+	// Initialize AutoDriver
+
+	// Configure SPI
+	board.SPIConfig();
+	delayMicroseconds(100);
+	// Reset each axis
+	board.resetDev();
+	delayMicroseconds(100);
+	// Configure each axis
+	dSPINConfig_board();
+	delayMicroseconds(100);
+	// Get the status to clear the UVLO Flag
+	board.getStatus();
+
+	// Initailize Pixy
+	pixy.init();
+	Wire.begin();
+
+	// Initialize LCD
+	myGLCD.InitLCD();
+	myGLCD.setFont(SmallFont);
+
+	// Set LEDs
+	//analogWrite(pin_RewLED, 0);
+	//analogWrite(pin_TrackLED, trackLEDDuty);
+
+	// Get rob to ard mesage byte vals
+	u.f = 0.0f;
+	u.c[0] = r2a_head;
+	u.c[1] = r2a_foot;
+	r2a_msg[0] = u.b[0];
+	r2a_msg[1] = 0;
+	r2a_msg[2] = u.b[1];
+
+	// Initilize packet history
+	for (int i = 0; i < c2r_phLng; i++)
+	{
+		c2r_packHist[i] = 0;
+	}
+	for (int i = 0; i < r2c_phLng; i++)
+	{
+		r2c_packHist[i] = 0;
+	}
+
+	// Initialize last packet array
+	for (int i = 0; i < c2r_idLng; i++)
+	{
+		c2r_packLast[i] = 0;
+	}
+	for (int i = 0; i < r2c_idLng; i++)
+	{
+		r2c_packLast[i] = 0;
+	}
+
+	// Make sure motor is stopped and in high impedance
+	board.hardHiZ();
+
+}
+
+
+// ---------MAIN LOOP---------
+void loop() {
+
+#pragma region //--- FIRST PASS SETUP ---
+	if (isFirstPass)
+	{
+		// Blink to show setup done
+		SetupBlink();
+
+		// Make sure Xbee buffer empty
+		while (Serial1.available() > 0) Serial1.read();
+
+		// Stop white noise
+		Send2_Ard('o');
+
+		isFirstPass = false;
+		PrintState("MAIN LOOP");
+	}
+#pragma endregion
+
+#pragma region //--- PARSE SERIAL ---
+	msg_pass = false; // reset before next loop
+	if (Serial1.available() > 0)
+	{
+		msg_pass = ParseSerial();
+	}
+#pragma endregion
+
+#pragma region //--- (S) DO SETUP ---
+	if (msg_id == 'S' && msg_pass)
+	{
+		// Set condition
+		if (setupCmd[0] == 1)
+		{
+			doTrackRat = true;
+			PrintState("DO TRACKING");
+		}
+		else
+		{
+			doTrackRat = false;
+			// put motor in high impedance
+			board.hardHiZ();
+			PrintState("NO TRACKING");
+		}
+		// Set reward tone
+		if (setupCmd[1] == 1)
+		{
+			doRewTone = true;
+			// Start white noise
+			Send2_Ard('w');
+			PrintState("DO TONE");
+		}
+		else
+		{
+			doRewTone = false;
+			// Stop white noise
+			Send2_Ard('o');
+			PrintState("NO TONE");
+		}
+	}
+#pragma endregion
+
+#pragma region //--- (Q) DO QUIT ---
+	if (msg_id == 'Q' && msg_pass)
+	{
+		doQuit = true;
+		uint32_t t_quitCmd = millis() + 5000;
+		// Tell ard to quit
+		Send2_Ard('q');
+		PrintState("DO QUIT");
+		// Stop PID
+		pid.Manual();
+
+	}
+	// Wait for quit delay to pass 
+	if (doQuit && millis() > t_quitCmd)
+	{
+		// Retell ard to quit
+		Send2_Ard('q');
+		PrintState("QUITING...");
+		QuitSession();
+	}
+#pragma endregion
+
+#pragma region //--- (M) DO MOVE ---
+	if (msg_id == 'M' && msg_pass)
+	{
+		doMove = true;
+		PrintState("DO MOVE");
+	}
+	// Perform movement
+	if (doMove)
+	{
+		// Check if robot is ready to be moved
+		if (!isTargSet)
+		{
+			CompTarg(movePos);
+			if (isTargSet)
+			{
+				PrintState("MOVE STARTED");
+			}
+		}
+		// Check if robot is ready to be stopped
+		if (isTargSet && !isTargReached)
+		{
+			DoDecelerate(30);
+			if (isTargReached)
+			{
+				doMove = false;
+				// Tell CS movement is done
+				Send2_CS('D', c2r_packLast[CharInd('M', "c2r")]);
+				PrintState("MOVE FINISHED");
+			}
+		}
+	}
+#pragma endregion
+
+#pragma region //--- (R) DO REWARD ---
+	if (msg_id == 'R' && msg_pass)
+	{
+		if (rewPos == 0)
+		{
+			doRew = true;
+			PrintState("REWARD NOW");
+		}
+		else
+		{
+			cueRew = true;
+			PrintState("CUE REWARD");
+		}
+	}
+
+	// Reward now
+	if (doRew)
+	{
+		StartRew();
+		doRew = false;
+		isRewarding = true;
+		PrintState("REWARDIND...");
+	}
+	// End ongoing reward
+	if (isRewarding)
+	{
+		if (t_rewStop < millis())
+			EndRew();
+		isRewarding = false;
+		PrintState("DONE REWARD");
+	}
+
+	// Cue reward
+	if (cueRew)
+	{
+		// Check if robot is ready to be moved
+		if (!isTargSet)
+		{
+			CompTarg(movePos);
+			if (isTargSet)
+			{
+				PrintState("MOVE STARTED");
+			}
+		}
+		// Check if robot is ready to be stopped
+		if (isTargSet && !isTargReached)
+		{
+			DoDecelerate(30);
+			if (isTargReached)
+			{
+				doMove = false;
+				// Tell CS movement is done
+				Send2_CS('D', c2r_packLast[CharInd('M', "c2r")]);
+				PrintState("MOVE FINISHED");
+			}
+		}
+	}
+
+#pragma endregion
+
+#pragma region //--- (H) HALT ROBOT STATUS ---
+	if (msg_id == 'H' && msg_pass)
+	{
+		if (doHalt)
+		{
+			PrintState("HALT ROBOT");
+			// Stop pid and set to manual
+			pid.HardStop();
+			pid.Manual();
+			doHalt = false;
+		}
+		else
+		{
+			PrintState("RESTART ROBOT");
+			// Restart pid and set to auto if mode before halt was auto
+			pid.Automatic(pid.modeLast);
+			// TEST
+			//board.run(FWD, 20 * cm2stp);
+		}
+	}
+#pragma endregion
+
+#pragma region //--- (I) START/STOP PID ---
+	if (msg_id == 'I' && msg_pass)
+	{
+		if (runPID)
+		{
+			PrintState("START PID");
+			// Set rat ahead of robot
+			SetRatAhead();
+			// Blink lcd display
+			RatInBlink();
+			// Start PID
+			pid.Automatic();
+			// TEST
+			//board.run(FWD, 20 * cm2stp);
+		}
+		else
+		{
+			PrintState("STOP PID");
+			// Stop PID
+			pid.Manual();
+		}
+	}
+#pragma endregion
+
+#pragma region //--- (C) GET STREAM STATUS ---
+	if (msg_id == 'C' && msg_pass)
+	{
+		doStreamCheck = true;
+	}
+	// Check for streaming
+	if (doStreamCheck && isStreaming)
+	{
+		Send2_CS('D', c2r_packLast[CharInd('C', "c2r")]);
+		doStreamCheck = false;
+		PrintState("STREAMING CONFIRMED");
+	}
+#pragma endregion
+
+#pragma region //--- (Y) DONE RECIEVED ---
+	if (msg_id == 'Y' && msg_pass)
+	{
+		doCheckDoneRcvd = false;
+		PrintState("DONE RECIEVED CONFIRMED");
+	}
+	// Request done recieved confirmation
+	if (doCheckDoneRcvd && millis() > t_doneResend)
+	{
+		// Resend done confirmation
+		Send2_CS('D', r2c_packLast[CharInd('D', "r2c")]);
+		// Send again after 1 sec
+		t_doneResend = millis() + 1000;
+		PrintState("RESENT DONE RECIEVED CONFIRMATION REQUEST");
+	}
+#pragma endregion
+
+#pragma region //--- (P) VT DATA RECIEVED ---
+	if (msg_id == 'P' && msg_pass)
+	{
+		// Signal streaming started
+		if (!isStreaming)
+		{
+			isStreaming = true;
+		}
+		// Update vt pos data
+		if (vtEnt == 0)
+		{
+			pos_ratVT.UpdatePosVel(vtCM[vtEnt], vtTS[vtEnt]);
+		}
+		else
+		{
+			pos_robVT.UpdatePosVel(vtCM[vtEnt], vtTS[vtEnt]);
+		}
+	}
+#pragma endregion
+
+#pragma region //--- RUN TRACKING ---
+	// UPDATE PIXY
+	UpdatePixyPos();
+
+	// UPDATE EKF
+	UpdateEKF();
+
+	// UPDATE PID AND SPEED
+	if (doTrackRat)
+	{
+		pid.UpdatePID(ekf_ratPos, ekf_robPos, ekf_ratVel, ekf_robVel);
+	}
+#pragma endregion
+
+}
+
+
+#pragma region --------COMMUNICATION---------
+
+// PARSE SERIAL INPUT
+bool ParseSerial()
+{
+	char head[2];
+	char foot;
+	bool pass;
+	int pack_diff;
+	int dropped_packs;
+	bool use_old_pack;
+	msg_id == ' ';
+
+	// Dump data till msg header byte is reached
+	while (Serial1.available() > 0)
+	{
+
+		while (Serial1.peek() != c2r_head[0])
+		{
+			Serial1.read(); // dump
+		}
+
+		// Wait for complete packet
+		while (Serial1.available() < 6);
+
+		// get header
+		u.f = 0.0f;
+		u.b[0] = Serial1.read();
+		u.b[1] = Serial1.read();
+		head[0] = u.c[0];
+		head[1] = u.c[1];
+		// get packet num
+		u.f = 0.0f;
+		u.b[0] = Serial1.read();
+		u.b[1] = Serial1.read();
+		packNow = u.i16[0];
+		// get id
+		u.f = 0.0f;
+		u.b[0] = Serial1.read();
+		msg_id = u.c[0];
+
+		// Check for second header
+		if (head[1] != c2r_head[1])
+		{
+			// mesage will be dumped
+			return pass = false;
+		}
+		else break;
+	}
+
+	// Get setup data
+	if (msg_id == 'S')
+	{
+		// Wait for complete packet
+		while (Serial1.available() < 3);
+
+		// Get session comand
+		setupCmd[0] = Serial1.read();
+
+		// Get tone condition
+		setupCmd[1] = Serial1.read();
+
+	}
+
+	// Get MoveTo data
+	if (msg_id == 'M')
+	{
+		// Wait for complete packet
+		while (Serial1.available() < 5);
+
+		// Reset buffer
+		u.f = 0.0f;
+
+		// Get move posm
+		u.b[0] = Serial1.read();
+		u.b[1] = Serial1.read();
+		u.b[2] = Serial1.read();
+		u.b[3] = Serial1.read();
+		movePos = u.f;
+
+	}
+
+	// Get Reward data
+	if (msg_id == 'R')
+	{
+		// Wait for complete packet
+		while (Serial1.available() < 5);
+
+		// Reset buffer
+		u.f = 0.0f;
+
+		// Get move posm
+		u.b[0] = Serial1.read();
+		u.b[1] = Serial1.read();
+		u.b[2] = Serial1.read();
+		u.b[3] = Serial1.read();
+		rewPos = u.f;
+
+	}
+
+	// Get halt robot data
+	if (msg_id == 'H')
+	{
+		// Wait for complete packet
+		while (Serial1.available() < 2);
+
+		// Get session comand
+		byte do_halt = Serial1.read();
+		doHalt = (bool)do_halt;
+	}
+
+	// Get start/end pid data
+	if (msg_id == 'I')
+	{
+		// Wait for complete packet
+		while (Serial1.available() < 2);
+
+		// Get session comand
+		byte run_pid = Serial1.read();
+		runPID = (bool)run_pid;
+	}
+
+	// Get VT data
+	else if (msg_id == 'P')
+	{
+
+		// Wait for complete packet
+		while (Serial1.available() < 10);
+
+		// Get Ent
+		vtEnt = Serial1.read();
+		// Get TS
+		u.f = 0.0f;
+		for (int i = 0; i < 4; i++)
+		{
+			u.b[i] = Serial1.read();
+		}
+		vtTS[vtEnt] = u.i32;
+		// Get pos cm
+		u.f = 0.0f;
+		for (int i = 0; i < 4; i++)
+		{
+			u.b[i] = Serial1.read();
+		}
+		vtCM[vtEnt] = u.f;
+	}
+
+	// Check for footer
+	u.f = 0.0f;
+	u.b[0] = Serial1.read();
+	foot = u.c[0];
+
+	// Footer missing
+	if (foot != c2r_foot) {
+		// mesage will be dumped
+		return pass = false;
+	}
+	else
+	{
+		// Update last packet array
+		c2r_packLast[CharInd(msg_id, "c2r")] = packNow;
+
+		// Save packet number Send back recieved id for all but pos and done resend data
+		if (msg_id != 'P' && msg_id != 'Y')
+		{
+
+			// Print revieved pack details
+			PrintRcvdPack(msg_id, packNow);
+
+			// Shift packet history
+			for (int i = 0; i < c2r_phLng - 1; i++)
+			{
+				c2r_packHist[i] = c2r_packHist[i + 1];
+			}
+			c2r_packHist[c2r_phLng - 1] = packNow;
+
+			// Send revieved pack
+			Send2_CS(msg_id, packNow);
+
+		}
+
+		// Check for missing packets
+		pack_diff = (int)(packNow - packLast);
+		// Count sent packets
+		if (pack_diff > 0)
+		{
+			packTot += pack_diff;
+			dropped_packs = pack_diff - 1;
+			// print missed packs
+			if (dropped_packs > 0)
+			{
+				droppedPackTot += dropped_packs;
+				PrintMissedPack(dropped_packs, droppedPackTot, packTot);
+			}
+			// Save new packet
+			packLast = packNow;
+			return pass = true;
+		}
+
+		// Check if resent packet was already recieved
+		else
+		{
+			use_old_pack = true;
+			for (int i = 0; i < c2r_phLng - 1; i++)
+			{
+				if (packNow == c2r_packHist[i])
+				{
+					use_old_pack = false;
+				}
+			}
+
+			// If quit command reuse packet anyway
+			if (msg_id == 'Q')
+			{
+				use_old_pack = true;
+			}
+
+			// If old packet not used then use
+			if (use_old_pack)
+			{
+				return pass = true;
+			}
+			else return pass = false;
+
+		}
+	}
+
+}
+
+// PRINT DROPPED PACKETS
+void PrintMissedPack(int missed, int missed_total, int total)
+{
+	if (doPrintDropped)
+	{
+		char str[50];
+		float t = (float)(millis() / 1000.0f);
+		sprintf(str, "!!DROPPED %d packs [total:%d/%d] (%0.2f sec)]!!\n", missed, missed_total, total, t);
+		SerialUSB.print(str);
+	}
+}
+
+// PRINT RECIEVED PACKET
+void PrintRcvdPack(char id, uint16_t pack)
+{
+
+	//// Print
+	if (doPrintRcvdPack)
+	{
+		char str[50];
+		float t = (float)(millis() / 1000.0f);
+
+		// Print specific pack contents
+		if (id == 'S')
+		{
+			sprintf(str, "---Rcvd: [id:%c d1:%d d2:%d pack:%d (%0.2f sec)]\n", id, setupCmd[0], setupCmd[1], pack, t);
+		}
+		else if (id == 'M')
+		{
+			sprintf(str, "---Rcvd: [id:%c d1:%0.2f pack:%d (%0.2f sec)]\n", id, movePos, pack, t);
+		}
+		else if (id == 'R')
+		{
+			sprintf(str, "---Rcvd: [id:%c d1:%0.2f pack:%d (%0.2f sec)]\n", id, rewPos, pack, t);
+		}
+		else if (id == 'H')
+		{
+			sprintf(str, "---Rcvd: [id:%c d1:%d pack:%d (%0.2f sec)]\n", id, doHalt, pack, t);
+		}
+		else if (id == 'I')
+		{
+			sprintf(str, "---Rcvd: [id:%c d1:%d pack:%d (%0.2f sec)]\n", id, runPID, pack, t);
+		}
+		else sprintf(str, "---Rcvd: [id:%c pack:%d (%0.2f sec)]\n", id, pack, t);
+		SerialUSB.print(str);
+
+	}
+}
+
+// SEND SERIAL TO CS
+void Send2_CS(char id, uint16_t pack)
+{
+	// Initialize
+	static uint32_t t1 = millis();
+	byte msg[5];
+
+	//// Print
+	if (doPrintSentPack)
+	{
+		char str[50];
+		uint32_t t2 = millis();
+		sprintf(str, "---Sent: [id:%c pack:%d (%d ms)]\n", id, pack, t2 - t1);
+		t1 = millis();
+		SerialUSB.print(str);
+	}
+
+	// Store header
+	u.f = 0.0f;
+	u.c[0] = r2c_head;
+	msg[0] = u.b[0];
+	// Store mesage id
+	u.f = 0.0f;
+	u.c[0] = id;
+	msg[1] = u.b[0];
+	// Store packet number
+	u.f = 0.0f;
+	u.i16[0] = pack;
+	msg[2] = u.b[0];
+	msg[3] = u.b[1];
+	// Store footer
+	u.f = 0.0f;
+	u.c[0] = r2c_foot;
+	msg[4] = u.b[0];
+
+	// Send
+	Serial1.write(msg, 5);
+
+	// Update last packet array
+	r2c_packLast[CharInd(id, "r2c")] = pack;
+
+	// Update packet history 
+	for (int i = 0; i < r2c_phLng - 1; i++)
+	{
+		r2c_packHist[i] = r2c_packHist[i + 1];
+	}
+	r2c_packHist[r2c_phLng - 1] = pack;
+
+	// Check for done id
+	if (id == 'D')
+	{
+		// Set to check for done recieved
+		doCheckDoneRcvd = true;
+		// Send done recieved request after 1 sec
+		t_doneResend = millis() + 1000;
+	}
+}
+
+// SEND SERIAL TO ARD
+void Send2_Ard(char id)
+{
+	u.f = 0.0f;
+	u.c[0] = id;
+	r2a_msg[1] = u.b[0];
+	Serial1.write(r2a_msg, 3);
+}
+
+
+#pragma endregion
+
+
+#pragma region --------MOVEMENT AND TRACKING---------
+
+// COMPUTE TARGET VARS
+void CompTarg(float move_targ)
+{
+
+	// Check there is enough rob vt data
+	if (pos_robVT.datReady)
+	{
+		char move_dir;
+		float set_pos;
+		float rob_tot_pos;
+		float rob_abs_pos;
+		float move_dif;
+
+		// Use EKF estimate if available
+		if (pid.ekfReady)
+		{
+			rob_tot_pos = ekf_robPos;
+		}
+		else rob_tot_pos = pos_robVT.posNow;
+
+		// Compute target distance and direction
+		set_pos = move_targ - pid.setPoint;
+		if (set_pos < 0)
+		{
+			set_pos = set_pos + (140 * PI);
+		}
+
+		// Robot current pos
+		moveStart = rob_tot_pos;
+		rob_abs_pos = moveStart - pos_robVT.nLaps*(140 * PI);
+
+		// Diff and absolute distance
+		move_dif = set_pos - rob_abs_pos;
+		moveDist =
+			min((140 * PI) - abs(move_dif), abs(move_dif));
+
+		// Compute direction to move
+		if ((move_dif > 0 && abs(move_dif) == moveDist) ||
+			(move_dif < 0 && abs(move_dif) != moveDist))
+		{
+			moveDir = 'f';
+			board.run(FWD, moveSpeed * cm2stp);
+		}
+		else
+		{
+			moveDir = 'r';
+			board.run(REV, moveSpeed * cm2stp);
+		}
+		baseSpeed = moveSpeed;
+		isTargSet = true;
+		isTargReached = false;
+	}
+}
+
+// DECELERATE TO POS
+void DoDecelerate(float dec_pos) {
+
+	float dist_gone;
+	float dist_last;
+	float dist_left;
+	float new_speed;
+
+	// Add total distance
+	dist_last = dist_gone;
+	dist_gone =
+		min((140 * PI) - abs(pos_robVT.posNow - moveStart), abs(pos_robVT.posNow - moveStart));
+
+	// Get remaining distance
+	dist_left = moveDist - dist_gone;
+
+	// Only run for new data
+	if (dist_gone != dist_last)
+	{
+		// Check if rat is dec_pos cm from target
+		if (dist_left <= dec_pos)
+		{
+			// Get base speed to decelerate from
+			if (baseSpeed == 1000)
+			{
+				// Use EKF estimate if available
+				if (pid.ekfReady)
+				{
+					baseSpeed = abs(ekf_robVel);
+				}
+				else baseSpeed = abs(pos_robVT.velNow);
+			}
+			// Update decel speed
+			else
+			{
+				new_speed = (dist_left / dec_pos) * baseSpeed;
+				if (new_speed < 2.5) new_speed = 2.5;
+				// Change speed
+				if (moveDir == 'f') board.run(FWD, new_speed);
+				else if (moveDir == 'r') board.run(REV, new_speed);
+				// SerialUSB.println(new_speed);
+			}
+		}
+	}
+	// Rat has reached +- 5 cm of target
+	if (dist_left < 0)
+	{
+		// Change speed
+		if (moveDir == 'f') board.run(FWD, 0);
+		else if (moveDir == 'r') board.run(REV, 0);
+		baseSpeed == 1000;
+		isTargSet = false;
+		isTargReached = true;
+	}
+}
+
+// PROCESS PIXY STREAM
+void UpdatePixyPos() {
+
+	uint16_t blocks = pixy.getBlocks();
+	static float pxRel;
+	static double pxAbs;
+	static uint32_t pxTS;
+
+	// Check for new data
+	if (blocks)
+	{
+		pxTS = millis();
+
+		// Get Y pos from last block and convert to CM
+		double pixyPosY = pixy.blocks[blocks - 1].y;
+		pxRel =
+			pixyCoeff[0] * (pixyPosY * pixyPosY * pixyPosY * pixyPosY) +
+			pixyCoeff[1] * (pixyPosY * pixyPosY * pixyPosY) +
+			pixyCoeff[2] * (pixyPosY * pixyPosY) +
+			pixyCoeff[3] * pixyPosY +
+			pixyCoeff[4];
+	}
+
+	// Update pos with new rob vt data
+	if (pos_robVT.newData)
+	{
+		// Compute position error
+		pxAbs = pxRel - pixyTarg;
+		pxAbs = pxAbs + pid.setPoint;
+		pxAbs = pos_robVT.posNow + pxAbs;
+		if (pxAbs > (140 * PI))
+		{
+			pxAbs = pxAbs - (140 * PI);
+		}
+		// Update pixy pos and vel
+		pos_ratPixy.UpdatePosVel((float)pxAbs, pxTS);
+	}
+}
+
+// UPDATE EKF
+void UpdateEKF()
+{
+	if (pos_ratVT.newData &&
+		pos_ratPixy.newData &&
+		pos_robVT.newData)
+	{
+
+		// Check EKF progress
+		pid.CheckEKF(millis());
+
+		// Update pid next loop time
+		pid.StoreLoopTime(millis());
+
+		//----------UPDATE EKF---------
+		double z[M] = {
+			pos_ratVT.GetPos(),
+			pos_ratPixy.GetPos(),
+			pos_robVT.GetPos(),
+			pos_ratVT.GetVel(),
+			pos_ratPixy.GetVel(),
+			pos_robVT.GetVel(),
+		};
+
+		// Run EKF
+		ekf.step(z);
+
+		// Update error estimate
+		ekf_ratPos = ekf.getX(0);
+		ekf_robPos = ekf.getX(1);
+		ekf_ratVel = ekf.getX(2);
+		ekf_robVel = ekf.getX(3);
+
+	}
+}
+
+// CHECK RAT POS AHEAD OF ROBOT AT START 
+void SetRatAhead()
+{
+	// Check if rat pos < robot
+	if (pos_ratVT.posNow < pos_robVT.posNow)
+	{
+		pos_ratVT.ResetLap(1);
+		pos_ratPixy.ResetLap(1);
+	}
+}
+#pragma endregion
+
+
+#pragma region --------HARDWARE CONTROL---------
+
+// START REWARD
+void StartRew()
+{
+	// Start reward
+	// chack if sol already open
+	if (digitalRead(pin_Rel_1) == LOW) {
+		if (doTrackRat)
+		{
+			// Halt robot 
+			pid.HardStop();
+			// Set hold time
+			pid.SetHoldTim(5000);
+		}
+		// trigger reward tone on
+		if (doRewTone)
+		{
+			Send2_Ard('t');
+			PrintState("SEND TONE ON");
+		}
+		// turn on reward LED
+		analogWrite(pin_RewLED, rewLEDDuty);
+		// open solenoid
+		//digitalWrite(pin_Rel_1, HIGH);
+		// compute stop time
+		t_rewStop = millis() + solDir;
+		char str[50];
+		t_rewStr = millis() / 1000;
+		sprintf(str, "Reward (%0.0fs)", t_rewStr);
+		myGLCD.print(str, CENTER, 20);
+		myGLCD.update();
+	}
+}
+
+// END REWARD
+void EndRew()
+{
+	// turn off reward LED
+	analogWrite(pin_RewLED, 0);
+	// close solenoid
+	digitalWrite(pin_Rel_1, LOW);
+	// reset
+	myGLCD.clrScr();
+	myGLCD.update();
+}
+
+// OPEN/CLOSE SOLONOID
+void OpenCloseSolonoid()
+{
+	// change state
+	solState = !solState;
+	// open/close solenoid
+	digitalWrite(pin_Rel_1, solState);
+
+	char str[50];
+	sprintf(str, "Solenoid %s", digitalRead(pin_Rel_1) == HIGH ? "open" : "close");
+	myGLCD.print(str, CENTER, 20);
+	myGLCD.update();
+	if (digitalRead(pin_Rel_1) == LOW) {
+		myGLCD.clrScr();
+		myGLCD.update();
+	}
+}
+
+#pragma endregion
+
+
+#pragma region --------MINOR FUNCTIONS---------
+
+void QuitSession()
+{
+	// Stop motor and PID
+	pid.HardStop();
+	pid.Manual();
+	delayMicroseconds(100);
+	// Restart Arduino
+	REQUEST_EXTERNAL_RESET;
+}
+
+void PrintState(String str)
+{
+	if (doPrintFlow)
+	{
+		char msg[50];
+		float t = (float)(millis() / 1000.0f);
+		sprintf(msg, " (%0.2f sec)\n\n", t);
+		SerialUSB.print('\n');
+		SerialUSB.print(str);
+		SerialUSB.print(msg);
+	}
+}
+
+void SetupBlink()
+{
+	int duty[2] = { 100, 0 };
+	bool isOn = false;
+	int del = 100;
+	// Flash sequentially
+	for (int i = 0; i < 8; i++)
+	{
+		analogWrite(pin_Disp_LED, duty[(int)isOn]);
+		delay(del);
+		analogWrite(pin_TrackLED, duty[(int)isOn]);
+		delay(del);
+		analogWrite(pin_RewLED, duty[(int)isOn]);
+		delay(del);
+		isOn = !isOn;
+	}
+	// Reset LEDs
+	analogWrite(pin_Disp_LED, 0);
+	analogWrite(pin_TrackLED, trackLEDDuty);
+	analogWrite(pin_RewLED, 0);
+}
+
+void RatInBlink()
+{
+	int duty[2] = { 75, 0 };
+	bool isOn = false;
+	int del = 50;
+	// Flash 
+	for (int i = 0; i < 10; i++)
+	{
+		analogWrite(pin_Disp_LED, duty[(int)isOn]);
+		delay(del);
+		isOn = !isOn;
+	}
+	// Reset LED
+	analogWrite(pin_Disp_LED, 0);
+}
+
+int CharInd(char id, String a_lab)
+{
+
+	int ind = -1;
+	if (a_lab == "c2r")
+	{
+		for (int i = 0; i < c2r_idLng; i++)
+		{
+			if (id == c2r_id[i]) ind = i;
+		}
+	}
+	else if (a_lab == "r2c")
+	{
+		for (int i = 0; i < r2c_idLng; i++)
+		{
+			if (id == r2c_id[i]) ind = i;
+		}
+	}
+	else if (a_lab == "r2a")
+	{
+		for (int i = 0; i < r2a_idLng; i++)
+		{
+			if (id == r2a_id[i]) ind = i;
+		}
+	}
+	return ind;
+
+}
+
+#pragma endregion
+
+
+#pragma region ---------INTERUPTS---------
+
+// Halt run on IR trigger
+void Interupt_Halt() {
+	pid.HardStop();
+}
+
+// Open/close solonoid
+void Interupt_Btn1() {
+
+	// exit if < 250 ms has not passed
+	if (t_debounce[0] > millis()) return;
+
+	// Run open close function
+	OpenCloseSolonoid();
+
+	t_debounce[0] = millis() + 250;
+}
+
+// Trigger reward
+void Interupt_Btn2() {
+
+	// exit if < 250 ms has not passed
+	if (t_debounce[1] > millis()) return;
+
+	// Set to start reward function
+	doRew = true;
+
+	t_debounce[1] = millis() + 250;
+
+}
+
+// Turn on/off LCD LED
+void Interupt_Btn3() {
+
+	// exit if < 250 ms has not passed
+	if (t_debounce[2] > millis()) return;
+
+	if (!lndLedOn) {
+		analogWrite(pin_Disp_LED, 50);
+		lndLedOn = true;
+	}
+	else {
+		analogWrite(pin_Disp_LED, 0);
+		lndLedOn = false;
+	}
+
+	t_debounce[2] = millis() + 250;
+
+}
+#pragma endregion
+
