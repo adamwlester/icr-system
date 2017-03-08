@@ -1,6 +1,6 @@
 
 # Directories to ignore (I think)
-z_Obs-Arc
+/z_Obs-Arc/
 git rm z_Obs-Arc --cache
 
 ## Ignore Visual Studio temporary files, build results, and
