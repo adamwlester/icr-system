@@ -1,1 +1,16 @@
+
+# Extensions to ignore
+*.dll
+*.exe
+*.exp
+*.ilk
+*.lib
+*.ncb
+*.log
+*.pdb
+*.vcproj.*.user
+
+# Directories to ignore (I think)
+[Dd]ebug
+[Rr]elease
 z_Obs-Arc/
