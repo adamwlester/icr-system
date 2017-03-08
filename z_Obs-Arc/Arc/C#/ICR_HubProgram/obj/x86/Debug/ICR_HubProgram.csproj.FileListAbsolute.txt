@@ -1,9 +1,0 @@
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\bin\x86\Debug\ICR_HubProgram.exe.config
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\obj\x86\Debug\Interop.MLApp.dll
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\obj\x86\Debug\ICR_HubProgram.csproj.ResolveComReference.cache
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\bin\x86\Debug\ICR_HubProgram.exe
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\bin\x86\Debug\ICR_HubProgram.pdb
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\bin\x86\Debug\MNetComClient3.dll
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\obj\x86\Debug\ICR_HubProgram.csprojResolveAssemblyReference.cache
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\obj\x86\Debug\ICR_HubProgram.exe
-C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING\C#\ICR_HubProgram\obj\x86\Debug\ICR_HubProgram.pdb
