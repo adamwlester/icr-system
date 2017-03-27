@@ -44,17 +44,15 @@
 #pragma endregion 
 
 
-#pragma region ---------VARIABLE DECLARATION---------
-
-//----------DEFINE PINS---------
+#pragma region ---------PIN DECLARATION---------
 
 // Autodriver
-const int pin_AD_CSP = 5;
-//const int pin_AD_Busy = 4;
-const int pin_AD_Reset = 3;
+const int pin_AD_CSP_R = 5;
+const int pin_AD_CSP_F = 6;
+const int pin_AD_RST = 7;
 
 // Display
-const int pin_Disp_Power = 2;
+const int pin_Disp_Pwr = 1;
 const int pin_Disp_SCK = 8;
 const int pin_Disp_MOSI = 9;
 const int pin_Disp_DC = 10;
@@ -63,40 +61,58 @@ const int pin_Disp_CS = 12;
 const int pin_Disp_LED = 13;
 
 // LEDs
-const int pin_TrackLED = 6;
-const int pin_RewLED = 7;
+const int pin_RewLED_R = 4;
+const int pin_RewLED_C = 3;
+const int pin_TrackLED = 2;
 
 // Relays
-const int pin_Rel_1 = 40;
-const int pin_Rel_2 = 41;
+const int pin_Rel_Ens = 26;
+const int pin_Rel_Eth = 27;
 
 // XBee power
-const int pin_XBee_Power = 53;
+const int pin_XBee_Pwr = 52;
 
-// EasyDriver
-const int pin_ED_DIR = 50;
-const int pin_ED_STP = 52;
-const int pin_ED_SLP = 47;
-const int pin_ED_RST = 44;
-const int pin_ED_PFD = 51;
-const int pin_ED_MS1 = 49;
-const int pin_ED_MS2 = 48;
-const int pin_ED_ENBL = 46;
+// BigEasyDriver
+const int pin_ED_RST = 47;
+const int pin_ED_SLP = 49;
+const int pin_ED_DIR = 51;
+const int pin_ED_STP = 53;
+const int pin_ED_ENBL = 35;
+const int pin_ED_MS1 = 37;
+const int pin_ED_MS2 = 39;
+const int pin_ED_MS3 = 41;
 
-// Feeder switches
-const int pin_Feed_Switch_1 = 0;
-const int pin_Feed_Switch_2 = 1;
+// Feeder switch
+const int pin_FeedSwitch = 0;
 
-// Note: pins bellow are all used for external interupts 
-// and must all be members of the same port (PortA)
-// IR Senosors
-const int pin_IR_Rt = 42;
-const int pin_IR_Lft = 43;
+// Power off
+const int pin_PwrOff = 31;
+
+// Voltage monitor
+const int pin_BatVolt = A11;
+
+/*
+Note: pins bellow are all used for external interupts
+and must all be members of the same port (PortA)
+*/
+
+// IR proximity sensors
+const int pin_IRprox_Pwr = 22;
+const int pin_IRprox_Rt = 42;
+const int pin_IRprox_Lft = 43;
+
+// IR detector
+const int pin_IRdetect = A4;
+const int pin_IRdetect_Gnd = A5;
+const int pin_IRdetect_Pwr = A6;
 
 // Buttons
-const int pin_Btn[4] = { A3, A2, A1, A4 };
+const int pin_Btn[3] = { A3, A2, A1 };
 
-//----------VARIABLE SETUP----------
+#pragma endregion
+
+
+#pragma region ---------VARIABLE SETUP---------
 
 // Debug print
 const bool doDebugConsole = false;
@@ -308,18 +324,20 @@ volatile bool vol_doIRhardStop = false;
 volatile bool vol_doBlockLCDlog = false;
 volatile uint32_t t_debounce[4] = { millis(), millis(), millis(), millis() };
 
-//----------INITILIZE OBJECTS----------
-// AutoDriver
-AutoDriver_Due board(pin_AD_CSP, pin_AD_Reset);
-// Pixy
-PixyI2C pixy(0x54);
-// LCD
-LCD5110 myGLCD(pin_Disp_CS, pin_Disp_RST, pin_Disp_DC, pin_Disp_MOSI, pin_Disp_SCK);
-
 #pragma endregion 
 
 
 #pragma region ---------CONSTRUCT CLASSES---------
+
+//----------INITILIZE OBJECTS----------
+
+// AutoDriver
+AutoDriver_Due ad_R(pin_AD_CSP_R, pin_AD_RST);
+AutoDriver_Due ad_F(pin_AD_CSP_F, pin_AD_RST);
+// Pixy
+PixyI2C pixy(0x54);
+// LCD
+LCD5110 myGLCD(pin_Disp_CS, pin_Disp_RST, pin_Disp_DC, pin_Disp_MOSI, pin_Disp_SCK);
 
 //----------CLASS: PosDat----------
 class PosDat
@@ -713,7 +731,8 @@ public:
 				)
 			{
 				// Change acc to rat pos
-				//board.setAcc(dampAcc*cm2stp);
+				//ad_R.setAcc(dampAcc*cm2stp);
+				//ad_F.setAcc(dampAcc*cm2stp);
 				delayMicroseconds(100);
 
 				// Set time to dampen till
@@ -747,7 +766,8 @@ public:
 				)
 			{
 				// Set acc back to normal
-				//board.setAcc(maxAcc*cm2stp);
+				//ad_R.setAcc(maxAcc*cm2stp);
+				//ad_F.setAcc(maxAcc*cm2stp);
 				delayMicroseconds(100);
 
 				// Store time
@@ -1540,51 +1560,78 @@ void setup() {
 	Serial1.begin(57600);
 
 	// Set button pins enable internal pullup
-	for (int i = 0; i <= 3; i++) {
+	for (int i = 0; i <= 2; i++) {
 		pinMode(pin_Btn[i], INPUT_PULLUP);
 	}
-	pinMode(pin_Feed_Switch_1, INPUT_PULLUP);
-	pinMode(pin_Feed_Switch_2, INPUT_PULLUP);
+	pinMode(pin_FeedSwitch, INPUT_PULLUP);
 
-	// Set output/power pins
-	pinMode(pin_Rel_1, OUTPUT);
-	pinMode(pin_Rel_2, OUTPUT);
-	digitalWrite(pin_Rel_1, LOW);
-	digitalWrite(pin_Rel_2, LOW);
-	pinMode(pin_Disp_Power, OUTPUT);
-	digitalWrite(pin_Disp_Power, HIGH);
-	pinMode(pin_XBee_Power, OUTPUT);
-	digitalWrite(pin_XBee_Power, HIGH);
+	// Set output pins
+	pinMode(pin_Rel_Ens, OUTPUT);
+	pinMode(pin_Rel_Eth, OUTPUT);
+	pinMode(pin_Disp_Pwr, OUTPUT);
+	pinMode(pin_XBee_Pwr, OUTPUT);
+	pinMode(pin_ED_STP, OUTPUT);
+	pinMode(pin_ED_DIR, OUTPUT);
+	pinMode(pin_ED_SLP, OUTPUT);
+	pinMode(pin_ED_MS1, OUTPUT);
+	pinMode(pin_ED_MS2, OUTPUT);
+	pinMode(pin_ED_ENBL, OUTPUT);
+	pinMode(pin_PwrOff, OUTPUT);
+	pinMode(pin_IRprox_Pwr, OUTPUT);
+	pinMode(pin_IRdetect_Pwr, OUTPUT);
+	pinMode(pin_IRdetect_Gnd, OUTPUT);
+
+	// Set power/ground pins
+	digitalWrite(pin_Rel_Ens, LOW);
+	digitalWrite(pin_Rel_Eth, LOW);
+	digitalWrite(pin_Disp_Pwr, HIGH);
+	digitalWrite(pin_XBee_Pwr, HIGH);
+	digitalWrite(pin_IRprox_Pwr, HIGH);
+	digitalWrite(pin_IRdetect_Pwr, HIGH);
+	digitalWrite(pin_IRdetect_Gnd, LOW);
+
+	// Start BigEasyDriver in sleep
+	digitalWrite(pin_ED_SLP, LOW);
 
 	// Define external interrupt
 	attachInterrupt(digitalPinToInterrupt(pin_Btn[0]), Interupt_Btn1, FALLING);
 	attachInterrupt(digitalPinToInterrupt(pin_Btn[1]), Interupt_Btn2, FALLING);
 	attachInterrupt(digitalPinToInterrupt(pin_Btn[2]), Interupt_Btn3, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_IR_Rt), Interupt_IR_Halt, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_IR_Lft), Interupt_IR_Halt, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 
 	// Initialize AutoDriver
 
 	// Configure SPI
-	board.SPIConfig();
+	ad_R.SPIConfig();
+	ad_F.SPIConfig();
 	delayMicroseconds(100);
 	// Reset each axis
-	board.resetDev();
+	ad_R.resetDev();
+	ad_F.resetDev();
 	delayMicroseconds(100);
 	// Configure each axis
 	dSPINConfig_board();
 	delayMicroseconds(100);
 	// Get the status to clear the UVLO Flag
-	board.getStatus();
+	ad_R.getStatus();
+	ad_F.getStatus();
 
-	// Initailize Pixy
-	pixy.init();
-	Wire.begin();
+	// Print ad board status
+	SerialUSB.println(' ');
+	SerialUSB.print("BOARD R STATUS: ");
+	SerialUSB.println(ad_R.getStatus(), HEX);
+	SerialUSB.print("BOARD F STATUS: ");
+	SerialUSB.println(ad_F.getStatus(), HEX);
 
 	// Initialize LCD
 	myGLCD.InitLCD();
 	myGLCD.setFont(SmallFont);
 	myGLCD.invert(true);
+
+	// Initailize Pixy
+	pixy.init();
+	Wire.begin();
 	
 	// Initialize print queue
 	for (int i = 0; i < printQueue_lng; i++)
@@ -1626,7 +1673,8 @@ void setup() {
 	}
 
 	// Make sure motor is stopped and in high impedance
-	board.hardHiZ();
+	ad_R.hardHiZ();
+	ad_F.hardHiZ();
 	//RunMotor('f', 0, "None");
 
 }
@@ -1648,8 +1696,8 @@ void loop() {
 		while (Serial1.available() > 0) Serial1.read();
 
 		// Make sure relays are off
-		digitalWrite(pin_Rel_1, LOW);
-		digitalWrite(pin_Rel_2, LOW);
+		digitalWrite(pin_Rel_Ens, LOW);
+		digitalWrite(pin_Rel_Eth, LOW);
 
 		// Clear LCD
 		ClearLCD();
@@ -2205,7 +2253,7 @@ void loop() {
 	// IR triggered halt
 	if (vol_doIRhardStop)
 	{
-		Function_IR_Halt();
+		Function_IRprox_Halt();
 		vol_doIRhardStop = false;
 	}
 
@@ -2863,7 +2911,8 @@ void SendData()
 void HardStop(String called_from)
 {
 	// Normal hard stop
-	board.hardStop();
+	ad_R.hardStop();
+	ad_F.hardStop();
 
 	// Reset pid
 	pid.Reset();
@@ -2872,7 +2921,8 @@ void HardStop(String called_from)
 	if (fc_isManualSes)
 	{
 		delay(100);
-		board.hardHiZ();
+		ad_R.hardHiZ();
+		ad_F.hardHiZ();
 	}
 
 	// Store string
@@ -2880,12 +2930,12 @@ void HardStop(String called_from)
 }
 
 // IR TRIGGERED HARD STOP
-void Function_IR_Halt()
+void Function_IRprox_Halt()
 {
 	if (!(bull.mode == "Active" && bull.state == "On") &&
 		!fc_isManualSes)
 	{
-		HardStop("Function_IR_Halt");
+		HardStop("Function_IRprox_Halt");
 	}
 }
 
@@ -2900,11 +2950,13 @@ bool RunMotor(char dir, float speed, String agent)
 	{
 		if (dir == 'f')
 		{
-			board.run(FWD, speed_steps);
+			ad_R.run(FWD, speed_steps);
+			ad_F.run(FWD, speed_steps);
 		}
 		else if (dir == 'r')
 		{
-			board.run(REV, speed_steps);
+			ad_R.run(REV, speed_steps);
+			ad_F.run(REV, speed_steps);
 		}
 		return true;
 	}
@@ -3259,10 +3311,11 @@ void StartRew(bool do_stop)
 	reward.t_end = millis() + reward.duration;
 
 	// Turn on reward LED
-	analogWrite(pin_RewLED, rewLEDduty);
+	analogWrite(pin_RewLED_R, rewLEDduty);
+	analogWrite(pin_RewLED_C, rewLEDduty);
 
 	// Open solenoid
-	digitalWrite(pin_Rel_1, HIGH);
+	digitalWrite(pin_Rel_Ens, HIGH);
 
 	// Print to LCD for manual rewards
 	if (vol_doRew)
@@ -3289,10 +3342,11 @@ bool EndRew()
 	{
 
 		// Close solenoid
-		digitalWrite(pin_Rel_1, LOW);
+		digitalWrite(pin_Rel_Ens, LOW);
 
 		// Turn off reward LED
-		analogWrite(pin_RewLED, rewLEDmin);
+		analogWrite(pin_RewLED_R, rewLEDmin);
+		analogWrite(pin_RewLED_C, rewLEDmin);
 
 		// Clear LCD
 		if (vol_doRew)
@@ -3315,17 +3369,17 @@ bool EndRew()
 void OpenCloseSolonoid()
 {
 	// Local vars
-	byte sol_state = digitalRead(pin_Rel_1);
+	byte sol_state = digitalRead(pin_Rel_Ens);
 
 	// Change state
 	sol_state = !sol_state;
 
 	// Open/close solenoid
-	digitalWrite(pin_Rel_1, sol_state);
+	digitalWrite(pin_Rel_Ens, sol_state);
 
 	// Print to LCD
 	char str[50];
-	sprintf(str, "%s", digitalRead(pin_Rel_1) == HIGH ? "OPEN" : "CLOSED");
+	sprintf(str, "%s", digitalRead(pin_Rel_Ens) == HIGH ? "OPEN" : "CLOSED");
 	PrintLCD("SOLONOID", str);
 }
 
@@ -3620,14 +3674,14 @@ void SetupBlink()
 		delay(del);
 		analogWrite(pin_TrackLED, duty[(int)isOn]);
 		delay(del);
-		analogWrite(pin_RewLED, duty[(int)isOn]);
+		analogWrite(pin_RewLED_R, duty[(int)isOn]);
 		delay(del);
 		isOn = !isOn;
 	}
 	// Reset LEDs
 	analogWrite(pin_Disp_LED, 0);
 	analogWrite(pin_TrackLED, trackLEDduty);
-	analogWrite(pin_RewLED, rewLEDmin);
+	analogWrite(pin_RewLED_R, rewLEDmin);
 }
 
 void RatInBlink()
@@ -3720,7 +3774,7 @@ void Interupt_Btn3() {
 }
 
 // Halt run on IR trigger
-void Interupt_IR_Halt() {
+void Interupt_IRprox_Halt() {
 
 	// exit if < 250 ms has not passed
 	if (t_debounce[3] > millis()) return;
