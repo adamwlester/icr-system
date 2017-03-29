@@ -66,11 +66,8 @@ const int pin_RewLED_C = 3;
 const int pin_TrackLED = 2;
 
 // Relays
-const int pin_Rel_Ens = 26;
-const int pin_Rel_Eth = 27;
-
-// XBee power
-const int pin_XBee_Pwr = 52;
+const int pin_Rel_Ens = 23;
+const int pin_Rel_Eth = 25;
 
 // BigEasyDriver
 const int pin_ED_RST = 47;
@@ -83,10 +80,11 @@ const int pin_ED_MS2 = 39;
 const int pin_ED_MS3 = 41;
 
 // Feeder switch
-const int pin_FeedSwitch = 0;
+const int pin_FeedSwitch_Gnd = 14;
+const int pin_FeedSwitch = 15;
 
 // Power off
-const int pin_PwrOff = 31;
+const int pin_PwrOff = 45;
 
 // Voltage monitor
 const int pin_BatVolt = A11;
@@ -102,9 +100,7 @@ const int pin_IRprox_Rt = 42;
 const int pin_IRprox_Lft = 43;
 
 // IR detector
-const int pin_IRdetect = A4;
-const int pin_IRdetect_Gnd = A5;
-const int pin_IRdetect_Pwr = A6;
+const int pin_IRdetect = 16;
 
 // Buttons
 const int pin_Btn[3] = { A3, A2, A1 };
@@ -115,9 +111,9 @@ const int pin_Btn[3] = { A3, A2, A1 };
 #pragma region ---------VARIABLE SETUP---------
 
 // Debug print
-const bool doDebugConsole = false;
+const bool doDebugConsole = true;
 const bool doDebugLCD = false;
-const bool doPrint_flow = false;
+const bool doPrint_flow = true;
 const bool doPrint_motorControl = false;
 const bool doPrint_rcvd = false;
 const bool doPrint_r2c = false;
@@ -185,7 +181,7 @@ bool msg_pass = false;
 uint32_t t_rsvd = millis(); // (ms)
 uint32_t t_rsvdLast; // (ms)
 
-					 // Serial to CS
+// Serial to CS
 const char r2c_head = '{';
 const char r2c_foot = '}';
 const char r2c_id[10] = {
@@ -253,11 +249,11 @@ uint32_t msg_vtTS[2];
 
 // Pixy
 const double pixyCoeff[5] = {
-	0.000000039357552,
-	-0.000020900586036,
-	0.004379255805114,
-	-0.572754842881408,
-	69.251766070592168
+	0.000000043550534,
+	-0.000023239535204,
+	0.005033059128963,
+	-0.677050955917591,
+	75.424132382709260
 };
 float vtpixyVelAvg;
 float vtpixyPosAvg;
@@ -268,8 +264,8 @@ const float stp2cm = (9 * PI) / 200;
 const float maxSpeed = 80; // (cm)
 const float maxAcc = 80; // (cm)
 const float maxDec = 80; // (cm)
-const byte kAcc = 60*2;
-const byte kDec = 60*2;
+const byte kAcc = 60 * 2;
+const byte kDec = 60 * 2;
 const byte kRun = 60;
 const byte kHold = 60 / 2;
 
@@ -305,6 +301,10 @@ float cueStartPos[2];
 float msg_rewPos;
 byte msg_rewDurByte;
 int rewCnt = 0;
+const int armExtStps = 200;
+int armPos = armExtStps;
+int armTarg = 0;
+bool armStpOn = false;
 
 // LEDs
 const int trackLEDduty = 75; // value between 0 and 255
@@ -1553,23 +1553,20 @@ u;
 void setup() {
 
 	delayMicroseconds(100);
-	//while (!SerialUSB);
+
+	// SET UP SERIAL STUFF
+	// Serial monitor
 	SerialUSB.begin(0);
 
 	// XBee
 	Serial1.begin(57600);
 
-	// Set button pins enable internal pullup
-	for (int i = 0; i <= 2; i++) {
-		pinMode(pin_Btn[i], INPUT_PULLUP);
-	}
-	pinMode(pin_FeedSwitch, INPUT_PULLUP);
+	// SETUP OUTPUT POWER AND GROUND PINS
 
 	// Set output pins
 	pinMode(pin_Rel_Ens, OUTPUT);
 	pinMode(pin_Rel_Eth, OUTPUT);
 	pinMode(pin_Disp_Pwr, OUTPUT);
-	pinMode(pin_XBee_Pwr, OUTPUT);
 	pinMode(pin_ED_STP, OUTPUT);
 	pinMode(pin_ED_DIR, OUTPUT);
 	pinMode(pin_ED_SLP, OUTPUT);
@@ -1578,29 +1575,22 @@ void setup() {
 	pinMode(pin_ED_ENBL, OUTPUT);
 	pinMode(pin_PwrOff, OUTPUT);
 	pinMode(pin_IRprox_Pwr, OUTPUT);
-	pinMode(pin_IRdetect_Pwr, OUTPUT);
-	pinMode(pin_IRdetect_Gnd, OUTPUT);
+	pinMode(pin_FeedSwitch_Gnd, OUTPUT);
 
 	// Set power/ground pins
 	digitalWrite(pin_Rel_Ens, LOW);
 	digitalWrite(pin_Rel_Eth, LOW);
 	digitalWrite(pin_Disp_Pwr, HIGH);
-	digitalWrite(pin_XBee_Pwr, HIGH);
 	digitalWrite(pin_IRprox_Pwr, HIGH);
-	digitalWrite(pin_IRdetect_Pwr, HIGH);
-	digitalWrite(pin_IRdetect_Gnd, LOW);
+	digitalWrite(pin_FeedSwitch_Gnd, LOW);
 
-	// Start BigEasyDriver in sleep
-	digitalWrite(pin_ED_SLP, LOW);
+	// Set button pins enable internal pullup
+	for (int i = 0; i <= 2; i++) {
+		pinMode(pin_Btn[i], INPUT_PULLUP);
+	}
+	pinMode(pin_FeedSwitch, INPUT_PULLUP);
 
-	// Define external interrupt
-	attachInterrupt(digitalPinToInterrupt(pin_Btn[0]), Interupt_Btn1, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_Btn[1]), Interupt_Btn2, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_Btn[2]), Interupt_Btn3, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
-
-	// Initialize AutoDriver
+	// SETUP AUTODRIVER
 
 	// Configure SPI
 	ad_R.SPIConfig();
@@ -1617,6 +1607,10 @@ void setup() {
 	ad_R.getStatus();
 	ad_F.getStatus();
 
+	// Make sure motor is stopped and in high impedance
+	ad_R.hardHiZ();
+	ad_F.hardHiZ();
+
 	// Print ad board status
 	SerialUSB.println(' ');
 	SerialUSB.print("BOARD R STATUS: ");
@@ -1624,15 +1618,34 @@ void setup() {
 	SerialUSB.print("BOARD F STATUS: ");
 	SerialUSB.println(ad_F.getStatus(), HEX);
 
-	// Initialize LCD
+	// SETUP BIG EASY DRIVER
+
+	// Set to 1/2 step mode
+	digitalWrite(pin_ED_MS1, HIGH);
+	digitalWrite(pin_ED_MS2, LOW);
+	digitalWrite(pin_ED_MS3, LOW);
+
+	// Start BigEasyDriver in sleep
+	digitalWrite(pin_ED_SLP, LOW);
+
+	// DEFINE EXTERNAL INTERUPTS
+	attachInterrupt(digitalPinToInterrupt(pin_Btn[0]), Interupt_Btn1, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_Btn[1]), Interupt_Btn2, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_Btn[2]), Interupt_Btn3, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+
+	// INITIALIZE LCD
 	myGLCD.InitLCD();
 	myGLCD.setFont(SmallFont);
 	myGLCD.invert(true);
 
-	// Initailize Pixy
+	// INITIALIZE PIXY
 	pixy.init();
 	Wire.begin();
-	
+
+	// INITIALIZE MESAGE VARIABLES
+
 	// Initialize print queue
 	for (int i = 0; i < printQueue_lng; i++)
 	{
@@ -1672,10 +1685,6 @@ void setup() {
 		r2c_packLast[i] = 0;
 	}
 
-	// Make sure motor is stopped and in high impedance
-	ad_R.hardHiZ();
-	ad_F.hardHiZ();
-	//RunMotor('f', 0, "None");
 
 }
 
@@ -1689,8 +1698,6 @@ void loop() {
 #pragma region //--- FIRST PASS SETUP ---
 	if (fc_isFirstPass)
 	{
-		// Blink to show setup done
-		SetupBlink();
 
 		// Make sure Xbee buffer empty
 		while (Serial1.available() > 0) Serial1.read();
@@ -1710,6 +1717,9 @@ void loop() {
 
 		fc_isFirstPass = false;
 		DebugState("RESET");
+
+		// Blink to show setup done
+		SetupBlink();
 
 		//// TEST
 		//float now_pos = 348 + (140 * PI);
@@ -2289,6 +2299,13 @@ void loop() {
 
 	// UPDATE BULLDOZER
 	bull.UpdateBull();
+
+#pragma endregion
+
+#pragma region //--- OTHER OPPERATIONS ---
+
+	// Check if feeder arm should be moved
+	MoveFeedArm();
 
 #pragma endregion
 
@@ -3290,11 +3307,76 @@ void UpdateEKF()
 
 #pragma region --------HARDWARE CONTROL---------
 
+// MOVE FEEDER ARM
+void MoveFeedArm()
+{
+	// Check if arm should be moved
+	if (armPos != armTarg)
+	{
+		// Wake motor
+		if (digitalRead(pin_ED_SLP) == LOW)
+		{
+			digitalWrite(pin_ED_SLP, HIGH);
+		}
+
+		// Step motor
+		if (!armStpOn)
+		{
+			// Extend arm
+			if (armPos < armTarg)
+			{
+				armPos++;
+				digitalWrite(pin_ED_DIR, LOW); // extend
+			}
+			// Retract arm
+			else
+			{
+				if (digitalRead(pin_FeedSwitch) == HIGH)
+				{
+					digitalWrite(pin_ED_DIR, HIGH); // retract
+				}
+				// Home pos reached
+				else
+				{
+					//armPos = 0;
+					// Take presure off botton
+					armPos = -20;
+				}
+			}
+			digitalWrite(pin_ED_STP, HIGH);
+		}
+		// Unstep motor
+		else
+		{
+			digitalWrite(pin_ED_STP, LOW);
+		}
+		armStpOn = !armStpOn;
+	}
+	// Target reached
+	else
+	{
+		// Unstep motor
+		if (digitalRead(pin_ED_STP) == HIGH)
+		{
+			digitalWrite(pin_ED_STP, LOW);
+		}
+		// Sleep motor
+		if (digitalRead(pin_ED_SLP) == HIGH)
+		{
+			digitalWrite(pin_ED_SLP, LOW);
+		}
+		armStpOn = false;
+	}
+}
+
 // START REWARD
 void StartRew(bool do_stop)
 {
 	// Track rewards
 	rewCnt++;
+
+	// Set to extend feeder arm 
+	armTarg = armExtStps;
 
 	// Stop robot
 	if (do_stop)
@@ -3311,9 +3393,8 @@ void StartRew(bool do_stop)
 	reward.t_end = millis() + reward.duration;
 
 	// Turn on reward LED
-	analogWrite(pin_RewLED_R, rewLEDduty);
+	analogWrite(pin_RewLED_R, round(rewLEDduty*0.75));
 	analogWrite(pin_RewLED_C, rewLEDduty);
-
 	// Open solenoid
 	digitalWrite(pin_Rel_Ens, HIGH);
 
@@ -3340,6 +3421,8 @@ bool EndRew()
 
 	if (millis() > reward.t_end)
 	{
+		// Set to retract feeder arm 
+		armTarg = 0;
 
 		// Close solenoid
 		digitalWrite(pin_Rel_Ens, LOW);

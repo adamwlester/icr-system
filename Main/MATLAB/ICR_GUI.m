@@ -30,8 +30,7 @@ D.PAR.strQdDel = 0.5; % min time in start quad (sec)
 % Directories
 
 % IO dirs
-D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\Code\RUNNING';
-D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
+D.DIR.ioTop = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\IOfiles';
 D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images\plot_images\wall_top_down.png');
 D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
 D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');

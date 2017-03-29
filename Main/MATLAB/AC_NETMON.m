@@ -12,7 +12,7 @@ function[] = AC_NETMON()
     %   Img1 & Img2: N, S, E, W
     % image directory
     imgDir = ...
-        '\\ICR_CHEETAH\Study_ICR\Code\RUNNING\IOfiles\Images\WallImages';
+        '\\ICR_CHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages';
     % subdirectories
     subDir{1} = 'Main';
     subDir{2} = 'Trigger';
@@ -43,16 +43,18 @@ noise_rt = rand(nsfs*nsmin*60,1) * 0.1;
 % tone signal blend
 % reward_lft = sin(2*pi*(1/nsfs:1/nsfs:nsmin*60)*2500)';
 t = 1/nsfs:1/nsfs:nsmin*60;
-s1 = sin(2*pi*t*4000)';
-s2 = sin(2*pi*t*8000)';
-reward_lft = (s1 + s2) / 2;
+s1 = sin(2*pi*t*1000)';
+s2 = sin(2*pi*t*2500)';
+s3 = sin(2*pi*t*5000)';
+s4 = sin(2*pi*t*10000)';
+reward_lft = (s1 + s2 + s3 + s4) / 4;
 reward_lft = reward_lft * 0.2;
 
 % Sound object
 soundH = audioplayer([reward_lft,noise_rt], nsfs);
 
 % Start sound
-play(soundH);
+%play(soundH);
 %stop(soundH);
 
 %% Loop indefinitely
