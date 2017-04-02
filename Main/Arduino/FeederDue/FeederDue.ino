@@ -1,10 +1,47 @@
 
 //-------FEEDERDUE-------
 
-// XBee DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size) 
-// XBee DO (to UART rx) buffer = 202 bytes
-// DUE SERIAL_BUFFER_SIZE = 128
-// SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
+#pragma region ---------DEBUG SETTINGS---------
+
+/*
+NOTES
+XBee DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
+XBee DO (to UART rx) buffer = 202 bytes
+DUE SERIAL_BUFFER_SIZE = 128
+SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
+*/
+
+// PRINT DEBUGGING
+
+// Where to print
+const bool doDB_PrintConsole = false;
+const bool doDB_PrintLCD = false;
+
+// What to print
+const bool doPrint_flow = false;
+const bool doPrint_motorControl = false;
+const bool doPrint_rcvd = false;
+const bool doPrint_r2c = false;
+const bool doPrint_r2a = false;
+const bool doPrint_pid = false;
+const bool doPrint_bull = false;
+const bool doPrint_resent = false;
+const bool doPrint_dropped = false;
+
+// PID CALIBRATION
+// Set kC and run ICR_Run.cs
+const bool do_pidCalibration = true;
+const float kC = 4; // critical gain [2,3,4]
+const float pC = 2.13; // oscillation period [3.28,2.32,2.13]  
+const float c_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
+uint32_t c_durSteps = 30000; // (ms)
+
+
+// POSITION
+const bool do_posDebug = false;
+
+#pragma endregion
+
 
 #pragma region ---------LIBRARIES & PACKAGES---------
 
@@ -52,7 +89,6 @@ const int pin_AD_CSP_F = 6;
 const int pin_AD_RST = 7;
 
 // Display
-const int pin_Disp_Pwr = 1;
 const int pin_Disp_SCK = 8;
 const int pin_Disp_MOSI = 9;
 const int pin_Disp_DC = 10;
@@ -66,8 +102,8 @@ const int pin_RewLED_C = 3;
 const int pin_TrackLED = 2;
 
 // Relays
-const int pin_Rel_Ens = 23;
-const int pin_Rel_Eth = 25;
+const int pin_Rel_Ens = 22;
+const int pin_Rel_Eth = 23;
 
 // BigEasyDriver
 const int pin_ED_RST = 47;
@@ -95,12 +131,11 @@ and must all be members of the same port (PortA)
 */
 
 // IR proximity sensors
-const int pin_IRprox_Pwr = 22;
 const int pin_IRprox_Rt = 42;
 const int pin_IRprox_Lft = 43;
 
 // IR detector
-const int pin_IRdetect = 16;
+const int pin_IRdetect = 17;
 
 // Buttons
 const int pin_Btn[3] = { A3, A2, A1 };
@@ -110,24 +145,14 @@ const int pin_Btn[3] = { A3, A2, A1 };
 
 #pragma region ---------VARIABLE SETUP---------
 
-// Debug print
-const bool doDebugConsole = true;
-const bool doDebugLCD = false;
-const bool doPrint_flow = true;
-const bool doPrint_motorControl = false;
-const bool doPrint_rcvd = false;
-const bool doPrint_r2c = false;
-const bool doPrint_r2a = false;
-const bool doPrint_pid = false;
-const bool doPrint_bull = false;
-const bool doPrint_resent = false;
-const bool doPrint_dropped = false;
+// Print debugging
 String printQueue[10];
 const int printQueue_lng =
 sizeof(printQueue) / sizeof(printQueue[0]);
 int printQueueInd = printQueue_lng;
 bool doPrint = false;
-// debug tracking
+
+// Debug tracking
 uint32_t t_loopMain = millis();
 uint32_t t_loopRead = millis();
 int cnt_droppedPacks;
@@ -261,7 +286,7 @@ float vtpixyPosAvg;
 // AutoDriver
 const float cm2stp = 200 / (9 * PI);
 const float stp2cm = (9 * PI) / 200;
-const float maxSpeed = 80; // (cm)
+const float maxSpeed = 100; // (cm)
 const float maxAcc = 80; // (cm)
 const float maxDec = 80; // (cm)
 const byte kAcc = 60 * 2;
@@ -277,9 +302,6 @@ float ekf_robVel = 0;
 
 // PID Settings
 bool do_includeTerm[2] = { true, true };
-const uint32_t loopTim = 60; // pid sample rate (ms)
-const float kC = 5; // critical gain kC = 5 * (1 / 0.6)
-const float pC = 3; // oscillation period   
 const float defualtSetPoint = 42; // (cm)
 const float guardDist = 4.5;
 const float feedDist = 66;
@@ -491,7 +513,6 @@ class PID
 
 public:
 	uint32_t t_lastLoop = 0;
-	uint32_t t_lastMotorRun = 0;
 	float dtLoop;
 	bool wasLoopRan = false;
 	float p_term;
@@ -509,9 +530,6 @@ public:
 	float velUpdate;
 	float runSpeed = 0;
 	float speedMax = maxSpeed;
-	float kP_default;
-	float kI_default;
-	float kD_default;
 	float dT;
 	float kP;
 	float kI;
@@ -527,15 +545,38 @@ public:
 	uint32_t t_dampTill;
 	uint32_t t_lastDamp = millis();
 
+	// PID calibration
+	uint32_t _c_t_calStr = millis();
+	uint32_t _c_dt_min = 40; // (ms)
+	int _c_stepNow = 0;
+	float _c_PcCnt = 0;  // oscillation count
+	float _c_PcSum = 0; // oscillation period sum
+	uint32_t _c_t_PcNow = 0;
+	uint32_t _c_t_PcLast = 0;
+	float _c_PcArr[4] = { 0, 0, 0, 0 };
+	float _c_PcAvg;
+	float _c_PcNow;
+	float _c_PcAll;
+	float _c_errNow;
+	float _c_errLast;
+	float _c_errAvg;
+	float _c_errArr[4] = { 0, 0, 0, 0 };
+	float _c_dtLoop;
+	float _c_errCnt = 0;
+	float _c_errSum = 0;
+	float _c_errMax = 0;
+	float _c_errMin = 0;
+	float _c_ekf_ratPos = 0;
+	float _c_ekf_ratVel = 0;
+	bool _c_is_pidUpdated = false;
+	bool _c_is_calFinished = false;
+
 	// constructor
 	PID(const float kC, const float pC, const float set_point)
 	{
-		this->kP_default = 0.6 * kC; // proportional constant
-		this->kI_default = 2 * kP_default / pC; // integral constant
-		this->kD_default = kP_default*pC / 8; // derivative constant
-		this->kP = kP_default; // proportional constant
-		this->kI = kI_default; // integral constant
-		this->kD = kD_default; // derivative constant
+		this->kP = 0.6 * kC; // proportional constant
+		this->kI = 2 * kP / pC; // integral constant
+		this->kD = kP*pC / 8; // derivative constant
 		this->setPoint = set_point;
 	}
 
@@ -638,7 +679,6 @@ public:
 					wasLoopRan = true;
 					ekfNew = false;
 
-					t_lastMotorRun = millis();
 					if (firstRun)
 					{
 						PrintPID("pid: first run");
@@ -843,44 +883,122 @@ public:
 
 	void PrintPID(String str)
 	{
-		if (doPrint_pid && (doDebugConsole || doDebugLCD))
+		if (doPrint_pid && (doDB_PrintConsole || doDB_PrintLCD))
 		{
 			StoreDebugStr(str);
 		}
 	}
 
-	void RunCalibration()
+	float RunPidCalibration()
 	{
-		float PcCount = 0;  // oscillation count
-		uint32_t t_Pc[2] = { 0, 0 }; // oscillation period sum
-		uint32_t PcSum = 0; // oscillation period sum
-		float PcAvg;
-		float PcNow;
-		float errCount = 0;
-		float errSum = 0;
-		float errAvg;
-		float errMax = 0;
-		float errMin = 0;
-		if (errorLast > 0 && error < 0)
-		{
-			t_Pc[0] = t_Pc[1];
-			t_Pc[1] = millis() / 1000;
-			if (t_Pc[0] > 0 && t_Pc[1] > 0)
-			{
-				PcCount++;
-				PcNow = t_Pc[1] - t_Pc[0];
-				PcSum += PcNow;
-				PcAvg = (float)(PcSum) / PcCount;
-			}
-		}
-		errCount++;
-		errSum += abs(error);
-		errAvg = errSum / errCount;
-		errMax = max(errMax, error);
-		errMin = max(errMin, error);
 
-		// If robot runs over rat
-		if (error < setPoint*-1);
+		/*
+		Calibration based on the Ziegler–Nichols method:
+		http://www.inpharmix.com/jps/PID_Controller_For_Lego_Mindstorms_Robots.html
+		Equations:
+		kP = 0.6*Kc
+		Kd = 2*Kp * dT/Pc
+		Ki = Kp*Pc / (8*dT)
+		*/
+
+		if (!_c_is_calFinished)
+		{
+			// End of calibration 
+			if (
+				millis() > (4 * (c_durSteps) + _c_t_calStr) &&
+				_c_PcArr[3] > 0
+				)
+			{
+				float _pc_sum = 0;
+				// Compute overal average
+				for (int i = 0; i < 4; i++)
+				{
+					_pc_sum += _c_PcArr[i];
+				}
+				_c_PcAll = _pc_sum / 4;
+				_c_is_pidUpdated = true;
+				_c_is_calFinished = true;
+				return -1;
+			}
+			else if (!ekfNew || ekf_robPos <= 0)
+			{
+				return -1;
+			}
+			else if (millis() > t_lastLoop + _c_dt_min)
+			{
+
+				// Setup stuff
+				if (_c_ekf_ratPos == 0)
+				{
+					_c_ekf_ratPos = ekf_robPos + setPoint;
+					t_lastLoop = millis();
+					_c_t_calStr = millis();
+				}
+
+				// Check if speed should be incrimented
+				if (millis() > (_c_stepNow + 1)*c_durSteps + _c_t_calStr)
+				{
+					_c_PcArr[_c_stepNow] = _c_PcAvg;
+					_c_PcSum = 0;
+					_c_PcCnt = 0;
+					_c_errArr[_c_stepNow] = _c_errAvg;
+					_c_errSum = 0;
+					_c_errCnt = 0;
+					if (_c_stepNow < 3) _c_stepNow++;
+				}
+
+				// Get loop dt
+				_c_dtLoop = (float)(millis() - t_lastLoop) / 1000.0f;
+				t_lastLoop = millis();
+
+				// Compute PID
+				_c_ekf_ratVel = c_speedSteps[_c_stepNow];
+				_c_ekf_ratPos += _c_ekf_ratVel * (_c_dtLoop / 1);
+
+				// Compute error 
+				error = _c_ekf_ratPos - (ekf_robPos + setPoint);
+				_c_errNow = error;
+
+				// Compute new terms
+				p_term = kC*error;
+
+				// Get new run speed
+				runSpeed = ekf_robVel + p_term;
+
+				// Keep speed in range [0, speedMax]
+				if (runSpeed > speedMax) runSpeed = speedMax;
+				else if (runSpeed < 0) runSpeed = 0;
+
+				// Catch occilation edge
+				if (_c_errLast > 0 && error < 0)
+				{
+					_c_t_PcLast = _c_t_PcNow;
+					_c_t_PcNow = millis();
+					if (_c_t_PcLast > 0)
+					{
+						_c_PcCnt++;
+						_c_PcNow = float(_c_t_PcNow - _c_t_PcLast) / 1000;
+						_c_PcSum += _c_PcNow;
+						_c_PcAvg = _c_PcSum / _c_PcCnt;
+					}
+				}
+				_c_errCnt++;
+				_c_errSum += abs(error);
+				_c_errAvg = _c_errSum / _c_errCnt;
+				_c_errMax = max(_c_errMax, error);
+				_c_errMin = max(_c_errMin, error);
+
+				// Update vars
+				_c_errLast = error;
+				_c_is_pidUpdated = true;
+				wasLoopRan = true;
+				ekfNew = false;
+
+				return runSpeed;
+			}
+
+		}
+
 	}
 
 };
@@ -1110,7 +1228,7 @@ public:
 
 	void PrintBull(String str)
 	{
-		if (doPrint_bull && (doDebugConsole || doDebugLCD))
+		if (doPrint_bull && (doDB_PrintConsole || doDB_PrintLCD))
 		{
 			StoreDebugStr(str);
 		}
@@ -1131,7 +1249,7 @@ public:
 	const uint32_t t_updateDT = 10;
 	uint32_t t_updateNext;
 	float dist_left;
-	float new_speed;
+	float _new_speed;
 	float pos_start;
 	float targ;
 	float offset_target;
@@ -1230,10 +1348,10 @@ public:
 				else if (millis() > t_updateNext)
 				{
 					// Compute new speed
-					new_speed = (dist_left / dec_pos) * base_speed;
+					_new_speed = (dist_left / dec_pos) * base_speed;
 
 					// Maintain at min speed
-					if (new_speed < speed_min) new_speed = speed_min;
+					if (_new_speed < speed_min) _new_speed = speed_min;
 
 					// Update loop time
 					t_updateNext = millis() + t_updateDT;
@@ -1247,12 +1365,12 @@ public:
 				// Set flag true
 				is_targ_reached = true;
 
-				new_speed = 0;
+				_new_speed = 0;
 			}
 		}
-		else new_speed = 0;
+		else _new_speed = 0;
 
-		return new_speed;
+		return _new_speed;
 	}
 
 	bool CheckTargReached(float now_pos, float now_vel)
@@ -1555,6 +1673,7 @@ void setup() {
 	delayMicroseconds(100);
 
 	// SET UP SERIAL STUFF
+
 	// Serial monitor
 	SerialUSB.begin(0);
 
@@ -1566,7 +1685,6 @@ void setup() {
 	// Set output pins
 	pinMode(pin_Rel_Ens, OUTPUT);
 	pinMode(pin_Rel_Eth, OUTPUT);
-	pinMode(pin_Disp_Pwr, OUTPUT);
 	pinMode(pin_ED_STP, OUTPUT);
 	pinMode(pin_ED_DIR, OUTPUT);
 	pinMode(pin_ED_SLP, OUTPUT);
@@ -1574,14 +1692,9 @@ void setup() {
 	pinMode(pin_ED_MS2, OUTPUT);
 	pinMode(pin_ED_ENBL, OUTPUT);
 	pinMode(pin_PwrOff, OUTPUT);
-	pinMode(pin_IRprox_Pwr, OUTPUT);
 	pinMode(pin_FeedSwitch_Gnd, OUTPUT);
 
 	// Set power/ground pins
-	digitalWrite(pin_Rel_Ens, LOW);
-	digitalWrite(pin_Rel_Eth, LOW);
-	digitalWrite(pin_Disp_Pwr, HIGH);
-	digitalWrite(pin_IRprox_Pwr, HIGH);
 	digitalWrite(pin_FeedSwitch_Gnd, LOW);
 
 	// Set button pins enable internal pullup
@@ -1590,14 +1703,20 @@ void setup() {
 	}
 	pinMode(pin_FeedSwitch, INPUT_PULLUP);
 
+	// Make sure relay pins low
+	digitalWrite(pin_Rel_Ens, LOW);
+	digitalWrite(pin_Rel_Eth, LOW);
+
 	// SETUP AUTODRIVER
 
 	// Configure SPI
 	ad_R.SPIConfig();
+	delayMicroseconds(100);
 	ad_F.SPIConfig();
 	delayMicroseconds(100);
 	// Reset each axis
 	ad_R.resetDev();
+	delayMicroseconds(100);
 	ad_F.resetDev();
 	delayMicroseconds(100);
 	// Configure each axis
@@ -1605,6 +1724,7 @@ void setup() {
 	delayMicroseconds(100);
 	// Get the status to clear the UVLO Flag
 	ad_R.getStatus();
+	delayMicroseconds(100);
 	ad_F.getStatus();
 
 	// Make sure motor is stopped and in high impedance
@@ -1692,8 +1812,68 @@ void setup() {
 // ---------MAIN LOOP---------
 void loop() {
 
+#pragma region //--- DEBUG ---
+
 	// Store loop time
 	t_loopMain = millis();
+
+	// Print debug
+	if (doPrint)
+	{
+		PrintDebug();
+	}
+
+	// Debug pos
+	if (do_posDebug && fc_isRatIn)
+	{
+		static float ratRobDist;
+		if (millis() % 100 == 0)
+		{
+			// Hold all motor control
+			if (!fc_isHalted)
+			{
+				fc_isHalted = true;
+				SetMotorControl("None", "PosDebug");
+			}
+			ratRobDist = ekf_ratPos - ekf_robPos;
+			// Plot pos
+			millis();
+			// Turn on rew led when near setpoint
+			if (errorDefault > -0.5 && errorDefault < 0.5) { analogWrite(pin_RewLED_C, 50); }
+			else { analogWrite(pin_RewLED_C, 0); }
+			// Print to LCD
+			analogWrite(pin_Disp_LED, 25);
+			PrintLCD(String(ratRobDist, 2));
+		}
+	}
+
+	// Run PID calibration
+	if (do_pidCalibration)
+	{
+		float _new_speed = pid.RunPidCalibration();
+		float _speed_steps;
+
+		// Run motors
+		if (pid._c_is_pidUpdated)
+		{
+			if (_new_speed <= 0)
+			{
+				HardStop("PID");
+			}
+			else if (_new_speed > 0)
+			{
+				_speed_steps = _new_speed*cm2stp;
+				ad_R.run(FWD, _speed_steps);
+				ad_F.run(FWD, _speed_steps);
+			}
+			// Print/plot values
+			millis();
+			// Reset flag
+			pid._c_is_pidUpdated = false;
+		}
+	}
+
+#pragma endregion
 
 #pragma region //--- FIRST PASS SETUP ---
 	if (fc_isFirstPass)
@@ -1731,16 +1911,6 @@ void loop() {
 		//	now_pos = now_pos + 10 + (140 * PI);
 		//}
 
-	}
-
-#pragma endregion
-
-#pragma region //--- PRINT DEBUG ---
-
-	// Print debug
-	if (doPrint)
-	{
-		PrintDebug();
 	}
 
 #pragma endregion
@@ -1869,12 +2039,12 @@ void loop() {
 		if (targ_moveTo.is_targ_set)
 		{
 			// Do deceleration
-			float new_speed = targ_moveTo.DecelToTarg(ekf_robPos, ekf_robVel, 40, 10);
+			float _new_speed = targ_moveTo.DecelToTarg(ekf_robPos, ekf_robVel, 40, 10);
 
 			// Change speed if > 0
-			if (new_speed > 0)
+			if (_new_speed > 0)
 			{
-				RunMotor(targ_moveTo.move_dir, new_speed, "MoveTo");
+				RunMotor(targ_moveTo.move_dir, _new_speed, "MoveTo");
 			}
 			// Check if target reached
 			else if (targ_moveTo.is_targ_reached)
@@ -1942,7 +2112,7 @@ void loop() {
 			else if (!reward.is_trigger_ready)
 			{
 				bool ekf_pass = reward.CheckTargBounds(ekf_ratPos, ekf_ratVel);
-				bool raw_pass = false; // reward.CheckTargBounds(vtpixyPosAvg, vtpixyVelAvg);
+				bool raw_pass = false; // 
 				if (ekf_pass || raw_pass)
 				{
 					// Start reward
@@ -2287,14 +2457,15 @@ void loop() {
 	CheckBlockTimElapsed();
 
 	// UPDATE PID AND SPEED
-	float new_speed = pid.UpdatePID();
-	if (new_speed == 0)
+	float _new_speed = pid.UpdatePID();
+
+	if (_new_speed == 0)
 	{
 		HardStop("PID");
 	}
-	else if (new_speed > 0)
+	else if (_new_speed > 0)
 	{
-		RunMotor('f', new_speed, "PID");
+		RunMotor('f', _new_speed, "PID");
 	}
 
 	// UPDATE BULLDOZER
@@ -2317,6 +2488,7 @@ void loop() {
 // PARSE SERIAL INPUT
 bool ParseSerial()
 {
+	// Local vars
 	byte buff;
 	char head[2];
 	char foot;
@@ -2892,7 +3064,7 @@ void SendData()
 		// Print
 		if (((doPrint_r2c && rcv_id == 'c') ||
 			(doPrint_r2a && rcv_id == 'a')) &&
-			(doDebugConsole || doDebugLCD))
+			(doDB_PrintConsole || doDB_PrintLCD))
 		{
 			char str[50];
 			char id;
@@ -3260,11 +3432,12 @@ void UpdateEKF()
 		// Check EKF progress
 		pid.CheckEKF(millis());
 
+		// Update pid next loop time
+		pid.SetLoopTime(millis());
+
 		// Update PID loop time
 		if (fc_isRatIn)
 		{
-			// Update pid next loop time
-			pid.SetLoopTime(millis());
 			// Set flag for reward 
 			reward.is_ekf_new = true;
 			// Store pixy/vt average
@@ -3545,12 +3718,12 @@ void StoreDebugStr(String str)
 void PrintDebug()
 {
 
-	if ((doDebugLCD && !vol_doBlockLCDlog) ||
-		doDebugConsole)
+	if ((doDB_PrintLCD && !vol_doBlockLCDlog) ||
+		doDB_PrintConsole)
 	{
 
 		// Print to LCD
-		if (doDebugLCD && !vol_doBlockLCDlog)
+		if (doDB_PrintLCD && !vol_doBlockLCDlog)
 		{
 			// Local vars 
 			static int scale_ind = 40 / printQueue_lng;
@@ -3586,7 +3759,7 @@ void PrintDebug()
 		}
 
 		// Print to console
-		if (doDebugConsole)
+		if (doDB_PrintConsole)
 		{
 			// Get current string
 			String str =
@@ -3609,7 +3782,7 @@ void PrintDebug()
 
 void DebugMotorControl(String set_to, String called_from)
 {
-	if (doPrint_motorControl && (doDebugConsole || doDebugLCD))
+	if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
 	{
 		String str;
 		// Store
@@ -3620,7 +3793,7 @@ void DebugMotorControl(String set_to, String called_from)
 
 void DebugDropped(int missed, int missed_total, int total)
 {
-	if (doPrint_dropped && (doDebugConsole || doDebugLCD))
+	if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
 	{
 		char str[50];
 		// Store
@@ -3631,7 +3804,7 @@ void DebugDropped(int missed, int missed_total, int total)
 
 void DebugResent(char id, uint16_t pack, int total)
 {
-	if (doPrint_resent && (doDebugConsole || doDebugLCD))
+	if (doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD))
 	{
 		char str[50];
 		// Store
@@ -3643,7 +3816,7 @@ void DebugResent(char id, uint16_t pack, int total)
 void DebugRsvd(char id, uint16_t pack)
 {
 	//// Print
-	if (doPrint_rcvd && (doDebugConsole || doDebugLCD))
+	if (doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD))
 	{
 		char str[50];
 
@@ -3682,7 +3855,7 @@ void DebugRsvd(char id, uint16_t pack)
 
 void DebugState(String msg)
 {
-	if (doPrint_flow && (doDebugConsole || doDebugLCD))
+	if (doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD))
 	{
 		// Store
 		StoreDebugStr(msg);
