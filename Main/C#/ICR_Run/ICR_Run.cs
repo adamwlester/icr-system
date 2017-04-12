@@ -17,12 +17,23 @@ namespace ICR_Run
     class ICR_Run
     {
 
-        #region ---------TOP LEVEL VARS---------
+        #region ---------DEBUG SETTINGS---------
 
-        // Debugging
-        private static bool doDebugMat = false;
-        private static bool printBlockedVt = true;
+        // Run system test
+        private static double systemTest = 2;
+        /*
+        0: No test
+        1: Run MATLAB in debug mode
+        2: Halt error test
+        */
+        // Print all blocked vt recs
+        private static bool printBlockedVt = false;
+        // Print all sent vt recs
         private static bool printSentVt = false;
+        
+        #endregion
+
+        #region ---------TOP LEVEL VARS---------
 
         // To quit exit program smoothly
         private static bool isMAThanging = false;
@@ -58,8 +69,9 @@ namespace ICR_Run
         static readonly object lock_sendData = new object();
         private static VT_Blocker vtBlocker = new VT_Blocker();
 
-        // Matlab communication
-        private static char[] m2c_id = new char[12] { // prefix giving masage id
+        // Matlab to CS communication
+        private static char[] m2c_id = new char[13] { // prefix giving masage id
+            'T', // system test command
             'S', // start session
             'Q', // quit session
             'M', // move to position
@@ -78,7 +90,8 @@ namespace ICR_Run
         private static double matIn_dat2; // matlab data
 
         // CS to robot communication
-        private static char[] c2r_id = new char[11] {
+        private static char[] c2r_id = new char[12] {
+            'T', // system test command
             'S', // start session
             'Q', // quit session
             'M', // move to position
@@ -102,7 +115,8 @@ namespace ICR_Run
         private static byte[] c2r_packNum = new byte[2];
 
         // Robot to CS communication
-        private static char[] r2c_id = new char[10] {
+        private static char[] r2c_id = new char[13] {
+            'T', // system test command
             'S', // start session
             'Q', // quit session
             'M', // move to position
@@ -113,12 +127,20 @@ namespace ICR_Run
             'I', // rat in/out
             'D', // execution done
             'V', // connected and streaming
+            'J', // battery voltage
+            'A', // reward zone
              };
         private static char r2c_head = '{';
         private static char r2c_foot = '}';
         private static List<char> r2c_idHist = new List<char>();
         private static List<ushort> r2c_packHist = new List<ushort>();
         private static ushort[] r2c_packLast = new ushort[r2c_id.Length];
+
+        // CS to Matlab communication
+        private static char[] c2m_id = new char[2] {
+            'J', // battery voltage
+            'A', // reward zone
+             };
 
         // General communication
         private static long t_c2r = 0;
@@ -191,8 +213,8 @@ namespace ICR_Run
         static void Main()
         {
             PrintAction("[Main] RUNNING: Main...");
-            // Hide matlab app window
-            if (doDebugMat)
+            // Hide/show matlab app window
+            if (systemTest != 0)
                 com_Matlab.Visible = 1;
             else com_Matlab.Visible = 0;
 
@@ -573,7 +595,7 @@ namespace ICR_Run
                 }
 
                 // Hold for errors
-                if (doDebugMat || isMAThanging || (doAbort && !doQuit))
+                if ((systemTest != 0) || isMAThanging || (doAbort && !doQuit))
                 {
                     PrintAction("PRESS ANY KEY TO EXIT");
                     Console.ReadKey();
@@ -746,6 +768,17 @@ namespace ICR_Run
                 byte[] msg_data = null;
                 // default no data
                 int nDataBytes = 0;
+
+                // Send system test command
+                if (id == 'T')
+                {
+                    nDataBytes = 2;
+                    msg_data = new byte[nDataBytes];
+                    // Add test id
+                    msg_data[0] = (byte)dat_1;
+                    // Add test parameter
+                    msg_data[1] = (byte)dat_2;
+                }
 
                 // Send setup data
                 if (id == 'S')
@@ -988,11 +1021,13 @@ namespace ICR_Run
             bool for_ard = false;
             byte[] head_rcvd = new byte[1];
             byte[] id_rcvd = new byte[1];
+            byte[] dat_rcvd = new byte[1];
             byte[] pack_rcvd = new byte[2];
             byte[] foot_rcvd = new byte[1];
             char head = ' ';
             char id = ' ';
             char foot = ' ';
+            byte dat = 0;
             ushort pack = 0;
             string msg_str;
 
@@ -1032,6 +1067,15 @@ namespace ICR_Run
                 }
             }
 
+            // Get data byte
+            if (head_found && id_found)
+            {
+                // Get data byte
+                while (sp_Xbee.BytesToRead < 1 && !doExit) ; // wait
+                sp_Xbee.Read(dat_rcvd, 0, 1);
+                dat = dat_rcvd[0];
+            }
+
             // Get first and second part of packet number
             if (head_found && id_found)
             {
@@ -1042,14 +1086,13 @@ namespace ICR_Run
                 u.b2 = pack_rcvd[1];
                 pack = u.s1;
 
-                // Check if pack matches sent pack or done related id
+                // Check if pack matches sent pack or done related id or one way message
                 for (int i = c2r_packHist.Count - 1; i >= 0; i--)
                 {
                     while (c2r_packHist.Count != c2r_idHist.Count && !doExit) ;
                     if (
-                        c2r_packHist[i] == pack &&
-                        (c2r_idHist[i] == id ||
-                        id == 'D')
+                        (c2r_packHist[i] == pack &&  (c2r_idHist[i] == id || id == 'D')) ||
+                        (id == 'J' && pack == 0)
                         )
                     {
                         pack_found = true;
@@ -1082,7 +1125,7 @@ namespace ICR_Run
                 t_r2c = sw_main.ElapsedMilliseconds;
 
                 // print data recieved
-                msg_str = String.Format("   Rsvd: [id:{0} pack:{1}]", id, pack);
+                msg_str = String.Format("   Rsvd: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
                 PrintAction(msg_str, t_r2cLast, t_r2c);
 
                 // Update last pack
@@ -1090,6 +1133,15 @@ namespace ICR_Run
                 // Update list
                 r2c_idHist.Add(id);
                 r2c_packHist.Add(pack);
+
+                // Check if data should be relayed to Matlab
+                for (int i = 0; i < c2m_id.Length - 1; i++)
+                {
+                    if (c2m_id[i] == id)
+                    {
+                        com_Matlab.Execute(String.Format("c2m_{0} = {1}", c2m_id[i], (double)dat));
+                    }
+                }
             }
             // Dump
             else
@@ -1227,20 +1279,19 @@ namespace ICR_Run
             object result = null;
 
             // Set Matlab paths
-            com_Matlab.Execute(@"addpath(genpath('C:\Users\lester\MeDocuments\AppData\MATLAB\Startup'));");
+            com_Matlab.Execute(@"addpath(genpath('C:\Users\lester\MeDocuments\AppData\MATLABMO\Startup'));");
             com_Matlab.Feval("startup", 0, out result);
             PrintAction("[DoWork_RunGUI] RUNNING: ICR_GUI");
 
             // Debugging
-            if (doDebugMat)
-            {
-                //com_Matlab.Execute(@"dbstop in ICR_GUI at 3476");
-            }
+
+            // Set MATLAB break point
+            //com_Matlab.Execute(@"dbstop in ICR_GUI at 2243");
 
             // Run ICR_GUI.m
             try
             {
-                com_Matlab.Feval("ICR_GUI", 0, out result, doDebugMat);
+                com_Matlab.Feval("ICR_GUI", 0, out result, systemTest);
             }
             catch
             {
@@ -1289,8 +1340,12 @@ namespace ICR_Run
             com_Matlab.PutWorkspaceData("m2c_dat1", "global", 9999.0);
             com_Matlab.PutWorkspaceData("m2c_dat2", "global", 9999.0);
             com_Matlab.PutWorkspaceData("m2c_flag", "global", 0.0);
+            for (int i = 0; i < c2m_id.Length - 1; i++)
+            {
+                com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m_id[i]), "global", 0.0);
+            }
 
-            while (!doQuit && !isMAThanging)
+                while (!doQuit && !isMAThanging)
             {
                 // Get flag
                 try

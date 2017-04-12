@@ -1,8 +1,12 @@
-function[] = ICR_GUI(doDebug)
+function[] = ICR_GUI(inArg)
+% INPUT:
+%        0: No test
+%        1: Run MATLAB in debug mode
+%        2: Halt error test
 
 %% ============================= TOP LEVEL =================================
 
-% Declare global vars
+% Declare global vars 
 global FigH; % UI figure handle
 global D; % Main data struct
 global shouldExit; % bool to exit
@@ -14,24 +18,46 @@ global m2c_dat2; % data out to CS
 global m2c_flag; % new data flag out to CS
 global consoleText; % console text
 global tcpIP; % server tcpip object
+% Non CS globals
+global isTestRun;
+global isMatRunAlone;
+global doHaultErrorTest;
+% CS to matlab vars
+global c2m_J c2m_A;
 
 % Set globals
 shouldExit = false;
 caughtError = false;
 enableSave = false;
 consoleText = ' ';
+isTestRun = false;
+isMatRunAlone = false;
+doHaultErrorTest = false;
+[c2m_J, c2m_A] = deal(0);
 
 % ---------------------------SET MAIN PARAMETERS---------------------------
 
-% Time
-D.PAR.polRate = 0.1; % poll fs (sec)
-D.PAR.strQdDel = 0.5; % min time in start quad (sec)
+% Poll fs (sec)
+D.PAR.polRate = 0.1; 
+% Min time in start quad (sec)
+D.PAR.strQdDel = 0.5; 
+% Minimum battery voltage level
+D.PAR.voltCutoff = 11.6; 
+% Robot guard dist
+D.PAR.guardDist = 4.5 * ((2 * pi)/(140 * pi));
+% PID setPoint
+D.PAR.setPoint = 42 * ((2 * pi)/(140 * pi));
+% Robot butt dist
+D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
+% Feeder dist from rob tracker
+D.PAR.feedDist = 66 * ((2 * pi)/(140 * pi));
 
 % Directories
-
+D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
 % IO dirs
-D.DIR.ioTop = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\IOfiles';
-D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images\plot_images\wall_top_down.png');
+D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
+D.DIR.ioTestOut = fullfile(D.DIR.top,'Testing','Output');
+D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images','plot_images','wall_top_down.png');
 D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
 D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
 D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
@@ -62,13 +88,32 @@ D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 %    'L', // matlab loaded
 %    'A', // connected to AC computer
 %    'Z', // data saved
+%    'T', // system test command
 %--------------------------------------------------------------------------
 
 % ---------------------------RUN MAIN SCRIPT-------------------------------
 
-% Determine if code should be run in debug mode
+% DEBUG/TESTING
+
+% Halt Error test
+D.DB.velSteps = 10:10:80; % (cm/sec)
+D.DB.stepSamp = 4;
+
+% Set to debug in no arg in
 if nargin == 0
-    doDebug = true;
+    isMatRunAlone = true;
+    inArg = 1;
+end
+
+doDebug = true;
+switch inArg
+    case 0
+        doDebug = false;
+    case 1
+        doDebug = true;
+    case 2
+        isTestRun = true;
+        doHaultErrorTest = true;
 end
 
 % Initilize top level vars
@@ -198,6 +243,9 @@ clear(PersistentVarNames{:});
             % Tell CS Matlab is connected to Cheetah
             Mat2CS('L');
             
+            % Run testing setup
+            SF_Run_Test_Setup();
+            
             while ~shouldExit
                 
                 % -----------------------CHECK FOR UI SETUP---------------------------
@@ -272,6 +320,9 @@ clear(PersistentVarNames{:});
                             
                             SF_Rat_In_Check();
                         end
+                        
+                        % RUN TEST/DEBUG CODE
+                        SF_Run_Test();
                         
                         % -----------------------ONCE RAT IN-----------------------------------
                         
@@ -476,11 +527,11 @@ clear(PersistentVarNames{:});
             
             % DEBUG VARS
             % track reward duration [now, min, max, sum, count]
-            D.T.rew_duration = [0, inf, 0, 0, 0];
-            % track reward round trip [now, min, max, avg, sum, count]
-            D.T.rew_round_trip = [0, inf, 0, 0, 0];
-            % halt error [now, min, max, avg, sum, count]
-            D.PAR.halt_error = [0, inf, 0, 0, 0];
+            D.DB.rew_duration = [0, inf, 0, 0, 0];
+            % track reward round trip [now, min, max, sum, count]
+            D.DB.rew_round_trip = [0, inf, 0, 0, 0];
+            % halt error [now, min, max, sum, count]
+            D.DB.halt_error = [0, inf, 0, 0, 0];
             
             % INDEXING
             
@@ -523,14 +574,6 @@ clear(PersistentVarNames{:});
             D.PAR.YC = S.YC;
             clear S;
             
-            % Robot guard dist
-            D.PAR.guardDist = 4.5 * ((2 * pi)/(140 * pi));
-            % PID setPoint
-            D.PAR.setPoint = 42 * ((2 * pi)/(140 * pi));
-            % Robot butt dist
-            D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
-            % Feeder dist from rob tracker
-            D.PAR.feedDist = 66 * ((2 * pi)/(140 * pi));
             % pos now
             D.P.Rat.x = NaN;
             D.P.Rat.y = NaN;
@@ -618,7 +661,7 @@ clear(PersistentVarNames{:});
             % width of line for setpoint
             D.UI.setPosLineWidth = 2;
             % primary backround color
-            D.UI.backroundCol = [0.9, 0.9, 0.9];
+            D.UI.backroundCol = [1, 1, 1];
             % primary backround color
             D.UI.enabledCol = [0.3, 0.3, 0.3];
             % default light text color
@@ -637,6 +680,8 @@ clear(PersistentVarNames{:});
             D.UI.enabledCol = [0.5, 0.5, 0.5];
             % defualt disabled object color
             D.UI.disabledCol = [0.75 0.75 0.75];
+            % defualt disabled object color
+            D.UI.warningCol = [1 0 0];
             
             % UI FONTS
             
@@ -1551,7 +1596,6 @@ clear(PersistentVarNames{:});
             %% --------------------------PRINTED INFO----------------------------------
             
             % Position settings
-            obj_gap_ht = 0.025;
             pos_lft_dflt = (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3)) + 0.005;
             pos_wd_dflt = 1 - (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3)) - 2*0.005;
             pan_lft = (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3));
@@ -1670,7 +1714,7 @@ clear(PersistentVarNames{:});
             % PERFORMANCE INFO
             
             % Number of text lines not including header
-            nlines(2) = 17;
+            nlines(2) = 19;
             
             % pannel
             D.UI.perfInfPanHt = ...
@@ -1681,7 +1725,7 @@ clear(PersistentVarNames{:});
             D.UI.perfInfPanBtm = ...
                 D.UI.sesInfPanBtm - ...
                 D.UI.perfInfPanHt - ...
-                obj_gap_ht;
+                2*D.UI.pxl2norm_y;
             D.UI.perfInfPanPos = [...
                 pan_lft, ...
                 D.UI.perfInfPanBtm, ...
@@ -1828,17 +1872,35 @@ clear(PersistentVarNames{:});
                 'FontWeight','Bold', ...
                 'FontSize', text_font_sz(1));
             
+            % battery voltage
+            botm = botm - 2*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)];
+            D.UI.txtPerfInf(7) = uicontrol('Style','text', ...
+                'Parent',FigH, ...
+                'String','', ...
+                'Units','Normalized', ...
+                'HorizontalAlignment', 'Left', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.printBckCol, ...
+                'ForegroundColor', D.UI.printTxtCol, ...
+                'FontName','Courier New', ...
+                'FontWeight','Bold', ...
+                'FontSize', text_font_sz(1));
+            
             % TIMER INFO
             
             % Number of text lines not including header
             nlines(3) = 10;
             
             % pannel
-            D.UI.timInf_pan_pos = [...
+            D.UI.timInfPanHt = ...
+                D.UI.sesInfPanBtm - D.UI.perfInfPanHt - 4*D.UI.pxl2norm_y;
+            D.UI.timInfPanBtm = 0;
+            D.UI.timInfPanPos = [...
                 pan_lft, ...
-                0, ...
+                D.UI.timInfPanBtm, ...
                 pan_wd, ...
-                nlines(3)*text_font_sz(2) + head_font_sz(2) + 4*D.UI.pxl2norm_y*2];
+                D.UI.timInfPanHt];
             D.UI.panTimInf = uipanel(...
                 'Parent',FigH, ...
                 'Units','Normalized', ...
@@ -1846,9 +1908,9 @@ clear(PersistentVarNames{:});
                 'BorderWidth',4, ...
                 'BackgroundColor', D.UI.printBckCol, ...
                 'HighlightColor', D.UI.disabledCol, ...
-                'Position',  D.UI.timInf_pan_pos);
+                'Position',  D.UI.timInfPanPos);
             % heading
-            botm = text_font_sz(2)*nlines(3)+4*D.UI.pxl2norm_y;
+            botm = D.UI.timInfPanHt - 4*D.UI.pxl2norm_y - head_font_sz(2);
             pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtTimInfHed = uicontrol('Style','text', ...
                 'Parent',FigH, ...
@@ -2205,6 +2267,56 @@ clear(PersistentVarNames{:});
                 datestr(now, 'HH:MM:SS')));
         end
         
+        % -----------------------------TEST SETUP---------------------------------
+        
+        function[] = SF_Run_Test_Setup()
+            if isTestRun
+                
+                % Load rat 0000
+                
+                % Change data table entries which will be loaded later
+                ratInd = ...
+                    find(ismember(D.SS_In_All.Properties.RowNames, 'r0000'));
+                
+                % SET UI TO LAST SESSION
+                
+                % Set Session Condition
+                D.SS_In_All.Session_Condition(ratInd) = 'Behavior_Training';
+                % Set reward delay
+                D.SS_In_All.Reward_Delay(ratInd)= '0.0';
+                % Set cue condition
+                D.SS_In_All.Cue_Condition(ratInd) = 'None';
+                
+                % Run PopRat for rat 0000
+                val = find(cell2mat(cellfun(@(x) strcmp(x(1:4), '0000'), D.UI.ratList, 'uni', false)));
+                set(D.UI.popRat, 'Value', val);
+                PopRat();
+                
+                % Send test setup
+                if doHaultErrorTest
+                    D.DB.haltCnt = D.DB.stepSamp;
+                    D.DB.haltDur = 5; % (sec)
+                    D.DB.halt_error_str = sprintf('\r');
+                    D.DB.t_halt = clock;
+                    D.DB.t_halt(6) = D.DB.t_halt(6) + 5;
+                    D.DB.nowStep = 0;
+                    D.DB.nowVel = 0;
+                    D.DB.isHalted = true;
+                    D.DB.sendPos = 0;
+                    
+                    % Enable editing in console
+                    set(D.UI.editConsole, 'Enable','on');
+                end
+                
+                % Run BtnSetupDone
+                set(D.UI.btnSetupDone, 'Value', 1);
+                BtnSetupDone();
+                
+                Update_Console(sprintf('\rTest Run Setup Complete\rTime: %s\r', ...
+                    datestr(now, 'HH:MM:SS')));
+            end
+        end
+        
         % -----------------------------TARG SETUP---------------------------------
         
         function[] = SF_Targ_Dist_Setup()
@@ -2389,6 +2501,7 @@ clear(PersistentVarNames{:});
         end
         
         % ----------------------------FINISH SETUP---------------------------------
+        
         function [] = SF_Finish_Setup()
             
             %% Update session specific vars
@@ -2481,6 +2594,7 @@ clear(PersistentVarNames{:});
             else
                 d1 = 1;
             end
+            
             % sound cond
             if all(~D.UI.snd)
                 d2 = 0;
@@ -2670,6 +2784,10 @@ clear(PersistentVarNames{:});
             % rob vel
             infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', 0, 0, 0);
             set(D.UI.txtPerfInf(6), 'String', infstr)
+            
+            % bat volt
+            infstr = sprintf('Battery:_%0.1fV', 0);
+            set(D.UI.txtPerfInf(7), 'String', infstr)
             
             % Print time info
             % elapsed
@@ -3395,6 +3513,103 @@ clear(PersistentVarNames{:});
             
         end
         
+        % ------------------------------RUN TEST CODE---------------------------------
+        
+        function [] = SF_Run_Test()
+            if isTestRun
+                
+                % HALT ERROR TEST
+                if doHaultErrorTest
+                    
+                    % Check if robot should be restarted
+                    if D.DB.isHalted && ...
+                            etime(clock, D.DB.t_halt) > D.DB.haltDur && ...
+                            get(D.UI.btnHaltRob, 'Value') == 0
+                        
+                        % Save and print halt error
+                        % Store halt error
+                        halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.sendPos) * ((140*pi)/(2*pi));
+                        D.DB.halt_error(1) = halt_err;
+                        D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
+                        D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
+                        D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
+                        D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
+                        % Print halt error
+                        D.DB.halt_error_str = [D.DB.halt_error_str, ...
+                            sprintf('%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
+                            D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), D.DB.nowVel)];
+                        Update_Console(D.DB.halt_error_str);
+                        
+                        % Check if vel should be stepped
+                        if D.DB.haltCnt == D.DB.stepSamp
+                            
+                            % Reset counter
+                            D.DB.haltCnt = 0;
+                            
+                            % Incriment step
+                            D.DB.nowStep = D.DB.nowStep+1;
+                            
+                            % Incriment vel
+                            if D.DB.nowStep <= length(D.DB.velSteps);
+                                D.DB.nowVel = D.DB.velSteps(D.DB.nowStep);
+                            else
+                                % End test
+                                D.DB.nowVel = 0;
+                                doHaultErrorTest = false;
+                                
+                                % Save data to csv file
+                                fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
+                                file_id = fopen(fi_out,'w');
+                                fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
+                                fprintf(file_id,D.DB.halt_error_str(3:end));
+                                fclose(file_id);
+                            end
+                            
+                            Update_Console(sprintf('\rNew Vel: %d cm/sec\rTime: %s\r', ...
+                                D.DB.nowVel, datestr(now, 'HH:MM:SS')));
+                        end
+                        
+                        % Tell CS to resume run
+                        Mat2CS('T', inArg, D.DB.nowVel);
+                        
+                        % Set flag
+                        D.DB.isHalted = false;
+                        
+                        % Check if robot has stopped
+                    elseif ~D.DB.isHalted && ...
+                            D.P.Rob.vel < 5
+                        
+                        % Tell CS to resume run
+                        Mat2CS('T', inArg, D.DB.nowVel);
+                        
+                    end
+                    
+                    % Check if robot has passed 0 deg
+                    if ~D.DB.isHalted && ...
+                            etime(clock, D.DB.t_halt) > D.DB.haltDur+1 && ...
+                            any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
+                        
+                        % Incriment counter
+                        D.DB.haltCnt = D.DB.haltCnt+1;
+                        
+                        % Tell CS to Halt Robot
+                        Mat2CS('T', inArg, 0);
+                        
+                        % Store robots current pos and time
+                        D.DB.sendPos = D.P.Rob.radLast;
+                        D.DB.t_halt = clock;
+                        
+                        % Set flag
+                        D.DB.isHalted = true;
+                        
+                        Update_Console(sprintf('\rHalting Robot \rTime: %s\r', ...
+                            datestr(now, 'HH:MM:SS')));
+                    end
+                    
+                end
+            end
+        end
+        
         % --------------------------PROCESS NLX EVENTS-----------------------------
         
         function [] = SF_Evt_Proc()
@@ -3421,11 +3636,11 @@ clear(PersistentVarNames{:});
                     if datenum(D.T.rew_sent) > 0 && ...
                             datenum(D.T.rew_sent) < datenum(D.T.rew_start)
                         % Save reward mesage round trip time
-                        D.T.rew_round_trip(1) = etime(D.T.rew_start, D.T.rew_sent) * 1000;
-                        D.T.rew_round_trip(2) = min(D.T.rew_round_trip(1), D.T.rew_round_trip(2));
-                        D.T.rew_round_trip(3) = max(D.T.rew_round_trip(1), D.T.rew_round_trip(3));
-                        D.T.rew_round_trip(4) = D.T.rew_round_trip(1) + D.T.rew_round_trip(4);
-                        D.T.rew_round_trip(5) = D.T.rew_round_trip(5) + 1;
+                        D.DB.rew_round_trip(1) = etime(D.T.rew_start, D.T.rew_sent) * 1000;
+                        D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
+                        D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
+                        D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
+                        D.DB.rew_round_trip(5) = D.DB.rew_round_trip(5) + 1;
                     end
                     
                     % Change feeder plot color and marker size
@@ -3475,51 +3690,23 @@ clear(PersistentVarNames{:});
                     end
                     if dt(2) > 0
                         % Save reward duration
-                        D.T.rew_duration(1) = dt(2);
-                        D.T.rew_duration(2) = min(D.T.rew_duration(1), D.T.rew_duration(2));
-                        D.T.rew_duration(3) = max(D.T.rew_duration(1), D.T.rew_duration(3));
-                        D.T.rew_duration(4) = D.T.rew_duration(1) + D.T.rew_duration(4);
-                        D.T.rew_duration(5) = D.T.rew_duration(5) + 1;
+                        D.DB.rew_duration(1) = dt(2);
+                        D.DB.rew_duration(2) = min(D.DB.rew_duration(1), D.DB.rew_duration(2));
+                        D.DB.rew_duration(3) = max(D.DB.rew_duration(1), D.DB.rew_duration(3));
+                        D.DB.rew_duration(4) = D.DB.rew_duration(1) + D.DB.rew_duration(4);
+                        D.DB.rew_duration(5) = D.DB.rew_duration(5) + 1;
                     end
                     
                     % Save halt error
                     if ~isempty(D.I.targ)
                         halt_err = D.UI.rewBnds(D.I.targ,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
                         % Save reward duration
-                        D.PAR.halt_error(1) = halt_err * ((140*pi)/(2*pi));
-                        D.PAR.halt_error(2) = min(D.PAR.halt_error(1), D.PAR.halt_error(2));
-                        D.PAR.halt_error(3) = max(D.PAR.halt_error(1), D.PAR.halt_error(3));
-                        D.PAR.halt_error(4) = D.PAR.halt_error(1) + D.PAR.halt_error(4);
-                        D.PAR.halt_error(5) = D.PAR.halt_error(5) + 1;
+                        D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
+                        D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
+                        D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
+                        D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
+                        D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
                     end
-                    
-                    %                     % TEST
-                    %                     if get(D.UI.popBulldoze, 'Value') ~= 1
-                    %                         D.PAR.halt_error_str = [];
-                    %                         set(D.UI.popBulldoze, 'Value', 1);
-                    %                         set(D.UI.editBulldoze, 'String', num2str(10))
-                    %                         set(D.UI.btnBulldoze, 'Value', 0);
-                    %                         Bulldoze();
-                    %                         pause(0.5)
-                    %                         set(D.UI.btnBulldoze, 'Value', 1);
-                    %                         Bulldoze();
-                    %                         set(D.UI.editConsole, 'Enable','on')
-                    %                     end
-                    %                     if strcmp(get(D.UI.editBulldoze, 'Visible'), 'off')
-                    %                         set(D.UI.editBulldoze, 'Enable','on','Visible', 'on');
-                    %                     end
-                    %                     D.PAR.halt_error_str = [D.PAR.halt_error_str, ...
-                    %                         sprintf('%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
-                    %                         D.PAR.halt_error(1), D.PAR.halt_error(2), D.PAR.halt_error(3), D.PAR.halt_error(4), D.PAR.bullSpeed)];
-                    %                     Update_Console(D.PAR.halt_error_str);
-                    %                     if mod(sum([D.C.rew_cnt{:}]),2) == 0
-                    %                         set(D.UI.editBulldoze, 'String', num2str(D.PAR.bullSpeed+10))
-                    %                         set(D.UI.btnBulldoze, 'Value', 0);
-                    %                         Bulldoze();
-                    %                         pause(0.5)
-                    %                         set(D.UI.btnBulldoze, 'Value', 1);
-                    %                         Bulldoze();
-                    %                     end
                     
                     % Set flag
                     D.B.is_rewarding = false;
@@ -4433,6 +4620,22 @@ clear(PersistentVarNames{:});
                 D.P.Rob.vel, D.P.Rob.vel_max_lap, D.P.Rob.vel_max_all);
             set(D.UI.txtPerfInf(6), 'String', infstr)
             
+            % Bat volt
+            % Turn red and flicker if bellow 12 V
+            volt_now = c2m_J/10;
+            if volt_now <= D.PAR.voltCutoff && volt_now > 0 
+                set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
+                if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
+                    set(D.UI.txtPerfInf(7), 'Visible', 'off')
+                else
+                    set(D.UI.txtPerfInf(7), 'Visible', 'on')
+                end
+            else 
+                set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.printTxtCol);
+            end
+            infstr = sprintf('Battery:_%0.1fV', volt_now);
+            set(D.UI.txtPerfInf(7), 'String', infstr)
+            
             %% Print time info
             
             % Get session time
@@ -4485,9 +4688,9 @@ clear(PersistentVarNames{:});
                 'HE: %4.0f  mn:%4.0f  mx:%4.0f av:%2.2f\n', ...
                 'Lp: %4.0f  mn:%4.0f  mx:%4.0f\n', ...
                 ], ...
-                D.T.rew_duration(1), D.T.rew_duration(2), D.T.rew_duration(3), D.T.rew_duration(4)/D.T.rew_duration(5), ...
-                D.T.rew_round_trip(1), D.T.rew_round_trip(2), D.T.rew_round_trip(3), D.T.rew_round_trip(4)/D.T.rew_round_trip(5), ...
-                D.PAR.halt_error(1), D.PAR.halt_error(2), D.PAR.halt_error(3), D.PAR.halt_error(4)/D.PAR.halt_error(5), ...
+                D.DB.rew_duration(1), D.DB.rew_duration(2), D.DB.rew_duration(3), D.DB.rew_duration(4)/D.DB.rew_duration(5), ...
+                D.DB.rew_round_trip(1), D.DB.rew_round_trip(2), D.DB.rew_round_trip(3), D.DB.rew_round_trip(4)/D.DB.rew_round_trip(5), ...
+                D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), ...
                 D.T.loop*1000, D.T.loop_min*1000, D.T.loop_max*1000 ...
                 );
             set(D.UI.txtTimDebug, 'String', infstr)
@@ -5130,6 +5333,11 @@ clear(PersistentVarNames{:});
             % Tell C# to begin quit
             Mat2CS('Q');
             
+            % Shut down if matlab run alone
+            if isMatRunAlone
+                shouldExit = true;
+            end
+            
             % Set flag
             D.B.do_quit = true;
             
@@ -5377,6 +5585,11 @@ clear(PersistentVarNames{:});
             C{3}(:,:,3) = Lo;
             
             C = C';
+        end
+        
+        % ---------------------------COMPUTE RAD DIFF------------------------------
+        function [rad_diff] = Rad_Diff(rad1, rad2)
+            rad_diff = min(2*pi - abs(rad1-rad2), abs(rad1-rad2));
         end
         
         % ---------------------------GET TRACK BOUNDS------------------------------

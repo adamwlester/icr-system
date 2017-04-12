@@ -10,9 +10,11 @@
 #pragma region ---------PIN SETUP---------
 
 // DEFINE PINS
-const int pin_LED = 13;
-const int pin_relWhiteNoise = 12;
+
+// Relays
+const int pin_IR_LED = 9;
 const int pin_relRewTone = 11;
+const int pin_relWhiteNoise = 12;
 
 // NLX TTL
 
@@ -143,7 +145,7 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
 
 	// set other output pins
-	pinMode(pin_LED, OUTPUT);
+	pinMode(pin_IR_LED, OUTPUT);
 	pinMode(pin_relWhiteNoise, OUTPUT);
 	pinMode(pin_ttlWhiteNoise, OUTPUT);
 	pinMode(pin_relRewTone, OUTPUT);

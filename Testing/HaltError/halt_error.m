@@ -1,6 +1,12 @@
-%halt_error = [];
-
+% Dir
+inDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Testing\Output';
+inFi = 'halt_error_6700.csv';
+% Vel steps
 V = (10:10:80)';
+
+% Read in
+halt_error = txt2cell(fullfile(inDir,inFi));
+halt_error = cell2mat(halt_error(3:end,:));
 CM = cell2mat(arrayfun(@(x) (mean(halt_error(halt_error(:,5)==x),1)), ...
     V, 'Uni', false));
 figure;
@@ -24,9 +30,11 @@ P = polyfit(V, CM, 2);
 CM1 = P(1).*V.^2 + P(2).*V.^1 + P(3);
 plot(V, CM1, 'go-');
 
+legend({'All','Average','Regression','Polyfit'},'Location','northwest')
 % Copy these coeff values to arduino code
 fprintf('%0.15f\n\r', P);
 
+% Can check how well coeff work
 velCoeff = [...
 0.001830357142857, ...
 0.131160714285714, ... 

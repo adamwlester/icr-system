@@ -4,9 +4,16 @@
 /*
 Connect pot and use to test motor function
 */
-const bool do_POT_Test = false;
+const bool do_POT_Test = true;
 
-// POT Test 
+// Feed Arm Test
+/*
+Retract arm w/ button 1 and extend arm w/ button 2
+*/
+const bool do_FeedArmTest = true;
+bool is_armExtended = false;
+
+// Volt Test 
 /*
 Test voltage measurment
 */
@@ -20,7 +27,7 @@ const bool do_XBeeTest = false;
 
 // Solenoid Test 
 /*
-Open Ensure w/ button1 and Ethonal w/ button 2
+Open Rew sol w/ button 1 and EtOH w/ button 2
 */
 const bool do_SolTest = false;
 
@@ -30,7 +37,7 @@ Upload code to both CheetahDue and FeederDue)
 Connect 34 on FeederDue to IR relay pin on CheetahDue
 Make sure pin A8 is shorted to A9 on CheetahDue
 */
-const bool do_IR_ComTest = true;
+const bool do_IR_ComTest = false;
 const uint32_t t_IR_Del = 1000; // (ms)
 const uint32_t t_IR_Dur = 5; // (ms)
 const uint32_t t_LED_Dur = 250; // (ms)
@@ -97,8 +104,8 @@ const int pin_RewLED_C = 3;
 const int pin_TrackLED = 2;
 
 // Relays
-const int pin_Rel_Ens = 22;
-const int pin_Rel_Eth = 23;
+const int pin_Rel_EtOH = 22;
+const int pin_Rel_Rew = 23;
 
 // BigEasyDriver
 const int pin_ED_RST = 47;
@@ -161,6 +168,11 @@ const byte kAcc = 60 * 2;
 const byte kDec = 60 * 2;
 const byte kRun = 60;
 const byte kHold = 60 / 2;
+
+// LEDs
+const int trackLEDduty = 75; // value between 0 and 255
+const int rewLEDduty = 15; // value between 0 and 255
+const int rewLEDmin = 0; // value between 0 and 255
 
 // POT Variables
 const float Pi = 3.141593;
@@ -248,8 +260,8 @@ void setup()
 	// SETUP OUTPUT POWER AND GROUND PINS
 
 	// Set output pins
-	pinMode(pin_Rel_Ens, OUTPUT);
-	pinMode(pin_Rel_Eth, OUTPUT);
+	pinMode(pin_Rel_Rew, OUTPUT);
+	pinMode(pin_Rel_EtOH, OUTPUT);
 	pinMode(pin_ED_STP, OUTPUT);
 	pinMode(pin_ED_DIR, OUTPUT);
 	pinMode(pin_ED_SLP, OUTPUT);
@@ -269,8 +281,8 @@ void setup()
 	pinMode(pin_FeedSwitch, INPUT_PULLUP);
 
 	// Make sure relay pins low
-	digitalWrite(pin_Rel_Ens, LOW);
-	digitalWrite(pin_Rel_Eth, LOW);
+	digitalWrite(pin_Rel_Rew, LOW);
+	digitalWrite(pin_Rel_EtOH, LOW);
 
 	// SETUP AUTODRIVER
 
@@ -314,13 +326,10 @@ void setup()
 	digitalWrite(pin_ED_SLP, LOW);
 
 	// DEFINE EXTERNAL INTERUPTS
-	attachInterrupt(digitalPinToInterrupt(pin_Btn[0]), Interupt_Btn1, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_Btn[1]), Interupt_Btn2, FALLING);
-	attachInterrupt(digitalPinToInterrupt(pin_Btn[2]), Interupt_Btn3, FALLING);
 	if (do_POT_Test)
 	{
-		attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
-		attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), InteruptIRproxHalt, FALLING);
 	}
 
 	// INITIALIZE LCD
@@ -337,7 +346,7 @@ void setup()
 	digitalWrite(pin_POT_Gnd, LOW);
 
 	// Initialize bat volt array
-	for (int i = 0; i <= 100; i++) {
+	for (int i = 0; i < 100; i++) {
 		batVoltArr[i] = 0;
 	}
 
@@ -384,22 +393,24 @@ void loop()
 	// Voltage Test
 	if (do_VoltTest)
 	{
-		Volt_Read();
+		CheckBattery();
 	}
 
 	// XBee Test
 	if (do_XBeeTest)
 	{
-		XBee_Read();
+		XBeeRead();
 	}
 
 	// IR Com Test
 	if (do_IR_ComTest)
 	{
 		IR_Send();
-		IR_Lat_Comp();
+		IR_LatComp();
 	}
 
+	// Check buttons for input
+	CheckButtons();
 
 }
 
@@ -431,34 +442,135 @@ void POT_Run() {
 		else
 		{
 			ad_R.run(FWD, runSpeed);
-			ad_F.run(FWD, runSpeed);
+			ad_F.run(FWD, runSpeed*1.0375);
 			analogWrite(13, 120);
 		}
 	}
 }
 
-void Volt_Read()
+void ExtendFeedArm()
 {
-	delay(10);
-	if (firstPass)
+	bool armStpOn = false;
+	int stepCnt = 0;
+
+
+	if (!is_armExtended)
 	{
-		digitalWrite(pin_Rel_Eth, HIGH);
-		firstPass = false;
+		SerialUSB.println("Extending Feed Arm");
+
+		// Wake motor
+		digitalWrite(pin_ED_SLP, HIGH);
+
+		// Set arm direction
+		digitalWrite(pin_ED_DIR, LOW); // extend
+
+		while (stepCnt < 200)
+		{
+			if (!armStpOn)
+			{
+				delay(1);
+				digitalWrite(pin_ED_STP, HIGH);
+				stepCnt++;
+			}
+			else
+			{
+				delay(1);
+				digitalWrite(pin_ED_STP, LOW);
+			}
+			armStpOn = !armStpOn;
+		}
+
+		// Unstep motor
+			digitalWrite(pin_ED_STP, LOW);
+
+		// Sleep motor
+			digitalWrite(pin_ED_SLP, LOW);
+
+		is_armExtended = true;
 	}
-	bitVolt = analogRead(pin_BatVolt);
-	batVoltNow = bitVolt * bit2volt;
-	// Shift array and compute average
-	float voltSum = 0;
-	for (int i = 99; i > 0; i--) {
-		batVoltArr[i] = batVoltArr[i - 1];
-		voltSum += batVoltArr[i];
-	}
-	batVoltArr[0] = batVoltNow;
-	batVoltAvg = voltSum / 99;
-	SerialUSB.println(batVoltAvg);
 }
 
-void XBee_Read()
+void RetractFeedArm()
+{
+	bool armStpOn = false;
+
+	if (is_armExtended)
+	{
+		SerialUSB.println("Extending Feed Arm");
+
+		// Wake motor
+		digitalWrite(pin_ED_SLP, HIGH);
+
+		// Set arm direction
+		digitalWrite(pin_ED_DIR, HIGH); // retract
+
+		while (digitalRead(pin_FeedSwitch) == HIGH)
+		{
+			if (!armStpOn)
+			{
+				delay(1);
+				digitalWrite(pin_ED_STP, HIGH);
+			}
+			else
+			{
+				delay(1);
+				digitalWrite(pin_ED_STP, LOW);
+			}
+			armStpOn = !armStpOn;
+		}
+
+		// Unstep motor
+		digitalWrite(pin_ED_STP, LOW);
+
+		// Sleep motor
+		digitalWrite(pin_ED_SLP, LOW);
+
+		is_armExtended = false;
+	}
+}
+
+void CheckBattery()
+{
+	// Local vars
+	static uint32_t t_lastUpdate = millis();
+	static uint32_t t_delUpdate = 100;
+	float bit_in;
+	float volt_in;
+	float volt_sum;
+	float volt_avg;
+	byte bit_out;
+
+	// Make sure relay is open
+	if (digitalRead(pin_Rel_EtOH) == LOW)
+	{
+		digitalWrite(pin_Rel_EtOH, HIGH);
+	}
+
+		bit_in = analogRead(pin_BatVolt);
+		volt_in = bit_in * bit2volt;
+		volt_sum = 0;
+		// Shift array and compute average
+		for (int i = 99; i > 0; i--) {
+			batVoltArr[i] = batVoltArr[i - 1];
+			volt_sum += batVoltArr[i];
+		}
+		batVoltArr[0] = volt_in;
+		volt_avg = volt_sum / 99;
+
+		// Convert float to byte
+		bit_out = byte(round(volt_avg * 10));
+
+		if (millis() > t_lastUpdate + t_delUpdate)
+		{
+			char str[50];
+			sprintf(str, "\r\nVOLTAGE: Float = %0.2fV Byte = %d", volt_avg, bit_out);
+			SerialUSB.print(str);
+
+			t_lastUpdate = millis();
+		}
+}
+
+void XBeeRead()
 {
 	byte buff_b;
 	char buff_c[2] = { '\0' ,'\r' };
@@ -532,7 +644,7 @@ void Interupt_Pulse_Detect()
 	//cnt_Pls_Trig++;
 }
 
-void IR_Lat_Comp()
+void IR_LatComp()
 {
 	if (is_FeederDue)
 	{
@@ -575,60 +687,84 @@ void IR_Lat_Comp()
 	}
 }
 
-void Feed_Switch() {
+void FeedSwitch() {
 	if (digitalRead(pin_FeedSwitch) == LOW)
 	{
 
 	}
 }
 
-void Interupt_Btn1() {
-
-	if (t_debounce[0] > millis()) return;
-	t_debounce[0] = millis() + 250;
-
-	if (do_SolTest)
+void CheckButtons()
+{
+	// RUN BUTTON 1 OPPERATIONS
+	if (digitalRead(pin_Btn[0]) == LOW)
 	{
-		if (digitalRead(pin_Rel_Ens) == LOW)
-			digitalWrite(pin_Rel_Ens, HIGH);
-		else digitalWrite(pin_Rel_Ens, LOW);
-	}
+		// Check debounce time
+		if (t_debounce[0] > millis()) return;
+		t_debounce[0] = millis() + 250;
 
-	SerialUSB.println("Button 1");
+		// Feed arm test
+		if (do_FeedArmTest)
+		{
+			RetractFeedArm();
+		}
+
+		// Solenoid Test
+		if (do_SolTest)
+		{
+			if (digitalRead(pin_Rel_Rew) == LOW)
+				digitalWrite(pin_Rel_Rew, HIGH);
+			else digitalWrite(pin_Rel_Rew, LOW);
+		}
+
+		SerialUSB.println("Button 1");
+	}
+	// RUN BUTTON 2 OPPERATIONS
+	else if (digitalRead(pin_Btn[1]) == LOW)
+	{
+		// Check debounce time
+		if (t_debounce[1] > millis()) return;
+		t_debounce[1] = millis() + 250;
+
+		// Feed arm test
+		if (do_FeedArmTest)
+		{
+			ExtendFeedArm();
+		}
+
+		// Solenoid Test
+		if (do_SolTest)
+		{
+			if (digitalRead(pin_Rel_EtOH) == LOW)
+				digitalWrite(pin_Rel_EtOH, HIGH);
+			else digitalWrite(pin_Rel_EtOH, LOW);
+		}
+
+		SerialUSB.println("Button 2");
+	}
+	// RUN BUTTON 3 OPPERATIONS
+	else if (digitalRead(pin_Btn[2]) == LOW)
+	{
+		// Check debounce time
+		if (t_debounce[2] > millis()) return;
+		t_debounce[2] = millis() + 250;
+
+		// Run function
+		if (do_IR_ComTest)
+		{
+			static bool is_LCD_On = false;
+			if (is_LCD_On) { analogWrite(pin_Disp_LED, 25); }
+			else { analogWrite(pin_Disp_LED, 0); }
+			is_LCD_On = !is_LCD_On;
+		}
+
+		SerialUSB.println("Button 3");
+	}
+	// Exit
+	else return;
 }
 
-void Interupt_Btn2() {
-
-	if (t_debounce[1] > millis()) return;
-	t_debounce[1] = millis() + 250;
-
-	if (do_SolTest)
-	{
-		if (digitalRead(pin_Rel_Eth) == LOW)
-			digitalWrite(pin_Rel_Eth, HIGH);
-		else digitalWrite(pin_Rel_Eth, LOW);
-	}
-
-	SerialUSB.println("Button 2");
-}
-
-void Interupt_Btn3() {
-
-	if (t_debounce[2] > millis()) return;
-	t_debounce[2] = millis() + 250;
-
-	if (do_IR_ComTest)
-	{
-		static bool is_LCD_On = false;
-		if (is_LCD_On) { analogWrite(pin_Disp_LED, 25); }
-		else { analogWrite(pin_Disp_LED, 0); }
-		is_LCD_On = !is_LCD_On;
-	}
-
-	SerialUSB.println("Button 3");
-}
-
-void Interupt_IRprox_Halt() {
+void InteruptIRproxHalt() {
 	ad_R.hardStop();
 	ad_F.hardStop();
 	SerialUSB.println("Run Halted");
