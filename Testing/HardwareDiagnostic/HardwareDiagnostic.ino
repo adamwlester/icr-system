@@ -4,20 +4,20 @@
 /*
 Connect pot and use to test motor function
 */
-const bool do_POT_Test = true;
+const bool do_POT_Test = false;
 
 // Feed Arm Test
 /*
 Retract arm w/ button 1 and extend arm w/ button 2
 */
-const bool do_FeedArmTest = true;
+const bool do_FeedArmTest = false;
 bool is_armExtended = false;
 
 // Volt Test 
 /*
 Test voltage measurment
 */
-const bool do_VoltTest = false;
+const bool do_VoltTest = true;
 
 // XBee Test 
 /*

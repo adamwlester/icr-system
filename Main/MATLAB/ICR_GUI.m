@@ -85,7 +85,7 @@ D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 %    'B', // bulldoze rat
 %    'I', // start/end pid
 %    'N', // matlab not loaded
-%    'L', // matlab loaded
+%    'G', // matlab gui loaded
 %    'A', // connected to AC computer
 %    'Z', // data saved
 %    'T', // system test command
@@ -211,6 +211,7 @@ clear(PersistentVarNames{:});
 
 
 
+
 %% ==========================MAIN FUNCTION==================================
 
     function[] = RunScript()
@@ -241,7 +242,7 @@ clear(PersistentVarNames{:});
             SF_NLX_Setup();
             
             % Tell CS Matlab is connected to Cheetah
-            Mat2CS('L');
+            Mat2CS('G');
             
             % Run testing setup
             SF_Run_Test_Setup();
@@ -386,6 +387,13 @@ clear(PersistentVarNames{:});
             end
             
         end
+        
+        
+        
+        
+        
+        
+        
         
         %% ========================= SETUP FUNCTIONS ==============================
         
@@ -2095,29 +2103,33 @@ clear(PersistentVarNames{:});
             D.NLX.port_0 = '0';
             D.NLX.port_1 = '1';
             
-            % INPUT TTL PIN/BIT
+            % INPUT TTL PIN/BIT 
+            % vars = (port, pin)
             
             % Audio channels
-            D.NLX.snd_rt_wn_bit = '1';
-            D.NLX.snd_lft_rt_bit = '2';
+            D.NLX.snd_rt_wn_bit = [{'1'},{'1'}];
+            D.NLX.snd_lft_rt_bit = [{'1'},{'2'}];
             
             % Rew
-            D.NLX.rew_on_bit = '3';
-            D.NLX.rew_off_bit = '4';
+            D.NLX.rew_on_bit = [{'1'},{'3'}];
+            D.NLX.rew_off_bit = [{'1'},{'4'}];
             
             % Bulldozer state
-            D.NLX.bull_run_bit = '5';
-            D.NLX.bull_stop_bit = '6';
+            D.NLX.bull_run_bit = [{'1'},{'5'}];
+            D.NLX.bull_stop_bit = [{'1'},{'6'}];
             
             % PID mode
-            D.NLX.pid_run_bit = '0';
-            D.NLX.pid_stop_bit = '7';
+            D.NLX.pid_run_bit = [{'1'},{'0'}];
+            D.NLX.pid_stop_bit = [{'1'},{'7'}];
             
             % Photo Transducers
-            D.NLX.north_bit = '7';
-            D.NLX.west_bit = '6';
-            D.NLX.south_bit = '5';
-            D.NLX.east_bit = '4';
+            D.NLX.north_bit = [{'0'},{'7'}];
+            D.NLX.west_bit = [{'0'},{'6'}];
+            D.NLX.south_bit = [{'0'},{'5'}];
+            D.NLX.east_bit = [{'0'},{'4'}];
+            
+            % IR time sync LED
+            D.NLX.ir_ts_bit = [{'0'},{'3'}];
             
             % TTL STRINGS
             
@@ -2142,6 +2154,9 @@ clear(PersistentVarNames{:});
             D.NLX.west_str = 'TTL_West_On';
             D.NLX.south_str = 'TTL_South_On';
             D.NLX.east_str = 'TTL_East_On';
+            
+            % IR time sync LED
+            D.NLX.ir_ts_str = 'IR_Time_Sync';
             
             % EVENT STRINGS
             
@@ -2196,21 +2211,15 @@ clear(PersistentVarNames{:});
             
             %% CONFIGURE DIGITAL IO
             
+            % SETUP CUBE
+            
             % Pair Cube headstage (Should be commented out unless router has been unpluged)
             %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -InitWHSPairing 30')
             
             % Turn on Cube LEDs
             %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1');
             
-            % Open the data stream for the VT acquisition entity.  This tells Cheetah to begin %streaming
-            % data for the VT acq ent.
-            NlxOpenStream(D.NLX.vt_rat_ent);
-            NlxOpenStream(D.NLX.vt_rob_ent);
-            NlxOpenStream(D.NLX.event_ent);
-            
-            % Get current folder name
-            dirs = dir(D.DIR.nlxTempTop);
-            D.DIR.recFi = dirs([dirs.datenum] == max([dirs.datenum])).name;
+            % SETUP PORTS
             
             % Set port directions
             NlxSendCommand(['-SetDigitalIOportDirection ', D.NLX.DevName, ' ', D.NLX.port_0, ' Input']);
@@ -2220,26 +2229,45 @@ clear(PersistentVarNames{:});
             NlxSendCommand(['-SetDigitalIOEventsEnabled ', D.NLX.DevName, ' ', D.NLX.port_0, ' True']);
             NlxSendCommand(['-SetDigitalIOEventsEnabled ', D.NLX.DevName, ' ', D.NLX.port_1, ' True']);
             
-            % Set TTL Event strings
-            % audio channels
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.snd_rt_wn_bit, ' ', D.NLX.snd_rt_wn_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.snd_lft_rt_bit, ' ', D.NLX.snd_lft_rt_str]);
-            % reward
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.rew_on_bit, ' ', D.NLX.rew_on_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.rew_off_bit, ' ', D.NLX.rew_off_str]);
-            % pid mode
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.pid_run_bit, ' ', D.NLX.pid_run_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.pid_stop_bit, ' ', D.NLX.pid_stop_str]);
-            % bulldozer state
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.bull_run_bit, ' ', D.NLX.bull_run_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_1, ' ', D.NLX.bull_stop_bit, ' ', D.NLX.bull_stop_str]);
-            % photo transdicers
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_0, ' ', D.NLX.north_bit, ' ', D.NLX.north_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_0, ' ', D.NLX.west_bit, ' ', D.NLX.west_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_0, ' ', D.NLX.south_bit, ' ', D.NLX.south_str]);
-            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.port_0, ' ', D.NLX.east_bit, ' ', D.NLX.east_str]);
+             % CONFIGURE TTL EVENTS
+
+            % Audio channels
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.snd_rt_wn_bit{1}, ' ', D.NLX.snd_rt_wn_bit{2}, ' ', D.NLX.snd_rt_wn_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.snd_lft_rt_bit{1}, ' ', D.NLX.snd_lft_rt_bit{2}, ' ', D.NLX.snd_lft_rt_str]);
             
-            %% START ACQUISITION
+            % Reward
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.rew_on_bit{1}, ' ', D.NLX.rew_on_bit{2}, ' ', D.NLX.rew_on_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.rew_off_bit{1}, ' ', D.NLX.rew_off_bit{2}, ' ', D.NLX.rew_off_str]);
+            
+            % Pid state
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.pid_run_bit{1}, ' ', D.NLX.pid_run_bit{2}, ' ', D.NLX.pid_run_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.pid_stop_bit{1}, ' ', D.NLX.pid_stop_bit{2}, ' ', D.NLX.pid_stop_str]);
+            
+            % Bulldozer state
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.bull_run_bit{1}, ' ', D.NLX.bull_run_bit{2}, ' ', D.NLX.bull_run_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.bull_stop_bit{1}, ' ', D.NLX.bull_stop_bit{2}, ' ', D.NLX.bull_stop_str]);
+            
+            % Photo transdicers
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.north_bit{1}, ' ', D.NLX.north_bit{2}, ' ', D.NLX.north_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.west_bit{1}, ' ', D.NLX.west_bit{2}, ' ', D.NLX.west_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.south_bit{1}, ' ', D.NLX.south_bit{2}, ' ', D.NLX.south_str]);
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.east_bit{1}, ' ', D.NLX.east_bit{2}, ' ', D.NLX.east_str]);
+            
+            % IR time sync LED
+            NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.ir_ts_bit{1}, ' ', D.NLX.ir_ts_bit{2}, ' ', D.NLX.ir_ts_str]);
+            
+            % Get current Cheetah folder name
+            dirs = dir(D.DIR.nlxTempTop);
+            D.DIR.recFi = dirs([dirs.datenum] == max([dirs.datenum])).name;
+            
+            %% START STREAMING
+            
+                        % Open the data stream for the VT acquisition entity.  This tells Cheetah to begin 
+                        % streaming data for the VT acq ent.
+            NlxOpenStream(D.NLX.vt_rat_ent);
+            NlxOpenStream(D.NLX.vt_rob_ent);
+            NlxOpenStream(D.NLX.event_ent);
+            
             % Run BtnAcq
             set(D.UI.btnAcq, 'Value', 1)
             BtnAcq(D.UI.btnAcq);

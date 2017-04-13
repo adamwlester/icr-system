@@ -1,11 +1,22 @@
 //-------CheetahDue-------
 
+#pragma region ---------DEBUG SETTINGS---------
+
+bool doPrintFlow = false;
+bool doPrintRcvdPack = false;
+
+#pragma endregion 
+
+#pragma region ---------LIBRARIES & PACKAGES---------
+
 // SOFTWARE RESET
 #define SYSRESETREQ    (1<<2)
 #define VECTKEY        (0x05fa0000UL)
 #define VECTKEY_MASK   (0x0000ffffUL)
 #define AIRCR          (*(uint32_t*)0xe000ed0cUL) // fixed arch-defined address
 #define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
+
+#pragma endregion 
 
 #pragma region ---------PIN SETUP---------
 
@@ -28,9 +39,7 @@ const int pin_ptWestOn = A2;
 const int pin_ptSouthOn = A1;
 const int pin_ptEastOn = A0;
 
-// Noise/rew
-const int pin_ttlWhiteNoise = 25;
-const int pin_ttlRewTone = 26;
+// Rew
 const int pin_ttlRewOn = 27;
 const int pin_ttlRewOff = 28;
 
@@ -71,15 +80,12 @@ uint32_t t_debounce = 10; // (ms)
 uint32_t t_pulseWdth = 50; // (ms)
 
 // Flow control
-bool doPrintFlow = false;
-bool doPrintRcvdPack = false;
 bool fc_isSesStarted = false;
 bool fc_doWhiteNoise = false;
 bool fc_doRewTone = false;
 bool fc_isRewarding = false;
 
 // Serial
-uint32_t t_sync = 0;
 char msg_id = ' ';
 byte msg_dat;
 uint16_t packNow;
@@ -98,6 +104,12 @@ bool msg_pass = false;
 // Reward
 uint32_t rewDur; // (ms) 
 uint32_t t_rewEnd;
+
+// IR time sync LED
+const uint32_t syncDur = 5; // (ms)
+const uint32_t syncDel = 60000; // (ms)
+uint32_t t_sync = 0;
+uint32_t t_syncLast;
 
 //----------CLASS: union----------
 union u_tag {
@@ -122,7 +134,7 @@ void setup()
 	// XBee.
 	Serial1.begin(57600);
 
-	// Set pin direction
+	// Set PT pin direction
 	pinMode(pin_ptNorthOn, INPUT);
 	pinMode(pin_ptWestOn, INPUT);
 	pinMode(pin_ptSouthOn, INPUT);
@@ -132,24 +144,24 @@ void setup()
 	pinMode(pin_ttlSouthOn, OUTPUT);
 	pinMode(pin_ttlEastOn, OUTPUT);
 
-	// Set initial output state
+	// Set PT pins low
 	digitalWrite(pin_ttlNorthOn, LOW);
 	digitalWrite(pin_ttlWestOn, LOW);
 	digitalWrite(pin_ttlSouthOn, LOW);
 	digitalWrite(pin_ttlEastOn, LOW);
 
-	// External interrupt
-	attachInterrupt(digitalPinToInterrupt(pin_ptNorthOn), NorthInterrupt, RISING); // north
-	attachInterrupt(digitalPinToInterrupt(pin_ptWestOn), WestInterrupt, RISING); // west
-	attachInterrupt(digitalPinToInterrupt(pin_ptSouthOn), SouthInterrupt, RISING); // south
-	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
+	// Set relay pin to output
+	pinMode(pin_IR_LED, OUTPUT);
+	pinMode(pin_relWhiteNoise, OUTPUT);
+	pinMode(pin_relRewTone, OUTPUT);
+
+	// set relay pins low
+	digitalWrite(pin_IR_LED, LOW);
+	digitalWrite(pin_relRewTone, LOW);
+	digitalWrite(pin_relWhiteNoise, LOW);
 
 	// set other output pins
 	pinMode(pin_IR_LED, OUTPUT);
-	pinMode(pin_relWhiteNoise, OUTPUT);
-	pinMode(pin_ttlWhiteNoise, OUTPUT);
-	pinMode(pin_relRewTone, OUTPUT);
-	pinMode(pin_ttlRewTone, OUTPUT);
 	pinMode(pin_ttlRewOn, OUTPUT);
 	pinMode(pin_ttlRewOff, OUTPUT);
 	pinMode(pin_ttlBullRun, OUTPUT);
@@ -157,9 +169,12 @@ void setup()
 	pinMode(pin_ttlPidRun, OUTPUT);
 	pinMode(pin_ttlPidStop, OUTPUT);
 
-	// set noise off
-	digitalWrite(pin_relRewTone, LOW);
-	digitalWrite(pin_relWhiteNoise, HIGH);
+	// External interrupt
+	attachInterrupt(digitalPinToInterrupt(pin_ptNorthOn), NorthInterrupt, RISING); // north
+	attachInterrupt(digitalPinToInterrupt(pin_ptWestOn), WestInterrupt, RISING); // west
+	attachInterrupt(digitalPinToInterrupt(pin_ptSouthOn), SouthInterrupt, RISING); // south
+	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
+
 }
 
 
@@ -177,8 +192,11 @@ void loop()
 	{
 		if (msg_pass && msg_id == 't')
 		{
-			// Set sync time and session start
+			// Set sync time and pulse IR
 			t_sync = millis();
+			CheckIRPulse();
+
+			// Set flag
 			fc_isSesStarted = true;
 			PrintState("START SESSION");
 		}
@@ -213,7 +231,6 @@ void loop()
 				{
 					// set white noise pins
 					digitalWrite(pin_relWhiteNoise, HIGH);
-					digitalWrite(pin_ttlWhiteNoise, HIGH);
 					fc_doWhiteNoise = true;
 					fc_doRewTone = false;
 					PrintState("WHITE ON");
@@ -223,7 +240,6 @@ void loop()
 				{
 					// set white noise pins
 					digitalWrite(pin_relWhiteNoise, HIGH);
-					digitalWrite(pin_ttlWhiteNoise, HIGH);
 					fc_doWhiteNoise = true;
 					fc_doRewTone = true;
 					PrintState("WHITE AND TONE ON");
@@ -279,13 +295,16 @@ void loop()
 		}
 
 		// Check for rew end
-		if (fc_isRewarding && millis() > t_rewEnd)
+		if (fc_isRewarding)
 		{
 			EndRew();
 		}
 
 		// Set output pins back to low
 		ResetTTL();
+
+		// Check if IR should be pulsed 
+		CheckIRPulse();
 
 	}
 }
@@ -372,10 +391,8 @@ void StartRew()
 	{
 		// set rew pins
 		digitalWrite(pin_relRewTone, HIGH);
-		digitalWrite(pin_ttlRewTone, HIGH);
 		// set white noise pins
 		digitalWrite(pin_relWhiteNoise, LOW);
-		digitalWrite(pin_ttlWhiteNoise, LOW);
 	}
 	// Set rew off time
 	t_rewEnd = millis() + rewDur;
@@ -397,27 +414,54 @@ void StartRew()
 // END REWARD
 void EndRew()
 {
-	// Tell NLX reward off
-	digitalWrite(pin_ttlRewOn, LOW);
-	digitalWrite(pin_ttlRewOff, HIGH);
-
-	if (fc_doRewTone)
+	if (millis() > t_rewEnd)
 	{
-		// set white noise pins
-		digitalWrite(pin_relWhiteNoise, HIGH);
-		digitalWrite(pin_ttlWhiteNoise, HIGH);
-		// set rew pins
-		digitalWrite(pin_relRewTone, LOW);
-		digitalWrite(pin_ttlRewTone, LOW);
+
+		// Tell NLX reward off
+		digitalWrite(pin_ttlRewOn, LOW);
+		digitalWrite(pin_ttlRewOff, HIGH);
+
+		if (fc_doRewTone)
+		{
+			// set white noise pins
+			digitalWrite(pin_relWhiteNoise, HIGH);
+			// set rew pins
+			digitalWrite(pin_relRewTone, LOW);
+		}
+		fc_isRewarding = false;
+		PrintState("REWARD OFF");
+
 	}
-	fc_isRewarding = false;
-	PrintState("REWARD OFF");
 }
 
 #pragma endregion
 
 
-#pragma region --------MINOR FUNCTIONS---------
+#pragma region --------OTHER FUNCTIONS---------
+
+// PULSE IR
+void CheckIRPulse()
+{
+
+	// Set high
+	if (
+		digitalRead(pin_IR_LED == LOW) &&
+		millis() > t_syncLast + syncDel
+		)
+	{
+		digitalWrite(pin_IR_LED, HIGH);
+		t_syncLast = millis();
+	}
+	// Set low
+	else if (
+		digitalRead(pin_IR_LED == HIGH) &&
+		millis() > t_syncLast + syncDur
+		)
+	{
+		digitalWrite(pin_IR_LED, LOW);
+	}
+
+}
 
 // PRINT STATUS
 void PrintState(String str)

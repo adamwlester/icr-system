@@ -30,7 +30,7 @@ namespace ICR_Run
         private static bool printBlockedVt = false;
         // Print all sent vt recs
         private static bool printSentVt = false;
-        
+
         #endregion
 
         #region ---------TOP LEVEL VARS---------
@@ -68,6 +68,7 @@ namespace ICR_Run
         static readonly object lock_printState = new object();
         static readonly object lock_sendData = new object();
         private static VT_Blocker vtBlocker = new VT_Blocker();
+        private static Import_Robot_Log importRobotLog = new Import_Robot_Log();
 
         // Matlab to CS communication
         private static char[] m2c_id = new char[13] { // prefix giving masage id
@@ -81,7 +82,7 @@ namespace ICR_Run
             'B', // bulldoze rat
             'I', // rat in/out
             'N', // matlab not loaded
-            'L', // matlab loaded
+            'G', // matlab gui loaded
             'A', // connected to AC computer
             'Z', // data saved
              };
@@ -90,7 +91,7 @@ namespace ICR_Run
         private static double matIn_dat2; // matlab data
 
         // CS to robot communication
-        private static char[] c2r_id = new char[12] {
+        private static char[] c2r_id = new char[13] {
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -102,10 +103,11 @@ namespace ICR_Run
             'I', // rat in/out
             'P', // position data
             'V', // request stream status
+            'L', // request log send/resend
             'Y', // confirm done recieved
              };
-        private static char[] char_head = new char[] { '_', '<' }; // 2 byte header
-        private static char char_foot = '>'; // 1 byte header
+        private static char[] c2r_charHead = new char[] { '_', '<' }; // 2 byte header
+        private static char c2r_charFoot = '>'; // 1 byte header
         private static List<char> c2r_idHist = new List<char>();
         private static List<ushort> c2r_packHist = new List<ushort>();
         private static ushort[] c2r_packLast = new ushort[c2r_id.Length];
@@ -115,7 +117,7 @@ namespace ICR_Run
         private static byte[] c2r_packNum = new byte[2];
 
         // Robot to CS communication
-        private static char[] r2c_id = new char[13] {
+        private static char[] r2c_id = new char[15] {
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -127,6 +129,8 @@ namespace ICR_Run
             'I', // rat in/out
             'D', // execution done
             'V', // connected and streaming
+            'L', // request log send/resend
+            'O', // log pack
             'J', // battery voltage
             'A', // reward zone
              };
@@ -231,14 +235,14 @@ namespace ICR_Run
             // Create header and footer byte array
             UnionHack u = new UnionHack(0, 0, 0, '0', 0);
             // get header chars
-            u.c1 = char_head[0];
-            u.c2 = char_head[1];
+            u.c1 = c2r_charHead[0];
+            u.c2 = c2r_charHead[1];
             // use only first byte 
             // becasue arduino uses uni-8
             c2r_head[0] = u.b1;
             c2r_head[1] = u.b3;
             // Get footer byte 
-            u.c1 = char_foot;
+            u.c1 = c2r_charFoot;
             c2r_foot[0] = u.b1;
 
             // Initialize list entries
@@ -337,9 +341,17 @@ namespace ICR_Run
                 }
             }
 
+            // TEST
+            // Request log data from robot
+            PrintAction("[Main] RUNNING: Get Robot Log...");
+            pass = GetRobotLog();
+            if (pass) PrintAction("[Main] FINISHED: Get Robot Log");
+            else PrintAction("[Main] !!ABORTED: Get Robot Log!!");
+            Console.ReadKey();
+
             // Wait for ICR_GUI to load
             PrintAction("[Main] RUNNING: Wait for ICR_GUI Load...");
-            while (matIn_id != 'L' && !doAbort) ;
+            while (matIn_id != 'G' && !doAbort) ;
             if (!doAbort) PrintAction("[Main] FINISHED: Wait for ICR_GUI Load");
 
             // Setup connection
@@ -394,35 +406,7 @@ namespace ICR_Run
 
                     // Wait for reply on last sent packet
                     PrintAction("[Main] RUNNING: Wait for Last Pack...");
-                    check_time = sw_main.ElapsedMilliseconds + 3000;
-                    pass = false;
-                    do_loop = true;
-                    ushort pack;
-                    char id;
-                    string str;
-                    do
-                    {
-                        id = c2r_idHist[c2r_packHist.Count - 1];
-                        pack = c2r_packHist[c2r_packHist.Count - 1];
-                        str = String.Format("   waiting for: [id:{0} pack:{1}]...", id, pack);
-                        PrintAction(str);
-                        for (int i = r2c_packHist.Count - 1; i >= 0; i--)
-                        {
-                            if (r2c_packHist[i] == c2r_packHist[c2r_packHist.Count - 1])
-                            {
-                                pass = true;
-                                do_loop = false;
-                                break;
-                            }
-                            else if (doAbort && sw_main.ElapsedMilliseconds > check_time)
-                            {
-                                pass = false;
-                                do_loop = false;
-                                break;
-                            }
-                        }
-                        Thread.Sleep(100);
-                    } while (do_loop);
+                    pass = WaitForPack();
                     if (pass) PrintAction("[Main] FINISHED: Wait for Last Pack");
                     else PrintAction("[Main] !!ABORTED: Wait for Last Pack!!");
 
@@ -452,12 +436,10 @@ namespace ICR_Run
                     {
                         RepeatSend('M', move_to, true);
                     }).Start();
-
                     // Wait for new sent packet
                     while (c2r_packLast[CharInd('M', c2r_id)] == last_pack) ;
 
                     // Wait for confirmation from robot
-                    pass = false;
                     pass = false;
                     do_loop = true;
                     check_time = sw_main.ElapsedMilliseconds + 3000;
@@ -535,6 +517,18 @@ namespace ICR_Run
                 }
                 else PrintAction("[Main] !!ABORTED: Save Enabled!!");
 
+                // Wait for reply on last sent packet
+                PrintAction("[Main] RUNNING: Wait for Last Pack...");
+                pass = WaitForPack();
+                if (pass) PrintAction("[Main] FINISHED: Wait for Last Pack");
+                else PrintAction("[Main] !!ABORTED: Wait for Last Pack!!");
+
+                // Request log data from robot
+                PrintAction("[Main] RUNNING: Get Robot Log...");
+                pass = GetRobotLog();
+                if (pass) PrintAction("[Main] FINISHED: Get Robot Log");
+                else PrintAction("[Main] !!ABORTED: Get Robot Log!!");
+
                 // Wait for quit command
                 while (!(doQuit || doAbort)) ;
 
@@ -544,7 +538,7 @@ namespace ICR_Run
                     RepeatSend('Q');
                 }).Start();
 
-                // Wait for quit confirmation from robot
+                // Wait for quit confirmation from robot for fixed period of time
                 check_time = sw_main.ElapsedMilliseconds + 3000;
                 pass = false;
                 do_loop = true;
@@ -1011,24 +1005,71 @@ namespace ICR_Run
             PrintAction(msg_str);
         }
 
+        public static bool WaitForPack()
+        {
+
+            long check_time = sw_main.ElapsedMilliseconds + 3000;
+            bool pass = false;
+            bool do_loop = true;
+            ushort pack;
+            char id;
+            string str;
+            do
+            {
+                // Get sent id and pack
+                id = c2r_idHist[c2r_packHist.Count - 1];
+                pack = c2r_packHist[c2r_packHist.Count - 1];
+
+                // If move command wait for done
+                id = id == 'M' ? 'D' : id;
+
+                // Print current id
+                str = String.Format("   waiting for: [id:{0} pack:{1}]...", id, pack);
+                PrintAction(str);
+
+                // Check history
+                for (int i = r2c_packHist.Count - 1; i >= 0; i--)
+                {
+                    if (r2c_packHist[i] == c2r_packHist[c2r_packHist.Count - 1])
+                    {
+                        pass = true;
+                        do_loop = false;
+                        break;
+                    }
+                    else if (doAbort && sw_main.ElapsedMilliseconds > check_time)
+                    {
+                        pass = false;
+                        do_loop = false;
+                        break;
+                    }
+                }
+                Thread.Sleep(100);
+            } while (do_loop);
+            return pass;
+        }
+
         public static void DataReceived_Xbee(object sender, SerialDataReceivedEventArgs e)
         {
             UnionHack u = new UnionHack(0, 0, 0, '0', 0);
+            long check_time;
             bool head_found = false;
             bool id_found = false;
             bool pack_found = false;
             bool foot_found = false;
             bool for_ard = false;
+            bool do_dump = false;
             byte[] head_rcvd = new byte[1];
             byte[] id_rcvd = new byte[1];
             byte[] dat_rcvd = new byte[1];
             byte[] pack_rcvd = new byte[2];
             byte[] foot_rcvd = new byte[1];
+            byte[] check_sum_rcvd = new byte[1];
             char head = ' ';
             char id = ' ';
             char foot = ' ';
             byte dat = 0;
             ushort pack = 0;
+            ushort check_sum = 0;
             string msg_str;
 
             // Find header
@@ -1037,7 +1078,7 @@ namespace ICR_Run
                 sp_Xbee.Read(head_rcvd, 0, 1);
                 // Get header
                 u.b1 = head_rcvd[0];
-                u.b2 = 0;
+                u.b2 = 0; // C# chars are 2 bytes
                 head = u.c1;
                 if (head == r2c_head)
                 {
@@ -1067,84 +1108,181 @@ namespace ICR_Run
                 }
             }
 
-            // Get data byte
-            if (head_found && id_found)
+            // Check if this is a log packet
+            if (id != 'U')
             {
+
                 // Get data byte
-                while (sp_Xbee.BytesToRead < 1 && !doExit) ; // wait
-                sp_Xbee.Read(dat_rcvd, 0, 1);
-                dat = dat_rcvd[0];
-            }
-
-            // Get first and second part of packet number
-            if (head_found && id_found)
-            {
-                // Get first byte of packet number
-                while (sp_Xbee.BytesToRead < 2 && !doExit) ; // wait
-                sp_Xbee.Read(pack_rcvd, 0, 2);
-                u.b1 = pack_rcvd[0];
-                u.b2 = pack_rcvd[1];
-                pack = u.s1;
-
-                // Check if pack matches sent pack or done related id or one way message
-                for (int i = c2r_packHist.Count - 1; i >= 0; i--)
+                if (head_found && id_found)
                 {
-                    while (c2r_packHist.Count != c2r_idHist.Count && !doExit) ;
-                    if (
-                        (c2r_packHist[i] == pack &&  (c2r_idHist[i] == id || id == 'D')) ||
-                        (id == 'J' && pack == 0)
+                    // Get data byte
+                    while (sp_Xbee.BytesToRead < 1 && !doExit) ; // wait
+                    sp_Xbee.Read(dat_rcvd, 0, 1);
+                    dat = dat_rcvd[0];
+                }
+
+                // Get first and second part of packet number
+                if (head_found && id_found)
+                {
+                    // Get first byte of packet number
+                    while (sp_Xbee.BytesToRead < 2 && !doExit) ; // wait
+                    sp_Xbee.Read(pack_rcvd, 0, 2);
+                    u.b1 = pack_rcvd[0];
+                    u.b2 = pack_rcvd[1];
+                    pack = u.s1;
+
+                    // Check if pack matches sent pack or done related id or one way message
+                    for (int i = c2r_packHist.Count - 1; i >= 0; i--)
+                    {
+                        while (c2r_packHist.Count != c2r_idHist.Count && !doExit) ;
+                        if (
+                            (c2r_packHist[i] == pack && (c2r_idHist[i] == id || id == 'D')) ||
+                            (id == 'J' && pack == 0)
+                            )
+                        {
+                            pack_found = true;
+                        }
+                    }
+                }
+
+                // Find footer
+                if (head_found && id_found && pack_found)
+                {
+                    check_time = sw_main.ElapsedMilliseconds + 100;
+                    while (
+                        !foot_found &&
+                        sw_main.ElapsedMilliseconds <= check_time &&
+                        !doExit
                         )
                     {
-                        pack_found = true;
+                        sp_Xbee.Read(foot_rcvd, 0, 1);
+                        // Get header
+                        u.b1 = foot_rcvd[0];
+                        u.b2 = 0;
+                        foot = u.c1;
+                        if (foot == r2c_foot)
+                        {
+                            foot_found = true;
+                        }
                     }
                 }
-            }
 
-            // Find footer
-            if (head_found && id_found && pack_found)
-            {
-                while (!foot_found && sp_Xbee.BytesToRead > 0 && !doExit)
+                // Print and save if complete packet recieved
+                if (head_found && id_found && pack_found && foot_found)
                 {
-                    sp_Xbee.Read(foot_rcvd, 0, 1);
-                    // Get header
-                    u.b1 = foot_rcvd[0];
-                    u.b2 = 0;
-                    foot = u.c1;
-                    if (foot == r2c_foot)
+                    // Update recieve time
+                    t_r2cLast = t_r2c;
+                    t_r2c = sw_main.ElapsedMilliseconds;
+
+                    // print data recieved
+                    msg_str = String.Format("   Rsvd: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
+                    PrintAction(msg_str, t_r2cLast, t_r2c);
+
+                    // Update last pack
+                    r2c_packLast[CharInd(id, r2c_id)] = pack;
+                    // Update list
+                    r2c_idHist.Add(id);
+                    r2c_packHist.Add(pack);
+
+                    // Check if data should be relayed to Matlab
+                    for (int i = 0; i < c2m_id.Length - 1; i++)
                     {
-                        foot_found = true;
+                        if (c2m_id[i] == id)
+                        {
+                            com_Matlab.Execute(String.Format("c2m_{0} = {1}", c2m_id[i], (double)dat));
+                        }
                     }
                 }
-            }
-
-            // Print and save if complete packet recieved
-            if (head_found && id_found && pack_found && foot_found)
-            {
-                // Update recieve time
-                t_r2cLast = t_r2c;
-                t_r2c = sw_main.ElapsedMilliseconds;
-
-                // print data recieved
-                msg_str = String.Format("   Rsvd: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
-                PrintAction(msg_str, t_r2cLast, t_r2c);
-
-                // Update last pack
-                r2c_packLast[CharInd(id, r2c_id)] = pack;
-                // Update list
-                r2c_idHist.Add(id);
-                r2c_packHist.Add(pack);
-
-                // Check if data should be relayed to Matlab
-                for (int i = 0; i < c2m_id.Length - 1; i++)
+                else
                 {
-                    if (c2m_id[i] == id)
-                    {
-                        com_Matlab.Execute(String.Format("c2m_{0} = {1}", c2m_id[i], (double)dat));
-                    }
+                    // Set dump flag 
+                    do_dump = true;
                 }
             }
-            // Dump
+
+            // Process log data
             else
+            {
+
+                // Get check sum
+                if (head_found && id_found)
+                {
+                    // Get check sum byte
+                    while (sp_Xbee.BytesToRead < 1 && !doExit) ; // wait
+                    sp_Xbee.Read(check_sum_rcvd, 0, 1);
+                    check_sum = dat_rcvd[0];
+                }
+
+                // Read in complete packet
+                byte[] log_rcvd = new byte[check_sum];
+
+                // Wait for buffer to fill for fixed time
+                check_time = sw_main.ElapsedMilliseconds + 1000;
+                while (
+                sp_Xbee.BytesToRead < check_sum &&
+                sw_main.ElapsedMilliseconds <= check_time &&
+                !doExit
+                ) ; // wait
+
+                // Read in all data
+                if (sp_Xbee.BytesToRead >= check_sum)
+                {
+                    sp_Xbee.Read(log_rcvd, 0, check_sum);
+                }
+                else do_dump = true;
+
+                // Convert to string
+                string log_str = System.Text.Encoding.UTF8.GetString(log_rcvd);
+
+                // Find footer
+                check_time = sw_main.ElapsedMilliseconds + 1000;
+                if (head_found && id_found && pack_found)
+                {
+                    check_time = sw_main.ElapsedMilliseconds + 100;
+                    while (
+                        !foot_found &&
+                        sw_main.ElapsedMilliseconds <= check_time &&
+                        !doExit
+                        )
+                    {
+                        sp_Xbee.Read(foot_rcvd, 0, 1);
+                        // Get header
+                        u.b1 = foot_rcvd[0];
+                        u.b2 = 0;
+                        foot = u.c1;
+                        if (foot == r2c_foot)
+                        {
+                            foot_found = true;
+                        }
+                    }
+                }
+
+                // Check if packet complete
+                if (foot_found)
+                {
+                    // Update list
+                    importRobotLog.UpdateList(log_str);
+
+                    // Request send next
+                    importRobotLog.doSendNext = true;
+
+                    // print data recieved
+                    PrintAction(log_str);
+                }
+                else
+                {
+                    // Request resend
+                    importRobotLog.doSendLast = true;
+
+                    // Set dump flag
+                    do_dump = true;
+                }
+
+
+            }
+
+            // Dump incomplete packets
+            if (do_dump)
             {
                 if (for_ard)
                 {
@@ -1159,6 +1297,52 @@ namespace ICR_Run
                 // dump input buffer
                 sp_Xbee.DiscardInBuffer();
             }
+        }
+
+        public static bool GetRobotLog()
+        {
+            // Local vars
+            bool pass = false;
+            long check_time;
+
+            // Send initial request for new data
+            RepeatSend('L', 1);
+
+            // Wait for complete log
+            check_time = sw_main.ElapsedMilliseconds + 10000;
+            bool do_loop = true;
+            do
+            {
+                // Check if need to send new or resend
+                if (importRobotLog.doSendLast)
+                {
+                    RepeatSend('L', 0);
+                    importRobotLog.doSendLast = false;
+                }
+                else if (importRobotLog.doSendNext)
+                {
+                    RepeatSend('L', 1);
+                    importRobotLog.doSendNext = false;
+                }
+
+                // Check if list complete
+                if (c2r_packLast[CharInd('L', c2r_id)] == r2c_packLast[CharInd('D', r2c_id)])
+                {
+                    pass = true;
+                    do_loop = false;
+                }
+                else if (sw_main.ElapsedMilliseconds > check_time)
+                {
+
+                }
+                else if (doAbort)
+                {
+                    do_loop = false;
+                }
+
+            } while (do_loop);
+
+            return pass;
         }
 
         #endregion
@@ -1345,7 +1529,7 @@ namespace ICR_Run
                 com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m_id[i]), "global", 0.0);
             }
 
-                while (!doQuit && !isMAThanging)
+            while (!doQuit && !isMAThanging)
             {
                 // Get flag
                 try
@@ -1432,7 +1616,7 @@ namespace ICR_Run
 
             // Relay all matlab data but the following
             if (
-                matIn_id == 'L' || // loaded
+                matIn_id == 'G' || // loaded
                 matIn_id == 'A' || // ac comp
                 matIn_id == 'Q' || // quit
                 matIn_id == 'Z'    // saved
@@ -1652,6 +1836,56 @@ namespace ICR_Run
                 }
             }
         }
+    }
+
+    class Import_Robot_Log
+    {
+        private static List<string> logList = new List<string>();
+        static readonly object lockLog = new object();
+        private static int _logInd = 0;
+        private static bool _doSendNext;
+        private static bool _doSendLast;
+
+        public int logInd
+        {
+            get { return _logInd; }
+            set
+            {
+                lock (lockLog)
+                {
+                    _logInd = value;
+                }
+            }
+        }
+        public bool doSendNext
+        {
+            get { return _doSendNext; }
+            set
+            {
+                lock (lockLog)
+                {
+                    _doSendNext = value;
+                }
+            }
+        }
+        public bool doSendLast
+        {
+            get { return _doSendLast; }
+            set
+            {
+                lock (lockLog)
+                {
+                    _doSendLast = value;
+                }
+            }
+        }
+
+        public void UpdateList(string log_str)
+        {
+            logList.Add(log_str);
+            logInd++;
+        }
+
     }
 
     #endregion

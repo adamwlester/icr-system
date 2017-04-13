@@ -11,6 +11,23 @@ DUE SERIAL_BUFFER_SIZE = 128
 SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 */
 
+// LOG DEBUGGING
+
+// Do log
+const bool doDB_Log = true;
+
+// What to print
+const bool doLog_flow = false;
+const bool doLog_irSync = false;
+const bool doLog_motorControl = false;
+const bool doLog_rcvd = false;
+const bool doLog_r2c = false;
+const bool doLog_r2a = false;
+const bool doLog_pid = false;
+const bool doLog_bull = false;
+const bool doLog_resent = false;
+const bool doLog_dropped = false;
+
 // PRINT DEBUGGING
 
 // Where to print
@@ -19,6 +36,7 @@ const bool doDB_PrintLCD = false;
 
 // What to print
 const bool doPrint_flow = false;
+const bool doPrint_irSync = false;
 const bool doPrint_motorControl = false;
 const bool doPrint_rcvd = false;
 const bool doPrint_r2c = false;
@@ -149,6 +167,10 @@ const int pin_IRdetect = 17;
 
 #pragma region ---------VARIABLE SETUP---------
 
+// Log debugging
+String logList[5000];
+uint16_t logCnt = 0;
+
 // Print debugging
 String printQueue[10];
 const int printQueue_lng =
@@ -185,6 +207,8 @@ bool fc_doHalt = false;
 bool fc_isHalted = false;
 bool fc_doBulldoze = false;
 bool fc_doCheckDoneRcvd = false;
+bool fc_doLogSend = false;
+bool fc_doLogResend = false;
 
 // Start/Quit
 byte msg_setupCmd[2];
@@ -193,7 +217,7 @@ uint32_t t_quitCmd;
 // Serial from CS
 const char c2r_head[2] = { '_', '<' };
 const char c2r_foot = '>';
-const char c2r_id[12] = {
+const char c2r_id[14] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
@@ -205,6 +229,7 @@ const char c2r_id[12] = {
 	'I', // rat in/out
 	'P', // position data
 	'V', // request stream status
+	'L', // request log send/resend
 	'Y', // confirm done recieved
 };
 char msg_id = ' ';
@@ -215,7 +240,7 @@ uint32_t t_rsvdLast; // (ms)
 // Serial to CS
 const char r2c_head = '{';
 const char r2c_foot = '}';
-const char r2c_id[13] = {
+const char r2c_id[15] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
@@ -227,10 +252,13 @@ const char r2c_id[13] = {
 	'I', // rat in/out
 	'D', // execution done
 	'V', // connected and streaming
+	'L', // request log send/resend
+	'U', // log pack
 	'J', // battery voltage
 	'A', // reward zone
 };
-uint32_t t_resendDone = millis();
+uint32_t t_resendDone = millis(); // (ms)
+uint32_t t_sent = millis(); // (ms)
 //uint32_t resendDone_cnt = 0;
 //uint32_t resendDone_max = 5;
 
@@ -246,7 +274,6 @@ const char r2a_id[10] = {
 	'p', // pid mode [0, 1]
 	'b', // bull mode [0, 1]
 };
-uint32_t t_sent = millis();
 
 // Outgoing data
 byte r2_queue[10][7];
@@ -254,7 +281,6 @@ const int r2_lngR = 10;
 const int r2_lngC = 7;
 int sendQueueInd = r2_lngR - 1;
 bool doSend = false;
-uint32_t t_sync = 0;
 
 // Serial packet tracking
 uint16_t packNow;
@@ -360,12 +386,18 @@ extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 bool lcdLightOn = false;
 
-// Interrupt and button vars
+// Buttons
 volatile bool btn_doChangeSolState = false;
 volatile bool btn_doRew = false;
 volatile bool btn_doChangeLCDstate = false;
+
+// Interrupts 
+volatile uint32_t intrpt_irProxDebounce = millis();
 volatile bool intrpt_doIRhardStop = false;
-volatile uint32_t intrpt_irDebounce = millis();
+volatile uint32_t intrpt_irDetectDebounce = millis();
+volatile uint32_t t_irSyncLast = millis();
+volatile uint32_t t_sync = 0;
+volatile bool doLogIR = false;
 
 #pragma endregion 
 
@@ -904,10 +936,12 @@ public:
 
 	void PrintPID(String str)
 	{
+		// Add to print queue
 		if (doPrint_pid && (doDB_PrintConsole || doDB_PrintLCD))
-		{
-			StoreDebugStr(str);
-		}
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_pid && doDB_Log)
+			StoreDBLogStr(str, millis());
 	}
 
 	float RunPidCalibration()
@@ -1249,10 +1283,12 @@ public:
 
 	void PrintBull(String str)
 	{
+		// Add to print queue
 		if (doPrint_bull && (doDB_PrintConsole || doDB_PrintLCD))
-		{
-			StoreDebugStr(str);
-		}
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_bull && doDB_Log)
+			StoreDBLogStr(str, millis());
 	}
 
 };
@@ -1514,6 +1550,7 @@ public:
 	// START REWARD
 	bool StartRew(bool do_stop)
 	{
+		/*
 		// Local vars
 		bool is_rewarding = true;
 
@@ -1552,16 +1589,19 @@ public:
 		{
 			char str[50];
 			sprintf(str, "REWARDING(%dms)...", duration);
-			DebugState(str);
+			DebugFlow(str);
 		}
 
 		// indicate reward in progress
 		return is_rewarding;
+		*/
+		return true;
 	}
 
 	// END REWARD
 	bool EndRew()
 	{
+		/*
 		bool do_continue_rew = true;
 
 		if (millis() > t_close_sol)
@@ -1581,12 +1621,15 @@ public:
 			}
 			else
 			{
-				DebugState("REWARD FINISHED");
+				DebugFlow("REWARD FINISHED");
 			}
 
 		}
 		else do_continue_rew = false;
 		return do_continue_rew;
+
+		*/
+		return true;
 	}
 
 	// Set reward duration
@@ -1899,6 +1942,7 @@ union u_tag {
 	char c[4]; // (char) 1 byte
 	uint16_t i16[2]; // (int16) 2 byte
 	uint32_t i32; // (int32) 4 byte
+	int i; // (int) 4 byte
 	long l; // (long) 4 byte
 	float f; // (float) 4 byte
 }
@@ -1990,8 +2034,13 @@ void setup() {
 	digitalWrite(pin_ED_SLP, LOW);
 
 	// DEFINE EXTERNAL INTERUPTS
+
+	// IR prox right
 	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
+	// IR prox left
 	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+	// IR detector
+	attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
 
 	// INITIALIZE LCD
 	myGLCD.InitLCD();
@@ -2049,6 +2098,14 @@ void setup() {
 		batVoltArr[i] = 0;
 	}
 
+	// TEST
+	for (int i = 0; i < 100; i++)
+	{
+		char chr[50];
+		sprintf(chr, "Log %d: Bunch of stuff", i);
+		String str = chr;
+		StoreDBLogStr(str, millis());
+	}
 
 }
 
@@ -2140,7 +2197,7 @@ void loop() {
 		intrpt_doIRhardStop = false;
 
 		fc_isFirstPass = false;
-		DebugState("RESET");
+		DebugFlow("RESET");
 
 		// Blink to show setup done
 		SetupBlink();
@@ -2170,7 +2227,7 @@ void loop() {
 #pragma region //--- SEND SERIAL DATA ---
 	if (doSend)
 	{
-		SendData();
+		SendPacketData();
 	}
 #pragma endregion
 
@@ -2215,31 +2272,31 @@ void loop() {
 		if (msg_setupCmd[0] == 1)
 		{
 			fc_isManualSes = false;
-			DebugState("DO TRACKING");
+			DebugFlow("DO TRACKING");
 		}
 		else
 		{
 			fc_isManualSes = true;
-			DebugState("DONT DO TRACKING");
+			DebugFlow("DONT DO TRACKING");
 		}
 		// Set reward tone
 		if (msg_setupCmd[1] == 0)
 		{
 			// No sound
 			Store4_Ard('s', 0);
-			DebugState("NO SOUND");
+			DebugFlow("NO SOUND");
 		}
 		else if (msg_setupCmd[1] == 1)
 		{
 			// Use white noise only
 			Store4_Ard('s', 1);
-			DebugState("DONT DO TONE");
+			DebugFlow("DONT DO TONE");
 		}
 		else
 		{
 			// Use white and reward noise
 			Store4_Ard('s', 2);
-			DebugState("DO TONE");
+			DebugFlow("DO TONE");
 		}
 
 		// Make sure lcd led is off
@@ -2261,7 +2318,7 @@ void loop() {
 
 		// Tell ard to quit
 		Store4_Ard('q', 255);
-		DebugState("DO QUIT");
+		DebugFlow("DO QUIT");
 
 		// Hold all motor control
 		fc_isHalted = true;
@@ -2274,7 +2331,7 @@ void loop() {
 	{
 		// Retell ard to quit
 		Store4_Ard('q', 255);
-		DebugState("QUITING...");
+		DebugFlow("QUITING...");
 		QuitSession();
 	}
 #pragma endregion
@@ -2283,7 +2340,7 @@ void loop() {
 	if (msg_id == 'M' && msg_pass)
 	{
 		fc_doMove = true;
-		DebugState("DO MOVE");
+		DebugFlow("DO MOVE");
 	}
 
 	// Perform movement
@@ -2306,7 +2363,7 @@ void loop() {
 					char str[50];
 					sprintf(str, "MOVEING FROM %0.2fcm TO %0.2fcm BY %0.2fcm",
 						targ_moveTo.pos_start, targ_moveTo.offset_target, targ_moveTo.targ_dist);
-					DebugState(str);
+					DebugFlow(str);
 				}
 				// Reset motor cotrol if run fails
 				else SetMotorControl("Open", "MsgM");
@@ -2334,7 +2391,7 @@ void loop() {
 				BlockMotorTill(5000);
 
 				// Tell CS movement is done
-				Store4_CS('D', 0, c2r_packLast[CharInd('M', "c2r")]);
+				Store4_CS('D', 255, c2r_packLast[CharInd('M', "c2r")]);
 
 				// Reset flags
 				fc_doMove = false;
@@ -2344,7 +2401,7 @@ void loop() {
 				char str[50];
 				sprintf(str, "FINISHED MOVE TO %0.2fcm WITHIN %0.2fcm",
 					targ_moveTo.offset_target, targ_moveTo.GetError(ekfRobPos));
-				DebugState(str);
+				DebugFlow(str);
 			}
 		}
 
@@ -2360,14 +2417,14 @@ void loop() {
 			// Set reward duration in ms
 			reward.SetRewDur(msg_rewDurByte);
 
-			DebugState("REWARD NOW");
+			DebugFlow("REWARD NOW");
 			// Start reward
 			fc_isRewarding = reward.StartRew(true);
 		}
 		else
 		{
 			fc_doRew = true;
-			DebugState("RUN REWARD");
+			DebugFlow("RUN REWARD");
 		}
 	}
 
@@ -2385,7 +2442,7 @@ void loop() {
 				char str[50];
 				sprintf(str, "REWARD AT %0.2fcm FROM %0.2fcm TO %0.2fcm",
 					reward.rewCenter, reward.targBounds[0][0], reward.targBounds[8][1]);
-				DebugState(str);
+				DebugFlow(str);
 			}
 			else if (!reward.is_trigger_ready)
 			{
@@ -2399,7 +2456,7 @@ void loop() {
 					char str[50];
 					sprintf(str, "REWARDED TARG %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
 						reward.rewardedTarg, reward.rewardedBounds[0], reward.rewardedBounds[1], ekf_pass ? "EKF" : "Raw");
-					DebugState(str);
+					DebugFlow(str);
 				}
 			}
 			// Check if rat bassed all bounds
@@ -2455,7 +2512,7 @@ void loop() {
 					char str[50];
 					sprintf(str, "CUEING REWARD AT %0.2fcm/%0.2fcm FROM DIST %0.2fcm/%0.2fcm",
 						targ_cueRat.offset_target, targ_cueRob.offset_target, targ_cueRat.targ_dist, targ_cueRob.targ_dist);
-					DebugState(str);
+					DebugFlow(str);
 				}
 			}
 
@@ -2470,7 +2527,7 @@ void loop() {
 						targ_cueRob.CheckTargReached(ekfRobPos, ekfRobVel)
 						)
 					{
-						DebugState("ROBOT REACHED CUE TARGET");
+						DebugFlow("ROBOT REACHED CUE TARGET");
 						// Hard stop
 						HardStop("MsgC");
 						// Set flag
@@ -2487,7 +2544,7 @@ void loop() {
 						targ_cueRat.CheckTargReached(ekfRatPos, 0)
 						)
 					{
-						DebugState("RAT REACHED CUE TARGET");
+						DebugFlow("RAT REACHED CUE TARGET");
 						// Trigger reward without stopping
 						fc_isRewarding = reward.StartRew(false);
 					}
@@ -2498,7 +2555,7 @@ void loop() {
 					char str[50];
 					sprintf(str, "FINISHED CUEING AT %0.2fcm/%0.2fcm WITHIN %0.2fcm/%0.2fcm",
 						targ_cueRat.offset_target, targ_cueRob.offset_target, targ_cueRat.GetError(ekfRatPos), targ_cueRob.GetError(ekfRobPos));
-					DebugState(str);
+					DebugFlow(str);
 				}
 			}
 		}
@@ -2521,7 +2578,7 @@ void loop() {
 	{
 		if (fc_doHalt)
 		{
-			DebugState("HALT STARTED");
+			DebugFlow("HALT STARTED");
 			// Stop pid and set to manual
 			HardStop("MsgH");
 			// Remove motor control
@@ -2531,7 +2588,7 @@ void loop() {
 		}
 		else
 		{
-			DebugState("HALT FINISHED");
+			DebugFlow("HALT FINISHED");
 			// Open motor control
 			fc_isHalted = false;
 			SetMotorControl("Open", "MsgH");
@@ -2556,7 +2613,7 @@ void loop() {
 			{
 				is_mode_changed = true;
 				fc_doBulldoze = true;
-				DebugState("DO BULLDOZE");
+				DebugFlow("DO BULLDOZE");
 			}
 			// Only settings changed
 			else is_mode_changed = false;
@@ -2568,7 +2625,7 @@ void loop() {
 			{
 				is_mode_changed = true;
 				fc_doBulldoze = false;
-				DebugState("DONT DO BULLDOZE");
+				DebugFlow("DONT DO BULLDOZE");
 			}
 			// Only settings changed
 			else is_mode_changed = false;
@@ -2582,13 +2639,13 @@ void loop() {
 			{
 				// Turn bulldoze on
 				bull.TurnOn("MsgB");
-				DebugState("BULLDOZE ON");
+				DebugFlow("BULLDOZE ON");
 			}
 			else
 			{
 				// Turn bulldoze off
 				bull.TurnOff("MsgB");
-				DebugState("BULLDOZE OFF");
+				DebugFlow("BULLDOZE OFF");
 			}
 		}
 
@@ -2606,7 +2663,7 @@ void loop() {
 			pos_robVT.ResetDat(0, 0);
 
 			// Pid started by InitializeTracking()
-			DebugState("RAT IN");
+			DebugFlow("RAT IN");
 		}
 		else
 		{
@@ -2627,7 +2684,7 @@ void loop() {
 			// Set to stop tracking
 			fc_isTrackingEnabled = false;
 
-			DebugState("RAT OUT");
+			DebugFlow("RAT OUT");
 		}
 	}
 #pragma endregion
@@ -2641,9 +2698,9 @@ void loop() {
 	// Check for streaming
 	if (fc_doStreamCheck && fc_isStreaming)
 	{
-		Store4_CS('D', 0, c2r_packLast[CharInd('V', "c2r")]);
+		Store4_CS('D', 255, c2r_packLast[CharInd('V', "c2r")]);
 		fc_doStreamCheck = false;
-		DebugState("STREAMING CONFIRMED");
+		DebugFlow("STREAMING CONFIRMED");
 	}
 #pragma endregion
 
@@ -2651,16 +2708,16 @@ void loop() {
 	if (msg_id == 'Y' && msg_pass)
 	{
 		fc_doCheckDoneRcvd = false;
-		DebugState("CS RESIEVED 'DONE'");
+		DebugFlow("CS RESIEVED 'DONE'");
 	}
 	// Request done recieved confirmation
 	if (fc_doCheckDoneRcvd && millis() > t_resendDone)
 	{
 		// Resend done confirmation
-		Store4_CS('D', 0, r2c_packLast[CharInd('D', "r2c")]);
+		Store4_CS('D', 255, r2c_packLast[CharInd('D', "r2c")]);
 		// Send again after 1 sec
 		t_resendDone = millis() + 1000;
-		DebugState("RESENT 'D'");
+		DebugFlow("RESENT 'D'");
 	}
 #pragma endregion
 
@@ -2676,6 +2733,40 @@ void loop() {
 		{
 			pos_robVT.UpdatePosVel(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
 		}
+	}
+#pragma endregion
+
+#pragma region //--- (L) SEND LOG ---
+	if (msg_id == 'L' && msg_pass)
+	{
+		bool do_resend;
+		// Send log data
+		if (msg_setupCmd[0] == 1)
+		{
+			do_resend = false;
+			DebugFlow("SEND NEXT LOG PACKET");
+		}
+		else
+		{
+			do_resend = true;
+			DebugFlow("RESEND LAST LOG PACKET");
+		}
+		// Send log data if end not reached
+		if (!SendLogData(do_resend))
+		{
+			// Send confirm done
+			Store4_CS('D', 255, c2r_packLast[CharInd('L', "c2r")]);
+		}
+	}
+
+	if (fc_doLogSend)
+	{
+
+
+	}
+	else if (fc_doLogResend)
+	{
+
 	}
 #pragma endregion
 
@@ -2765,6 +2856,9 @@ void loop() {
 
 	// Check voltage sensor
 	CheckBattery();
+
+	// Log new ir events
+	if (doLogIR) DebugIRSync("IR Detected");
 
 #pragma endregion
 
@@ -2958,9 +3052,7 @@ bool ParseSerial()
 			// Signal streaming started
 			fc_isStreaming = true;
 
-			// Get sync time
-			t_sync = millis();
-			// send sync time cmd to ard
+			// send sync start cmd to ard
 			Store4_Ard('t', 255);
 		}
 
@@ -3071,7 +3163,7 @@ bool CheckPack(char id, uint16_t pack)
 		if (id != 'Y')
 		{
 			// Send revieved pack
-			Store4_CS(id, 0, pack);
+			Store4_CS(id, 255, pack);
 		}
 	}
 
@@ -3275,8 +3367,8 @@ void Store4_Ard(char id, byte d1)
 
 }
 
-// SEND SERIAL DATA
-void SendData()
+// SEND SERIAL PACKET DATA
+void SendPacketData()
 {
 	// Local vars
 	const int msg_size = r2_lngC - 1;
@@ -3366,10 +3458,51 @@ void SendData()
 
 			// Store
 			sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
-			StoreDebugStr(str);
+			StoreDBPrintStr(str, t_sent);
 		}
 
 	}
+}
+
+// SEND SERIAL LOG DATA
+bool SendLogData(bool do_resend)
+{
+	// Local vars
+	static int listInd = 0;
+	String msg_str;
+	char msg_char[100];
+	int msg_size;
+	byte msg[100];
+
+	// Incriment list ind
+	if (!do_resend) listInd++;
+
+	// Check if end of list reached
+	if (listInd > logCnt)
+	{
+		return false;
+	}
+
+	// Pull out string
+	msg_str = logList[listInd - 1];
+
+	// Get message size
+	msg_size = msg_str.length();
+
+	// Convert to char array
+	msg_str.toCharArray(msg_char, msg_size);
+
+	// Load byte array
+	msg[0] = r2c_head;
+	msg[1] = msg_size;
+	for (int i = 0; i < msg_size; i++)
+		msg[i + 2] = msg_char[i];
+	msg[msg_size + 3] = r2c_head;
+
+	// Send
+	Serial1.write(msg, msg_size + 3);
+
+	return true;
 }
 
 #pragma endregion
@@ -3396,7 +3529,7 @@ void HardStop(String called_from)
 	}
 
 	// Store string
-	DebugState("HARD STOP [" + called_from + "]");
+	DebugFlow("HARD STOP [" + called_from + "]");
 }
 
 // IR TRIGGERED HARD STOP
@@ -3567,11 +3700,11 @@ void InitializeTracking()
 		n_laps = pos_ratVT.posNow > pos_robVT.posNow ? 0 : 1;
 		if (n_laps > 0)
 		{
-			DebugState("SET RAT POS AHEAD");
+			DebugFlow("SET RAT POS AHEAD");
 		}
 		else
 		{
-			DebugState("RAT POS ALREADY AHEAD");
+			DebugFlow("RAT POS ALREADY AHEAD");
 		}
 
 		// Reset all vt data
@@ -3608,7 +3741,7 @@ void InitializeTracking()
 
 				// Run PID
 				pid.Run("InitializeTracking");
-				DebugState("PID STARTED");
+				DebugFlow("PID STARTED");
 			}
 
 			// Initialize bulldoze
@@ -3616,7 +3749,7 @@ void InitializeTracking()
 			{
 				// Run from initial blocked mode
 				bull.TurnOn("InitializeTracking");
-				DebugState("BULLDOZE INITIALIZED");
+				DebugFlow("BULLDOZE INITIALIZED");
 			}
 
 			// Blink lcd display
@@ -3763,86 +3896,6 @@ void UpdateEKF()
 
 #pragma region --------HARDWARE CONTROL---------
 
-/*
-// START REWARD
-void StartRew(bool do_stop)
-{
-	// Track rewards
-	rewCnt++;
-
-	// Set to extend feeder arm
-	reward.ExtendFeedArm();
-
-	// Stop robot
-	if (do_stop)
-	{
-		HardStop("StartRew");
-		// Set hold time
-		BlockMotorTill(reward.t_block);
-	}
-
-	// Trigger reward tone on
-	Store4_Ard('r', reward.duration_byte);
-
-	// Compute reward end time
-	reward.t_close_sol = millis() + reward.duration;
-	reward.t_retract_arm = millis() + reward.t_block;
-
-	// Turn on reward LED
-	analogWrite(pin_RewLED_R, round(rewLEDduty*0.75));
-	analogWrite(pin_RewLED_C, rewLEDduty);
-	// Open solenoid
-	digitalWrite(pin_Rel_Rew, HIGH);
-
-	// Print to LCD for manual rewards
-	if (btn_doRew)
-	{
-		PrintLCD("REWARDING...");
-	}
-	else
-	{
-		char str[50];
-		sprintf(str, "REWARDING(%dms)...", reward.duration);
-		DebugState(str);
-	}
-
-	// indicate reward in progress
-	fc_isRewarding = true;
-}
-
-// END REWARD
-bool EndRew()
-{
-	bool is_rew_end = false;
-
-	if (millis() > reward.t_close_sol)
-	{
-
-		// Close solenoid
-		digitalWrite(pin_Rel_Rew, LOW);
-
-		// Turn off reward LED
-		analogWrite(pin_RewLED_R, rewLEDmin);
-		analogWrite(pin_RewLED_C, rewLEDmin);
-
-		// Clear LCD
-		if (btn_doRew)
-		{
-			ClearLCD();
-		}
-		else
-		{
-			DebugState("REWARD FINISHED");
-		}
-
-		// Set flags
-		fc_isRewarding = false;
-		is_rew_end = true;
-	}
-	return is_rew_end;
-}
-*/
-
 // OPEN/CLOSE REWARD SOLENOID
 void OpenCloseRewSolenoid()
 {
@@ -3890,7 +3943,7 @@ void CheckEtOH()
 		isEtOHOpen = true;
 
 		// Print to debug
-		DebugState("EtOH SOLENOID OPEN");
+		DebugFlow("EtOH SOLENOID OPEN");
 	}
 	else if (
 		isEtOHOpen &&
@@ -3904,7 +3957,7 @@ void CheckEtOH()
 		isEtOHOpen = false;
 
 		// Print to debug
-		DebugState("EtOH SOLENOID CLOSE");
+		DebugFlow("EtOH SOLENOID CLOSE");
 	}
 }
 
@@ -3947,7 +4000,7 @@ void CheckBattery()
 
 		char str[50];
 		sprintf(str, "V: (float)%0.2fV (byte)%d", volt_avg, byte_out);
-		DebugState(str);
+		DebugFlow(str);
 
 		// Reset flag
 		do_volt_update = false;
@@ -4026,50 +4079,143 @@ void QuitSession()
 
 #pragma region --------DEBUGGING---------
 
-void StoreDebugStr(String str)
+void DebugMotorControl(String set_to, String called_from)
 {
-	// Local vars
-	char t_str_long[50];
-	char t_str_ellapsed[50];
-	static uint32_t t_last = millis();
-	uint32_t ts;
-	float t_c;
-	float t_m;
-	float t_ellapsed;
-
-	// Time now
-	ts = t_sync == 0 ? millis() : t_sync;
-
-	// Total time
-	t_c = (float)((millis() - ts) / 1000.0f);
-	t_m = (float)millis() / 1000.0f;
-
-	// Ellapsed time
-	t_ellapsed = (float)((millis() - t_last) / 1000.0f);
-	t_last = millis();
-
-	// Save long and short string
-	sprintf(t_str_long, "%0.2fsec/%0.2fsec", t_c, t_m);
-	sprintf(t_str_ellapsed, "%0.0f-", t_ellapsed);
-
-	// Shift queue
-	for (int i = 0; i < printQueue_lng - 1; i++)
+	if (
+		(doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_motorControl && doDB_Log)
+		)
 	{
-		printQueue[i] = printQueue[i + 1];
+		String str;
+		str = "mc set:" + fc_motorControl + " " + "in:" + set_to + " [" + called_from + "]";
+
+		// Add to print queue
+		if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_motorControl && doDB_Log)
+			StoreDBLogStr(str, millis());
+	}
+}
+
+void DebugDropped(int missed, int missed_total, int total)
+{
+	if (
+		(doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_dropped && doDB_Log)
+		)
+	{
+		char str[50];
+		sprintf(str, "!dropped p:%d [t:%d/%d]!", missed, missed_total, total);
+
+		// Add to print queue
+		if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_dropped && doDB_Log)
+			StoreDBLogStr(str, millis());
+	}
+}
+
+void DebugResent(char id, uint16_t pack, int total)
+{
+	if (
+		(doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_resent && doDB_Log)
+		)
+	{
+		char str[50];
+		sprintf(str, "!resent i:%c p:%d t:%d!", id, pack, total);
+
+		// Add to print queue
+		if (doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_resent && doDB_Log)
+			StoreDBLogStr(str, millis());
+	}
+}
+
+void DebugRsvd(char id, uint16_t pack)
+{
+	if (
+		(doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_rcvd && doDB_Log)
+		)
+	{
+		char str[50];
+
+		// Print specific pack contents
+		if (id == 'T')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+		}
+		else if (id == 'S')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+		}
+		else if (id == 'M')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%0.2f p:%d", id, msg_moveToTarg, pack);
+		}
+		else if (id == 'R')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%0.2f p:%d", id, msg_rewPos, pack);
+		}
+		else if (id == 'H')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, fc_doHalt, pack);
+		}
+		else if (id == 'B')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, msg_bullDel, pack);
+		}
+		else if (id == 'I')
+		{
+			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, fc_isRatIn, pack);
+		}
+		else sprintf(str, "rcvd: [i:%c p:%d", id, pack);
+
+		// Add to print queue
+		if (doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_rcvd && doDB_Log)
+			StoreDBLogStr(str, millis());
 	}
 
-	// Set first entry to new string
-	printQueue[printQueue_lng - 1] = t_str_ellapsed + str;
+}
 
-	// Set last entry to time 
-	printQueue[0] = t_str_long;
+void DebugIRSync(String str)
+{
+	if (
+		(doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_irSync && doDB_Log)
+		)
+	{
+		// Add to print queue
+		if (doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, t_irSyncLast);
+		// Add to log queue
+		if (doLog_irSync && doDB_Log)
+			StoreDBLogStr(str, t_irSyncLast);
+	}
+}
 
-	// Set queue ind
-	printQueueInd--;
-
-	// Set flag
-	doPrint = true;
-
+void DebugFlow(String str)
+{
+	if (
+		(doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_flow && doDB_Log)
+		)
+	{
+		// Add to print queue
+		if (doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_flow && doDB_Log)
+			StoreDBLogStr(str, millis());
+	}
 }
 
 void PrintDebug()
@@ -4137,90 +4283,70 @@ void PrintDebug()
 	}
 }
 
-void DebugMotorControl(String set_to, String called_from)
+void StoreDBPrintStr(String str, uint32_t ts)
 {
-	if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
+	// Local vars
+	char t_str_long[50];
+	char t_str_ellapsed[50];
+	static uint32_t t_last = millis();
+	uint32_t ts_norm;
+	float t_c;
+	float t_m;
+	float t_ellapsed;
+
+	// Time now
+	ts_norm = t_sync == 0 ? ts : t_sync;
+
+	// Total time
+	t_c = (float)((millis() - ts_norm) / 1000.0f);
+	t_m = (float)millis() / 1000.0f;
+
+	// Ellapsed time
+	t_ellapsed = (float)((millis() - t_last) / 1000.0f);
+	t_last = millis();
+
+	// Save long and short string
+	sprintf(t_str_long, "%0.2fsec/%0.2fsec", t_c, t_m);
+	sprintf(t_str_ellapsed, "%0.0f-", t_ellapsed);
+
+	// Shift queue
+	for (int i = 0; i < printQueue_lng - 1; i++)
 	{
-		String str;
-		// Store
-		str = "mc set:" + fc_motorControl + " " + "in:" + set_to + " [" + called_from + "]";
-		StoreDebugStr(str);
+		printQueue[i] = printQueue[i + 1];
 	}
+
+	// Set first entry to new string
+	printQueue[printQueue_lng - 1] = t_str_ellapsed + str;
+
+	// Set last entry to time 
+	printQueue[0] = t_str_long;
+
+	// Set queue ind
+	printQueueInd--;
+
+	// Set flag
+	doPrint = true;
+
 }
 
-void DebugDropped(int missed, int missed_total, int total)
+void StoreDBLogStr(String str, uint32_t ts)
 {
-	if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
-	{
-		char str[50];
-		// Store
-		sprintf(str, "!dropped p:%d [t:%d/%d]!", missed, missed_total, total);
-		StoreDebugStr(str);
-	}
-}
+	// Local vars
+	char str_c[50];
+	char msg_c[50];
+	uint32_t ts_norm;
 
-void DebugResent(char id, uint16_t pack, int total)
-{
-	if (doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD))
-	{
-		char str[50];
-		// Store
-		sprintf(str, "!resent i:%c p:%d t:%d!", id, pack, total);
-		StoreDebugStr(str);
-	}
-}
+	// Itterate log entry count
+	logCnt++;
 
-void DebugRsvd(char id, uint16_t pack)
-{
-	//// Print
-	if (doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD))
-	{
-		char str[50];
+	// Time now
+	ts_norm = t_sync == 0 ? ts : ts - t_sync;
 
-		// Print specific pack contents
-		if (id == 'T')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
-		}
-		else if (id == 'S')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
-		}
-		else if (id == 'M')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%0.2f p:%d", id, msg_moveToTarg, pack);
-		}
-		else if (id == 'R')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%0.2f p:%d", id, msg_rewPos, pack);
-		}
-		else if (id == 'H')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, fc_doHalt, pack);
-		}
-		else if (id == 'B')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, msg_bullDel, pack);
-		}
-		else if (id == 'I')
-		{
-			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, fc_isRatIn, pack);
-		}
-		else sprintf(str, "rcvd: [i:%c p:%d", id, pack);
+	// Concatinate ts with message
+	str.toCharArray(str_c, str.length());
+	sprintf(msg_c, "%d %s", ts_norm, str_c);
+	logList[logCnt - 1] = msg_c;
 
-		// Store
-		StoreDebugStr(str);
-
-	}
-}
-
-void DebugState(String msg)
-{
-	if (doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD))
-	{
-		// Store
-		StoreDebugStr(msg);
-	}
 }
 
 #pragma endregion
@@ -4357,15 +4483,36 @@ int CharInd(char id, String a_lab)
 // Halt run on IR trigger
 void Interupt_IRprox_Halt() {
 
-	// exit if < 250 ms has not passed
-	if (intrpt_irDebounce > millis()) return;
+	// Exit if < 250 ms has not passed
+	if (intrpt_irProxDebounce > millis()) return;
 
 	// Run stop in main loop
 	intrpt_doIRhardStop = true;
 
-	intrpt_irDebounce = millis() + 250;
+	// Update debounce
+	intrpt_irProxDebounce = millis() + 250;
 }
 
+// IR detector
+void Interupt_IR_Detect()
+{
+	// Exit if < 250 ms has not passed
+	if (intrpt_irDetectDebounce > millis()) return;
 
+	// Store time
+	t_irSyncLast = millis();
+
+	// Check if this if first event
+	if (t_sync == 0)
+	{
+		t_sync = t_irSyncLast;
+	}
+
+	// Set flag
+	doLogIR = true;
+
+	// Update debounce
+	intrpt_irDetectDebounce = millis() + 250;
+}
 #pragma endregion
 

@@ -95,28 +95,22 @@ void dSPINConfig_board()
 	ad_R.setAccKVAL(50);				        // This controls the acceleration current
 	ad_R.setDecKVAL(50);				        // This controls the deceleration current
 	ad_R.setRunKVAL(50);					    // This controls the run current
-	ad_R.setHoldKVAL(30);				        // This controls the holding current keep it low
+	ad_R.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-												// NIMA 17 12V
+	// NIMA 17 24V
+	ad_F.setAccKVAL(50);				        // This controls the acceleration current
+	ad_F.setDecKVAL(50);				        // This controls the deceleration current
+	ad_F.setRunKVAL(50);					    // This controls the run current
+	ad_F.setHoldKVAL(20);				        // This controls the holding current keep it low
+
+	/*
+	// NIMA 17 12V
 	ad_F.setAccKVAL(100);				        // This controls the acceleration current
 	ad_F.setDecKVAL(100);				        // This controls the deceleration current
 	ad_F.setRunKVAL(120);					    // This controls the run current
 	ad_F.setHoldKVAL(35);				        // This controls the holding current keep it low
+	*/
 
-												/*
-												// NIMA 17 24V
-												ad_R.setAccKVAL(50);				        // This controls the acceleration current
-												ad_R.setDecKVAL(50);				        // This controls the deceleration current
-												ad_R.setRunKVAL(50);					    // This controls the run current
-												ad_R.setHoldKVAL(17);				        // This controls the holding current keep it low
-												*/
-												/*
-												// NIMA 23 24V MAX KVALS
-												ad_R.setAccKVAL(30);				        // This controls the acceleration current
-												ad_R.setDecKVAL(30);				        // This controls the deceleration current
-												ad_R.setRunKVAL(75);					    // This controls the run current
-												ad_R.setHoldKVAL(30);				        // This controls the holding current keep it low
-												*/
 
 #pragma endregion
 
