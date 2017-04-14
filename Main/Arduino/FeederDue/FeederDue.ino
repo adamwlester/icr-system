@@ -182,14 +182,14 @@ bool doBlockLCDlog = false;
 // Debug tracking
 uint32_t t_loopMain = millis();
 uint32_t t_loopRead = millis();
-int cnt_droppedPacks;
+int cnt_droppedPacks = 0;
 int cnt_overflowEvt = 0;
 int cnt_timeoutEvt = 0;
 int cnt_packResend = 0;
 
 // State control
 String fc_motorControl = "None"; // ["None", "Open", "MoveTo", "Bull", "PID"]
-uint32_t t_blockTill;
+uint32_t t_blockTill = 0;
 bool fc_isBlockingTill = false;
 bool fc_doQuit = false;
 bool fc_isFirstPass = true;
@@ -212,7 +212,7 @@ bool fc_doLogResend = false;
 
 // Start/Quit
 byte msg_setupCmd[2];
-uint32_t t_quitCmd;
+uint32_t t_quitCmd = 0;
 
 // Serial from CS
 const char c2r_head[2] = { '_', '<' };
@@ -235,7 +235,7 @@ const char c2r_id[14] = {
 char msg_id = ' ';
 bool msg_pass = false;
 uint32_t t_rsvd = millis(); // (ms)
-uint32_t t_rsvdLast; // (ms)
+uint32_t t_rsvdLast = 0; // (ms)
 
 					 // Serial to CS
 const char r2c_head = '{';
@@ -259,10 +259,10 @@ const char r2c_id[15] = {
 };
 uint32_t t_resendDone = millis(); // (ms)
 uint32_t t_sent = millis(); // (ms)
-							//uint32_t resendDone_cnt = 0;
-							//uint32_t resendDone_max = 5;
+//uint32_t resendDone_cnt = 0;
+//uint32_t resendDone_max = 5;
 
-							// Serial to other ard
+// Serial to other ard
 const char r2a_head = '[';
 const char r2a_foot = ']';
 uint16_t r2a_packCnt = 0;
@@ -283,7 +283,7 @@ int sendQueueInd = r2_lngR - 1;
 bool doSend = false;
 
 // Serial packet tracking
-uint16_t packNow;
+uint16_t packNow = 0;
 uint16_t packLast = 0;
 int packTot = 0;
 // last packet
@@ -303,9 +303,9 @@ const int c2r_hLng = sizeof(c2r_packHist) / sizeof(c2r_packHist[0]);
 const int r2c_hLng = sizeof(r2c_packHist) / sizeof(r2c_packHist[0]);
 
 // Serial VT
-byte msg_vtEnt;
-float msg_vtCM[2];
-uint32_t msg_vtTS[2];
+byte msg_vtEnt = 0;
+float msg_vtCM[2] = {0,0};
+uint32_t msg_vtTS[2] = { 0,0 };
 
 // Pixy
 const double pixyCoeff[5] = {
@@ -315,8 +315,8 @@ const double pixyCoeff[5] = {
 	-0.677050955917591,
 	75.424132382709260
 };
-float vtpixyVelAvg;
-float vtpixyPosAvg;
+float vtpixyVelAvg = 0;
+float vtpixyPosAvg = 0;
 
 // AutoDriver
 const float cm2stp = 200 / (9 * PI);
@@ -331,33 +331,33 @@ const byte kRun = 60;
 const byte kHold = 60 / 2;
 
 // Kalman model measures
-float ekfRatPos;
-float ekfRobPos;
-float ekfRatVel;
-float ekfRobVel;
+float ekfRatPos = 0;
+float ekfRobPos = 0;
+float ekfRatVel = 0;
+float ekfRobVel = 0;
 
 // PID Settings
 bool do_includeTerm[2] = { true, true };
 const float defualtSetPoint = 42; // (cm)
 const float guardDist = 4.5;
 const float feedDist = 66;
-float errorFeeder;
-float errorDefault;
+float errorFeeder = 0;
+float errorDefault = 0;
 
 // Movement
 float moveToSpeed = 80;
-float msg_moveToTarg;
-float moveToDist;
-float moveToStartPos;
-byte msg_bullDel;
-byte msg_bullSpeed;
+float msg_moveToTarg = 0;
+float moveToDist = 0;
+float moveToStartPos = 0;
+byte msg_bullDel = 0;
+byte msg_bullSpeed = 0;
 
 // Reward
-float msg_cueTarg;
-float cueDist[2];
-float cueStartPos[2];
-float msg_rewPos;
-byte msg_rewDurByte;
+float msg_cueTarg = 0;
+float cueDist[2] = {0,0};
+float cueStartPos[2] = { 0,0 };
+float msg_rewPos = 0;
+byte msg_rewDurByte = 0;
 int rewCnt = 0;
 
 // EtOH 
@@ -1348,7 +1348,7 @@ public:
 				offsetTarget = targ + offset;
 				if (offsetTarget < 0)
 					offsetTarget = offsetTarget + (140 * PI);
-				else if (offsetTarget >(140 * PI))
+				else if (offsetTarget > (140 * PI))
 					offsetTarget = offsetTarget - (140 * PI);
 
 				// Current relative pos on track
