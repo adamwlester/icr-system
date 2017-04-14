@@ -2107,10 +2107,6 @@ void setup() {
 	{
 		batVoltArr[i] = 0;
 	}
-	delay(5000);
-	myGLCD.invert(false);
-	delay(5000);
-	myGLCD.invert(true);
 }
 
 
