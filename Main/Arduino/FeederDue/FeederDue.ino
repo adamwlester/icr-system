@@ -4440,24 +4440,6 @@ void SetupBlink()
 	analogWrite(pin_RewLED_R, rewLEDmin);
 }
 
-void RatInBlink()
-{
-	// Local vars
-	int duty[2] = { 255, 0 };
-	bool is_on = true;
-	int del = 50;
-
-	// Flash 
-	for (int i = 0; i < 3; i++)
-	{
-		analogWrite(pin_TrackLED, duty[(int)is_on]);
-		delay(del);
-		is_on = !is_on;
-	}
-	// Reset LED
-	analogWrite(pin_TrackLED, trackLEDduty);
-}
-
 int CharInd(char id, String a_lab)
 {
 
@@ -4485,6 +4467,24 @@ int CharInd(char id, String a_lab)
 	}
 	return ind;
 
+}
+
+void RatInBlink()
+{
+	// Local vars
+	int duty[2] = { 255, 0 };
+	bool is_on = true;
+	int del = 50;
+
+	// Flash 
+	for (int i = 0; i < 3; i++)
+	{
+		analogWrite(pin_TrackLED, duty[(int)is_on]);
+		delay(del);
+		is_on = !is_on;
+	}
+	// Reset LED
+	analogWrite(pin_TrackLED, trackLEDduty);
 }
 
 #pragma endregion
