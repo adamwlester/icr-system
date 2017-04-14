@@ -17,7 +17,7 @@ bool is_armExtended = false;
 /*
 Test voltage measurment
 */
-const bool do_VoltTest = true;
+const bool do_VoltTest = false;
 
 // XBee Test 
 /*
@@ -384,6 +384,14 @@ void setup()
 
 void loop()
 {
+	static bool first_pass = true;
+		if (first_pass)
+		{
+			// Blink to show setup done
+			SetupBlink();
+			first_pass = false;
+		}
+
 	// POT Test
 	if (do_POT_Test)
 	{
@@ -770,3 +778,24 @@ void InteruptIRproxHalt() {
 	SerialUSB.println("Run Halted");
 }
 
+void SetupBlink()
+{
+	int duty[2] = { 100, 0 };
+	bool isOn = false;
+	int del = 100;
+	// Flash sequentially
+	for (int i = 0; i < 8; i++)
+	{
+		analogWrite(pin_Disp_LED, duty[(int)isOn]);
+		delay(del);
+		analogWrite(pin_TrackLED, duty[(int)isOn]);
+		delay(del);
+		analogWrite(pin_RewLED_R, duty[(int)isOn]);
+		delay(del);
+		isOn = !isOn;
+	}
+	// Reset LEDs
+	analogWrite(pin_Disp_LED, 0);
+	analogWrite(pin_TrackLED, trackLEDduty);
+	analogWrite(pin_RewLED_R, rewLEDmin);
+}

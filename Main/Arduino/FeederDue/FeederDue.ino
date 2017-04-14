@@ -32,10 +32,10 @@ const bool doLog_dropped = false;
 
 // Where to print
 const bool doDB_PrintConsole = false;
-const bool doDB_PrintLCD = false;
+const bool doDB_PrintLCD = true;
 
 // What to print
-const bool doPrint_flow = false;
+const bool doPrint_flow = true;
 const bool doPrint_irSync = false;
 const bool doPrint_motorControl = false;
 const bool doPrint_rcvd = false;
@@ -168,7 +168,7 @@ const int pin_IRdetect = 17;
 #pragma region ---------VARIABLE SETUP---------
 
 // Log debugging
-String logList[5000];
+String logList[150];
 uint16_t logCnt = 0;
 
 // Print debugging
@@ -331,10 +331,10 @@ const byte kRun = 60;
 const byte kHold = 60 / 2;
 
 // Kalman model measures
-float ekfRatPos = 0;
-float ekfRobPos = 0;
-float ekfRatVel = 0;
-float ekfRobVel = 0;
+float ekfRatPos;
+float ekfRobPos;
+float ekfRatVel;
+float ekfRobVel;
 
 // PID Settings
 bool do_includeTerm[2] = { true, true };
@@ -418,20 +418,20 @@ LCD5110 myGLCD(pin_Disp_CS, pin_Disp_RST, pin_Disp_DC, pin_Disp_MOSI, pin_Disp_S
 class PosDat
 {
 public:
-	char objID;
-	int nSamp;
-	float posArr[6];
-	uint32_t tsArr[6];
+	char objID = ' ';
+	int nSamp = 0;
+	float posArr[6] = { 0,0,0,0,0,0 };
+	uint32_t tsArr[6] = { 0,0,0,0,0,0 };
 	int t_skip = 0;
 	float velNow = 0.0f;
 	float posNow = 0.0f;
 	float posAbs = 0.0f;
-	uint32_t tsNow = 0;
-	uint32_t msNow = millis();
+	uint32_t t_tsNow = 0;
+	uint32_t t_msNow = millis();
 	float nLaps = 0;
 	int sampCnt = 0;
 	bool newData = false;
-	uint32_t dtFrame;
+	uint32_t dtFrame = 0;
 
 	// constructor
 	PosDat(char id, int l)
@@ -444,9 +444,9 @@ public:
 	void UpdatePosVel(float pos_new, uint32_t ts_new)
 	{
 		// Store input
-		this->msNow = millis();
+		this->t_msNow = millis();
 		this->posAbs = pos_new;
-		this->tsNow = ts_new;
+		this->t_tsNow = ts_new;
 
 		// Update itteration count
 		this->sampCnt++;
@@ -537,7 +537,7 @@ public:
 	void SetDat(float set_pos, uint32_t ms)
 	{
 		// Compute ts
-		uint32_t ts = tsNow + (ms - msNow);
+		uint32_t ts = t_tsNow + (ms - t_msNow);
 
 		// Update pos
 		UpdatePosVel(set_pos, ts);
@@ -566,11 +566,11 @@ class PID
 
 public:
 	uint32_t t_lastLoop = 0;
-	float dtLoop;
+	float dtLoop = 0;
 	bool wasLoopRan = false;
-	float p_term;
-	float i_term;
-	float d_term;
+	float p_term = 0;
+	float i_term = 0;
+	float d_term = 0;
 	bool firstRun = true;
 	String mode = "Manual"; // ["Manual" "Automatic" "Halted"]
 	bool isHolding4cross = false;
@@ -580,14 +580,14 @@ public:
 	float errorLast = 0;
 	float integral = 0;
 	float derivative = 0;
-	float velUpdate;
+	float velUpdate = 0;
 	float runSpeed = 0;
 	float speedMax = maxSpeed;
-	float dT;
-	float kP;
-	float kI;
-	float kD;
-	float setPoint;
+	float dT = 0;
+	float kP = 0;
+	float kI = 0;
+	float kD = 0;
+	float setPoint = 0;
 	uint32_t t_ekfStr = 0;
 	uint32_t t_ekfSettle = 500; // (ms)
 	bool ekfReady = false;
@@ -595,7 +595,7 @@ public:
 	float dampAcc = 40;
 	float dampSpeedCut = 20;
 	uint32_t dampTimeCut = 4000;
-	uint32_t t_dampTill;
+	uint32_t t_dampTill = 0;
 	uint32_t t_lastDamp = millis();
 
 	// PID calibration
@@ -607,14 +607,14 @@ public:
 	uint32_t cal_t_PcNow = 0;
 	uint32_t cal_t_PcLast = 0;
 	float cal_PcArr[4] = { 0, 0, 0, 0 };
-	float cal_PcAvg;
-	float cal_PcNow;
-	float cal_PcAll;
-	float cal_errNow;
-	float cal_errLast;
-	float cal_errAvg;
+	float cal_PcAvg = 0;
+	float cal_PcNow = 0;
+	float cal_PcAll = 0;
+	float cal_errNow = 0;
+	float cal_errLast = 0;
+	float cal_errAvg = 0;
 	float cal_errArr[4] = { 0, 0, 0, 0 };
-	float cal_dtLoop;
+	float cal_dtLoop = 0;
 	float cal_errCnt = 0;
 	float cal_errSum = 0;
 	float cal_errMax = 0;
@@ -1071,15 +1071,15 @@ public:
 	String mode = "Inactive"; // ["Active" "Inactive"]
 	String state = "Off"; // ["off", "On", "Hold"]
 	uint32_t t_bullNext = 0; // (ms)
-	int bSpeed;
-	int bDelay; // (ms)
+	int bSpeed = 0;
+	int bDelay = 0; // (ms)
 	float posCheck = 0;
 	float posNow = 0;
-	float distMoved;
-	float guardPos;
-	bool hasMoved;
-	bool timesUp;
-	bool passedReset;
+	float distMoved = 0;
+	float guardPos = 0;
+	bool hasMoved = false;
+	bool timesUp = false;
+	bool passedReset = false;
 
 	void UpdateBull()
 	{
@@ -1299,23 +1299,23 @@ Bulldozer bull;
 class Target
 {
 public:
-	String obj_id;
-	float pos_rel;
-	float move_diff;
-	float min_speed;
+	String objID = " ";
+	float posRel = 0;
+	float moveDiff = 0;
+	float minSpeed = 0;
 	const uint32_t t_updateDT = 10;
-	uint32_t t_updateNext;
-	float dist_left;
-	float _new_speed;
-	float pos_start;
-	float targ;
-	float offset_target;
-	float targ_dist;
-	char move_dir;
-	float base_speed = 0;
-	bool is_targ_set = false;
-	bool is_targ_reached = false;
-	float halt_error;
+	uint32_t t_updateNext = 0;
+	float distLeft = 0;
+	float newSpeed = 0;
+	float posStart = 0;
+	float targ = 0;
+	float offsetTarget = 0;
+	float targDist = 0;
+	char moveDir = ' ';
+	float baseSpeed = 0;
+	bool isTargSet = false;
+	bool isTargReached = false;
+	float haltError = 0;
 	const double velCoeff[3] = {
 		0.001830357142857,
 		0.131160714285714,
@@ -1325,90 +1325,94 @@ public:
 	// constructor
 	Target(String id)
 	{
-		this->obj_id = id;
+		this->objID = id;
 	}
 
 	bool CompTarg(float now_pos, float targ_pos, float offset)
 	{
+		// Local vars
+		int diam = 0;
+		int pos = 0;
+
 		// Copy to public vars
-		pos_start = now_pos;
+		posStart = now_pos;
 		targ = targ_pos;
 
 		// Run only if targ not set
-		if (!is_targ_set)
+		if (!isTargSet)
 		{
 			// Check pos data is ready
 			if (pid.ekfReady)
 			{
 				// Compute target targ_dist and move_dir
-				offset_target = targ + offset;
-				if (offset_target < 0)
-					offset_target = offset_target + (140 * PI);
-				else if (offset_target >(140 * PI))
-					offset_target = offset_target - (140 * PI);
+				offsetTarget = targ + offset;
+				if (offsetTarget < 0)
+					offsetTarget = offsetTarget + (140 * PI);
+				else if (offsetTarget >(140 * PI))
+					offsetTarget = offsetTarget - (140 * PI);
 
 				// Current relative pos on track
-				int diam = (int)(140 * PI * 100);
-				int pos = (int)(now_pos * 100);
-				pos_rel = (float)(pos % diam) / 100;
+				diam = (int)(140 * PI * 100);
+				pos = (int)(now_pos * 100);
+				posRel = (float)(pos % diam) / 100;
 
 				// Diff and absolute targ_dist
-				move_diff = offset_target - pos_rel;
-				targ_dist =
-					min((140 * PI) - abs(move_diff), abs(move_diff));
+				moveDiff = offsetTarget - posRel;
+				targDist =
+					min((140 * PI) - abs(moveDiff), abs(moveDiff));
 
 				// Set to negative for reverse move
-				if ((move_diff > 0 && abs(move_diff) == targ_dist) ||
-					(move_diff < 0 && abs(move_diff) != targ_dist))
+				if ((moveDiff > 0 && abs(moveDiff) == targDist) ||
+					(moveDiff < 0 && abs(moveDiff) != targDist))
 				{
-					move_dir = 'f';
+					moveDir = 'f';
 				}
 				else
 				{
-					move_dir = 'r';
-					targ_dist = targ_dist*-1;
+					moveDir = 'r';
+					targDist = targDist*-1;
 				}
 
 				// Set vars for later
 				t_updateNext = millis();
-				base_speed = 0;
+				baseSpeed = 0;
 
 				// Set flag true
-				is_targ_set = true;
+				isTargSet = true;
 			}
 
 		}
 
 		// Retern move targ_dist
-		return is_targ_set;
+		return isTargSet;
 	}
 
 	float DecelToTarg(float now_pos, float now_vel, float dec_pos, float speed_min)
 	{
 		// Run if targ not reached
-		if (!is_targ_reached)
+		if (!isTargReached)
 		{
 
 			// Compute remaining targ_dist
-			dist_left = abs(targ_dist) -
-				min((140 * PI) - abs(now_pos - pos_start), abs(now_pos - pos_start));
+			distLeft = abs(targDist) -
+				min((140 * PI) - abs(now_pos - posStart), abs(now_pos - posStart));
 
 			// Check if rob is dec_pos cm from target
-			if (dist_left <= dec_pos)
+			if (distLeft <= dec_pos)
 			{
 				// Get base speed to decelerate from
-				if (base_speed == 0)
+				if (baseSpeed == 0)
 				{
-					base_speed = abs(now_vel);
+					baseSpeed = abs(now_vel);
 				}
 				// Update decel speed
 				else if (millis() > t_updateNext)
 				{
 					// Compute new speed
-					_new_speed = (dist_left / dec_pos) * base_speed;
+					newSpeed = (distLeft / dec_pos) * baseSpeed;
 
 					// Maintain at min speed
-					if (_new_speed < speed_min) _new_speed = speed_min;
+					if (newSpeed < speed_min) newSpeed = speed_min;
 
 					// Update loop time
 					t_updateNext = millis() + t_updateDT;
@@ -1417,67 +1421,71 @@ public:
 			}
 
 			// Target reached
-			if (dist_left < 1)
+			if (distLeft < 1)
 			{
 				// Set flag true
-				is_targ_reached = true;
+				isTargReached = true;
 
-				_new_speed = 0;
+				newSpeed = 0;
 			}
 		}
-		else _new_speed = 0;
+		else newSpeed = 0;
 
-		return _new_speed;
+		return newSpeed;
 	}
 
 	bool CheckTargReached(float now_pos, float now_vel)
 	{
 		// Run if targ not reached
-		if (!is_targ_reached)
+		if (!isTargReached)
 		{
 			// Get velocity corrected targ_dist threshold
 			if (now_vel >= 20)
 			{
-				halt_error =
+				haltError =
 					velCoeff[0] * (now_vel * now_vel) +
 					velCoeff[1] * now_vel +
 					velCoeff[2];
 			}
-			else halt_error = 1;
+			else haltError = 1;
 
 			// Cap halt error at min of 1
-			halt_error = halt_error < 1 ? 1 : halt_error;
+			haltError = haltError < 1 ? 1 : haltError;
 
 			// Compute remaining targ_dist
-			dist_left = abs(targ_dist) -
-				min((140 * PI) - abs(now_pos - pos_start), abs(now_pos - pos_start));
+			distLeft = abs(targDist) -
+				min((140 * PI) - abs(now_pos - posStart), abs(now_pos - posStart));
 
 			// Target is reached
-			if (dist_left < halt_error)
+			if (distLeft < haltError)
 			{
 				// Set flag true
-				is_targ_reached = true;
+				isTargReached = true;
 			}
 		}
 
-		return is_targ_reached;
+		return isTargReached;
 	}
 
 	float GetError(float now_pos)
 	{
+		// Local vars
+		int diam = 0;
+		int pos = 0;
+
 		// Current relative pos on track
-		int diam = (int)(140 * PI * 100);
-		int pos = (int)(now_pos * 100);
-		pos_rel = (float)(pos % diam) / 100;
+		diam = (int)(140 * PI * 100);
+		pos = (int)(now_pos * 100);
+		posRel = (float)(pos % diam) / 100;
 
 		// Target error
-		return offset_target - pos_rel;
+		return offsetTarget - posRel;
 	}
 
 	void Reset()
 	{
-		is_targ_set = false;
-		is_targ_reached = false;
+		isTargSet = false;
+		isTargReached = false;
 	}
 };
 // Initialize object
@@ -1514,65 +1522,64 @@ public:
 		-20,
 	};
 	uint32_t duration; // (ms) 
-	uint32_t duration_byte; // (ms) 
+	uint32_t durationByte; // (ms) 
 	float targBounds[9][2];
-	const int targ_lng =
+	const int targLng =
 		sizeof(targLocs) / sizeof(targLocs[0]);
 	float boundMin = 0;
 	float boundMax = 0;
-	uint32_t t_close_sol;
-	uint32_t t_retract_arm;
-	float rewCenter;
-	bool is_bound_set = false;
-	bool is_trigger_ready = false;
-	bool is_all_targ_passed = false;
-	bool is_ekf_new = false;
-	float rewardedTarg;
+	uint32_t t_closeSol = 0;
+	uint32_t t_retractArm = 0;
+	float rewCenter = 0;
+	bool isboundSet = false;
+	bool isTriggerReady = false;
+	bool isAllRargPassed = false;
+	bool is_ekfNew = false;
+	float rewardedTarg = 0;
 	float rewardedBounds[2];
-	float lap_n;
-	bool do_armMove = false;
-	bool is_armExtended = false;
+	float lapN = 0;
+	bool doArmMove = false;
+	bool isArmExtended = false;
 	const int armExtStps = 200;
 	int armPos = 0;
 	int armTarg = 0;
 	bool armStpOn = false;
-	uint32_t t_last_on_step = millis();
-	uint32_t t_last_off_step = millis();
+	uint32_t t_lastOnStep = millis();
+	uint32_t t_lastOffStep = millis();
 
 	// Constructor
 	Reward()
 	{
 		this->duration = 2000;
-		this->duration_byte = (byte)(duration / 10);
+		this->durationByte = (byte)(duration / 10);
 		ResetFeedArm();
 	}
 
 	// START REWARD
 	bool StartRew(bool do_stop)
 	{
-		/*
 		// Local vars
 		bool is_rewarding = true;
 
 		// Track rewards
 		rewCnt++;
 
-		// Set to extend feeder arm
+		// Set to extend feeder arm 
 		ExtendFeedArm();
 
 		// Stop robot
 		if (do_stop)
 		{
-		HardStop("StartRew");
-		// Set hold time
-		BlockMotorTill(t_block);
+			HardStop("StartRew");
+			// Set hold time
+			BlockMotorTill(t_block);
 		}
 
 		// Trigger reward tone on
-		Store4_Ard('r', duration_byte);
+		Store4_Ard('r', durationByte);
 
 		// Compute reward end time
-		t_close_sol = millis() + duration;
+		t_closeSol = millis() + duration;
 
 		// Turn on reward LED
 		analogWrite(pin_RewLED_R, round(rewLEDduty*0.75));
@@ -1583,60 +1590,58 @@ public:
 		// Print to LCD for manual rewards
 		if (btn_doRew)
 		{
-		PrintLCD("REWARDING...");
+			PrintLCD("REWARDING...");
 		}
 		else
 		{
-		char str[50];
-		sprintf(str, "REWARDING(%dms)...", duration);
-		DebugFlow(str);
+			char str[50];
+			sprintf(str, "REWARDING(%dms)...", duration);
+			DebugFlow(str);
 		}
 
 		// indicate reward in progress
 		return is_rewarding;
-		*/
-		return true;
+
 	}
 
 	// END REWARD
 	bool EndRew()
 	{
-		/*
+
+		// Local vars
 		bool do_continue_rew = true;
 
-		if (millis() > t_close_sol)
+		if (millis() > t_closeSol)
 		{
 
-		// Close solenoid
-		digitalWrite(pin_Rel_Rew, LOW);
+			// Close solenoid
+			digitalWrite(pin_Rel_Rew, LOW);
 
-		// Turn off reward LED
-		analogWrite(pin_RewLED_R, rewLEDmin);
-		analogWrite(pin_RewLED_C, rewLEDmin);
+			// Turn off reward LED
+			analogWrite(pin_RewLED_R, rewLEDmin);
+			analogWrite(pin_RewLED_C, rewLEDmin);
 
-		// Clear LCD
-		if (btn_doRew)
-		{
-		ClearLCD();
-		}
-		else
-		{
-		DebugFlow("REWARD FINISHED");
-		}
+			// Clear LCD
+			if (btn_doRew)
+			{
+				ClearLCD();
+			}
+			else
+			{
+				DebugFlow("REWARD FINISHED");
+			}
 
 		}
 		else do_continue_rew = false;
 		return do_continue_rew;
 
-		*/
-		return true;
 	}
 
 	// Set reward duration
 	void SetRewDur(uint32_t dur)
 	{
 		duration = dur;
-		duration_byte = (byte)(duration / 10);
+		durationByte = (byte)(duration / 10);
 	}
 	void SetRewDur(byte dur_byte)
 	{
@@ -1647,25 +1652,30 @@ public:
 	bool CompTargBounds(float now_pos, float rew_pos)
 	{
 		// Run only if bounds are not set
-		if (!is_bound_set)
+		if (!isboundSet)
 		{
+			// Local vars
+			int diam = 0;
+			int pos = 0;
+			float pos_rel = 0;
+			float dist_center_cm = 0;
+			float dist_start_cm = 0;
+			float dist_end_cm = 0;
+
 			// Compute laps
-			int diam = (int)(140 * PI * 100);
-			int pos = (int)(now_pos * 100);
-			lap_n = round(now_pos / (140 * PI) - (float)(pos % diam) / diam);
+			diam = (int)(140 * PI * 100);
+			pos = (int)(now_pos * 100);
+			lapN = round(now_pos / (140 * PI) - (float)(pos % diam) / diam);
 			// Check if rat 'ahead' of rew pos
-			float pos_rel = (float)(pos % diam) / 100;
+			pos_rel = (float)(pos % diam) / 100;
 			// add lap
-			lap_n = pos_rel > rew_pos ? lap_n + 1 : lap_n;
+			lapN = pos_rel > rew_pos ? lapN + 1 : lapN;
 
 			// Compute reward center
-			rewCenter = rew_pos + lap_n*(140 * PI);
+			rewCenter = rew_pos + lapN*(140 * PI);
 
 			// Compute bounds for each targ
-			float dist_center_cm;
-			float dist_start_cm;
-			float dist_end_cm;
-			for (int i = 0; i < targ_lng; i++)
+			for (int i = 0; i < targLng; i++)
 			{
 				// Compute 5 deg bounds
 				dist_center_cm = -1 * targLocs[i] * ((140 * PI) / 360);
@@ -1676,26 +1686,26 @@ public:
 				targBounds[i][1] = rewCenter + dist_end_cm;
 				// Save bound min/max
 				boundMin = i == 0 ? targBounds[i][0] : boundMin;
-				boundMax = i == targ_lng - 1 ? targBounds[i][1] : boundMax;
+				boundMax = i == targLng - 1 ? targBounds[i][1] : boundMax;
 			}
 			// Set flag
-			is_bound_set = true;
+			isboundSet = true;
 		}
-		return is_bound_set;
+		return isboundSet;
 	}
 
 	// Check bounds
 	bool CheckTargBounds(float now_pos, float now_vel)
 	{
 		// Run only if reward not already triggered
-		if (!is_trigger_ready)
+		if (!isTriggerReady)
 		{
 
 			// Check if all bounds passed
 			if (now_pos > boundMax + 5)
 			{
-				is_all_targ_passed = true;
-				return is_trigger_ready;
+				isAllRargPassed = true;
+				return isTriggerReady;
 			}
 			// Check velocity
 			else if (
@@ -1705,7 +1715,7 @@ public:
 			{
 
 				// Check if rat in any bounds
-				for (int i = 0; i < targ_lng; i++)
+				for (int i = 0; i < targLng; i++)
 				{
 					if (
 						now_pos > targBounds[i][0] &&
@@ -1721,21 +1731,21 @@ public:
 						rewardedBounds[1] = targBounds[i][1];
 
 						// Set flag
-						is_trigger_ready = true;
+						isTriggerReady = true;
 					}
 				}
 			}
 
 			// Reset flag
-			is_ekf_new = false;
+			is_ekfNew = false;
 		}
-		return is_trigger_ready;
+		return isTriggerReady;
 	}
 
 	// Check if feeder arm should be moved
 	void CheckFeedArm()
 	{
-		if (do_armMove)
+		if (doArmMove)
 		{
 			// Check if arm should be moved
 			if (armPos != armTarg)
@@ -1758,17 +1768,17 @@ public:
 				}
 
 				// Set flag
-				if (!is_armExtended && armPos > 0)
-					is_armExtended = true;
-				else if (is_armExtended && armPos == 0)
-					is_armExtended = false;
-				do_armMove = false;
+				if (!isArmExtended && armPos > 0)
+					isArmExtended = true;
+				else if (isArmExtended && armPos == 0)
+					isArmExtended = false;
+				doArmMove = false;
 			}
 		}
 		// Check if its time to retract arm
 		else if (
-			is_armExtended &&
-			millis() > t_retract_arm
+			isArmExtended &&
+			millis() > t_retractArm
 			)
 		{
 			RetractFeedArm();
@@ -1778,7 +1788,7 @@ public:
 	// Reset feeder arm
 	void ResetFeedArm()
 	{
-		is_armExtended = true;
+		isArmExtended = true;
 		armPos = armExtStps;
 		RetractFeedArm();
 	}
@@ -1786,21 +1796,21 @@ public:
 	// Extend feeder arm
 	void ExtendFeedArm()
 	{
-		if (!is_armExtended)
+		if (!isArmExtended)
 		{
-			t_retract_arm = millis() + t_block;
+			t_retractArm = millis() + t_block;
 			armTarg = armExtStps;
-			do_armMove = true;
+			doArmMove = true;
 		}
 	}
 
 	// Retract feeder arm
 	void RetractFeedArm()
 	{
-		if (is_armExtended)
+		if (isArmExtended)
 		{
 			armTarg = 0;
-			do_armMove = true;
+			doArmMove = true;
 		}
 	}
 
@@ -1815,7 +1825,7 @@ public:
 		}
 
 		// Step motor
-		if (!armStpOn && millis() > t_last_off_step + 1)
+		if (!armStpOn && millis() > t_lastOffStep + 1)
 		{
 
 			// Extend arm
@@ -1837,7 +1847,7 @@ public:
 				{
 					// Take presure off botton
 					armPos = -20;
-					is_armExtended = false;
+					isArmExtended = false;
 				}
 			}
 
@@ -1845,19 +1855,19 @@ public:
 			digitalWrite(pin_ED_STP, HIGH);
 
 			// Save step time
-			t_last_on_step = millis();
+			t_lastOnStep = millis();
 
 			// Set flag
 			armStpOn = true;
 		}
 		// Unstep motor
-		else if (armStpOn && millis() > t_last_on_step + 1)
+		else if (armStpOn && millis() > t_lastOnStep + 1)
 		{
 			// Set step low
 			digitalWrite(pin_ED_STP, LOW);
 
 			// Save step time
-			t_last_off_step = millis();
+			t_lastOffStep = millis();
 
 			// Set flag
 			armStpOn = false;
@@ -1867,10 +1877,10 @@ public:
 	// Reset
 	void Reset()
 	{
-		is_bound_set = false;
-		is_trigger_ready = false;
-		is_all_targ_passed = false;
-		is_ekf_new = false;
+		isboundSet = false;
+		isTriggerReady = false;
+		isAllRargPassed = false;
+		is_ekfNew = false;
 	}
 };
 // Initialize object
@@ -2097,17 +2107,10 @@ void setup() {
 	{
 		batVoltArr[i] = 0;
 	}
-
-	// TEST
-	/*
-	for (int i = 0; i < 100; i++)
-	{
-	char chr[50];
-	sprintf(chr, "Log %d: Bunch of stuff", i);
-	String str = chr;
-	StoreDBLogStr(str, millis());
-	}
-	*/
+	delay(5000);
+	myGLCD.invert(false);
+	delay(5000);
+	myGLCD.invert(true);
 }
 
 
@@ -2128,7 +2131,7 @@ void loop() {
 	// Debug pos
 	if (do_posDebug && fc_isRatIn)
 	{
-		static float ratRobDist;
+		static float rat_rob_dist;
 		if (millis() % 100 == 0)
 		{
 			// Hold all motor control
@@ -2137,7 +2140,7 @@ void loop() {
 				fc_isHalted = true;
 				SetMotorControl("None", "PosDebug");
 			}
-			ratRobDist = ekfRatPos - ekfRobPos;
+			rat_rob_dist = ekfRatPos - ekfRobPos;
 			// Plot pos
 			millis();
 			// Turn on rew led when near setpoint
@@ -2145,7 +2148,7 @@ void loop() {
 			else { analogWrite(pin_RewLED_C, 0); }
 			// Print to LCD
 			analogWrite(pin_Disp_LED, 25);
-			PrintLCD(String(ratRobDist, 2));
+			PrintLCD(String(rat_rob_dist, 2));
 		}
 	}
 
@@ -2213,6 +2216,17 @@ void loop() {
 		//	now_pos = now_pos + 10 + (140 * PI);
 		//}
 
+		/*
+		// TEST
+		for (int i = 0; i < 100; i++)
+		{
+		char chr[50];
+		sprintf(chr, "Log %d: Bunch of stuff", i);
+		String str = chr;
+		StoreDBLogStr(str, millis());
+		}
+		*/
+
 	}
 
 #pragma endregion
@@ -2240,15 +2254,15 @@ void loop() {
 			// Update Hault Error test run speed
 			if (msg_setupCmd[0] == 2)
 			{
-				float _new_speed = float(msg_setupCmd[1]);
-				float _speed_steps = _new_speed*cm2stp;
+				float new_speed = float(msg_setupCmd[1]);
+				float speed_steps = new_speed*cm2stp;
 
 
-				if (_new_speed > 0)
+				if (new_speed > 0)
 				{
 					// Run motor
-					ad_R.run(FWD, _speed_steps);
-					ad_F.run(FWD, _speed_steps*frontMoterScale);
+					ad_R.run(FWD, speed_steps);
+					ad_F.run(FWD, speed_steps*frontMoterScale);
 				}
 				else
 				{
@@ -2259,7 +2273,7 @@ void loop() {
 
 				// Print speed
 				char str[50];
-				sprintf(str, "HAULT ERROR SPEED = %0.0f cm/sec", _new_speed);
+				sprintf(str, "HAULT ERROR SPEED = %0.0f cm/sec", new_speed);
 				SerialUSB.println(str);
 			}
 		}
@@ -2349,7 +2363,7 @@ void loop() {
 	{
 
 		// Compute move target
-		if (!targ_moveTo.is_targ_set)
+		if (!targ_moveTo.isTargSet)
 		{
 			// If succesfull
 			if (targ_moveTo.CompTarg(ekfRobPos, msg_moveToTarg, -1 * feedDist))
@@ -2357,13 +2371,13 @@ void loop() {
 				// Start running
 				if (
 					SetMotorControl("MoveTo", "MsgM") &&
-					RunMotor(targ_moveTo.move_dir, moveToSpeed, "MoveTo")
+					RunMotor(targ_moveTo.moveDir, moveToSpeed, "MoveTo")
 					)
 				{
 					// Print message
 					char str[50];
 					sprintf(str, "MOVEING FROM %0.2fcm TO %0.2fcm BY %0.2fcm",
-						targ_moveTo.pos_start, targ_moveTo.offset_target, targ_moveTo.targ_dist);
+						targ_moveTo.posStart, targ_moveTo.offsetTarget, targ_moveTo.targDist);
 					DebugFlow(str);
 				}
 				// Reset motor cotrol if run fails
@@ -2372,18 +2386,18 @@ void loop() {
 		}
 
 		// Check if robot is ready to be stopped
-		if (targ_moveTo.is_targ_set)
+		if (targ_moveTo.isTargSet)
 		{
 			// Do deceleration
-			float _new_speed = targ_moveTo.DecelToTarg(ekfRobPos, ekfRobVel, 40, 10);
+			float new_speed = targ_moveTo.DecelToTarg(ekfRobPos, ekfRobVel, 40, 10);
 
 			// Change speed if > 0
-			if (_new_speed > 0)
+			if (new_speed > 0)
 			{
-				RunMotor(targ_moveTo.move_dir, _new_speed, "MoveTo");
+				RunMotor(targ_moveTo.moveDir, new_speed, "MoveTo");
 			}
 			// Check if target reached
-			else if (targ_moveTo.is_targ_reached)
+			else if (targ_moveTo.isTargReached)
 			{
 				// Hard stop
 				HardStop("MsgM");
@@ -2401,7 +2415,7 @@ void loop() {
 				// Print message
 				char str[50];
 				sprintf(str, "FINISHED MOVE TO %0.2fcm WITHIN %0.2fcm",
-					targ_moveTo.offset_target, targ_moveTo.GetError(ekfRobPos));
+					targ_moveTo.offsetTarget, targ_moveTo.GetError(ekfRobPos));
 				DebugFlow(str);
 			}
 		}
@@ -2436,7 +2450,7 @@ void loop() {
 		if (!fc_isRewarding)
 		{
 			// Compute reward bounds
-			if (!reward.is_bound_set)
+			if (!reward.isboundSet)
 			{
 				reward.CompTargBounds(ekfRatPos, msg_rewPos);
 				// Print message
@@ -2445,7 +2459,7 @@ void loop() {
 					reward.rewCenter, reward.targBounds[0][0], reward.targBounds[8][1]);
 				DebugFlow(str);
 			}
-			else if (!reward.is_trigger_ready)
+			else if (!reward.isTriggerReady)
 			{
 				bool ekf_pass = reward.CheckTargBounds(ekfRatPos, ekfRatVel);
 				bool raw_pass = false; // 
@@ -2462,8 +2476,8 @@ void loop() {
 			}
 			// Check if rat bassed all bounds
 			if (
-				reward.is_all_targ_passed &&
-				!reward.is_trigger_ready
+				reward.isAllRargPassed &&
+				!reward.isTriggerReady
 				)
 			{
 				// Reset flags
@@ -2501,7 +2515,7 @@ void loop() {
 		{
 
 			// Compute target targ_dist
-			if (!(targ_cueRat.is_targ_set && targ_cueRob.is_targ_set))
+			if (!(targ_cueRat.isTargSet && targ_cueRob.isTargSet))
 			{
 				// Compute target targ_dist for rat and robot
 				if (
@@ -2512,16 +2526,16 @@ void loop() {
 					// Print message
 					char str[50];
 					sprintf(str, "CUEING REWARD AT %0.2fcm/%0.2fcm FROM DIST %0.2fcm/%0.2fcm",
-						targ_cueRat.offset_target, targ_cueRob.offset_target, targ_cueRat.targ_dist, targ_cueRob.targ_dist);
+						targ_cueRat.offsetTarget, targ_cueRob.offsetTarget, targ_cueRat.targDist, targ_cueRob.targDist);
 					DebugFlow(str);
 				}
 			}
 
 			// Check if cue has been reached
-			if (targ_cueRat.is_targ_set && targ_cueRob.is_targ_set)
+			if (targ_cueRat.isTargSet && targ_cueRob.isTargSet)
 			{
 				// Check if robot reached targed
-				if (!targ_cueRob.is_targ_reached)
+				if (!targ_cueRob.isTargReached)
 				{
 					if (
 						targ_cueRob.CheckTargReached(pos_robVT.posNow, ekfRobVel) ||
@@ -2538,7 +2552,7 @@ void loop() {
 					}
 				}
 				// Check if rat reached target
-				if (!targ_cueRat.is_targ_reached)
+				if (!targ_cueRat.isTargReached)
 				{
 					if (
 						targ_cueRat.CheckTargReached(vtpixyPosAvg, 0) ||
@@ -2550,12 +2564,12 @@ void loop() {
 						fc_isRewarding = reward.StartRew(false);
 					}
 				}
-				if (targ_cueRat.is_targ_reached && targ_cueRob.is_targ_reached)
+				if (targ_cueRat.isTargReached && targ_cueRob.isTargReached)
 				{
 					// Print message
 					char str[50];
 					sprintf(str, "FINISHED CUEING AT %0.2fcm/%0.2fcm WITHIN %0.2fcm/%0.2fcm",
-						targ_cueRat.offset_target, targ_cueRob.offset_target, targ_cueRat.GetError(ekfRatPos), targ_cueRob.GetError(ekfRobPos));
+						targ_cueRat.offsetTarget, targ_cueRob.offsetTarget, targ_cueRat.GetError(ekfRatPos), targ_cueRob.GetError(ekfRobPos));
 					DebugFlow(str);
 				}
 			}
@@ -2601,7 +2615,7 @@ void loop() {
 	if (msg_id == 'B' && msg_pass)
 	{
 		// Local vars
-		static bool is_mode_changed;
+		bool is_mode_changed = false;
 
 		// Reinitialize bulldoze
 		bull.Reinitialize(msg_bullDel, msg_bullSpeed, "MsgB");
@@ -2831,15 +2845,15 @@ void loop() {
 	CheckBlockTimElapsed();
 
 	// UPDATE PID AND SPEED
-	float _new_speed = pid.UpdatePID();
+	float new_speed = pid.UpdatePID();
 
-	if (_new_speed == 0)
+	if (new_speed == 0)
 	{
 		HardStop("PID");
 	}
-	else if (_new_speed > 0)
+	else if (new_speed > 0)
 	{
-		RunMotor('f', _new_speed, "PID");
+		RunMotor('f', new_speed, "PID");
 	}
 
 	// UPDATE BULLDOZER
@@ -2872,11 +2886,11 @@ void loop() {
 bool ParseSerial()
 {
 	// Local vars
-	byte buff;
-	char head[2];
-	char foot;
-	bool pass;
-	bool loop;
+	byte buff = 0;
+	char head[2] = { ' ',' ' };
+	char foot = ' ';
+	bool pass = false;
+	bool loop = 0;
 	msg_id == ' ';
 
 	// Dump data till msg header byte is reached
@@ -3073,7 +3087,7 @@ byte WaitBuffRead(byte match)
 	// Local vars
 	static uint32_t time_out = 100;
 	uint32_t t_out = millis() + time_out;
-	byte buff;
+	byte buff = 0;
 	bool pass = false;
 
 	// Check for overflow
@@ -3148,11 +3162,11 @@ byte WaitBuffRead(byte match)
 bool CheckPack(char id, uint16_t pack)
 {
 	// Local vars
-	bool pass;
-	int pack_diff;
-	int dropped_packs;
-	bool do_use_pack;
-	int id_ind;
+	bool pass = false;
+	int pack_diff = 0;
+	int dropped_packs = 0;
+	bool do_use_pack = false;
+	int id_ind = 0;
 
 	// SEND AND PRINT PACKET CONFIRMATON
 	if (id != 'P')
@@ -3262,7 +3276,7 @@ bool CheckPack(char id, uint16_t pack)
 void Store4_CS(char id, byte d1, uint16_t pack)
 {
 	// Local vars
-	int queue_ind;
+	int queue_ind = 0;
 
 	// Update queue index
 	queue_ind = sendQueueInd;
@@ -3322,7 +3336,7 @@ void Store4_CS(char id, byte d1, uint16_t pack)
 void Store4_Ard(char id, byte d1)
 {
 	// Local vars
-	int queue_ind;
+	int queue_ind = 0;
 
 	// Itterate packet
 	r2a_packCnt++;
@@ -3374,9 +3388,9 @@ void SendPacketData()
 	// Local vars
 	const int msg_size = r2_lngC - 1;
 	static byte msg[msg_size];
-	char rcv_id;
+	char rcv_id = ' ';
 	bool do_send = false;
-	int buff_tx;
+	int buff_tx = 0;
 
 	// save reviever id
 	rcv_id = r2_queue[r2_lngR - 1][6];
@@ -3441,9 +3455,9 @@ void SendPacketData()
 			(doDB_PrintConsole || doDB_PrintLCD))
 		{
 			char str[50];
-			char id;
-			byte dat;
-			uint16_t pack;
+			char id = ' ';
+			byte dat = 0;
+			uint16_t pack = 0;
 
 			// Store mesage id
 			u.f = 0.0f;
@@ -3470,9 +3484,9 @@ bool SendLogData(bool do_resend)
 {
 	// Local vars
 	static int listInd = 0;
-	String msg_str;
+	String msg_str = " ";
 	char msg_char[100];
-	int msg_size;
+	int msg_size = 0;
 	byte msg[100];
 
 	// Incriment list ind
@@ -3502,6 +3516,9 @@ bool SendLogData(bool do_resend)
 
 	// Send
 	Serial1.write(msg, msg_size + 3);
+
+	// TEST
+	//SerialUSB.println(msg_str);
 
 	return true;
 }
@@ -3693,9 +3710,9 @@ void InitializeTracking()
 		pos_robVT.newData)
 	{
 		// Local vars
-		int n_laps;
-		float cm_diff;
-		float cm_dist;
+		int n_laps = 0;
+		float cm_diff = 0;
+		float cm_dist = 0;
 
 		// Check that rat pos < robot pos
 		n_laps = pos_ratVT.posNow > pos_robVT.posNow ? 0 : 1;
@@ -3768,12 +3785,12 @@ void CheckSampDT() {
 
 		// Local vars
 		uint32_t max_frame_dt = 100;
-		uint32_t vt_dt;
-		uint32_t pixy_dt;
+		uint32_t vt_dt = 0;
+		uint32_t pixy_dt = 0;
 
 		// Compute dt
-		vt_dt = millis() - pos_ratVT.msNow;
-		pixy_dt = millis() - pos_ratPixy.msNow;
+		vt_dt = millis() - pos_ratVT.t_msNow;
+		pixy_dt = millis() - pos_ratPixy.t_msNow;
 
 		// Check pixy
 		if (
@@ -3782,7 +3799,7 @@ void CheckSampDT() {
 			)
 		{
 			// Use VT for Pixy data
-			pos_ratPixy.SetDat(pos_ratVT.posAbs, pos_ratVT.msNow);
+			pos_ratPixy.SetDat(pos_ratVT.posAbs, pos_ratVT.t_msNow);
 		}
 		// Check VT 
 		else if (
@@ -3791,7 +3808,7 @@ void CheckSampDT() {
 			)
 		{
 			// Use Pixy for VT data
-			pos_ratVT.SetDat(pos_ratPixy.posAbs, pos_ratPixy.msNow);
+			pos_ratVT.SetDat(pos_ratPixy.posAbs, pos_ratPixy.t_msNow);
 		}
 
 	}
@@ -3802,9 +3819,10 @@ void CheckSampDT() {
 void UpdatePixyPos() {
 
 	// Local vars
-	static float pxRel;
-	static double pxAbs;
-	static uint32_t pxTS;
+	float px_rel = 0;
+	double px_abs = 0;
+	uint32_t px_ts = 0;
+	double pixy_pos_y = 0;
 
 	// Get new blocks
 	uint16_t blocks = pixy.getBlocks();
@@ -3814,25 +3832,25 @@ void UpdatePixyPos() {
 	{
 
 		// Save time stamp
-		pxTS = millis();
+		px_ts = millis();
 
 		// Get Y pos from last block and convert to CM
-		double pixyPosY = pixy.blocks[blocks - 1].y;
-		pxRel =
-			pixyCoeff[0] * (pixyPosY * pixyPosY * pixyPosY * pixyPosY) +
-			pixyCoeff[1] * (pixyPosY * pixyPosY * pixyPosY) +
-			pixyCoeff[2] * (pixyPosY * pixyPosY) +
-			pixyCoeff[3] * pixyPosY +
+		pixy_pos_y = pixy.blocks[blocks - 1].y;
+		px_rel =
+			pixyCoeff[0] * (pixy_pos_y * pixy_pos_y * pixy_pos_y * pixy_pos_y) +
+			pixyCoeff[1] * (pixy_pos_y * pixy_pos_y * pixy_pos_y) +
+			pixyCoeff[2] * (pixy_pos_y * pixy_pos_y) +
+			pixyCoeff[3] * pixy_pos_y +
 			pixyCoeff[4];
 
 		// Scale to abs space with rob vt data
-		pxAbs = pxRel + pos_robVT.posAbs;
-		if (pxAbs > (140 * PI))
+		px_abs = px_rel + pos_robVT.posAbs;
+		if (px_abs > (140 * PI))
 		{
-			pxAbs = pxAbs - (140 * PI);
+			px_abs = px_abs - (140 * PI);
 		}
 		// Update pixy pos and vel
-		pos_ratPixy.UpdatePosVel((float)pxAbs, pxTS);
+		pos_ratPixy.UpdatePosVel((float)px_abs, px_ts);
 
 	}
 
@@ -3856,7 +3874,7 @@ void UpdateEKF()
 		if (fc_isRatIn)
 		{
 			// Set flag for reward 
-			reward.is_ekf_new = true;
+			reward.is_ekfNew = true;
 			// Store pixy/vt average
 			vtpixyVelAvg =
 				(pos_ratVT.velNow + pos_ratPixy.velNow) / 2;
@@ -3912,7 +3930,7 @@ void OpenCloseRewSolenoid()
 	// Print to LCD
 	char str[50];
 	sprintf(str, "%s", digitalRead(pin_Rel_Rew) == HIGH ? "OPEN" : "CLOSED");
-	PrintLCD("REW SOLENOID", str);
+	PrintLCD("REW SOLENOID", str, 's');
 }
 
 // CHECK FOR ETOH UPDATE
@@ -3967,11 +3985,11 @@ void CheckBattery()
 {
 	// Local vars
 	static bool do_volt_update = false;
-	static float volt_avg;
-	float bit_in;
-	float volt_in;
-	float volt_sum;
-	byte byte_out;
+	static float volt_avg = 0;
+	float bit_in = 0;
+	float volt_in = 0;
+	float volt_sum = 0;
+	byte byte_out = 0;
 
 
 	// Only run if relay open
@@ -4290,10 +4308,10 @@ void StoreDBPrintStr(String str, uint32_t ts)
 	char t_str_long[50];
 	char t_str_ellapsed[50];
 	static uint32_t t_last = millis();
-	uint32_t ts_norm;
-	float t_c;
-	float t_m;
-	float t_ellapsed;
+	uint32_t ts_norm = 0;
+	float t_c = 0;
+	float t_m = 0;
+	float t_ellapsed = 0;
 
 	// Time now
 	ts_norm = t_sync == 0 ? ts : t_sync;
@@ -4335,7 +4353,7 @@ void StoreDBLogStr(String str, uint32_t ts)
 	// Local vars
 	char str_c[50];
 	char msg_c[50];
-	uint32_t ts_norm;
+	uint32_t ts_norm = 0;
 
 	// Itterate log entry count
 	logCnt++;
@@ -4348,6 +4366,10 @@ void StoreDBLogStr(String str, uint32_t ts)
 	sprintf(msg_c, "%d %s", ts_norm, str_c);
 	logList[logCnt - 1] = msg_c;
 
+	// TEST
+	delay(100);
+	PrintLCD(str, " ", 't');
+	//SerialUSB.println(logList[logCnt - 1]);
 }
 
 #pragma endregion
@@ -4355,44 +4377,37 @@ void StoreDBLogStr(String str, uint32_t ts)
 
 #pragma region --------MINOR FUNCTIONS---------
 
-void PrintLCD(String str1)
+void PrintLCD(String str_1)
 {
-
-	// Change settings
-	myGLCD.setFont(SmallFont);
-	myGLCD.invert(true);
-
-	// Clear
-	myGLCD.clrScr();
-
-	// Print
-	myGLCD.print(str1, LEFT, 20);
-
-	// Update
-	myGLCD.update();
-
-	// Block LCD log
-	doBlockLCDlog = true;
-
+	// Run default
+	PrintLCD(str_1, " ", 's');
 }
-
-void PrintLCD(String str1, String str2)
+void PrintLCD(String str_1, String str_2, char f_siz)
 {
 
 	// Change settings
-	myGLCD.setFont(SmallFont);
+	if (f_siz == 's')
+		myGLCD.setFont(SmallFont);
+	else if (f_siz == 't')
+		myGLCD.setFont(TinyFont);
 	myGLCD.invert(true);
 
 	// Clear
 	myGLCD.clrScr();
 
 	// Print
-	myGLCD.print(str1, CENTER, 15);
-	myGLCD.print(str2, CENTER, 25);
+	if (str_2 != " ")
+	{
+		myGLCD.print(str_1, CENTER, 15);
+		myGLCD.print(str_2, CENTER, 25);
+	}
+	else myGLCD.print(str_1, CENTER, 20);
 
 	// Update
 	myGLCD.update();
 
+	// Block LCD logging/printing while displayed
+	doBlockLCDlog = true;
 }
 
 void ClearLCD()
@@ -4410,18 +4425,18 @@ void ClearLCD()
 void SetupBlink()
 {
 	int duty[2] = { 100, 0 };
-	bool isOn = false;
+	bool is_on = false;
 	int del = 100;
 	// Flash sequentially
 	for (int i = 0; i < 8; i++)
 	{
-		analogWrite(pin_Disp_LED, duty[(int)isOn]);
+		analogWrite(pin_Disp_LED, duty[(int)is_on]);
 		delay(del);
-		analogWrite(pin_TrackLED, duty[(int)isOn]);
+		analogWrite(pin_TrackLED, duty[(int)is_on]);
 		delay(del);
-		analogWrite(pin_RewLED_R, duty[(int)isOn]);
+		analogWrite(pin_RewLED_R, duty[(int)is_on]);
 		delay(del);
-		isOn = !isOn;
+		is_on = !is_on;
 	}
 	// Reset LEDs
 	analogWrite(pin_Disp_LED, 0);
@@ -4433,15 +4448,15 @@ void RatInBlink()
 {
 	// Local vars
 	int duty[2] = { 255, 0 };
-	bool isOn = true;
+	bool is_on = true;
 	int del = 50;
 
 	// Flash 
 	for (int i = 0; i < 3; i++)
 	{
-		analogWrite(pin_TrackLED, duty[(int)isOn]);
+		analogWrite(pin_TrackLED, duty[(int)is_on]);
 		delay(del);
-		isOn = !isOn;
+		is_on = !is_on;
 	}
 	// Reset LED
 	analogWrite(pin_TrackLED, trackLEDduty);
