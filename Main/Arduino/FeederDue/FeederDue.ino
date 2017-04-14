@@ -366,13 +366,13 @@ EtOH run after min time or distance
 */
 bool isEtOHOpen = false;
 const uint32_t t_durEtOH = 1000; // (ms)
-const uint32_t t_delEtOH = 10000; // (ms)
+const uint32_t t_delEtOH = 60000; // (ms)
 const float distMaxEtOH = (140 * PI) / 2; // (cm)
 
-										  // Volt tracking
-										  /*
-										  Updated when EtOH relay opened
-										  */
+// Volt tracking
+/*
+Updated when EtOH relay opened
+*/
 const float bit2volt = 0.0164;
 float batVoltArr[100];
 
