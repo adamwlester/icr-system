@@ -2099,6 +2099,7 @@ void setup() {
 	}
 
 	// TEST
+	/*
 	for (int i = 0; i < 100; i++)
 	{
 		char chr[50];
@@ -2106,7 +2107,7 @@ void setup() {
 		String str = chr;
 		StoreDBLogStr(str, millis());
 	}
-
+	*/
 }
 
 
