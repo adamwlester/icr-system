@@ -30,8 +30,6 @@ namespace ICR_Run
         private static bool printBlockedVt = false;
         // Print all sent vt recs
         private static bool printSentVt = false;
-        // Print robot log
-        private static bool printRobLog = true;
 
         #endregion
 
@@ -288,7 +286,7 @@ namespace ICR_Run
             // Set sp_Xbee parameters
             sp_Xbee.ReadTimeout = 100;
             sp_Xbee.BaudRate = 57600;
-            sp_Xbee.PortName = "COM92";
+            sp_Xbee.PortName = "COM16";
             // Create event handeler for incoming data
             sp_Xbee.DataReceived += DataReceived_Xbee;
             // Open serial port connection
@@ -342,6 +340,14 @@ namespace ICR_Run
                     isMAThanging = true;
                 }
             }
+
+            // TEST
+            // Request log data from robot
+            PrintAction("[Main] RUNNING: Get Robot Log...");
+            pass = GetRobotLog();
+            if (pass) PrintAction("[Main] FINISHED: Get Robot Log");
+            else PrintAction("[Main] !!ABORTED: Get Robot Log!!");
+            Console.ReadKey();
 
             // Wait for ICR_GUI to load
             PrintAction("[Main] RUNNING: Wait for ICR_GUI Load...");
@@ -1261,8 +1267,7 @@ namespace ICR_Run
                     importRobotLog.doSendNext = true;
 
                     // print data recieved
-                    if (printRobLog)
-                        PrintAction(log_str);
+                    PrintAction(log_str);
                 }
                 else
                 {
