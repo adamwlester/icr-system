@@ -237,7 +237,7 @@ bool msg_pass = false;
 uint32_t t_rsvd = millis(); // (ms)
 uint32_t t_rsvdLast = 0; // (ms)
 
-					 // Serial to CS
+						 // Serial to CS
 const char r2c_head = '{';
 const char r2c_foot = '}';
 const char r2c_id[15] = {
@@ -259,10 +259,10 @@ const char r2c_id[15] = {
 };
 uint32_t t_resendDone = millis(); // (ms)
 uint32_t t_sent = millis(); // (ms)
-//uint32_t resendDone_cnt = 0;
-//uint32_t resendDone_max = 5;
+							//uint32_t resendDone_cnt = 0;
+							//uint32_t resendDone_max = 5;
 
-// Serial to other ard
+							// Serial to other ard
 const char r2a_head = '[';
 const char r2a_foot = ']';
 uint16_t r2a_packCnt = 0;
@@ -304,7 +304,7 @@ const int r2c_hLng = sizeof(r2c_packHist) / sizeof(r2c_packHist[0]);
 
 // Serial VT
 byte msg_vtEnt = 0;
-float msg_vtCM[2] = {0,0};
+float msg_vtCM[2] = { 0,0 };
 uint32_t msg_vtTS[2] = { 0,0 };
 
 // Pixy
@@ -354,7 +354,7 @@ byte msg_bullSpeed = 0;
 
 // Reward
 float msg_cueTarg = 0;
-float cueDist[2] = {0,0};
+float cueDist[2] = { 0,0 };
 float cueStartPos[2] = { 0,0 };
 float msg_rewPos = 0;
 byte msg_rewDurByte = 0;
@@ -4491,6 +4491,7 @@ void RatInBlink()
 
 
 #pragma region ---------INTERUPTS---------
+
 
 // Halt run on IR trigger
 void Interupt_IRprox_Halt() {
