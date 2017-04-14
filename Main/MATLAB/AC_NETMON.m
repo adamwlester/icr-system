@@ -208,7 +208,7 @@ while true
         
         % Bring java window back to front
         if exist('frame_java', 'var')
-            frame_java.setState(frame_java.NORMAL)
+          frame_java.setState(frame_java.NORMAL);
         end
         
     end

@@ -17,7 +17,7 @@ bool is_armExtended = false;
 /*
 Test voltage measurment
 */
-const bool do_VoltTest = true;
+const bool do_VoltTest = false;
 
 // XBee Test 
 /*
