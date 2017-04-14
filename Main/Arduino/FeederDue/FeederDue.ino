@@ -14,7 +14,7 @@ SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 // LOG DEBUGGING
 
 // Do log
-const bool doDB_Log = false;
+const bool doDB_Log = true;
 
 // What to print
 const bool doLog_flow = false;
