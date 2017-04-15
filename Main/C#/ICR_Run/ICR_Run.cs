@@ -30,6 +30,8 @@ namespace ICR_Run
         private static bool printBlockedVt = false;
         // Print all sent vt recs
         private static bool printSentVt = false;
+        // Print robot log
+        private static bool printRcvdLog = true;
 
         #endregion
 
@@ -130,7 +132,7 @@ namespace ICR_Run
             'D', // execution done
             'V', // connected and streaming
             'L', // request log send/resend
-            'O', // log pack
+            'U', // log pack
             'J', // battery voltage
             'A', // reward zone
              };
@@ -257,6 +259,26 @@ namespace ICR_Run
             for (int i = 0; i < r2c_packLast.Length; i++)
                 r2c_packLast[i] = 0;
 
+            // Setup and start Xbee serial
+            sp_Xbee.ReadTimeout = 100;
+            sp_Xbee.BaudRate = 57600;
+            sp_Xbee.PortName = "COM92";
+            // Create event handeler for incoming data
+            sp_Xbee.DataReceived += DataReceived_Xbee;
+            // Open serial port connection
+            sp_Xbee.Open();
+            PrintAction("[Main] FINISHED: Xbee Serial Port Open");
+
+            // TEST
+            // Request log data from robot
+            Thread.Sleep(1000);
+            PrintAction("[Main] RUNNING: Get Robot Log...");
+            pass = GetRobotLog();
+            if (pass) PrintAction("[Main] FINISHED: Get Robot Log");
+            else PrintAction("[Main] !!ABORTED: Get Robot Log!!");
+            Console.ReadKey();
+            return;
+
             // Setup ICR_GUI background worker
             bw_RunGUI.DoWork += DoWork_RunGUI;
             bw_RunGUI.RunWorkerCompleted += RunWorkerCompleted_RunGUI;
@@ -282,16 +304,6 @@ namespace ICR_Run
             MNetComClient com_netComClient = new MNetComClient();
             deligate_netComCallback = new MNetCom.MNC_VTCallback(NetComCallbackVT);
             com_netComClient.SetCallbackFunctionVT(deligate_netComCallback, new ICR_Run());
-
-            // Set sp_Xbee parameters
-            sp_Xbee.ReadTimeout = 100;
-            sp_Xbee.BaudRate = 57600;
-            sp_Xbee.PortName = "COM16";
-            // Create event handeler for incoming data
-            sp_Xbee.DataReceived += DataReceived_Xbee;
-            // Open serial port connection
-            sp_Xbee.Open();
-            PrintAction("[Main] FINISHED: Xbee Serial Port Open");
 
             // Set NetCom parameters
             var NETCOM_APP_ID = "ICR_Run"; // string displayed in Cheetah when connected
@@ -340,14 +352,6 @@ namespace ICR_Run
                     isMAThanging = true;
                 }
             }
-
-            // TEST
-            // Request log data from robot
-            PrintAction("[Main] RUNNING: Get Robot Log...");
-            pass = GetRobotLog();
-            if (pass) PrintAction("[Main] FINISHED: Get Robot Log");
-            else PrintAction("[Main] !!ABORTED: Get Robot Log!!");
-            Console.ReadKey();
 
             // Wait for ICR_GUI to load
             PrintAction("[Main] RUNNING: Wait for ICR_GUI Load...");
@@ -697,7 +701,7 @@ namespace ICR_Run
                 // Need to resend
                 if (!pass_rcvd && sw_main.ElapsedMilliseconds > resend_tim)
                 {
-                    SendData(id, pack);
+                    SendData(id, dat_1, dat_2, pack);
                     resend_tim = sw_main.ElapsedMilliseconds + 500;
                 }
 
@@ -857,6 +861,15 @@ namespace ICR_Run
                     msg_data[0] = (byte)dat_1;
                 }
 
+                // Send log request
+                if (id == 'L')
+                {
+                    nDataBytes = 1;
+                    msg_data = new byte[nDataBytes];
+                    // Add send/resend request
+                    msg_data[0] = (byte)dat_1;
+                }
+
                 // Send pos data
                 else if (id == 'P')
                 {
@@ -932,14 +945,14 @@ namespace ICR_Run
                     // Print sent mesage packet
                     if (nDataBytes == 0)
                     {
-                        msg_str = String.Format("   Sent: [id:{0} pack:{1}]", id, pack);
+                        msg_str = String.Format("   SENT: [id:{0} pack:{1}]", id, pack);
                     }
-                    else msg_str = String.Format("   Sent: [id:{0} dat1:{1:0.00} dat2:{2:0.00} pack:{3}]", id, dat_1, dat_2, pack);
+                    else msg_str = String.Format("   SENT: [id:{0} dat1:{1:0.00} dat2:{2:0.00} pack:{3}]", id, dat_1, dat_2, pack);
                     PrintAction(msg_str, t_c2rLast, t_c2r);
                 }
                 else if (printSentVt)
                 {
-                    msg_str = String.Format("   Sent: [id:{0} ent:{1} ts:{2} cm:{3:0.00} pack:{4}]", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
+                    msg_str = String.Format("   SENT: [id:{0} ent:{1} ts:{2} cm:{3:0.00} pack:{4}]", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
                     PrintAction(msg_str, t_c2rLast, t_c2r);
                 }
 
@@ -1156,7 +1169,7 @@ namespace ICR_Run
                         )
                     {
                         sp_Xbee.Read(foot_rcvd, 0, 1);
-                        // Get header
+                        // Get footer
                         u.b1 = foot_rcvd[0];
                         u.b2 = 0;
                         foot = u.c1;
@@ -1175,7 +1188,7 @@ namespace ICR_Run
                     t_r2c = sw_main.ElapsedMilliseconds;
 
                     // print data recieved
-                    msg_str = String.Format("   Rsvd: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
+                    msg_str = String.Format("   RCVD: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
                     PrintAction(msg_str, t_r2cLast, t_r2c);
 
                     // Update last pack
@@ -1210,7 +1223,7 @@ namespace ICR_Run
                     // Get check sum byte
                     while (sp_Xbee.BytesToRead < 1 && !doExit) ; // wait
                     sp_Xbee.Read(check_sum_rcvd, 0, 1);
-                    check_sum = dat_rcvd[0];
+                    check_sum = check_sum_rcvd[0];
                 }
 
                 // Read in complete packet
@@ -1219,7 +1232,7 @@ namespace ICR_Run
                 // Wait for buffer to fill for fixed time
                 check_time = sw_main.ElapsedMilliseconds + 1000;
                 while (
-                sp_Xbee.BytesToRead < check_sum &&
+                sp_Xbee.BytesToRead != check_sum + 1 &&
                 sw_main.ElapsedMilliseconds <= check_time &&
                 !doExit
                 ) ; // wait
@@ -1229,33 +1242,21 @@ namespace ICR_Run
                 {
                     sp_Xbee.Read(log_rcvd, 0, check_sum);
                 }
-                else do_dump = true;
 
                 // Convert to string
                 string log_str = System.Text.Encoding.UTF8.GetString(log_rcvd);
 
-                // Find footer
-                check_time = sw_main.ElapsedMilliseconds + 1000;
-                if (head_found && id_found && pack_found)
+                // Read in footer
+                if (sp_Xbee.BytesToRead > 0)
                 {
-                    check_time = sw_main.ElapsedMilliseconds + 100;
-                    while (
-                        !foot_found &&
-                        sw_main.ElapsedMilliseconds <= check_time &&
-                        !doExit
-                        )
-                    {
-                        sp_Xbee.Read(foot_rcvd, 0, 1);
-                        // Get header
-                        u.b1 = foot_rcvd[0];
-                        u.b2 = 0;
-                        foot = u.c1;
-                        if (foot == r2c_foot)
-                        {
-                            foot_found = true;
-                        }
-                    }
+                    sp_Xbee.Read(foot_rcvd, 0, 1);
+                    u.b1 = foot_rcvd[0];
+                    u.b2 = 0;
+                    foot = u.c1;
                 }
+
+                // Check if footer found
+                foot_found = foot == r2c_foot ? true : false;
 
                 // Check if packet complete
                 if (foot_found)
@@ -1263,16 +1264,17 @@ namespace ICR_Run
                     // Update list
                     importRobotLog.UpdateList(log_str);
 
-                    // Request send next
-                    importRobotLog.doSendNext = true;
-
                     // print data recieved
-                    PrintAction(log_str);
+                    if (printRcvdLog)
+                    {
+                        msg_str = String.Format("LOG: {0} (chksum = {1})", log_str, check_sum);
+                        PrintAction(msg_str);
+                    }
                 }
                 else
                 {
                     // Request resend
-                    importRobotLog.doSendLast = true;
+                    importRobotLog.ResendLast();
 
                     // Set dump flag
                     do_dump = true;
@@ -1291,7 +1293,8 @@ namespace ICR_Run
                 else
                 {
                     droppedPacks++;
-                    msg_str = String.Format("!!PACK LOST!! (Total:{0})", droppedPacks);
+                    msg_str = String.Format("!!PACK LOST (Total:{0}) [id:{1} dat:{2} pack:{3}]!!", 
+                        droppedPacks, id, dat, pack);
                     PrintAction(msg_str);
                 }
                 // dump input buffer
@@ -1306,23 +1309,17 @@ namespace ICR_Run
             long check_time;
 
             // Send initial request for new data
-            RepeatSend('L', 1);
+            RepeatSend('L', 0);
 
             // Wait for complete log
-            check_time = sw_main.ElapsedMilliseconds + 10000;
+            check_time = sw_main.ElapsedMilliseconds + 100000;
             bool do_loop = true;
             do
             {
                 // Check if need to send new or resend
-                if (importRobotLog.doSendLast)
+                if (importRobotLog.doSend)
                 {
-                    RepeatSend('L', 0);
-                    importRobotLog.doSendLast = false;
-                }
-                else if (importRobotLog.doSendNext)
-                {
-                    RepeatSend('L', 1);
-                    importRobotLog.doSendNext = false;
+                    RepeatSend('L', importRobotLog.sendWhat);
                 }
 
                 // Check if list complete
@@ -1331,11 +1328,10 @@ namespace ICR_Run
                     pass = true;
                     do_loop = false;
                 }
-                else if (sw_main.ElapsedMilliseconds > check_time)
-                {
-
-                }
-                else if (doAbort)
+                else if (
+                    sw_main.ElapsedMilliseconds > check_time ||
+                    doAbort
+                    )
                 {
                     do_loop = false;
                 }
@@ -1842,48 +1838,42 @@ namespace ICR_Run
     {
         private static List<string> logList = new List<string>();
         static readonly object lockLog = new object();
-        private static int _logInd = 0;
-        private static bool _doSendNext;
-        private static bool _doSendLast;
+        public double sendWhat;
+        private static bool _doSend;
 
-        public int logInd
+        public bool doSend
         {
-            get { return _logInd; }
-            set
+            get
             {
+                // Set to false after accessed
                 lock (lockLog)
                 {
-                    _logInd = value;
-                }
-            }
-        }
-        public bool doSendNext
-        {
-            get { return _doSendNext; }
-            set
-            {
-                lock (lockLog)
-                {
-                    _doSendNext = value;
-                }
-            }
-        }
-        public bool doSendLast
-        {
-            get { return _doSendLast; }
-            set
-            {
-                lock (lockLog)
-                {
-                    _doSendLast = value;
+                    bool do_send = _doSend;
+                    _doSend = false;
+                    return do_send;
                 }
             }
         }
 
         public void UpdateList(string log_str)
         {
-            logList.Add(log_str);
-            logInd++;
+            lock (lockLog)
+            {
+                logList.Add(log_str);
+                // Flag to send next
+                _doSend = true;
+                sendWhat = 0;
+            }
+        }
+
+        public void ResendLast()
+        {
+            lock (lockLog)
+            {
+                // Flag to send last
+                _doSend = true;
+                sendWhat = 1;
+            }
         }
 
     }

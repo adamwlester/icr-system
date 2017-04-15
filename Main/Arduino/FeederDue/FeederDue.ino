@@ -14,7 +14,7 @@ SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 // LOG DEBUGGING
 
 // Do log
-const bool doDB_Log = false;
+const bool doDB_Log = true;
 
 // What to print
 const bool doLog_flow = false;
@@ -31,8 +31,8 @@ const bool doLog_dropped = false;
 // PRINT DEBUGGING
 
 // Where to print
-const bool doDB_PrintConsole = false;
-const bool doDB_PrintLCD = true;
+const bool doDB_PrintConsole = true;
+const bool doDB_PrintLCD = false;
 
 // What to print
 const bool doPrint_flow = true;
@@ -45,6 +45,7 @@ const bool doPrint_pid = false;
 const bool doPrint_bull = false;
 const bool doPrint_resent = false;
 const bool doPrint_dropped = false;
+const bool doPrint_log = true;
 
 // PID CALIBRATION
 // Set kC and run ICR_Run.cs
@@ -168,8 +169,9 @@ const int pin_IRdetect = 17;
 #pragma region ---------VARIABLE SETUP---------
 
 // Log debugging
-String logList[150];
+String logList[1000];
 uint16_t logCnt = 0;
+bool doLogResend = false;
 
 // Print debugging
 String printQueue[10];
@@ -234,8 +236,8 @@ const char c2r_id[14] = {
 };
 char msg_id = ' ';
 bool msg_pass = false;
-uint32_t t_rsvd = millis(); // (ms)
-uint32_t t_rsvdLast = 0; // (ms)
+uint32_t t_rcvd = millis(); // (ms)
+uint32_t t_rcvdLast = 0; // (ms)
 
 						 // Serial to CS
 const char r2c_head = '{';
@@ -381,7 +383,7 @@ const int trackLEDduty = 75; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-						 // LCD
+// LCD
 extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 bool lcdLightOn = false;
@@ -400,7 +402,6 @@ volatile uint32_t t_sync = 0;
 volatile bool doLogIR = false;
 
 #pragma endregion 
-
 
 #pragma region ---------CONSTRUCT CLASSES---------
 
@@ -2107,6 +2108,7 @@ void setup() {
 	{
 		batVoltArr[i] = 0;
 	}
+
 }
 
 
@@ -2212,16 +2214,15 @@ void loop() {
 		//	now_pos = now_pos + 10 + (140 * PI);
 		//}
 
-		/*
 		// TEST
 		for (int i = 0; i < 100; i++)
 		{
-		char chr[50];
-		sprintf(chr, "Log %d: Bunch of stuff", i);
-		String str = chr;
-		StoreDBLogStr(str, millis());
+			char chr[50];
+			String str;
+			sprintf(chr, "Log #%d: Message!", i);
+			str = chr;
+			StoreDBLogStr(str, millis());
 		}
-		*/
 
 	}
 
@@ -2750,23 +2751,18 @@ void loop() {
 #pragma region //--- (L) SEND LOG ---
 	if (msg_id == 'L' && msg_pass)
 	{
-		bool do_resend;
 		// Send log data
-		if (msg_setupCmd[0] == 1)
-		{
-			do_resend = false;
+		if (!doLogResend)
 			DebugFlow("SEND NEXT LOG PACKET");
-		}
 		else
-		{
-			do_resend = true;
 			DebugFlow("RESEND LAST LOG PACKET");
-		}
+		
 		// Send log data if end not reached
-		if (!SendLogData(do_resend))
+		if (!SendLogData())
 		{
 			// Send confirm done
 			Store4_CS('D', 255, c2r_packLast[CharInd('L', "c2r")]);
+			DebugFlow("LOG SEND COMPLETE");
 		}
 	}
 
@@ -3019,6 +3015,15 @@ bool ParseSerial()
 		fc_isRatIn = rat_in == 1 ? true : false;
 	}
 
+	// Get log request data
+	if (msg_id == 'L')
+	{
+		// Get session comand
+		byte resend = WaitBuffRead(0);
+		doLogResend = resend == 1 ? true : false;
+
+	}
+
 	// Get VT data
 	else if (msg_id == 'P')
 	{
@@ -3054,8 +3059,8 @@ bool ParseSerial()
 	else
 	{
 		// Update recive time
-		t_rsvdLast = t_rsvd;
-		t_rsvd = millis();
+		t_rcvdLast = t_rcvd;
+		t_rcvd = millis();
 
 		// CHECK FOR STREAMING STARTED
 		if (msg_id == 'P' && !fc_isStreaming)
@@ -3154,7 +3159,7 @@ byte WaitBuffRead(byte match)
 	return buff;
 }
 
-// CHECK AND PROCESS RSVD PACKET NUMBER
+// CHECK AND PROCESS RCVD PACKET NUMBER
 bool CheckPack(char id, uint16_t pack)
 {
 	// Local vars
@@ -3168,7 +3173,7 @@ bool CheckPack(char id, uint16_t pack)
 	if (id != 'P')
 	{
 		// Print revieved pack details
-		DebugRsvd(id, pack);
+		DebugRcvd(id, pack);
 
 		// Send back packet confirmation
 		if (id != 'Y')
@@ -3408,7 +3413,7 @@ void SendPacketData()
 	}
 	// Avoid overlap between sent or rcvd events
 	else if (millis() > t_sent + 10 &&
-		millis() > t_rsvd + 15)
+		millis() > t_rcvd + 15)
 	{
 		do_send = true;
 	}
@@ -3476,17 +3481,18 @@ void SendPacketData()
 }
 
 // SEND SERIAL LOG DATA
-bool SendLogData(bool do_resend)
+bool SendLogData()
 {
 	// Local vars
 	static int listInd = 0;
 	String msg_str = " ";
 	char msg_char[100];
-	int msg_size = 0;
+	byte str_size = 0;
+	byte msg_size = 0;
 	byte msg[100];
 
 	// Incriment list ind
-	if (!do_resend) listInd++;
+	if (!doLogResend) listInd++;
 
 	// Check if end of list reached
 	if (listInd > logCnt)
@@ -3498,23 +3504,37 @@ bool SendLogData(bool do_resend)
 	msg_str = logList[listInd - 1];
 
 	// Get message size
-	msg_size = msg_str.length();
+	str_size = msg_str.length();
 
 	// Convert to char array
-	msg_str.toCharArray(msg_char, msg_size);
+	msg_str.toCharArray(msg_char, 50);
 
 	// Load byte array
 	msg[0] = r2c_head;
-	msg[1] = msg_size;
-	for (int i = 0; i < msg_size; i++)
-		msg[i + 2] = msg_char[i];
-	msg[msg_size + 3] = r2c_head;
+	u.f = 0.0f;
+	u.c[0] = 'U';
+	msg[1] = u.b[0];
+	msg[2] = str_size;
+	for (int i = 0; i < str_size; i++)
+		msg[i + 3] = msg_char[i];
+	msg[str_size + 3] = r2c_foot;
+
+	// Compute message size
+	msg_size = str_size + 4;
 
 	// Send
-	Serial1.write(msg, msg_size + 3);
+	Serial1.write(msg, msg_size);
 
-	// TEST
-	//SerialUSB.println(msg_str);
+	// Print
+	if (doPrint_log &&
+		(doDB_PrintConsole || doDB_PrintLCD))
+	{
+		char str[50];
+		
+		// Store
+		sprintf(str, "log(%d): ", listInd);
+		StoreDBPrintStr(str + msg_str, t_sent);
+	}
 
 	return true;
 }
@@ -4151,7 +4171,7 @@ void DebugResent(char id, uint16_t pack, int total)
 	}
 }
 
-void DebugRsvd(char id, uint16_t pack)
+void DebugRcvd(char id, uint16_t pack)
 {
 	if (
 		(doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4358,13 +4378,13 @@ void StoreDBLogStr(String str, uint32_t ts)
 	ts_norm = t_sync == 0 ? ts : ts - t_sync;
 
 	// Concatinate ts with message
-	str.toCharArray(str_c, str.length());
+	str.toCharArray(str_c, 50);
 	sprintf(msg_c, "%d %s", ts_norm, str_c);
 	logList[logCnt - 1] = msg_c;
 
 	// TEST
-	delay(100);
-	PrintLCD(str, " ", 't');
+	//delay(100);
+	//PrintLCD(logList[logCnt - 1], " ", 't');
 	//SerialUSB.println(logList[logCnt - 1]);
 }
 

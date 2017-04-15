@@ -1,31 +1,27 @@
 NetCom Log File Opened - File Name:  MatlabNetComLogfile.txt
-Time Opened: (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01
+Time Opened: (mm/dd/yyyy): 04/14/2017 At Time: 16:34:00
 NetCom Version 3.0.1
 
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26200.
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26481.
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01 - NodeConnectionClient::AddStreamObject - Object VT1 has been added to our stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01 - NodeConnectionClient::AddStreamObject - Object VT2 has been added to our stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:22:01 - NodeConnectionClient::AddStreamObject - Object EVENTS has been added to our stream list. Stream Type: Event
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::RemoveStreamObject - Object VT1 stream reference count has been decremented to 0. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::RemoveStreamObject - Object VT1 has been removed from the stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::RemoveStreamObject - Object VT2 stream reference count has been decremented to 0. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::RemoveStreamObject - Object VT2 has been removed from the stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::RemoveStreamObject - Object EVENTS stream reference count has been decremented to 0. Stream Type: Event
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::RemoveStreamObject - Object EVENTS has been removed from the stream list. Stream Type: Event
--*  ERROR  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: SingleElectrode
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for SingleElectrode stream processing thread. Stream Type: SingleElectrode
--*  ERROR  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Stereotrode
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Stereotrode stream processing thread. Stream Type: Stereotrode
--*  ERROR  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Tetrode
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Tetrode stream processing thread. Stream Type: Tetrode
--*  ERROR  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: CSC
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for CSC stream processing thread. Stream Type: CSC
--*  ERROR  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Video stream processing thread. Stream Type: Video
--*  ERROR  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Event
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Event stream processing thread. Stream Type: Event
--* NOTICE  *- (mm/dd/yyyy): 04/10/2017 At Time: 20:34:01 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:00 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26200.
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:00 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:00 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26201.
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:00 - NodeConnectionClient::AddStreamObject - Object EVENTS has been added to our stream list. Stream Type: Event
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NetworkNodeClient::CloseStream - Unable to open stream for object VT1, the name was not found in our list of valid objects.
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NetworkNodeClient::CloseStream - Unable to open stream for object VT2, the name was not found in our list of valid objects.
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::RemoveStreamObject - Object EVENTS stream reference count has been decremented to 0. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::RemoveStreamObject - Object EVENTS has been removed from the stream list. Stream Type: Event
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: SingleElectrode
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for SingleElectrode stream processing thread. Stream Type: SingleElectrode
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Stereotrode
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Stereotrode stream processing thread. Stream Type: Stereotrode
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Tetrode stream processing thread. Stream Type: Tetrode
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: CSC
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for CSC stream processing thread. Stream Type: CSC
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Video stream processing thread. Stream Type: Video
+-*  ERROR  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Event stream processing thread. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 04/14/2017 At Time: 16:34:20 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
 Log File Closed - End of File
 
