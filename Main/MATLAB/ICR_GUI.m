@@ -16,6 +16,7 @@ global m2c_id; % message out to CS
 global m2c_dat1; % data out to CS
 global m2c_dat2; % data out to CS
 global m2c_flag; % new data flag out to CS
+global m2c_dir; % current cheetah directory
 global consoleText; % console text
 global tcpIP; % server tcpip object
 % Non CS globals
@@ -2259,6 +2260,8 @@ clear(PersistentVarNames{:});
             % Get current Cheetah folder name
             dirs = dir(D.DIR.nlxTempTop);
             D.DIR.recFi = dirs([dirs.datenum] == max([dirs.datenum])).name;
+            % Save to global
+            m2c_dir = fullfile(D.DIR.nlxTempTop,D.DIR.recFi);
             
             %% START STREAMING
             

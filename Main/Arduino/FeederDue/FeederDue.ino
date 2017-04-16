@@ -17,7 +17,7 @@ SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 const bool doDB_Log = true;
 
 // What to print
-const bool doLog_flow = false;
+const bool doLog_flow = true;
 const bool doLog_irSync = false;
 const bool doLog_motorControl = false;
 const bool doLog_rcvd = false;
@@ -35,7 +35,7 @@ const bool doDB_PrintConsole = true;
 const bool doDB_PrintLCD = false;
 
 // What to print
-const bool doPrint_flow = true;
+const bool doPrint_flow = false;
 const bool doPrint_irSync = false;
 const bool doPrint_motorControl = false;
 const bool doPrint_rcvd = false;
@@ -43,9 +43,9 @@ const bool doPrint_r2c = false;
 const bool doPrint_r2a = false;
 const bool doPrint_pid = false;
 const bool doPrint_bull = false;
-const bool doPrint_resent = false;
-const bool doPrint_dropped = false;
-const bool doPrint_log = true;
+const bool doPrint_resent = true;
+const bool doPrint_dropped = true;
+const bool doPrint_log = false;
 
 // PID CALIBRATION
 // Set kC and run ICR_Run.cs
@@ -168,11 +168,6 @@ const int pin_IRdetect = 17;
 
 #pragma region ---------VARIABLE SETUP---------
 
-// Log debugging
-String logList[1000];
-uint16_t logCnt = 0;
-bool doLogResend = false;
-
 // Print debugging
 String printQueue[10];
 const int printQueue_lng =
@@ -209,12 +204,22 @@ bool fc_doHalt = false;
 bool fc_isHalted = false;
 bool fc_doBulldoze = false;
 bool fc_doCheckDoneRcvd = false;
-bool fc_doLogSend = false;
-bool fc_doLogResend = false;
 
-// Start/Quit
-byte msg_setupCmd[2];
-uint32_t t_quitCmd = 0;
+// Log debugging
+String logList[1000];
+uint16_t logStoreCnt = 0;
+uint16_t logSendCnt = 0;
+bool isLogResend = false;
+bool doLogSend = false;
+
+// Outgoing packet data
+byte r2_queue[10][7];
+const int r2_lngR = 10;
+const int r2_lngC = 7;
+int sendQueueInd = r2_lngR - 1;
+bool doPackSend = false;
+const uint32_t sendSentDel = 10;
+const uint32_t sendRcvdDel = 0;
 
 // Serial from CS
 const char c2r_head[2] = { '_', '<' };
@@ -277,13 +282,6 @@ const char r2a_id[10] = {
 	'b', // bull mode [0, 1]
 };
 
-// Outgoing data
-byte r2_queue[10][7];
-const int r2_lngR = 10;
-const int r2_lngC = 7;
-int sendQueueInd = r2_lngR - 1;
-bool doSend = false;
-
 // Serial packet tracking
 uint16_t packNow = 0;
 uint16_t packLast = 0;
@@ -303,6 +301,10 @@ char c2r_idHist[10];
 char r2c_idHist[10];
 const int c2r_hLng = sizeof(c2r_packHist) / sizeof(c2r_packHist[0]);
 const int r2c_hLng = sizeof(r2c_packHist) / sizeof(r2c_packHist[0]);
+
+// Start/Quit
+byte msg_setupCmd[2];
+uint32_t t_quitCmd = 0;
 
 // Serial VT
 byte msg_vtEnt = 0;
@@ -402,6 +404,7 @@ volatile uint32_t t_sync = 0;
 volatile bool doLogIR = false;
 
 #pragma endregion 
+
 
 #pragma region ---------CONSTRUCT CLASSES---------
 
@@ -2204,25 +2207,29 @@ void loop() {
 		// Blink to show setup done
 		SetupBlink();
 
-		//// TEST
-		//float now_pos = 348 + (140 * PI);
-		//float rew_pos = 92;
-		//for (int i = 0; i < 100; i++)
-		//{
-		//	reward.is_bound_set = false;
-		//	reward.CompTargBounds(now_pos, rew_pos);
-		//	now_pos = now_pos + 10 + (140 * PI);
-		//}
-
+		/*
 		// TEST
+		float now_pos = 348 + (140 * PI);
+		float rew_pos = 92;
 		for (int i = 0; i < 100; i++)
+		{
+			reward.is_bound_set = false;
+			reward.CompTargBounds(now_pos, rew_pos);
+			now_pos = now_pos + 10 + (140 * PI);
+		}
+		*/
+
+		/*
+		// TEST
+		for (int i = 0; i < 40; i++)
 		{
 			char chr[50];
 			String str;
-			sprintf(chr, "Log #%d: Message!", i);
+			sprintf(chr, "Log #%d: Message!", i+1);
 			str = chr;
 			StoreDBLogStr(str, millis());
 		}
+		*/
 
 	}
 
@@ -2237,9 +2244,16 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- SEND SERIAL DATA ---
-	if (doSend)
+
+	// Prioritize packet
+	if (doPackSend)
 	{
 		SendPacketData();
+	}
+	// Send log
+	else if (doLogSend)
+	{
+		SendLogData();
 	}
 #pragma endregion
 
@@ -2339,7 +2353,7 @@ void loop() {
 	}
 
 	// Wait for queue buffer to empty and quit delay to pass 
-	if (fc_doQuit && millis() > t_quitCmd && !doSend)
+	if (fc_doQuit && millis() > t_quitCmd && !doPackSend)
 	{
 		// Retell ard to quit
 		Store4_Ard('q', 255);
@@ -2752,28 +2766,26 @@ void loop() {
 	if (msg_id == 'L' && msg_pass)
 	{
 		// Send log data
-		if (!doLogResend)
+		if (!isLogResend)
+		{
 			DebugFlow("SEND NEXT LOG PACKET");
+			logSendCnt++;
+		}
+		else DebugFlow("RESEND LAST LOG PACKET");
+
+		// Check if end of list reached
+		if (logSendCnt <= logStoreCnt)
+		{
+			doLogSend = true;
+		}
+		// End reached
 		else
-			DebugFlow("RESEND LAST LOG PACKET");
-		
-		// Send log data if end not reached
-		if (!SendLogData())
 		{
 			// Send confirm done
 			Store4_CS('D', 255, c2r_packLast[CharInd('L', "c2r")]);
 			DebugFlow("LOG SEND COMPLETE");
+			doLogSend = false;
 		}
-	}
-
-	if (fc_doLogSend)
-	{
-
-
-	}
-	else if (fc_doLogResend)
-	{
-
 	}
 #pragma endregion
 
@@ -3020,7 +3032,7 @@ bool ParseSerial()
 	{
 		// Get session comand
 		byte resend = WaitBuffRead(0);
-		doLogResend = resend == 1 ? true : false;
+		isLogResend = resend == 1 ? true : false;
 
 	}
 
@@ -3308,7 +3320,7 @@ void Store4_CS(char id, byte d1, uint16_t pack)
 
 
 	// Set to send
-	doSend = true;
+	doPackSend = true;
 
 	// Update last packet array
 	r2c_packLast[CharInd(id, "r2c")] = pack;
@@ -3379,7 +3391,7 @@ void Store4_Ard(char id, byte d1)
 	r2_queue[queue_ind][5] = u.b[0];
 
 	// Set to send
-	doSend = true;
+	doPackSend = true;
 
 }
 
@@ -3392,6 +3404,11 @@ void SendPacketData()
 	char rcv_id = ' ';
 	bool do_send = false;
 	int buff_tx = 0;
+	int buff_rx = 0;
+
+	// Get total data in buffers
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = Serial1.available();
 
 	// save reviever id
 	rcv_id = r2_queue[r2_lngR - 1][6];
@@ -3402,9 +3419,6 @@ void SendPacketData()
 		msg[j] = r2_queue[r2_lngR - 1][j];
 	}
 
-	// Get total data in buffer
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
-
 	// Send r2a sync time or rew tone immediately
 	if ((msg[1] == 'r' ||
 		msg[1] == 't'))
@@ -3412,14 +3426,18 @@ void SendPacketData()
 		do_send = true;
 	}
 	// Avoid overlap between sent or rcvd events
-	else if (millis() > t_sent + 10 &&
-		millis() > t_rcvd + 15)
+	else if (millis() > t_sent + sendSentDel &&
+		millis() > t_rcvd + sendRcvdDel)
 	{
 		do_send = true;
 	}
 
 	// Send if conditions met
-	if (do_send && Serial.availableForWrite() >= 10)
+	if ( 
+		do_send && 
+		buff_tx == 0 &&
+		buff_rx == 0
+		)
 	{
 		// Send
 		Serial1.write(msg, msg_size);
@@ -3447,7 +3465,7 @@ void SendPacketData()
 		// Set to not send again if all sent
 		if (sendQueueInd == r2_lngR - 1)
 		{
-			doSend = false;
+			doPackSend = false;
 		}
 
 		// Print
@@ -3475,68 +3493,88 @@ void SendPacketData()
 			// Store
 			sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
 			StoreDBPrintStr(str, t_sent);
+		
 		}
 
 	}
 }
 
 // SEND SERIAL LOG DATA
-bool SendLogData()
+void SendLogData()
 {
 	// Local vars
-	static int listInd = 0;
 	String msg_str = " ";
 	char msg_char[100];
 	byte str_size = 0;
 	byte msg_size = 0;
 	byte msg[100];
+	bool do_send;
+	int buff_tx = 0;
+	int buff_rx = 0;
 
-	// Incriment list ind
-	if (!doLogResend) listInd++;
+	// Get total data in buffers
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = Serial1.available();
 
-	// Check if end of list reached
-	if (listInd > logCnt)
+
+	// Avoid overlap between sent or rcvd events
+	if (millis() > t_sent + sendSentDel &&
+		millis() > t_rcvd + sendRcvdDel)
 	{
-		return false;
+		do_send = true;
 	}
 
+	// Update send time 
+	t_sent = millis();
+
 	// Pull out string
-	msg_str = logList[listInd - 1];
+	msg_str = logList[logSendCnt - 1];
 
 	// Get message size
 	str_size = msg_str.length();
 
-	// Convert to char array
-	msg_str.toCharArray(msg_char, 50);
-
-	// Load byte array
-	msg[0] = r2c_head;
-	u.f = 0.0f;
-	u.c[0] = 'U';
-	msg[1] = u.b[0];
-	msg[2] = str_size;
-	for (int i = 0; i < str_size; i++)
-		msg[i + 3] = msg_char[i];
-	msg[str_size + 3] = r2c_foot;
-
-	// Compute message size
-	msg_size = str_size + 4;
-
-	// Send
-	Serial1.write(msg, msg_size);
-
-	// Print
-	if (doPrint_log &&
-		(doDB_PrintConsole || doDB_PrintLCD))
+	// Send if conditions met
+	if (
+		do_send &&
+		buff_tx == 0 &&
+		buff_rx == 0
+		)
 	{
-		char str[50];
-		
-		// Store
-		sprintf(str, "log(%d): ", listInd);
-		StoreDBPrintStr(str + msg_str, t_sent);
-	}
 
-	return true;
+		// Convert to char array
+		msg_str.toCharArray(msg_char, 50);
+
+		// Load byte array
+		msg[0] = r2c_head;
+		u.f = 0.0f;
+		u.c[0] = 'U';
+		msg[1] = u.b[0];
+		msg[2] = str_size;
+		for (int i = 0; i < str_size; i++)
+			msg[i + 3] = msg_char[i];
+		msg[str_size + 3] = r2c_foot;
+
+		// Compute message size
+		msg_size = str_size + 4;
+
+		// Send
+		Serial1.write(msg, msg_size);
+
+		// Print
+		if (doPrint_log &&
+			(doDB_PrintConsole || doDB_PrintLCD))
+		{
+			char str[50];
+
+			// Store
+			sprintf(str, "sent log(%d/%d): ", logSendCnt, logStoreCnt);
+			StoreDBPrintStr(str + msg_str, t_sent);
+		}
+
+		// Reset flag
+		doLogSend = false;
+
+	}
 }
 
 #pragma endregion
@@ -4140,8 +4178,16 @@ void DebugDropped(int missed, int missed_total, int total)
 		(doLog_dropped && doDB_Log)
 		)
 	{
+		// Local vars
+		int buff_tx = 0;
+		int buff_rx = 0;
+
+		// Get total data in buffers
+		buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+		buff_rx = Serial1.available();
+
 		char str[50];
-		sprintf(str, "!dropped p:%d [t:%d/%d]!", missed, missed_total, total);
+		sprintf(str, "!!Dropped(tot:%d/%d/%d) tx:%d rx:%d!!", missed, missed_total, total, buff_tx, buff_rx);
 
 		// Add to print queue
 		if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4159,8 +4205,16 @@ void DebugResent(char id, uint16_t pack, int total)
 		(doLog_resent && doDB_Log)
 		)
 	{
+		// Local vars
+		int buff_tx = 0;
+		int buff_rx = 0;
+
+		// Get total data in buffers
+		buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+		buff_rx = Serial1.available();
+
 		char str[50];
-		sprintf(str, "!resent i:%c p:%d t:%d!", id, pack, total);
+		sprintf(str, "!!Resent(tot:%d): tx:%d rx:%d id:%c pack:%d!!", total, buff_tx, buff_rx, id, pack);
 
 		// Add to print queue
 		if (doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4372,7 +4426,7 @@ void StoreDBLogStr(String str, uint32_t ts)
 	uint32_t ts_norm = 0;
 
 	// Itterate log entry count
-	logCnt++;
+	logStoreCnt++;
 
 	// Time now
 	ts_norm = t_sync == 0 ? ts : ts - t_sync;
@@ -4380,12 +4434,12 @@ void StoreDBLogStr(String str, uint32_t ts)
 	// Concatinate ts with message
 	str.toCharArray(str_c, 50);
 	sprintf(msg_c, "%d %s", ts_norm, str_c);
-	logList[logCnt - 1] = msg_c;
+	logList[logStoreCnt - 1] = msg_c;
 
 	// TEST
 	//delay(100);
-	//PrintLCD(logList[logCnt - 1], " ", 't');
-	//SerialUSB.println(logList[logCnt - 1]);
+	//PrintLCD(logList[logStoreCnt - 1], " ", 't');
+	//SerialUSB.println(logList[logStoreCnt - 1]);
 }
 
 #pragma endregion
