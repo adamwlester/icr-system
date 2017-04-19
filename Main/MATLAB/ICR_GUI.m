@@ -6,35 +6,36 @@ function[] = ICR_GUI(inArg)
 
 %% ============================= TOP LEVEL =================================
 
-% Declare global vars 
+% Matlab globals
 global FigH; % UI figure handle
 global D; % Main data struct
-global shouldExit; % bool to exit
 global caughtError; % bool for error handling
-global enableSave; % enable save button
+global consoleText; % console text
+global tcpIP; % server tcpip object
+global isTestRun;
+global isMatRunAlone;
+global doHaultErrorTest;
+% Matlab to CS communication
 global m2c_id; % message out to CS
 global m2c_dat1; % data out to CS
 global m2c_dat2; % data out to CS
 global m2c_flag; % new data flag out to CS
 global m2c_dir; % current cheetah directory
-global consoleText; % console text
-global tcpIP; % server tcpip object
-% Non CS globals
-global isTestRun;
-global isMatRunAlone;
-global doHaultErrorTest;
-% CS to matlab vars
-global c2m_J c2m_A;
+global m2c_quit; % relay quit
+% CS to Matlba communication
+global c2m_E; % bool to exit
+global c2m_S; % enable save button
+% Robot to Matlab communication
+global r2m_J r2m_A;
 
 % Set globals
-shouldExit = false;
+[c2m_S, c2m_E] = deal(false);
+[r2m_J, r2m_A] = deal(0);
 caughtError = false;
-enableSave = false;
 consoleText = ' ';
 isTestRun = false;
 isMatRunAlone = false;
 doHaultErrorTest = false;
-[c2m_J, c2m_A] = deal(0);
 
 % ---------------------------SET MAIN PARAMETERS---------------------------
 
@@ -78,7 +79,6 @@ D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 %   val 4 = sound state [0, 1], [no sound, sound]
 %...........................m2c_id...................................
 %    'S', // start session
-%    'Q', // quit session
 %    'M', // move to position
 %    'R', // run reward
 %    'C', // cue reward
@@ -153,7 +153,7 @@ else
         err = [err, sprintf('\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r')];
         Update_Console(err);
         % Wait if error occured before exiting
-        if ~shouldExit && exist('D', 'var')
+        if ~c2m_E && exist('D', 'var')
             wait = true;
             while wait;
                 drawnow
@@ -248,7 +248,7 @@ clear(PersistentVarNames{:});
             % Run testing setup
             SF_Run_Test_Setup();
             
-            while ~shouldExit
+            while ~c2m_E
                 
                 % -----------------------CHECK FOR UI SETUP---------------------------
                 
@@ -365,13 +365,13 @@ clear(PersistentVarNames{:});
                     end
                     
                     % Check if CS has enabled save
-                    if enableSave
+                    if c2m_S
                         % Enable save button
                         set(D.UI.btnSave, ...
                             'Enable', 'on', ...
                             'ForegroundColor' , D.UI.dfltTxtLightCol, ...
                             'BackgroundColor', D.UI.dfltActiveCol);
-                        enableSave = false;
+                        c2m_S = false;
                     end
                     
                     % Save sesion data
@@ -2189,14 +2189,14 @@ clear(PersistentVarNames{:});
             
             % Wait for Cheetah to open
             is_running = false;
-            while ~is_running && ~shouldExit
+            while ~is_running && ~c2m_E
                 [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
                 is_running = any(strfind(result, 'Cheetah.exe'));
             end
             
             % Load NetCom into Matlab, and connect to the NetCom server if we aren’t connected
             if NlxAreWeConnected() ~= 1
-                while NlxAreWeConnected() ~= 1 && ~shouldExit
+                while NlxAreWeConnected() ~= 1 && ~c2m_E
                     succeeded = NlxConnectToServer(D.NLX.IP);
                     if succeeded == 1
                         Update_Console(sprintf('\rConnected To NLX\rIP: %s\rTime: %s\r', ...
@@ -4653,7 +4653,7 @@ clear(PersistentVarNames{:});
             
             % Bat volt
             % Turn red and flicker if bellow 12 V
-            volt_now = c2m_J/10;
+            volt_now = r2m_J/10;
             if volt_now <= D.PAR.voltCutoff && volt_now > 0 
                 set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
                 if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
@@ -5362,11 +5362,11 @@ clear(PersistentVarNames{:});
             end
             
             % Tell C# to begin quit
-            Mat2CS('Q');
+            m2c_quit = true;
             
             % Shut down if matlab run alone
             if isMatRunAlone
-                shouldExit = true;
+                c2m_E = true;
             end
             
             % Set flag
@@ -5542,7 +5542,7 @@ clear(PersistentVarNames{:});
             m2c_id = id;
             
             % Set flag
-            m2c_flag = 1;
+            m2c_flag = true;
             
             % Post command to NLX
             if isfield(D, 'NLX')
@@ -5968,7 +5968,7 @@ clear(PersistentVarNames{:});
         end
         
         % Trigger GUI exit
-        shouldExit = true;
+        c2m_E = true;
         drawnow;
         % Disconnect all
         Disconnect_All();

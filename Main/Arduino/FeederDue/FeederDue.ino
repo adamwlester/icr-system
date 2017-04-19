@@ -14,7 +14,7 @@ SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 // LOG DEBUGGING
 
 // Do log
-const bool doDB_Log = true;
+bool doDB_Log = true;
 
 // What to print
 const bool doLog_flow = true;
@@ -45,7 +45,7 @@ const bool doPrint_pid = false;
 const bool doPrint_bull = false;
 const bool doPrint_resent = true;
 const bool doPrint_dropped = true;
-const bool doPrint_log = false;
+const bool doPrint_log = true;
 
 // PID CALIBRATION
 // Set kC and run ICR_Run.cs
@@ -186,7 +186,7 @@ int cnt_packResend = 0;
 
 // State control
 String fc_motorControl = "None"; // ["None", "Open", "MoveTo", "Bull", "PID"]
-uint32_t t_blockTill = 0;
+uint32_t blockDurTill = 0;
 bool fc_isBlockingTill = false;
 bool fc_doQuit = false;
 bool fc_isFirstPass = true;
@@ -195,11 +195,10 @@ bool fc_isStreaming = false;
 bool fc_isManualSes = false;
 bool fc_isRatIn = false;
 bool fc_isTrackingEnabled = false;
+bool fc_isRewarding = false;
 bool fc_doMove = false;
 bool fc_doRew = false;
 bool fc_doCueReward = false;
-bool fc_isRewarding = false;
-bool fc_isCueing = false;
 bool fc_doHalt = false;
 bool fc_isHalted = false;
 bool fc_doBulldoze = false;
@@ -218,8 +217,8 @@ const int r2_lngR = 10;
 const int r2_lngC = 7;
 int sendQueueInd = r2_lngR - 1;
 bool doPackSend = false;
-const uint32_t sendSentDel = 10;
-const uint32_t sendRcvdDel = 0;
+const uint32_t sendSentDel = 1;
+const uint32_t sendRcvdDel = 1;
 
 // Serial from CS
 const char c2r_head[2] = { '_', '<' };
@@ -357,6 +356,7 @@ byte msg_bullDel = 0;
 byte msg_bullSpeed = 0;
 
 // Reward
+uint32_t rewBlockDur = 2000; // (ms)
 float msg_cueTarg = 0;
 float cueDist[2] = { 0,0 };
 float cueStartPos[2] = { 0,0 };
@@ -784,8 +784,7 @@ public:
 		// Tell ard pid is stopped
 		if (
 			// Dont send if rewarding
-			!fc_isRewarding &&
-			!fc_isCueing
+			!fc_isRewarding
 			)
 		{
 			Store4_Ard('p', 0);
@@ -1501,7 +1500,6 @@ Target targ_cueRob("targ_cueRob");
 class Reward
 {
 public:
-	const uint32_t t_block = 15000; // (ms)
 	const float velThresh = 5; // (cm/sec)
 	const uint32_t targRewDurs[9] = { // (ms)
 		500,
@@ -1525,8 +1523,9 @@ public:
 		-15,
 		-20,
 	};
-	uint32_t duration; // (ms) 
-	uint32_t durationByte; // (ms) 
+	uint32_t blockDur = 0; // (ms)
+	uint32_t duration = 0; // (ms) 
+	uint32_t durationByte = 0; // (ms) 
 	float targBounds[9][2];
 	const int targLng =
 		sizeof(targLocs) / sizeof(targLocs[0]);
@@ -1535,6 +1534,10 @@ public:
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
 	float rewCenter = 0;
+	bool isRewarding = false;
+	bool isCueing = false;
+	bool isRewardDone = false;
+	bool isButtonReward = false;
 	bool isboundSet = false;
 	bool isTriggerReady = false;
 	bool isAllRargPassed = false;
@@ -1548,22 +1551,21 @@ public:
 	int armPos = 0;
 	int armTarg = 0;
 	bool armStpOn = false;
-	uint32_t t_lastOnStep = millis();
-	uint32_t t_lastOffStep = millis();
 
 	// Constructor
-	Reward()
+	Reward(uint32_t t_b)
 	{
+		this->blockDur = t_b;
 		this->duration = 2000;
 		this->durationByte = (byte)(duration / 10);
 		ResetFeedArm();
 	}
 
 	// START REWARD
-	bool StartRew(bool do_stop)
+	bool StartRew(bool do_stop, bool is_button_reward)
 	{
-		// Local vars
-		bool is_rewarding = true;
+		// Set flag
+		isButtonReward = is_button_reward;
 
 		// Track rewards
 		rewCnt++;
@@ -1576,7 +1578,7 @@ public:
 		{
 			HardStop("StartRew");
 			// Set hold time
-			BlockMotorTill(t_block);
+			BlockMotorTill(blockDur);
 		}
 
 		// Trigger reward tone on
@@ -1592,7 +1594,7 @@ public:
 		digitalWrite(pin_Rel_Rew, HIGH);
 
 		// Print to LCD for manual rewards
-		if (btn_doRew)
+		if (isButtonReward)
 		{
 			PrintLCD("REWARDING...");
 		}
@@ -1603,8 +1605,12 @@ public:
 			DebugFlow(str);
 		}
 
+		// Set flags
+		isRewarding = true;
+		isRewardDone = false;
+
 		// indicate reward in progress
-		return is_rewarding;
+		return isRewarding;
 
 	}
 
@@ -1612,8 +1618,7 @@ public:
 	bool EndRew()
 	{
 
-		// Local vars
-		bool do_continue_rew = true;
+		bool reward_finished = false;
 
 		if (millis() > t_closeSol)
 		{
@@ -1626,7 +1631,7 @@ public:
 			analogWrite(pin_RewLED_C, rewLEDmin);
 
 			// Clear LCD
-			if (btn_doRew)
+			if (isButtonReward)
 			{
 				ClearLCD();
 			}
@@ -1635,9 +1640,12 @@ public:
 				DebugFlow("REWARD FINISHED");
 			}
 
+			// Set/reset flags
+			isRewardDone = true;
+			Reset();
 		}
-		else do_continue_rew = false;
-		return do_continue_rew;
+
+		return isRewardDone;
 
 	}
 
@@ -1802,7 +1810,7 @@ public:
 	{
 		if (!isArmExtended)
 		{
-			t_retractArm = millis() + t_block;
+			t_retractArm = millis() + blockDur;
 			armTarg = armExtStps;
 			doArmMove = true;
 		}
@@ -1829,7 +1837,7 @@ public:
 		}
 
 		// Step motor
-		if (!armStpOn && millis() > t_lastOffStep + 1)
+		if (!armStpOn)
 		{
 
 			// Extend arm
@@ -1858,20 +1866,14 @@ public:
 			// Set step high
 			digitalWrite(pin_ED_STP, HIGH);
 
-			// Save step time
-			t_lastOnStep = millis();
-
 			// Set flag
 			armStpOn = true;
 		}
 		// Unstep motor
-		else if (armStpOn && millis() > t_lastOnStep + 1)
+		else
 		{
 			// Set step low
 			digitalWrite(pin_ED_STP, LOW);
-
-			// Save step time
-			t_lastOffStep = millis();
 
 			// Set flag
 			armStpOn = false;
@@ -1881,6 +1883,9 @@ public:
 	// Reset
 	void Reset()
 	{
+		isRewarding = false;
+		isCueing = false;
+		isButtonReward = false;
 		isboundSet = false;
 		isTriggerReady = false;
 		isAllRargPassed = false;
@@ -1888,7 +1893,7 @@ public:
 	}
 };
 // Initialize object
-Reward reward;
+Reward reward(rewBlockDur);
 
 //----------CLASS: Fuser----------
 class Fuser : public TinyEKF
@@ -2221,12 +2226,22 @@ void loop() {
 
 		/*
 		// TEST
-		for (int i = 0; i < 40; i++)
+		String s1 = " ";
+		String s2 = " ";
+		char c[1];
+		for (int i = 0; i < 100; i++)
 		{
-			char chr[50];
+			if (i <= 40)
+			{
+				sprintf(c, "%d", i + 1);
+				s1 = c;
+				s2 = s2 + s1;
+			}
 			String str;
+			char chr[100];
 			sprintf(chr, "Log #%d: Message!", i+1);
 			str = chr;
+			str = str + s2;
 			StoreDBLogStr(str, millis());
 		}
 		*/
@@ -2445,7 +2460,7 @@ void loop() {
 
 			DebugFlow("REWARD NOW");
 			// Start reward
-			fc_isRewarding = reward.StartRew(true);
+			fc_isRewarding = reward.StartRew(true, false);
 		}
 		else
 		{
@@ -2458,7 +2473,7 @@ void loop() {
 	if (fc_doRew)
 	{
 		// If not rewarding 
-		if (!fc_isRewarding)
+		if (!reward.isRewarding)
 		{
 			// Compute reward bounds
 			if (!reward.isboundSet)
@@ -2477,7 +2492,7 @@ void loop() {
 				if (ekf_pass || raw_pass)
 				{
 					// Start reward
-					fc_isRewarding = reward.StartRew(true);
+					fc_isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
 					sprintf(str, "REWARDED TARG %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
@@ -2485,7 +2500,7 @@ void loop() {
 					DebugFlow(str);
 				}
 			}
-			// Check if rat bassed all bounds
+			// Check if rat passed all bounds
 			if (
 				reward.isAllRargPassed &&
 				!reward.isTriggerReady
@@ -2502,6 +2517,7 @@ void loop() {
 			// Reset flags
 			reward.Reset();
 			fc_doRew = false;
+			fc_isRewarding = false;
 		}
 	}
 
@@ -2522,7 +2538,7 @@ void loop() {
 	if (fc_doCueReward)
 	{
 		// If not rewarding 
-		if (!fc_isRewarding || !fc_isCueing)
+		if (!reward.isRewarding || !reward.isCueing)
 		{
 
 			// Compute target targ_dist
@@ -2557,9 +2573,9 @@ void loop() {
 						// Hard stop
 						HardStop("MsgC");
 						// Set flag
-						fc_isCueing = true;
+						reward.isCueing = true;
 						// Set hold time
-						BlockMotorTill(reward.t_block);
+						BlockMotorTill(reward.blockDur);
 					}
 				}
 				// Check if rat reached target
@@ -2572,7 +2588,7 @@ void loop() {
 					{
 						DebugFlow("RAT REACHED CUE TARGET");
 						// Trigger reward without stopping
-						fc_isRewarding = reward.StartRew(false);
+						fc_isRewarding = reward.StartRew(false, false);
 					}
 				}
 				if (targ_cueRat.isTargReached && targ_cueRob.isTargReached)
@@ -2593,7 +2609,7 @@ void loop() {
 			targ_cueRat.Reset();
 			targ_cueRob.Reset();
 			fc_doCueReward = false;
-			fc_isCueing = false;
+			fc_isRewarding = false;
 		}
 	}
 
@@ -2765,6 +2781,10 @@ void loop() {
 #pragma region //--- (L) SEND LOG ---
 	if (msg_id == 'L' && msg_pass)
 	{
+		// Stop logging
+		if (doDB_Log)
+			doDB_Log = false;
+
 		// Send log data
 		if (!isLogResend)
 		{
@@ -2804,13 +2824,14 @@ void loop() {
 	// Button triggered reward
 	if (btn_doRew)
 	{
-		if (!fc_isRewarding)
+		if (!reward.isRewarding)
 		{
-			fc_isRewarding = reward.StartRew(false);
+			fc_isRewarding = reward.StartRew(false, true);
 		}
 		else if (reward.EndRew())
 		{
 			btn_doRew = false;
+			fc_isRewarding = false;
 		}
 	}
 
@@ -2877,7 +2898,7 @@ void loop() {
 	CheckBattery();
 
 	// Log new ir events
-	if (doLogIR) DebugIRSync("IR Detected");
+	if (doLogIR) DebugIRSync("ir detected");
 
 #pragma endregion
 
@@ -3542,7 +3563,7 @@ void SendLogData()
 	{
 
 		// Convert to char array
-		msg_str.toCharArray(msg_char, 50);
+		msg_str.toCharArray(msg_char, 100);
 
 		// Load byte array
 		msg[0] = r2c_head;
@@ -3564,11 +3585,13 @@ void SendLogData()
 		if (doPrint_log &&
 			(doDB_PrintConsole || doDB_PrintLCD))
 		{
-			char str[50];
+			char chr[100];
+			String str;
 
 			// Store
-			sprintf(str, "sent log(%d/%d): ", logSendCnt, logStoreCnt);
-			StoreDBPrintStr(str + msg_str, t_sent);
+			sprintf(chr, "sent log(%d/%d) cs(%d): ", logSendCnt, logStoreCnt, str_size);
+			str = chr;
+			StoreDBPrintStr(str + '[' + msg_str + ']', t_sent);
 		}
 
 		// Reset flag
@@ -3719,7 +3742,7 @@ void BlockMotorTill(uint32_t dt)
 	fc_isBlockingTill = true;
 
 	// Update time to hold till
-	t_blockTill = millis() + dt;
+	blockDurTill = millis() + dt;
 
 	// Remove all motor controll
 	SetMotorControl("None", "BlockMotorTill");
@@ -3739,7 +3762,7 @@ void CheckBlockTimElapsed()
 			pos_ratPixy.posNow - (ekfRobPos + feedDist) > 0;
 
 		// Check for time elapsed or rat moved at least 3cm past feeder
-		if (millis() > t_blockTill || passed_feeder)
+		if (millis() > blockDurTill || passed_feeder)
 		{
 			// Retract feeder arm
 			reward.RetractFeedArm();
@@ -4072,7 +4095,7 @@ void CheckBattery()
 		Store4_CS('J', byte_out, 0);
 
 		char str[50];
-		sprintf(str, "V: (float)%0.2fV (byte)%d", volt_avg, byte_out);
+		sprintf(str, "Vcc: (float)%0.2fV (byte)%d", volt_avg, byte_out);
 		DebugFlow(str);
 
 		// Reset flag
@@ -4187,7 +4210,7 @@ void DebugDropped(int missed, int missed_total, int total)
 		buff_rx = Serial1.available();
 
 		char str[50];
-		sprintf(str, "!!Dropped(tot:%d/%d/%d) tx:%d rx:%d!!", missed, missed_total, total, buff_tx, buff_rx);
+		sprintf(str, "!!Pack Lost(tot:%d/%d/%d) tx:%d rx:%d!!", missed, missed_total, total, buff_tx, buff_rx);
 
 		// Add to print queue
 		if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4421,8 +4444,8 @@ void StoreDBPrintStr(String str, uint32_t ts)
 void StoreDBLogStr(String str, uint32_t ts)
 {
 	// Local vars
-	char str_c[50];
-	char msg_c[50];
+	char str_c[100];
+	char msg_c[100];
 	uint32_t ts_norm = 0;
 
 	// Itterate log entry count
@@ -4432,8 +4455,8 @@ void StoreDBLogStr(String str, uint32_t ts)
 	ts_norm = t_sync == 0 ? ts : ts - t_sync;
 
 	// Concatinate ts with message
-	str.toCharArray(str_c, 50);
-	sprintf(msg_c, "%d %s", ts_norm, str_c);
+	str.toCharArray(str_c, 100);
+	sprintf(msg_c, "%d,%s", ts_norm, str_c);
 	logList[logStoreCnt - 1] = msg_c;
 
 	// TEST
