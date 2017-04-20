@@ -2260,8 +2260,6 @@ clear(PersistentVarNames{:});
             % Get current Cheetah folder name
             dirs = dir(D.DIR.nlxTempTop);
             D.DIR.recFi = dirs([dirs.datenum] == max([dirs.datenum])).name;
-            % Save to global
-            m2c_dir = fullfile(D.DIR.nlxTempTop,D.DIR.recFi);
             
             %% START STREAMING
             
@@ -5698,11 +5696,11 @@ clear(PersistentVarNames{:});
             
             % Save directory var
             % formt: datestr(clock, 'yyyy-mm-dd_HH-MM-SS', 'local');
-            D.DIR.rec = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
+            D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
             
             % Make directory if none exists
-            if exist(D.DIR.rec, 'dir') == 0
-                mkdir(D.DIR.rec);
+            if exist(D.DIR.nlxSaveRat, 'dir') == 0
+                mkdir(D.DIR.nlxSaveRat);
             end
             
             % Save GUI window image
@@ -5806,10 +5804,13 @@ clear(PersistentVarNames{:});
             Update_Console(sprintf('\rCopying Cheetah File...\rFile: %s\rSize: %0.2f GB\rTime: %s\r', ...
                 D.DIR.recFi, fiGigs, datestr(now, 'HH:MM:SS')));
             
-            copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.rec, D.DIR.recFi))
+            copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.nlxSaveRat, D.DIR.recFi))
             
             % Set flags
             D.UI.save_done = true;
+            
+            % Save to global
+            m2c_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.recFi);
             
             % Tell CS Matlab session saved
             Mat2CS('Z');

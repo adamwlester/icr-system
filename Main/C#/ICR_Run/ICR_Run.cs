@@ -44,6 +44,7 @@ namespace ICR_Run
         private static bool isRatOut = false;
         private static bool isSesSaved = false;
         private static bool doQuit = false;
+        private static bool doGUIclose = false;
         private static bool isGUIfinished = false;
         private static bool doExit = false;
         private static bool doAbort = false;
@@ -76,8 +77,8 @@ namespace ICR_Run
 
         // Directories
         private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLABMO\Startup";
-        private static string nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00"; // cheetah dir
-        private static string robLogFi = @"FeederDueLogFile.csv"; // log file for FeederDue
+        private static string nlxRecDir = " "; // cheetah dir
+        private static string dueLogFi = @"FeederDueLogFile.csv"; // log file for FeederDue
         private static string csLogFi = @"ICR_RunLogFile.csv"; // log file for ICR_Run
 
         // Matlab to CS communication
@@ -165,6 +166,7 @@ namespace ICR_Run
         private static long sendSentDel = 5; // (ms)
         private static long sendRcvdDel = 1; // (ms)
         private static long resendDel = 500; // (ms)
+        private static int resendMax = 5; 
         private static long t_c2r = 0;
         private static long t_c2rLast = 0;
         private static long t_r2c = 0;
@@ -235,9 +237,15 @@ namespace ICR_Run
         static void Main()
         {
             LogEvent("[Main] RUNNING: Main...");
-            // Hide/show matlab app window
+
+            // Setup debugging
             if (systemTest != 0)
+            {
+                // Hide/show matlab app window
                 com_Matlab.Visible = 1;
+                // Set rec dir to test dir
+                nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00";
+            }
             else com_Matlab.Visible = 0;
 
             // Start primary timer
@@ -249,6 +257,7 @@ namespace ICR_Run
             bool pass;
             ushort last_pack;
             double move_to;
+            string msg_str;
 
             // Create header and footer byte array
             UnionHack u = new UnionHack(0, 0, 0, '0', 0);
@@ -293,8 +302,11 @@ namespace ICR_Run
             {
                 LogEvent("[Main] FINISHED: Get Robot Log");
                 // Print
-                string msg_str = String.Format("[Main] LOGGED {0} Robot Events Dropped: {1} Packs)", dueLogger.logCnt, droppedPacks);
+                msg_str = String.Format("[Main] LOGGED {0} Robot Events Dropped: {1} Packs)", dueLogger.logCnt, droppedPacks);
                 LogEvent(msg_str, t_r2cLast, t_r2c);
+                // Save log file
+                if (nlxRecDir != " ")
+                    dueLogger.SaveLog(nlxRecDir, dueLogFi);
             }
             else LogEvent("[Main] !!ABORTED: Get Robot Log!!");
             Console.ReadKey();
@@ -379,14 +391,6 @@ namespace ICR_Run
             LogEvent("[Main] RUNNING: Wait for ICR_GUI NLX Setup...");
             while (matIn_id != 'G' && !doAbort) ;
             if (!doAbort) LogEvent("[Main] FINISHED: Wait for ICR_GUI NLX Setup");
-
-            // Get recording dir
-            if (!doAbort)
-            {
-                dynamic m2c_dir = com_Matlab.GetVariable("m2c_dir", "global");
-                nlxRecDir = (string)m2c_dir;
-                LogEvent("[Main] CHEETAH DIR: " + nlxRecDir);
-            }
 
             // Setup connection
             if (!(com_netComClient.AreWeConnected()))
@@ -562,7 +566,7 @@ namespace ICR_Run
                 else LogEvent("[Main] !!ABORTED: Wait for Last Pack!!");
 
                 // Request log data from robot
-                LogEvent("[Main] RUNNING: Get Robot Log...");
+                LogEvent("[Main] RUNNING: Import Robot Log...");
                 if (isRobStreaming)
                 {
                     pass = GetRobotLog();
@@ -570,12 +574,31 @@ namespace ICR_Run
                 else pass = false;
                 if (pass)
                 {
-                    LogEvent("[Main] FINISHED: Get Robot Log");
-                    // Print
-                    string msg_str = String.Format("[Main] LOGGED {0} Robot Events Dropped: {1} Packs)", dueLogger.logCnt, droppedPacks);
-                    LogEvent(msg_str, t_r2cLast, t_r2c);
+                    LogEvent("[Main] FINISHED: Import Robot Log");
+                    // Print log info
+                    msg_str = String.Format("[Main] Logged {0} Robot Events and Dropped: {1} Packs", dueLogger.logCnt, droppedPacks);
+                    LogEvent(msg_str);
                 }
-                else LogEvent("[Main] !!ABORTED: Get Robot Log!!");
+                else LogEvent("[Main] !!ABORTED: Import Robot Log!!");
+
+                // Wait for save complete
+                LogEvent("[Main] RUNNING: Wait for ICR_GUI to Save");
+                while (!(isSesSaved || doQuit || doAbort)) ;
+                if (isSesSaved)
+                {
+                    LogEvent("[Main] FINISHED: Wait for ICR_GUI to Save");
+
+                    // Get NLX dir
+                    dynamic nlx_rec_dir = com_Matlab.GetVariable("m2c_dir", "global");
+                    nlxRecDir = (string)nlx_rec_dir;
+
+                    // Confirm log saved
+                    msg_str = String.Format("RECORDING DIR: {0}:", nlxRecDir);
+                    LogEvent(msg_str);
+
+                }
+                else LogEvent("[Main] !!ABBORTED: Wait for ICR_GUI to Save!!");
+
 
                 // Wait for quit command
                 while (!(doQuit || doAbort)) ;
@@ -609,6 +632,9 @@ namespace ICR_Run
                 {
                     com_Matlab.Execute("c2m_E = true;");
                     LogEvent("[Main] FINISHED: Tell Mat to Close");
+
+                    // Set flag
+                    doGUIclose = true;
                 }
                 else LogEvent("[Main] !!ABORTED: Tell Mat to Close!!");
 
@@ -636,6 +662,14 @@ namespace ICR_Run
                     Thread.Sleep(100);
                 }
 
+                // Save robot log file
+                if (nlxRecDir != " ")
+                {
+                    dueLogger.SaveLog(nlxRecDir, dueLogFi);
+                    // Confirm log saved
+                    LogEvent("[Main] FINISHED: Save Robot Log");
+                }
+
                 // Hold for errors
                 if ((systemTest != 0) || isMAThanging || (doAbort && !doQuit))
                 {
@@ -654,10 +688,18 @@ namespace ICR_Run
                     KillMatlab();
                 }
                 LogEvent("[Main] FINISHED: Close MatCOM COM");
-                LogEvent("[MAIN] FINISHED ALL");
 
-                // Save log file
-                csLogger.SaveLog(nlxRecDir, csLogFi);
+                // Save CS log file
+                if (nlxRecDir != " ")
+                {
+                    csLogger.SaveLog(nlxRecDir, csLogFi);
+                    // Confirm log saved
+                    LogEvent("[Main] FINISHED: Save CS Log");
+
+                }
+
+                // Confirm end of program
+                LogEvent("[MAIN] FINISHED ALL");
 
                 // Give time for everything to close
                 Thread.Sleep(1000);
@@ -692,14 +734,19 @@ namespace ICR_Run
         public static bool RepeatSend(char id, double dat_1, double dat_2, bool check_done)
         {
             bool pass_rcvd = false;
-            long resend_tim = sw_main.ElapsedMilliseconds + resendDel;
+            long t_resend = sw_main.ElapsedMilliseconds + resendDel;
+            int send_count = 1;
             ushort pack;
 
             // Send new data with new packet number
             pack = SendData(id, dat_1, dat_2);
 
             // Keep checking mesage was recieved
-            while (!doExit && (isRobStreaming || !doAbort))
+            while (
+                send_count < resendMax && 
+                !doExit && 
+                (isRobStreaming || !doAbort)
+                )
             {
 
                 // Search for matching command packet
@@ -749,10 +796,11 @@ namespace ICR_Run
                 }
 
                 // Need to resend
-                if (!pass_rcvd && sw_main.ElapsedMilliseconds > resend_tim)
+                if (!pass_rcvd && sw_main.ElapsedMilliseconds > t_resend)
                 {
                     SendData(id, dat_1, dat_2, pack);
-                    resend_tim = sw_main.ElapsedMilliseconds + resendDel;
+                    t_resend = sw_main.ElapsedMilliseconds + resendDel;
+                    send_count++;
                 }
 
             }
@@ -1349,7 +1397,7 @@ namespace ICR_Run
                         // print data recieved
                         if (doPrint_rcvdLog)
                         {
-                            msg_str = String.Format("   LOG: \"{0}\" (chksum = {1})", log_str, chksum);
+                            msg_str = String.Format("LOG[{0}]: \"{1}\" (chksum = {2})", dueLogger.logCnt, log_str, chksum);
                             LogEvent(msg_str);
                         }
                     }
@@ -1429,6 +1477,7 @@ namespace ICR_Run
                 // Check if need to send new or resend
                 if (dueLogger.SendReady())
                 {
+                    double send_what = dueLogger.sendWhat;
                     RepeatSend('L', dueLogger.sendWhat);
                 }
 
@@ -1443,8 +1492,6 @@ namespace ICR_Run
                     // Note: this is just a hack to get confirmation from both ends
                     RepeatSend('L', dueLogger.sendWhat, true);
 
-                    // Save log file
-                    dueLogger.SaveLog(nlxRecDir, robLogFi);
                 }
                 else if (
                     sw_main.ElapsedMilliseconds > t_check_time
@@ -1605,7 +1652,7 @@ namespace ICR_Run
             isGUIfinished = true;
 
             // Check if do quit flag has been set
-            if (doQuit)
+            if (doQuit && doGUIclose)
             {
                 LogEvent("[RunWorkerCompleted_RunGUI] FINISHED: RunGUI Worker");
             }
@@ -1686,7 +1733,7 @@ namespace ICR_Run
                     bw_d1 = d1 != 9999 ? (double)d1 : Double.NaN;
 
                     // data2
-                    var d2 = com_Matlab.GetVariable("m2c_dat1", "global");
+                    var d2 = com_Matlab.GetVariable("m2c_dat2", "global");
                     bw_d2 = d2 != 9999 ? (double)d2 : Double.NaN;
 
                     // Reset flag
@@ -1855,41 +1902,34 @@ namespace ICR_Run
                 // Local vars
                 long t_m = 0;
                 float t_c = 0;
-                float t_s = 0;
                 long dt = 0;
                 string msg_print = " ";
-                string msg_log = " ";
                 string ts_print = " ";
+                string dt_print = " ";
 
                 // Get time from start of Main()
-                t_m = sw_main.ElapsedMilliseconds;
-                t_s = (float)(t_m) / 1000.0f;
+                t_m = t2 > 0 ? t2 : sw_main.ElapsedMilliseconds;
+                t_c = (float)(t_m - t_sync) / 1000.0f;
+                ts_print = String.Format("[{0:0.00}s]", t_c);
 
                 // No input time
-                if (t1 < 0)
+                if (t1 >= 0)
                 {
-                    if (t_sync == 0) t_c = 0.0f;
-                    else t_c = (float)(t_m - t_sync) / 1000.0f;
-                    ts_print = String.Format(" ({0:0.00}sec/{1:0.00}sec)\n", t_c, t_s);
-                }
-                // Use input time
-                else
-                {
-                    if (t_sync == 0) t_c = 0;
-                    else t_c = (float)(t2 - t_sync) / 1000.0f;
-                    dt = t1 > 0 ? t2 - t1 : 0;
-                    ts_print = String.Format(" (dt:{0}ms tot:{1:0.00}sec/{2:0.00}sec)\n", dt, t_c, t_s);
+                    dt = t2 - t1;
+                    dt_print = String.Format(" [dt:{0}ms]", dt);
                 }
 
+                // Pad message
+                ts_print = ts_print.PadRight(15, ' ');
+
                 // Cat strings
-                msg_print = "\n" + msg_in + ts_print;
-                msg_log = t_m + msg_in;
+                msg_print = "\n" + ts_print + msg_in + dt_print + "\n";
 
                 // Print message
                 Console.Write(msg_print);
 
                 // Store in logger 
-                csLogger.UpdateList(msg_log);
+                csLogger.UpdateList(msg_in, t_m);
             }
         }
 
@@ -1950,7 +1990,10 @@ namespace ICR_Run
         private static List<string> _logList = new List<string>();
         static readonly object _lockLog = new object();
         private static Stopwatch _sw = new Stopwatch();
-        private static long _t_lastLog = 0;
+        private static long _t_lastUpdate = 0;
+        private static long _t_lastSend = 0;
+        private static long _sendDel = 0; // (ms)
+        private static long _resendDel = 10000; // (ms)
         private static string _lastLogStr = " ";
         public double sendWhat;
         private static bool _doSend;
@@ -1964,27 +2007,36 @@ namespace ICR_Run
             _doSend = true;
             sendWhat = 0;
             _logCnt = 0;
-            _t_lastLog = _sw.ElapsedMilliseconds + 1000;
+            _t_lastUpdate = _sw.ElapsedMilliseconds + 1000;
         }
 
         public bool SendReady()
         {
             lock (_lockLog)
             {
-                bool do_send;
+                bool do_send = false;
 
                 // Check if too much time has ellapsed since last send    
                 if (
-                    _sw.ElapsedMilliseconds > _t_lastLog + 500 &&
+                    _sw.ElapsedMilliseconds > _t_lastUpdate + _resendDel &&
                     _logCnt > 0
                     )
                 {
                     ResendLast();
                 }
 
-                // Reset flag
-                do_send = _doSend;
-                _doSend = false;
+                // Wait for enough time to ellapse for next send
+                if (_doSend)
+                {
+                    while ((_sw.ElapsedMilliseconds - _t_lastSend) < _sendDel) ;
+
+                    // Reset flag
+                    do_send = _doSend;
+                    _doSend = false;
+
+                    // Update send time
+                    _t_lastSend = _sw.ElapsedMilliseconds;
+                }
 
                 return do_send;
             }
@@ -1997,19 +2049,26 @@ namespace ICR_Run
                 // Check for repeat
                 if (log_str != _lastLogStr)
                 {
-                    _logList.Add(log_str);
+                    // Save log string
+                    _lastLogStr = log_str;
+
+                    // Itterate count
+                    _logCnt++;
+
+                    // Add count
+                    string str = String.Format("[{0}],", _logCnt) + log_str;
+
+                    // Add to list
+                    _logList.Add(str);
+
                 }
 
-                // Update log time
-                _t_lastLog = _sw.ElapsedMilliseconds;
-
-                // Save log string
-                _lastLogStr = log_str;
+                // Update last log
+                _t_lastUpdate = _sw.ElapsedMilliseconds;
 
                 // Flag to send next
                 _doSend = true;
                 sendWhat = 0;
-                _logCnt++;
             }
         }
 
@@ -2051,20 +2110,23 @@ namespace ICR_Run
             _logCnt = 0;
         }
 
-        public void UpdateList(string log_str)
+        public void UpdateList(string log_str, long ts)
         {
             lock (_lockLog)
             {
-                // Check for repeat
-                if (log_str != _lastLogStr)
-                {
-                    _logList.Add(log_str);
-                }
+
+                // Itterate count
+                _logCnt++;
+
+                // Add time and count
+                string str = String.Format("[{0}],{1},", _logCnt, ts) + log_str;
+
+                // Add to list
+                _logList.Add(str);
 
                 // Save log string
-                _lastLogStr = log_str;
+                _lastLogStr = str;
 
-                _logCnt++;
             }
         }
 

@@ -18,15 +18,15 @@ bool doDB_Log = true;
 
 // What to print
 const bool doLog_flow = true;
-const bool doLog_irSync = false;
-const bool doLog_motorControl = false;
-const bool doLog_rcvd = false;
-const bool doLog_r2c = false;
-const bool doLog_r2a = false;
-const bool doLog_pid = false;
-const bool doLog_bull = false;
-const bool doLog_resent = false;
-const bool doLog_dropped = false;
+const bool doLog_irSync = true;
+const bool doLog_motorControl = true;
+const bool doLog_rcvd = true;
+const bool doLog_r2c = true;
+const bool doLog_r2a = true;
+const bool doLog_pid = true;
+const bool doLog_bull = true;
+const bool doLog_resent = true;
+const bool doLog_dropped = true;
 
 // PRINT DEBUGGING
 
@@ -43,9 +43,9 @@ const bool doPrint_r2c = false;
 const bool doPrint_r2a = false;
 const bool doPrint_pid = false;
 const bool doPrint_bull = false;
-const bool doPrint_resent = true;
-const bool doPrint_dropped = true;
-const bool doPrint_log = true;
+const bool doPrint_resent = false;
+const bool doPrint_dropped = false;
+const bool doPrint_log = false;
 
 // PID CALIBRATION
 // Set kC and run ICR_Run.cs
@@ -56,7 +56,7 @@ const float c_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 
 uint32_t c_durSteps = 30000; // (ms)
 
 
-							 // POSITION
+// POSITION
 const bool do_posDebug = false;
 
 #pragma endregion
@@ -205,7 +205,7 @@ bool fc_doBulldoze = false;
 bool fc_doCheckDoneRcvd = false;
 
 // Log debugging
-String logList[1000];
+String logList[2000];
 uint16_t logStoreCnt = 0;
 uint16_t logSendCnt = 0;
 bool isLogResend = false;
@@ -940,8 +940,13 @@ public:
 	void PrintPID(String str)
 	{
 		// Add to print queue
-		if (doPrint_pid && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(str, millis());
+		if (doPrint_pid)
+		{
+			if (doDB_PrintConsole)
+				StoreDBPrintStr("\t" + str, millis());
+			else if (doDB_PrintLCD)
+				StoreDBPrintStr(str, millis());
+		}
 		// Add to log queue
 		if (doLog_pid && doDB_Log)
 			StoreDBLogStr(str, millis());
@@ -1287,8 +1292,13 @@ public:
 	void PrintBull(String str)
 	{
 		// Add to print queue
-		if (doPrint_bull && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(str, millis());
+		if (doPrint_bull)
+		{
+			if (doDB_PrintConsole)
+				StoreDBPrintStr("\t" + str, millis());
+			else if (doDB_PrintLCD)
+				StoreDBPrintStr(str, millis());
+		}
 		// Add to log queue
 		if (doLog_bull && doDB_Log)
 			StoreDBLogStr(str, millis());
@@ -2035,13 +2045,6 @@ void setup() {
 	ad_R.hardHiZ();
 	ad_F.hardHiZ();
 
-	// Print ad board status
-	SerialUSB.println(' ');
-	SerialUSB.print("BOARD R STATUS: ");
-	SerialUSB.println(ad_R.getStatus(), HEX);
-	SerialUSB.print("BOARD F STATUS: ");
-	SerialUSB.println(ad_F.getStatus(), HEX);
-
 	// SETUP BIG EASY DRIVER
 
 	// Set to 1/2 step mode
@@ -2206,11 +2209,18 @@ void loop() {
 		btn_doChangeLCDstate = false;
 		intrpt_doIRhardStop = false;
 
-		fc_isFirstPass = false;
-		DebugFlow("RESET");
+		// Print ad board status
+		char chr[20];
+		sprintf(chr, "BOARD R STATUS: %04x", ad_R.getStatus());
+		DebugFlow(chr);
+		sprintf(chr, "BOARD F STATUS: %04x", ad_F.getStatus());
+		DebugFlow(chr);
 
 		// Blink to show setup done
 		SetupBlink();
+
+		fc_isFirstPass = false;
+		DebugFlow("RESET");
 
 		/*
 		// TEST
@@ -2898,7 +2908,11 @@ void loop() {
 	CheckBattery();
 
 	// Log new ir events
-	if (doLogIR) DebugIRSync("ir detected");
+	if (doLogIR)
+	{
+		DebugIRSync("ir detected", t_irSyncLast);
+		doLogIR = false;
+	}
 
 #pragma endregion
 
@@ -3454,8 +3468,8 @@ void SendPacketData()
 	}
 
 	// Send if conditions met
-	if ( 
-		do_send && 
+	if (
+		do_send &&
 		buff_tx == 0 &&
 		buff_rx == 0
 		)
@@ -3490,9 +3504,15 @@ void SendPacketData()
 		}
 
 		// Print
-		if (((doPrint_r2c && rcv_id == 'c') ||
+		if (
+			(((doPrint_r2c && rcv_id == 'c') ||
 			(doPrint_r2a && rcv_id == 'a')) &&
-			(doDB_PrintConsole || doDB_PrintLCD))
+				(doDB_PrintConsole || doDB_PrintLCD))
+			||
+			(((doLog_r2c && rcv_id == 'c') ||
+			(doLog_r2a && rcv_id == 'a')) &&
+				doDB_Log)
+			)
 		{
 			char str[50];
 			char id = ' ';
@@ -3512,9 +3532,20 @@ void SendPacketData()
 			pack = u.i16[0];
 
 			// Store
-			sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
-			StoreDBPrintStr(str, t_sent);
-		
+			if (doDB_PrintConsole || doDB_PrintLCD)
+			{
+				if (doDB_PrintConsole)
+					sprintf(str, "\tsent: i:%c d:%d p:%d", id, dat, pack);
+				else if (doDB_PrintLCD)
+					sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
+				StoreDBPrintStr(str, t_sent);
+			}
+			if (doDB_Log)
+			{
+				sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
+				StoreDBLogStr(str, t_sent);
+			}
+
 		}
 
 	}
@@ -3589,9 +3620,9 @@ void SendLogData()
 			String str;
 
 			// Store
-			sprintf(chr, "sent log(%d/%d) cs(%d): ", logSendCnt, logStoreCnt, str_size);
+			sprintf(chr, "log(%d/%d) cs(%d): ", logSendCnt, logStoreCnt, str_size);
 			str = chr;
-			StoreDBPrintStr(str + '[' + msg_str + ']', t_sent);
+			StoreDBPrintStr(str + "\"" + msg_str + "\"", t_sent);
 		}
 
 		// Reset flag
@@ -4095,7 +4126,7 @@ void CheckBattery()
 		Store4_CS('J', byte_out, 0);
 
 		char str[50];
-		sprintf(str, "Vcc: (float)%0.2fV (byte)%d", volt_avg, byte_out);
+		sprintf(str, "Vcc: %0.2fV", volt_avg);
 		DebugFlow(str);
 
 		// Reset flag
@@ -4255,50 +4286,68 @@ void DebugRcvd(char id, uint16_t pack)
 		(doLog_rcvd && doDB_Log)
 		)
 	{
-		char str[50];
+		char chr[50];
 
 		// Print specific pack contents
 		if (id == 'T')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd: i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
 		}
 		else if (id == 'S')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd: i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+		}
+		else if (id == 'Q')
+		{
+			sprintf(chr, "rcvd: i:%c d1:%d d2:%d p:%d", id, pack);
 		}
 		else if (id == 'M')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%0.2f p:%d", id, msg_moveToTarg, pack);
+			sprintf(chr, "rcvd: i:%c d1:%0.2f p:%d", id, msg_moveToTarg, pack);
 		}
 		else if (id == 'R')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%0.2f p:%d", id, msg_rewPos, pack);
+			sprintf(chr, "rcvd: i:%c d1:%0.2f d2:%d p:%d", id, msg_rewPos, msg_rewDurByte, pack);
+		}
+		else if (id == 'C')
+		{
+			sprintf(chr, "rcvd: i:%c d1:%0.2f d2:%d p:%d", id, msg_cueTarg, msg_rewDurByte, pack);
 		}
 		else if (id == 'H')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, fc_doHalt, pack);
+			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, fc_doHalt, pack);
 		}
 		else if (id == 'B')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, msg_bullDel, pack);
+			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, msg_bullDel, pack);
 		}
 		else if (id == 'I')
 		{
-			sprintf(str, "rcvd: [i:%c d1:%d p:%d", id, fc_isRatIn, pack);
+			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, fc_isRatIn, pack);
 		}
-		else sprintf(str, "rcvd: [i:%c p:%d", id, pack);
+		else if (id == 'L')
+		{
+			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, isLogResend, pack);
+		}
+		else sprintf(chr, "rcvd: i:%c p:%d", id, pack);
+
+		// Convert to string
+		String str = chr;
 
 		// Add to print queue
-		if (doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(str, millis());
+		if (doDB_PrintConsole)
+			StoreDBPrintStr("\t" + str, t_rcvd);
+		else if (doDB_PrintLCD)
+			StoreDBPrintStr(str, t_rcvd);
+
 		// Add to log queue
 		if (doLog_rcvd && doDB_Log)
-			StoreDBLogStr(str, millis());
+			StoreDBLogStr(str, t_rcvd);
 	}
 
 }
 
-void DebugIRSync(String str)
+void DebugIRSync(String str, uint32_t ts)
 {
 	if (
 		(doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4307,10 +4356,10 @@ void DebugIRSync(String str)
 	{
 		// Add to print queue
 		if (doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(str, t_irSyncLast);
+			StoreDBPrintStr(str, ts);
 		// Add to log queue
 		if (doLog_irSync && doDB_Log)
-			StoreDBLogStr(str, t_irSyncLast);
+			StoreDBLogStr(str, ts);
 	}
 }
 
@@ -4332,6 +4381,13 @@ void DebugFlow(String str)
 
 void PrintDebug()
 {
+
+	// Avoid overlap between sent or rcvd events
+	if (millis() < t_sent + sendSentDel ||
+		millis() < t_rcvd + sendRcvdDel)
+	{
+		return;
+	}
 
 	if ((doDB_PrintLCD && !doBlockLCDlog) ||
 		doDB_PrintConsole)
@@ -4376,9 +4432,14 @@ void PrintDebug()
 		// Print to console
 		if (doDB_PrintConsole)
 		{
+
+			// Pad string
+			char chr[50];
+			for (int i = 0; i < 20 - printQueue[0].length(); i++)
+				chr[i] = ' ';
+
 			// Get current string
-			String str =
-				"\n" + printQueue[printQueueInd] + " (" + printQueue[0] + ")\n";
+			String str = printQueue[0] + chr + printQueue[printQueueInd] + "\n";
 
 			// Send
 			SerialUSB.print(str);
@@ -4403,23 +4464,21 @@ void StoreDBPrintStr(String str, uint32_t ts)
 	static uint32_t t_last = millis();
 	uint32_t ts_norm = 0;
 	float t_c = 0;
-	float t_m = 0;
 	float t_ellapsed = 0;
 
 	// Time now
-	ts_norm = t_sync == 0 ? ts : t_sync;
+	ts_norm = t_sync == 0 ? ts : ts - t_sync;
 
 	// Total time
-	t_c = (float)((millis() - ts_norm) / 1000.0f);
-	t_m = (float)millis() / 1000.0f;
+	t_c = (float)(ts_norm) / 1000.0f;
 
 	// Ellapsed time
 	t_ellapsed = (float)((millis() - t_last) / 1000.0f);
 	t_last = millis();
 
 	// Save long and short string
-	sprintf(t_str_long, "%0.2fsec/%0.2fsec", t_c, t_m);
-	sprintf(t_str_ellapsed, "%0.0f-", t_ellapsed);
+	sprintf(t_str_long, "[%0.2fs]", t_c);
+	sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
 
 	// Shift queue
 	for (int i = 0; i < printQueue_lng - 1; i++)
@@ -4427,10 +4486,11 @@ void StoreDBPrintStr(String str, uint32_t ts)
 		printQueue[i] = printQueue[i + 1];
 	}
 
-	// Set first entry to new string
-	printQueue[printQueue_lng - 1] = t_str_ellapsed + str;
+	// Set first entry to new string 
+	if (doDB_PrintLCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + str;
+	else if (doDB_PrintConsole) printQueue[printQueue_lng - 1] = str;
 
-	// Set last entry to time 
+	// Save total time to end
 	printQueue[0] = t_str_long;
 
 	// Set queue ind
@@ -4451,12 +4511,9 @@ void StoreDBLogStr(String str, uint32_t ts)
 	// Itterate log entry count
 	logStoreCnt++;
 
-	// Time now
-	ts_norm = t_sync == 0 ? ts : ts - t_sync;
-
 	// Concatinate ts with message
 	str.toCharArray(str_c, 100);
-	sprintf(msg_c, "%d,%s", ts_norm, str_c);
+	sprintf(msg_c, "[%d],%d,%s", logStoreCnt, ts, str_c);
 	logList[logStoreCnt - 1] = msg_c;
 
 	// TEST
