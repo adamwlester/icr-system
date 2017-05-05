@@ -20,12 +20,12 @@ namespace ICR_Run
         #region ---------DEBUG SETTINGS---------
 
         // Run system test
-        private static double systemTest = 1;
         /*
-        0: No test
-        1: Run MATLAB in debug mode
-        2: Halt error test
+            0: No test
+            1: Run MATLAB in debug mode
+            2: Halt error test
         */
+        private static double systemTest = 1;
         // Print all blocked vt recs
         private static bool doPrint_blockedVt = false;
         // Print all sent vt recs
@@ -94,7 +94,7 @@ namespace ICR_Run
             'N', // matlab not loaded
             'G', // matlab gui loaded
             'A', // connected to AC computer
-            'Z', // data saved
+            'F', // data saved
              };
         private static char matIn_id = 'N'; // matlab now
         private static double matIn_dat1; // matlab data
@@ -142,7 +142,7 @@ namespace ICR_Run
             'L', // request log send/resend
             'U', // log pack
             'J', // battery voltage
-            'A', // reward zone
+            'Z', // reward zone
              };
         private static char r2c_head = '{';
         private static char r2c_foot = '}';
@@ -153,7 +153,7 @@ namespace ICR_Run
         // Robot to Matlab communication
         private static char[] r2m_id = new char[2] {
             'J', // battery voltage
-            'A', // reward zone
+            'Z', // reward zone
              };
 
         // CS to Matlab communication
@@ -165,8 +165,10 @@ namespace ICR_Run
         // General communication
         private static long sendSentDel = 5; // (ms)
         private static long sendRcvdDel = 1; // (ms)
-        private static long resendDel = 500; // (ms)
-        private static int resendMax = 5; 
+        private static long resendTimeout = 500; // (ms)
+        private static long chkDoneTimeout = 10000; // (ms)
+        private static long importLogTimeout = 60000; // (ms)
+        private static int resendMax = 5;
         private static long t_c2r = 0;
         private static long t_c2rLast = 0;
         private static long t_r2c = 0;
@@ -252,7 +254,7 @@ namespace ICR_Run
             sw_main.Start();
 
             // Local vars
-            long t_check_time;
+            long t_timeout;
             bool do_loop;
             bool pass;
             ushort last_pack;
@@ -356,7 +358,7 @@ namespace ICR_Run
 
             // Wait for ICR_GUI to connect to AC computer
             LogEvent("[Main] RUNNING: Wait for AC Connect...");
-            t_check_time = sw_main.ElapsedMilliseconds + 30000;
+            t_timeout = sw_main.ElapsedMilliseconds + importLogTimeout;
             do_loop = true;
             pass = false;
             do
@@ -367,7 +369,7 @@ namespace ICR_Run
                     pass = true;
                     break;
                 }
-                else if (doAbort || sw_main.ElapsedMilliseconds > t_check_time)
+                else if (doAbort || sw_main.ElapsedMilliseconds > t_timeout)
                 {
                     do_loop = false;
                     pass = false;
@@ -484,7 +486,7 @@ namespace ICR_Run
                     // Wait for confirmation from robot
                     pass = false;
                     do_loop = true;
-                    t_check_time = sw_main.ElapsedMilliseconds + 3000;
+                    t_timeout = sw_main.ElapsedMilliseconds + 3000;
                     while (do_loop)
                     {
                         if (c2r_packLast[CharInd('M', c2r_id)] == r2c_packLast[CharInd('M', r2c_id)])
@@ -492,7 +494,7 @@ namespace ICR_Run
                             pass = true;
                             do_loop = false;
                         }
-                        else if (sw_main.ElapsedMilliseconds > t_check_time)
+                        else if (sw_main.ElapsedMilliseconds > t_timeout)
                         {
                             pass = false;
                             do_loop = false;
@@ -506,7 +508,7 @@ namespace ICR_Run
                     {
                         // wait for confirmation from robot
                         do_loop = true;
-                        t_check_time = sw_main.ElapsedMilliseconds + 7500;
+                        t_timeout = sw_main.ElapsedMilliseconds + 7500;
                         while (do_loop)
                         {
                             if (c2r_packLast[CharInd('M', c2r_id)] == r2c_packLast[CharInd('D', r2c_id)])
@@ -514,7 +516,7 @@ namespace ICR_Run
                                 pass = true;
                                 do_loop = false;
                             }
-                            else if (sw_main.ElapsedMilliseconds > t_check_time)
+                            else if (sw_main.ElapsedMilliseconds > t_timeout)
                             {
                                 pass = false;
                                 do_loop = false;
@@ -610,7 +612,7 @@ namespace ICR_Run
                 }).Start();
 
                 // Wait for quit confirmation from robot for fixed period of time
-                t_check_time = sw_main.ElapsedMilliseconds + 3000;
+                t_timeout = sw_main.ElapsedMilliseconds + 3000;
                 pass = false;
                 do_loop = true;
                 while (do_loop)
@@ -619,7 +621,7 @@ namespace ICR_Run
                         pass = true;
                         do_loop = false;
                     }
-                    else if (sw_main.ElapsedMilliseconds > t_check_time)
+                    else if (sw_main.ElapsedMilliseconds > t_timeout)
                     {
                         pass = false;
                         do_loop = false;
@@ -734,7 +736,7 @@ namespace ICR_Run
         public static bool RepeatSend(char id, double dat_1, double dat_2, bool check_done)
         {
             bool pass_rcvd = false;
-            long t_resend = sw_main.ElapsedMilliseconds + resendDel;
+            long t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
             int send_count = 1;
             ushort pack;
 
@@ -743,8 +745,8 @@ namespace ICR_Run
 
             // Keep checking mesage was recieved
             while (
-                send_count < resendMax && 
-                !doExit && 
+                send_count < resendMax &&
+                !doExit &&
                 (isRobStreaming || !doAbort)
                 )
             {
@@ -796,10 +798,10 @@ namespace ICR_Run
                 }
 
                 // Need to resend
-                if (!pass_rcvd && sw_main.ElapsedMilliseconds > t_resend)
+                if (!pass_rcvd && sw_main.ElapsedMilliseconds > t_timeout)
                 {
                     SendData(id, dat_1, dat_2, pack);
-                    t_resend = sw_main.ElapsedMilliseconds + resendDel;
+                    t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
                     send_count++;
                 }
 
@@ -1084,7 +1086,7 @@ namespace ICR_Run
             LogEvent(msg_str);
 
             // Initialize
-            long t_resend_check = sw_main.ElapsedMilliseconds + 10000;
+            long t_timeout = sw_main.ElapsedMilliseconds + chkDoneTimeout;
             int msg_cnt = r2c_idHist.Count;
             int send_cnt = 1;
             int max_send = 5;
@@ -1092,7 +1094,7 @@ namespace ICR_Run
 
             // Spend 10 sec checking for done confirmation resend
             while (
-                sw_main.ElapsedMilliseconds < t_resend_check &&
+                sw_main.ElapsedMilliseconds < t_timeout &&
                 !doExit && (isRobStreaming || !doAbort)
                 )
             {
@@ -1121,7 +1123,7 @@ namespace ICR_Run
                         // Resend done confirmation
                         SendData('Y', pack);
                         // Add 10 more seconds
-                        t_resend_check = sw_main.ElapsedMilliseconds + 10000;
+                        t_timeout = sw_main.ElapsedMilliseconds + 10000;
                     }
                 }
                 // Pause thread
@@ -1134,7 +1136,7 @@ namespace ICR_Run
         public static bool WaitForPack()
         {
 
-            long t_check_time = sw_main.ElapsedMilliseconds + 3000;
+            long t_timeout = sw_main.ElapsedMilliseconds + 3000;
             bool pass = false;
             bool do_loop = true;
             ushort pack;
@@ -1162,7 +1164,7 @@ namespace ICR_Run
                         do_loop = false;
                         break;
                     }
-                    else if (doAbort && sw_main.ElapsedMilliseconds > t_check_time)
+                    else if (doAbort && sw_main.ElapsedMilliseconds > t_timeout)
                     {
                         pass = false;
                         do_loop = false;
@@ -1264,7 +1266,7 @@ namespace ICR_Run
 
                     // Get first and second part of packet number
                     // Wait/check for full buffer
-                    if (BuffReady(2, 10))
+                    if (BuffReady(2))
                     {
 
                         // Read in data
@@ -1286,7 +1288,7 @@ namespace ICR_Run
                             // Check that packet matches sent packet
                             if (
                                 (c2r_packHist[i] == pack && (c2r_idHist[i] == id || id == 'D')) ||
-                                 ((id == 'J' || id == 'A') && pack == 0)
+                                 (CharFound(id, r2m_id) && pack == 0)
                                 )
                             {
                                 pack_found = true;
@@ -1365,7 +1367,7 @@ namespace ICR_Run
                     // Get complete message
                     byte[] log_rcvd = new byte[chksum];
                     // Wait/check for full buffer
-                    if (BuffReady(chksum, 10))
+                    if (BuffReady(chksum))
                     {
                         // Read in all data
                         sp_Xbee.Read(log_rcvd, 0, chksum);
@@ -1424,15 +1426,15 @@ namespace ICR_Run
                     else
                     {
                         droppedPacks++;
-                        msg_str = String.Format("!!PACK LOST (Total:{0}) BuffTX:{1} BuffRX:{2} [head:{3} id:{4} dat:{5} pack:{6} foot:{7}]!!",
-                            droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, foot);
+                        msg_str = String.Format("!!PACK LOST (Total:{0}) BuffTX:{1} BuffRX:{2} [head:{3} id:{4} dat:{5} pack:{6} chksum:{7} foot:{8}]!!",
+                            droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, chksum, foot);
                         LogEvent(msg_str);
                     }
                     // dump input buffer
                     //sp_Xbee.DiscardInBuffer();
 
                     // Wait for buffer to refil
-                    BuffReady(6, 1000);
+                    BuffReady(6);
 
                 }
 
@@ -1442,18 +1444,18 @@ namespace ICR_Run
 
         public static bool BuffReady(int min_byte)
         {
-            return BuffReady(min_byte, 100);
+            return BuffReady(min_byte, 1000);
         }
         public static bool BuffReady(int min_byte, long wait_max)
         {
             // Local vars
-            long t_check_time = sw_main.ElapsedMilliseconds + wait_max;
+            long t_timeout = sw_main.ElapsedMilliseconds + wait_max;
             bool pass = false;
 
             // Wait for buffer to fill or time to ellapse
             while (
                 sp_Xbee.BytesToRead < min_byte &&
-                sw_main.ElapsedMilliseconds <= t_check_time &&
+                sw_main.ElapsedMilliseconds <= t_timeout &&
                 !doExit && (isRobStreaming || !doAbort)
                 ) ;
 
@@ -1468,7 +1470,7 @@ namespace ICR_Run
             // Local vars
             bool pass = false;
             ushort pack = 0;
-            long t_check_time = sw_main.ElapsedMilliseconds + 30000;
+            long t_timeout = sw_main.ElapsedMilliseconds + 30000;
 
             // Loop till complete log recieved
             bool do_loop = true;
@@ -1494,7 +1496,7 @@ namespace ICR_Run
 
                 }
                 else if (
-                    sw_main.ElapsedMilliseconds > t_check_time
+                    sw_main.ElapsedMilliseconds > t_timeout
                     )
                 {
                     do_loop = false;
@@ -1630,7 +1632,7 @@ namespace ICR_Run
             // Debugging
 
             // Set MATLAB break point
-            //com_Matlab.Execute(@"dbstop in ICR_GUI at 2243");
+            //com_Matlab.Execute(@"dbstop in ICR_GUI at 2491");
 
             // Run ICR_GUI.m
             try
@@ -1769,11 +1771,11 @@ namespace ICR_Run
             if (
                 matIn_id == 'G' || // loaded
                 matIn_id == 'A' || // ac comp
-                matIn_id == 'Z'    // saved
+                matIn_id == 'F'    // saved
                 )
             {
                 // Check if ses saved command
-                if (matIn_id == 'Z')
+                if (matIn_id == 'F')
                 {
                     isSesSaved = true;
                     LogEvent("[ProgressChanged_MatCOM] ICR_GUI Confirmed Save");
@@ -1832,6 +1834,16 @@ namespace ICR_Run
                 if (id == arr[i]) ind = i;
             }
             return ind;
+        }
+
+        public static bool CharFound(char id, char[] arr)
+        {
+            bool found = false;
+            for (int i = 0; i < arr.Length; i++)
+            {
+                if (id == arr[i]) found = true;
+            }
+            return found;
         }
 
         public static bool IsEmptyMat(object dynamicVariable)
@@ -1992,8 +2004,9 @@ namespace ICR_Run
         private static Stopwatch _sw = new Stopwatch();
         private static long _t_lastUpdate = 0;
         private static long _t_lastSend = 0;
-        private static long _sendDel = 0; // (ms)
-        private static long _resendDel = 10000; // (ms)
+        private static long _sendDel = 1; // (ms)
+        private static long _rcvdDel = 1; // (ms)
+        private static long _resendTimeout = 10000; // (ms)
         private static string _lastLogStr = " ";
         public double sendWhat;
         private static bool _doSend;
@@ -2018,7 +2031,7 @@ namespace ICR_Run
 
                 // Check if too much time has ellapsed since last send    
                 if (
-                    _sw.ElapsedMilliseconds > _t_lastUpdate + _resendDel &&
+                    _sw.ElapsedMilliseconds > _t_lastUpdate + _resendTimeout &&
                     _logCnt > 0
                     )
                 {
@@ -2028,7 +2041,10 @@ namespace ICR_Run
                 // Wait for enough time to ellapse for next send
                 if (_doSend)
                 {
-                    while ((_sw.ElapsedMilliseconds - _t_lastSend) < _sendDel) ;
+                    while (
+                        (_sw.ElapsedMilliseconds - _t_lastSend) < _sendDel &&
+                        (_sw.ElapsedMilliseconds - _t_lastUpdate) < _rcvdDel
+                        ) ;
 
                     // Reset flag
                     do_send = _doSend;

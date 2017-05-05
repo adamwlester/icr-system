@@ -219,6 +219,8 @@ int sendQueueInd = r2_lngR - 1;
 bool doPackSend = false;
 const uint32_t sendSentDel = 1;
 const uint32_t sendRcvdDel = 1;
+const uint32_t logSentDel = 1;
+const uint32_t logRcvdDel = 1;
 
 // Serial from CS
 const char c2r_head[2] = { '_', '<' };
@@ -261,7 +263,7 @@ const char r2c_id[15] = {
 	'L', // request log send/resend
 	'U', // log pack
 	'J', // battery voltage
-	'A', // reward zone
+	'Z', // reward zone
 };
 uint32_t t_resendDone = millis(); // (ms)
 uint32_t t_sent = millis(); // (ms)
@@ -368,6 +370,7 @@ int rewCnt = 0;
 /*
 EtOH run after min time or distance
 */
+bool doEtOHRun = true;
 bool isEtOHOpen = false;
 const uint32_t t_durEtOH = 1000; // (ms)
 const uint32_t t_delEtOH = 60000; // (ms)
@@ -391,9 +394,10 @@ extern unsigned char TinyFont[];
 bool lcdLightOn = false;
 
 // Buttons
-volatile bool btn_doChangeSolState = false;
-volatile bool btn_doRew = false;
-volatile bool btn_doChangeLCDstate = false;
+bool btn_doRewSolStateChange = false;
+bool btn_doEtOHSolStateChange = false;
+bool btn_doRew = false;
+bool btn_doChangeLCDstate = false;
 
 // Interrupts 
 volatile uint32_t intrpt_irProxDebounce = millis();
@@ -2204,10 +2208,8 @@ void loop() {
 		ClearLCD();
 
 		// Reset volatiles
-		btn_doChangeSolState = false;
-		btn_doRew = false;
-		btn_doChangeLCDstate = false;
 		intrpt_doIRhardStop = false;
+		doLogIR = false;
 
 		// Print ad board status
 		char chr[20];
@@ -2521,14 +2523,6 @@ void loop() {
 				fc_doRew = false;
 			}
 		}
-		// End ongoing reward
-		else if (reward.EndRew())
-		{
-			// Reset flags
-			reward.Reset();
-			fc_doRew = false;
-			fc_isRewarding = false;
-		}
 	}
 
 #pragma endregion
@@ -2611,13 +2605,18 @@ void loop() {
 				}
 			}
 		}
+	}
 
-		// End ongoing reward
-		else if (reward.EndRew())
+	// End any ongoing reward
+	if (fc_isRewarding)
+	{
+		if (reward.EndRew())
 		{
 			// Reset flags
+			reward.Reset();
 			targ_cueRat.Reset();
 			targ_cueRob.Reset();
+			fc_doRew = false;
 			fc_doCueReward = false;
 			fc_isRewarding = false;
 		}
@@ -2824,11 +2823,18 @@ void loop() {
 	// Check for button input
 	CheckButtons();
 
-	// Open/close solonoid
-	if (btn_doChangeSolState)
+	// Open/close rew solonoid
+	if (btn_doRewSolStateChange)
 	{
 		OpenCloseRewSolenoid();
-		btn_doChangeSolState = false;
+		btn_doRewSolStateChange = false;
+	}
+
+	// Open/close etoh solonoid
+	if (btn_doEtOHSolStateChange)
+	{
+		OpenCloseEtOHSolenoid();
+		btn_doEtOHSolStateChange = false;
 	}
 
 	// Button triggered reward
@@ -2837,11 +2843,7 @@ void loop() {
 		if (!reward.isRewarding)
 		{
 			fc_isRewarding = reward.StartRew(false, true);
-		}
-		else if (reward.EndRew())
-		{
 			btn_doRew = false;
-			fc_isRewarding = false;
 		}
 	}
 
@@ -3133,8 +3135,8 @@ bool ParseSerial()
 byte WaitBuffRead(byte match)
 {
 	// Local vars
-	static uint32_t time_out = 100;
-	uint32_t t_out = millis() + time_out;
+	static uint32_t timeout = 100;
+	uint32_t t_timeout = millis() + timeout;
 	byte buff = 0;
 	bool pass = false;
 
@@ -3143,7 +3145,7 @@ byte WaitBuffRead(byte match)
 	{
 		// Wait for at least 1 byte
 		while (Serial1.available() < 1 &&
-			millis() < t_out);
+			millis() < t_timeout);
 
 		// Store next byte
 		if (match == 0)
@@ -3165,7 +3167,7 @@ byte WaitBuffRead(byte match)
 					buff = Serial1.read(); // dump
 				}
 			} while (buff != match &&
-				millis() < t_out &&
+				millis() < t_timeout &&
 				Serial1.available() < SERIAL_BUFFER_SIZE - 1);
 			// check match was found
 			if (buff == match)
@@ -3191,7 +3193,7 @@ byte WaitBuffRead(byte match)
 		}
 
 		// Timed out
-		if (millis() > t_out)
+		if (millis() > t_timeout)
 		{
 			cnt_timeoutEvt++;
 		}
@@ -3201,7 +3203,7 @@ byte WaitBuffRead(byte match)
 	}
 
 	// Store time
-	t_loopRead = millis() - (t_out - time_out);
+	t_loopRead = millis() - (t_timeout - timeout);
 	// Return buffer
 	return buff;
 }
@@ -3560,7 +3562,7 @@ void SendLogData()
 	byte str_size = 0;
 	byte msg_size = 0;
 	byte msg[100];
-	bool do_send;
+	bool do_send = false;
 	int buff_tx = 0;
 	int buff_rx = 0;
 
@@ -3570,20 +3572,11 @@ void SendLogData()
 
 
 	// Avoid overlap between sent or rcvd events
-	if (millis() > t_sent + sendSentDel &&
-		millis() > t_rcvd + sendRcvdDel)
+	if (millis() > t_sent + logSentDel &&
+		millis() > t_rcvd + logRcvdDel)
 	{
 		do_send = true;
 	}
-
-	// Update send time 
-	t_sent = millis();
-
-	// Pull out string
-	msg_str = logList[logSendCnt - 1];
-
-	// Get message size
-	str_size = msg_str.length();
 
 	// Send if conditions met
 	if (
@@ -3592,6 +3585,14 @@ void SendLogData()
 		buff_rx == 0
 		)
 	{
+		// Update send time 
+		t_sent = millis();
+
+		// Pull out string
+		msg_str = logList[logSendCnt - 1];
+
+		// Get message size
+		str_size = msg_str.length();
 
 		// Convert to char array
 		msg_str.toCharArray(msg_char, 100);
@@ -4041,6 +4042,29 @@ void OpenCloseRewSolenoid()
 	PrintLCD("REW SOLENOID", str, 's');
 }
 
+// OPEN/CLOSE EtOH SOLENOID
+void OpenCloseEtOHSolenoid()
+{
+	// Local vars
+	byte sol_state = digitalRead(pin_Rel_EtOH);
+
+	// Change state
+	sol_state = !sol_state;
+
+	// Open/close solenoid
+	digitalWrite(pin_Rel_EtOH, sol_state);
+
+	// Make sure periodic drip does not run
+	if (sol_state)
+		doEtOHRun = false;
+	else doEtOHRun = true;
+
+	// Print to LCD
+	char str[50];
+	sprintf(str, "%s", digitalRead(pin_Rel_Rew) == HIGH ? "OPEN" : "CLOSED");
+	PrintLCD("EtOH SOLENOID", str, 's');
+}
+
 // CHECK FOR ETOH UPDATE
 void CheckEtOH()
 {
@@ -4049,42 +4073,45 @@ void CheckEtOH()
 	static float etoh_dist_start = 0; // (cm)
 	static float etoh_dist_diff = 0; // (cm)
 
-									 // Get distance traveled
+	// Get distance traveled
 	etoh_dist_diff = ekfRobPos - etoh_dist_start;
 
 	// Check if EtOH should be run
-	if (
-		!isEtOHOpen &&
-		(millis() > (t_etoh_start + t_delEtOH) || etoh_dist_diff > distMaxEtOH)
-		)
+	if (doEtOHRun)
 	{
+		if (
+			!isEtOHOpen &&
+			(millis() > (t_etoh_start + t_delEtOH) || etoh_dist_diff > distMaxEtOH)
+			)
+		{
 
-		// Open solenoid
-		digitalWrite(pin_Rel_EtOH, HIGH);
+			// Open solenoid
+			digitalWrite(pin_Rel_EtOH, HIGH);
 
-		// Reset vars
-		t_etoh_start = millis();
-		etoh_dist_start = ekfRobPos;
+			// Reset vars
+			t_etoh_start = millis();
+			etoh_dist_start = ekfRobPos;
 
-		// Set flag
-		isEtOHOpen = true;
+			// Set flag
+			isEtOHOpen = true;
 
-		// Print to debug
-		DebugFlow("EtOH SOLENOID OPEN");
-	}
-	else if (
-		isEtOHOpen &&
-		millis() > (t_etoh_start + t_durEtOH)
-		)
-	{
-		// Close solenoid
-		digitalWrite(pin_Rel_EtOH, LOW);
+			// Print to debug
+			DebugFlow("EtOH SOLENOID OPEN");
+		}
+		else if (
+			isEtOHOpen &&
+			millis() > (t_etoh_start + t_durEtOH)
+			)
+		{
+			// Close solenoid
+			digitalWrite(pin_Rel_EtOH, LOW);
 
-		// Set flag
-		isEtOHOpen = false;
+			// Set flag
+			isEtOHOpen = false;
 
-		// Print to debug
-		DebugFlow("EtOH SOLENOID CLOSE");
+			// Print to debug
+			DebugFlow("EtOH SOLENOID CLOSE");
+		}
 	}
 }
 
@@ -4151,7 +4178,11 @@ void ChangeLCDlight()
 void CheckButtons()
 {
 	// Local vars
-	static uint32_t t_debounce[3] = { millis(), millis(), millis() };
+	static uint32_t t_debounce[3] = { 0, 0, 0 };
+	static uint32_t t_long_hold[3] = { 0, 0, 0 };
+	static uint32_t long_hold_del = 250;
+	static uint32_t do_short_hold[3] = { false, false, false };
+	static uint32_t is_long_hold[3] = { false, false, false };
 
 	// RUN BUTTON 1 OPPERATIONS (Trigger reward)
 	if (digitalRead(pin_Btn[0]) == LOW)
@@ -4164,17 +4195,36 @@ void CheckButtons()
 
 		t_debounce[0] = millis() + reward.duration + 100;
 	}
+
 	// RUN BUTTON 2 OPPERATIONS (Open/close solonoid)
+	// Note: Long hold to open/close EtOH
 	else if (digitalRead(pin_Btn[1]) == LOW)
 	{
+		// Initialize
+		if (t_debounce[1] == 0) t_debounce[1] = millis();
+		if (t_long_hold[1] == 0) t_long_hold[1] = millis() + long_hold_del;
+
+		// Check for long hold 
+		if (abs(t_debounce[1] - millis()) < 20)
+		{
+			// Run open close function
+			btn_doEtOHSolStateChange = true;
+
+			// Set flags
+			do_short_hold[1] = false;
+			is_long_hold[1] = true;
+
+			// Reset debounce
+			t_debounce[1] = millis() + long_hold_del;
+		}
 		// exit if < 250 ms has not passed
-		if (t_debounce[1] > millis()) return;
-
-		// Run open close function
-		btn_doChangeSolState = true;
-
-		t_debounce[1] = millis() + 250;
+		else if (t_debounce[1] > millis())
+		{
+			// Set flag
+			do_short_hold[1] = true;
+		}
 	}
+
 	// RUN BUTTON 3 OPPERATIONS (Turn on/off LCD LED)
 	else if (digitalRead(pin_Btn[2]) == LOW)
 	{
@@ -4185,8 +4235,35 @@ void CheckButtons()
 
 		t_debounce[2] = millis() + 250;
 	}
-	// Exit
-	else return;
+
+	// Check for button release
+	else if (
+		digitalRead(pin_Btn[1]) == HIGH && 
+		do_short_hold[1] && 
+		!is_long_hold[1]
+		)
+	{
+		// Run open close function
+		btn_doRewSolStateChange = true;
+
+		// Reset flag
+		do_short_hold[1] = false;
+
+		// Reset debounce
+		t_debounce[1] = millis() + long_hold_del + 50;
+	}
+
+	// RESET AND EXIT
+	else
+	{
+		// Reset all flags
+		for (int i = 0; i < 3; i++)
+		{
+			if (do_short_hold[i]) do_short_hold[i] = false;
+			if (is_long_hold[i]) is_long_hold[i] = false;
+		}
+		return;
+	}
 }
 
 // QUIT AND RESTART ARDUINO

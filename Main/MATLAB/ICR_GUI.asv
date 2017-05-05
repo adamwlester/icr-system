@@ -1,10 +1,10 @@
 function[] = ICR_GUI(inArg)
-% INPUT: inArg = [0,1,2]
+% INPUT:
 %        0: No test
 %        1: Run MATLAB in debug mode
 %        2: Halt error test
 
-%% ========================= TOP LEVEL SETUP ==============================
+%% ============================= TOP LEVEL =================================
 
 % Matlab globals
 global FigH; % UI figure handle
@@ -88,20 +88,9 @@ D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 %    'N', // matlab not loaded
 %    'G', // matlab gui loaded
 %    'A', // connected to AC computer
-%    'F', // data saved
+%    'Z', // data saved
 %    'T', // system test command
-%...........................c2m_id...................................
-%    'S', // enable save
-%    'E', // exit
-%...........................r2m_id...................................
-%    'J', // battery voltage
-%    'Z', // reward zone
 %--------------------------------------------------------------------------
-
-
-
-
-
 
  %% =========================== RUN MAIN SCRIPT ===========================
 
@@ -570,7 +559,6 @@ clear(PersistentVarNames{:});
             D.PAR.rewDur = max(D.PAR.rewDurLim);
             D.I.targ = ceil(length(D.PAR.targLocs)/2); % default max
             D.I.targArr = NaN(1,100);
-            D.I.targHist = NaN(1,100);
             D.C.targ = zeros(2,length(D.PAR.targLocs));
             D.UI.targAllH = gobjects(length(D.PAR.targLocs),2);
             D.UI.targNowH = gobjects(1,1);
@@ -5825,7 +5813,7 @@ clear(PersistentVarNames{:});
             m2c_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.recFi);
             
             % Tell CS Matlab session saved
-            Mat2CS('F');
+            Mat2CS('Z');
             
             % Highlight Quit button
             set(D.UI.btnQuit, ...
