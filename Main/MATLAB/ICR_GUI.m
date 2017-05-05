@@ -26,16 +26,46 @@ global m2c_quit; % relay quit
 global c2m_E; % bool to exit
 global c2m_S; % enable save button
 % Robot to Matlab communication
-global r2m_J r2m_A;
+global r2m_J r2m_Z;
 
 % Set globals
 [c2m_S, c2m_E] = deal(false);
-[r2m_J, r2m_A] = deal(0);
+[r2m_J, r2m_Z] = deal(0);
 caughtError = false;
 consoleText = ' ';
 isTestRun = false;
 isMatRunAlone = false;
 doHaultErrorTest = false;
+
+%---------------------Important variable formats---------------------------
+%...........................D.UI.snd....................................
+%   val 1 = White Noise [true, false]
+%   val 2 = Reward Tone [true, false]
+%...........................D.AC.data......................................
+%   val 1 = conection [0, 1], [no, yes]
+%   val 2 = display image [0, 1, 2], [Close all, 0-deg, 40-deg]
+%   val 3 = rotation direction [-1, 1], [ACW, CW]
+%   val 4 = sound state [0, 1], [no sound, sound]
+%...........................m2c_id...................................
+%    'S', // start session
+%    'M', // move to position
+%    'R', // run reward
+%    'C', // cue reward
+%    'H', // halt movement
+%    'B', // bulldoze rat
+%    'I', // start/end pid
+%    'N', // matlab not loaded
+%    'G', // matlab gui loaded
+%    'A', // connected to AC computer
+%    'F', // data saved
+%    'T', // system test command
+%...........................c2m_id...................................
+%    'S', // enable save
+%    'E', // exit
+%...........................r2m_id...................................
+%    'J', // battery voltage
+%    'Z', // reward zone
+%--------------------------------------------------------------------------
 
 % ---------------------------SET MAIN PARAMETERS---------------------------
 
@@ -68,42 +98,12 @@ D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).ma
 D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
 D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 
-%---------------------Important variable formats---------------------------
-%...........................D.UI.snd....................................
-%   val 1 = White Noise [true, false]
-%   val 2 = Reward Tone [true, false]
-%...........................D.AC.data......................................
-%   val 1 = conection [0, 1], [no, yes]
-%   val 2 = display image [0, 1, 2], [Close all, 0-deg, 40-deg]
-%   val 3 = rotation direction [-1, 1], [ACW, CW]
-%   val 4 = sound state [0, 1], [no sound, sound]
-%...........................m2c_id...................................
-%    'S', // start session
-%    'M', // move to position
-%    'R', // run reward
-%    'C', // cue reward
-%    'H', // halt movement
-%    'B', // bulldoze rat
-%    'I', // start/end pid
-%    'N', // matlab not loaded
-%    'G', // matlab gui loaded
-%    'A', // connected to AC computer
-%    'F', // data saved
-%    'T', // system test command
-%...........................c2m_id...................................
-%    'S', // enable save
-%    'E', // exit
-%...........................r2m_id...................................
-%    'J', // battery voltage
-%    'Z', // reward zone
-%--------------------------------------------------------------------------
 
 
 
 
 
-
- %% =========================== RUN MAIN SCRIPT ===========================
+ %% ========================= TOP LEVEL RUN ===============================
 
 % DEBUG/TESTING
 
@@ -268,8 +268,8 @@ clear(PersistentVarNames{:});
                     
                 elseif ~D.B.poll_nlx && ~D.B.rec_done
                     
-                    % Run Targ setup code
-                    SF_Targ_Dist_Setup();
+                    % Run Zone setup code
+                    SF_Zone_Dist_Setup();
                     
                     % Run Finish setup code
                     SF_Finish_Setup();
@@ -486,6 +486,8 @@ clear(PersistentVarNames{:});
             D.B.flag_new_rew = false;
             % track reward crossing
             D.B.flag_rew_crossed = false;
+            % check for reward zone
+            D.B.check_rew_zone = false;
             % track lap bounds
             D.B.check_inbound_lap = false(4,1);
             % track if reward point should be plotted
@@ -564,17 +566,17 @@ clear(PersistentVarNames{:});
             
             % REWARD VARS
             D.PAR.rewDurLim = [500, 2000];
-            D.PAR.targLocs = 20:-5:-20;
-            D.PAR.targRewDur = ...
+            D.PAR.zoneLocs = 20:-5:-20;
+            D.PAR.zoneRewDur = ...
                 [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
             D.PAR.rewDur = max(D.PAR.rewDurLim);
-            D.I.targ = ceil(length(D.PAR.targLocs)/2); % default max
-            D.I.targArr = NaN(1,100);
-            D.I.targHist = NaN(1,100);
-            D.C.targ = zeros(2,length(D.PAR.targLocs));
-            D.UI.targAllH = gobjects(length(D.PAR.targLocs),2);
-            D.UI.targNowH = gobjects(1,1);
-            D.UI.targAvgH = gobjects(1,1);
+            D.I.zone = ceil(length(D.PAR.zoneLocs)/2); % default max
+            D.I.zoneArr = NaN(1,100);
+            D.I.zoneHist = NaN(1,100);
+            D.C.zone = zeros(2,length(D.PAR.zoneLocs));
+            D.UI.zoneAllH = gobjects(length(D.PAR.zoneLocs),2);
+            D.UI.zoneNowH = gobjects(1,1);
+            D.UI.zoneAvgH = gobjects(1,1);
             D.UI.durNowTxtH = gobjects(1,1);
             
             % POSITION VARS
@@ -2188,8 +2190,8 @@ clear(PersistentVarNames{:});
             % Mat to CS event command string
             D.NLX.m2cs_evt = '-PostEvent Post_Mat2CS_ID:%s_D1:%0.4f_D2:%0.4f 210 0';
             
-            % Reward Target and Duration
-            D.NLX.rew_evt = '-PostEvent Post_Reward_Target:%d_Duration:%d 211 0';
+            % Reward Zoneet and Duration
+            D.NLX.rew_evt = '-PostEvent Post_Reward_Zoneet:%d_Duration:%d 211 0';
             
             % Session end command string
             D.NLX.ses_end_evt = '-PostEvent Post_Session_End 211 0';
@@ -2358,41 +2360,41 @@ clear(PersistentVarNames{:});
             end
         end
         
-        % -----------------------------TARG SETUP---------------------------------
+        % -------------------------REWARD ZONE SETUP------------------------------
         
-        function[] = SF_Targ_Dist_Setup()
+        function[] = SF_Zone_Dist_Setup()
             
             % Initialize long distrebution
             sub_samp = 100;
             x_long = 1:11*sub_samp;
-            targ_short = linspace(-25,25,11);
+            zone_short = linspace(-25,25,11);
             
             % Setup axes
             wdth = 0.23;
             ht = 0.2;
             lft = (D.UI.main_ax_bounds(1)+(D.UI.main_ax_bounds(3)/2)) - wdth/2;
             botm = 0.5 - ht/2;
-            targ_ax_pos = [...
+            zone_ax_pos = [...
                 lft, ...
                 botm, ...
                 wdth, ...
                 ht ...
                 ];
-            D.UI.axTargH(1) = axes( ...
+            D.UI.axZoneH(1) = axes( ...
                 'Color', 'none', ...
-                'Position',targ_ax_pos, ...
+                'Position',zone_ax_pos, ...
                 'XLim',[min(x_long)+sub_samp/2-1,max(x_long)-sub_samp/2], ...
                 'Visible','off');
             hold on;
-            D.UI.axTargH(2) = axes( ...
+            D.UI.axZoneH(2) = axes( ...
                 'Color','none', ...
-                'Position',targ_ax_pos, ...
-                'XLim',[min(targ_short)+2.5, max(targ_short)-2.5], ...
-                'XTick',targ_short, ...
+                'Position',zone_ax_pos, ...
+                'XLim',[min(zone_short)+2.5, max(zone_short)-2.5], ...
+                'XTick',zone_short, ...
                 'Visible','on');
             box on;
             hold on
-            set(D.UI.axTargH, ...
+            set(D.UI.axZoneH, ...
                 'FontWeight', 'bold', ...
                 'FontSize', 7)
             
@@ -2407,39 +2409,39 @@ clear(PersistentVarNames{:});
             % normalize
             dist_long = (dist_long/sum(dist_long))';
             % scale y axis
-            set(D.UI.axTargH(1), 'YLim', [0,max(dist_long)]);
+            set(D.UI.axZoneH(1), 'YLim', [0,max(dist_long)]);
             
             % Plot example distrebution
             y = dist_long;
             y(y == 0) = NaN;
             plot(x_long, y,'k', ...
                 'LineWidth', 2, ...
-                'Parent',D.UI.axTargH(1));
+                'Parent',D.UI.axZoneH(1));
             % plot center line
             x = repmat(round(max(x_long)/2),1,2);
-            y = get(D.UI.axTargH(1),'YLim');
+            y = get(D.UI.axZoneH(1),'YLim');
             plot(x, y, 'k', ...
                 'LineWidth', 2, ...
                 'Color', [0, 0, 0], ...
-                'Parent',D.UI.axTargH(1));
+                'Parent',D.UI.axZoneH(1));
             
             % Subsample long distrebution
-            short_ind = floor(linspace(1, length(x_long), length(targ_short)));
+            short_ind = floor(linspace(1, length(x_long), length(zone_short)));
             dist_short = dist_long(short_ind);
             
-            % Plot point for reward size at each target
+            % Plot point for reward size at each zoneet
             x =  short_ind(2:end-1);
-            y = D.PAR.targRewDur/max(D.PAR.targRewDur)*max(dist_long);
+            y = D.PAR.zoneRewDur/max(D.PAR.zoneRewDur)*max(dist_long);
             plot(x, y, 'or', ...
                 'MarkerFaceColor', [0.5, 0.5, 0.5], ...
                 'MarkerEdgeColor', [0.1, 0.1, 0.1], ...
                 'MarkerSize', 10, ...
-                'Parent',D.UI.axTargH(1));
+                'Parent',D.UI.axZoneH(1));
             
             % Rescale dist and set main axis
             dist_short = dist_short * (1/sum(dist_short));
             % set axis
-            set(D.UI.axTargH(2), ...
+            set(D.UI.axZoneH(2), ...
                 'YLim' , [0, 1], ...
                 'YTick',0:500/D.PAR.rewDurLim(2):1, ...
                 'YTickLabels',0:500:D.PAR.rewDurLim(2), ...
@@ -2449,9 +2451,9 @@ clear(PersistentVarNames{:});
                 'YMinorGrid', 'on');
             % make lables
             x_tic_labs = arrayfun(@(x,y,z) (sprintf('%d%c \n%d_{ms} \n(%0.0f%%)', x, char(176), y, z)), ...
-                targ_short, [0,D.PAR.targRewDur,0], dist_short*100, 'uni', false);
+                zone_short, [0,D.PAR.zoneRewDur,0], dist_short*100, 'uni', false);
             for z_tick = 2:length(x_tic_labs)-1
-                text(D.UI.axTargH(2).XTick(z_tick), -0.15, x_tic_labs{z_tick}, ...
+                text(D.UI.axZoneH(2).XTick(z_tick), -0.15, x_tic_labs{z_tick}, ...
                     'FontSize', 7, ...
                     'FontWeight', 'bold', ...
                     'HorizontalAlignment', 'center');
@@ -2459,7 +2461,7 @@ clear(PersistentVarNames{:});
             
             % Remove unused vals
             dist_cut = find(dist_short ~= 0, 1, 'last');
-            targ_interp = targ_short(1:dist_cut);
+            zone_interp = zone_short(1:dist_cut);
             dist_interp = dist_short(1:dist_cut);
             
             % Compute cumsum and interpolate from random data
@@ -2467,39 +2469,39 @@ clear(PersistentVarNames{:});
             cum = cum/max(cum);
             
             % get random values based on distrebution
-            bins = linspace(min(targ_interp)-5,max(targ_interp),length(targ_interp)+1);
+            bins = linspace(min(zone_interp)-5,max(zone_interp),length(zone_interp)+1);
             % run initial rand
-            rand_dist = round(interp1(cum, targ_interp, sort(rand(1,100))));
+            rand_dist = round(interp1(cum, zone_interp, sort(rand(1,100))));
             samp_hist = histc(rand_dist, bins);
             samp_hist = samp_hist(1:end-1);
             
-            % Get final target dist
-            targ_arr = cell2mat(arrayfun(@(x) (repmat(targ_interp(x),samp_hist(x),1)), ...
+            % Get final zoneet dist
+            zone_arr = cell2mat(arrayfun(@(x) (repmat(zone_interp(x),samp_hist(x),1)), ...
                 (1:dist_cut)', 'Uni', false));
             % shuffle
-            targ_arr = targ_arr(randperm(length(targ_arr)));
+            zone_arr = zone_arr(randperm(length(zone_arr)));
             
             % remove unused values
-            targ_arr(targ_arr < -20 | targ_arr > 20) = 0;
+            zone_arr(zone_arr < -20 | zone_arr > 20) = 0;
             
             % Plot saved sample dist
             bins = ...
-                linspace(min(-1*D.PAR.targLocs)-2.5, max(-1*D.PAR.targLocs)+2.5, length(D.PAR.targLocs)+1);
-            samp_hist = histc(targ_arr, bins);
+                linspace(min(-1*D.PAR.zoneLocs)-2.5, max(-1*D.PAR.zoneLocs)+2.5, length(D.PAR.zoneLocs)+1);
+            samp_hist = histc(zone_arr, bins);
             samp_hist(end) = [];
             % rescale for plotting
             samp_dist = samp_hist'/max(samp_hist);
             
             % Reverse sign and store values
-            D.I.targArr = targ_arr*-1;
+            D.I.zoneArr = zone_arr*-1;
             
             % plot sample dist
             if D.PAR.cueFeed ~= 'None'
-                D.UI.targArrH = createPatches(...
-                    -1*D.PAR.targLocs, samp_dist, 2, ...
+                D.UI.zoneArrH = createPatches(...
+                    -1*D.PAR.zoneLocs, samp_dist, 2, ...
                     [0, 0, 0], ...
                     0.25, ...
-                    D.UI.axTargH(2));
+                    D.UI.axZoneH(2));
             end
             
             % Compute reward vlue by pos
@@ -2512,31 +2514,31 @@ clear(PersistentVarNames{:});
             % must be convertable to byte
             rew_by_pos = floor(rew_by_pos/10)*10; %#ok<NASGU>
             % Store values
-            %D.PAR.targRewDur = rew_by_pos;
+            %D.PAR.zoneRewDur = rew_by_pos;
             
             % Keep count shown on top of ax 1
-            set(D.UI.axTargH(1), ...
+            set(D.UI.axZoneH(1), ...
                 'Visible', 'on', ...
                 'XAxisLocation','top', ...
                 'YTickLabels', [], ...
                 'XTick', short_ind(2:end-1), ...
-                'XTickLabels', D.C.targ(D.I.rot,:));
+                'XTickLabels', D.C.zone(D.I.rot,:));
             
             % Move axes to top of stack
-            uistack(D.UI.axTargH, 'top');
-            uistack(D.UI.axTargH(1), 'top');
+            uistack(D.UI.axZoneH, 'top');
+            uistack(D.UI.axZoneH(1), 'top');
             
             % Print vals to console
             str = [];
-            for z_s = 1:7:length(D.I.targArr)
-                if z_s+7 < length(D.I.targArr)
-                    str = [str, sprintf('%s\r', num2str(D.I.targArr(z_s:z_s+7)'))];
+            for z_s = 1:7:length(D.I.zoneArr)
+                if z_s+7 < length(D.I.zoneArr)
+                    str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
                 else
-                    str = [str, sprintf('%s\r', num2str(D.I.targArr(z_s:end)'))];
+                    str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
                 end
             end
             
-            Update_Console(sprintf('\rComputed Targ Dist: \r%s\rTime: %s\r', ...
+            Update_Console(sprintf('\rComputed Zone Dist: \r%s\rTime: %s\r', ...
                 str, datestr(now, 'HH:MM:SS')));
             
         end
@@ -2910,13 +2912,13 @@ clear(PersistentVarNames{:});
                 D.UI.rewFeedRad + (D.PAR.feedDist - D.PAR.setPoint);
             
             % REWARD FEEDER BOUNDS
-            for z_targ = 1:length(D.PAR.targLocs)
-                D.UI.rewBnds(z_targ,:,1) = [...
-                    D.UI.rewFeedRad(1) + deg2rad(D.PAR.feedSet(1) + D.PAR.targLocs(z_targ)), ...
-                    D.UI.rewFeedRad(1) + deg2rad(D.PAR.feedSet(2) + D.PAR.targLocs(z_targ))];
-                D.UI.rewBnds(z_targ,:,2) = [...
-                    D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(1) + D.PAR.targLocs(z_targ)), ...
-                    D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(2) + D.PAR.targLocs(z_targ))];
+            for z_zone = 1:length(D.PAR.zoneLocs)
+                D.UI.rewBnds(z_zone,:,1) = [...
+                    D.UI.rewFeedRad(1) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
+                    D.UI.rewFeedRad(1) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
+                D.UI.rewBnds(z_zone,:,2) = [...
+                    D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
+                    D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
             end
             D.UI.rewBnds = wrapTo2Pi(D.UI.rewBnds);
             
@@ -2996,15 +2998,15 @@ clear(PersistentVarNames{:});
                 'Parent',D.UI.axH(2));
             
             % Plot reward bounds
-            D.UI.ptchFdH = gobjects(length(D.PAR.targLocs),2);
-            D.UI.durNowTxtH = gobjects(length(D.PAR.targLocs),2);
+            D.UI.ptchFdH = gobjects(length(D.PAR.zoneLocs),2);
+            D.UI.durNowTxtH = gobjects(length(D.PAR.zoneLocs),2);
             for z_fd = 1:2
-                for z_targ = 1:length(D.PAR.targLocs)
+                for z_zone = 1:length(D.PAR.zoneLocs)
                     
                     % reward bounds
                     [xbnd, ybnd] =  ...
-                        Get_Rad_Bnds(D.UI.rewBnds(z_targ,:,z_fd));
-                    D.UI.ptchFdH(z_targ,z_fd) = ...
+                        Get_Rad_Bnds(D.UI.rewBnds(z_zone,:,z_fd));
+                    D.UI.ptchFdH(z_zone,z_fd) = ...
                         patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
                         [ybnd(1,:),fliplr(ybnd(2,:))], ...
                         D.UI.rotCol(z_fd,:), ...
@@ -3016,8 +3018,8 @@ clear(PersistentVarNames{:});
                     
                     % Add reward duration text
                     str = ...
-                        sprintf('%d%c\n%d ms', -1*D.PAR.targLocs(z_targ), char(176), D.PAR.targRewDur(z_targ));
-                    D.UI.durNowTxtH(z_targ,z_fd) = text(...
+                        sprintf('%d%c\n%d ms', -1*D.PAR.zoneLocs(z_zone), char(176), D.PAR.zoneRewDur(z_zone));
+                    D.UI.durNowTxtH(z_zone,z_fd) = text(...
                         mean(mean(xbnd)), mean(mean(ybnd)), ...
                         str, ...
                         'Color', [1, 1, 1], ...
@@ -3079,7 +3081,7 @@ clear(PersistentVarNames{:});
                 [xbnd, ybnd] =  ...
                     Get_Rad_Bnds([D.UI.rewFeedRad(z_fd), ...
                     D.UI.rewFeedRad(z_fd) + deg2rad(D.PAR.trigDist)]);
-                % setpoint target line
+                % setpoint zoneet line
                 D.UI.fdH(1,z_fd) = ...
                     plot(xbnd(:,end), ybnd(:,end), ...
                     'Color', D.UI.rotCol(z_fd,:), ...
@@ -3739,8 +3741,8 @@ clear(PersistentVarNames{:});
                     end
                     
                     % Save halt error
-                    if ~isempty(D.I.targ)
-                        halt_err = D.UI.rewBnds(D.I.targ,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
+                    if ~isempty(D.I.zone)
+                        halt_err = D.UI.rewBnds(D.I.zone,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
                         % Save reward duration
                         D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
                         D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
@@ -3987,26 +3989,26 @@ clear(PersistentVarNames{:});
                             % Check if this is cued reward
                             if D.B.is_cued_rew
                                 
-                                % Get new reward target
-                                D.I.targ = find(D.PAR.targLocs == ...
-                                    D.I.targArr(sum([D.C.rew_cnt{:}])+1));
+                                % Get new reward zoneet
+                                D.I.zone = find(D.PAR.zoneLocs == ...
+                                    D.I.zoneArr(sum([D.C.rew_cnt{:}])+1));
                                 
                                 % Get new reward duration
-                                D.PAR.rewDur = D.PAR.targRewDur(D.I.targ);
+                                D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone);
                                 
-                                % Send CS command with target and rew dur
-                                targ_rad = D.UI.rewBnds(D.I.targ,2,D.I.rot);
-                                Mat2CS('C', targ_rad, D.PAR.rewDur/10);
+                                % Send CS command with zoneet and rew dur
+                                zone_rad = D.UI.rewBnds(D.I.zone,2,D.I.rot);
+                                Mat2CS('C', zone_rad, D.PAR.rewDur/10);
                                 
                                 % Show new reward taget patch
-                                set(D.UI.ptchFdH(D.I.targ, D.I.rot), ...
+                                set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
                                     'FaceAlpha', 0.75, ...
                                     'EdgeAlpha', 1);
                                 % Outline in active color
-                                set(D.UI.ptchFdH(D.I.targ, D.I.rot), ...
+                                set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
                                     'EdgeColor', D.UI.dfltActiveCol);
                                 % Print new duration
-                                set(D.UI.durNowTxtH(D.I.targ, D.I.rot), ...
+                                set(D.UI.durNowTxtH(D.I.zone, D.I.rot), ...
                                     'Visible', 'on');
                                 
                                 % Post NLX event: cue on
@@ -4015,7 +4017,7 @@ clear(PersistentVarNames{:});
                             else
                                 % Send CS command with reward pos
                                 Mat2CS('R', D.UI.rewSetpointRad(D.I.rot), 0);
-                                % Darken all targets target patch
+                                % Darken all zoneets zoneet patch
                                 set(D.UI.ptchFdH(:, D.I.rot), ...
                                     'FaceAlpha', 0.75)
                             end
@@ -4103,8 +4105,8 @@ clear(PersistentVarNames{:});
                         
                         % Check where rew was triggered
                         if ~D.B.is_cued_rew
-                            D.I.targ = Find_Rew_Bnds(D.P.Rat.rad, D.UI.rewBnds(:,:,D.I.rot));
-                            disp(D.I.targ);
+                            D.I.zone = Find_Rew_Bnds(D.P.Rat.rad, D.UI.rewBnds(:,:,D.I.rot));
+                            disp(D.I.zone);
                         end
                         
                         % Reset patches
@@ -4112,51 +4114,51 @@ clear(PersistentVarNames{:});
                             'EdgeColor', [0, 0, 0], ...
                             'FaceAlpha', 0.15, ...
                             'EdgeAlpha', 0.05);
-                        % Lighten rewarded target
-                        set(D.UI.ptchFdH(D.I.targ, D.I.rot), ...
+                        % Lighten rewarded zoneet
+                        set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
                             'FaceAlpha', 0.5, ...
                             'EdgeAlpha', 0.5);
                         % Print new duration
-                        set(D.UI.durNowTxtH(D.I.targ, D.I.rot), ...
+                        set(D.UI.durNowTxtH(D.I.zone, D.I.rot), ...
                             'Visible', 'on');
                         
-                        % Update targ dist plot
-                        D.C.targ(D.I.rot,D.I.targ) = D.C.targ(D.I.rot,D.I.targ)+1;
-                        x = -1*D.PAR.targLocs;
-                        y = D.C.targ(D.I.rot,:) / sum(D.C.targ(D.I.rot,:));
+                        % Update zone dist plot
+                        D.C.zone(D.I.rot,D.I.zone) = D.C.zone(D.I.rot,D.I.zone)+1;
+                        x = -1*D.PAR.zoneLocs;
+                        y = D.C.zone(D.I.rot,:) / sum(D.C.zone(D.I.rot,:));
                         y = y/max(y);
-                        delete(D.UI.targAllH(:,D.I.rot));
-                        D.UI.targAllH(:,D.I.rot) = createPatches(...
+                        delete(D.UI.zoneAllH(:,D.I.rot));
+                        D.UI.zoneAllH(:,D.I.rot) = createPatches(...
                             x, y, 2, ...
                             D.UI.rotCol(D.I.rot,:), ...
                             0.25, ...
-                            D.UI.axTargH(2));
-                        delete(D.UI.targNowH);
-                        D.UI.targNowH = createPatches(...
-                            x(D.I.targ), y(D.I.targ), 2, ...
+                            D.UI.axZoneH(2));
+                        delete(D.UI.zoneNowH);
+                        D.UI.zoneNowH = createPatches(...
+                            x(D.I.zone), y(D.I.zone), 2, ...
                             D.UI.rotCol(D.I.rot,:), ...
                             0.75, ...
-                            D.UI.axTargH(2));
+                            D.UI.axZoneH(2));
                         
                         % Display count
-                        set(D.UI.axTargH(1), 'XTickLabels', D.C.targ(D.I.rot,:))
+                        set(D.UI.axZoneH(1), 'XTickLabels', D.C.zone(D.I.rot,:))
                         
                         % Reset missed rewards
                         D.C.missed_rew_cnt(2) = sum(D.C.missed_rew_cnt);
                         D.C.missed_rew_cnt(1) = 0;
                         
-                        % Plot average targ pos
-                        delete(D.UI.targAvgH);
-                        avg_trig = D.PAR.targLocs*D.C.targ(D.I.rot,:)' / sum(D.C.targ(D.I.rot,:));
+                        % Plot average zone pos
+                        delete(D.UI.zoneAvgH);
+                        avg_trig = D.PAR.zoneLocs*D.C.zone(D.I.rot,:)' / sum(D.C.zone(D.I.rot,:));
                         [xbnd, ybnd] =  ...
                             Get_Rad_Bnds(D.UI.rewFeedRad(D.I.rot) + deg2rad(avg_trig + D.PAR.trigDist));
-                        D.UI.targAvgH = ...
+                        D.UI.zoneAvgH = ...
                             plot(xbnd, ybnd, ...
                             'Color', D.UI.rotCol(D.I.rot,:), ...
                             'LineStyle', '-', ...
                             'LineWidth', 1, ...
                             'Parent',D.UI.axH(2));
-                        uistack(D.UI.targAvgH, 'bottom');
+                        uistack(D.UI.zoneAvgH, 'bottom');
                         
                         % Update reward info list
                         rew_ellapsed = etime(clock, D.T.rew_last);
@@ -4166,7 +4168,7 @@ clear(PersistentVarNames{:});
                             {sprintf('%d: T:%0.2f P:%d M:%d', ...
                             sum([D.C.rew_cnt{:}])+1, ...
                             rew_ellapsed, ...
-                            D.PAR.targLocs(D.I.targ)*-1, ...
+                            D.PAR.zoneLocs(D.I.zone)*-1, ...
                             sum(D.C.missed_rew_cnt)) ...
                             }];
                         missed_percent = ...
@@ -4190,7 +4192,7 @@ clear(PersistentVarNames{:});
                         
                         % Post NLX event: reward info
                         NlxSendCommand(...
-                            sprintf(D.NLX.rew_evt, D.PAR.targLocs(D.I.targ), D.PAR.targRewDur(D.I.targ)));
+                            sprintf(D.NLX.rew_evt, D.PAR.zoneLocs(D.I.zone), D.PAR.zoneRewDur(D.I.zone)));
                         
                         % Check if next reward is cued
                         if ...
@@ -4226,6 +4228,19 @@ clear(PersistentVarNames{:});
                         
                     end
                     
+                end
+                
+                % Check for new rewarded zone data
+                if D.B.check_rew_zone
+                    if r2m_Z ~= 255
+                        
+                        % Store reward zone
+                        D.I.zoneHist(sum([D.C.rew_cnt{:}])) = r2m_Z - 127;
+                        
+                        % Reset flag
+                        r2m_Z = 255;
+                        D.B.check_rew_zone = false;
+                    end
                 end
                 
             end
@@ -5438,7 +5453,7 @@ clear(PersistentVarNames{:});
         % REWARD
         function [] = BtnReward(~, ~, ~)
             %             %TEST
-            %             rew_dur = D.PAR.targRewDur(ceil(rand(1,1)*7));
+            %             rew_dur = D.PAR.zoneRewDur(ceil(rand(1,1)*7));
             %             Mat2CS('R', 0, rew_dur/10)
             %             Update_Console(sprintf('rew_dur = %d\r', rew_dur));
             % Tell CS to trigger reward
@@ -5656,17 +5671,17 @@ clear(PersistentVarNames{:});
         end
         
         % ---------------------------GET TRACK BOUNDS------------------------------
-        function [targ_ind] = Find_Rew_Bnds(rad_arr, rew_bnds)
+        function [zone_ind] = Find_Rew_Bnds(rad_arr, rew_bnds)
             rad_arr(isnan(rad_arr)) = [];
             rad = rad_arr(end);
-            targ_ind = find(cell2mat(arrayfun(@(x,y) Check_Rad_Bnds(rad, [x,y]), ...
+            zone_ind = find(cell2mat(arrayfun(@(x,y) Check_Rad_Bnds(rad, [x,y]), ...
                 rew_bnds(:,1), rew_bnds(:,2), 'uni', false)));
             % If not match found
-            if isempty(targ_ind)
+            if isempty(zone_ind)
                 if rad > max(reshape(rew_bnds,1,[]))
-                    targ_ind = 1;
-                elseif targ_ind < min(reshape(rew_bnds,1,[]))
-                    targ_ind = size(rew_bnds,1);
+                    zone_ind = 1;
+                elseif zone_ind < min(reshape(rew_bnds,1,[]))
+                    zone_ind = size(rew_bnds,1);
                 end
             end
         end
@@ -5686,7 +5701,13 @@ clear(PersistentVarNames{:});
             
         end
         
-        % ---------------------------SAVE SESSION DATA-----------------------------
+        
+        
+        
+        
+        
+        
+        %% ======================= SAVE SESSION DATA ==============================
         function [] =  Save_Ses_Data()
             
             %% Disconnect from NetCom
@@ -5753,6 +5774,8 @@ clear(PersistentVarNames{:});
             D.SS_Out_ICR.(D.PAR.ratLab).Sound_Conditions(rowInd,:) = D.UI.snd;
             D.SS_Out_ICR.(D.PAR.ratLab).Start_Quadrant(rowInd) = D.PAR.ratStrQuad;
             D.SS_Out_ICR.(D.PAR.ratLab).Bulldozings(rowInd) = D.C.bull_cnt;
+            D.SS_Out_ICR.(D.PAR.ratLab).Zones_Rewarded{rowInd} = ...
+                    D.I.zoneHist(1:find(~isnan(D.I.zoneHist),1,'last'));
             D.SS_Out_ICR.(D.PAR.ratLab).Rewards_Standard{rowInd} = sum(D.C.rew_cnt{3});
             D.SS_Out_ICR.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
             D.SS_Out_ICR.(D.PAR.ratLab).Notes{rowInd} = '';
@@ -5838,6 +5861,12 @@ clear(PersistentVarNames{:});
                 datestr(now, 'HH:MM:SS')));
             
         end
+        
+        
+        
+        
+        
+        
         
     end
 

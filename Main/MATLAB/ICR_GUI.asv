@@ -1,10 +1,10 @@
 function[] = ICR_GUI(inArg)
-% INPUT:
+% INPUT: inArg = [0,1,2]
 %        0: No test
 %        1: Run MATLAB in debug mode
 %        2: Halt error test
 
-%% ============================= TOP LEVEL =================================
+%% ========================= TOP LEVEL SETUP ==============================
 
 % Matlab globals
 global FigH; % UI figure handle
@@ -26,16 +26,46 @@ global m2c_quit; % relay quit
 global c2m_E; % bool to exit
 global c2m_S; % enable save button
 % Robot to Matlab communication
-global r2m_J r2m_A;
+global r2m_J r2m_Z;
 
 % Set globals
 [c2m_S, c2m_E] = deal(false);
-[r2m_J, r2m_A] = deal(0);
+[r2m_J, r2m_Z] = deal(0);
 caughtError = false;
 consoleText = ' ';
 isTestRun = false;
 isMatRunAlone = false;
 doHaultErrorTest = false;
+
+%---------------------Important variable formats---------------------------
+%...........................D.UI.snd....................................
+%   val 1 = White Noise [true, false]
+%   val 2 = Reward Tone [true, false]
+%...........................D.AC.data......................................
+%   val 1 = conection [0, 1], [no, yes]
+%   val 2 = display image [0, 1, 2], [Close all, 0-deg, 40-deg]
+%   val 3 = rotation direction [-1, 1], [ACW, CW]
+%   val 4 = sound state [0, 1], [no sound, sound]
+%...........................m2c_id...................................
+%    'S', // start session
+%    'M', // move to position
+%    'R', // run reward
+%    'C', // cue reward
+%    'H', // halt movement
+%    'B', // bulldoze rat
+%    'I', // start/end pid
+%    'N', // matlab not loaded
+%    'G', // matlab gui loaded
+%    'A', // connected to AC computer
+%    'F', // data saved
+%    'T', // system test command
+%...........................c2m_id...................................
+%    'S', // enable save
+%    'E', // exit
+%...........................r2m_id...................................
+%    'J', // battery voltage
+%    'Z', // reward zone
+%--------------------------------------------------------------------------
 
 % ---------------------------SET MAIN PARAMETERS---------------------------
 
@@ -68,31 +98,12 @@ D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).ma
 D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
 D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 
-%---------------------Important variable formats---------------------------
-%...........................D.UI.snd....................................
-%   val 1 = White Noise [true, false]
-%   val 2 = Reward Tone [true, false]
-%...........................D.AC.data......................................
-%   val 1 = conection [0, 1], [no, yes]
-%   val 2 = display image [0, 1, 2], [Close all, 0-deg, 40-deg]
-%   val 3 = rotation direction [-1, 1], [ACW, CW]
-%   val 4 = sound state [0, 1], [no sound, sound]
-%...........................m2c_id...................................
-%    'S', // start session
-%    'M', // move to position
-%    'R', // run reward
-%    'C', // cue reward
-%    'H', // halt movement
-%    'B', // bulldoze rat
-%    'I', // start/end pid
-%    'N', // matlab not loaded
-%    'G', // matlab gui loaded
-%    'A', // connected to AC computer
-%    'Z', // data saved
-%    'T', // system test command
-%--------------------------------------------------------------------------
 
- %% =========================== RUN MAIN SCRIPT ===========================
+
+
+
+
+ %% ========================= TOP LEVEL RUN ===============================
 
 % DEBUG/TESTING
 
@@ -475,6 +486,8 @@ clear(PersistentVarNames{:});
             D.B.flag_new_rew = false;
             % track reward crossing
             D.B.flag_rew_crossed = false;
+            % check for reward zone
+            D.B.check_rew_zone = false;
             % track lap bounds
             D.B.check_inbound_lap = false(4,1);
             % track if reward point should be plotted
@@ -559,6 +572,7 @@ clear(PersistentVarNames{:});
             D.PAR.rewDur = max(D.PAR.rewDurLim);
             D.I.targ = ceil(length(D.PAR.targLocs)/2); % default max
             D.I.targArr = NaN(1,100);
+            D.I.targHist = NaN(1,100);
             D.C.targ = zeros(2,length(D.PAR.targLocs));
             D.UI.targAllH = gobjects(length(D.PAR.targLocs),2);
             D.UI.targNowH = gobjects(1,1);
@@ -4216,6 +4230,19 @@ clear(PersistentVarNames{:});
                     
                 end
                 
+                % Check for new rewarded zone data
+                if D.B.check_rew_zone
+                    if r2m_Z ~= 255
+                        
+                        % Store reward zone
+                        D.I.targHist(sum([D.C.rew_cnt{:}])) = r2m_Z - 127;
+                        
+                        % Reset flag
+                        r2m_Z = 255;
+                        D.B.check_rew_zone = false;
+                    end
+                end
+                
             end
             
         end
@@ -5674,7 +5701,7 @@ clear(PersistentVarNames{:});
             
         end
         
-        % ---------------------------SAVE SESSION DATA-----------------------------
+        %% ======================= SAVE SESSION DATA-----------------------------
         function [] =  Save_Ses_Data()
             
             %% Disconnect from NetCom
@@ -5813,7 +5840,7 @@ clear(PersistentVarNames{:});
             m2c_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.recFi);
             
             % Tell CS Matlab session saved
-            Mat2CS('Z');
+            Mat2CS('F');
             
             % Highlight Quit button
             set(D.UI.btnQuit, ...

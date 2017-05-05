@@ -1,6 +1,6 @@
 function[] = SesIOSetup()
 
-%% Set paramiters
+%% =========================== Set paramiters ============================= 
 OutDir = regexp(pwd,'.*(?=\MATLAB)','match');
 OutDir = fullfile(OutDir{:},'MATLAB\IOfiles\SessionData');
 
@@ -21,8 +21,14 @@ DOBstr = [...
     {'03/1/2016'}; ...
     {'10/1/2014'} ...
     ];
+ 
+% Max sesions
+nses = 200; % number of total sessions
 
-%% Setup vars
+% Max ICR events per session
+rots = 9;
+
+%% =========================== Setup vars =================================
 
 % convert to yy/mm/dd format
 DOBstr = cellstr(datestr(DOBstr, 'yyyy/mm/dd'));
@@ -40,6 +46,7 @@ rotation_positions = {'90', '180', '270'};
 rotations_per_session = {'2', '4', '6'};
 laps_per_rotation = {'5:8', '6:9', '7:10'};
 days_till_rotation = {'1:2', '2:3', '3:4'};
+
 % Variable descriptions
 session_number_description = '[Track, Forage]';
 sound_conditions_description = '[White, Reward]';
@@ -49,7 +56,7 @@ days_till_rotation_description = '[1:4]';
 
 %% ======================== SS_In_All =====================================
 
-% Store variables
+% Initialize variables
 T = table('RowNames',ratList);
 T.Include_Run = true(length(ratList),1);
 T.Include_Analysis = true(length(ratList),1);
@@ -128,15 +135,9 @@ end
 % Copy sorted rat data
 SS_In_All = sortrows(T, 'RowNames');
 
-%% ======================== SS_Out_ICR =====================================
+%% ======================== SS_Out_ICR ====================================
 
-% Max sesions
-nses = 200; % number of total sessions
-
-% Max ICR events per session
-rots = 9;
-
-%% Create condition paramiters
+%  ------------------  Create condition paramiters ------------------------
 
 % Rat list
 % will include only rats which are going into ICR and have not had
@@ -165,7 +166,7 @@ yokeInd = diff(yokePrs,[],2);
 yokeInd(yokeInd>=0) = 1:nCond;
 yokeInd(yokeInd<0) = find(yokeInd<0 == 1) + yokeInd(yokeInd<0);
 
-%% Asign semi-random condition for yoked pairs
+% ------------ Asign semi-random condition for yoked pairs ----------------
 
 % FEEDER CONDITION
 prms = [1, 1; 1, 2; 2, 1; 2, 2]; % col1 = feedcond; col2 = rotdrc
@@ -280,7 +281,7 @@ for i = 1:length(ratList)
         categorical(ndays(:,yokeInd(i)), days_till_rotation); 
 end
 
-%% Add entries to SS_Out_ICR
+%% ==================== Add entries to SS_Out_ICR =========================
 % Load existing dataset
 if exist(fullfile(OutDir, 'SS_Out_ICR.mat'), 'file')
     S = load(fullfile(OutDir, 'SS_Out_ICR.mat'));
@@ -323,6 +324,7 @@ T.Rotations_Per_Session = NaN;
 T.Laps_Per_Rotation = {[]};
 T.Days_Till_Rotation = categorical({'<undefined>'}, days_till_rotation);
 T.Bulldozings = NaN;
+T.Zones_Rewarded = {[]};
 T.Rewards_Standard = {[]};
 T.Rewards_40_Deg = {[]};
 T.Rewards_0_Deg = {[]};

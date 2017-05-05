@@ -1515,7 +1515,7 @@ class Reward
 {
 public:
 	const float velThresh = 5; // (cm/sec)
-	const uint32_t targRewDurs[9] = { // (ms)
+	const uint32_t zoneRewDurs[9] = { // (ms)
 		500,
 		910,
 		1420,
@@ -1526,7 +1526,7 @@ public:
 		910,
 		500
 	};
-	const float targLocs[9] = { // (deg)
+	const float zoneLocs[9] = { // (deg)
 		20,
 		15,
 		10,
@@ -1540,9 +1540,9 @@ public:
 	uint32_t blockDur = 0; // (ms)
 	uint32_t duration = 0; // (ms) 
 	uint32_t durationByte = 0; // (ms) 
-	float targBounds[9][2];
-	const int targLng =
-		sizeof(targLocs) / sizeof(targLocs[0]);
+	float zoneBounds[9][2];
+	const int zoneLng =
+		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
 	float boundMin = 0;
 	float boundMax = 0;
 	uint32_t t_closeSol = 0;
@@ -1556,14 +1556,15 @@ public:
 	bool isTriggerReady = false;
 	bool isAllRargPassed = false;
 	bool is_ekfNew = false;
-	float rewardedTarg = 0;
-	float rewardedBounds[2];
+	float zoneRewarded = 0;
+	byte zoneRewardedByte = 255;
+	float boundsRewarded[2];
 	float lapN = 0;
 	bool doArmMove = false;
 	bool isArmExtended = false;
 	const int armExtStps = 200;
 	int armPos = 0;
-	int armTarg = 0;
+	int armZone = 0;
 	bool armStpOn = false;
 
 	// Constructor
@@ -1674,8 +1675,8 @@ public:
 		SetRewDur((uint32_t)dur_byte * 10);
 	}
 
-	// Compute target bounds
-	bool CompTargBounds(float now_pos, float rew_pos)
+	// Compute zone bounds
+	bool CompZoneBounds(float now_pos, float rew_pos)
 	{
 		// Run only if bounds are not set
 		if (!isboundSet)
@@ -1700,19 +1701,19 @@ public:
 			// Compute reward center
 			rewCenter = rew_pos + lapN*(140 * PI);
 
-			// Compute bounds for each targ
-			for (int i = 0; i < targLng; i++)
+			// Compute bounds for each zone
+			for (int i = 0; i < zoneLng; i++)
 			{
 				// Compute 5 deg bounds
-				dist_center_cm = -1 * targLocs[i] * ((140 * PI) / 360);
+				dist_center_cm = -1 * zoneLocs[i] * ((140 * PI) / 360);
 				dist_start_cm = dist_center_cm - (2.5 * ((140 * PI) / 360));
 				dist_end_cm = dist_center_cm + (2.5 * ((140 * PI) / 360));
 				// Store in array
-				targBounds[i][0] = rewCenter + dist_start_cm;
-				targBounds[i][1] = rewCenter + dist_end_cm;
+				zoneBounds[i][0] = rewCenter + dist_start_cm;
+				zoneBounds[i][1] = rewCenter + dist_end_cm;
 				// Save bound min/max
-				boundMin = i == 0 ? targBounds[i][0] : boundMin;
-				boundMax = i == targLng - 1 ? targBounds[i][1] : boundMax;
+				boundMin = i == 0 ? zoneBounds[i][0] : boundMin;
+				boundMax = i == zoneLng - 1 ? zoneBounds[i][1] : boundMax;
 			}
 			// Set flag
 			isboundSet = true;
@@ -1721,7 +1722,7 @@ public:
 	}
 
 	// Check bounds
-	bool CheckTargBounds(float now_pos, float now_vel)
+	bool CheckZoneBounds(float now_pos, float now_vel)
 	{
 		// Run only if reward not already triggered
 		if (!isTriggerReady)
@@ -1741,20 +1742,22 @@ public:
 			{
 
 				// Check if rat in any bounds
-				for (int i = 0; i < targLng; i++)
+				for (int i = 0; i < zoneLng; i++)
 				{
 					if (
-						now_pos > targBounds[i][0] &&
-						now_pos < targBounds[i][1]
+						now_pos > zoneBounds[i][0] &&
+						now_pos < zoneBounds[i][1]
 						)
 					{
 						// Reward at this pos
-						SetRewDur(targRewDurs[i]);
+						SetRewDur(zoneRewDurs[i]);
 
-						// Store rewarded target for debugging
-						rewardedTarg = targLocs[i];
-						rewardedBounds[0] = targBounds[i][0];
-						rewardedBounds[1] = targBounds[i][1];
+						// Store rewarded zone for debugging
+						zoneRewarded = zoneLocs[i];
+						boundsRewarded[0] = zoneBounds[i][0];
+						boundsRewarded[1] = zoneBounds[i][1];
+						// convert zone to byte to send
+						zoneRewardedByte = (byte)(zoneRewarded + 127);
 
 						// Set flag
 						isTriggerReady = true;
@@ -1774,7 +1777,7 @@ public:
 		if (doArmMove)
 		{
 			// Check if arm should be moved
-			if (armPos != armTarg)
+			if (armPos != armZone)
 			{
 				MoveFeedArm();
 			}
@@ -1825,7 +1828,7 @@ public:
 		if (!isArmExtended)
 		{
 			t_retractArm = millis() + blockDur;
-			armTarg = armExtStps;
+			armZone = armExtStps;
 			doArmMove = true;
 		}
 	}
@@ -1835,7 +1838,7 @@ public:
 	{
 		if (isArmExtended)
 		{
-			armTarg = 0;
+			armZone = 0;
 			doArmMove = true;
 		}
 	}
@@ -1855,7 +1858,7 @@ public:
 		{
 
 			// Extend arm
-			if (armPos < armTarg)
+			if (armPos < armZone)
 			{
 				armPos++;
 				digitalWrite(pin_ED_DIR, LOW); // extend
@@ -2231,7 +2234,7 @@ void loop() {
 		for (int i = 0; i < 100; i++)
 		{
 			reward.is_bound_set = false;
-			reward.CompTargBounds(now_pos, rew_pos);
+			reward.CompZoneBounds(now_pos, rew_pos);
 			now_pos = now_pos + 10 + (140 * PI);
 		}
 		*/
@@ -2490,16 +2493,16 @@ void loop() {
 			// Compute reward bounds
 			if (!reward.isboundSet)
 			{
-				reward.CompTargBounds(ekfRatPos, msg_rewPos);
+				reward.CompZoneBounds(ekfRatPos, msg_rewPos);
 				// Print message
 				char str[50];
 				sprintf(str, "REWARD AT %0.2fcm FROM %0.2fcm TO %0.2fcm",
-					reward.rewCenter, reward.targBounds[0][0], reward.targBounds[8][1]);
+					reward.rewCenter, reward.zoneBounds[0][0], reward.zoneBounds[8][1]);
 				DebugFlow(str);
 			}
 			else if (!reward.isTriggerReady)
 			{
-				bool ekf_pass = reward.CheckTargBounds(ekfRatPos, ekfRatVel);
+				bool ekf_pass = reward.CheckZoneBounds(ekfRatPos, ekfRatVel);
 				bool raw_pass = false; // 
 				if (ekf_pass || raw_pass)
 				{
@@ -2507,8 +2510,8 @@ void loop() {
 					fc_isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
-					sprintf(str, "REWARDED TARG %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
-						reward.rewardedTarg, reward.rewardedBounds[0], reward.rewardedBounds[1], ekf_pass ? "EKF" : "Raw");
+					sprintf(str, "REWARDED ZONE %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
+						reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1], ekf_pass ? "EKF" : "Raw");
 					DebugFlow(str);
 				}
 			}
@@ -2604,21 +2607,6 @@ void loop() {
 					DebugFlow(str);
 				}
 			}
-		}
-	}
-
-	// End any ongoing reward
-	if (fc_isRewarding)
-	{
-		if (reward.EndRew())
-		{
-			// Reset flags
-			reward.Reset();
-			targ_cueRat.Reset();
-			targ_cueRob.Reset();
-			fc_doRew = false;
-			fc_doCueReward = false;
-			fc_isRewarding = false;
 		}
 	}
 
@@ -2900,6 +2888,24 @@ void loop() {
 
 #pragma region //--- OTHER OPPERATIONS ---
 
+	// End any ongoing reward
+	if (fc_isRewarding)
+	{
+		if (reward.EndRew())
+		{
+			// Reset flags
+			reward.Reset();
+			targ_cueRat.Reset();
+			targ_cueRob.Reset();
+			fc_doRew = false;
+			fc_doCueReward = false;
+			fc_isRewarding = false;
+
+			// Tell CS what zone was rewarded
+			Store4_CS('Z', reward.zoneRewardedByte, 0);
+		}
+	}
+	
 	// Check if feeder arm should be moved
 	reward.CheckFeedArm();
 
