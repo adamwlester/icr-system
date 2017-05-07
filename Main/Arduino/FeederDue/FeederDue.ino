@@ -20,6 +20,7 @@ bool doDB_Log = true;
 const bool doLog_flow = true;
 const bool doLog_irSync = true;
 const bool doLog_motorControl = true;
+const bool doLog_motorBlocking = true;
 const bool doLog_rcvd = true;
 const bool doLog_r2c = true;
 const bool doLog_r2a = true;
@@ -31,13 +32,14 @@ const bool doLog_dropped = true;
 // PRINT DEBUGGING
 
 // Where to print
-const bool doDB_PrintConsole = true;
+const bool doDB_PrintConsole = false;
 const bool doDB_PrintLCD = false;
 
 // What to print
 const bool doPrint_flow = false;
 const bool doPrint_irSync = false;
 const bool doPrint_motorControl = false;
+const bool doPrint_motorBlocking = false;
 const bool doPrint_rcvd = false;
 const bool doPrint_r2c = false;
 const bool doPrint_r2a = false;
@@ -48,13 +50,14 @@ const bool doPrint_dropped = false;
 const bool doPrint_log = false;
 
 // PID CALIBRATION
-// Set kC and run ICR_Run.cs
+/*
+Set kC and run ICR_Run.cs
+*/
 const bool do_pidCalibration = false;
 const float kC = 4; // critical gain [2,3,4]
 const float pC = 2.13; // oscillation period [3.28,2.32,2.13]  
 const float c_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
 uint32_t c_durSteps = 30000; // (ms)
-
 
 // POSITION
 const bool do_posDebug = false;
@@ -340,6 +343,7 @@ float ekfRatPos = 0;
 float ekfRobPos = 0;
 float ekfRatVel = 0;
 float ekfRobVel = 0;
+float ekfSetPos = 0;
 
 // PID Settings
 bool do_includeTerm[2] = { true, true };
@@ -597,7 +601,7 @@ public:
 	float kD = 0;
 	float setPoint = 0;
 	uint32_t t_ekfStr = 0;
-	uint32_t t_ekfSettle = 500; // (ms)
+	uint32_t t_ekfSettle = 250; // (ms)
 	bool ekfReady = false;
 	bool ekfNew = false;
 	float dampAcc = 40;
@@ -844,7 +848,7 @@ public:
 
 				char str[50];
 				sprintf(str, "pid: dampen to %0.2f", dampAcc);
-				PrintPID(str);
+				//PrintPID(str);
 			}
 			else
 			{
@@ -886,12 +890,18 @@ public:
 		if ((fc_motorControl == "PID" || fc_motorControl == "Open") &&
 			mode == "Hold")
 		{
+			// Print taking conrol
+			PrintPID("pid: take motor conrol [PID.CheckMotorControl]");
+
 			// Run pid
 			Run("PID.CheckMotorControl");
 		}
 		else if ((fc_motorControl != "PID" && fc_motorControl != "Open") &&
 			mode == "Automatic")
 		{
+			// Print taking conrol
+			PrintPID("pid: give up motor conrol [PID.CheckMotorControl]");
+
 			// Hold pid
 			Hold("PID.CheckMotorControl");
 		}
@@ -905,11 +915,6 @@ public:
 			isHolding4cross = false;
 			PrintPID("pid: crossed setpoint");
 		}
-	}
-
-	void ChangeSetpoint(float delta)
-	{
-		setPoint = defualtSetPoint + delta;
 	}
 
 	void CheckEKF(uint32_t now_ms)
@@ -1547,6 +1552,7 @@ public:
 	float boundMax = 0;
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
+	uint32_t t_moveArmStr = 0;
 	float rewCenter = 0;
 	bool isRewarding = false;
 	bool isCueing = false;
@@ -1593,7 +1599,7 @@ public:
 		{
 			HardStop("StartRew");
 			// Set hold time
-			BlockMotorTill(blockDur);
+			BlockMotorTill(blockDur, "REWARD.StartRew");
 		}
 
 		// Trigger reward tone on
@@ -1776,8 +1782,14 @@ public:
 	{
 		if (doArmMove)
 		{
+			// Save start time
+			if (t_moveArmStr == 0)
+				t_moveArmStr = millis();
+
 			// Check if arm should be moved
-			if (armPos != armZone)
+			if (
+				armPos != armZone &&
+				millis() < t_moveArmStr + 1000)
 			{
 				MoveFeedArm();
 			}
@@ -1802,6 +1814,7 @@ public:
 				else if (isArmExtended && armPos == 0)
 					isArmExtended = false;
 				doArmMove = false;
+				t_moveArmStr = 0;
 			}
 		}
 		// Check if its time to retract arm
@@ -2145,25 +2158,22 @@ void loop() {
 	}
 
 	// Debug pos
-	if (do_posDebug && fc_isRatIn)
+	if (do_posDebug)
 	{
 		static float rat_rob_dist;
 		if (millis() % 100 == 0)
 		{
-			// Hold all motor control
-			if (!fc_isHalted)
-			{
-				fc_isHalted = true;
-				SetMotorControl("None", "PosDebug");
-			}
 			rat_rob_dist = ekfRatPos - ekfRobPos;
 			// Plot pos
+			/*
+			{@Plot.Pos.ratPixy.Green pos_ratPixy.posNow}{@Plot.Pos.ratVT.Blue pos_ratVT.posNow}{@Plot.Pos.ratEKF.Black ekfRatPos}{@Plot.Pos.robVT.Orange pos_robVT.posNow}{@Plot.Pos.robEKF.Red ekfRobPos}
+			*/
 			millis();
 			// Turn on rew led when near setpoint
 			if (errorDefault > -0.5 && errorDefault < 0.5) { analogWrite(pin_RewLED_C, 50); }
 			else { analogWrite(pin_RewLED_C, 0); }
 			// Print to LCD
-			analogWrite(pin_Disp_LED, 25);
+			analogWrite(pin_Disp_LED, 10);
 			PrintLCD(String(rat_rob_dist, 2));
 		}
 	}
@@ -2424,6 +2434,8 @@ void loop() {
 				// Reset motor cotrol if run fails
 				else SetMotorControl("Open", "MsgM");
 			}
+			else if (!pid.ekfReady)
+				DebugFlow("NO MOVE BECAUSE EKF NOT READY");
 		}
 
 		// Check if robot is ready to be stopped
@@ -2443,8 +2455,8 @@ void loop() {
 				// Hard stop
 				HardStop("MsgM");
 
-				// Hold motor control for 5 sec
-				BlockMotorTill(5000);
+				// Set motor cotrol to None
+				SetMotorControl("None", "MsgM");
 
 				// Tell CS movement is done
 				Store4_CS('D', 255, c2r_packLast[CharInd('M', "c2r")]);
@@ -2582,7 +2594,7 @@ void loop() {
 						// Set flag
 						reward.isCueing = true;
 						// Set hold time
-						BlockMotorTill(reward.blockDur);
+						BlockMotorTill(reward.blockDur, "MsgC");
 					}
 				}
 				// Check if rat reached target
@@ -2905,7 +2917,7 @@ void loop() {
 			Store4_CS('Z', reward.zoneRewardedByte, 0);
 		}
 	}
-	
+
 	// Check if feeder arm should be moved
 	reward.CheckFeedArm();
 
@@ -3540,17 +3552,24 @@ void SendPacketData()
 			pack = u.i16[0];
 
 			// Store
-			if (doDB_PrintConsole || doDB_PrintLCD)
+			if ((doDB_PrintConsole || doDB_PrintLCD) &&
+				((doPrint_r2c && rcv_id == 'c') ||
+				(doPrint_r2a && rcv_id == 'a'))
+				)
 			{
 				if (doDB_PrintConsole)
-					sprintf(str, "\tsent: i:%c d:%d p:%d", id, dat, pack);
+					sprintf(str, "\tsent: to:%c id:%c dat:%d pack:%d", rcv_id, id, dat, pack);
 				else if (doDB_PrintLCD)
-					sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
+					sprintf(str, "sent: t:%c i:%c d:%d p:%d", rcv_id, id, dat, pack);
 				StoreDBPrintStr(str, t_sent);
 			}
-			if (doDB_Log)
+			if (
+				doDB_Log &&
+				((doLog_r2c && rcv_id == 'c') ||
+				(doLog_r2a && rcv_id == 'a'))
+				)
 			{
-				sprintf(str, "sent: i:%c d:%d p:%d", id, dat, pack);
+				sprintf(str, "sent: to:%c id:%c dat:%d pack:%d", rcv_id, id, dat, pack);
 				StoreDBLogStr(str, t_sent);
 			}
 
@@ -3703,6 +3722,7 @@ bool RunMotor(char dir, float speed, String agent)
 bool SetMotorControl(String set_to, String called_from)
 {
 	// VALUES:  ["None", "Open", "MoveTo", "Bull", "PID"]
+	bool pass = false;
 
 	// Can always set to "None"
 	if (set_to == "None")
@@ -3730,14 +3750,21 @@ bool SetMotorControl(String set_to, String called_from)
 					fc_motorControl = set_to;
 				}
 			}
-			// Can unblock but only if rat in
+			// CheckBlockTimElapsed can unblock if tracking setup
 			else if (
 				fc_isTrackingEnabled &&
-				called_from == "CheckBlockTimElapsed"
+				(called_from == "CheckBlockTimElapsed")
 				)
 			{
 				fc_motorControl = set_to;
 			}
+
+			// InitializeTracking can always unset "None"
+			if (called_from == "InitializeTracking")
+			{
+				fc_motorControl = set_to;
+			}
+
 		}
 		// "MoveTo" can only be set to "Open"
 		else if (fc_motorControl == "MoveTo")
@@ -3762,19 +3789,20 @@ bool SetMotorControl(String set_to, String called_from)
 		}
 	}
 
-	// Store current controller
-	DebugMotorControl(set_to, called_from);
-
 	// Return true if set to input
 	if (set_to == fc_motorControl)
 	{
-		return true;
+		pass = true;
 	}
-	else return false;
+
+	// Store current controller
+	DebugMotorControl(pass, set_to, called_from);
+	
+	return pass;
 }
 
 // BLOCK MOTOR TILL TIME ELLAPESED
-void BlockMotorTill(uint32_t dt)
+void BlockMotorTill(uint32_t dt, String called_from)
 {
 	// Set blocking and time
 	fc_isBlockingTill = true;
@@ -3785,6 +3813,8 @@ void BlockMotorTill(uint32_t dt)
 	// Remove all motor controll
 	SetMotorControl("None", "BlockMotorTill");
 
+	// Print blocking finished
+	DebugMotorBocking("Blocking motor for:", dt, called_from);
 }
 
 // CHECK IF TIME ELLAPESED
@@ -3802,6 +3832,9 @@ void CheckBlockTimElapsed()
 		// Check for time elapsed or rat moved at least 3cm past feeder
 		if (millis() > blockDurTill || passed_feeder)
 		{
+			// Print blocking finished
+			DebugMotorBocking("Finished blocking motor at:", millis(), "CheckBlockTimElapsed");
+
 			// Retract feeder arm
 			reward.RetractFeedArm();
 
@@ -3832,13 +3865,10 @@ void InitializeTracking()
 		// Check that rat pos < robot pos
 		n_laps = pos_ratVT.posNow > pos_robVT.posNow ? 0 : 1;
 		if (n_laps > 0)
-		{
 			DebugFlow("SET RAT POS AHEAD");
-		}
+
 		else
-		{
 			DebugFlow("RAT POS ALREADY AHEAD");
-		}
 
 		// Reset all vt data
 		pos_ratVT.ResetDat(pos_ratVT.posNow, n_laps);
@@ -3855,6 +3885,7 @@ void InitializeTracking()
 			pos_ratVT.ResetDat(0, 0);
 			pos_ratPixy.ResetDat(0, 0);
 			pos_robVT.ResetDat(0, 0);
+			DebugFlow("RAT POS WRONG SO POS DATA RESET");
 		}
 		// Good to go
 		else
@@ -4021,6 +4052,7 @@ void UpdateEKF()
 		ekfRobPos = ekf.getX(1);
 		ekfRatVel = ekf.getX(2);
 		ekfRobVel = ekf.getX(3);
+		ekfSetPos = ekfRobPos + pid.setPoint;
 
 	}
 }
@@ -4244,8 +4276,8 @@ void CheckButtons()
 
 	// Check for button release
 	else if (
-		digitalRead(pin_Btn[1]) == HIGH && 
-		do_short_hold[1] && 
+		digitalRead(pin_Btn[1]) == HIGH &&
+		do_short_hold[1] &&
 		!is_long_hold[1]
 		)
 	{
@@ -4289,15 +4321,18 @@ void QuitSession()
 
 #pragma region --------DEBUGGING---------
 
-void DebugMotorControl(String set_to, String called_from)
+// LOG/PRING MOTOR CONTROL DEBUG STRING
+void DebugMotorControl(bool pass, String set_to, String called_from)
 {
 	if (
 		(doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD)) ||
 		(doLog_motorControl && doDB_Log)
 		)
 	{
+		char chr[50];
+		sprintf(chr, "mc change %s: set_in:", pass ? "succeeded" : "failed");
 		String str;
-		str = "mc set:" + fc_motorControl + " " + "in:" + set_to + " [" + called_from + "]";
+		str = chr + set_to + " set_out:" + fc_motorControl + " [" + called_from + "]";
 
 		// Add to print queue
 		if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4308,6 +4343,29 @@ void DebugMotorControl(String set_to, String called_from)
 	}
 }
 
+// LOG/PRING MOTOR BLOCKING DEBUG STRING
+void DebugMotorBocking(String msg, uint32_t t, String called_from)
+{
+	if (
+		(doPrint_motorBlocking && (doDB_PrintConsole || doDB_PrintLCD)) ||
+		(doLog_motorBlocking && doDB_Log)
+		)
+	{
+		char chr[50];
+		sprintf(chr, " %d ms ", t);
+		String str;
+		str = msg + chr + " [" + called_from + "]";
+
+		// Add to print queue
+		if (doPrint_motorBlocking && (doDB_PrintConsole || doDB_PrintLCD))
+			StoreDBPrintStr(str, millis());
+		// Add to log queue
+		if (doLog_motorBlocking && doDB_Log)
+			StoreDBLogStr(str, millis());
+	}
+}
+
+// LOG/PRING DROPPED PACKET DEBUG STRING
 void DebugDropped(int missed, int missed_total, int total)
 {
 	if (
@@ -4335,6 +4393,7 @@ void DebugDropped(int missed, int missed_total, int total)
 	}
 }
 
+// LOG/PRING RESENT PACKET DEBUG STRING
 void DebugResent(char id, uint16_t pack, int total)
 {
 	if (
@@ -4362,6 +4421,7 @@ void DebugResent(char id, uint16_t pack, int total)
 	}
 }
 
+// LOG/PRING RECIEVED PACKET DEBUG STRING
 void DebugRcvd(char id, uint16_t pack)
 {
 	if (
@@ -4374,53 +4434,53 @@ void DebugRcvd(char id, uint16_t pack)
 		// Print specific pack contents
 		if (id == 'T')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d dat2:%d pack:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
 		}
 		else if (id == 'S')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d d2:%d p:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d dat2:%d pack:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
 		}
 		else if (id == 'Q')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d d2:%d p:%d", id, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d dat2:%d pack:%d", id, pack);
 		}
 		else if (id == 'M')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%0.2f p:%d", id, msg_moveToTarg, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%0.2f pack:%d", id, msg_moveToTarg, pack);
 		}
 		else if (id == 'R')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%0.2f d2:%d p:%d", id, msg_rewPos, msg_rewDurByte, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%0.2f dat2:%d pack:%d", id, msg_rewPos, msg_rewDurByte, pack);
 		}
 		else if (id == 'C')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%0.2f d2:%d p:%d", id, msg_cueTarg, msg_rewDurByte, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%0.2f dat2:%d pack:%d", id, msg_cueTarg, msg_rewDurByte, pack);
 		}
 		else if (id == 'H')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, fc_doHalt, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, fc_doHalt, pack);
 		}
 		else if (id == 'B')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, msg_bullDel, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, msg_bullDel, pack);
 		}
 		else if (id == 'I')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, fc_isRatIn, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, fc_isRatIn, pack);
 		}
 		else if (id == 'L')
 		{
-			sprintf(chr, "rcvd: i:%c d1:%d p:%d", id, isLogResend, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, isLogResend, pack);
 		}
-		else sprintf(chr, "rcvd: i:%c p:%d", id, pack);
+		else sprintf(chr, "rcvd: id:%c pack:%d", id, pack);
 
 		// Convert to string
 		String str = chr;
 
 		// Add to print queue
-		if (doDB_PrintConsole)
+		if (doDB_PrintConsole && doPrint_rcvd)
 			StoreDBPrintStr("\t" + str, t_rcvd);
-		else if (doDB_PrintLCD)
+		else if (doDB_PrintLCD && doPrint_rcvd)
 			StoreDBPrintStr(str, t_rcvd);
 
 		// Add to log queue
@@ -4430,7 +4490,8 @@ void DebugRcvd(char id, uint16_t pack)
 
 }
 
-void DebugIRSync(String str, uint32_t ts)
+// LOG/PRING IR SENSOR EVENT
+void DebugIRSync(String msg, uint32_t ts)
 {
 	if (
 		(doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4439,14 +4500,15 @@ void DebugIRSync(String str, uint32_t ts)
 	{
 		// Add to print queue
 		if (doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(str, ts);
+			StoreDBPrintStr(msg, ts);
 		// Add to log queue
 		if (doLog_irSync && doDB_Log)
-			StoreDBLogStr(str, ts);
+			StoreDBLogStr(msg, ts);
 	}
 }
 
-void DebugFlow(String str)
+// LOG/PRING MAIN EVENT
+void DebugFlow(String msg)
 {
 	if (
 		(doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4455,13 +4517,82 @@ void DebugFlow(String str)
 	{
 		// Add to print queue
 		if (doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(str, millis());
+			StoreDBPrintStr(msg, millis());
 		// Add to log queue
 		if (doLog_flow && doDB_Log)
-			StoreDBLogStr(str, millis());
+			StoreDBLogStr(msg, millis());
 	}
 }
 
+// STORE STRING FOR PRINTING
+void StoreDBPrintStr(String msg, uint32_t ts)
+{
+	// Local vars
+	char t_str_long[50];
+	char t_str_ellapsed[50];
+	static uint32_t t_last = millis();
+	uint32_t ts_norm = 0;
+	float t_c = 0;
+	float t_ellapsed = 0;
+
+	// Time now
+	ts_norm = t_sync == 0 ? ts : ts - t_sync;
+
+	// Total time
+	t_c = (float)(ts_norm) / 1000.0f;
+
+	// Ellapsed time
+	t_ellapsed = (float)((millis() - t_last) / 1000.0f);
+	t_last = millis();
+
+	// Save long and short string
+	sprintf(t_str_long, "[%0.2fs]", t_c);
+	sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
+
+	// Shift queue
+	for (int i = 0; i < printQueue_lng - 1; i++)
+	{
+		printQueue[i] = printQueue[i + 1];
+	}
+
+	// Set first entry to new string 
+	if (doDB_PrintLCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + msg;
+	else if (doDB_PrintConsole) printQueue[printQueue_lng - 1] = msg;
+
+	// Save total time to end
+	printQueue[0] = t_str_long;
+
+	// Set queue ind
+	printQueueInd--;
+
+	// Set flag
+	doPrint = true;
+
+}
+
+// STORE STRING FOR LOGGING
+void StoreDBLogStr(String msg, uint32_t ts)
+{
+	// Local vars
+	char str_c[100];
+	char msg_c[100];
+	uint32_t ts_norm = 0;
+
+	// Itterate log entry count
+	logStoreCnt++;
+
+	// Concatinate ts with message
+	msg.toCharArray(str_c, 100);
+	sprintf(msg_c, "[%d],%d,%s", logStoreCnt, ts, str_c);
+	logList[logStoreCnt - 1] = msg_c;
+
+	// TEST
+	//delay(100);
+	//PrintLCD(logList[logStoreCnt - 1], " ", 't');
+	//SerialUSB.println(logList[logStoreCnt - 1]);
+}
+
+// PRINT DEBUG STRINGS TO CONSOLE/LCD
 void PrintDebug()
 {
 
@@ -4518,10 +4649,12 @@ void PrintDebug()
 
 			// Pad string
 			char chr[50];
-			for (int i = 0; i < 20 - printQueue[0].length(); i++)
-				chr[i] = ' ';
+			char arg[50];
+			String sarg;
+			sprintf(arg, "%%%ds", 20 - printQueue[0].length());
+			sprintf(chr, arg, '_');
 
-			// Get current string
+			// Append string
 			String str = printQueue[0] + chr + printQueue[printQueueInd] + "\n";
 
 			// Send
@@ -4539,77 +4672,7 @@ void PrintDebug()
 	}
 }
 
-void StoreDBPrintStr(String str, uint32_t ts)
-{
-	// Local vars
-	char t_str_long[50];
-	char t_str_ellapsed[50];
-	static uint32_t t_last = millis();
-	uint32_t ts_norm = 0;
-	float t_c = 0;
-	float t_ellapsed = 0;
-
-	// Time now
-	ts_norm = t_sync == 0 ? ts : ts - t_sync;
-
-	// Total time
-	t_c = (float)(ts_norm) / 1000.0f;
-
-	// Ellapsed time
-	t_ellapsed = (float)((millis() - t_last) / 1000.0f);
-	t_last = millis();
-
-	// Save long and short string
-	sprintf(t_str_long, "[%0.2fs]", t_c);
-	sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
-
-	// Shift queue
-	for (int i = 0; i < printQueue_lng - 1; i++)
-	{
-		printQueue[i] = printQueue[i + 1];
-	}
-
-	// Set first entry to new string 
-	if (doDB_PrintLCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + str;
-	else if (doDB_PrintConsole) printQueue[printQueue_lng - 1] = str;
-
-	// Save total time to end
-	printQueue[0] = t_str_long;
-
-	// Set queue ind
-	printQueueInd--;
-
-	// Set flag
-	doPrint = true;
-
-}
-
-void StoreDBLogStr(String str, uint32_t ts)
-{
-	// Local vars
-	char str_c[100];
-	char msg_c[100];
-	uint32_t ts_norm = 0;
-
-	// Itterate log entry count
-	logStoreCnt++;
-
-	// Concatinate ts with message
-	str.toCharArray(str_c, 100);
-	sprintf(msg_c, "[%d],%d,%s", logStoreCnt, ts, str_c);
-	logList[logStoreCnt - 1] = msg_c;
-
-	// TEST
-	//delay(100);
-	//PrintLCD(logList[logStoreCnt - 1], " ", 't');
-	//SerialUSB.println(logList[logStoreCnt - 1]);
-}
-
-#pragma endregion
-
-
-#pragma region --------MINOR FUNCTIONS---------
-
+// FOR PRINTING TO LCD
 void PrintLCD(String str_1)
 {
 	// Run default
@@ -4642,7 +4705,6 @@ void PrintLCD(String str_1, String str_2, char f_siz)
 	// Block LCD logging/printing while displayed
 	doBlockLCDlog = true;
 }
-
 void ClearLCD()
 {
 	// Clear
@@ -4655,28 +4717,12 @@ void ClearLCD()
 	doBlockLCDlog = false;
 }
 
-void SetupBlink()
-{
-	int duty[2] = { 100, 0 };
-	bool is_on = false;
-	int del = 100;
-	// Flash sequentially
-	for (int i = 0; i < 8; i++)
-	{
-		analogWrite(pin_Disp_LED, duty[(int)is_on]);
-		delay(del);
-		analogWrite(pin_TrackLED, duty[(int)is_on]);
-		delay(del);
-		analogWrite(pin_RewLED_R, duty[(int)is_on]);
-		delay(del);
-		is_on = !is_on;
-	}
-	// Reset LEDs
-	analogWrite(pin_Disp_LED, 0);
-	analogWrite(pin_TrackLED, trackLEDduty);
-	analogWrite(pin_RewLED_R, rewLEDmin);
-}
+#pragma endregion
 
+
+#pragma region --------MINOR FUNCTIONS---------
+
+// GET ID INDEX
 int CharInd(char id, String a_lab)
 {
 
@@ -4706,6 +4752,30 @@ int CharInd(char id, String a_lab)
 
 }
 
+// BLINK LEDS AT SETUP
+void SetupBlink()
+{
+	int duty[2] = { 100, 0 };
+	bool is_on = false;
+	int del = 100;
+	// Flash sequentially
+	for (int i = 0; i < 8; i++)
+	{
+		analogWrite(pin_Disp_LED, duty[(int)is_on]);
+		delay(del);
+		analogWrite(pin_TrackLED, duty[(int)is_on]);
+		delay(del);
+		analogWrite(pin_RewLED_R, duty[(int)is_on]);
+		delay(del);
+		is_on = !is_on;
+	}
+	// Reset LEDs
+	analogWrite(pin_Disp_LED, 0);
+	analogWrite(pin_TrackLED, trackLEDduty);
+	analogWrite(pin_RewLED_R, rewLEDmin);
+}
+
+// BLICK LEDS WHEN RAT FIRST DETECTED
 void RatInBlink()
 {
 	// Local vars
@@ -4716,11 +4786,13 @@ void RatInBlink()
 	// Flash 
 	for (int i = 0; i < 3; i++)
 	{
+		analogWrite(pin_RewLED_R, duty[(int)is_on]);
 		analogWrite(pin_TrackLED, duty[(int)is_on]);
 		delay(del);
 		is_on = !is_on;
 	}
 	// Reset LED
+	analogWrite(pin_RewLED_R, 0);
 	analogWrite(pin_TrackLED, trackLEDduty);
 }
 
@@ -4729,8 +4801,7 @@ void RatInBlink()
 
 #pragma region ---------INTERUPTS---------
 
-
-// Halt run on IR trigger
+// HALT RUN ON IR TRIGGER
 void Interupt_IRprox_Halt() {
 
 	// Exit if < 250 ms has not passed
@@ -4743,7 +4814,7 @@ void Interupt_IRprox_Halt() {
 	intrpt_irProxDebounce = millis() + 250;
 }
 
-// IR detector
+// DETECT IR SYNC EVENT
 void Interupt_IR_Detect()
 {
 	// Exit if < 250 ms has not passed

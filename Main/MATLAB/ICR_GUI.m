@@ -1,8 +1,14 @@
-function[] = ICR_GUI(inArg)
-% INPUT: inArg = [0,1,2]
+function[] = ICR_GUI(inArg, isMatRunAlone)
+% INPUT: inArg = [0,1,2,3]
 %        0: No test
 %        1: Run MATLAB in debug mode
 %        2: Halt error test
+%        3: Simulated rat test
+
+
+
+
+
 
 %% ========================= TOP LEVEL SETUP ==============================
 
@@ -13,8 +19,9 @@ global caughtError; % bool for error handling
 global consoleText; % console text
 global tcpIP; % server tcpip object
 global isTestRun;
-global isMatRunAlone;
 global doHaultErrorTest;
+global doSimRatTest;
+global test_simX test_simY test_simTS
 % Matlab to CS communication
 global m2c_id; % message out to CS
 global m2c_dat1; % data out to CS
@@ -34,8 +41,8 @@ global r2m_J r2m_Z;
 caughtError = false;
 consoleText = ' ';
 isTestRun = false;
-isMatRunAlone = false;
 doHaultErrorTest = false;
+doSimRatTest = false;
 
 %---------------------Important variable formats---------------------------
 %...........................D.UI.snd....................................
@@ -67,7 +74,9 @@ doHaultErrorTest = false;
 %    'Z', // reward zone
 %--------------------------------------------------------------------------
 
-% ---------------------------SET MAIN PARAMETERS---------------------------
+% ---------------------------- SET PARAMETERS -----------------------------
+
+% MAIN RUN PARAMETERS
 
 % Poll fs (sec)
 D.PAR.polRate = 0.1; 
@@ -84,8 +93,11 @@ D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
 % Feeder dist from rob tracker
 D.PAR.feedDist = 66 * ((2 * pi)/(140 * pi));
 
-% Directories
+% DIRECTORIES
+
+% Top directory
 D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
+
 % IO dirs
 D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
 D.DIR.ioTestOut = fullfile(D.DIR.top,'Testing','Output');
@@ -98,6 +110,16 @@ D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).ma
 D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
 D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 
+% DEBUG/TESTING
+
+% Halt Error test
+D.DB.velSteps = 10:10:80; % (cm/sec)
+D.DB.stepSamp = 4;
+
+% Simulated rat test
+D.DB.ratMaxVel = 5; % (cm/sec)
+D.DB.ratMaxAcc = 1; % (cm/sec/sec)
+
 
 
 
@@ -107,14 +129,12 @@ D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 
 % DEBUG/TESTING
 
-% Halt Error test
-D.DB.velSteps = 10:10:80; % (cm/sec)
-D.DB.stepSamp = 4;
-
 % Set to debug in no arg in
 if nargin == 0
     isMatRunAlone = true;
     inArg = 1;
+elseif nargin == 1
+    isMatRunAlone = false;
 end
 
 doDebug = true;
@@ -126,6 +146,9 @@ switch inArg
     case 2
         isTestRun = true;
         doHaultErrorTest = true;
+    case 3
+        isTestRun = true;
+        doSimRatTest = true;
 end
 
 % Initilize top level vars
@@ -319,9 +342,14 @@ clear(PersistentVarNames{:});
                         
                         % Run VT processing code
                         % Robot
+                        SF_VT_Get('Rob');
                         SF_VT_Proc('Rob');
                         % Rat
-                        SF_VT_Proc('Rat');
+                        SF_VT_Get('Rat');
+                        %SF_VT_Proc('Rat');
+                        
+                        % RUN TEST/DEBUG CODE
+                        SF_Run_Test();
                         
                         % CHECK IF RAT IN
                         
@@ -333,9 +361,6 @@ clear(PersistentVarNames{:});
                             
                             SF_Rat_In_Check();
                         end
-                        
-                        % RUN TEST/DEBUG CODE
-                        SF_Run_Test();
                         
                         % -----------------------ONCE RAT IN-----------------------------------
                         
@@ -402,9 +427,7 @@ clear(PersistentVarNames{:});
         
         
         
-        
-        
-        
+              
         
         
         %% ========================= SETUP FUNCTIONS ==============================
@@ -482,8 +505,8 @@ clear(PersistentVarNames{:});
             D.B.flag_rew_reset = false;
             % track reset crossing
             D.B.flag_reset_crossed = false;
-            % flack check reward
-            D.B.flag_new_rew = false;
+            % flack nxl recieved cheetah due reward confirmation
+            D.B.flag_cheetah_due_rew_confirm = false;
             % track reward crossing
             D.B.flag_rew_crossed = false;
             % check for reward zone
@@ -565,15 +588,24 @@ clear(PersistentVarNames{:});
             D.I.lap_hunt_ind = 1;
             
             % REWARD VARS
+            % min/max reward duration
             D.PAR.rewDurLim = [500, 2000];
+            % reward zone positions
             D.PAR.zoneLocs = 20:-5:-20;
+            % reward zone reward durations
             D.PAR.zoneRewDur = ...
                 [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
+            % current reward duration
             D.PAR.rewDur = max(D.PAR.rewDurLim);
+            % current reward zone
             D.I.zone = ceil(length(D.PAR.zoneLocs)/2); % default max
+            % distrebution of reward zones
             D.I.zoneArr = NaN(1,100);
+            % store reward zone for each reward event
             D.I.zoneHist = NaN(1,100);
+            % counter for each reward zone
             D.C.zone = zeros(2,length(D.PAR.zoneLocs));
+            % handles
             D.UI.zoneAllH = gobjects(length(D.PAR.zoneLocs),2);
             D.UI.zoneNowH = gobjects(1,1);
             D.UI.zoneAvgH = gobjects(1,1);
@@ -597,7 +629,16 @@ clear(PersistentVarNames{:});
             D.PAR.YC = S.YC;
             clear S;
             
-            % pos now
+            % nlx input
+            D.P.Rat.vtTS = NaN;
+            D.P.Rat.vtPos = NaN;
+            D.P.Rat.vtHD = NaN;
+            D.P.Rat.vtNRecs = NaN;
+            D.P.Rob.vtTS = NaN;
+            D.P.Rob.vtPos = NaN;
+            D.P.Rob.vtHD = NaN;
+            D.P.Rob.vtNRecs = NaN;
+            % cardinal pos now
             D.P.Rat.x = NaN;
             D.P.Rat.y = NaN;
             D.P.Rob.x = NaN;
@@ -2309,57 +2350,7 @@ clear(PersistentVarNames{:});
             Update_Console(sprintf('\rGUI Ready\rTime: %s\r', ...
                 datestr(now, 'HH:MM:SS')));
         end
-        
-        % -----------------------------TEST SETUP---------------------------------
-        
-        function[] = SF_Run_Test_Setup()
-            if isTestRun
-                
-                % Load rat 0000
-                
-                % Change data table entries which will be loaded later
-                ratInd = ...
-                    find(ismember(D.SS_In_All.Properties.RowNames, 'r0000'));
-                
-                % SET UI TO LAST SESSION
-                
-                % Set Session Condition
-                D.SS_In_All.Session_Condition(ratInd) = 'Behavior_Training';
-                % Set reward delay
-                D.SS_In_All.Reward_Delay(ratInd)= '0.0';
-                % Set cue condition
-                D.SS_In_All.Cue_Condition(ratInd) = 'None';
-                
-                % Run PopRat for rat 0000
-                val = find(cell2mat(cellfun(@(x) strcmp(x(1:4), '0000'), D.UI.ratList, 'uni', false)));
-                set(D.UI.popRat, 'Value', val);
-                PopRat();
-                
-                % Send test setup
-                if doHaultErrorTest
-                    D.DB.haltCnt = D.DB.stepSamp;
-                    D.DB.haltDur = 5; % (sec)
-                    D.DB.halt_error_str = sprintf('\r');
-                    D.DB.t_halt = clock;
-                    D.DB.t_halt(6) = D.DB.t_halt(6) + 5;
-                    D.DB.nowStep = 0;
-                    D.DB.nowVel = 0;
-                    D.DB.isHalted = true;
-                    D.DB.sendPos = 0;
-                    
-                    % Enable editing in console
-                    set(D.UI.editConsole, 'Enable','on');
-                end
-                
-                % Run BtnSetupDone
-                set(D.UI.btnSetupDone, 'Value', 1);
-                BtnSetupDone();
-                
-                Update_Console(sprintf('\rTest Run Setup Complete\rTime: %s\r', ...
-                    datestr(now, 'HH:MM:SS')));
-            end
-        end
-        
+             
         % -------------------------REWARD ZONE SETUP------------------------------
         
         function[] = SF_Zone_Dist_Setup()
@@ -3254,8 +3245,67 @@ clear(PersistentVarNames{:});
             
         end
         
+          % -----------------------------TEST SETUP---------------------------------
         
-        
+        function[] = SF_Run_Test_Setup()
+            if isTestRun
+                
+                % Load rat 0000
+                
+                % Change data table entries which will be loaded later
+                ratInd = ...
+                    find(ismember(D.SS_In_All.Properties.RowNames, 'r0000'));
+                
+                % SET UI TO LAST SESSION
+                
+                % Set Session Condition
+                D.SS_In_All.Session_Condition(ratInd) = 'Behavior_Training';
+                % Set reward delay
+                D.SS_In_All.Reward_Delay(ratInd)= '0.0';
+                % Set cue condition
+                D.SS_In_All.Cue_Condition(ratInd) = 'None';
+                
+                % Run PopRat for rat 0000
+                val = find(cell2mat(cellfun(@(x) strcmp(x(1:4), '0000'), D.UI.ratList, 'uni', false)));
+                set(D.UI.popRat, 'Value', val);
+                PopRat();
+                
+                % HALT ERROR TEST
+                if doHaultErrorTest
+                    D.DB.haltCnt = D.DB.stepSamp;
+                    D.DB.haltDur = 5; % (sec)
+                    D.DB.halt_error_str = sprintf('\r');
+                    D.DB.t_halt = clock;
+                    D.DB.t_halt(6) = D.DB.t_halt(6) + 5;
+                    D.DB.nowStep = 0;
+                    D.DB.nowVel = 0;
+                    D.DB.isHalted = true;
+                    D.DB.sendPos = 0;
+                    
+                    % Enable editing in console
+                    set(D.UI.editConsole, 'Enable','on');
+                end
+                
+                % SIMULATED RAT TEST
+                if doSimRatTest
+                    D.B.simRadLast = NaN;
+                    D.B.simVelLast = NaN;
+                    D.B.simTSStart = NaN;
+                    D.B.simTSLast = NaN;
+                    D.B.holdForRew = false;
+                    D.B.holdTime = clock;
+                    D.B.initVals = true;
+                end
+                
+                % Run BtnSetupDone
+                set(D.UI.btnSetupDone, 'Value', 1);
+                BtnSetupDone();
+                
+                Update_Console(sprintf('\rTest Run Setup Complete\rTime: %s\r', ...
+                    datestr(now, 'HH:MM:SS')));
+            end
+        end
+   
         
         
         
@@ -3263,25 +3313,36 @@ clear(PersistentVarNames{:});
         
         %% ======================== ONGOING FUNCTIONS =============================
         
-        % ------------------------------PROCESS NLX VT---------------------------------
+         % ------------------------------GET NLX VT---------------------------------
         
-        function [] = SF_VT_Proc(fld)
+        function [] = SF_VT_Get(fld)
             
             %% GET VT DATA
             
             % Get NXL vt data and reformat data with samples in column vectors
             if strcmp(fld, 'Rat')
-                [~, vtTS, vtPos, vtHD, vtNRecs, ~] = NlxGetNewVTData(D.NLX.vt_rat_ent);
-                D.P.(fld).hd_deg = vtHD';
+                [~, D.P.(fld).vtTS, D.P.(fld).vtPos, D.P.(fld).vtHD, D.P.(fld).vtNRecs, ~] = ...
+                    NlxGetNewVTData(D.NLX.vt_rat_ent);
+                D.P.(fld).hd_deg = D.P.(fld).vtHD';
             else
-                [~, vtTS, vtPos, ~, vtNRecs, ~] = NlxGetNewVTData(D.NLX.vt_rob_ent);
+                [~, D.P.(fld).vtTS, D.P.(fld).vtPos, ~, D.P.(fld).vtNRecs, ~] = ...
+                    NlxGetNewVTData(D.NLX.vt_rob_ent);
             end
             
-            if vtNRecs > 0
+        end
+            
+        % ------------------------------PROCESS NLX VT---------------------------------
+        
+        function [] = SF_VT_Proc(fld)
+            
+            if D.P.(fld).vtNRecs > 0
+               
+                %% PROCESS NEW DATA
+                 
                 % convdert to [r = samp, c = dim]
-                xy_pos = reshape(double(vtPos),2,[])';
-                ts = double(vtTS)';
-                recs = vtNRecs;
+                xy_pos = reshape(double(D.P.(fld).vtPos),2,[])';
+                ts = double(D.P.(fld).vtTS)';
+                recs = D.P.(fld).vtNRecs;
                 
                 % Save x/y pos samples in seperate vars
                 x = xy_pos(:,1);
@@ -3555,104 +3616,7 @@ clear(PersistentVarNames{:});
             end
             
         end
-        
-        % ------------------------------RUN TEST CODE---------------------------------
-        
-        function [] = SF_Run_Test()
-            if isTestRun
-                
-                % HALT ERROR TEST
-                if doHaultErrorTest
-                    
-                    % Check if robot should be restarted
-                    if D.DB.isHalted && ...
-                            etime(clock, D.DB.t_halt) > D.DB.haltDur && ...
-                            get(D.UI.btnHaltRob, 'Value') == 0
-                        
-                        % Save and print halt error
-                        % Store halt error
-                        halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.sendPos) * ((140*pi)/(2*pi));
-                        D.DB.halt_error(1) = halt_err;
-                        D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
-                        D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
-                        D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
-                        D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
-                        % Print halt error
-                        D.DB.halt_error_str = [D.DB.halt_error_str, ...
-                            sprintf('%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
-                            D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), D.DB.nowVel)];
-                        Update_Console(D.DB.halt_error_str);
-                        
-                        % Check if vel should be stepped
-                        if D.DB.haltCnt == D.DB.stepSamp
-                            
-                            % Reset counter
-                            D.DB.haltCnt = 0;
-                            
-                            % Incriment step
-                            D.DB.nowStep = D.DB.nowStep+1;
-                            
-                            % Incriment vel
-                            if D.DB.nowStep <= length(D.DB.velSteps);
-                                D.DB.nowVel = D.DB.velSteps(D.DB.nowStep);
-                            else
-                                % End test
-                                D.DB.nowVel = 0;
-                                doHaultErrorTest = false;
-                                
-                                % Save data to csv file
-                                fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
-                                file_id = fopen(fi_out,'w');
-                                fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
-                                fprintf(file_id,D.DB.halt_error_str(3:end));
-                                fclose(file_id);
-                            end
-                            
-                            Update_Console(sprintf('\rNew Vel: %d cm/sec\rTime: %s\r', ...
-                                D.DB.nowVel, datestr(now, 'HH:MM:SS')));
-                        end
-                        
-                        % Tell CS to resume run
-                        Mat2CS('T', inArg, D.DB.nowVel);
-                        
-                        % Set flag
-                        D.DB.isHalted = false;
-                        
-                        % Check if robot has stopped
-                    elseif ~D.DB.isHalted && ...
-                            D.P.Rob.vel < 5
-                        
-                        % Tell CS to resume run
-                        Mat2CS('T', inArg, D.DB.nowVel);
-                        
-                    end
-                    
-                    % Check if robot has passed 0 deg
-                    if ~D.DB.isHalted && ...
-                            etime(clock, D.DB.t_halt) > D.DB.haltDur+1 && ...
-                            any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
-                        
-                        % Incriment counter
-                        D.DB.haltCnt = D.DB.haltCnt+1;
-                        
-                        % Tell CS to Halt Robot
-                        Mat2CS('T', inArg, 0);
-                        
-                        % Store robots current pos and time
-                        D.DB.sendPos = D.P.Rob.radLast;
-                        D.DB.t_halt = clock;
-                        
-                        % Set flag
-                        D.DB.isHalted = true;
-                        
-                        Update_Console(sprintf('\rHalting Robot \rTime: %s\r', ...
-                            datestr(now, 'HH:MM:SS')));
-                    end
-                    
-                end
-            end
-        end
-        
+            
         % --------------------------PROCESS NLX EVENTS-----------------------------
         
         function [] = SF_Evt_Proc()
@@ -3666,7 +3630,7 @@ clear(PersistentVarNames{:});
                 
                 %% CHECK FOR REWARD
                 
-                % Started
+                % Reward Started
                 if any(ismember(evtStr, D.NLX.rew_on_str))
                     
                     % Save reward start time
@@ -3706,11 +3670,11 @@ clear(PersistentVarNames{:});
                     
                     % Set flags
                     D.B.is_rewarding = true;
-                    D.B.flag_new_rew = true;
+                    D.B.flag_cheetah_due_rew_confirm = true;
                     
                 end
                 
-                % Stopped
+                % Reward Ended
                 if any(ismember(evtStr, D.NLX.rew_off_str))
                     
                     % Save reward end time
@@ -4100,13 +4064,12 @@ clear(PersistentVarNames{:});
                     end
                     
                     % Check if reward has been reset
-                    if D.B.flag_new_rew && ...
+                    if D.B.flag_cheetah_due_rew_confirm && ...
                             D.B.flag_rew_reset
                         
                         % Check where rew was triggered
                         if ~D.B.is_cued_rew
                             D.I.zone = Find_Rew_Bnds(D.P.Rat.rad, D.UI.rewBnds(:,:,D.I.rot));
-                            disp(D.I.zone);
                         end
                         
                         % Reset patches
@@ -4218,7 +4181,7 @@ clear(PersistentVarNames{:});
                         
                         % Reset flags
                         D.B.flag_rew_reset = false;
-                        D.B.flag_new_rew = false;
+                        D.B.flag_cheetah_due_rew_confirm = false;
                         
                         % Set flags
                         D.B.plot_rew = true;
@@ -4232,13 +4195,13 @@ clear(PersistentVarNames{:});
                 
                 % Check for new rewarded zone data
                 if D.B.check_rew_zone
-                    if r2m_Z ~= 255
+                    if r2m_Z ~= 0
                         
                         % Store reward zone
                         D.I.zoneHist(sum([D.C.rew_cnt{:}])) = r2m_Z - 127;
                         
                         % Reset flag
-                        r2m_Z = 255;
+                        r2m_Z = 0;
                         D.B.check_rew_zone = false;
                     end
                 end
@@ -4753,7 +4716,197 @@ clear(PersistentVarNames{:});
             
         end
         
+         % ------------------------------RUN TEST CODE---------------------------------
         
+        function [] = SF_Run_Test()
+            if isTestRun
+                
+                %% HALT ERROR TEST
+                if doHaultErrorTest
+                    
+                    % Check if robot should be restarted
+                    if D.DB.isHalted && ...
+                            etime(clock, D.DB.t_halt) > D.DB.haltDur && ...
+                            get(D.UI.btnHaltRob, 'Value') == 0
+                        
+                        % Save and print halt error
+                        % Store halt error
+                        halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.sendPos) * ((140*pi)/(2*pi));
+                        D.DB.halt_error(1) = halt_err;
+                        D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
+                        D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
+                        D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
+                        D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
+                        % Print halt error
+                        D.DB.halt_error_str = [D.DB.halt_error_str, ...
+                            sprintf('%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
+                            D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), D.DB.nowVel)];
+                        Update_Console(D.DB.halt_error_str);
+                        
+                        % Check if vel should be stepped
+                        if D.DB.haltCnt == D.DB.stepSamp
+                            
+                            % Reset counter
+                            D.DB.haltCnt = 0;
+                            
+                            % Incriment step
+                            D.DB.nowStep = D.DB.nowStep+1;
+                            
+                            % Incriment vel
+                            if D.DB.nowStep <= length(D.DB.velSteps);
+                                D.DB.nowVel = D.DB.velSteps(D.DB.nowStep);
+                            else
+                                % End test
+                                D.DB.nowVel = 0;
+                                doHaultErrorTest = false;
+                                
+                                % Save data to csv file
+                                fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
+                                file_id = fopen(fi_out,'w');
+                                fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
+                                fprintf(file_id,D.DB.halt_error_str(3:end));
+                                fclose(file_id);
+                            end
+                            
+                            Update_Console(sprintf('\rNew Vel: %d cm/sec\rTime: %s\r', ...
+                                D.DB.nowVel, datestr(now, 'HH:MM:SS')));
+                        end
+                        
+                        % Tell CS to resume run
+                        Mat2CS('T', inArg, D.DB.nowVel);
+                        
+                        % Set flag
+                        D.DB.isHalted = false;
+                        
+                        % Check if robot has stopped
+                    elseif ~D.DB.isHalted && ...
+                            D.P.Rob.vel < 5
+                        
+                        % Tell CS to resume run
+                        Mat2CS('T', inArg, D.DB.nowVel);
+                        
+                    end
+                    
+                    % Check if robot has passed 0 deg
+                    if ~D.DB.isHalted && ...
+                            etime(clock, D.DB.t_halt) > D.DB.haltDur+1 && ...
+                            any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
+                        
+                        % Incriment counter
+                        D.DB.haltCnt = D.DB.haltCnt+1;
+                        
+                        % Tell CS to Halt Robot
+                        Mat2CS('T', inArg, 0);
+                        
+                        % Store robots current pos and time
+                        D.DB.sendPos = D.P.Rob.radLast;
+                        D.DB.t_halt = clock;
+                        
+                        % Set flag
+                        D.DB.isHalted = true;
+                        
+                        Update_Console(sprintf('\rHalting Robot \rTime: %s\r', ...
+                            datestr(now, 'HH:MM:SS')));
+                    end
+                    
+                end
+                
+                %% SIMULATED RAT TEST
+                if doSimRatTest
+                    
+                    % Wait till recording
+                    if D.B.rec
+                        
+                        % Wait for 5 sec after setup
+                        if etime(clock, D.T.rec_tim_reset) > 5
+                            
+                            % Local vars
+                            cm = 0; 
+                            vel_now = 0;
+                            
+                            % Start rat in start quad
+                            if D.B.initVals
+                                D.B.simRadLast = mean(D.UI.strQuadBnds);
+                                D.B.simVelLast = 0;
+                                D.B.simTSStart = clock;
+                                D.B.simTSLast = 0;
+                                D.B.initVals = false;
+                            end
+                            
+                            % Copy robot vt data
+                            ts_now = etime(clock, D.B.simTSStart)*10^6;
+                            dt_sec = (ts_now - D.B.simTSLast) / 10^6;
+                            D.B.simTSLast = ts_now;
+                            
+                            % Dont update rat pos if rewarding
+                            if D.B.is_rewarding && ~D.B.holdForRew
+                                D.B.holdForRew = true;
+                                D.B.holdTime = clock;
+                            end
+                            
+                            % Check if rewarding or holding for 5 sec for setup
+                            if D.B.holdForRew || etime(clock, D.B.simTSStart) < 20
+                                % Stop holding
+                                if etime(clock, D.B.holdTime) > 5
+                                    D.B.holdForRew = false;
+                                end
+                            else
+                                % Check if rat should speed up
+                                if D.B.simVelLast < D.DB.ratMaxVel
+                                    vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
+                                end
+                                % Hold velocity
+                                if   D.B.simVelLast >= D.DB.ratMaxVel
+                                    vel_now = D.DB.ratMaxVel;
+                                end
+                            end
+                            
+                            % Compute new pos
+                            if ~isnan(vel_now) && ~isnan(cm) && ~isnan(dt_sec)
+                                cm = vel_now * dt_sec;
+                                rad_diff = cm / ((140 * pi)/(2 * pi));
+                            else
+                                rad_diff = 0;
+                            end
+                            rad_now = D.B.simRadLast - rad_diff;
+                            
+                            % Convert rad back to cart
+                            rad = wrapTo2Pi(rad_now);
+                            rad = abs(rad - 2*pi);
+                            rad = wrapToPi(rad);
+                            roh = ones(length(rad), 1) - (D.UI.trkWdt/2/D.UI.arnRad);
+                            [x_norm,y_norm] = pol2cart(rad, roh);
+                            x = (x_norm.*D.PAR.R) + D.PAR.XC;
+                            y = (y_norm.*D.PAR.R) + D.PAR.YC;
+                            y = y*(10/11);
+                            xy_pos(:,1) = x;
+                            xy_pos(:,2) = y;
+                            xy_pos = reshape(xy_pos', 1, []);
+                            
+                            % Update globals
+                            test_simX = x;
+                            test_simY = y;
+                            test_simTS = ts_now;
+        
+                            % Update simulated rat data
+                            D.B.simRadLast = rad_now;
+                            D.B.simVelLast = vel_now;
+                            D.P.Rat.vtTS = single(ts_now);
+                            D.P.Rat.vtPos = single(xy_pos);
+                            D.P.Rat.vtNRecs = single(1);
+                            
+                            % Run SF_VT_Proc('Rat');
+                            SF_VT_Proc('Rat');
+                            
+                        end
+                        
+                    end
+                    
+                end
+                
+            end
+        end
+    
         
         
         
@@ -4816,14 +4969,6 @@ clear(PersistentVarNames{:});
                 % run callback
                 PopTask();
                 
-                % Set reward delay
-                D.PAR.rewDel = ...
-                    D.SS_In_All.Reward_Delay(D.PAR.ratInd);
-                set(D.UI.popRwDl, 'Value', ...
-                    find(ismember(D.UI.delList, D.PAR.rewDel)));
-                % run callback
-                PopRewDel();
-                
                 % Set cue condition
                 D.PAR.cueFeed = ...
                     D.SS_In_All.Cue_Condition(D.PAR.ratInd);
@@ -4833,6 +4978,14 @@ clear(PersistentVarNames{:});
                 set(D.UI.toggCue( ...
                     ~ismember(D.PAR.catCueCond, D.PAR.cueFeed)), 'Value', 0);
                 ToggCue();
+                
+                % Set reward delay
+                D.PAR.rewDel = ...
+                    D.SS_In_All.Reward_Delay(D.PAR.ratInd);
+                set(D.UI.popRwDl, 'Value', ...
+                    find(ismember(D.UI.delList, D.PAR.rewDel)));
+                % run callback
+                PopRewDel();
                 
                 % Set SOUND condition
                 D.UI.snd(1:2) = logical(...
@@ -4937,7 +5090,7 @@ clear(PersistentVarNames{:});
             % Get trigger button
             cue_cond = get(gcbo, 'UserData');
             
-            % Chack if callback was run without button press
+            % Check if callback was run without button press
             if isempty(cue_cond)
                 cue_cond = find(cell2mat(get(D.UI.toggCue, 'Value')) == 1);
             end
@@ -4960,10 +5113,11 @@ clear(PersistentVarNames{:});
             end
             
             % Change Reward delay
+            rew_del = str2double(D.UI.delList{get(D.UI.popRwDl,'Value'),:});
             if (D.PAR.cueFeed == 'Half' || ...
                     D.PAR.cueFeed == 'None') && ...
                     D.PAR.sesCond ~= 'Manual_Training' && ...
-                    D.PAR.rewDel == 0
+                    rew_del == 0
                 
                 % Set reward delay
                 set(D.UI.popRwDl, 'Value', ...
@@ -4972,7 +5126,7 @@ clear(PersistentVarNames{:});
                 PopRewDel();
                 
             elseif D.PAR.cueFeed == 'All' && ...
-                    D.PAR.rewDel ~= 0
+                    rew_del ~= 0
                 
                 % 'All' should have 0 delay
                 % Set reward delay
@@ -5542,8 +5696,7 @@ clear(PersistentVarNames{:});
         end
         
         
-        
-        
+              
         
         
         
@@ -5578,9 +5731,14 @@ clear(PersistentVarNames{:});
                 end
             end
             
-            % Save reward sent time
-            if strcmp(id, 'R') && data1 == 0
-                D.T.rew_sent = clock;
+            % Set vars for reward events
+            if strcmp(id, 'R') || strcmp(id, 'C')
+                % set flag to check for rewarded zone
+                D.B.check_rew_zone = true;
+                if strcmp(id, 'R') && data1 == 0
+                    % reward send time
+                    D.T.rew_sent = clock;
+                end
             end
             
             Update_Console(sprintf('\rMat2CS\rm2c_id = %s\rm2c_dat1 = %2.2f\rm2c_dat2 = %2.2f\rTime: %s\r', ...
@@ -5703,8 +5861,7 @@ clear(PersistentVarNames{:});
         
         
         
-        
-        
+                
         
         
         %% ======================= SAVE SESSION DATA ==============================
@@ -5863,13 +6020,11 @@ clear(PersistentVarNames{:});
         end
         
         
-        
-        
+               
         
         
         
     end
-
 
 
 

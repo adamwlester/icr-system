@@ -24,8 +24,9 @@ namespace ICR_Run
             0: No test
             1: Run MATLAB in debug mode
             2: Halt error test
+            3: Simulated rat test
         */
-        private static double systemTest = 1;
+        private static double systemTest = 3;
         // Print all blocked vt recs
         private static bool doPrint_blockedVt = false;
         // Print all sent vt recs
@@ -247,6 +248,15 @@ namespace ICR_Run
                 com_Matlab.Visible = 1;
                 // Set rec dir to test dir
                 nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00";
+
+                // Start thread to pass simulation rat data
+                if (systemTest == 3)
+                {
+                    new Thread(delegate ()
+                    {
+                        RelaySimRat();
+                    }).Start();
+                }
             }
             else com_Matlab.Visible = 0;
 
@@ -295,25 +305,6 @@ namespace ICR_Run
             // Open serial port connection
             sp_Xbee.Open();
             LogEvent("[Main] FINISHED: Xbee Serial Port Open");
-
-            /*
-            // TEST
-            LogEvent("[Main] RUNNING: Get Robot Log...");
-            pass = GetRobotLog();
-            if (pass)
-            {
-                LogEvent("[Main] FINISHED: Get Robot Log");
-                // Print
-                msg_str = String.Format("[Main] LOGGED {0} Robot Events Dropped: {1} Packs)", dueLogger.logCnt, droppedPacks);
-                LogEvent(msg_str, t_r2cLast, t_r2c);
-                // Save log file
-                if (nlxRecDir != " ")
-                    dueLogger.SaveLog(nlxRecDir, dueLogFi);
-            }
-            else LogEvent("[Main] !!ABORTED: Get Robot Log!!");
-            Console.ReadKey();
-            return;
-            */
 
             // Setup ICR_GUI background worker
             bw_RunGUI.DoWork += DoWork_RunGUI;
@@ -807,6 +798,10 @@ namespace ICR_Run
 
             }
 
+            // Check if streaming has failed
+            if (send_count >= resendMax)
+                isRobStreaming = false;
+
             // forced quit
             return false;
         }
@@ -1164,7 +1159,10 @@ namespace ICR_Run
                         do_loop = false;
                         break;
                     }
-                    else if (doAbort && sw_main.ElapsedMilliseconds > t_timeout)
+                    else if (
+                        doAbort && 
+                        (sw_main.ElapsedMilliseconds > t_timeout || !isRobStreaming)
+                        )
                     {
                         pass = false;
                         do_loop = false;
@@ -1550,7 +1548,8 @@ namespace ICR_Run
 
             // Compute velocity (cm/sec)
             double dt = (double)(ts_now - ts_last) / 1000.0;
-            double vel = Math.Abs(rad_now - rad_last) *
+            double rad_diff = RadDiff(rad_last, rad_now);
+            double vel = rad_diff *
                 ((140 * Math.PI) / (2 * Math.PI)) /
                 dt;
             // Convert back to pixels with lower left = 0
@@ -1826,6 +1825,14 @@ namespace ICR_Run
 
         #region ---------MINOR METHODS---------
 
+        public static double RadDiff(double rad1, double rad2)
+        {
+            double rad_diff =
+             Math.Abs(rad2 - rad1) < (2 * Math.PI - Math.Abs(rad2 - rad1)) ?
+             Math.Abs(rad2 - rad1) : (2 * Math.PI - Math.Abs(rad2 - rad1));
+            return rad_diff;
+        }
+
         public static int CharInd(char id, char[] arr)
         {
             int ind = -1;
@@ -1907,6 +1914,10 @@ namespace ICR_Run
             // wmic process get name,creationdate
         }
 
+        #endregion
+
+        #region ---------DEBUGGING---------
+
         public static void LogEvent(string msg_in, long t1 = -1, long t2 = -1)
         {
             lock (lock_printState)
@@ -1943,6 +1954,55 @@ namespace ICR_Run
                 // Store in logger 
                 csLogger.UpdateList(msg_in, t_m);
             }
+        }
+
+        public static void RelaySimRat()
+        {
+            // Create global vars
+            com_Matlab.PutWorkspaceData("test_simX", "global", 0.0);
+            com_Matlab.PutWorkspaceData("test_simY", "global", 0.0);
+            com_Matlab.PutWorkspaceData("test_simTS", "global", 0);
+            ushort ent = 0;
+            ulong ts_last = 0;
+            ulong ts_now = 0;
+            double x_now;
+            double y_now;
+
+            // Wait for streaming to begin
+            while (!isRobStreaming && !doQuit && !isMAThanging) ;
+
+            // Check for new data till quit time
+            while (!doQuit && !isMAThanging)
+            {
+                // Get ts
+                var ts = com_Matlab.GetVariable("test_simTS", "global");
+                ts_now = (ulong)System.Convert.ToDouble(ts);
+
+                // Check if different from last
+                if (ts_now != ts_last)
+                {
+                    // Get remaining vars
+                    var x = com_Matlab.GetVariable("test_simX", "global");
+                    x_now = System.Convert.ToDouble(x);
+                    var y = com_Matlab.GetVariable("test_simY", "global");
+                    y_now = System.Convert.ToDouble(y);
+
+                    // Run compute pos
+                    bool pass = CompPos(ent, ts_now, x_now, y_now);
+                    // Send data
+                    if (pass)
+                    {
+                        SendData('P');
+                    }
+
+                    // Update ts_last
+                    ts_last = ts_now;
+
+                    // Pause thread
+                    Thread.Sleep(100);
+                }
+            }
+
         }
 
         #endregion
