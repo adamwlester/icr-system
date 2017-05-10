@@ -230,13 +230,12 @@ const uint32_t logRcvdDel = 1;
 // Serial from CS
 const char c2r_head = '<';
 const char c2r_foot = '>';
-char c2r_id[14] = {
+char c2r_id[13] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
 	'M', // move to position
 	'R', // run reward
-	'C', // cue reward
 	'H', // halt movement
 	'B', // bulldoze rat
 	'I', // rat in/out
@@ -253,13 +252,12 @@ uint32_t t_rcvdLast = 0; // (ms)
 // Serial to CS
 const char r2c_head = '<';
 const char r2c_foot = '>';
-char r2c_id[15] = {
+char r2c_id[14] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
 	'M', // move to position
 	'R', // run reward
-	'C', // cue reward
 	'H', // halt movement
 	'B', // bulldoze rat
 	'I', // rat in/out
@@ -337,8 +335,6 @@ const double pixyCoeff[5] = {
 	-0.677050955917591,
 	75.424132382709260
 };
-float vtpixyVelAvg = 0;
-float vtpixyPosAvg = 0;
 
 // AutoDriver
 const float cm2stp = 200 / (9 * PI);
@@ -377,11 +373,11 @@ byte msg_bullSpeed = 0;
 
 // Reward
 uint32_t rewBlockDur = 2000; // (ms)
-float msg_cueTarg = 0;
+float cuePos = 0;
 float cueDist[2] = { 0,0 };
 float cueStartPos[2] = { 0,0 };
 float msg_rewPos = 0;
-byte msg_rewDurByte = 0;
+byte msg_rewZoneInd = 0;
 int rewCnt = 0;
 
 // EtOH 
@@ -1682,13 +1678,14 @@ public:
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
 	uint32_t t_moveArmStr = 0;
-	float rewCenter = 0;
+	float rewCenterAbs = 0;
+	float rewCenterRel = 0;
 	bool isRewarding = false;
 	bool isCueing = false;
 	bool isButtonReward = false;
-	bool isboundSet = false;
-	bool isTriggerReady = false;
-	bool isAllRargPassed = false;
+	bool isBoundsSet = false;
+	bool isZoneTriggered = false;
+	bool isAllZonePassed = false;
 	bool is_ekfNew = false;
 	float zoneRewarded = 0;
 	byte zoneRewardedByte = 255;
@@ -1798,21 +1795,25 @@ public:
 	}
 
 	// Set reward duration
-	void SetRewDur(uint32_t dur)
+	void SetRewDur(byte zone_ind)
 	{
-		duration = dur;
+		duration = zoneRewDurs[zone_ind];
 		durationByte = (byte)(duration / 10);
 	}
-	void SetRewDur(byte dur_byte)
+
+	// Set reward pos
+	float SetRewPos(byte zone_ind, float rew_pos)
 	{
-		SetRewDur((uint32_t)dur_byte * 10);
+		float zone_loc = zone_ind != 0 ? zoneLocs[zone_ind] : 0;
+		rewCenterAbs = rew_pos + (-1 * zone_loc * ((140 * PI) / 360));
+		return rewCenterAbs;
 	}
 
 	// Compute zone bounds
 	bool CompZoneBounds(float now_pos, float rew_pos)
 	{
 		// Run only if bounds are not set
-		if (!isboundSet)
+		if (!isBoundsSet)
 		{
 			// Local vars
 			int diam = 0;
@@ -1832,7 +1833,7 @@ public:
 			lapN = pos_rel > rew_pos ? lapN + 1 : lapN;
 
 			// Compute reward center
-			rewCenter = rew_pos + lapN*(140 * PI);
+			rewCenterRel = rew_pos + lapN*(140 * PI);
 
 			// Compute bounds for each zone
 			for (int i = 0; i < zoneLng; i++)
@@ -1842,30 +1843,30 @@ public:
 				dist_start_cm = dist_center_cm - (2.5 * ((140 * PI) / 360));
 				dist_end_cm = dist_center_cm + (2.5 * ((140 * PI) / 360));
 				// Store in array
-				zoneBounds[i][0] = rewCenter + dist_start_cm;
-				zoneBounds[i][1] = rewCenter + dist_end_cm;
+				zoneBounds[i][0] = rewCenterRel + dist_start_cm;
+				zoneBounds[i][1] = rewCenterRel + dist_end_cm;
 				// Save bound min/max
 				boundMin = i == 0 ? zoneBounds[i][0] : boundMin;
 				boundMax = i == zoneLng - 1 ? zoneBounds[i][1] : boundMax;
 			}
 			// Set flag
-			isboundSet = true;
+			isBoundsSet = true;
 		}
-		return isboundSet;
+		return isBoundsSet;
 	}
 
 	// Check bounds
 	bool CheckZoneBounds(float now_pos, float now_vel)
 	{
 		// Run only if reward not already triggered
-		if (!isTriggerReady)
+		if (!isZoneTriggered)
 		{
 
 			// Check if all bounds passed
 			if (now_pos > boundMax + 5)
 			{
-				isAllRargPassed = true;
-				return isTriggerReady;
+				isAllZonePassed = true;
+				return isZoneTriggered;
 			}
 			// Check velocity
 			else if (
@@ -1883,7 +1884,7 @@ public:
 						)
 					{
 						// Reward at this pos
-						SetRewDur(zoneRewDurs[i]);
+						SetRewDur(i);
 
 						// Store rewarded zone for debugging
 						zoneRewarded = zoneLocs[i];
@@ -1893,7 +1894,7 @@ public:
 						zoneRewardedByte = (byte)(zoneRewarded + 127);
 
 						// Set flag
-						isTriggerReady = true;
+						isZoneTriggered = true;
 					}
 				}
 			}
@@ -1901,7 +1902,7 @@ public:
 			// Reset flag
 			is_ekfNew = false;
 		}
-		return isTriggerReady;
+		return isZoneTriggered;
 	}
 
 	// Check if feeder arm should be moved
@@ -2043,9 +2044,9 @@ public:
 		isRewarding = false;
 		isCueing = false;
 		isButtonReward = false;
-		isboundSet = false;
-		isTriggerReady = false;
-		isAllRargPassed = false;
+		isBoundsSet = false;
+		isZoneTriggered = false;
+		isAllZonePassed = false;
 		is_ekfNew = false;
 	}
 };
@@ -2394,28 +2395,6 @@ void loop() {
 		}
 		*/
 
-		/*
-		// TEST
-		String s1 = " ";
-		String s2 = " ";
-		char c[1];
-		for (int i = 0; i < 100; i++)
-		{
-			if (i <= 40)
-			{
-				sprintf(c, "%d", i + 1);
-				s1 = c;
-				s2 = s2 + s1;
-			}
-			String str;
-			char chr[100];
-			sprintf(chr, "Log #%d: Message!", i+1);
-			str = chr;
-			str = str + s2;
-			StoreDBLogStr(str, millis());
-		}
-		*/
-
 	}
 
 #pragma endregion
@@ -2636,59 +2615,64 @@ void loop() {
 #pragma region //--- (R) RUN REWARD ---
 	if (c2r_msg_id == 'R' && c2r_isNew)
 	{
+		// Compute reward duration
+		if (msg_rewZoneInd != 0)
+			reward.SetRewDur(msg_rewZoneInd);
 
-		if (msg_rewPos == 0)
-		{
+		// Imediate reward
+		if (msg_rewPos == 0 && msg_rewZoneInd != 0) {
 			DebugFlow("REWARD NOW");
-
-			// Set reward duration in ms
-			reward.SetRewDur(msg_rewDurByte);
 
 			// Start reward
 			fc_isRewarding = reward.StartRew(true, false);
 		}
-		else
-		{
+		// Reward zone
+		else if (msg_rewPos != 0 && msg_rewZoneInd == 0) {
 			DebugFlow("REWARD ZONE");
 			fc_doRew = true;
 		}
+		// Cued reward
+		else {
+			DebugFlow("REWARD CUED");
+			// Get zone position
+			cuePos = reward.SetRewPos(msg_rewZoneInd, msg_rewPos);
+			fc_doCueReward = true;
+		}
 	}
 
-	// Perform reward
+	// ZONE TRIGGERED REWARD
 	if (fc_doRew)
 	{
 		// If not rewarding 
 		if (!reward.isRewarding)
 		{
 			// Compute reward bounds
-			if (!reward.isboundSet)
+			if (!reward.isBoundsSet)
 			{
 				reward.CompZoneBounds(ekfRatPos, msg_rewPos);
 				// Print message
 				char str[50];
 				sprintf(str, "SET REWARD ZONE: %0.2fcm FROM %0.2fcm TO %0.2fcm",
-					reward.rewCenter, reward.zoneBounds[0][0], reward.zoneBounds[8][1]);
+					reward.rewCenterRel, reward.zoneBounds[0][0], reward.zoneBounds[8][1]);
 				DebugFlow(str);
 			}
-			else if (!reward.isTriggerReady)
+			else if (!reward.isZoneTriggered)
 			{
-				bool ekf_pass = reward.CheckZoneBounds(ekfRatPos, ekfRatVel);
-				bool raw_pass = false; // 
-				if (ekf_pass || raw_pass)
+				if (reward.CheckZoneBounds(ekfRatPos, ekfRatVel))
 				{
 					// Start reward
 					fc_isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
-					sprintf(str, "REWARDED ZONE: %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
-						reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1], ekf_pass ? "EKF" : "Raw");
+					sprintf(str, "REWARDED ZONE: %0.2fcm BOUNDS %0.2fcm TO %0.2fcm",
+						reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1]);
 					DebugFlow(str);
 				}
 			}
 			// Check if rat passed all bounds
 			if (
-				reward.isAllRargPassed &&
-				!reward.isTriggerReady
+				reward.isAllZonePassed &&
+				!reward.isZoneTriggered
 				)
 			{
 				// Reset flags
@@ -2698,20 +2682,7 @@ void loop() {
 		}
 	}
 
-#pragma endregion
-
-#pragma region //--- (C) CUE REWARD ---
-
-	if (c2r_msg_id == 'C' && c2r_isNew)
-	{
-		// Set reward duration in ms
-		reward.SetRewDur(msg_rewDurByte);
-
-		// Cue reward
-		fc_doCueReward = true;
-	}
-
-	// Perform cued reward
+	// CUED REWARD
 	if (fc_doCueReward)
 	{
 		// If not rewarding 
@@ -2723,8 +2694,8 @@ void loop() {
 			{
 				// Compute target targ_dist for rat and robot
 				if (
-					targ_cueRat.CompTarg(ekfRatPos, msg_cueTarg, 0) &&
-					targ_cueRob.CompTarg(ekfRobPos, msg_cueTarg, -1 * defualtSetPoint)
+					targ_cueRat.CompTarg(ekfRatPos, cuePos, 0) &&
+					targ_cueRob.CompTarg(ekfRobPos, cuePos, -1 * defualtSetPoint)
 					)
 				{
 					// Print message
@@ -2741,10 +2712,7 @@ void loop() {
 				// Check if robot reached targed
 				if (!targ_cueRob.isTargReached)
 				{
-					if (
-						targ_cueRob.CheckTargReached(pos_robVT.posNow, ekfRobVel) ||
-						targ_cueRob.CheckTargReached(ekfRobPos, ekfRobVel)
-						)
+					if (targ_cueRob.CheckTargReached(ekfRobPos, ekfRobVel))
 					{
 						DebugFlow("ROBOT REACHED CUE TARGET");
 						// Hard stop
@@ -2758,10 +2726,7 @@ void loop() {
 				// Check if rat reached target
 				if (!targ_cueRat.isTargReached)
 				{
-					if (
-						targ_cueRat.CheckTargReached(vtpixyPosAvg, 0) ||
-						targ_cueRat.CheckTargReached(ekfRatPos, 0)
-						)
+					if (targ_cueRat.CheckTargReached(ekfRatPos, 0))
 					{
 						DebugFlow("RAT REACHED CUE TARGET");
 						// Trigger reward without stopping
@@ -3209,24 +3174,9 @@ bool ParseC2R()
 		msg_rewPos = u.f;
 
 		// Get reward diration 
-		msg_rewDurByte = WaitBuffRead();
-	}
-
-	// Get Cue Reward data
-	if (c2r_msg_id == 'C')
-	{
-		// Reset buffer
-		u.f = 0.0f;
-
-		// Get stop pos
-		u.b[0] = WaitBuffRead();
-		u.b[1] = WaitBuffRead();
-		u.b[2] = WaitBuffRead();
-		u.b[3] = WaitBuffRead();
-		msg_cueTarg = u.f;
-
-		// Get reward diration 
-		msg_rewDurByte = WaitBuffRead();
+		msg_rewZoneInd = WaitBuffRead();
+		// Set to 0 ind
+		msg_rewZoneInd = msg_rewZoneInd - 1;
 	}
 
 	// Get halt robot data
@@ -4741,11 +4691,7 @@ void DebugRcvd(char id, uint16_t pack)
 		}
 		else if (id == 'R')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%0.2f dat2:%d pack:%d", id, msg_rewPos, msg_rewDurByte, pack);
-		}
-		else if (id == 'C')
-		{
-			sprintf(chr, "rcvd: id:%c dat1:%0.2f dat2:%d pack:%d", id, msg_cueTarg, msg_rewDurByte, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%0.2f dat2:%d pack:%d", id, msg_rewPos, msg_rewZoneInd, pack);
 		}
 		else if (id == 'H')
 		{

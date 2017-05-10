@@ -83,12 +83,11 @@ namespace ICR_Run
         private static string csLogFi = @"ICR_RunLogFile.csv"; // log file for ICR_Run
 
         // Matlab to CS communication
-        private static char[] m2c_id = new char[12] { // prefix giving masage id
+        private static char[] m2c_id = new char[11] { // prefix giving masage id
             'T', // system test command
             'S', // start session
             'M', // move to position
             'R', // run reward
-            'C', // cue reward
             'H', // halt movement
             'B', // bulldoze rat
             'I', // rat in/out
@@ -102,13 +101,12 @@ namespace ICR_Run
         private static double matIn_dat2; // matlab data
 
         // CS to robot communication
-        private static char[] c2r_id = new char[13] {
+        private static char[] c2r_id = new char[12] {
             'T', // system test command
             'S', // start session
             'Q', // quit session
             'M', // move to position
             'R', // run reward
-            'C', // cue reward
             'H', // halt movement
             'B', // bulldoze rat
             'I', // rat in/out
@@ -126,13 +124,12 @@ namespace ICR_Run
         private static byte[] c2r_packNum = new byte[2];
 
         // Robot to CS communication
-        private static char[] r2c_id = new char[15] {
+        private static char[] r2c_id = new char[14] {
             'T', // system test command
             'S', // start session
             'Q', // quit session
             'M', // move to position
             'R', // run reward
-            'C', // cue reward
             'H', // halt movement
             'B', // bulldoze rat
             'I', // rat in/out
@@ -907,22 +904,7 @@ namespace ICR_Run
                     msg_data[1] = u.b2;
                     msg_data[2] = u.b3;
                     msg_data[3] = u.b4;
-                    // Add reward duration
-                    msg_data[4] = (byte)dat_2;
-                }
-
-                // Send Cue data
-                else if (id == 'C')
-                {
-                    nDataBytes = 5;
-                    msg_data = new byte[nDataBytes];
-                    // Add targ pos
-                    u.f = (float)dat_1;
-                    msg_data[0] = u.b1;
-                    msg_data[1] = u.b2;
-                    msg_data[2] = u.b3;
-                    msg_data[3] = u.b4;
-                    // Add reward duration
+                    // Add reward zone ind
                     msg_data[4] = (byte)dat_2;
                 }
 
@@ -1786,9 +1768,7 @@ namespace ICR_Run
                         do_check_done = true;
                     }
                     // Check if reward command with pos given
-                    else if (
-                        (matIn_id == 'R' && matIn_dat1 > 0) || // reward
-                        matIn_id == 'C') // cue
+                    else if (matIn_id == 'R' && matIn_dat1 > 0)
                     {
                         // calculate target pos
                         matIn_dat1 = CalcMove(matIn_dat1);

@@ -59,6 +59,7 @@ doSimRatTest = false;
 %    'S', // start session
 %    'M', // move to position
 %    'R', // run reward
+%    'C', // cue reward
 %    'H', // halt movement
 %    'B', // bulldoze rat
 %    'I', // start/end pid
@@ -2916,7 +2917,6 @@ clear(PersistentVarNames{:});
                     D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
                     D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
             end
-            % [zone,min_max,rot_cond]
             D.UI.rewBnds = wrapTo2Pi(D.UI.rewBnds);
             
             % REWARD RESET BOUNDS
@@ -3968,7 +3968,8 @@ clear(PersistentVarNames{:});
                                 
                                 % Send CS command with pos and zone
                                 pos_center = D.UI.rewSetpointRad(D.I.rot);
-                                Mat2CS('R', pos_center, D.I.zone);
+                                zone = D.PAR.zoneLocs(D.I.zone,2,D.I.rot);
+                                Mat2CS('C', pos_center, zone);
                                 
                                 % Show new reward taget patch
                                 set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
@@ -3986,8 +3987,7 @@ clear(PersistentVarNames{:});
                                 
                             else
                                 % Send CS command with reward pos
-                                pos_center = D.UI.rewSetpointRad(D.I.rot);
-                                Mat2CS('R', pos_center, 0);
+                                Mat2CS('R', D.UI.rewSetpointRad(D.I.rot), 0);
                                 % Darken all zoneets zone patch
                                 set(D.UI.ptchFdH(:, D.I.rot), ...
                                     'FaceAlpha', 0.75)
@@ -5618,7 +5618,7 @@ clear(PersistentVarNames{:});
             %             Mat2CS('R', 0, rew_dur/10)
             %             Update_Console(sprintf('rew_dur = %d\r', rew_dur));
             % Tell CS to trigger reward
-            Mat2CS('R', 0, D.I.zone(D.PAR.zoneRewDur == max(D.PAR.zoneRewDur)));
+            Mat2CS('R', 0, 2000/10);
             
         end
         
@@ -5739,11 +5739,10 @@ clear(PersistentVarNames{:});
             end
             
             % Set vars for reward events
-            if strcmp(id, 'R')
+            if strcmp(id, 'R') || strcmp(id, 'C')
                 % set flag to check for rewarded zone
                 D.B.check_rew_zone = true;
-                % if imediate reward
-                if strcmp(id, 'R') && data1 == 0 && data2 == 0
+                if strcmp(id, 'R') && data1 == 0
                     % reward send time
                     D.T.rew_sent = clock;
                 end
