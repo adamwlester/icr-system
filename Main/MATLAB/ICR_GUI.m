@@ -30,13 +30,15 @@ global m2c_flag; % new data flag out to CS
 global m2c_dir; % current cheetah directory
 global m2c_quit; % relay quit
 % CS to Matlba communication
-global c2m_E; % bool to exit
-global c2m_S; % enable save button
+global c2m_V; % bool robot streaming exit
+global c2m_S; % bool enable save button
+global c2m_E; % bool exit
 % Robot to Matlab communication
-global r2m_J r2m_Z;
+global r2m_J; % battery voltage
+global r2m_Z; % reward zone
 
 % Set globals
-[c2m_S, c2m_E] = deal(false);
+[c2m_V, c2m_S, c2m_E] = deal(false);
 [r2m_J, r2m_Z] = deal(0);
 caughtError = false;
 consoleText = ' ';
@@ -117,8 +119,8 @@ D.DB.velSteps = 10:10:80; % (cm/sec)
 D.DB.stepSamp = 4;
 
 % Simulated rat test
-D.DB.ratMaxVel = 5; % (cm/sec)
-D.DB.ratMaxAcc = 1; % (cm/sec/sec)
+D.DB.ratMaxVel = 15; % (cm/sec)
+D.DB.ratMaxAcc = 10; % (cm/sec/sec)
 
 
 
@@ -294,13 +296,9 @@ clear(PersistentVarNames{:});
                     % Run Zone setup code
                     SF_Zone_Dist_Setup();
                     
-                    % Run Finish setup code
-                    SF_Finish_Setup();
-                    
                     % Dump initial 1 sec of vt data
-                    dump_str = clock;
                     rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
-                    while etime(clock, dump_str) < 1 || ...
+                    while etime(clock, D.T.acq_tim) < 1 || ...
                             rat_vt_recs > 0 || ...
                             rob_vt_recs > 0 || ...
                             evt_recs > 0
@@ -310,6 +308,12 @@ clear(PersistentVarNames{:});
                     end
                     % Set initial poll time
                     D.T.last_poll_tim = clock;
+                    
+                    % Wait for robot streaming to start
+                    while ~c2m_V; end;
+                    
+                    % Run Finish setup code
+                    SF_Finish_Setup();
                     
                     % ---------------------------POLL NETCOM------------------------------
                     
@@ -531,13 +535,13 @@ clear(PersistentVarNames{:});
             % time session starts
             D.T.ses_str_tim = clock;
             % total acq time
-            D.T.acq_tim = 0;
+            D.T.acq_tot_tim = 0;
             % acq restart time
-            D.T.acq_tim_reset = 0;
+            D.T.acq_tim = 0;
             % total rec time
-            D.T.rec_tim = 0;
+            D.T.rec_tot_tim = 0;
             % rec restart time
-            D.T.rec_tim_reset = 0;
+            D.T.rec_tim = 0;
             % run start time
             D.T.run_str = 0;
             % run time
@@ -2130,8 +2134,8 @@ clear(PersistentVarNames{:});
             fopen(tcpIP);
             
             % Print that AC computer is connected
-            Update_Console(sprintf('\rConnected To AC Computer\rIP: %s\rTime: %s\r', ...
-                D.AC.IP, datestr(now, 'HH:MM:SS')));
+            Update_Console(sprintf('\rConnected To AC Computer\rTime: %s\r', ...
+                datestr(now, 'HH:MM:SS')));
             
         end
         
@@ -2254,15 +2258,15 @@ clear(PersistentVarNames{:});
                 while NlxAreWeConnected() ~= 1 && ~c2m_E
                     succeeded = NlxConnectToServer(D.NLX.IP);
                     if succeeded == 1
-                        Update_Console(sprintf('\rConnected To NLX\rIP: %s\rTime: %s\r', ...
-                            D.NLX.IP, datestr(now, 'HH:MM:SS')));
+                        Update_Console(sprintf('\rConnected To NLX\rTime: %s\r', ...
+                            datestr(now, 'HH:MM:SS')));
                         %Identify this program to the server.
                         NlxSetApplicationName('ICR_GUI');
                     end
                 end
             else
-                Update_Console(sprintf('\rAlready Connected to NLX\rIP: %s\rTime: %s\r', ...
-                    D.NLX.IP, datestr(now, 'HH:MM:SS')));
+                Update_Console(sprintf('\rAlready Connected to NLX\rTime: %s\r', ...
+                    datestr(now, 'HH:MM:SS')));
             end
             
             %% CONFIGURE DIGITAL IO
@@ -2318,8 +2322,8 @@ clear(PersistentVarNames{:});
             
             %% START STREAMING
             
-                        % Open the data stream for the VT acquisition entity.  This tells Cheetah to begin 
-                        % streaming data for the VT acq ent.
+            % Open the data stream for the VT acquisition entity.  This tells Cheetah to begin
+            % streaming data for the VT acq ent.
             NlxOpenStream(D.NLX.vt_rat_ent);
             NlxOpenStream(D.NLX.vt_rob_ent);
             NlxOpenStream(D.NLX.event_ent);
@@ -2519,18 +2523,18 @@ clear(PersistentVarNames{:});
             uistack(D.UI.axZoneH, 'top');
             uistack(D.UI.axZoneH(1), 'top');
             
-            % Print vals to console
-            str = [];
-            for z_s = 1:7:length(D.I.zoneArr)
-                if z_s+7 < length(D.I.zoneArr)
-                    str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
-                else
-                    str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
-                end
-            end
-            
-            Update_Console(sprintf('\rComputed Zone Dist: \r%s\rTime: %s\r', ...
-                str, datestr(now, 'HH:MM:SS')));
+            %             % Print vals to console
+            %             str = [];
+            %             for z_s = 1:7:length(D.I.zoneArr)
+            %                 if z_s+7 < length(D.I.zoneArr)
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
+            %                 else
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
+            %                 end
+            %             end
+            %
+            %             Update_Console(sprintf('\rComputed Zone Dist: \r%s\rTime: %s\r', ...
+            %                 str, datestr(now, 'HH:MM:SS')));
             
         end
         
@@ -4197,8 +4201,8 @@ clear(PersistentVarNames{:});
                 if D.B.check_rew_zone
                     if r2m_Z ~= 0
                         
-                        % Store reward zone
-                        D.I.zoneHist(sum([D.C.rew_cnt{:}])) = r2m_Z - 127;
+                        % Store reward zone with range [-20,20]
+                        D.I.zoneHist(sum([D.C.rew_cnt{:}])) = -1*(r2m_Z - 127);
                         
                         % Reset flag
                         r2m_Z = 0;
@@ -4662,8 +4666,8 @@ clear(PersistentVarNames{:});
             
             % Get recording elapsed time plus saved time
             if  D.B.rec
-                nowTim(2) = etime(clock, D.T.rec_tim_reset)  + D.T.rec_tim;
-            else nowTim(2) = D.T.rec_tim; % keep showing save time
+                nowTim(2) = etime(clock, D.T.rec_tim)  + D.T.rec_tot_tim;
+            else nowTim(2) = D.T.rec_tot_tim; % keep showing save time
             end
             
             % Get lap time
@@ -4818,7 +4822,7 @@ clear(PersistentVarNames{:});
                     if D.B.rec
                         
                         % Wait for 5 sec after setup
-                        if etime(clock, D.T.rec_tim_reset) > 5
+                        if etime(clock, D.T.rec_tim) > 5
                             
                             % Local vars
                             cm = 0; 
@@ -4845,7 +4849,7 @@ clear(PersistentVarNames{:});
                             end
                             
                             % Check if rewarding or holding for 5 sec for setup
-                            if D.B.holdForRew || etime(clock, D.B.simTSStart) < 20
+                            if D.B.holdForRew || etime(clock, D.B.simTSStart) < 5
                                 % Stop holding
                                 if etime(clock, D.B.holdTime) > 5
                                     D.B.holdForRew = false;
@@ -5253,14 +5257,14 @@ clear(PersistentVarNames{:});
                 % Set time tracking variables
                 if D.B.acq
                     % save out time before stopping
-                    D.T.acq_tim = etime(clock,D.T.acq_tim_reset) + D.T.acq_tim;
+                    D.T.acq_tot_tim = etime(clock,D.T.acq_tim) + D.T.acq_tot_tim;
                 end
                 
                 % Change aquiring status
                 D.B.acq = ~D.B.acq;
                 
                 % Reset temp clock
-                D.T.acq_tim_reset = clock;
+                D.T.acq_tim = clock;
                 
             end
             
@@ -5280,10 +5284,10 @@ clear(PersistentVarNames{:});
             % Set time tracking variables
             if  D.B.rec
                 % save out time before stopping
-                D.T.rec_tim = etime(clock, D.T.rec_tim_reset) + D.T.rec_tim;
+                D.T.rec_tot_tim = etime(clock, D.T.rec_tim) + D.T.rec_tot_tim;
             end
             D.B.rec = ~ D.B.rec;
-            D.T.rec_tim_reset = clock;
+            D.T.rec_tim = clock;
             
             % Enable icr button
             if strcmp(get(D.UI.btnICR, 'Enable'), 'off')

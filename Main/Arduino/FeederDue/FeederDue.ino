@@ -171,23 +171,7 @@ const int pin_IRdetect = 17;
 
 #pragma region ---------VARIABLE SETUP---------
 
-// Print debugging
-String printQueue[10];
-const int printQueue_lng =
-sizeof(printQueue) / sizeof(printQueue[0]);
-int printQueueInd = printQueue_lng;
-bool doPrint = false;
-bool doBlockLCDlog = false;
-
-// Debug tracking
-uint32_t t_loopMain = millis();
-uint32_t t_loopRead = millis();
-int cnt_droppedPacks = 0;
-int cnt_overflowEvt = 0;
-int cnt_timeoutEvt = 0;
-int cnt_packResend = 0;
-
-// State control
+// Flow/state control
 String fc_motorControl = "None"; // ["None", "Open", "MoveTo", "Bull", "PID"]
 uint32_t blockDurTill = 0;
 bool fc_isBlockingTill = false;
@@ -206,13 +190,31 @@ bool fc_doHalt = false;
 bool fc_isHalted = false;
 bool fc_doBulldoze = false;
 bool fc_doCheckDoneRcvd = false;
+bool fc_isSendingLog = false;
+bool fc_doLogResend = false;
+bool fc_doLogSend = false;
+bool fc_isEKFReady = false;
+
+// Print debugging
+String printQueue[10];
+const int printQueue_lng =
+sizeof(printQueue) / sizeof(printQueue[0]);
+int printQueueInd = printQueue_lng;
+bool doPrint = false;
+bool doBlockLCDlog = false;
+
+// Debug tracking
+uint32_t t_loopMain = millis();
+uint32_t t_loopRead = millis();
+int cnt_droppedPacks = 0;
+int cnt_overflowEvt = 0;
+int cnt_timeoutEvt = 0;
+int cnt_packResend = 0;
 
 // Log debugging
 String logList[2000];
-uint16_t logStoreCnt = 0;
-uint16_t logSendCnt = 0;
-bool isLogResend = false;
-bool doLogSend = false;
+uint16_t cnt_logStore = 0;
+uint16_t cnt_logSend = 0;
 
 // Outgoing packet data
 byte r2_queue[10][7];
@@ -226,9 +228,9 @@ const uint32_t logSentDel = 1;
 const uint32_t logRcvdDel = 1;
 
 // Serial from CS
-const char c2r_head[2] = { '_', '<' };
+const char c2r_head = '<';
 const char c2r_foot = '>';
-const char c2r_id[14] = {
+char c2r_id[14] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
@@ -243,15 +245,15 @@ const char c2r_id[14] = {
 	'L', // request log send/resend
 	'Y', // confirm done recieved
 };
-char msg_id = ' ';
-bool msg_pass = false;
+char c2r_msg_id = ' ';
+bool c2r_isNew = false;
 uint32_t t_rcvd = millis(); // (ms)
 uint32_t t_rcvdLast = 0; // (ms)
 
-						 // Serial to CS
-const char r2c_head = '{';
-const char r2c_foot = '}';
-const char r2c_id[15] = {
+// Serial to CS
+const char r2c_head = '<';
+const char r2c_foot = '>';
+char r2c_id[15] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
@@ -273,11 +275,11 @@ uint32_t t_sent = millis(); // (ms)
 							//uint32_t resendDone_cnt = 0;
 							//uint32_t resendDone_max = 5;
 
-							// Serial to other ard
-const char r2a_head = '[';
-const char r2a_foot = ']';
+// Serial to other ard
+const char r2a_head = '{';
+const char r2a_foot = '}';
 uint16_t r2a_packCnt = 0;
-const char r2a_id[10] = {
+char r2a_id[6] = {
 	't', // set sync time
 	'q', // quit/reset
 	'r', // reward
@@ -285,6 +287,10 @@ const char r2a_id[10] = {
 	'p', // pid mode [0, 1]
 	'b', // bull mode [0, 1]
 };
+
+// Serial from other ard
+const char a2r_head = '{';
+const char a2r_foot = '}';
 
 // Serial packet tracking
 uint16_t packNow = 0;
@@ -305,6 +311,14 @@ char c2r_idHist[10];
 char r2c_idHist[10];
 const int c2r_hLng = sizeof(c2r_packHist) / sizeof(c2r_packHist[0]);
 const int r2c_hLng = sizeof(r2c_packHist) / sizeof(r2c_packHist[0]);
+// ard to ard packet handeling
+uint16_t r2a_packLast[r2a_idLng];
+byte r2a_datLast[r2a_idLng];
+bool r2a_doRcvCheck[r2a_idLng];
+uint16_t r2a_sendTim[r2a_idLng];
+int r2a_resendCnt[r2a_idLng];
+uint16_t r2a_resendDel = 50;
+uint16_t r2a_resendMax = 3;
 
 // Start/Quit
 byte msg_setupCmd[2];
@@ -409,9 +423,104 @@ volatile bool intrpt_doIRhardStop = false;
 volatile uint32_t intrpt_irDetectDebounce = millis();
 volatile uint32_t t_irSyncLast = millis();
 volatile uint32_t t_sync = 0;
-volatile bool doLogIR = false;
+volatile bool intrpt_doLogIR = false;
 
 #pragma endregion 
+
+
+#pragma region ---------CONSTRUCT FUNCTIONS---------
+// PARSE SERIAL INPUT
+bool ParseSerial();
+// PARSE CS MESSAGE
+bool ParseC2R();
+// PARSE CHEEAH DUE MESSAGE
+void ParseA2R();
+// WAIT FOR BUFFER TO FILL
+byte WaitBuffRead();
+byte WaitBuffRead(char chr1);
+byte WaitBuffRead(char chr1, char chr2);
+// CHECK AND PROCESS RCVD PACKET NUMBER
+bool CheckPack(char id, uint16_t pack);
+// STORE BYTE SERIAL DATA FOR CS
+void Store4_CS(char id, byte d1, uint16_t pack);
+// STORE BYTE SERIAL DATA FOR ARD
+void Store4_Ard(char id, byte d1);
+void Store4_Ard(char id, byte d1, uint16_t pack);
+// SEND SERIAL PACKET DATA
+void SendPacketData();
+// SEND SERIAL LOG DATA
+void SendLogData();
+// CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
+bool CheckArdResend();
+// HARD STOP
+void HardStop(String called_from);
+// IR TRIGGERED HARD STOP
+void Function_IRprox_Halt();
+// RUN AUTODRIVER
+bool RunMotor(char dir, float speed, String agent);
+// SET WHATS CONTROLLING THE MOTOR
+bool SetMotorControl(String set_to, String called_from);
+// BLOCK MOTOR TILL TIME ELLAPESED
+void BlockMotorTill(uint32_t dt, String called_from);
+// CHECK IF TIME ELLAPESED
+void CheckBlockTimElapsed();
+// DO SETUP TO BEGIN TRACKING
+void InitializeTracking();
+// CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
+void CheckSampDT();
+// PROCESS PIXY STREAM
+void UpdatePixyPos();
+// UPDATE EKF
+void UpdateEKF();
+// OPEN/CLOSE REWARD SOLENOID
+void OpenCloseRewSolenoid();
+// OPEN/CLOSE EtOH SOLENOID
+void OpenCloseEtOHSolenoid();
+// CHECK FOR ETOH UPDATE
+void CheckEtOH();
+// CHECK BATTERY VOLTAGE
+void CheckBattery();
+// TURN LCD LIGHT ON/OFF
+void ChangeLCDlight();
+// CHECK FOR BUTTON INPUT
+void CheckButtons();
+// QUIT AND RESTART ARDUINO
+void QuitSession();
+// LOG/PRING MOTOR CONTROL DEBUG STRING
+void DebugMotorControl(bool pass, String set_to, String called_from);
+// LOG/PRING MOTOR BLOCKING DEBUG STRING
+void DebugMotorBocking(String msg, uint32_t t, String called_from);
+// LOG/PRING DROPPED PACKET DEBUG STRING
+void DebugDropped(int missed, int missed_total, int total);
+// LOG/PRING RESENT PACKET DEBUG STRING
+void DebugResent(char id, uint16_t pack, int total);
+// LOG/PRING RECIEVED PACKET DEBUG STRING
+void DebugRcvd(char id, uint16_t pack);
+// LOG/PRING IR SENSOR EVENT
+void DebugIRSync(String msg, uint32_t ts);
+// LOG/PRING MAIN EVENT
+void DebugFlow(String msg);
+// STORE STRING FOR PRINTING
+void StoreDBPrintStr(String msg, uint32_t ts);
+// STORE STRING FOR LOGGING
+void StoreDBLogStr(String msg, uint32_t ts);
+// PRINT DEBUG STRINGS TO CONSOLE/LCD
+void PrintDebug();
+// FOR PRINTING TO LCD
+void PrintLCD(String str_1);
+void PrintLCD(String str_1, String str_2, char f_siz);
+void ClearLCD();
+// GET ID INDEX
+int CharInd(char id, char id_arr[], int arr_size);
+// BLINK LEDS AT SETUP
+void SetupBlink();
+// BLICK LEDS WHEN RAT FIRST DETECTED
+void RatInBlink();
+// HALT RUN ON IR TRIGGER
+void Interupt_IRprox_Halt();
+// DETECT IR SYNC EVENT
+void Interupt_IR_Detect();
+#pragma endregion
 
 
 #pragma region ---------CONSTRUCT CLASSES---------
@@ -430,7 +539,7 @@ LCD5110 myGLCD(pin_Disp_CS, pin_Disp_RST, pin_Disp_DC, pin_Disp_MOSI, pin_Disp_S
 class PosDat
 {
 public:
-	char objID = ' ';
+	String objID = " ";
 	int nSamp = 0;
 	float posArr[6] = { 0,0,0,0,0,0 };
 	uint32_t tsArr[6] = { 0,0,0,0,0,0 };
@@ -446,14 +555,14 @@ public:
 	uint32_t dtFrame = 0;
 
 	// constructor
-	PosDat(char id, int l)
+	PosDat(String id, int l)
 	{
 		this->objID = id;
 		this->nSamp = l;
 		for (int i = 0; i < l; i++) this->posArr[i] = 0.0f;
 	}
 
-	void UpdatePosVel(float pos_new, uint32_t ts_new)
+	void UpdatePos(float pos_new, uint32_t ts_new)
 	{
 		// Store input
 		this->t_msNow = millis();
@@ -552,10 +661,10 @@ public:
 		uint32_t ts = t_tsNow + (ms - t_msNow);
 
 		// Update pos
-		UpdatePosVel(set_pos, ts);
+		UpdatePos(set_pos, ts);
 	}
 
-	void ResetDat(float set_pos, float set_laps)
+	void SetPos(float set_pos, float set_laps)
 	{
 		posNow = set_pos;
 		sampCnt = 0;
@@ -568,9 +677,9 @@ public:
 
 };
 // Initialize objects
-PosDat pos_ratVT('A', 4);
-PosDat pos_robVT('C', 4);
-PosDat pos_ratPixy('B', 6);
+PosDat pos_ratVT("pos_ratVT", 4);
+PosDat pos_robVT("pos_robVT", 4);
+PosDat pos_ratPixy("pos_ratPixy", 6);
 
 //----------CLASS: PID----------
 class PID
@@ -602,7 +711,7 @@ public:
 	float setPoint = 0;
 	uint32_t t_ekfStr = 0;
 	uint32_t t_ekfSettle = 250; // (ms)
-	bool ekfReady = false;
+	bool fc_isEKFReady = false;
 	bool ekfNew = false;
 	float dampAcc = 40;
 	float dampSpeedCut = 20;
@@ -649,7 +758,7 @@ public:
 	{
 
 		// Wait till ekf ready
-		if (!ekfReady)
+		if (!fc_isEKFReady)
 		{
 			return -1;
 		}
@@ -919,18 +1028,18 @@ public:
 
 	void CheckEKF(uint32_t now_ms)
 	{
-		if (!ekfReady)
+		if (!fc_isEKFReady)
 		{
 			if ((now_ms - t_ekfStr) > t_ekfSettle)
 			{
-				ekfReady = true;
+				fc_isEKFReady = true;
 			}
 		}
 	}
 
 	void ResetEKF(String called_from)
 	{
-		ekfReady = false;
+		fc_isEKFReady = false;
 		t_ekfStr = millis();
 		PrintPID("pid: reset ekf [" + called_from + "]");
 	}
@@ -949,16 +1058,13 @@ public:
 	void PrintPID(String str)
 	{
 		// Add to print queue
-		if (doPrint_pid)
-		{
-			if (doDB_PrintConsole)
-				StoreDBPrintStr("\t" + str, millis());
-			else if (doDB_PrintLCD)
-				StoreDBPrintStr(str, millis());
+		if (doPrint_pid && (doDB_PrintConsole || doDB_PrintLCD)) {
+			StoreDBPrintStr(str, millis());
 		}
 		// Add to log queue
-		if (doLog_pid && doDB_Log)
+		if (doLog_pid && doDB_Log) {
 			StoreDBLogStr(str, millis());
+		}
 	}
 
 	float RunPidCalibration()
@@ -1109,7 +1215,7 @@ public:
 
 			// Update when ready
 			if (
-				pid.ekfReady &&
+				fc_isEKFReady &&
 				millis() > t_loopNext)
 			{
 
@@ -1301,16 +1407,13 @@ public:
 	void PrintBull(String str)
 	{
 		// Add to print queue
-		if (doPrint_bull)
-		{
-			if (doDB_PrintConsole)
-				StoreDBPrintStr("\t" + str, millis());
-			else if (doDB_PrintLCD)
-				StoreDBPrintStr(str, millis());
+		if (doPrint_bull && (doDB_PrintConsole || doDB_PrintLCD)) {
+			StoreDBPrintStr(str, millis());
 		}
 		// Add to log queue
-		if (doLog_bull && doDB_Log)
+		if (doLog_bull && doDB_Log) {
 			StoreDBLogStr(str, millis());
+		}
 	}
 
 };
@@ -1322,6 +1425,11 @@ class Target
 {
 public:
 	String objID = " ";
+	uint32_t targSetTimeout = 1000;
+	uint32_t moveTimeout = 5000;
+	uint32_t t_tryTargSetTill = 0;
+	uint32_t t_tryMoveTill = 0;
+	bool abortMove = false;
 	float posRel = 0;
 	float moveDiff = 0;
 	float minSpeed = 0;
@@ -1360,11 +1468,20 @@ public:
 		posStart = now_pos;
 		targ = targ_pos;
 
+		// Get abort timeout
+		if (t_tryTargSetTill == 0)
+			t_tryTargSetTill = millis() + targSetTimeout;
+		// Check if time out reached
+		if (millis() > t_tryTargSetTill) {
+			abortMove = true;
+			return false;
+		}
+
 		// Run only if targ not set
 		if (!isTargSet)
 		{
 			// Check pos data is ready
-			if (pid.ekfReady)
+			if (fc_isEKFReady)
 			{
 				// Compute target targ_dist and move_dir
 				offsetTarget = targ + offset;
@@ -1414,6 +1531,15 @@ public:
 		// Run if targ not reached
 		if (!isTargReached)
 		{
+
+			// Get abort timeout
+			if (t_tryMoveTill == 0)
+				t_tryMoveTill = millis() + moveTimeout;
+			// Check if time out reached
+			if (millis() > t_tryMoveTill) {
+				abortMove = true;
+				return false;
+			}
 
 			// Compute remaining targ_dist
 			distLeft = abs(targDist) -
@@ -1508,6 +1634,9 @@ public:
 	{
 		isTargSet = false;
 		isTargReached = false;
+		abortMove = false;
+		t_tryTargSetTill = 0;
+		t_tryMoveTill = 0;
 	}
 };
 // Initialize object
@@ -1556,7 +1685,6 @@ public:
 	float rewCenter = 0;
 	bool isRewarding = false;
 	bool isCueing = false;
-	bool isRewardDone = false;
 	bool isButtonReward = false;
 	bool isboundSet = false;
 	bool isTriggerReady = false;
@@ -1628,7 +1756,6 @@ public:
 
 		// Set flags
 		isRewarding = true;
-		isRewardDone = false;
 
 		// indicate reward in progress
 		return isRewarding;
@@ -1662,11 +1789,11 @@ public:
 			}
 
 			// Set/reset flags
-			isRewardDone = true;
+			reward_finished = true;
 			Reset();
 		}
 
-		return isRewardDone;
+		return reward_finished;
 
 	}
 
@@ -2037,9 +2164,10 @@ void setup() {
 	}
 	pinMode(pin_FeedSwitch, INPUT_PULLUP);
 
-	// Make sure relay pins low
+	// Make sure certain pins low
 	digitalWrite(pin_Rel_Rew, LOW);
 	digitalWrite(pin_Rel_EtOH, LOW);
+	digitalWrite(pin_PwrOff, LOW);
 
 	// SETUP AUTODRIVER
 
@@ -2074,15 +2202,6 @@ void setup() {
 
 	// Start BigEasyDriver in sleep
 	digitalWrite(pin_ED_SLP, LOW);
-
-	// DEFINE EXTERNAL INTERUPTS
-
-	// IR prox right
-	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
-	// IR prox left
-	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
-	// IR detector
-	attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
 
 	// INITIALIZE LCD
 	myGLCD.InitLCD();
@@ -2134,11 +2253,33 @@ void setup() {
 		r2c_packLast[i] = 0;
 	}
 
+	// Initialize r2a stuff
+	for (int i = 0; i < r2a_idLng; i++)
+	{
+		r2a_doRcvCheck[i] = false;
+		r2a_sendTim[i] = 0;
+		r2a_packLast[i] = 0;
+		r2a_datLast[i] = 0;
+		r2a_resendCnt[i] = 0;
+	}
+
 	// Initialize bat volt array
 	for (int i = 0; i < 100; i++)
 	{
 		batVoltArr[i] = 0;
 	}
+
+	// DEFINE EXTERNAL INTERUPTS
+
+	// IR prox right
+	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), Interupt_IRprox_Halt, FALLING);
+	// IR prox left
+	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+	// IR detector
+	uint32_t check_ir = millis() + 1000;
+	while (digitalRead(pin_IRdetect) == HIGH && check_ir < millis());
+	if (digitalRead(pin_IRdetect) == LOW)
+		attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
 
 }
 
@@ -2222,7 +2363,7 @@ void loop() {
 
 		// Reset volatiles
 		intrpt_doIRhardStop = false;
-		doLogIR = false;
+		intrpt_doLogIR = false;
 
 		// Print ad board status
 		char chr[20];
@@ -2236,6 +2377,10 @@ void loop() {
 
 		fc_isFirstPass = false;
 		DebugFlow("RESET");
+
+		// Check if ir sensor needs to be disabled
+		if (digitalRead(pin_IRdetect) == HIGH)
+			DebugFlow("!!IR SENSOR DISABLED!!");
 
 		/*
 		// TEST
@@ -2276,10 +2421,10 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- PARSE SERIAL ---
-	msg_pass = false; // reset before next loop
+	c2r_isNew = false; // reset before next loop
 	if (Serial1.available() > 0)
 	{
-		msg_pass = ParseSerial();
+		c2r_isNew = ParseSerial();
 	}
 #pragma endregion
 
@@ -2291,14 +2436,14 @@ void loop() {
 		SendPacketData();
 	}
 	// Send log
-	else if (doLogSend)
+	else if (fc_doLogSend)
 	{
 		SendLogData();
 	}
 #pragma endregion
 
 #pragma region //--- (T) SYSTEM TEST ---
-	if (msg_id == 'T' && msg_pass)
+	if (c2r_msg_id == 'T' && c2r_isNew)
 	{
 		if (!fc_isHalted || fc_isHalted)
 		{
@@ -2332,7 +2477,7 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (S) DO SETUP ---
-	if (msg_id == 'S' && msg_pass)
+	if (c2r_msg_id == 'S' && c2r_isNew)
 	{
 		// Set condition
 		if (msg_setupCmd[0] == 1)
@@ -2377,7 +2522,7 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (Q) DO QUIT ---
-	if (msg_id == 'Q' && msg_pass)
+	if (c2r_msg_id == 'Q' && c2r_isNew)
 	{
 		fc_doQuit = true;
 		t_quitCmd = millis() + 1000;
@@ -2393,17 +2538,19 @@ void loop() {
 	}
 
 	// Wait for queue buffer to empty and quit delay to pass 
-	if (fc_doQuit && millis() > t_quitCmd && !doPackSend)
+	if (
+		fc_doQuit && millis() > t_quitCmd && 
+		!CheckArdResend() &&
+		!doPackSend)
 	{
-		// Retell ard to quit
-		Store4_Ard('q', 255);
+		// Quit session
 		DebugFlow("QUITING...");
 		QuitSession();
 	}
 #pragma endregion
 
 #pragma region //--- (M) DO MOVE ---
-	if (msg_id == 'M' && msg_pass)
+	if (c2r_msg_id == 'M' && c2r_isNew)
 	{
 		fc_doMove = true;
 		DebugFlow("DO MOVE");
@@ -2434,7 +2581,7 @@ void loop() {
 				// Reset motor cotrol if run fails
 				else SetMotorControl("Open", "MsgM");
 			}
-			else if (!pid.ekfReady)
+			else if (!fc_isEKFReady)
 				DebugFlow("NO MOVE BECAUSE EKF NOT READY");
 		}
 
@@ -2449,50 +2596,61 @@ void loop() {
 			{
 				RunMotor(targ_moveTo.moveDir, new_speed, "MoveTo");
 			}
-			// Check if target reached
-			else if (targ_moveTo.isTargReached)
+		}
+
+		// Check if target reached or move aborted
+		if (targ_moveTo.isTargReached || targ_moveTo.abortMove)
+		{
+			// Hard stop
+			HardStop("MsgM");
+
+			// Set motor cotrol to None
+			SetMotorControl("None", "MsgM");
+
+			// Reset flags
+			fc_doMove = false;
+			targ_moveTo.Reset();
+
+			char str[50];
+			if (!targ_moveTo.abortMove)
 			{
-				// Hard stop
-				HardStop("MsgM");
-
-				// Set motor cotrol to None
-				SetMotorControl("None", "MsgM");
-
 				// Tell CS movement is done
-				Store4_CS('D', 255, c2r_packLast[CharInd('M', "c2r")]);
+				Store4_CS('D', 255, c2r_packLast[CharInd('M', c2r_id, c2r_idLng)]);
 
-				// Reset flags
-				fc_doMove = false;
-				targ_moveTo.Reset();
-
-				// Print message
-				char str[50];
+				// Print success message
 				sprintf(str, "FINISHED MOVE TO %0.2fcm WITHIN %0.2fcm",
 					targ_moveTo.offsetTarget, targ_moveTo.GetError(ekfRobPos));
 				DebugFlow(str);
 			}
+			else
+			{
+				// Print failure message
+				sprintf(str, "!!ABORTED MOVE TO %0.2fcm WITHIN %0.2fcm!!",
+					targ_moveTo.offsetTarget, targ_moveTo.GetError(ekfRobPos));
+				DebugFlow(str);
+			}
 		}
-
 	}
 #pragma endregion
 
 #pragma region //--- (R) RUN REWARD ---
-	if (msg_id == 'R' && msg_pass)
+	if (c2r_msg_id == 'R' && c2r_isNew)
 	{
 
 		if (msg_rewPos == 0)
 		{
+			DebugFlow("REWARD NOW");
+
 			// Set reward duration in ms
 			reward.SetRewDur(msg_rewDurByte);
 
-			DebugFlow("REWARD NOW");
 			// Start reward
 			fc_isRewarding = reward.StartRew(true, false);
 		}
 		else
 		{
+			DebugFlow("REWARD ZONE");
 			fc_doRew = true;
-			DebugFlow("RUN REWARD");
 		}
 	}
 
@@ -2508,7 +2666,7 @@ void loop() {
 				reward.CompZoneBounds(ekfRatPos, msg_rewPos);
 				// Print message
 				char str[50];
-				sprintf(str, "REWARD AT %0.2fcm FROM %0.2fcm TO %0.2fcm",
+				sprintf(str, "SET REWARD ZONE: %0.2fcm FROM %0.2fcm TO %0.2fcm",
 					reward.rewCenter, reward.zoneBounds[0][0], reward.zoneBounds[8][1]);
 				DebugFlow(str);
 			}
@@ -2522,7 +2680,7 @@ void loop() {
 					fc_isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
-					sprintf(str, "REWARDED ZONE %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
+					sprintf(str, "REWARDED ZONE: %0.2fcm BOUNDS %0.2fcm TO %0.2fcm USING %s",
 						reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1], ekf_pass ? "EKF" : "Raw");
 					DebugFlow(str);
 				}
@@ -2544,7 +2702,7 @@ void loop() {
 
 #pragma region //--- (C) CUE REWARD ---
 
-	if (msg_id == 'C' && msg_pass)
+	if (c2r_msg_id == 'C' && c2r_isNew)
 	{
 		// Set reward duration in ms
 		reward.SetRewDur(msg_rewDurByte);
@@ -2625,7 +2783,7 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (H) HALT ROBOT STATUS ---
-	if (msg_id == 'H' && msg_pass)
+	if (c2r_msg_id == 'H' && c2r_isNew)
 	{
 		if (fc_doHalt)
 		{
@@ -2648,7 +2806,7 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (B) BULLDOZE RAT STATUS ---
-	if (msg_id == 'B' && msg_pass)
+	if (c2r_msg_id == 'B' && c2r_isNew)
 	{
 		// Local vars
 		bool is_mode_changed = false;
@@ -2704,14 +2862,14 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (I) START/STOP PID ---
-	if (msg_id == 'I' && msg_pass)
+	if (c2r_msg_id == 'I' && c2r_isNew)
 	{
 		if (fc_isRatIn)
 		{
 			// Reset all vt data
-			pos_ratVT.ResetDat(0, 0);
-			pos_ratPixy.ResetDat(0, 0);
-			pos_robVT.ResetDat(0, 0);
+			pos_ratVT.SetPos(0, 0);
+			pos_ratPixy.SetPos(0, 0);
+			pos_robVT.SetPos(0, 0);
 
 			// Pid started by InitializeTracking()
 			DebugFlow("RAT IN");
@@ -2741,7 +2899,7 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (V) GET STREAM STATUS ---
-	if (msg_id == 'V' && msg_pass)
+	if (c2r_msg_id == 'V' && c2r_isNew)
 	{
 		fc_doStreamCheck = true;
 	}
@@ -2749,14 +2907,14 @@ void loop() {
 	// Check for streaming
 	if (fc_doStreamCheck && fc_isStreaming)
 	{
-		Store4_CS('D', 255, c2r_packLast[CharInd('V', "c2r")]);
+		Store4_CS('D', 255, c2r_packLast[CharInd('V', c2r_id, c2r_idLng)]);
 		fc_doStreamCheck = false;
 		DebugFlow("STREAMING CONFIRMED");
 	}
 #pragma endregion
 
 #pragma region //--- (Y) DONE RECIEVED ---
-	if (msg_id == 'Y' && msg_pass)
+	if (c2r_msg_id == 'Y' && c2r_isNew)
 	{
 		fc_doCheckDoneRcvd = false;
 		DebugFlow("CS RESIEVED 'DONE'");
@@ -2765,7 +2923,7 @@ void loop() {
 	if (fc_doCheckDoneRcvd && millis() > t_resendDone)
 	{
 		// Resend done confirmation
-		Store4_CS('D', 255, r2c_packLast[CharInd('D', "r2c")]);
+		Store4_CS('D', 255, r2c_packLast[CharInd('D', r2c_id, r2c_idLng)]);
 		// Send again after 1 sec
 		t_resendDone = millis() + 1000;
 		DebugFlow("RESENT 'D'");
@@ -2773,47 +2931,48 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (P) VT DATA RECIEVED ---
-	if (msg_id == 'P' && msg_pass)
+	if (c2r_msg_id == 'P' && c2r_isNew)
 	{
 		// Update vt pos data
 		if (msg_vtEnt == 0)
 		{
-			pos_ratVT.UpdatePosVel(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
+			pos_ratVT.UpdatePos(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
 		}
 		else
 		{
-			pos_robVT.UpdatePosVel(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
+			pos_robVT.UpdatePos(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
 		}
 	}
 #pragma endregion
 
 #pragma region //--- (L) SEND LOG ---
-	if (msg_id == 'L' && msg_pass)
+	if (c2r_msg_id == 'L' && c2r_isNew)
 	{
 		// Stop logging
 		if (doDB_Log)
 			doDB_Log = false;
 
 		// Send log data
-		if (!isLogResend)
+		if (!fc_doLogResend)
 		{
-			DebugFlow("SEND NEXT LOG PACKET");
-			logSendCnt++;
+			cnt_logSend++;
 		}
-		else DebugFlow("RESEND LAST LOG PACKET");
+		else DebugFlow("!!RESEND LAST LOG PACKET!!");
 
 		// Check if end of list reached
-		if (logSendCnt <= logStoreCnt)
+		if (cnt_logSend <= cnt_logStore)
 		{
-			doLogSend = true;
+			fc_doLogSend = true;
+			fc_isSendingLog = true;
 		}
 		// End reached
 		else
 		{
 			// Send confirm done
-			Store4_CS('D', 255, c2r_packLast[CharInd('L', "c2r")]);
+			Store4_CS('D', 255, c2r_packLast[CharInd('L', c2r_id, c2r_idLng)]);
 			DebugFlow("LOG SEND COMPLETE");
-			doLogSend = false;
+			fc_doLogSend = false;
+			fc_isSendingLog = false;
 		}
 	}
 #pragma endregion
@@ -2861,6 +3020,17 @@ void loop() {
 		intrpt_doIRhardStop = false;
 	}
 
+	// Log new ir events
+	if (intrpt_doLogIR)
+	{
+		// Log event if streaming started
+		if (fc_isStreaming)
+			DebugIRSync("ir sync event", t_irSyncLast);
+
+		// Reset flag
+		intrpt_doLogIR = false;
+	}
+
 
 #pragma endregion
 
@@ -2869,11 +3039,11 @@ void loop() {
 	// UPDATE PIXY
 	UpdatePixyPos();
 
-	// INITIALIZE RAT AHEAD
-	InitializeTracking();
-
 	// CHECK IF RAT POS FRAMES DROPPING
 	CheckSampDT();
+
+	// INITIALIZE RAT AHEAD
+	InitializeTracking();
 
 	// UPDATE EKF
 	UpdateEKF();
@@ -2906,7 +3076,6 @@ void loop() {
 		if (reward.EndRew())
 		{
 			// Reset flags
-			reward.Reset();
 			targ_cueRat.Reset();
 			targ_cueRob.Reset();
 			fc_doRew = false;
@@ -2927,12 +3096,9 @@ void loop() {
 	// Check voltage sensor
 	CheckBattery();
 
-	// Log new ir events
-	if (doLogIR)
-	{
-		DebugIRSync("ir detected", t_irSyncLast);
-		doLogIR = false;
-	}
+	// Check if ard data should be resent
+	CheckArdResend();
+
 
 #pragma endregion
 
@@ -2946,181 +3112,193 @@ bool ParseSerial()
 {
 	// Local vars
 	byte buff = 0;
-	char head[2] = { ' ',' ' };
-	char foot = ' ';
-	bool pass = false;
-	bool loop = 0;
-	msg_id == ' ';
+	char head = ' ';
+	bool is_new_c2a = false;
 
 	// Dump data till msg header byte is reached
-	buff = WaitBuffRead(c2r_head[0]);
+	buff = WaitBuffRead(c2r_head, a2r_head);
 	if (buff == 255)
 	{
-		return pass = false;
+		return is_new_c2a = false;
 	}
-
-	// get header
+	// store header
 	u.f = 0.0f;
 	u.b[0] = buff;
-	u.b[1] = WaitBuffRead(0);
-	head[0] = u.c[0];
-	head[1] = u.c[1];
+	head = u.c[0];
 
-	// get packet num
-	u.f = 0.0f;
-	u.b[0] = WaitBuffRead(0);
-	u.b[1] = WaitBuffRead(0);
-	packNow = u.i16[0];
-	// get id
-	u.f = 0.0f;
-	u.b[0] = WaitBuffRead(0);
-	msg_id = u.c[0];
-
-	// Check for second header
-	if (head[1] != c2r_head[1])
+	// Determine sender;
+	if (head == c2r_head)
 	{
-		// mesage will be dumped
-		return pass = false;
+		is_new_c2a = ParseC2R();
+	}
+	else if (head == a2r_head)
+	{
+		ParseA2R();
 	}
 
+	// Return if this is new c2r data
+	return is_new_c2a;
+
+}
+
+// PARSE CS MESSAGE
+bool ParseC2R()
+{
+	// Local vars
+	bool pass = false;
+	byte buff = 0;
+	char foot = ' ';
+	c2r_msg_id == ' ';
+
+	// get id
+	u.f = 0.0f;
+	u.b[0] = WaitBuffRead();
+	c2r_msg_id = u.c[0];
+
 	// Get system test data
-	if (msg_id == 'T')
+	if (c2r_msg_id == 'T')
 	{
 
 		// Get test id
-		msg_setupCmd[0] = WaitBuffRead(0);
+		msg_setupCmd[0] = WaitBuffRead();
 
 		// Get test argument
-		msg_setupCmd[1] = WaitBuffRead(0);
+		msg_setupCmd[1] = WaitBuffRead();
 
 	}
 
 	// Get setup data
-	if (msg_id == 'S')
+	if (c2r_msg_id == 'S')
 	{
 
 		// Get session comand
-		msg_setupCmd[0] = WaitBuffRead(0);
+		msg_setupCmd[0] = WaitBuffRead();
 
 		// Get tone condition
-		msg_setupCmd[1] = WaitBuffRead(0);
+		msg_setupCmd[1] = WaitBuffRead();
 
 	}
 
 	// Get MoveTo data
-	if (msg_id == 'M')
+	if (c2r_msg_id == 'M')
 	{
 
 		// Reset buffer
 		u.f = 0.0f;
 
 		// Get move posm
-		u.b[0] = WaitBuffRead(0);
-		u.b[1] = WaitBuffRead(0);
-		u.b[2] = WaitBuffRead(0);
-		u.b[3] = WaitBuffRead(0);
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
 		msg_moveToTarg = u.f;
 
 	}
 
 	// Get Reward data
-	if (msg_id == 'R')
+	if (c2r_msg_id == 'R')
 	{
 		// Reset buffer
 		u.f = 0.0f;
 
 		// Get stop pos
-		u.b[0] = WaitBuffRead(0);
-		u.b[1] = WaitBuffRead(0);
-		u.b[2] = WaitBuffRead(0);
-		u.b[3] = WaitBuffRead(0);
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
 		msg_rewPos = u.f;
 
 		// Get reward diration 
-		msg_rewDurByte = WaitBuffRead(0);
+		msg_rewDurByte = WaitBuffRead();
 	}
 
 	// Get Cue Reward data
-	if (msg_id == 'C')
+	if (c2r_msg_id == 'C')
 	{
 		// Reset buffer
 		u.f = 0.0f;
 
 		// Get stop pos
-		u.b[0] = WaitBuffRead(0);
-		u.b[1] = WaitBuffRead(0);
-		u.b[2] = WaitBuffRead(0);
-		u.b[3] = WaitBuffRead(0);
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
 		msg_cueTarg = u.f;
 
 		// Get reward diration 
-		msg_rewDurByte = WaitBuffRead(0);
+		msg_rewDurByte = WaitBuffRead();
 	}
 
 	// Get halt robot data
-	if (msg_id == 'H')
+	if (c2r_msg_id == 'H')
 	{
 		// Get halt bool
-		byte do_halt = WaitBuffRead(0);
+		byte do_halt = WaitBuffRead();
 		fc_doHalt = do_halt == 1 ? true : false;
 	}
 
 	// Get bulldoze rat data
-	if (msg_id == 'B')
+	if (c2r_msg_id == 'B')
 	{
 		// Get delay in sec
-		msg_bullDel = WaitBuffRead(0);
+		msg_bullDel = WaitBuffRead();
 		// Get speed
-		msg_bullSpeed = WaitBuffRead(0);
+		msg_bullSpeed = WaitBuffRead();
 	}
 
 	// Get rat in/out
-	if (msg_id == 'I')
+	if (c2r_msg_id == 'I')
 	{
 		// Get session comand
-		byte rat_in = WaitBuffRead(0);
+		byte rat_in = WaitBuffRead();
 		fc_isRatIn = rat_in == 1 ? true : false;
 	}
 
 	// Get log request data
-	if (msg_id == 'L')
+	if (c2r_msg_id == 'L')
 	{
 		// Get session comand
-		byte resend = WaitBuffRead(0);
-		isLogResend = resend == 1 ? true : false;
+		byte resend = WaitBuffRead();
+		fc_doLogResend = resend == 1 ? true : false;
 
 	}
 
 	// Get VT data
-	else if (msg_id == 'P')
+	else if (c2r_msg_id == 'P')
 	{
 		// Get Ent
-		msg_vtEnt = WaitBuffRead(0);
+		msg_vtEnt = WaitBuffRead();
 		// Get TS
 		u.f = 0.0f;
 		for (int i = 0; i < 4; i++)
 		{
-			u.b[i] = WaitBuffRead(0);
+			u.b[i] = WaitBuffRead();
 		}
 		msg_vtTS[msg_vtEnt] = u.i32;
 		// Get pos cm
 		u.f = 0.0f;
 		for (int i = 0; i < 4; i++)
 		{
-			u.b[i] = WaitBuffRead(0);
+			u.b[i] = WaitBuffRead();
 		}
 		msg_vtCM[msg_vtEnt] = u.f;
 	}
 
+	// Get packet num
+	u.f = 0.0f;
+	u.b[0] = WaitBuffRead();
+	u.b[1] = WaitBuffRead();
+	packNow = u.i16[0];
+
 	// Check for footer
 	u.f = 0.0f;
-	u.b[0] = WaitBuffRead(0);
+	u.b[0] = WaitBuffRead();
 	foot = u.c[0];
 
 	// Footer missing
 	if (foot != c2r_foot) {
 		// mesage will be dumped
-		return pass = false;
+		pass = false;
 	}
 	// Process complete mesage
 	else
@@ -3130,7 +3308,7 @@ bool ParseSerial()
 		t_rcvd = millis();
 
 		// CHECK FOR STREAMING STARTED
-		if (msg_id == 'P' && !fc_isStreaming)
+		if (c2r_msg_id == 'P' && !fc_isStreaming)
 		{
 			// Signal streaming started
 			fc_isStreaming = true;
@@ -3140,23 +3318,75 @@ bool ParseSerial()
 		}
 
 		// Process packet number
-		pass = CheckPack(msg_id, packNow);
-
-		// Return final status
-		return pass;
+		pass = CheckPack(c2r_msg_id, packNow);
 
 	}
 
+	// Return final status
+	return pass;
+
+}
+
+// PARSE CHEEAH DUE MESSAGE
+void ParseA2R()
+{
+	// Local vars
+	byte buff = 0;
+	char foot = ' ';
+	char id = ' ';
+	uint16_t pack = 0;
+
+	// get id
+	u.f = 0.0f;
+	u.b[0] = WaitBuffRead();
+	id = u.c[0];
+
+	// Get packet num
+	u.f = 0.0f;
+	u.b[0] = WaitBuffRead();
+	u.b[1] = WaitBuffRead();
+	pack = u.i16[0];
+
+	// Check for footer
+	u.f = 0.0f;
+	u.b[0] = WaitBuffRead();
+	foot = u.c[0];
+
+	// Update sent history
+	if (foot == a2r_foot) {
+		int id_ind = CharInd(id, r2a_id, r2a_idLng);
+		if (id_ind != -1)
+		{
+			// Reset flags
+			r2a_sendTim[id_ind] = 0;
+			r2a_doRcvCheck[id_ind] = false;
+
+			// Store revieved pack details
+			DebugRcvd(id, pack);
+		}
+	}
 }
 
 // WAIT FOR BUFFER TO FILL
-byte WaitBuffRead(byte match)
+byte WaitBuffRead()
+{
+	return WaitBuffRead(' ', ' ');
+}
+byte WaitBuffRead(char chr1)
+{
+	return WaitBuffRead(chr1, chr1);
+}
+byte WaitBuffRead(char chr1, char chr2)
 {
 	// Local vars
 	static uint32_t timeout = 100;
 	uint32_t t_timeout = millis() + timeout;
 	byte buff = 0;
 	bool pass = false;
+
+	// Convert char to byte
+	byte match1 = chr1 == ' ' ? 255 : byte(chr1);
+	byte match2 = chr2 == ' ' ? 255 : byte(chr2);
 
 	// Check for overflow
 	if (Serial1.available() < SERIAL_BUFFER_SIZE - 1)
@@ -3166,7 +3396,7 @@ byte WaitBuffRead(byte match)
 			millis() < t_timeout);
 
 		// Store next byte
-		if (match == 0)
+		if (match1 == 255)
 		{
 			if (Serial1.available() > 0)
 			{
@@ -3184,11 +3414,13 @@ byte WaitBuffRead(byte match)
 				{
 					buff = Serial1.read(); // dump
 				}
-			} while (buff != match &&
+			} while (
+				buff != match1  &&
+				buff != match2  &&
 				millis() < t_timeout &&
 				Serial1.available() < SERIAL_BUFFER_SIZE - 1);
 			// check match was found
-			if (buff == match)
+			if (buff == match1 || buff == match2)
 			{
 				pass = true;
 			}
@@ -3222,6 +3454,7 @@ byte WaitBuffRead(byte match)
 
 	// Store time
 	t_loopRead = millis() - (t_timeout - timeout);
+
 	// Return buffer
 	return buff;
 }
@@ -3239,7 +3472,7 @@ bool CheckPack(char id, uint16_t pack)
 	// SEND AND PRINT PACKET CONFIRMATON
 	if (id != 'P')
 	{
-		// Print revieved pack details
+		// Store revieved pack details
 		DebugRcvd(id, pack);
 
 		// Send back packet confirmation
@@ -3283,10 +3516,10 @@ bool CheckPack(char id, uint16_t pack)
 	}
 
 	// CHECK IF NEW PACK
-	if (c2r_packLast[CharInd(id, "c2r")] != pack)
+	if (c2r_packLast[CharInd(id, c2r_id, c2r_idLng)] != pack)
 	{
 		// Update last packet
-		c2r_packLast[CharInd(id, "c2r")] = pack;
+		c2r_packLast[CharInd(id, c2r_id, c2r_idLng)] = pack;
 
 		// Pack should be used
 		do_use_pack = true;
@@ -3308,7 +3541,7 @@ bool CheckPack(char id, uint16_t pack)
 				{
 
 					// Get list index
-					id_ind = CharInd(c2r_idHist[i], c2r_id);
+					id_ind = CharInd(c2r_idHist[i], c2r_id, c2r_idLng);
 
 					// Check caught pack is what we have stored
 					if (c2r_packRepeat[id_ind] != pack)
@@ -3343,11 +3576,15 @@ bool CheckPack(char id, uint16_t pack)
 // STORE BYTE SERIAL DATA FOR CS
 void Store4_CS(char id, byte d1, uint16_t pack)
 {
+	/*
+	STORE DATA FOR CS
+	FORMAT: head, id, data, packet num, footer
+	*/
+
 	// Local vars
-	int queue_ind = 0;
+	int queue_ind = sendQueueInd;
 
 	// Update queue index
-	queue_ind = sendQueueInd;
 	sendQueueInd--;
 
 	// Store reciever id in last col
@@ -3378,7 +3615,7 @@ void Store4_CS(char id, byte d1, uint16_t pack)
 	doPackSend = true;
 
 	// Update last packet array
-	r2c_packLast[CharInd(id, "r2c")] = pack;
+	r2c_packLast[CharInd(id, r2c_id, r2c_idLng)] = pack;
 
 	// Update packet history 
 	for (int i = 0; i < r2c_hLng - 1; i++)
@@ -3403,11 +3640,21 @@ void Store4_CS(char id, byte d1, uint16_t pack)
 // STORE BYTE SERIAL DATA FOR ARD
 void Store4_Ard(char id, byte d1)
 {
+	Store4_Ard(id, d1, 0);
+}
+void Store4_Ard(char id, byte d1, uint16_t pack)
+{
+	/*
+	STORE DATA FOR CHEETAH DUE
+	FORMAT: head, id, data, packet num, footer
+	*/
+
 	// Local vars
-	int queue_ind = 0;
+	int queue_ind = r2_lngR - 1;
 
 	// Itterate packet
-	r2a_packCnt++;
+	if (pack == 0)
+		pack = r2a_packCnt++;
 
 	// Shift data back so ard msg is first in queue
 	for (int i = 0; i < r2_lngR - 1; i++)
@@ -3419,7 +3666,6 @@ void Store4_Ard(char id, byte d1)
 	}
 
 	// Update queue index
-	queue_ind = r2_lngR - 1;
 	sendQueueInd--;
 
 	// Store reciever id in last col
@@ -3460,6 +3706,9 @@ void SendPacketData()
 	bool do_send = false;
 	int buff_tx = 0;
 	int buff_rx = 0;
+	char id = ' ';
+	byte dat = 0;
+	uint16_t pack = 0;
 
 	// Get total data in buffers
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
@@ -3500,6 +3749,22 @@ void SendPacketData()
 		// Update send time 
 		t_sent = millis();
 
+		// Set flags for r2a comm
+		if (rcv_id == 'a')
+		{
+			int id_ind = CharInd(msg[1], r2a_id, r2a_idLng);
+			r2a_sendTim[id_ind] = t_sent;
+			r2a_doRcvCheck[id_ind] = true;
+
+			// Store sent message data
+			r2a_datLast[id_ind] = msg[2];
+			// Store sent packet number
+			u.f = 0.0f;
+			u.b[0] = msg[2];
+			u.b[1] = msg[3];
+			r2a_packLast[id_ind] = u.i16[0];
+		}
+
 		// Update queue index
 		sendQueueInd++;
 
@@ -3534,11 +3799,6 @@ void SendPacketData()
 				doDB_Log)
 			)
 		{
-			char str[50];
-			char id = ' ';
-			byte dat = 0;
-			uint16_t pack = 0;
-
 			// Store mesage id
 			u.f = 0.0f;
 			u.b[0] = msg[1];
@@ -3552,13 +3812,15 @@ void SendPacketData()
 			pack = u.i16[0];
 
 			// Store
-			if ((doDB_PrintConsole || doDB_PrintLCD) &&
+			char str[50];
+			if (
+				(doDB_PrintConsole || doDB_PrintLCD) &&
 				((doPrint_r2c && rcv_id == 'c') ||
 				(doPrint_r2a && rcv_id == 'a'))
 				)
 			{
 				if (doDB_PrintConsole)
-					sprintf(str, "\tsent: to:%c id:%c dat:%d pack:%d", rcv_id, id, dat, pack);
+					sprintf(str, "sent: to:%c id:%c dat:%d pack:%d", rcv_id, id, dat, pack);
 				else if (doDB_PrintLCD)
 					sprintf(str, "sent: t:%c i:%c d:%d p:%d", rcv_id, id, dat, pack);
 				StoreDBPrintStr(str, t_sent);
@@ -3614,7 +3876,7 @@ void SendLogData()
 		t_sent = millis();
 
 		// Pull out string
-		msg_str = logList[logSendCnt - 1];
+		msg_str = logList[cnt_logSend - 1];
 
 		// Get message size
 		str_size = msg_str.length();
@@ -3646,15 +3908,53 @@ void SendLogData()
 			String str;
 
 			// Store
-			sprintf(chr, "log(%d/%d) cs(%d): ", logSendCnt, logStoreCnt, str_size);
+			sprintf(chr, "log(%d/%d) cs(%d): ", cnt_logSend, cnt_logStore, str_size);
 			str = chr;
 			StoreDBPrintStr(str + "\"" + msg_str + "\"", t_sent);
 		}
 
 		// Reset flag
-		doLogSend = false;
+		fc_doLogSend = false;
 
 	}
+}
+
+// CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
+bool CheckArdResend()
+{
+	// Local vars
+	bool do_pack_resend = false;
+
+	// Loop through and check for data needing to be resent
+	for (int i = 0; i < r2a_idLng; i++)
+	{
+		if (
+			r2a_doRcvCheck[i] &&
+			millis() > r2a_sendTim[i] + r2a_resendDel
+			)
+		{
+			if (r2a_resendCnt[i] < r2a_resendMax) {
+
+				// Resend data
+				Store4_Ard(r2a_id[i], r2a_datLast[i], r2a_packLast[i]);
+
+				// Update count
+				r2a_resendCnt[i]++;
+				DebugResent(r2a_id[i], r2a_packLast[i], r2a_resendCnt[i]);
+
+				// Set flag
+				do_pack_resend = true;
+			}
+			// Com likely down
+			else {
+				r2a_doRcvCheck[i] = false;
+				r2a_sendTim[i] = 0;
+			}
+		}
+	}
+
+// Return
+	return do_pack_resend;
 }
 
 #pragma endregion
@@ -3797,7 +4097,7 @@ bool SetMotorControl(String set_to, String called_from)
 
 	// Store current controller
 	DebugMotorControl(pass, set_to, called_from);
-	
+
 	return pass;
 }
 
@@ -3862,17 +4162,16 @@ void InitializeTracking()
 		float cm_diff = 0;
 		float cm_dist = 0;
 
-		// Check that rat pos < robot pos
+		// Print process
+		DebugFlow("INITIALIZING RAT TRACKING");
+
+		// Check that rat pos > robot pos
 		n_laps = pos_ratVT.posNow > pos_robVT.posNow ? 0 : 1;
 		if (n_laps > 0)
 			DebugFlow("SET RAT POS AHEAD");
-
-		else
-			DebugFlow("RAT POS ALREADY AHEAD");
-
-		// Reset all vt data
-		pos_ratVT.ResetDat(pos_ratVT.posNow, n_laps);
-		pos_ratPixy.ResetDat(pos_ratPixy.posNow, n_laps);
+		// set n_laps for rat vt data
+		pos_ratVT.SetPos(pos_ratVT.posNow, n_laps);
+		pos_ratPixy.SetPos(pos_ratPixy.posNow, n_laps);
 
 		// Check that results make sense
 		cm_diff = pos_ratVT.posNow - pos_robVT.posNow;
@@ -3882,9 +4181,9 @@ void InitializeTracking()
 		if (cm_dist > ((140 * PI) / 4))
 		{
 			// Will have to run again with new samples
-			pos_ratVT.ResetDat(0, 0);
-			pos_ratPixy.ResetDat(0, 0);
-			pos_robVT.ResetDat(0, 0);
+			pos_ratVT.SetPos(0, 0);
+			pos_ratPixy.SetPos(0, 0);
+			pos_robVT.SetPos(0, 0);
 			DebugFlow("RAT POS WRONG SO POS DATA RESET");
 		}
 		// Good to go
@@ -3941,7 +4240,7 @@ void CheckSampDT() {
 		// Check pixy
 		if (
 			pixy_dt >= max_frame_dt &&
-			vt_dt < max_frame_dt
+			vt_dt < pixy_dt
 			)
 		{
 			// Use VT for Pixy data
@@ -3950,7 +4249,7 @@ void CheckSampDT() {
 		// Check VT 
 		else if (
 			vt_dt >= max_frame_dt &&
-			pixy_dt < max_frame_dt
+			pixy_dt < vt_dt
 			)
 		{
 			// Use Pixy for VT data
@@ -3996,7 +4295,7 @@ void UpdatePixyPos() {
 			px_abs = px_abs - (140 * PI);
 		}
 		// Update pixy pos and vel
-		pos_ratPixy.UpdatePosVel((float)px_abs, px_ts);
+		pos_ratPixy.UpdatePos((float)px_abs, px_ts);
 
 	}
 
@@ -4016,22 +4315,17 @@ void UpdateEKF()
 		// Update pid next loop time
 		pid.SetLoopTime(millis());
 
-		// Update PID loop time
-		if (fc_isRatIn)
+		// Set rat pos data to match robot
+		if (!fc_isRatIn)
+		{
+			pos_ratVT.SetPos(0, 0);
+			pos_ratPixy.SetPos(0, 0);
+		}
+		// Set rat pos data to match robot
+		else if (fc_isTrackingEnabled)
 		{
 			// Set flag for reward 
 			reward.is_ekfNew = true;
-			// Store pixy/vt average
-			vtpixyVelAvg =
-				(pos_ratVT.velNow + pos_ratPixy.velNow) / 2;
-			vtpixyPosAvg =
-				(pos_ratVT.posNow + pos_ratPixy.posNow) / 2;
-		}
-		// Set rat pos data to match robot
-		else
-		{
-			pos_ratVT.ResetDat(0, 0);
-			pos_ratPixy.ResetDat(0, 0);
 		}
 
 		//----------UPDATE EKF---------
@@ -4187,8 +4481,9 @@ void CheckBattery()
 		// Convert float to byte
 		byte_out = byte(round(volt_avg * 10));
 
-		// Add to queue
-		Store4_CS('J', byte_out, 0);
+		// Add to queue if streaming established
+		if (fc_isStreaming)
+			Store4_CS('J', byte_out, 0);
 
 		char str[50];
 		sprintf(str, "Vcc: %0.2fV", volt_avg);
@@ -4470,7 +4765,7 @@ void DebugRcvd(char id, uint16_t pack)
 		}
 		else if (id == 'L')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, isLogResend, pack);
+			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, fc_doLogResend, pack);
 		}
 		else sprintf(chr, "rcvd: id:%c pack:%d", id, pack);
 
@@ -4478,9 +4773,8 @@ void DebugRcvd(char id, uint16_t pack)
 		String str = chr;
 
 		// Add to print queue
-		if (doDB_PrintConsole && doPrint_rcvd)
-			StoreDBPrintStr("\t" + str, t_rcvd);
-		else if (doDB_PrintLCD && doPrint_rcvd)
+		if (doDB_PrintConsole &&
+			(doDB_PrintConsole || doDB_PrintLCD))
 			StoreDBPrintStr(str, t_rcvd);
 
 		// Add to log queue
@@ -4528,68 +4822,84 @@ void DebugFlow(String msg)
 void StoreDBPrintStr(String msg, uint32_t ts)
 {
 	// Local vars
+	static String last_msg = " ";
+	static uint32_t t_last = millis();
 	char t_str_long[50];
 	char t_str_ellapsed[50];
-	static uint32_t t_last = millis();
 	uint32_t ts_norm = 0;
 	float t_c = 0;
 	float t_ellapsed = 0;
 
-	// Time now
-	ts_norm = t_sync == 0 ? ts : ts - t_sync;
+	// Dont store repeated string
+	if (msg != last_msg) {
 
-	// Total time
-	t_c = (float)(ts_norm) / 1000.0f;
+		// Save string
+		last_msg = msg;
 
-	// Ellapsed time
-	t_ellapsed = (float)((millis() - t_last) / 1000.0f);
-	t_last = millis();
+		// Time now
+		ts_norm = t_sync == 0 ? ts : ts - t_sync;
 
-	// Save long and short string
-	sprintf(t_str_long, "[%0.2fs]", t_c);
-	sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
+		// Total time
+		t_c = (float)(ts_norm) / 1000.0f;
 
-	// Shift queue
-	for (int i = 0; i < printQueue_lng - 1; i++)
-	{
-		printQueue[i] = printQueue[i + 1];
+		// Ellapsed time
+		t_ellapsed = (float)((millis() - t_last) / 1000.0f);
+		t_last = millis();
+
+		// Save long and short string
+		sprintf(t_str_long, "[%0.2fs]", t_c);
+		sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
+
+		// Shift queue
+		for (int i = 0; i < printQueue_lng - 1; i++)
+		{
+			printQueue[i] = printQueue[i + 1];
+		}
+
+		// Set first entry to new string 
+		if (doDB_PrintLCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + msg;
+		else if (doDB_PrintConsole) printQueue[printQueue_lng - 1] = msg;
+
+		// Save total time to end
+		printQueue[0] = t_str_long;
+
+		// Set queue ind
+		printQueueInd--;
+
+		// Set flag
+		doPrint = true;
+
 	}
-
-	// Set first entry to new string 
-	if (doDB_PrintLCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + msg;
-	else if (doDB_PrintConsole) printQueue[printQueue_lng - 1] = msg;
-
-	// Save total time to end
-	printQueue[0] = t_str_long;
-
-	// Set queue ind
-	printQueueInd--;
-
-	// Set flag
-	doPrint = true;
-
 }
 
 // STORE STRING FOR LOGGING
 void StoreDBLogStr(String msg, uint32_t ts)
 {
 	// Local vars
+	static String last_msg = " ";
 	char str_c[100];
 	char msg_c[100];
 	uint32_t ts_norm = 0;
 
-	// Itterate log entry count
-	logStoreCnt++;
+	// Dont store repeated string or log data while sending log
+	if (
+		!fc_isSendingLog &&
+		msg != last_msg
+		) 
+	{
 
-	// Concatinate ts with message
-	msg.toCharArray(str_c, 100);
-	sprintf(msg_c, "[%d],%d,%s", logStoreCnt, ts, str_c);
-	logList[logStoreCnt - 1] = msg_c;
+		// Save string
+		last_msg = msg;
 
-	// TEST
-	//delay(100);
-	//PrintLCD(logList[logStoreCnt - 1], " ", 't');
-	//SerialUSB.println(logList[logStoreCnt - 1]);
+		// Itterate log entry count
+		cnt_logStore++;
+
+		// Concatinate ts with message
+		msg.toCharArray(str_c, 100);
+		sprintf(msg_c, "[%d],%d,%s", cnt_logStore, ts, str_c);
+		logList[cnt_logStore - 1] = msg_c;
+
+	}
 }
 
 // PRINT DEBUG STRINGS TO CONSOLE/LCD
@@ -4650,14 +4960,13 @@ void PrintDebug()
 			// Pad string
 			char chr[50];
 			char arg[50];
-			String sarg;
 			sprintf(arg, "%%%ds", 20 - printQueue[0].length());
 			sprintf(chr, arg, '_');
 
 			// Append string
 			String str = printQueue[0] + chr + printQueue[printQueueInd] + "\n";
 
-			// Send
+			// Print
 			SerialUSB.print(str);
 		}
 
@@ -4723,31 +5032,16 @@ void ClearLCD()
 #pragma region --------MINOR FUNCTIONS---------
 
 // GET ID INDEX
-int CharInd(char id, String a_lab)
+int CharInd(char id, char id_arr[], int arr_size)
 {
 
 	int ind = -1;
-	if (a_lab == "c2r")
+	for (int i = 0; i < arr_size; i++)
 	{
-		for (int i = 0; i < c2r_idLng; i++)
-		{
-			if (id == c2r_id[i]) ind = i;
-		}
+		if (id == id_arr[i])
+			ind = i;
 	}
-	else if (a_lab == "r2c")
-	{
-		for (int i = 0; i < r2c_idLng; i++)
-		{
-			if (id == r2c_id[i]) ind = i;
-		}
-	}
-	else if (a_lab == "r2a")
-	{
-		for (int i = 0; i < r2a_idLng; i++)
-		{
-			if (id == r2a_id[i]) ind = i;
-		}
-	}
+
 	return ind;
 
 }
@@ -4830,10 +5124,9 @@ void Interupt_IR_Detect()
 	}
 
 	// Set flag
-	doLogIR = true;
+	intrpt_doLogIR = true;
 
 	// Update debounce
 	intrpt_irDetectDebounce = millis() + 250;
 }
 #pragma endregion
-

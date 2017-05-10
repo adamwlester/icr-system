@@ -2,8 +2,9 @@
 
 #pragma region ---------DEBUG SETTINGS---------
 
-bool doPrintFlow = false;
-bool doPrintRcvdPack = false;
+bool doPrintFlow = true;
+bool doPrintRcvdPack = true;
+bool doPrintSentPack = true;
 
 #pragma endregion 
 
@@ -80,6 +81,7 @@ uint32_t t_debounce = 10; // (ms)
 uint32_t t_pulseWdth = 50; // (ms)
 
 // Flow control
+bool fc_doQuit = false;
 bool fc_isSesStarted = false;
 bool fc_doWhiteNoise = false;
 bool fc_doRewTone = false;
@@ -88,8 +90,7 @@ bool fc_isRewarding = false;
 // Serial
 char msg_id = ' ';
 byte msg_dat;
-uint16_t packNow;
-const char r2a_id[10] = {
+char r2a_id[6] = {
 	't', // set sync time
 	'q', // quit/reset
 	'r', // reward
@@ -97,9 +98,14 @@ const char r2a_id[10] = {
 	'p', // pid mode [0, 1]
 	'b', // bull mode [0, 1]
 };
-char rob2ard_head = '[';
-char rob2ard_foot = ']';
-bool msg_pass = false;
+const int r2a_idLng = sizeof(r2a_id) / sizeof(r2a_id[0]);
+uint16_t r2a_packLast[r2a_idLng];
+char r2a_head = '{';
+char r2a_foot = '}';
+bool r2a_isNew = false;
+bool doPackSend = false;
+const char a2r_head = '{';
+const char a2r_foot = '}';
 
 // Reward
 uint32_t rewDur; // (ms) 
@@ -107,7 +113,7 @@ uint32_t t_rewEnd;
 
 // IR time sync LED
 const uint32_t syncDur = 5; // (ms)
-const uint32_t syncDel = 60000; // (ms)
+const uint32_t syncDel = 10000; // (ms)
 uint32_t t_sync = 0;
 uint32_t t_syncLast;
 
@@ -129,7 +135,7 @@ void setup()
 {
 
 	//while (!SerialUSB);
-	PrintState("SETUP");
+	PrintState("RESTART");
 
 	// XBee.
 	Serial1.begin(57600);
@@ -161,7 +167,6 @@ void setup()
 	digitalWrite(pin_relWhiteNoise, LOW);
 
 	// set other output pins
-	pinMode(pin_IR_LED, OUTPUT);
 	pinMode(pin_ttlRewOn, OUTPUT);
 	pinMode(pin_ttlRewOff, OUTPUT);
 	pinMode(pin_ttlBullRun, OUTPUT);
@@ -182,15 +187,15 @@ void setup()
 void loop()
 {
 	// Check for XBee input
-	msg_pass = false;
+	r2a_isNew = false;
 	if (Serial1.available() > 0) {
-		msg_pass = ParseSerial();
+		r2a_isNew = ParseSerial();
 	}
 
 	// Check for sync time indicating session starting
 	if (!fc_isSesStarted)
 	{
-		if (msg_pass && msg_id == 't')
+		if (r2a_isNew && msg_id == 't')
 		{
 			// Set sync time and pulse IR
 			t_sync = millis();
@@ -204,7 +209,7 @@ void loop()
 	else
 	{
 		// Exicute input
-		if (msg_pass)
+		if (r2a_isNew)
 		{
 
 			// Run reward tone
@@ -284,12 +289,8 @@ void loop()
 
 			// Quite and reset
 			else if (msg_id == 'q') {
+				fc_doQuit = true;
 				PrintState("QUITING");
-				// Run bleep bleep
-				QuitBleep();
-				fc_isSesStarted = false;
-				// Restart Arduino
-				REQUEST_EXTERNAL_RESET;
 			}
 
 		}
@@ -306,21 +307,39 @@ void loop()
 		// Check if IR should be pulsed 
 		CheckIRPulse();
 
+		// Check if ready to quit
+		if (fc_doQuit && !doPackSend)
+		{
+			// Run bleep bleep
+			QuitBleep();
+			// Restart Arduino
+			REQUEST_EXTERNAL_RESET;
+		}
+
+	}
+
+	// Send message confirmation
+	if (doPackSend)
+	{
+		SendSerial(msg_id, r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)]);
 	}
 }
 
 
 #pragma region --------COMMUNICATION---------
+
 // PARSE SERIAL INPUT
 bool ParseSerial()
 {
 
-	static char head;
-	static char foot;
-	static bool pass;
+	static char head = ' ';
+	static char foot = ' ';
+	uint16_t pack = 0;
+	static bool pass = false;
+	doPackSend = false;
 
 	// Dump data till header byte is reached
-	while (Serial1.peek() != rob2ard_head && Serial1.available() > 0)
+	while (Serial1.peek() != r2a_head && Serial1.available() > 0)
 	{
 		Serial1.read(); // dump
 	}
@@ -331,7 +350,7 @@ bool ParseSerial()
 	head = u.c[0];
 
 	// Check header
-	if (head != rob2ard_head) {
+	if (head != r2a_head) {
 		// mesage will be dumped
 		return pass = false;
 	}
@@ -344,7 +363,7 @@ bool ParseSerial()
 
 	// Wait for data packet
 	while (Serial1.available() < 1);
-	// get id
+	// get data
 	msg_dat = Serial1.read();
 
 	// Wait for pack number packet
@@ -353,7 +372,7 @@ bool ParseSerial()
 	u.f = 0.0f;
 	u.b[0] = Serial1.read();
 	u.b[1] = Serial1.read();
-	packNow = u.i16[0];
+	pack = u.i16[0];
 
 	// Wait for foot packet
 	while (Serial1.available() < 1);
@@ -363,16 +382,79 @@ bool ParseSerial()
 	foot = u.c[2];
 
 	// Footer missing
-	if (foot != rob2ard_foot) {
+	if (foot != r2a_foot) {
 		// mesage will be dumped
 		return pass = false;
 	}
 	else
 	{
-		PrintRcvdPack(msg_id, packNow);
-		return pass = true;
+		// Send back confirmation
+		doPackSend = true;
+		// Print rcvd pack
+		PrintRcvdPack(msg_id, msg_dat, pack);
+		pass = true;
 	}
 
+	// Check if packet is new
+	if (pass)
+	{
+		if (r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)] != pack)
+		{
+			// Update last packet
+			r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)] = pack;
+		}
+		else pass = false;
+	}
+
+	return pass;
+
+}
+
+// SEND SERIAL DATA
+void SendSerial(char id, uint16_t pack)
+{
+	// Local vars
+	const int msg_size = 5;
+	byte msg[msg_size];
+	bool pass = false;
+
+	// Confirm message really intended for here
+
+	for (int i = 0; i < r2a_idLng; i++)
+	{
+		if (id == r2a_id[i])
+			pass = true;
+	}
+
+	if (pass)
+	{
+		// Store header
+		u.f = 0.0f;
+		u.c[0] = a2r_head;
+		msg[0] = u.b[0];
+		// Store mesage id
+		u.f = 0.0f;
+		u.c[0] = id;
+		msg[1] = u.b[0];
+		// Store packet number
+		u.f = 0.0f;
+		u.i16[0] = pack;
+		msg[2] = u.b[0];
+		msg[3] = u.b[1];
+		// Store footer
+		u.f = 0.0f;
+		u.c[0] = a2r_foot;
+		msg[4] = u.b[0];
+
+		// Send
+		Serial1.write(msg, msg_size);
+
+		// Print sent
+		PrintSentPack(id, pack);
+
+		// Reset flag
+		doPackSend = false;
+	}
 }
 
 #pragma endregion
@@ -406,8 +488,9 @@ void StartRew()
 	fc_isRewarding = true;
 
 	// Print
-	char str[50];
-	sprintf(str, "REWARDING(%dms)...", rewDur);
+	char chr[50];
+	sprintf(chr, "REWARDING(%dms)...", rewDur);
+	String str = chr;
 	PrintState(str);
 }
 
@@ -437,7 +520,92 @@ void EndRew()
 #pragma endregion
 
 
-#pragma region --------OTHER FUNCTIONS---------
+#pragma region --------DEBUGGING---------
+
+// PRINT STATUS
+void PrintState(String msg)
+{
+	if (doPrintFlow)
+	{
+		PrintStr(msg, millis());
+	}
+}
+
+// PRINT RECIEVED PACKET
+void PrintRcvdPack(char id, byte dat, uint16_t pack)
+{
+
+	//// Print
+	if (doPrintRcvdPack)
+	{
+		char str[50];
+		sprintf(str, "rcvd: id:%c dat:%d pack:%d", id, dat, pack);
+		PrintStr(str, millis());
+	}
+}
+
+// PRINT SENT PACKET
+void PrintSentPack(char id, uint16_t pack)
+{
+
+	//// Print
+	if (doPrintSentPack)
+	{
+		char str[50];
+		sprintf(str, "sent: id:%c pack:%d", id, pack);
+		PrintStr(str, millis());
+	}
+}
+
+// PRINT DB INFO
+void PrintStr(String msg, uint32_t ts)
+{
+	static uint32_t t1 = millis();
+	uint32_t ts_norm = 0;
+	float t_c = 0;
+	float t;
+
+	// Time now
+	ts_norm = t_sync == 0 ? ts : ts - t_sync;
+
+	// Total time
+	t_c = (float)(ts_norm) / 1000.0f;
+
+	// Pad string
+	char chr[50];
+	char chr_ts[50];
+	char arg[50];
+	sprintf(chr_ts, "[%0.2fs]", t_c);
+	String str_ts = chr_ts;
+	sprintf(arg, "%%%ds", 20 - str_ts.length());
+	sprintf(chr, arg, '_');
+
+	// Append string
+	String str = str_ts + chr + msg + "\n";
+
+	// Print
+	SerialUSB.print(str);
+}
+
+#pragma endregion
+
+
+#pragma region --------MINOR FUNCTIONS---------
+
+// GET ID INDEX
+int CharInd(char id, char id_arr[], int arr_size)
+{
+
+	int ind = -1;
+	for (int i = 0; i < arr_size; i++)
+	{
+		if (id == id_arr[i])
+			ind = i;
+	}
+
+	return ind;
+
+}
 
 // PULSE IR
 void CheckIRPulse()
@@ -461,56 +629,6 @@ void CheckIRPulse()
 		digitalWrite(pin_IR_LED, LOW);
 	}
 
-}
-
-// PRINT STATUS
-void PrintState(String str)
-{
-	if (doPrintFlow)
-	{
-		char msg[50];
-		uint32_t ts;
-		float t;
-
-		// compute time
-		if (t_sync == 0) ts = millis();
-		else ts = t_sync;
-		t = (float)((millis() - ts) / 1000.0f);
-
-		// print
-		sprintf(msg, " (%0.3fsec)\n\n", t);
-		SerialUSB.print('\n');
-		SerialUSB.print(str);
-		SerialUSB.print(msg);
-	}
-}
-
-// PRINT RECIEVED PACKET
-void PrintRcvdPack(char id, uint16_t pack)
-{
-
-	//// Print
-	if (doPrintRcvdPack)
-	{
-		char str[50];
-		static uint32_t t1 = millis();
-		uint32_t ts;
-		uint32_t dt;
-		float t;
-
-		// Print
-
-		// compute time
-		if (t_sync == 0) ts = millis();
-		else ts = t_sync;
-		t = (float)((millis() - ts) / 1000.0f);
-		dt = millis() - t1;
-
-		// Print specific pack contents
-		sprintf(str, "---Rcvd: [id:%c pack:%d (dt:%dms tot:%0.3fsec)]\n", id, pack, dt, t);
-		SerialUSB.print(str);
-		t1 = millis();
-	}
 }
 
 // PLAY SOUND WHEN QUITING

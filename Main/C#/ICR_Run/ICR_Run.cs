@@ -117,14 +117,12 @@ namespace ICR_Run
             'L', // request log send/resend
             'Y', // confirm done recieved
              };
-        private static char[] c2r_charHead = new char[] { '_', '<' }; // 2 byte header
-        private static char c2r_charFoot = '>'; // 1 byte header
+        private static byte[] c2r_head = new byte[] { (byte)'<' }; // 2 byte header
+        private static byte[] c2r_foot = new byte[] { (byte)'>' }; // 1 byte header
         private static List<char> c2r_idHist = new List<char>();
         private static List<ushort> c2r_packHist = new List<ushort>();
         private static ushort[] c2r_packLast = new ushort[c2r_id.Length];
         private static ushort c2r_packCnt = 0; // packet number
-        private static byte[] c2r_head = new byte[2];
-        private static byte[] c2r_foot = new byte[1];
         private static byte[] c2r_packNum = new byte[2];
 
         // Robot to CS communication
@@ -145,22 +143,23 @@ namespace ICR_Run
             'J', // battery voltage
             'Z', // reward zone
              };
-        private static char r2c_head = '{';
-        private static char r2c_foot = '}';
+        private static char r2c_head = '<';
+        private static char r2c_foot = '>';
         private static List<char> r2c_idHist = new List<char>();
         private static List<ushort> r2c_packHist = new List<ushort>();
         private static ushort[] r2c_packLast = new ushort[r2c_id.Length];
+
+        // CS to Matlab communication
+        private static char[] c2m_id = new char[3] {
+            'V', // robot streaming
+            'S', // enable save
+            'E', // exit
+             };
 
         // Robot to Matlab communication
         private static char[] r2m_id = new char[2] {
             'J', // battery voltage
             'Z', // reward zone
-             };
-
-        // CS to Matlab communication
-        private static char[] c2m_id = new char[2] {
-            'S', // enable save
-            'E', // exit
              };
 
         // General communication
@@ -178,7 +177,7 @@ namespace ICR_Run
         private static long t_m2cLast = 0;
         private static int droppedPacks = 0;
         // serial to other ard
-        private static char r2a_head = '[';
+        private static char r2a_head = '{';
 
         // Position variables
         private static double X_CENT = 359.5553;
@@ -270,19 +269,6 @@ namespace ICR_Run
             ushort last_pack;
             double move_to;
             string msg_str;
-
-            // Create header and footer byte array
-            UnionHack u = new UnionHack(0, 0, 0, '0', 0);
-            // get header chars
-            u.c1 = c2r_charHead[0];
-            u.c2 = c2r_charHead[1];
-            // use only first byte 
-            // becasue arduino uses uni-8
-            c2r_head[0] = u.b1;
-            c2r_head[1] = u.b3;
-            // Get footer byte 
-            u.c1 = c2r_charFoot;
-            c2r_foot[0] = u.b1;
 
             // Initialize list entries
             r2c_idHist.Add(' ');
@@ -411,6 +397,7 @@ namespace ICR_Run
                     if (!doAbort)
                     {
                         isRobStreaming = true;
+                        com_Matlab.Execute("c2m_V = true;");
                         LogEvent("[Main] FINISHED: Confirm Robot Streaming");
                     }
                     else LogEvent("[Main] !!ABORTED: Confirm Robot Streaming!!");
@@ -820,7 +807,10 @@ namespace ICR_Run
         }
         public static ushort SendData(char id, double dat_1, double dat_2, ushort pack)
         {
-
+            /* 
+            SEND DATA TO ROBOT 
+            FORMAT: head, id, data, packet num, footer
+            */
             lock (lock_sendData)
             {
 
@@ -1004,24 +994,24 @@ namespace ICR_Run
                 // Concatinate header and footer
                 byte[] msgByteArr = new byte[
                     c2r_head.Length +    // header
-                    c2r_packNum.Length + // packet num
                     msg_id.Length +          // id
                     nDataBytes +             // data
+                    c2r_packNum.Length + // packet num
                     c2r_foot.Length      // footer
                     ];
                 // add header
                 c2r_head.CopyTo(msgByteArr, 0);
-                // add packet number
-                c2r_packNum.CopyTo(msgByteArr, c2r_head.Length);
                 // add id
-                msg_id.CopyTo(msgByteArr, c2r_head.Length + c2r_packNum.Length);
+                msg_id.CopyTo(msgByteArr, c2r_head.Length);
                 // add data
                 if (nDataBytes > 0)
                 {
-                    msg_data.CopyTo(msgByteArr, c2r_head.Length + c2r_packNum.Length + msg_id.Length);
+                    msg_data.CopyTo(msgByteArr, c2r_head.Length + msg_id.Length);
                 }
+                // add packet number
+                c2r_packNum.CopyTo(msgByteArr, c2r_head.Length + msg_id.Length + nDataBytes);
                 // add footer
-                c2r_foot.CopyTo(msgByteArr, c2r_head.Length + c2r_packNum.Length + msg_id.Length + nDataBytes);
+                c2r_foot.CopyTo(msgByteArr, c2r_head.Length + msg_id.Length + nDataBytes + c2r_packNum.Length);
 
                 // Send to arduino
                 if (sp_Xbee.IsOpen) sp_Xbee.Write(msgByteArr, 0, msgByteArr.Length);
@@ -1049,14 +1039,14 @@ namespace ICR_Run
                     // Print sent mesage packet
                     if (nDataBytes == 0)
                     {
-                        msg_str = String.Format("   SENT: [id:{0} pack:{1}]", id, pack);
+                        msg_str = String.Format("   sent: [id:{0} pack:{1}]", id, pack);
                     }
-                    else msg_str = String.Format("   SENT: [id:{0} dat1:{1:0.00} dat2:{2:0.00} pack:{3}]", id, dat_1, dat_2, pack);
+                    else msg_str = String.Format("   sent: [id:{0} dat1:{1:0.00} dat2:{2:0.00} pack:{3}]", id, dat_1, dat_2, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
                 else if (doPrint_sentVt)
                 {
-                    msg_str = String.Format("   SENT: [id:{0} ent:{1} ts:{2} cm:{3:0.00} pack:{4}]", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
+                    msg_str = String.Format("   sent: [id:{0} ent:{1} ts:{2} cm:{3:0.00} pack:{4}]", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
 
@@ -1256,7 +1246,6 @@ namespace ICR_Run
                     // Wait/check for full buffer
                     if (BuffReady(1))
                     {
-
                         // Read in data
                         sp_Xbee.Read(dat_rcvd, 0, 1);
                         dat = dat_rcvd[0];
@@ -1324,7 +1313,7 @@ namespace ICR_Run
                         t_r2c = sw_main.ElapsedMilliseconds;
 
                         // print data recieved
-                        msg_str = String.Format("   RCVD: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
+                        msg_str = String.Format("   rcvd: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
                         LogEvent(msg_str, t_r2cLast, t_r2c);
 
                         // Update last pack
