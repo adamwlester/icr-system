@@ -2,9 +2,9 @@
 
 #pragma region ---------DEBUG SETTINGS---------
 
-bool doPrintFlow = true;
-bool doPrintRcvdPack = true;
-bool doPrintSentPack = true;
+bool doPrintFlow = false;
+bool doPrintRcvdPack = false;
+bool doPrintSentPack = false;
 
 #pragma endregion 
 

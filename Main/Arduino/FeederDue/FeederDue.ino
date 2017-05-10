@@ -2539,7 +2539,7 @@ void loop() {
 
 	// Wait for queue buffer to empty and quit delay to pass 
 	if (
-		fc_doQuit && millis() > t_quitCmd && 
+		fc_doQuit && millis() > t_quitCmd &&
 		!CheckArdResend() &&
 		!doPackSend)
 	{
@@ -3953,7 +3953,7 @@ bool CheckArdResend()
 		}
 	}
 
-// Return
+	// Return
 	return do_pack_resend;
 }
 
@@ -4393,7 +4393,7 @@ void OpenCloseEtOHSolenoid()
 
 	// Print to LCD
 	char str[50];
-	sprintf(str, "%s", digitalRead(pin_Rel_Rew) == HIGH ? "OPEN" : "CLOSED");
+	sprintf(str, "%s", digitalRead(pin_Rel_EtOH) == HIGH ? "OPEN" : "CLOSED");
 	PrintLCD("EtOH SOLENOID", str, 's');
 }
 
@@ -4511,91 +4511,87 @@ void ChangeLCDlight()
 void CheckButtons()
 {
 	// Local vars
-	static uint32_t t_debounce[3] = { 0, 0, 0 };
+	static bool is_pressed[3] = { false, false, false };
+	static uint32_t t_debounce[3] = { millis() + 1000, millis() + 1000, millis() + 1000 };
 	static uint32_t t_long_hold[3] = { 0, 0, 0 };
-	static uint32_t long_hold_del = 250;
-	static uint32_t do_short_hold[3] = { false, false, false };
-	static uint32_t is_long_hold[3] = { false, false, false };
+	static uint32_t long_hold_del = 500;
+	int btn_ind = 0;
 
 	// RUN BUTTON 1 OPPERATIONS (Trigger reward)
-	if (digitalRead(pin_Btn[0]) == LOW)
+	btn_ind = 0;
+	if (digitalRead(pin_Btn[btn_ind]) == LOW)
 	{
-		// exit if < reward time has not passed
-		if (t_debounce[0] > millis()) return;
+		// exit if < debounce time has not passed
+		if (t_debounce[btn_ind] > millis()) return;
 
 		// Set to start reward function
 		btn_doRew = true;
 
-		t_debounce[0] = millis() + reward.duration + 100;
+		// Update debounce time
+		t_debounce[btn_ind] = millis() + reward.duration + 100;
 	}
 
 	// RUN BUTTON 2 OPPERATIONS (Open/close solonoid)
-	// Note: Long hold to open/close EtOH
-	else if (digitalRead(pin_Btn[1]) == LOW)
+	/*
+	Note: Long hold to open/close EtOH
+	*/
+	btn_ind = 1;
+	if (
+		digitalRead(pin_Btn[btn_ind]) == LOW &&
+		!is_pressed[btn_ind]
+		)
 	{
-		// Initialize
-		if (t_debounce[1] == 0) t_debounce[1] = millis();
-		if (t_long_hold[1] == 0) t_long_hold[1] = millis() + long_hold_del;
+		// exit if < debounce time has not passed
+		if (t_debounce[btn_ind] > millis()) return;
 
-		// Check for long hold 
-		if (abs(t_debounce[1] - millis()) < 20)
-		{
-			// Run open close function
-			btn_doEtOHSolStateChange = true;
+		// Get long hold time
+		t_long_hold[btn_ind] = millis() + long_hold_del;
 
-			// Set flags
-			do_short_hold[1] = false;
-			is_long_hold[1] = true;
+		// Set flag
+		is_pressed[btn_ind] = true;
+	}
+	// Check hold time
+	else if (is_pressed[btn_ind])
+	{
+		// short hold
+		bool is_short_hold =
+			digitalRead(pin_Btn[btn_ind]) == HIGH &&
+			millis() < t_long_hold[btn_ind];
+		// long hold
+		bool is_long_hold = millis() > t_long_hold[btn_ind];
 
-			// Reset debounce
-			t_debounce[1] = millis() + long_hold_del;
+		// Check for either condition
+		if (is_short_hold || is_long_hold) {
+
+			// Run function 1
+			if (is_short_hold) {
+				btn_doRewSolStateChange = true;
+				t_debounce[btn_ind] = millis() + 250;
+			}
+
+			// Run function 2
+			if (is_long_hold) {
+				btn_doEtOHSolStateChange = true;
+				t_debounce[btn_ind] = millis() + 500;
+			}
+
+			// Reset flags
+			t_long_hold[btn_ind] = 0;
+			is_pressed[btn_ind] = false;
 		}
-		// exit if < 250 ms has not passed
-		else if (t_debounce[1] > millis())
-		{
-			// Set flag
-			do_short_hold[1] = true;
-		}
+
 	}
 
 	// RUN BUTTON 3 OPPERATIONS (Turn on/off LCD LED)
-	else if (digitalRead(pin_Btn[2]) == LOW)
+	btn_ind = 2;
+	if (digitalRead(pin_Btn[btn_ind]) == LOW)
 	{
 		// exit if < 250 ms has not passed
-		if (t_debounce[2] > millis()) return;
+		if (t_debounce[btn_ind] > millis()) return;
 
 		btn_doChangeLCDstate = true;
 
-		t_debounce[2] = millis() + 250;
-	}
-
-	// Check for button release
-	else if (
-		digitalRead(pin_Btn[1]) == HIGH &&
-		do_short_hold[1] &&
-		!is_long_hold[1]
-		)
-	{
-		// Run open close function
-		btn_doRewSolStateChange = true;
-
-		// Reset flag
-		do_short_hold[1] = false;
-
-		// Reset debounce
-		t_debounce[1] = millis() + long_hold_del + 50;
-	}
-
-	// RESET AND EXIT
-	else
-	{
-		// Reset all flags
-		for (int i = 0; i < 3; i++)
-		{
-			if (do_short_hold[i]) do_short_hold[i] = false;
-			if (is_long_hold[i]) is_long_hold[i] = false;
-		}
-		return;
+		t_debounce[btn_ind] = millis() + 250;
 	}
 }
 
@@ -4885,7 +4881,7 @@ void StoreDBLogStr(String msg, uint32_t ts)
 	if (
 		!fc_isSendingLog &&
 		msg != last_msg
-		) 
+		)
 	{
 
 		// Save string
