@@ -29,17 +29,17 @@ global m2c_dat2; % data out to CS
 global m2c_flag; % new data flag out to CS
 global m2c_dir; % current cheetah directory
 global m2c_quit; % relay quit
+% Robot to Matlab communication
+global r2m_J; % battery voltage
+global r2m_Z; % reward zone
 % CS to Matlba communication
 global c2m_V; % bool robot streaming exit
 global c2m_S; % bool enable save button
 global c2m_E; % bool exit
-% Robot to Matlab communication
-global r2m_J; % battery voltage
-global r2m_Z; % reward zone
 
 % Set globals
-[c2m_V, c2m_S, c2m_E] = deal(false);
 [r2m_J, r2m_Z] = deal(0);
+[c2m_V, c2m_S, c2m_E] = deal(false);
 caughtError = false;
 consoleText = ' ';
 isTestRun = false;
@@ -2168,29 +2168,29 @@ clear(PersistentVarNames{:});
             % vars = (port, pin)
             
             % Audio channels
-            D.NLX.snd_rt_wn_bit = [{'1'},{'1'}];
-            D.NLX.snd_lft_rt_bit = [{'1'},{'2'}];
+            D.NLX.snd_rt_wn_bit = [{'1'},{'5'}];
+            D.NLX.snd_lft_rt_bit = [{'1'},{'4'}];
+                        
+            % IR time sync LED
+            D.NLX.ir_ts_bit = [{'1'},{'7'}];
             
             % Rew
-            D.NLX.rew_on_bit = [{'1'},{'3'}];
-            D.NLX.rew_off_bit = [{'1'},{'4'}];
-            
-            % Bulldozer state
-            D.NLX.bull_run_bit = [{'1'},{'5'}];
-            D.NLX.bull_stop_bit = [{'1'},{'6'}];
+            D.NLX.rew_on_bit = [{'1'},{'0'}];
+            D.NLX.rew_off_bit = [{'1'},{'1'}];
             
             % PID mode
-            D.NLX.pid_run_bit = [{'1'},{'0'}];
-            D.NLX.pid_stop_bit = [{'1'},{'7'}];
+            D.NLX.pid_run_bit = [{'0'},{'0'}];
+            D.NLX.pid_stop_bit = [{'0'},{'1'}];
+            
+            % Bulldozer state
+            D.NLX.bull_run_bit = [{'0'},{'2'}];
+            D.NLX.bull_stop_bit = [{'0'},{'3'}];
             
             % Photo Transducers
             D.NLX.north_bit = [{'0'},{'7'}];
             D.NLX.west_bit = [{'0'},{'6'}];
             D.NLX.south_bit = [{'0'},{'5'}];
             D.NLX.east_bit = [{'0'},{'4'}];
-            
-            % IR time sync LED
-            D.NLX.ir_ts_bit = [{'0'},{'3'}];
             
             % TTL STRINGS
             

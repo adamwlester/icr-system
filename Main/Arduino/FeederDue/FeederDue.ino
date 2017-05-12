@@ -42,7 +42,7 @@ const bool doPrint_motorControl = false;
 const bool doPrint_motorBlocking = false;
 const bool doPrint_rcvd = false;
 const bool doPrint_r2c = false;
-const bool doPrint_r2a = false;
+const bool doPrint_r2a = true;
 const bool doPrint_pid = false;
 const bool doPrint_bull = false;
 const bool doPrint_resent = false;
@@ -195,6 +195,12 @@ bool fc_doLogResend = false;
 bool fc_doLogSend = false;
 bool fc_isEKFReady = false;
 
+// Log debugging
+const int logLng = 2000;
+String logList[logLng];
+uint16_t cnt_logStore = 0;
+uint16_t cnt_logSend = 0;
+
 // Print debugging
 String printQueue[10];
 const int printQueue_lng =
@@ -206,15 +212,11 @@ bool doBlockLCDlog = false;
 // Debug tracking
 uint32_t t_loopMain = millis();
 uint32_t t_loopRead = millis();
+int cnt_loop;
 int cnt_droppedPacks = 0;
 int cnt_overflowEvt = 0;
 int cnt_timeoutEvt = 0;
 int cnt_packResend = 0;
-
-// Log debugging
-String logList[2000];
-uint16_t cnt_logStore = 0;
-uint16_t cnt_logSend = 0;
 
 // Outgoing packet data
 byte r2_queue[10][7];
@@ -387,7 +389,7 @@ EtOH run after min time or distance
 bool doEtOHRun = true;
 bool isEtOHOpen = false;
 const uint32_t t_durEtOH = 1000; // (ms)
-const uint32_t t_delEtOH = 60000; // (ms)
+const uint32_t t_delEtOH = 30000; // (ms)
 const float distMaxEtOH = (140 * PI) / 2; // (cm)
 
 // Volt tracking
@@ -440,6 +442,7 @@ bool CheckPack(char id, uint16_t pack);
 // STORE BYTE SERIAL DATA FOR CS
 void Store4_CS(char id, byte d1, uint16_t pack);
 // STORE BYTE SERIAL DATA FOR ARD
+void Store4_Ard(char id);
 void Store4_Ard(char id, byte d1);
 void Store4_Ard(char id, byte d1, uint16_t pack);
 // SEND SERIAL PACKET DATA
@@ -707,7 +710,6 @@ public:
 	float setPoint = 0;
 	uint32_t t_ekfStr = 0;
 	uint32_t t_ekfSettle = 250; // (ms)
-	bool fc_isEKFReady = false;
 	bool ekfNew = false;
 	float dampAcc = 40;
 	float dampSpeedCut = 20;
@@ -1669,7 +1671,7 @@ public:
 	};
 	uint32_t blockDur = 0; // (ms)
 	uint32_t duration = 0; // (ms) 
-	uint32_t durationByte = 0; // (ms) 
+	byte durationByte = 0; // (ms) 
 	float zoneBounds[9][2];
 	const int zoneLng =
 		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
@@ -1931,10 +1933,7 @@ public:
 					armStpOn = false;
 				}
 				// Sleep motor
-				if (digitalRead(pin_ED_SLP) == HIGH)
-				{
-					digitalWrite(pin_ED_SLP, LOW);
-				}
+				digitalWrite(pin_ED_SLP, LOW);
 
 				// Set flag
 				if (!isArmExtended && armPos > 0)
@@ -1949,10 +1948,14 @@ public:
 		else if (
 			isArmExtended &&
 			millis() > t_retractArm
-			)
-		{
+			) {
 			RetractFeedArm();
 		}
+		else if (digitalRead(pin_ED_SLP) == HIGH) {
+			// Sleep motor
+			digitalWrite(pin_ED_SLP, LOW);
+		}
+
 	}
 
 	// Reset feeder arm
@@ -2277,7 +2280,7 @@ void setup() {
 	// IR prox left
 	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 	// IR detector
-	uint32_t check_ir = millis() + 1000;
+	uint32_t check_ir = millis() + 500;
 	while (digitalRead(pin_IRdetect) == HIGH && check_ir < millis());
 	if (digitalRead(pin_IRdetect) == LOW)
 		attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
@@ -2292,6 +2295,19 @@ void loop() {
 
 	// Store loop time
 	t_loopMain = millis();
+	cnt_loop++;
+
+	// Store every 10 thousand loops
+	// fc_isStreaming && 
+	if (fc_isStreaming && cnt_loop % 10000 == 0) {
+		// Print loop count and dt
+		static uint32_t t_loop_last = millis();
+		char chr[50];
+		sprintf(chr, "LOOP %d [dt:%d]", cnt_loop, millis() - t_loop_last);
+		DebugFlow(chr);
+		// Store loop time
+		t_loop_last = millis();
+	}
 
 	// Print debug
 	if (doPrint)
@@ -2382,6 +2398,7 @@ void loop() {
 		// Check if ir sensor needs to be disabled
 		if (digitalRead(pin_IRdetect) == HIGH)
 			DebugFlow("!!IR SENSOR DISABLED!!");
+
 
 		/*
 		// TEST
@@ -2507,7 +2524,7 @@ void loop() {
 		t_quitCmd = millis() + 1000;
 
 		// Tell ard to quit
-		Store4_Ard('q', 255);
+		Store4_Ard('q');
 		DebugFlow("DO QUIT");
 
 		// Hold all motor control
@@ -2682,7 +2699,7 @@ void loop() {
 		}
 	}
 
-	// CUED REWARD
+	// CUE REWARD
 	if (fc_doCueReward)
 	{
 		// If not rewarding 
@@ -2988,6 +3005,13 @@ void loop() {
 	// Log new ir events
 	if (intrpt_doLogIR)
 	{
+		// Log first sync event
+		static bool first_sync = true;
+		if (first_sync) {
+			DebugFlow("SET SYNC TIME",t_sync);
+			first_sync = false;
+		}
+
 		// Log event if streaming started
 		if (fc_isStreaming)
 			DebugIRSync("ir sync event", t_irSyncLast);
@@ -3264,7 +3288,7 @@ bool ParseC2R()
 			fc_isStreaming = true;
 
 			// send sync start cmd to ard
-			Store4_Ard('t', 255);
+			Store4_Ard('t');
 		}
 
 		// Process packet number
@@ -3277,7 +3301,7 @@ bool ParseC2R()
 
 }
 
-// PARSE CHEEAH DUE MESSAGE
+// PARSE CHEETAH DUE MESSAGE
 void ParseA2R()
 {
 	// Local vars
@@ -3308,7 +3332,6 @@ void ParseA2R()
 		if (id_ind != -1)
 		{
 			// Reset flags
-			r2a_sendTim[id_ind] = 0;
 			r2a_doRcvCheck[id_ind] = false;
 
 			// Store revieved pack details
@@ -3588,6 +3611,10 @@ void Store4_CS(char id, byte d1, uint16_t pack)
 }
 
 // STORE BYTE SERIAL DATA FOR ARD
+void Store4_Ard(char id)
+{
+	Store4_Ard(id, 255, 0);
+}
 void Store4_Ard(char id, byte d1)
 {
 	Store4_Ard(id, d1, 0);
@@ -3633,13 +3660,18 @@ void Store4_Ard(char id, byte d1, uint16_t pack)
 	r2_queue[queue_ind][2] = d1;
 	// Store packet number
 	u.f = 0.0f;
-	u.i16[0] = r2a_packCnt;
+	u.i16[0] = pack;
 	r2_queue[queue_ind][3] = u.b[0];
 	r2_queue[queue_ind][4] = u.b[1];
 	// Store footer
 	u.f = 0.0f;
 	u.c[0] = r2a_foot;
 	r2_queue[queue_ind][5] = u.b[0];
+
+	// Store sent message data
+	int id_ind = CharInd(id, r2a_id, r2a_idLng);
+	r2a_datLast[id_ind] = d1;
+	r2a_packLast[id_ind] = pack;
 
 	// Set to send
 	doPackSend = true;
@@ -3664,7 +3696,8 @@ void SendPacketData()
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 	buff_rx = Serial1.available();
 
-	// save reviever id
+	// save msg id and reviever id
+	id = r2_queue[r2_lngR - 1][1];
 	rcv_id = r2_queue[r2_lngR - 1][6];
 
 	// Move next in queue to temp msg array
@@ -3674,8 +3707,8 @@ void SendPacketData()
 	}
 
 	// Send r2a sync time or rew tone immediately
-	if ((msg[1] == 'r' ||
-		msg[1] == 't'))
+	if ((id == 'r' ||
+		id == 't'))
 	{
 		do_send = true;
 	}
@@ -3702,17 +3735,9 @@ void SendPacketData()
 		// Set flags for r2a comm
 		if (rcv_id == 'a')
 		{
-			int id_ind = CharInd(msg[1], r2a_id, r2a_idLng);
+			int id_ind = CharInd(id, r2a_id, r2a_idLng);
 			r2a_sendTim[id_ind] = t_sent;
 			r2a_doRcvCheck[id_ind] = true;
-
-			// Store sent message data
-			r2a_datLast[id_ind] = msg[2];
-			// Store sent packet number
-			u.f = 0.0f;
-			u.b[0] = msg[2];
-			u.b[1] = msg[3];
-			r2a_packLast[id_ind] = u.i16[0];
 		}
 
 		// Update queue index
@@ -3749,16 +3774,12 @@ void SendPacketData()
 				doDB_Log)
 			)
 		{
-			// Store mesage id
-			u.f = 0.0f;
-			u.b[0] = msg[1];
-			id = u.c[0];
 			// Store dat
 			dat = msg[2];
 			// Store packet number
 			u.f = 0.0f;
-			u.b[0] = msg[2];
-			u.b[1] = msg[3];
+			u.b[0] = msg[3];
+			u.b[1] = msg[4];
 			pack = u.i16[0];
 
 			// Store
@@ -3892,13 +3913,13 @@ bool CheckArdResend()
 				r2a_resendCnt[i]++;
 				DebugResent(r2a_id[i], r2a_packLast[i], r2a_resendCnt[i]);
 
-				// Set flag
+				// Set flags
 				do_pack_resend = true;
+				r2a_doRcvCheck[i] = false;
 			}
 			// Com likely down
 			else {
 				r2a_doRcvCheck[i] = false;
-				r2a_sendTim[i] = 0;
 			}
 		}
 	}
@@ -4715,7 +4736,7 @@ void DebugRcvd(char id, uint16_t pack)
 		String str = chr;
 
 		// Add to print queue
-		if (doDB_PrintConsole &&
+		if (doPrint_rcvd &&
 			(doDB_PrintConsole || doDB_PrintLCD))
 			StoreDBPrintStr(str, t_rcvd);
 
@@ -4745,6 +4766,10 @@ void DebugIRSync(String msg, uint32_t ts)
 
 // LOG/PRING MAIN EVENT
 void DebugFlow(String msg)
+{
+	DebugFlow(msg, millis());
+}
+void DebugFlow(String msg, uint32_t ts)
 {
 	if (
 		(doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4836,11 +4861,24 @@ void StoreDBLogStr(String msg, uint32_t ts)
 		// Itterate log entry count
 		cnt_logStore++;
 
-		// Concatinate ts with message
-		msg.toCharArray(str_c, 100);
-		sprintf(msg_c, "[%d],%d,%s", cnt_logStore, ts, str_c);
-		logList[cnt_logStore - 1] = msg_c;
+		// Check for overflow 
+		if (cnt_logStore < logLng)
+		{
+			// Concatinate ts with message
+			msg.toCharArray(str_c, 100);
+			sprintf(msg_c, "[%d],%d,%s", cnt_logStore, ts, str_c);
+			logList[cnt_logStore - 1] = msg_c;
+		}
+		// Log if full
+		else
+		{
+			// Store final message
+			sprintf(msg_c, "[%d],%d,!!LOG FULL!!", cnt_logStore, ts, str_c);
+			logList[cnt_logStore - 1] = msg_c;
 
+			// Set flag to stop logging
+			doDB_Log = false;
+		}
 	}
 }
 

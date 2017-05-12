@@ -26,29 +26,29 @@ namespace ICR_Run
             2: Halt error test
             3: Simulated rat test
         */
-        private static double systemTest = 3;
+        private static double db_systemTest = 3;
         // Print all blocked vt recs
-        private static bool doPrint_blockedVt = false;
+        private static bool db_printBlockedVt = false;
         // Print all sent vt recs
-        private static bool doPrint_sentVt = false;
+        private static bool db_printSentVT = false;
         // Print robot log
-        private static bool doPrint_rcvdLog = true;
+        private static bool db_printRcvdLog = true;
 
         #endregion
 
         #region ---------TOP LEVEL VARS---------
 
         // To quit exit program smoothly
-        private static bool isMAThanging = false;
-        private static bool isRobStreaming = false;
-        private static bool isMovedToStart = false;
-        private static bool isRatOut = false;
-        private static bool isSesSaved = false;
-        private static bool doQuit = false;
-        private static bool doGUIclose = false;
-        private static bool isGUIfinished = false;
-        private static bool doExit = false;
-        private static bool doAbort = false;
+        private static bool fc_isMAThanging = false;
+        private static bool fc_isRobStreaming = false;
+        private static bool fc_isMovedToStart = false;
+        private static bool fc_isRatOut = false;
+        private static bool fc_isSesSaved = false;
+        private static bool fc_doQuit = false;
+        private static bool fc_doGUIclose = false;
+        private static bool fc_isGUIfinished = false;
+        private static bool fc_doExit = false;
+        private static bool fc_doAbort = false;
 
         // Create stop watch object
         private static Stopwatch sw_main = new Stopwatch();
@@ -146,17 +146,17 @@ namespace ICR_Run
         private static List<ushort> r2c_packHist = new List<ushort>();
         private static ushort[] r2c_packLast = new ushort[r2c_id.Length];
 
+        // Robot to Matlab communication
+        private static char[] r2m_id = new char[2] {
+            'J', // battery voltage
+            'Z', // reward zone
+             };
+
         // CS to Matlab communication
         private static char[] c2m_id = new char[3] {
             'V', // robot streaming
             'S', // enable save
             'E', // exit
-             };
-
-        // Robot to Matlab communication
-        private static char[] r2m_id = new char[2] {
-            'J', // battery voltage
-            'Z', // reward zone
              };
 
         // General communication
@@ -175,6 +175,7 @@ namespace ICR_Run
         private static int droppedPacks = 0;
         // serial to other ard
         private static char r2a_head = '{';
+        private static char r2a_foot = '}';
 
         // Position variables
         private static double X_CENT = 359.5553;
@@ -238,7 +239,7 @@ namespace ICR_Run
             LogEvent("[Main] RUNNING: Main...");
 
             // Setup debugging
-            if (systemTest != 0)
+            if (db_systemTest != 0)
             {
                 // Hide/show matlab app window
                 com_Matlab.Visible = 1;
@@ -246,7 +247,7 @@ namespace ICR_Run
                 nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00";
 
                 // Start thread to pass simulation rat data
-                if (systemTest == 3)
+                if (db_systemTest == 3)
                 {
                     new Thread(delegate ()
                     {
@@ -304,11 +305,11 @@ namespace ICR_Run
 
             // Start Cheetah if it is not already running
             LogEvent("[Main] RUNNING: Cheetah Open...");
-            while (!IsProcessOpen("Cheetah") && !doAbort)
+            while (!IsProcessOpen("Cheetah") && !fc_doAbort)
             {
                 OpenCheetah("Cheetah.cfg");
             }
-            if (!doAbort) LogEvent("[Main] FINISHED: Cheetah Open");
+            if (!fc_doAbort) LogEvent("[Main] FINISHED: Cheetah Open");
 
             // Initilize deligate for VT callback
             MNetComClient com_netComClient = new MNetComClient();
@@ -343,7 +344,7 @@ namespace ICR_Run
                     pass = true;
                     break;
                 }
-                else if (doAbort || sw_main.ElapsedMilliseconds > t_timeout)
+                else if (fc_doAbort || sw_main.ElapsedMilliseconds > t_timeout)
                 {
                     do_loop = false;
                     pass = false;
@@ -355,18 +356,18 @@ namespace ICR_Run
             else
             {
                 LogEvent("[Main] !!ABORTED: Wait for AC Connect!!");
-                if (!doAbort)
+                if (!fc_doAbort)
                 {
                     // Program timed out because matlab was hanging on connect
-                    doAbort = true;
-                    isMAThanging = true;
+                    fc_doAbort = true;
+                    fc_isMAThanging = true;
                 }
             }
 
             // Wait for ICR_GUI to load and connect to NLX
             LogEvent("[Main] RUNNING: Wait for ICR_GUI NLX Setup...");
-            while (matIn_id != 'G' && !doAbort) ;
-            if (!doAbort) LogEvent("[Main] FINISHED: Wait for ICR_GUI NLX Setup");
+            while (matIn_id != 'G' && !fc_doAbort) ;
+            if (!fc_doAbort) LogEvent("[Main] FINISHED: Wait for ICR_GUI NLX Setup");
 
             // Setup connection
             if (!(com_netComClient.AreWeConnected()))
@@ -390,10 +391,10 @@ namespace ICR_Run
                         RepeatSend('V', true);
                     }).Start();
                     // Wait for confirmation from robot
-                    while (c2r_packLast[CharInd('V', c2r_id)] != r2c_packLast[CharInd('D', r2c_id)] && !doAbort) ;
-                    if (!doAbort)
+                    while (c2r_packLast[CharInd('V', c2r_id)] != r2c_packLast[CharInd('D', r2c_id)] && !fc_doAbort) ;
+                    if (!fc_doAbort)
                     {
-                        isRobStreaming = true;
+                        //fc_isRobStreaming = true;
                         com_Matlab.Execute("c2m_V = true;");
                         LogEvent("[Main] FINISHED: Confirm Robot Streaming");
                     }
@@ -401,17 +402,17 @@ namespace ICR_Run
 
                     // Wait for setup command confirmation
                     LogEvent("[Main] RUNNING: Confirm Setup");
-                    while (r2c_idHist[r2c_idHist.Count - 1] != 'S' && !doAbort) ;
-                    if (!doAbort) LogEvent("[Main] FINISHED: Confirm Setup");
+                    while (r2c_idHist[r2c_idHist.Count - 1] != 'S' && !fc_doAbort) ;
+                    if (!fc_doAbort) LogEvent("[Main] FINISHED: Confirm Setup");
                     else LogEvent("[Main] !!ABORTED: Confirm Setup!!");
 
                     // Wait for initial move to command to complete
                     LogEvent("[Main] RUNNING: MoveTo Start...");
-                    while (c2r_packLast[CharInd('M', c2r_id)] != r2c_packLast[CharInd('D', r2c_id)] && !doAbort) ;
+                    while (c2r_packLast[CharInd('M', c2r_id)] != r2c_packLast[CharInd('D', r2c_id)] && !fc_doAbort) ;
                     // set flag
-                    if (!doAbort)
+                    if (!fc_doAbort)
                     {
-                        isMovedToStart = true;
+                        fc_isMovedToStart = true;
                         LogEvent("[Main] FINISHED: MoveTo Start");
                     }
                     else LogEvent("[Main] !!ABORTED: MoveTo Start!!");
@@ -419,8 +420,8 @@ namespace ICR_Run
                     // Main holding loop
                     LogEvent("[Main] RUNNING: Main Loop...");
                     // Stay in loop till rat is out
-                    while (com_netComClient.AreWeConnected() && !(isRatOut || doAbort)) ;
-                    if (!doAbort) LogEvent("[Main] FINISHED: Main Loop");
+                    while (com_netComClient.AreWeConnected() && !(fc_isRatOut || fc_doAbort)) ;
+                    if (!fc_doAbort) LogEvent("[Main] FINISHED: Main Loop");
                     else LogEvent("[Main] !!ABORTED: Main Loop!!");
 
                     // Wait for reply on last sent packet
@@ -433,7 +434,7 @@ namespace ICR_Run
                 // Failed to connect to NetCom
                 else
                 {
-                    doAbort = true;
+                    fc_doAbort = true;
                     LogEvent("[Main] !!FAILED: TO CONNECT TO NETCOM!!");
                 }
 
@@ -441,7 +442,7 @@ namespace ICR_Run
                 LogEvent("[Main] EXITING...");
 
                 // Move back to default pos
-                if (isMovedToStart && com_netComClient.AreWeConnected())
+                if (fc_isMovedToStart && com_netComClient.AreWeConnected())
                 {
                     LogEvent("[Main] RUNNING: MoveTo South...");
                     move_to = CalcMove(4.7124 - feedDist);
@@ -521,7 +522,7 @@ namespace ICR_Run
                     com_netComClient.CloseStream(NETCOM_ACQ_ENT_2);
 
                     // Disconect from NetCom
-                    while (com_netComClient.AreWeConnected() && !doAbort)
+                    while (com_netComClient.AreWeConnected() && !fc_doAbort)
                     {
                         com_netComClient.DisconnectFromServer();
                         LogEvent("[Main] FINISHED: NetCom Close");
@@ -529,7 +530,7 @@ namespace ICR_Run
                 }
 
                 // Enable GUI save button
-                if (!isMAThanging && !doAbort)
+                if (!fc_isMAThanging && !fc_doAbort)
                 {
                     com_Matlab.Execute("c2m_S = true;");
                     LogEvent("[Main] FINISHED: Save Enabled");
@@ -544,7 +545,7 @@ namespace ICR_Run
 
                 // Request log data from robot
                 LogEvent("[Main] RUNNING: Import Robot Log...");
-                if (isRobStreaming)
+                if (fc_isRobStreaming)
                 {
                     pass = GetRobotLog();
                 }
@@ -560,8 +561,8 @@ namespace ICR_Run
 
                 // Wait for save complete
                 LogEvent("[Main] RUNNING: Wait for ICR_GUI to Save");
-                while (!(isSesSaved || doQuit || doAbort)) ;
-                if (isSesSaved)
+                while (!(fc_isSesSaved || fc_doQuit || fc_doAbort)) ;
+                if (fc_isSesSaved)
                 {
                     LogEvent("[Main] FINISHED: Wait for ICR_GUI to Save");
 
@@ -578,7 +579,7 @@ namespace ICR_Run
 
 
                 // Wait for quit command
-                while (!(doQuit || doAbort)) ;
+                while (!(fc_doQuit || fc_doAbort)) ;
 
                 // Send command for arduino to quit on seperate thread
                 new Thread(delegate ()
@@ -605,21 +606,29 @@ namespace ICR_Run
                 else LogEvent("[Main] !!ABORTED: Confirm Robot Quit!!");
 
                 // Send command for ICR_GUI to exit
-                if (!isMAThanging)
+                if (!fc_isMAThanging)
                 {
                     com_Matlab.Execute("c2m_E = true;");
                     LogEvent("[Main] FINISHED: Tell Mat to Close");
 
                     // Set flag
-                    doGUIclose = true;
+                    fc_doGUIclose = true;
                 }
                 else LogEvent("[Main] !!ABORTED: Tell Mat to Close!!");
 
                 // Wait for GUI to close
-                while (!isMAThanging && !isGUIfinished) ;
+                while (!fc_isMAThanging && !fc_isGUIfinished) ;
+
+                // Save robot log file
+                if (nlxRecDir != " ")
+                {
+                    dueLogger.SaveLog(nlxRecDir, dueLogFi);
+                    // Confirm log saved
+                    LogEvent("[Main] FINISHED: Save Robot Log");
+                }
 
                 // Set exit flag to exit all threads
-                doExit = true;
+                fc_doExit = true;
 
                 // Wait for threads to close down
                 Thread.Sleep(100);
@@ -631,7 +640,7 @@ namespace ICR_Run
                 bw_MatCOM.Dispose();
 
                 // Clear all MatCOM vars
-                if (!isMAThanging)
+                if (!fc_isMAThanging)
                 {
                     com_Matlab.Execute("clearvars - global;");
                     com_Matlab.Execute("clearvars;");
@@ -639,23 +648,15 @@ namespace ICR_Run
                     Thread.Sleep(100);
                 }
 
-                // Save robot log file
-                if (nlxRecDir != " ")
-                {
-                    dueLogger.SaveLog(nlxRecDir, dueLogFi);
-                    // Confirm log saved
-                    LogEvent("[Main] FINISHED: Save Robot Log");
-                }
-
                 // Hold for errors
-                if ((systemTest != 0) || isMAThanging || (doAbort && !doQuit))
+                if ((db_systemTest != 0) || fc_isMAThanging || (fc_doAbort && !fc_doQuit))
                 {
                     LogEvent("PRESS ANY KEY TO EXIT");
                     Console.ReadKey();
                 }
 
                 // Quit MatCOM
-                if (!isMAThanging)
+                if (!fc_isMAThanging)
                 {
                     com_Matlab.Quit();
                 }
@@ -721,8 +722,8 @@ namespace ICR_Run
             // Keep checking mesage was recieved
             while (
                 send_count < resendMax &&
-                !doExit &&
-                (isRobStreaming || !doAbort)
+                !fc_doExit &&
+                (fc_isRobStreaming || !fc_doAbort)
                 )
             {
 
@@ -745,7 +746,7 @@ namespace ICR_Run
                     {
                         while (
                             r2c_idHist.Count != r2c_packHist.Count &&
-                            !doExit && (isRobStreaming || !doAbort)
+                            !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
                             ) ;
                         // Check match for current command
                         if (r2c_idHist[i] == 'D' && r2c_packHist[i] == pack)
@@ -784,7 +785,7 @@ namespace ICR_Run
 
             // Check if streaming has failed
             if (send_count >= resendMax)
-                isRobStreaming = false;
+                fc_isRobStreaming = false;
 
             // forced quit
             return false;
@@ -830,7 +831,7 @@ namespace ICR_Run
                     // Check if loop should continue
                     do_loop = (
                         sw_main.ElapsedMilliseconds < t_send || !buff_ready) &&
-                        !doExit && (isRobStreaming || !doAbort);
+                        !fc_doExit && (fc_isRobStreaming || !fc_doAbort);
 
                 } while (do_loop);
 
@@ -1026,7 +1027,7 @@ namespace ICR_Run
                     else msg_str = String.Format("   sent: [id:{0} dat1:{1:0.00} dat2:{2:0.00} pack:{3}]", id, dat_1, dat_2, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
-                else if (doPrint_sentVt)
+                else if (db_printSentVT)
                 {
                     msg_str = String.Format("   sent: [id:{0} ent:{1} ts:{2} cm:{3:0.00} pack:{4}]", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
@@ -1062,7 +1063,7 @@ namespace ICR_Run
             // Spend 10 sec checking for done confirmation resend
             while (
                 sw_main.ElapsedMilliseconds < t_timeout &&
-                !doExit && (isRobStreaming || !doAbort)
+                !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
                 )
             {
                 if (r2c_idHist.Count > msg_cnt)
@@ -1073,7 +1074,7 @@ namespace ICR_Run
                     // Wait for list update complete
                     while (
                         r2c_idHist.Count != r2c_packHist.Count &&
-                        !doExit && (isRobStreaming || !doAbort)
+                        !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
                         ) ;
 
                     // Check match for done id and current packet
@@ -1132,8 +1133,8 @@ namespace ICR_Run
                         break;
                     }
                     else if (
-                        doAbort && 
-                        (sw_main.ElapsedMilliseconds > t_timeout || !isRobStreaming)
+                        fc_doAbort &&
+                        (sw_main.ElapsedMilliseconds > t_timeout || !fc_isRobStreaming)
                         )
                     {
                         pass = false;
@@ -1153,7 +1154,9 @@ namespace ICR_Run
         {
 
             // Loop till all data read out
-            while (sp_Xbee.BytesToRead > 0)
+            while (sp_Xbee.BytesToRead > 0 &&
+                    !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
+                    )
             {
 
                 // Local vars
@@ -1180,7 +1183,7 @@ namespace ICR_Run
 
                 // Dump till header found
                 while (!head_found && sp_Xbee.BytesToRead > 0 &&
-                    !doExit && (isRobStreaming || !doAbort)
+                    !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
                     )
                 {
                     sp_Xbee.Read(head_rcvd, 0, 1);
@@ -1195,6 +1198,8 @@ namespace ICR_Run
                     else if (head == r2a_head)
                     {
                         for_ard = true;
+                        do_dump = true;
+                        break;
                     }
                 }
 
@@ -1251,7 +1256,7 @@ namespace ICR_Run
                             // Wait for sent list to update
                             while (
                                 c2r_packHist.Count != c2r_idHist.Count &&
-                                !doExit && (isRobStreaming || !doAbort)
+                                !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
                                 ) ;
 
                             // Check that packet matches sent packet
@@ -1309,7 +1314,7 @@ namespace ICR_Run
                         {
                             if (r2m_id[i] == id)
                             {
-                                com_Matlab.Execute(String.Format("c2m_{0} = {1}", r2m_id[i], (double)dat));
+                                com_Matlab.Execute(String.Format("r2m_{0} = {1}", r2m_id[i], (double)dat));
                             }
                         }
                     }
@@ -1366,7 +1371,7 @@ namespace ICR_Run
                         dueLogger.UpdateList(log_str);
 
                         // print data recieved
-                        if (doPrint_rcvdLog)
+                        if (db_printRcvdLog)
                         {
                             msg_str = String.Format("LOG[{0}]: \"{1}\" (chksum = {2})", dueLogger.logCnt, log_str, chksum);
                             LogEvent(msg_str);
@@ -1390,7 +1395,22 @@ namespace ICR_Run
                 {
                     if (for_ard)
                     {
-                        msg_str = String.Format("skipped cheeta due packet");
+                        // Dump till header found
+                        while (!foot_found && sp_Xbee.BytesToRead > 0 &&
+                            !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
+                            )
+                        {
+                            sp_Xbee.Read(foot_rcvd, 0, 1);
+                            // Get footer
+                            u.b1 = foot_rcvd[0];
+                            u.b2 = 0; // C# chars are 2 bytes
+                            foot = u.c1;
+                            if (foot == r2a_foot)
+                            {
+                                foot_found = true;
+                            }
+                        }
+                        LogEvent("   rcvd: cheeta due packet");
                     }
                     else
                     {
@@ -1398,14 +1418,20 @@ namespace ICR_Run
                         msg_str = String.Format("!!PACK LOST (Total:{0}) BuffTX:{1} BuffRX:{2} [head:{3} id:{4} dat:{5} pack:{6} chksum:{7} foot:{8}]!!",
                             droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, chksum, foot);
                         LogEvent(msg_str);
+
+                        // Wait for buffer to refil
+                        BuffReady(6);
                     }
                     // dump input buffer
                     //sp_Xbee.DiscardInBuffer();
 
-                    // Wait for buffer to refil
-                    BuffReady(6);
-
                 }
+                // Change streaming status
+                else if(foot_found && !fc_isRobStreaming)
+                {
+                    fc_isRobStreaming = true;
+                }
+
 
             }
 
@@ -1425,7 +1451,7 @@ namespace ICR_Run
             while (
                 sp_Xbee.BytesToRead < min_byte &&
                 sw_main.ElapsedMilliseconds <= t_timeout &&
-                !doExit && (isRobStreaming || !doAbort)
+                !fc_doExit && (fc_isRobStreaming || !fc_doAbort)
                 ) ;
 
             // Check if buff filled
@@ -1582,7 +1608,7 @@ namespace ICR_Run
                     SendData('P');
                 }
             }
-            else if (doPrint_blockedVt)
+            else if (db_printBlockedVt)
             {
                 LogEvent("      vt blocked");
             }
@@ -1607,7 +1633,7 @@ namespace ICR_Run
             // Run ICR_GUI.m
             try
             {
-                com_Matlab.Feval("ICR_GUI", 0, out result, systemTest);
+                com_Matlab.Feval("ICR_GUI", 0, out result, db_systemTest);
             }
             catch
             {
@@ -1621,18 +1647,18 @@ namespace ICR_Run
         {
 
             // Set flag that GUI has closed
-            isGUIfinished = true;
+            fc_isGUIfinished = true;
 
             // Check if do quit flag has been set
-            if (doQuit && doGUIclose)
+            if (fc_doQuit && fc_doGUIclose)
             {
                 LogEvent("[RunWorkerCompleted_RunGUI] FINISHED: RunGUI Worker");
             }
             else
             {
                 // GUI was closed prematurely
-                doQuit = true;
-                doAbort = true;
+                fc_doQuit = true;
+                fc_doAbort = true;
                 LogEvent("[RunWorkerCompleted_RunGUI] !!ABORT: RunGUI Worker!!");
             }
         }
@@ -1669,7 +1695,7 @@ namespace ICR_Run
                 com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m_id[i]), "global", false);
             }
 
-            while (!doQuit && !isMAThanging)
+            while (!fc_doQuit && !fc_isMAThanging)
             {
 
                 // Get flag
@@ -1681,12 +1707,12 @@ namespace ICR_Run
                 // Exicute quit
                 if (quit)
                 {
-                    doQuit = true;
+                    fc_doQuit = true;
                     // Check if this is a premature quit
-                    if (!isSesSaved)
+                    if (!fc_isSesSaved)
                     {
                         // Start exiting early
-                        doAbort = true;
+                        fc_doAbort = true;
                         LogEvent("[ProgressChanged_MatCOM] !!FORCED EXIT!!");
                     }
                 }
@@ -1747,7 +1773,7 @@ namespace ICR_Run
                 // Check if ses saved command
                 if (matIn_id == 'F')
                 {
-                    isSesSaved = true;
+                    fc_isSesSaved = true;
                     LogEvent("[ProgressChanged_MatCOM] ICR_GUI Confirmed Save");
                 }
             }
@@ -1777,7 +1803,7 @@ namespace ICR_Run
                     else if (matIn_id == 'I' && matIn_dat1 == 0)
                     {
                         // Rat is out
-                        isRatOut = true;
+                        fc_isRatOut = true;
                     }
 
                     RepeatSend(matIn_id, matIn_dat1, matIn_dat2, do_check_done);
@@ -1938,10 +1964,10 @@ namespace ICR_Run
             double y_now;
 
             // Wait for streaming to begin
-            while (!isRobStreaming && !doQuit && !isMAThanging) ;
+            while (!fc_isRobStreaming && !fc_doQuit && !fc_isMAThanging) ;
 
             // Check for new data till quit time
-            while (!doQuit && !isMAThanging)
+            while (!fc_doQuit && !fc_isMAThanging)
             {
                 // Get ts
                 var ts = com_Matlab.GetVariable("test_simTS", "global");

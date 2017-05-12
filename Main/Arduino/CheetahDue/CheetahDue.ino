@@ -5,6 +5,7 @@
 bool doPrintFlow = false;
 bool doPrintRcvdPack = false;
 bool doPrintSentPack = false;
+bool doTestPinMapping = false;
 
 #pragma endregion 
 
@@ -24,11 +25,35 @@ bool doPrintSentPack = false;
 // DEFINE PINS
 
 // Relays
-const int pin_IR_LED = 9;
-const int pin_relRewTone = 11;
-const int pin_relWhiteNoise = 12;
+const int pin_relIR = 51;
+const int pin_relRewTone = 47;
+const int pin_relWhiteNoise = 45;
+// ttl
+const int pin_ttlIR = 50;
+const int pin_ttlRewTone = 46;
+const int pin_ttlWhiteNoise = 44;
 
-// NLX TTL
+// Rew
+const int pin_ttlRewOn = 34;
+const int pin_ttlRewOff = 36;
+
+// SAM3X pin
+const int sam_relIR = 12;
+const int sam_relRewTone = 16;
+const int sam_relWhiteNoise = 18;
+const int sam_ttlIR = 13;
+const int sam_ttlRewTone = 17;
+const int sam_ttlWhiteNoise = 19;
+const int sam_ttlRewOn = 2;
+const int sam_ttlRewOff = 4;
+
+// PID
+const int pin_ttlPidRun = 26;
+const int pin_ttlPidStop = 28;
+
+// Bulldozer
+const int pin_ttlBullRun = 30;
+const int pin_ttlBullStop = 32;
 
 // PT
 const int pin_ttlNorthOn = A7;
@@ -40,17 +65,7 @@ const int pin_ptWestOn = A2;
 const int pin_ptSouthOn = A1;
 const int pin_ptEastOn = A0;
 
-// Rew
-const int pin_ttlRewOn = 27;
-const int pin_ttlRewOff = 28;
 
-// PID
-const int pin_ttlPidRun = 24;
-const int pin_ttlPidStop = 31;
-
-// Bulldozer
-const int pin_ttlBullRun = 29;
-const int pin_ttlBullStop = 30;
 
 
 #pragma endregion
@@ -110,12 +125,15 @@ const char a2r_foot = '}';
 // Reward
 uint32_t rewDur; // (ms) 
 uint32_t t_rewEnd;
+uint32_t word_rewOn;
+uint32_t word_rewOff;
 
 // IR time sync LED
 const uint32_t syncDur = 5; // (ms)
-const uint32_t syncDel = 10000; // (ms)
+const uint32_t syncDel = 60000; // (ms)
 uint32_t t_sync = 0;
 uint32_t t_syncLast;
+uint32_t word_irOn;
 
 //----------CLASS: union----------
 union u_tag {
@@ -156,15 +174,21 @@ void setup()
 	digitalWrite(pin_ttlSouthOn, LOW);
 	digitalWrite(pin_ttlEastOn, LOW);
 
-	// Set relay pin to output
-	pinMode(pin_IR_LED, OUTPUT);
+	// Set relay/ttl pin to output
+	pinMode(pin_relIR, OUTPUT);
 	pinMode(pin_relWhiteNoise, OUTPUT);
 	pinMode(pin_relRewTone, OUTPUT);
+	pinMode(pin_ttlIR, OUTPUT);
+	pinMode(pin_ttlRewTone, OUTPUT);
+	pinMode(pin_ttlWhiteNoise, OUTPUT);
 
-	// set relay pins low
-	digitalWrite(pin_IR_LED, LOW);
+	// set relay/ttl pins low
+	digitalWrite(pin_relIR, LOW);
 	digitalWrite(pin_relRewTone, LOW);
 	digitalWrite(pin_relWhiteNoise, LOW);
+	digitalWrite(pin_ttlIR, LOW);
+	digitalWrite(pin_ttlRewTone, LOW);
+	digitalWrite(pin_ttlWhiteNoise, LOW);
 
 	// set other output pins
 	pinMode(pin_ttlRewOn, OUTPUT);
@@ -174,18 +198,54 @@ void setup()
 	pinMode(pin_ttlPidRun, OUTPUT);
 	pinMode(pin_ttlPidStop, OUTPUT);
 
+	// Setup reward ttl stuff on port C
+	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT B
+	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT B as output port
+
+	// Get ir word
+	int sam_ir_pins[2] = { sam_ttlIR, sam_relIR };
+	word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
+
 	// External interrupt
 	attachInterrupt(digitalPinToInterrupt(pin_ptNorthOn), NorthInterrupt, RISING); // north
 	attachInterrupt(digitalPinToInterrupt(pin_ptWestOn), WestInterrupt, RISING); // west
 	attachInterrupt(digitalPinToInterrupt(pin_ptSouthOn), SouthInterrupt, RISING); // south
 	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
 
+	// Test pin mapping
+	/*
+	Note: make sure Cheetah aquiring
+	*/
+	if (doTestPinMapping) {
+		delay(5000);
+		bool print_flow = doPrintFlow;
+		doPrintFlow = true;
+		digitalWrite(pin_ttlNorthOn, HIGH); PrintState("North TTL"); delay(1000); digitalWrite(pin_ttlNorthOn, LOW);
+		digitalWrite(pin_ttlWestOn, HIGH); PrintState("West TTL"); delay(1000); digitalWrite(pin_ttlWestOn, LOW);
+		digitalWrite(pin_ttlSouthOn, HIGH); PrintState("South TTL"); delay(1000); digitalWrite(pin_ttlSouthOn, LOW);
+		digitalWrite(pin_ttlEastOn, HIGH); PrintState("East TTL"); delay(1000); digitalWrite(pin_ttlEastOn, LOW);
+		digitalWrite(pin_ttlIR, HIGH); PrintState("IR Sync TTL"); delay(1000); digitalWrite(pin_ttlIR, LOW);
+		digitalWrite(pin_ttlWhiteNoise, HIGH); PrintState("White Noise TTL"); delay(1000); digitalWrite(pin_ttlWhiteNoise, LOW);
+		digitalWrite(pin_ttlRewTone, HIGH); PrintState("Reward Tone TTL"); delay(1000); digitalWrite(pin_ttlRewTone, LOW);
+		digitalWrite(pin_ttlRewOn, HIGH); PrintState("Reward On TTL"); delay(1000); digitalWrite(pin_ttlRewOn, LOW);
+		digitalWrite(pin_ttlRewOff, HIGH); PrintState("Reward Off TTL"); delay(1000); digitalWrite(pin_ttlRewOff, LOW);
+		digitalWrite(pin_ttlPidRun, HIGH); PrintState("PID Run TTL"); delay(1000); digitalWrite(pin_ttlPidRun, LOW);
+		digitalWrite(pin_ttlPidStop, HIGH); PrintState("PID Stop TTL"); delay(1000); digitalWrite(pin_ttlPidStop, LOW);
+		digitalWrite(pin_ttlBullRun, HIGH); PrintState("Bull Run TTL"); delay(1000); digitalWrite(pin_ttlBullRun, LOW);
+		digitalWrite(pin_ttlBullStop, HIGH); PrintState("Bull Stop TTL"); delay(1000); digitalWrite(pin_ttlBullStop, LOW);
+		digitalWrite(pin_relIR, HIGH); PrintState("IR Sync Relay"); delay(1000); digitalWrite(pin_relIR, LOW);
+		digitalWrite(pin_relRewTone, HIGH); PrintState("Reward Tone Relay"); delay(1000); digitalWrite(pin_relRewTone, LOW);
+		digitalWrite(pin_relWhiteNoise, HIGH); PrintState("White Noise Relay"); delay(1000); digitalWrite(pin_relWhiteNoise, LOW);
+		doPrintFlow = print_flow;
+		delay(5000);
+	}
 }
 
 
 // ---------MAIN LOOP---------
 void loop()
 {
+
 	// Check for XBee input
 	r2a_isNew = false;
 	if (Serial1.available() > 0) {
@@ -249,6 +309,32 @@ void loop()
 					fc_doRewTone = true;
 					PrintState("WHITE AND TONE ON");
 				}
+
+				// Get reward on port word
+				if (fc_doWhiteNoise && fc_doRewTone) {
+					// white and tone pins
+					int sam_on_pins[3] = { sam_ttlRewOn, sam_relRewTone, sam_ttlRewTone };
+					word_rewOn = GetPortWord(0x0, sam_on_pins, 3);
+				}
+				else {
+					// rew event pin only
+					int sam_on_pins[1] = { sam_ttlRewOn };
+					word_rewOn = GetPortWord(0x0, sam_on_pins, 1);
+				}
+				
+				// Get reward of port word
+				if (fc_doWhiteNoise) {
+					// turn white back on
+					int sam_off_pins[2] = { sam_ttlWhiteNoise, sam_ttlRewOff };
+					word_rewOff = GetPortWord(0x0, sam_off_pins, 2);
+				}
+				else {
+					// only signal reward end event
+					int sam_off_pins[1] = { sam_ttlRewOff };
+					word_rewOff = GetPortWord(0x0, sam_off_pins, 1);
+				}
+
+
 			}
 
 			// Signal PID mode
@@ -323,6 +409,7 @@ void loop()
 	{
 		SendSerial(msg_id, r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)]);
 	}
+
 }
 
 
@@ -465,17 +552,9 @@ void SendSerial(char id, uint16_t pack)
 // START REWARD
 void StartRew()
 {
-	// Tell NLX reward on
-	digitalWrite(pin_ttlRewOff, LOW);
-	digitalWrite(pin_ttlRewOn, HIGH);
+	// Set rew on pins
+	REG_PIOC_ODSR |= word_rewOn;
 
-	if (fc_doRewTone)
-	{
-		// set rew pins
-		digitalWrite(pin_relRewTone, HIGH);
-		// set white noise pins
-		digitalWrite(pin_relWhiteNoise, LOW);
-	}
 	// Set rew off time
 	t_rewEnd = millis() + rewDur;
 
@@ -500,17 +579,12 @@ void EndRew()
 	if (millis() > t_rewEnd)
 	{
 
-		// Tell NLX reward off
-		digitalWrite(pin_ttlRewOn, LOW);
-		digitalWrite(pin_ttlRewOff, HIGH);
+		// Set reward off pins
+		uint32_t word_off = REG_PIOC_ODSR;
+		word_off -= word_rewOn;
+		word_off |= word_rewOff;
+		REG_PIOC_ODSR = word_off;
 
-		if (fc_doRewTone)
-		{
-			// set white noise pins
-			digitalWrite(pin_relWhiteNoise, HIGH);
-			// set rew pins
-			digitalWrite(pin_relRewTone, LOW);
-		}
 		fc_isRewarding = false;
 		PrintState("REWARD OFF");
 
@@ -610,25 +684,29 @@ int CharInd(char id, char id_arr[], int arr_size)
 // PULSE IR
 void CheckIRPulse()
 {
-
+	static bool is_ir_on = false;
 	// Set high
 	if (
-		digitalRead(pin_IR_LED == LOW) &&
+		!is_ir_on &&
 		millis() > t_syncLast + syncDel
 		)
 	{
-		digitalWrite(pin_IR_LED, HIGH);
+		REG_PIOC_ODSR |= word_irOn;
 		t_syncLast = millis();
+		PrintState("IR SYNC ON");
+		is_ir_on = true;
 	}
 	// Set low
 	else if (
-		digitalRead(pin_IR_LED == HIGH) &&
+		is_ir_on &&
 		millis() > t_syncLast + syncDur
 		)
 	{
-		digitalWrite(pin_IR_LED, LOW);
+		REG_PIOC_ODSR -= word_irOn;
+		PrintState("IR SYNC OFF");
+		is_ir_on = false;
 	}
-
+	
 }
 
 // PLAY SOUND WHEN QUITING
@@ -652,6 +730,18 @@ void QuitBleep()
 	}
 	digitalWrite(pin_relWhiteNoise, HIGH);
 	digitalWrite(pin_relRewTone, LOW);
+}
+
+// GET 32 BIT WORD FOR PORT
+uint32_t GetPortWord(uint32_t word, int pin_arr[], int arr_size)
+{
+
+	// Get 32 bit state
+	for (int i = 0; i < arr_size; i++) {
+		word = word | 0x01 << pin_arr[i];
+	}
+
+	return word;
 }
 
 #pragma endregion
