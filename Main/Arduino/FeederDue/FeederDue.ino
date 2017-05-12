@@ -1690,7 +1690,7 @@ public:
 	bool isAllZonePassed = false;
 	bool is_ekfNew = false;
 	float zoneRewarded = 0;
-	byte zoneRewardedByte = 255;
+	byte zoneIndByte = 255;
 	float boundsRewarded[2];
 	float lapN = 0;
 	bool doArmMove = false;
@@ -1804,10 +1804,23 @@ public:
 	}
 
 	// Set reward pos
+	float SetRewPos(byte zone_ind)
+	{
+		zoneIndByte = zone_ind;
+	}
 	float SetRewPos(byte zone_ind, float rew_pos)
 	{
-		float zone_loc = zone_ind != 0 ? zoneLocs[zone_ind] : 0;
+		// Local vars
+		byte zone_zer_ind = zone_ind - 1;
+
+		// Get reward pos in radians
+		float zone_loc = zone_zer_ind != 0 ? zoneLocs[zone_zer_ind] : 0;
 		rewCenterAbs = rew_pos + (-1 * zone_loc * ((140 * PI) / 360));
+		
+		// Store zone ind as byte
+		zoneIndByte = zone_ind;
+		
+		// Return pos
 		return rewCenterAbs;
 	}
 
@@ -1892,8 +1905,9 @@ public:
 						zoneRewarded = zoneLocs[i];
 						boundsRewarded[0] = zoneBounds[i][0];
 						boundsRewarded[1] = zoneBounds[i][1];
-						// convert zone to byte to send
-						zoneRewardedByte = (byte)(zoneRewarded + 127);
+
+						// convert zone ind to byte to send
+						zoneIndByte = (byte)(i+1);
 
 						// Set flag
 						isZoneTriggered = true;
@@ -2640,6 +2654,9 @@ void loop() {
 		if (msg_rewPos == 0 && msg_rewZoneInd != 0) {
 			DebugFlow("REWARD NOW");
 
+			// Set reward pos to zero
+			reward.SetRewPos(0);
+
 			// Start reward
 			fc_isRewarding = reward.StartRew(true, false);
 		}
@@ -2649,7 +2666,7 @@ void loop() {
 			fc_doRew = true;
 		}
 		// Cued reward
-		else {
+		else if (msg_rewPos != 0 && msg_rewZoneInd != 0) {
 			DebugFlow("REWARD CUED");
 			// Get zone position
 			cuePos = reward.SetRewPos(msg_rewZoneInd, msg_rewPos);
@@ -3072,7 +3089,7 @@ void loop() {
 			fc_isRewarding = false;
 
 			// Tell CS what zone was rewarded
-			Store4_CS('Z', reward.zoneRewardedByte, 0);
+			Store4_CS('Z', reward.zoneIndByte, 0);
 		}
 	}
 
@@ -3199,8 +3216,6 @@ bool ParseC2R()
 
 		// Get reward diration 
 		msg_rewZoneInd = WaitBuffRead();
-		// Set to 0 ind
-		msg_rewZoneInd = msg_rewZoneInd - 1;
 	}
 
 	// Get halt robot data

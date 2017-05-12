@@ -2,9 +2,9 @@
 
 #pragma region ---------DEBUG SETTINGS---------
 
-bool doPrintFlow = false;
-bool doPrintRcvdPack = false;
-bool doPrintSentPack = false;
+bool doPrintFlow = true;
+bool doPrintRcvdPack = true;
+bool doPrintSentPack = true;
 bool doTestPinMapping = false;
 
 #pragma endregion 
@@ -151,10 +151,6 @@ union u_tag {
 // ---------SETUP---------
 void setup()
 {
-
-	//while (!SerialUSB);
-	PrintState("RESTART");
-
 	// XBee.
 	Serial1.begin(57600);
 
@@ -199,8 +195,8 @@ void setup()
 	pinMode(pin_ttlPidStop, OUTPUT);
 
 	// Setup reward ttl stuff on port C
-	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT B
-	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT B as output port
+	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT C
+	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output port
 
 	// Get ir word
 	int sam_ir_pins[2] = { sam_ttlIR, sam_relIR };
@@ -211,6 +207,8 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(pin_ptWestOn), WestInterrupt, RISING); // west
 	attachInterrupt(digitalPinToInterrupt(pin_ptSouthOn), SouthInterrupt, RISING); // south
 	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
+
+	PrintState("RESTART");
 
 	// Test pin mapping
 	/*
@@ -284,56 +282,50 @@ void loop()
 
 			// Get noise settings
 			else if (msg_id == 's') {
+
 				// No noise
 				if (msg_dat == 0)
 				{
 					fc_doWhiteNoise = false;
 					fc_doRewTone = false;
-					PrintState("WHITE OFF");
 				}
 				// White noise only
 				else if (msg_dat == 1)
 				{
 					// set white noise pins
-					digitalWrite(pin_relWhiteNoise, HIGH);
 					fc_doWhiteNoise = true;
 					fc_doRewTone = false;
-					PrintState("WHITE ON");
 				}
 				// White and reward sound
 				else if (msg_dat == 2)
 				{
 					// set white noise pins
-					digitalWrite(pin_relWhiteNoise, HIGH);
 					fc_doWhiteNoise = true;
 					fc_doRewTone = true;
-					PrintState("WHITE AND TONE ON");
 				}
 
 				// Get reward on port word
 				if (fc_doWhiteNoise && fc_doRewTone) {
 					// white and tone pins
-					int sam_on_pins[3] = { sam_ttlRewOn, sam_relRewTone, sam_ttlRewTone };
+					int sam_on_pins[3] = { sam_relRewTone, sam_ttlRewTone, sam_ttlRewOn };
 					word_rewOn = GetPortWord(0x0, sam_on_pins, 3);
+					int sam_off_pins[3] = { sam_relWhiteNoise, sam_ttlWhiteNoise, sam_ttlRewOff };
+					word_rewOff = GetPortWord(0x0, sam_off_pins, 3);
 				}
 				else {
-					// rew event pin only
+					// rew event pins only
 					int sam_on_pins[1] = { sam_ttlRewOn };
 					word_rewOn = GetPortWord(0x0, sam_on_pins, 1);
-				}
-				
-				// Get reward of port word
-				if (fc_doWhiteNoise) {
-					// turn white back on
-					int sam_off_pins[2] = { sam_ttlWhiteNoise, sam_ttlRewOff };
-					word_rewOff = GetPortWord(0x0, sam_off_pins, 2);
-				}
-				else {
-					// only signal reward end event
 					int sam_off_pins[1] = { sam_ttlRewOff };
 					word_rewOff = GetPortWord(0x0, sam_off_pins, 1);
 				}
-
+				// Turn on white noise
+				if (fc_doWhiteNoise) {
+					// turn white back on
+					int sam_white_pins[2] = { sam_relWhiteNoise, sam_ttlWhiteNoise };
+					uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
+					REG_PIOC_ODSR |= word_white;
+				}
 
 			}
 
@@ -342,15 +334,15 @@ void loop()
 				// Signal PID stopped
 				if (msg_dat == 0)
 				{
-					digitalWrite(pin_ttlPidRun, LOW);
 					digitalWrite(pin_ttlPidStop, HIGH);
+					digitalWrite(pin_ttlPidRun, LOW);
 					PrintState("PID STOPPED");
 				}
 				// Signal PID running
 				else if (msg_dat == 1)
 				{
-					digitalWrite(pin_ttlPidStop, LOW);
 					digitalWrite(pin_ttlPidRun, HIGH);
+					digitalWrite(pin_ttlPidStop, LOW);
 					PrintState("PID RUNNING");
 				}
 			}
@@ -360,15 +352,15 @@ void loop()
 				// Signal Bull stopped
 				if (msg_dat == 0)
 				{
-					digitalWrite(pin_ttlBullRun, LOW);
 					digitalWrite(pin_ttlBullStop, HIGH);
+					digitalWrite(pin_ttlBullRun, LOW);
 					PrintState("BULL STOPPED");
 				}
 				// Signal Bull running
 				else if (msg_dat == 1)
 				{
-					digitalWrite(pin_ttlBullStop, LOW);
 					digitalWrite(pin_ttlBullRun, HIGH);
+					digitalWrite(pin_ttlBullStop, LOW);
 					PrintState("BULL RUNNING");
 				}
 			}
@@ -553,7 +545,10 @@ void SendSerial(char id, uint16_t pack)
 void StartRew()
 {
 	// Set rew on pins
-	REG_PIOC_ODSR |= word_rewOn;
+	uint32_t word_on = REG_PIOC_ODSR;
+	word_on = word_on & ~word_rewOff;
+	word_on |= word_rewOn;
+	REG_PIOC_ODSR = word_on;
 
 	// Set rew off time
 	t_rewEnd = millis() + rewDur;
@@ -581,7 +576,7 @@ void EndRew()
 
 		// Set reward off pins
 		uint32_t word_off = REG_PIOC_ODSR;
-		word_off -= word_rewOn;
+		word_off = word_off & ~word_rewOn;
 		word_off |= word_rewOff;
 		REG_PIOC_ODSR = word_off;
 
@@ -702,11 +697,13 @@ void CheckIRPulse()
 		millis() > t_syncLast + syncDur
 		)
 	{
-		REG_PIOC_ODSR -= word_irOn;
+		uint32_t word_off = REG_PIOC_ODSR;
+		word_off = word_off & ~word_irOn;
+		REG_PIOC_ODSR = word_off;
 		PrintState("IR SYNC OFF");
 		is_ir_on = false;
 	}
-	
+
 }
 
 // PLAY SOUND WHEN QUITING

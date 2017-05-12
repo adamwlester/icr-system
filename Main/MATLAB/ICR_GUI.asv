@@ -3915,8 +3915,6 @@ clear(PersistentVarNames{:});
                             Set_Cue_Buttons('Disable');
                             
                             % Rat triggered reward or first run
-                            pos_send = 0;
-                            zone_ind_send = 0;
                             if D.B.flag_rew_confirmed || D.C.rew_cross_cnt == 0
                                 
                                 % Reset patches
@@ -3938,10 +3936,6 @@ clear(PersistentVarNames{:});
                                     % Get new reward duration
                                     D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone);
                                     
-                                    % Will send CS command with pos and zone
-                                    pos_send = D.UI.rewSetpointRad(D.I.rot);
-                                    zone_ind_send = D.I.zone;
-                                    
                                     % Show new reward taget patch
                                     set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
                                         'FaceAlpha', 0.75, ...
@@ -3956,20 +3950,20 @@ clear(PersistentVarNames{:});
                                     % Post NLX event: cue on
                                     NlxSendCommand(D.NLX.cue_on_evt);
                                     
-                                else
-                                    
-                                    % Send reward center and no zone ind
-                                    pos_send = D.UI.rewSetpointRad(D.I.rot);
-                                    zone_ind_send = 0;
-                                    
-                                    % Darken all zone patches
-                                    set(D.UI.ptchFdH(:, D.I.rot), ...
-                                        'FaceAlpha', 0.75)
                                 end
+                                
+                                % Send CS command with pos and zone
+                                pos_center = D.UI.rewSetpointRad(D.I.rot);
+                                Mat2CS('R', pos_center, D.I.zone);
+                                
+                            else
+                                % Send CS command with reward pos
+                                pos_center = D.UI.rewSetpointRad(D.I.rot);
+                                Mat2CS('R', pos_center, 0);
+                                % Darken all zoneets zone patch
+                                set(D.UI.ptchFdH(:, D.I.rot), ...
+                                    'FaceAlpha', 0.75)
                             end
-                            
-                            % Send CS command
-                            Mat2CS('R', pos_send, zone_ind_send);
                             
                             % Hide reset patch
                             set(D.UI.ptchFdRstH(D.I.rot), ...
