@@ -23,10 +23,11 @@ namespace ICR_Run
         /*
             0: No test
             1: Run MATLAB in debug mode
-            2: Halt error test
-            3: Simulated rat test
+            2: PID calibration
+            3: Halt error test
+            4: Simulated rat test
         */
-        private static double db_systemTest = 3;
+        private static double db_systemTest = 4;
         // Print all blocked vt recs
         private static bool db_printBlockedVt = false;
         // Print all sent vt recs
@@ -164,6 +165,7 @@ namespace ICR_Run
         private static long sendRcvdDel = 1; // (ms)
         private static long resendTimeout = 500; // (ms)
         private static long chkDoneTimeout = 10000; // (ms)
+        private static long acConnectTimeout = 15000; // (ms)
         private static long importLogTimeout = 60000; // (ms)
         private static int resendMax = 5;
         private static long t_c2r = 0;
@@ -247,7 +249,7 @@ namespace ICR_Run
                 nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00";
 
                 // Start thread to pass simulation rat data
-                if (db_systemTest == 3)
+                if (db_systemTest == 4)
                 {
                     new Thread(delegate ()
                     {
@@ -333,7 +335,7 @@ namespace ICR_Run
 
             // Wait for ICR_GUI to connect to AC computer
             LogEvent("[Main] RUNNING: Wait for AC Connect...");
-            t_timeout = sw_main.ElapsedMilliseconds + importLogTimeout;
+            t_timeout = sw_main.ElapsedMilliseconds + acConnectTimeout;
             do_loop = true;
             pass = false;
             do
@@ -388,14 +390,14 @@ namespace ICR_Run
                     LogEvent("[Main] RUNNING: Confirm Robot Streaming...");
                     new Thread(delegate ()
                     {
-                        RepeatSend('V', true);
+                        RepeatSendPack('V', true);
                     }).Start();
                     // Wait for confirmation from robot
                     while (c2r_packLast[CharInd('V', c2r_id)] != r2c_packLast[CharInd('D', r2c_id)] && !fc_doAbort) ;
                     if (!fc_doAbort)
                     {
                         //fc_isRobStreaming = true;
-                        com_Matlab.Execute("c2m_V = true;");
+                        SendMCOM("c2m_V = true;");
                         LogEvent("[Main] FINISHED: Confirm Robot Streaming");
                     }
                     else LogEvent("[Main] !!ABORTED: Confirm Robot Streaming!!");
@@ -454,7 +456,7 @@ namespace ICR_Run
                     last_pack = c2r_packLast[CharInd('M', c2r_id)];
                     new Thread(delegate ()
                     {
-                        RepeatSend('M', move_to, true);
+                        RepeatSendPack('M', move_to, true);
                     }).Start();
                     // Wait for new sent packet
                     while (c2r_packLast[CharInd('M', c2r_id)] == last_pack) ;
@@ -532,7 +534,7 @@ namespace ICR_Run
                 // Enable GUI save button
                 if (!fc_isMAThanging && !fc_doAbort)
                 {
-                    com_Matlab.Execute("c2m_S = true;");
+                    SendMCOM("c2m_S = true;");
                     LogEvent("[Main] FINISHED: Save Enabled");
                 }
                 else LogEvent("[Main] !!ABORTED: Save Enabled!!");
@@ -584,7 +586,7 @@ namespace ICR_Run
                 // Send command for arduino to quit on seperate thread
                 new Thread(delegate ()
                 {
-                    RepeatSend('Q');
+                    RepeatSendPack('Q');
                 }).Start();
 
                 // Wait for quit confirmation from robot for fixed period of time
@@ -608,7 +610,7 @@ namespace ICR_Run
                 // Send command for ICR_GUI to exit
                 if (!fc_isMAThanging)
                 {
-                    com_Matlab.Execute("c2m_E = true;");
+                    SendMCOM("c2m_E = true;");
                     LogEvent("[Main] FINISHED: Tell Mat to Close");
 
                     // Set flag
@@ -642,9 +644,9 @@ namespace ICR_Run
                 // Clear all MatCOM vars
                 if (!fc_isMAThanging)
                 {
-                    com_Matlab.Execute("clearvars - global;");
-                    com_Matlab.Execute("clearvars;");
-                    com_Matlab.Execute("close all;");
+                    SendMCOM("clearvars - global;");
+                    SendMCOM("clearvars;");
+                    SendMCOM("close all;");
                     Thread.Sleep(100);
                 }
 
@@ -689,27 +691,27 @@ namespace ICR_Run
 
         #region ---------COMMUNICATION---------
 
-        public static bool RepeatSend(char id)
+        public static bool RepeatSendPack(char id)
         {
-            return RepeatSend(id, double.NaN, double.NaN, false);
+            return RepeatSendPack(id, double.NaN, double.NaN, false);
         }
-        public static bool RepeatSend(char id, double dat_1)
+        public static bool RepeatSendPack(char id, double dat_1)
         {
-            return RepeatSend(id, dat_1, double.NaN, false);
+            return RepeatSendPack(id, dat_1, double.NaN, false);
         }
-        public static bool RepeatSend(char id, double dat_1, double dat_2)
+        public static bool RepeatSendPack(char id, double dat_1, double dat_2)
         {
-            return RepeatSend(id, dat_1, dat_2, false);
+            return RepeatSendPack(id, dat_1, dat_2, false);
         }
-        public static bool RepeatSend(char id, bool check_done)
+        public static bool RepeatSendPack(char id, bool check_done)
         {
-            return RepeatSend(id, double.NaN, double.NaN, check_done);
+            return RepeatSendPack(id, double.NaN, double.NaN, check_done);
         }
-        public static bool RepeatSend(char id, double dat_1, bool check_done)
+        public static bool RepeatSendPack(char id, double dat_1, bool check_done)
         {
-            return RepeatSend(id, dat_1, double.NaN, check_done);
+            return RepeatSendPack(id, dat_1, double.NaN, check_done);
         }
-        public static bool RepeatSend(char id, double dat_1, double dat_2, bool check_done)
+        public static bool RepeatSendPack(char id, double dat_1, double dat_2, bool check_done)
         {
             bool pass_rcvd = false;
             long t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
@@ -717,7 +719,7 @@ namespace ICR_Run
             ushort pack;
 
             // Send new data with new packet number
-            pack = SendData(id, dat_1, dat_2);
+            pack = SendPack(id, dat_1, dat_2);
 
             // Keep checking mesage was recieved
             while (
@@ -752,7 +754,7 @@ namespace ICR_Run
                         if (r2c_idHist[i] == 'D' && r2c_packHist[i] == pack)
                         {
                             // Send back done recieved confirmation
-                            SendData('Y', pack);
+                            SendPack('Y', pack);
 
                             // Run CheckDone on new thread
                             new Thread(delegate ()
@@ -776,7 +778,7 @@ namespace ICR_Run
                 // Need to resend
                 if (!pass_rcvd && sw_main.ElapsedMilliseconds > t_timeout)
                 {
-                    SendData(id, dat_1, dat_2, pack);
+                    SendPack(id, dat_1, dat_2, pack);
                     t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
                     send_count++;
                 }
@@ -791,19 +793,19 @@ namespace ICR_Run
             return false;
         }
 
-        public static ushort SendData(char id)
+        public static ushort SendPack(char id)
         {
-            return SendData(id, double.NaN, double.NaN, 0);
+            return SendPack(id, double.NaN, double.NaN, 0);
         }
-        public static ushort SendData(char id, double dat_1, double dat_2)
+        public static ushort SendPack(char id, double dat_1, double dat_2)
         {
-            return SendData(id, dat_1, dat_2, 0);
+            return SendPack(id, dat_1, dat_2, 0);
         }
-        public static ushort SendData(char id, ushort pack)
+        public static ushort SendPack(char id, ushort pack)
         {
-            return SendData(id, double.NaN, double.NaN, pack);
+            return SendPack(id, double.NaN, double.NaN, pack);
         }
-        public static ushort SendData(char id, double dat_1, double dat_2, ushort pack)
+        public static ushort SendPack(char id, double dat_1, double dat_2, ushort pack)
         {
             /* 
             SEND DATA TO ROBOT 
@@ -1022,14 +1024,14 @@ namespace ICR_Run
                     // Print sent mesage packet
                     if (nDataBytes == 0)
                     {
-                        msg_str = String.Format("   sent: [id:{0} pack:{1}]", id, pack);
+                        msg_str = String.Format("   sent: to=r id={0} pack={1}", id, pack);
                     }
-                    else msg_str = String.Format("   sent: [id:{0} dat1:{1:0.00} dat2:{2:0.00} pack:{3}]", id, dat_1, dat_2, pack);
+                    else msg_str = String.Format("   sent: to=r id={0} dat1={1:0.00} dat2={2:0.00} pack={3}", id, dat_1, dat_2, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
                 else if (db_printSentVT)
                 {
-                    msg_str = String.Format("   sent: [id:{0} ent:{1} ts:{2} cm:{3:0.00} pack:{4}]", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
+                    msg_str = String.Format("   sent: to:r id={0} ent={1} ts={2} cm={3:0.00} pack={4}", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
 
@@ -1050,7 +1052,7 @@ namespace ICR_Run
         {
             // Print worker started
             string msg_str;
-            msg_str = String.Format("   Running CheckDone Worker (pack:{0})", pack);
+            msg_str = String.Format("   running checkdone Worker: pack={0}", pack);
             LogEvent(msg_str);
 
             // Initialize
@@ -1089,7 +1091,7 @@ namespace ICR_Run
                             break;
                         }
                         // Resend done confirmation
-                        SendData('Y', pack);
+                        SendPack('Y', pack);
                         // Add 10 more seconds
                         t_timeout = sw_main.ElapsedMilliseconds + 10000;
                     }
@@ -1097,8 +1099,17 @@ namespace ICR_Run
                 // Pause thread
                 Thread.Sleep(100);
             }
-            msg_str = String.Format("   Finished CheckDone Worker {0} (pack:{1})", pass ? "Passed" : "Failed", pack);
+            msg_str = String.Format("   finished checkdone Worker {0}: pack={1}", pass ? "passed" : "failed", pack);
             LogEvent(msg_str);
+        }
+
+        public static void SendMCOM(string msg)
+        {
+            // Store value
+            com_Matlab.Execute(msg);
+
+            // Print value
+            LogEvent("   sent: to=m dat=\"" + msg + "\"");
         }
 
         public static bool WaitForPack()
@@ -1120,7 +1131,7 @@ namespace ICR_Run
                 id = id == 'M' ? 'D' : id;
 
                 // Print current id
-                str = String.Format("   waiting for: [id:{0} pack:{1}]...", id, pack);
+                str = String.Format("   waiting for: id={0} pack={1}...", id, pack);
                 LogEvent(str);
 
                 // Check history
@@ -1300,7 +1311,7 @@ namespace ICR_Run
                         t_r2c = sw_main.ElapsedMilliseconds;
 
                         // print data recieved
-                        msg_str = String.Format("   rcvd: [id:{0} dat:{1} pack:{2}]", id, dat, pack);
+                        msg_str = String.Format("   rcvd: from=r id={0} dat={1} pack={2}", id, dat, pack);
                         LogEvent(msg_str, t_r2cLast, t_r2c);
 
                         // Update last pack
@@ -1310,11 +1321,12 @@ namespace ICR_Run
                         r2c_packHist.Add(pack);
 
                         // Check if data should be relayed to Matlab
-                        for (int i = 0; i < r2m_id.Length - 1; i++)
+                        for (int i = 0; i < r2m_id.Length; i++)
                         {
                             if (r2m_id[i] == id)
                             {
-                                com_Matlab.Execute(String.Format("r2m_{0} = {1}", r2m_id[i], (double)dat));
+                                // Update matlab var
+                                SendMCOM(String.Format("r2m_{0} = {1};", r2m_id[i], (double)dat));
                             }
                         }
                     }
@@ -1373,7 +1385,7 @@ namespace ICR_Run
                         // print data recieved
                         if (db_printRcvdLog)
                         {
-                            msg_str = String.Format("LOG[{0}]: \"{1}\" (chksum = {2})", dueLogger.logCnt, log_str, chksum);
+                            msg_str = String.Format("LOG[{0}]: dat=\"{1}\" chksum={2}", dueLogger.logCnt, log_str, chksum);
                             LogEvent(msg_str);
                         }
                     }
@@ -1415,7 +1427,7 @@ namespace ICR_Run
                     else
                     {
                         droppedPacks++;
-                        msg_str = String.Format("!!PACK LOST (Total:{0}) BuffTX:{1} BuffRX:{2} [head:{3} id:{4} dat:{5} pack:{6} chksum:{7} foot:{8}]!!",
+                        msg_str = String.Format("!!PACK LOST: tot={0} tx={1} rx={2} head={3} id={4} dat={5} pack={6} chksum={7} foot={8}!!",
                             droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, chksum, foot);
                         LogEvent(msg_str);
 
@@ -1427,7 +1439,7 @@ namespace ICR_Run
 
                 }
                 // Change streaming status
-                else if(foot_found && !fc_isRobStreaming)
+                else if (foot_found && !fc_isRobStreaming)
                 {
                     fc_isRobStreaming = true;
                 }
@@ -1465,7 +1477,7 @@ namespace ICR_Run
             // Local vars
             bool pass = false;
             ushort pack = 0;
-            long t_timeout = sw_main.ElapsedMilliseconds + 30000;
+            long t_timeout = sw_main.ElapsedMilliseconds + importLogTimeout;
 
             // Loop till complete log recieved
             bool do_loop = true;
@@ -1475,7 +1487,7 @@ namespace ICR_Run
                 if (dueLogger.SendReady())
                 {
                     double send_what = dueLogger.sendWhat;
-                    RepeatSend('L', dueLogger.sendWhat);
+                    RepeatSendPack('L', dueLogger.sendWhat);
                 }
 
                 // Check if list complete
@@ -1487,7 +1499,7 @@ namespace ICR_Run
 
                     // Send one more log request and wait for done
                     // Note: this is just a hack to get confirmation from both ends
-                    RepeatSend('L', dueLogger.sendWhat, true);
+                    RepeatSendPack('L', dueLogger.sendWhat, true);
 
                 }
                 else if (
@@ -1605,7 +1617,7 @@ namespace ICR_Run
                 // Send data
                 if (pass)
                 {
-                    SendData('P');
+                    SendPack('P');
                 }
             }
             else if (db_printBlockedVt)
@@ -1685,12 +1697,12 @@ namespace ICR_Run
             com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
             com_Matlab.PutWorkspaceData("m2c_quit", "global", false);
             // r2m vars
-            for (int i = 0; i < r2m_id.Length - 1; i++)
+            for (int i = 0; i < r2m_id.Length; i++)
             {
                 com_Matlab.PutWorkspaceData(String.Format("r2m_{0}", r2m_id[i]), "global", 0.0);
             }
             // c2m vars
-            for (int i = 0; i < c2m_id.Length - 1; i++)
+            for (int i = 0; i < c2m_id.Length; i++)
             {
                 com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m_id[i]), "global", false);
             }
@@ -1720,7 +1732,7 @@ namespace ICR_Run
                 // Check for new command
                 if (flag)
                 {
-                    LogEvent("   New MatCom Data");
+                    LogEvent("   new matcom data");
                     // Get new message id
                     var id = com_Matlab.GetVariable("m2c_id", "global");
                     bw_id = System.Convert.ToChar(id);
@@ -1735,7 +1747,7 @@ namespace ICR_Run
                     bw_d2 = d2 != 9999 ? (double)d2 : Double.NaN;
 
                     // Reset flag
-                    com_Matlab.Execute("m2c_flag = false;");
+                    SendMCOM("m2c_flag = false;");
 
                     // Trigger progress change event
                     worker.ReportProgress(0, new System.Tuple<char, double, double>(bw_id, bw_d1, bw_d2));
@@ -1755,7 +1767,7 @@ namespace ICR_Run
             matIn_dat2 = bw_args.Item3;
 
             // Print incoming mesage
-            string msg_str = String.Format("   mCOM: [id:{0} dat1:{1:0.00} dat2:{2:0.00}]", matIn_id, matIn_dat1, matIn_dat2);
+            string msg_str = String.Format("   rcvd: from=m id={0} dat1={1:0.00} dat2={2:0.00}", matIn_id, matIn_dat1, matIn_dat2);
             t_m2cLast = t_m2c;
             t_m2c = sw_main.ElapsedMilliseconds;
             LogEvent(msg_str, t_m2cLast, t_m2c);
@@ -1806,7 +1818,7 @@ namespace ICR_Run
                         fc_isRatOut = true;
                     }
 
-                    RepeatSend(matIn_id, matIn_dat1, matIn_dat2, do_check_done);
+                    RepeatSendPack(matIn_id, matIn_dat1, matIn_dat2, do_check_done);
                 }
             }
         }
@@ -1987,7 +1999,7 @@ namespace ICR_Run
                     // Send data
                     if (pass)
                     {
-                        SendData('P');
+                        SendPack('P');
                     }
 
                     // Update ts_last

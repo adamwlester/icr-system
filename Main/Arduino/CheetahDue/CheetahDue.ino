@@ -2,9 +2,10 @@
 
 #pragma region ---------DEBUG SETTINGS---------
 
-bool doPrintFlow = true;
-bool doPrintRcvdPack = true;
-bool doPrintSentPack = true;
+bool doPrintFlow = false;
+bool doPrintRcvdPack = false;
+bool doPrintSentPack = false;
+bool doPrintResent = false;
 bool doTestPinMapping = false;
 
 #pragma endregion 
@@ -130,7 +131,7 @@ uint32_t word_rewOff;
 
 // IR time sync LED
 const uint32_t syncDur = 5; // (ms)
-const uint32_t syncDel = 60000; // (ms)
+const uint32_t syncDel = 10000; // (ms)
 uint32_t t_sync = 0;
 uint32_t t_syncLast;
 uint32_t word_irOn;
@@ -321,10 +322,10 @@ void loop()
 				}
 				// Turn on white noise
 				if (fc_doWhiteNoise) {
-					// turn white back on
+					// turn white on
 					int sam_white_pins[2] = { sam_relWhiteNoise, sam_ttlWhiteNoise };
 					uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
-					REG_PIOC_ODSR |= word_white;
+					SetPort(word_white, 0x0);
 				}
 
 			}
@@ -463,7 +464,7 @@ bool ParseSerial()
 	// Footer missing
 	if (foot != r2a_foot) {
 		// mesage will be dumped
-		return pass = false;
+		pass = false;
 	}
 	else
 	{
@@ -482,7 +483,12 @@ bool ParseSerial()
 			// Update last packet
 			r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)] = pack;
 		}
-		else pass = false;
+		else
+		{
+			// Print resent packet
+			PrintResent(msg_id, msg_dat, pack);
+			pass = false;
+		}
 	}
 
 	return pass;
@@ -545,10 +551,7 @@ void SendSerial(char id, uint16_t pack)
 void StartRew()
 {
 	// Set rew on pins
-	uint32_t word_on = REG_PIOC_ODSR;
-	word_on = word_on & ~word_rewOff;
-	word_on |= word_rewOn;
-	REG_PIOC_ODSR = word_on;
+	SetPort(word_rewOn, word_rewOff);
 
 	// Set rew off time
 	t_rewEnd = millis() + rewDur;
@@ -575,10 +578,7 @@ void EndRew()
 	{
 
 		// Set reward off pins
-		uint32_t word_off = REG_PIOC_ODSR;
-		word_off = word_off & ~word_rewOn;
-		word_off |= word_rewOff;
-		REG_PIOC_ODSR = word_off;
+		SetPort(word_rewOff, word_rewOn);
 
 		fc_isRewarding = false;
 		PrintState("REWARD OFF");
@@ -608,7 +608,7 @@ void PrintRcvdPack(char id, byte dat, uint16_t pack)
 	if (doPrintRcvdPack)
 	{
 		char str[50];
-		sprintf(str, "rcvd: id:%c dat:%d pack:%d", id, dat, pack);
+		sprintf(str, "rcvd: id=%c dat=%d pack=%d", id, dat, pack);
 		PrintStr(str, millis());
 	}
 }
@@ -621,7 +621,22 @@ void PrintSentPack(char id, uint16_t pack)
 	if (doPrintSentPack)
 	{
 		char str[50];
-		sprintf(str, "sent: id:%c pack:%d", id, pack);
+		sprintf(str, "sent: id=%c pack=%d", id, pack);
+		PrintStr(str, millis());
+	}
+}
+
+// PRINT RESENT PACKET
+void PrintResent(char id, byte dat, uint16_t pack)
+{
+	static int resent_cnt = 0;
+	resent_cnt++;
+
+	//// Print
+	if (doPrintResent)
+	{
+		char str[50];
+		sprintf(str, "!!RESENT PACK: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
 		PrintStr(str, millis());
 	}
 }
@@ -686,7 +701,8 @@ void CheckIRPulse()
 		millis() > t_syncLast + syncDel
 		)
 	{
-		REG_PIOC_ODSR |= word_irOn;
+		// Set ir pins on
+		SetPort(word_irOn, 0x0);
 		t_syncLast = millis();
 		PrintState("IR SYNC ON");
 		is_ir_on = true;
@@ -697,9 +713,7 @@ void CheckIRPulse()
 		millis() > t_syncLast + syncDur
 		)
 	{
-		uint32_t word_off = REG_PIOC_ODSR;
-		word_off = word_off & ~word_irOn;
-		REG_PIOC_ODSR = word_off;
+		SetPort(0x0, word_irOn);
 		PrintState("IR SYNC OFF");
 		is_ir_on = false;
 	}
@@ -739,6 +753,15 @@ uint32_t GetPortWord(uint32_t word, int pin_arr[], int arr_size)
 	}
 
 	return word;
+}
+
+// SET PORT
+void SetPort(uint32_t word_on, uint32_t word_off)
+{
+	uint32_t word_new = REG_PIOC_ODSR;
+	word_new = word_new & ~word_off;
+	word_new |= word_on;
+	REG_PIOC_ODSR = word_new;
 }
 
 #pragma endregion
@@ -784,12 +807,11 @@ void NorthFun()
 			digitalWrite(pin_ttlNorthOn, HIGH);
 			t_outLastNorth = millis();
 			isOnNorth = true;
+			// Print
+			if (doPrintFlow)
+				PrintStr("NORTH ON", t_outLastNorth);
 		}
 		t_inLastNorth = millis();
-		if (doPrintFlow)
-		{
-			SerialUSB.print("\nNorth On\n");
-		}
 	}
 }
 
@@ -806,12 +828,11 @@ void WestFun()
 			digitalWrite(pin_ttlWestOn, HIGH);
 			t_outLastWest = millis();
 			isOnWest = true;
+			// Print
+			if (doPrintFlow)
+				PrintStr("WEST ON", t_outLastWest);
 		}
 		t_inLastWest = millis();
-		if (doPrintFlow)
-		{
-			SerialUSB.print("\nWest On\n");
-		}
 	}
 }
 
@@ -828,12 +849,11 @@ void SouthFun()
 			digitalWrite(pin_ttlSouthOn, HIGH);
 			t_outLastSouth = millis();
 			isOnSouth = true;
+			// Print
+			if (doPrintFlow)
+				PrintStr("SOUTH ON", t_outLastSouth);
 		}
 		t_inLastSouth = millis();
-		if (doPrintFlow)
-		{
-			SerialUSB.print("\nSouth On\n");
-		}
 	}
 }
 
@@ -850,12 +870,11 @@ void EastFun()
 			digitalWrite(pin_ttlEastOn, HIGH);
 			t_outLastEast = millis();
 			isOnEast = true;
+			// Print
+			if (doPrintFlow)
+				PrintStr("EAST ON", t_outLastEast);
 		}
 		t_inLastEast = millis();
-		if (doPrintFlow)
-		{
-			SerialUSB.print("\nEast On\n");
-		}
 	}
 }
 

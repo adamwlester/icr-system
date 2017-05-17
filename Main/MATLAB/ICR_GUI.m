@@ -1,9 +1,10 @@
 function[] = ICR_GUI(inArg, isMatRunAlone)
-% INPUT: inArg = [0,1,2,3]
+% INPUT: inArg = [0,1,2,3,4]
 %        0: No test
 %        1: Run MATLAB in debug mode
-%        2: Halt error test
-%        3: Simulated rat test
+%        2: PID calibration
+%        3: Halt error test
+%        4: Simulated rat test
 
 
 
@@ -19,6 +20,7 @@ global caughtError; % bool for error handling
 global consoleText; % console text
 global tcpIP; % server tcpip object
 global isTestRun;
+global doPidCalibrationTest;
 global doHaultErrorTest;
 global doSimRatTest;
 global test_simX test_simY test_simTS
@@ -43,6 +45,7 @@ global c2m_E; % bool exit
 caughtError = false;
 consoleText = ' ';
 isTestRun = false;
+doPidCalibrationTest = false;
 doHaultErrorTest = false;
 doSimRatTest = false;
 
@@ -146,8 +149,11 @@ switch inArg
         doDebug = true;
     case 2
         isTestRun = true;
-        doHaultErrorTest = true;
+        doPidCalibrationTest = true;
     case 3
+        isTestRun = true;
+        doHaultErrorTest = true;
+    case 4
         isTestRun = true;
         doSimRatTest = true;
 end
@@ -3244,7 +3250,7 @@ clear(PersistentVarNames{:});
         
         function[] = SF_Run_Test_Setup()
             if isTestRun
-                
+               
                 % Load rat 0000
                 
                 % Change data table entries which will be loaded later
@@ -3264,6 +3270,12 @@ clear(PersistentVarNames{:});
                 val = find(cell2mat(cellfun(@(x) strcmp(x(1:4), '0000'), D.UI.ratList, 'uni', false)));
                 set(D.UI.popRat, 'Value', val);
                 PopRat();
+                
+                % PID CALIBRATION
+                if doPidCalibrationTest
+                    % Start pid test
+                    Mat2CS('T', inArg, 255);
+                end
                 
                 % HALT ERROR TEST
                 if doHaultErrorTest
@@ -4140,8 +4152,8 @@ clear(PersistentVarNames{:});
                                     'FaceAlpha', 0.25);
                                 
                                 % Print missed reward
-                                Update_Console(sprintf('\r   Detected Missed Reward: %d \r   Time: %s\r', ...
-                                    D.C.missed_rew_cnt, datestr(now, 'HH:MM:SS')));
+                                Update_Console(sprintf('\r   Detected Missed Reward: %d|%d \r   Time: %s\r', ...
+                                    D.C.missed_rew_cnt(1), D.C.missed_rew_cnt(2), datestr(now, 'HH:MM:SS')));
                                 
                             end
                             

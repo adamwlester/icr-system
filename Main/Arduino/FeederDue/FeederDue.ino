@@ -32,11 +32,11 @@ const bool doLog_dropped = true;
 // PRINT DEBUGGING
 
 // Where to print
-const bool doDB_PrintConsole = false;
+const bool doDB_PrintConsole = true;
 const bool doDB_PrintLCD = false;
 
 // What to print
-const bool doPrint_flow = false;
+const bool doPrint_flow = true;
 const bool doPrint_irSync = false;
 const bool doPrint_motorControl = false;
 const bool doPrint_motorBlocking = false;
@@ -49,18 +49,23 @@ const bool doPrint_resent = false;
 const bool doPrint_dropped = false;
 const bool doPrint_log = false;
 
-// PID CALIBRATION
+// TESTING
+
+// Test message
+byte msg_testCmd[2];
+
+// Position
+const bool do_posDebug = false;
+
+// PID Calibration
 /*
 Set kC and run ICR_Run.cs
 */
-const bool do_pidCalibration = false;
-const float kC = 4; // critical gain [2,3,4]
-const float pC = 2.13; // oscillation period [3.28,2.32,2.13]  
+const float kC = 5; // critical gain [2,3,4,5]
+const float pC = 1.5; // oscillation period [0,0,0,1.5]  
 const float c_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
-uint32_t c_durSteps = 30000; // (ms)
-
-// POSITION
-const bool do_posDebug = false;
+uint32_t c_nMeasPerSteps = 10;
+bool do_pidCalibration = false;
 
 #pragma endregion
 
@@ -494,7 +499,7 @@ void DebugDropped(int missed, int missed_total, int total);
 // LOG/PRING RESENT PACKET DEBUG STRING
 void DebugResent(char id, uint16_t pack, int total);
 // LOG/PRING RECIEVED PACKET DEBUG STRING
-void DebugRcvd(char id, uint16_t pack);
+void DebugRcvd(char from, char id, uint16_t pack);
 // LOG/PRING IR SENSOR EVENT
 void DebugIRSync(String msg, uint32_t ts);
 // LOG/PRING MAIN EVENT
@@ -718,8 +723,8 @@ public:
 	uint32_t t_lastDamp = millis();
 
 	// PID calibration
-	uint32_t cal_t_calStr = millis();
 	uint32_t cal_dtMin = 40; // (ms)
+	int cal_cntPcArr[4] = { 0, 0, 0, 0 };
 	int cal_stepNow = 0;
 	float cal_PcCnt = 0;  // oscillation count
 	float cal_PcSum = 0; // oscillation period sum
@@ -1081,7 +1086,7 @@ public:
 		{
 			// End of calibration 
 			if (
-				millis() > (4 * (c_durSteps)+cal_t_calStr) &&
+				cal_cntPcArr[3] == c_nMeasPerSteps &&
 				cal_PcArr[3] > 0
 				)
 			{
@@ -1094,7 +1099,7 @@ public:
 				cal_PcAll = _pc_sum / 4;
 				cal_isPidUpdated = true;
 				cal_isCalFinished = true;
-				return -1;
+				return 0;
 			}
 			else if (!ekfNew || ekfRobPos <= 0)
 			{
@@ -1108,11 +1113,11 @@ public:
 				{
 					cal_ekfRatPos = ekfRobPos + setPoint;
 					t_lastLoop = millis();
-					cal_t_calStr = millis();
+					return -1;
 				}
 
 				// Check if speed should be incrimented
-				if (millis() > (cal_stepNow + 1)*c_durSteps + cal_t_calStr)
+				if (cal_cntPcArr[cal_stepNow] == c_nMeasPerSteps)
 				{
 					cal_PcArr[cal_stepNow] = cal_PcAvg;
 					cal_PcSum = 0;
@@ -1120,7 +1125,10 @@ public:
 					cal_errArr[cal_stepNow] = cal_errAvg;
 					cal_errSum = 0;
 					cal_errCnt = 0;
+
+					// Incriment step or bail if max reached
 					if (cal_stepNow < 3) cal_stepNow++;
+					else return -1;
 				}
 
 				// Get loop dt
@@ -1153,6 +1161,7 @@ public:
 					if (cal_t_PcLast > 0)
 					{
 						cal_PcCnt++;
+						cal_cntPcArr[cal_stepNow]++;
 						cal_PcNow = float(cal_t_PcNow - cal_t_PcLast) / 1000;
 						cal_PcSum += cal_PcNow;
 						cal_PcAvg = cal_PcSum / cal_PcCnt;
@@ -1749,7 +1758,7 @@ public:
 		else
 		{
 			char str[50];
-			sprintf(str, "REWARDING(%dms)...", duration);
+			sprintf(str, "REWARDING FOR %dms...", duration);
 			DebugFlow(str);
 		}
 
@@ -1816,10 +1825,10 @@ public:
 		// Get reward pos in radians
 		float zone_loc = zone_zer_ind != 0 ? zoneLocs[zone_zer_ind] : 0;
 		rewCenterAbs = rew_pos + (-1 * zone_loc * ((140 * PI) / 360));
-		
+
 		// Store zone ind as byte
 		zoneIndByte = zone_ind;
-		
+
 		// Return pos
 		return rewCenterAbs;
 	}
@@ -1907,7 +1916,7 @@ public:
 						boundsRewarded[1] = zoneBounds[i][1];
 
 						// convert zone ind to byte to send
-						zoneIndByte = (byte)(i+1);
+						zoneIndByte = (byte)(i + 1);
 
 						// Set flag
 						isZoneTriggered = true;
@@ -2312,12 +2321,11 @@ void loop() {
 	cnt_loop++;
 
 	// Store every 10 thousand loops
-	// fc_isStreaming && 
-	if (fc_isStreaming && cnt_loop % 10000 == 0) {
+	if (fc_isStreaming && cnt_loop % 100 == 0) {
 		// Print loop count and dt
 		static uint32_t t_loop_last = millis();
 		char chr[50];
-		sprintf(chr, "LOOP %d [dt:%d]", cnt_loop, millis() - t_loop_last);
+		sprintf(chr, "LOOP %d: dt=%d", cnt_loop, millis() - t_loop_last);
 		DebugFlow(chr);
 		// Store loop time
 		t_loop_last = millis();
@@ -2327,53 +2335,6 @@ void loop() {
 	if (doPrint)
 	{
 		PrintDebug();
-	}
-
-	// Debug pos
-	if (do_posDebug)
-	{
-		static float rat_rob_dist;
-		if (millis() % 100 == 0)
-		{
-			rat_rob_dist = ekfRatPos - ekfRobPos;
-			// Plot pos
-			/*
-			{@Plot.Pos.ratPixy.Green pos_ratPixy.posNow}{@Plot.Pos.ratVT.Blue pos_ratVT.posNow}{@Plot.Pos.ratEKF.Black ekfRatPos}{@Plot.Pos.robVT.Orange pos_robVT.posNow}{@Plot.Pos.robEKF.Red ekfRobPos}
-			*/
-			millis();
-			// Turn on rew led when near setpoint
-			if (errorDefault > -0.5 && errorDefault < 0.5) { analogWrite(pin_RewLED_C, 50); }
-			else { analogWrite(pin_RewLED_C, 0); }
-			// Print to LCD
-			analogWrite(pin_Disp_LED, 10);
-			PrintLCD(String(rat_rob_dist, 2));
-		}
-	}
-
-	// Run PID calibration
-	if (do_pidCalibration)
-	{
-		float new_speed = pid.RunPidCalibration();
-		float speed_steps;
-
-		// Run motors
-		if (pid.cal_isPidUpdated)
-		{
-			if (new_speed <= 0)
-			{
-				HardStop("PID");
-			}
-			else if (new_speed > 0)
-			{
-				speed_steps = new_speed*cm2stp;
-				ad_R.run(FWD, speed_steps);
-				ad_F.run(FWD, speed_steps*frontMoterScale);
-			}
-			// Print/plot values
-			millis();
-			// Reset flag
-			pid.cal_isPidUpdated = false;
-		}
 	}
 
 #pragma endregion
@@ -2452,36 +2413,91 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- (T) SYSTEM TEST ---
+#pragma region //--- SYSTEM TESTS ---
+
+	// Run position debugging
+	if (do_posDebug)
+	{
+		static float rat_rob_dist;
+		if (millis() % 100 == 0)
+		{
+			rat_rob_dist = ekfRatPos - ekfRobPos;
+			// Plot pos
+			/*
+			{@Plot.Pos.ratPixy.Green pos_ratPixy.posNow}{@Plot.Pos.ratVT.Blue pos_ratVT.posNow}{@Plot.Pos.ratEKF.Black ekfRatPos}{@Plot.Pos.robVT.Orange pos_robVT.posNow}{@Plot.Pos.robEKF.Red ekfRobPos}
+			*/
+			millis();
+			// Turn on rew led when near setpoint
+			if (errorDefault > -0.5 && errorDefault < 0.5) { analogWrite(pin_RewLED_C, 50); }
+			else { analogWrite(pin_RewLED_C, 0); }
+			// Print to LCD
+			analogWrite(pin_Disp_LED, 10);
+			PrintLCD(String(rat_rob_dist, 2));
+		}
+	}
+
+	// Run PID calibration
+	if (do_pidCalibration)
+	{
+		float new_speed = pid.RunPidCalibration();
+		float speed_steps;
+
+		// Run motors
+		if (pid.cal_isPidUpdated)
+		{
+			if (new_speed >= 0)
+			{
+				speed_steps = new_speed*cm2stp;
+				ad_R.run(FWD, speed_steps);
+				ad_F.run(FWD, speed_steps*frontMoterScale);
+			}
+			// Print values
+			/*
+			{pid.cal_isCalFinished}{"ERROR"}{pid.cal_errNow}{pid.cal_errArr[0]}{pid.cal_errArr[1]}{pid.cal_errArr[2]}{pid.cal_errArr[3]}{"PERIOD"}{pid.cal_PcNow}{pid.cal_cntPcArr[0]}{pid.cal_PcArr[0]}{pid.cal_cntPcArr[1]}{pid.cal_PcArr[1]}{pid.cal_cntPcArr[2]}{pid.cal_PcArr[2]}{pid.cal_cntPcArr[3]}{pid.cal_PcArr[3]}{pid.cal_PcAll}
+			*/
+			millis();
+			// Plot vel
+			/*
+				{@Plot.Vel.ratVelCal.Black pid.cal_ekfRatVel} {@Plot.Vel.robVelEKF.Red ekfRobVel}
+			*/
+			millis();
+			// Reset flag
+			pid.cal_isPidUpdated = false;
+		}
+	}
+
 	if (c2r_msg_id == 'T' && c2r_isNew)
 	{
-		if (!fc_isHalted || fc_isHalted)
+		// Set run pid calibration flag
+		if (msg_testCmd[0] == 2)
 		{
-			// Update Hault Error test run speed
-			if (msg_setupCmd[0] == 2)
+			do_pidCalibration = true;
+		}
+
+		// Update Hault Error test run speed
+		else if (msg_testCmd[0] == 3)
+		{
+			float new_speed = float(msg_testCmd[1]);
+			float speed_steps = new_speed*cm2stp;
+
+
+			if (new_speed > 0)
 			{
-				float new_speed = float(msg_setupCmd[1]);
-				float speed_steps = new_speed*cm2stp;
-
-
-				if (new_speed > 0)
-				{
-					// Run motor
-					ad_R.run(FWD, speed_steps);
-					ad_F.run(FWD, speed_steps*frontMoterScale);
-				}
-				else
-				{
-					// Halt robot
-					ad_R.hardStop();
-					ad_F.hardStop();
-				}
-
-				// Print speed
-				char str[50];
-				sprintf(str, "HAULT ERROR SPEED = %0.0f cm/sec", new_speed);
-				SerialUSB.println(str);
+				// Run motor
+				ad_R.run(FWD, speed_steps);
+				ad_F.run(FWD, speed_steps*frontMoterScale);
 			}
+			else
+			{
+				// Halt robot
+				ad_R.hardStop();
+				ad_F.hardStop();
+			}
+
+			// Print speed
+			char str[50];
+			sprintf(str, "HAULT ERROR SPEED = %0.0f cm/sec", new_speed);
+			SerialUSB.println(str);
 		}
 	}
 #pragma endregion
@@ -2584,7 +2600,7 @@ void loop() {
 				{
 					// Print message
 					char str[50];
-					sprintf(str, "MOVEING FROM %0.2fcm TO %0.2fcm BY %0.2fcm",
+					sprintf(str, "MOVING: from=%0.2fcm to=%0.2fcm by=%0.2fcm",
 						targ_moveTo.posStart, targ_moveTo.offsetTarget, targ_moveTo.targDist);
 					DebugFlow(str);
 				}
@@ -2628,14 +2644,14 @@ void loop() {
 				Store4_CS('D', 255, c2r_packLast[CharInd('M', c2r_id, c2r_idLng)]);
 
 				// Print success message
-				sprintf(str, "FINISHED MOVE TO %0.2fcm WITHIN %0.2fcm",
+				sprintf(str, "FINISHED MOVE: to=%0.2fcm within=%0.2fcm",
 					targ_moveTo.offsetTarget, targ_moveTo.GetError(ekfRobPos));
 				DebugFlow(str);
 			}
 			else
 			{
 				// Print failure message
-				sprintf(str, "!!ABORTED MOVE TO %0.2fcm WITHIN %0.2fcm!!",
+				sprintf(str, "!!ABORTED MOVE: to=%0.2fcm within=%0.2fcm!!",
 					targ_moveTo.offsetTarget, targ_moveTo.GetError(ekfRobPos));
 				DebugFlow(str);
 			}
@@ -2686,7 +2702,7 @@ void loop() {
 				reward.CompZoneBounds(ekfRatPos, msg_rewPos);
 				// Print message
 				char str[50];
-				sprintf(str, "SET REWARD ZONE: %0.2fcm FROM %0.2fcm TO %0.2fcm",
+				sprintf(str, "SET REWARD ZONE: center=%0.2fcm from=%0.2fcm to=%0.2fcm",
 					reward.rewCenterRel, reward.zoneBounds[0][0], reward.zoneBounds[8][1]);
 				DebugFlow(str);
 			}
@@ -2698,7 +2714,7 @@ void loop() {
 					fc_isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
-					sprintf(str, "REWARDED ZONE: %0.2fcm BOUNDS %0.2fcm TO %0.2fcm",
+					sprintf(str, "REWARDED ZONE: zone=%0.2fcm from=%0.2fcm to=%0.2fcm",
 						reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1]);
 					DebugFlow(str);
 				}
@@ -2734,7 +2750,7 @@ void loop() {
 				{
 					// Print message
 					char str[50];
-					sprintf(str, "CUEING REWARD AT %0.2fcm/%0.2fcm FROM DIST %0.2fcm/%0.2fcm",
+					sprintf(str, "CUEING REWARD: rat_targ=%0.2fcm rob_targ=%0.2fcm rat_dist=%0.2fcm rob_dist=%0.2fcm",
 						targ_cueRat.offsetTarget, targ_cueRob.offsetTarget, targ_cueRat.targDist, targ_cueRob.targDist);
 					DebugFlow(str);
 				}
@@ -2771,7 +2787,7 @@ void loop() {
 				{
 					// Print message
 					char str[50];
-					sprintf(str, "FINISHED CUEING AT %0.2fcm/%0.2fcm WITHIN %0.2fcm/%0.2fcm",
+					sprintf(str, "FINISHED CUEING: rat_targ=%0.2fcm rob_targ=%0.2fcm rat_dist=%0.2fcm rob_dist=%0.2fcm",
 						targ_cueRat.offsetTarget, targ_cueRob.offsetTarget, targ_cueRat.GetError(ekfRatPos), targ_cueRob.GetError(ekfRobPos));
 					DebugFlow(str);
 				}
@@ -3025,7 +3041,7 @@ void loop() {
 		// Log first sync event
 		static bool first_sync = true;
 		if (first_sync) {
-			DebugFlow("SET SYNC TIME",t_sync);
+			DebugFlow("SET SYNC TIME", t_sync);
 			first_sync = false;
 		}
 
@@ -3166,10 +3182,10 @@ bool ParseC2R()
 	{
 
 		// Get test id
-		msg_setupCmd[0] = WaitBuffRead();
+		msg_testCmd[0] = WaitBuffRead();
 
 		// Get test argument
-		msg_setupCmd[1] = WaitBuffRead();
+		msg_testCmd[1] = WaitBuffRead();
 
 	}
 
@@ -3350,7 +3366,7 @@ void ParseA2R()
 			r2a_doRcvCheck[id_ind] = false;
 
 			// Store revieved pack details
-			DebugRcvd(id, pack);
+			DebugRcvd('a', id, pack);
 		}
 	}
 }
@@ -3461,7 +3477,7 @@ bool CheckPack(char id, uint16_t pack)
 	if (id != 'P')
 	{
 		// Store revieved pack details
-		DebugRcvd(id, pack);
+		DebugRcvd('c', id, pack);
 
 		// Send back packet confirmation
 		if (id != 'Y')
@@ -3549,8 +3565,6 @@ bool CheckPack(char id, uint16_t pack)
 					if (c2r_cntRepeat[id_ind] > 0)
 					{
 						DebugResent(id, c2r_packRepeat[id_ind], c2r_cntRepeat[id_ind]);
-						//Serial1.end();
-						//Serial1.begin(57600);
 					}
 				}
 			}
@@ -3646,7 +3660,10 @@ void Store4_Ard(char id, byte d1, uint16_t pack)
 
 	// Itterate packet
 	if (pack == 0)
-		pack = r2a_packCnt++;
+	{
+		r2a_packCnt++;
+		pack = r2a_packCnt;
+	}
 
 	// Shift data back so ard msg is first in queue
 	for (int i = 0; i < r2_lngR - 1; i++)
@@ -3805,10 +3822,7 @@ void SendPacketData()
 				(doPrint_r2a && rcv_id == 'a'))
 				)
 			{
-				if (doDB_PrintConsole)
-					sprintf(str, "sent: to:%c id:%c dat:%d pack:%d", rcv_id, id, dat, pack);
-				else if (doDB_PrintLCD)
-					sprintf(str, "sent: t:%c i:%c d:%d p:%d", rcv_id, id, dat, pack);
+				sprintf(str, "sent: to=%c id=%c dat=%d pack=%d", rcv_id, id, dat, pack);
 				StoreDBPrintStr(str, t_sent);
 			}
 			if (
@@ -3817,7 +3831,7 @@ void SendPacketData()
 				(doLog_r2a && rcv_id == 'a'))
 				)
 			{
-				sprintf(str, "sent: to:%c id:%c dat:%d pack:%d", rcv_id, id, dat, pack);
+				sprintf(str, "sent: to=%c id=%c dat=%d pack=%d", rcv_id, id, dat, pack);
 				StoreDBLogStr(str, t_sent);
 			}
 
@@ -3894,7 +3908,7 @@ void SendLogData()
 			String str;
 
 			// Store
-			sprintf(chr, "log(%d/%d) cs(%d): ", cnt_logSend, cnt_logStore, str_size);
+			sprintf(chr, "sent log: sent=%d stored=%d chksum=%d: ", cnt_logSend, cnt_logStore, str_size);
 			str = chr;
 			StoreDBPrintStr(str + "\"" + msg_str + "\"", t_sent);
 		}
@@ -4100,7 +4114,7 @@ void BlockMotorTill(uint32_t dt, String called_from)
 	SetMotorControl("None", "BlockMotorTill");
 
 	// Print blocking finished
-	DebugMotorBocking("Blocking motor for:", dt, called_from);
+	DebugMotorBocking("blocking motor for: dt=", dt, called_from);
 }
 
 // CHECK IF TIME ELLAPESED
@@ -4119,7 +4133,7 @@ void CheckBlockTimElapsed()
 		if (millis() > blockDurTill || passed_feeder)
 		{
 			// Print blocking finished
-			DebugMotorBocking("Finished blocking motor at:", millis(), "CheckBlockTimElapsed");
+			DebugMotorBocking("finished blocking motor: tim=", millis(), "CheckBlockTimElapsed");
 
 			// Retract feeder arm
 			reward.RetractFeedArm();
@@ -4472,7 +4486,7 @@ void CheckBattery()
 			Store4_CS('J', byte_out, 0);
 
 		char str[50];
-		sprintf(str, "Vcc: %0.2fV", volt_avg);
+		sprintf(str, "VCC: %0.2fV", volt_avg);
 		DebugFlow(str);
 
 		// Reset flag
@@ -4607,9 +4621,9 @@ void DebugMotorControl(bool pass, String set_to, String called_from)
 		)
 	{
 		char chr[50];
-		sprintf(chr, "mc change %s: set_in:", pass ? "succeeded" : "failed");
+		sprintf(chr, "mc change %s: set_in=", pass ? "succeeded" : "failed");
 		String str;
-		str = chr + set_to + " set_out:" + fc_motorControl + " [" + called_from + "]";
+		str = chr + set_to + " set_out=" + fc_motorControl + " [" + called_from + "]";
 
 		// Add to print queue
 		if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4659,7 +4673,7 @@ void DebugDropped(int missed, int missed_total, int total)
 		buff_rx = Serial1.available();
 
 		char str[50];
-		sprintf(str, "!!Pack Lost(tot:%d/%d/%d) tx:%d rx:%d!!", missed, missed_total, total, buff_tx, buff_rx);
+		sprintf(str, "!!PACK LOST: tot=%d/%d/%d tx=%d rx=%d!!", missed, missed_total, total, buff_tx, buff_rx);
 
 		// Add to print queue
 		if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4687,7 +4701,7 @@ void DebugResent(char id, uint16_t pack, int total)
 		buff_rx = Serial1.available();
 
 		char str[50];
-		sprintf(str, "!!Resent(tot:%d): tx:%d rx:%d id:%c pack:%d!!", total, buff_tx, buff_rx, id, pack);
+		sprintf(str, "!!RESENT PACK: tot=%d tx=%d rx=%d id=%c pack=%d!!", total, buff_tx, buff_rx, id, pack);
 
 		// Add to print queue
 		if (doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4699,7 +4713,7 @@ void DebugResent(char id, uint16_t pack, int total)
 }
 
 // LOG/PRING RECIEVED PACKET DEBUG STRING
-void DebugRcvd(char id, uint16_t pack)
+void DebugRcvd(char from, char id, uint16_t pack)
 {
 	if (
 		(doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4711,41 +4725,41 @@ void DebugRcvd(char id, uint16_t pack)
 		// Print specific pack contents
 		if (id == 'T')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d dat2:%d pack:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d dat2=%d pack=%d", from, id, msg_testCmd[0], msg_testCmd[1], pack);
 		}
 		else if (id == 'S')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d dat2:%d pack:%d", id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d dat2=%d pack=%d", from, id, msg_setupCmd[0], msg_setupCmd[1], pack);
 		}
 		else if (id == 'Q')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d dat2:%d pack:%d", id, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d dat2=%d pack=%d", from, id, pack);
 		}
 		else if (id == 'M')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%0.2f pack:%d", id, msg_moveToTarg, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%0.2f pack=%d", from, id, msg_moveToTarg, pack);
 		}
 		else if (id == 'R')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%0.2f dat2:%d pack:%d", id, msg_rewPos, msg_rewZoneInd, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewZoneInd, pack);
 		}
 		else if (id == 'H')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, fc_doHalt, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, fc_doHalt, pack);
 		}
 		else if (id == 'B')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, msg_bullDel, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, msg_bullDel, pack);
 		}
 		else if (id == 'I')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, fc_isRatIn, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, fc_isRatIn, pack);
 		}
 		else if (id == 'L')
 		{
-			sprintf(chr, "rcvd: id:%c dat1:%d pack:%d", id, fc_doLogResend, pack);
+			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, fc_doLogResend, pack);
 		}
-		else sprintf(chr, "rcvd: id:%c pack:%d", id, pack);
+		else sprintf(chr, "rcvd: from=%c id=%c pack=%d", from, id, pack);
 
 		// Convert to string
 		String str = chr;
