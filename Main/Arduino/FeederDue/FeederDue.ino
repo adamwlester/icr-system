@@ -379,7 +379,7 @@ byte msg_bullDel = 0;
 byte msg_bullSpeed = 0;
 
 // Reward
-uint32_t rewBlockDur = 2000; // (ms)
+uint32_t rewBlockDur = 10000; // (ms)
 float cuePos = 0;
 float cueDist[2] = { 0,0 };
 float cueStartPos[2] = { 0,0 };

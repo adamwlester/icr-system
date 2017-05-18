@@ -59,17 +59,18 @@ doSimRatTest = false;
 %   val 3 = rotation direction [-1, 1], [ACW, CW]
 %   val 4 = sound state [0, 1], [no sound, sound]
 %...........................m2c_id...................................
-%    'S', // start session
-%    'M', // move to position
-%    'R', // run reward
-%    'H', // halt movement
-%    'B', // bulldoze rat
-%    'I', // start/end pid
-%    'N', // matlab not loaded
-%    'G', // matlab gui loaded
-%    'A', // connected to AC computer
-%    'F', // data saved
-%    'T', // system test command
+%    'S', // start session [(byte)ses_cond, (byte)sound_cond]
+%    'M', // move to position [(float)targ_pos]
+%    'R', // run reward [(float)rew_pos, (byte)rew_delay]
+%    'C', // cue reward [(float)rew_pos, (byte)zone_ind]
+%    'H', // halt movement [(byte)halt_state]
+%    'B', // bulldoze rat [(byte)bull_delay, (byte)bull_speed]
+%    'I', // rat in/out [(byte)in/out]
+%    'N', // matlab not loaded [NA]
+%    'G', // matlab gui loaded [NA]
+%    'A', // connected to AC computer [NA]
+%    'F', // data saved [NA]
+%    'T', // system test command [(byte)test]
 %...........................c2m_id...................................
 %    'S', // enable save
 %    'E', // exit
