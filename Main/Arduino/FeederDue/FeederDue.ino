@@ -201,7 +201,7 @@ bool fc_doLogSend = false;
 bool fc_isEKFReady = false;
 
 // Log debugging
-const int logLng = 2000;
+const int logLng = 1000;
 String logList[logLng];
 uint16_t cnt_logStore = 0;
 uint16_t cnt_logSend = 0;
@@ -322,7 +322,7 @@ byte r2a_datLast[r2a_idLng];
 bool r2a_doRcvCheck[r2a_idLng];
 uint16_t r2a_sendTim[r2a_idLng];
 int r2a_resendCnt[r2a_idLng];
-uint16_t r2a_resendDel = 50;
+uint16_t r2a_resendDel = 100;
 uint16_t r2a_resendMax = 3;
 
 // Start/Quit
@@ -2321,7 +2321,7 @@ void loop() {
 	cnt_loop++;
 
 	// Store every 10 thousand loops
-	if (fc_isStreaming && cnt_loop % 100 == 0) {
+	if (fc_isStreaming && cnt_loop % 10000 == 0) {
 		// Print loop count and dt
 		static uint32_t t_loop_last = millis();
 		char chr[50];
@@ -2837,7 +2837,7 @@ void loop() {
 			{
 				is_mode_changed = true;
 				fc_doBulldoze = true;
-				DebugFlow("DO BULLDOZE");
+				DebugFlow("SET BULLDOZE ON");
 			}
 			// Only settings changed
 			else is_mode_changed = false;
@@ -2849,7 +2849,7 @@ void loop() {
 			{
 				is_mode_changed = true;
 				fc_doBulldoze = false;
-				DebugFlow("DONT DO BULLDOZE");
+				DebugFlow("SET BULLDOZE OFF");
 			}
 			// Only settings changed
 			else is_mode_changed = false;
@@ -3817,22 +3817,17 @@ void SendPacketData()
 			// Store
 			char str[50];
 			if (
-				(doDB_PrintConsole || doDB_PrintLCD) &&
+				((doDB_PrintConsole || doDB_PrintLCD) &&
 				((doPrint_r2c && rcv_id == 'c') ||
-				(doPrint_r2a && rcv_id == 'a'))
-				)
-			{
-				sprintf(str, "sent: to=%c id=%c dat=%d pack=%d", rcv_id, id, dat, pack);
-				StoreDBPrintStr(str, t_sent);
-			}
-			if (
-				doDB_Log &&
+				(doPrint_r2a && rcv_id == 'a')))
+				||
+				(doDB_Log &&
 				((doLog_r2c && rcv_id == 'c') ||
-				(doLog_r2a && rcv_id == 'a'))
+					(doLog_r2a && rcv_id == 'a')))
 				)
 			{
-				sprintf(str, "sent: to=%c id=%c dat=%d pack=%d", rcv_id, id, dat, pack);
-				StoreDBLogStr(str, t_sent);
+				sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d", rcv_id, id, dat, pack);
+				StoreDBPrintStr(str, t_sent);
 			}
 
 		}
@@ -4725,41 +4720,41 @@ void DebugRcvd(char from, char id, uint16_t pack)
 		// Print specific pack contents
 		if (id == 'T')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d dat2=%d pack=%d", from, id, msg_testCmd[0], msg_testCmd[1], pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d dat2=%d pack=%d", from, id, msg_testCmd[0], msg_testCmd[1], pack);
 		}
 		else if (id == 'S')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d dat2=%d pack=%d", from, id, msg_setupCmd[0], msg_setupCmd[1], pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d dat2=%d pack=%d", from, id, msg_setupCmd[0], msg_setupCmd[1], pack);
 		}
 		else if (id == 'Q')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d dat2=%d pack=%d", from, id, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d dat2=%d pack=%d", from, id, pack);
 		}
 		else if (id == 'M')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%0.2f pack=%d", from, id, msg_moveToTarg, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f pack=%d", from, id, msg_moveToTarg, pack);
 		}
 		else if (id == 'R')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewZoneInd, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewZoneInd, pack);
 		}
 		else if (id == 'H')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, fc_doHalt, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, fc_doHalt, pack);
 		}
 		else if (id == 'B')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, msg_bullDel, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, msg_bullDel, pack);
 		}
 		else if (id == 'I')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, fc_isRatIn, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, fc_isRatIn, pack);
 		}
 		else if (id == 'L')
 		{
-			sprintf(chr, "rcvd: from=%c id=%c dat1=%d pack=%d", from, id, fc_doLogResend, pack);
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, fc_doLogResend, pack);
 		}
-		else sprintf(chr, "rcvd: from=%c id=%c pack=%d", from, id, pack);
+		else sprintf(chr, "rcvd_%c2r: id=%c pack=%d", from, id, pack);
 
 		// Convert to string
 		String str = chr;

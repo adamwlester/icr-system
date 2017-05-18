@@ -581,11 +581,10 @@ void CheckBattery()
 void XBeeRead()
 {
 	byte buff_b;
-	char buff_c[2] = { '\0' ,'\r' };
+	char buff_c;
 	if (Serial1.available() > 0) {
 		buff_b = Serial1.read();
-		u.b[0] = buff_b;
-		buff_c[0] = u.c[0];
+		buff_c = buff_b;
 		SerialUSB.print(buff_c);
 	}
 }

@@ -3,7 +3,7 @@
 #pragma region ---------DEBUG SETTINGS---------
 
 bool doPrintFlow = false;
-bool doPrintRcvdPack = false;
+bool doPrintRcvdPack = true;
 bool doPrintSentPack = false;
 bool doPrintResent = false;
 bool doTestPinMapping = false;
@@ -608,7 +608,7 @@ void PrintRcvdPack(char id, byte dat, uint16_t pack)
 	if (doPrintRcvdPack)
 	{
 		char str[50];
-		sprintf(str, "rcvd: id=%c dat=%d pack=%d", id, dat, pack);
+		sprintf(str, "rcvd_r2a: id=%c dat=%d pack=%d", id, dat, pack);
 		PrintStr(str, millis());
 	}
 }
@@ -621,7 +621,7 @@ void PrintSentPack(char id, uint16_t pack)
 	if (doPrintSentPack)
 	{
 		char str[50];
-		sprintf(str, "sent: id=%c pack=%d", id, pack);
+		sprintf(str, "sent_a2r: id=%c pack=%d", id, pack);
 		PrintStr(str, millis());
 	}
 }

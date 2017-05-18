@@ -1024,14 +1024,14 @@ namespace ICR_Run
                     // Print sent mesage packet
                     if (nDataBytes == 0)
                     {
-                        msg_str = String.Format("   sent: to=r id={0} pack={1}", id, pack);
+                        msg_str = String.Format("   sent_c2r: id={0} pack={1}", id, pack);
                     }
-                    else msg_str = String.Format("   sent: to=r id={0} dat1={1:0.00} dat2={2:0.00} pack={3}", id, dat_1, dat_2, pack);
+                    else msg_str = String.Format("   sent_c2r: id={0} dat1={1:0.00} dat2={2:0.00} pack={3}", id, dat_1, dat_2, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
                 else if (db_printSentVT)
                 {
-                    msg_str = String.Format("   sent: to:r id={0} ent={1} ts={2} cm={3:0.00} pack={4}", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
+                    msg_str = String.Format("   sent_c2r: id={0} ent={1} ts={2} cm={3:0.00} pack={4}", id, vtEnt, vtTS[vtEnt, 1], vtCM, pack);
                     LogEvent(msg_str, t_c2rLast, t_c2r);
                 }
 
@@ -1109,7 +1109,7 @@ namespace ICR_Run
             com_Matlab.Execute(msg);
 
             // Print value
-            LogEvent("   sent: to=m dat=\"" + msg + "\"");
+            LogEvent("   sent_c2m: dat=\"" + msg + "\"");
         }
 
         public static bool WaitForPack()
@@ -1311,7 +1311,7 @@ namespace ICR_Run
                         t_r2c = sw_main.ElapsedMilliseconds;
 
                         // print data recieved
-                        msg_str = String.Format("   rcvd: from=r id={0} dat={1} pack={2}", id, dat, pack);
+                        msg_str = String.Format("   rcvd_r2c: id={0} dat={1} pack={2}", id, dat, pack);
                         LogEvent(msg_str, t_r2cLast, t_r2c);
 
                         // Update last pack
@@ -1767,7 +1767,7 @@ namespace ICR_Run
             matIn_dat2 = bw_args.Item3;
 
             // Print incoming mesage
-            string msg_str = String.Format("   rcvd: from=m id={0} dat1={1:0.00} dat2={2:0.00}", matIn_id, matIn_dat1, matIn_dat2);
+            string msg_str = String.Format("   rcvd_m2c: id={0} dat1={1:0.00} dat2={2:0.00}", matIn_id, matIn_dat1, matIn_dat2);
             t_m2cLast = t_m2c;
             t_m2c = sw_main.ElapsedMilliseconds;
             LogEvent(msg_str, t_m2cLast, t_m2c);

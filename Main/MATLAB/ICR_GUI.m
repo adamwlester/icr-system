@@ -121,7 +121,7 @@ D.DB.velSteps = 10:10:80; % (cm/sec)
 D.DB.stepSamp = 4;
 
 % Simulated rat test
-D.DB.ratMaxVel = 15; % (cm/sec)
+D.DB.ratMaxVel = 30; % (cm/sec)
 D.DB.ratMaxAcc = 10; % (cm/sec/sec)
 
 
@@ -356,8 +356,10 @@ clear(PersistentVarNames{:});
                         SF_VT_Get('Rob');
                         SF_VT_Proc('Rob');
                         % Rat
-                        SF_VT_Get('Rat');
-                        %SF_VT_Proc('Rat');
+                        if ~doSimRatTest
+                            SF_VT_Get('Rat');
+                            SF_VT_Proc('Rat');
+                        end
                         
                         % RUN TEST/DEBUG CODE
                         SF_Run_Test();
@@ -561,8 +563,8 @@ clear(PersistentVarNames{:});
             D.T.loop = 0;
             D.T.loop_min = 1;
             D.T.loop_max = NaN;
-            % track sent timing
-            D.T.rew_sent = 0;
+            % track manual reward sent time
+            D.T.manual_rew_sent = 0;
             % track last reward time
             D.T.rew_last = clock;
             % track reward start
@@ -2927,6 +2929,11 @@ clear(PersistentVarNames{:});
             D.UI.rewRstBnds(2,1:2) = D.UI.rewBnds(1,end,2) + [deg2rad(10),deg2rad(40)];
             D.UI.rewRstBnds = wrapTo2Pi(D.UI.rewRstBnds);
             
+            % REWARD PASS BOUNDS
+            D.UI.rewPassBnds(1,1:2) = D.UI.rewBnds(end,end,1) - [deg2rad(5),deg2rad(35)];
+            D.UI.rewPassBnds(2,1:2) = D.UI.rewBnds(end,end,2) - [deg2rad(5),deg2rad(35)];
+            D.UI.rewPassBnds = wrapTo2Pi(D.UI.rewPassBnds);
+            
             % ROTATION BOUNDS
             
             % Calculate crossing points for 90 180 and 270 deg from rew feeders
@@ -3647,14 +3654,16 @@ clear(PersistentVarNames{:});
                     D.T.rew_nlx_ts(1) = evtTS(ismember(evtStr, D.NLX.rew_on_str));
                     
                     % Store round trip time
-                    if datenum(D.T.rew_sent) > 0 && ...
-                            datenum(D.T.rew_sent) < datenum(D.T.rew_start)
+                    if datenum(D.T.manual_rew_sent) > 0 && ...
+                            datenum(D.T.manual_rew_sent) < datenum(D.T.rew_start)
                         % Save reward mesage round trip time
-                        D.DB.rew_round_trip(1) = etime(D.T.rew_start, D.T.rew_sent) * 1000;
+                        D.DB.rew_round_trip(1) = etime(D.T.rew_start, D.T.manual_rew_sent) * 1000;
                         D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
                         D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
                         D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
                         D.DB.rew_round_trip(5) = D.DB.rew_round_trip(5) + 1;
+                        % Reset time
+                        D.T.manual_rew_sent = 0;
                     end
                     
                     % Change feeder dish plot color and marker size
@@ -3886,114 +3895,112 @@ clear(PersistentVarNames{:});
             if D.PAR.sesCond ~= 'Manual_Training'
                 
                 % Skip if no new data
-                if any(~isnan(D.P.Rat.rad))
+                if  ~D.B.flag_reset_crossed && ...
+                        any(~isnan(D.P.Rat.rad))
                     
                     % Check if rat is in quad
                     check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.UI.rewRstBnds(D.I.rot,:));
                     
-                    % If rat is in bounds
+                    % Run once each lap
                     if any(check_inbound)
                         
-                        % Run once each lap
-                        if ~D.B.flag_reset_crossed
+                        % Print reset bounds crossed
+                        Update_Console(sprintf('\rCrossed Reset Bounds \r   Time: %s\r', ...
+                            datestr(now, 'HH:MM:SS')));
+                        
+                        % Check if next reward is cued
+                        if ...
+                                D.PAR.cueFeed == 'All' || ...
+                                (D.PAR.cueFeed == 'Half' && ~D.B.is_cued_rew)
                             
-                            % Set flag
-                            D.B.flag_reset_crossed = true;
+                            % Cue next lap
+                            D.B.is_cued_rew = true;
+                        else
+                            % Dont cue next lap
+                            D.B.is_cued_rew = false;
+                        end
+                        
+                        % Check if cue should be forced
+                        if D.B.do_all_cue && D.B.is_cued_rew == false
+                            D.B.is_cued_rew = true;
+                        elseif D.B.do_block_cue && D.B.is_cued_rew == true
+                            D.B.is_cued_rew = false;
+                        end
+                        
+                        % Disable cue buttons
+                        Set_Cue_Buttons('Disable');
+                        
+                        % Rat triggered reward on last lap
+                        if D.B.is_cued_rew && ...
+                                (D.B.flag_rew_confirmed || D.C.rew_cross_cnt == 0)
                             
-                            % Print reset bounds crossed
-                            Update_Console(sprintf('\r   Crossed Reset Bounds \r   Time: %s\r', ...
-                                datestr(now, 'HH:MM:SS')));
+                            % Get new reward zone
+                            D.I.zone = find(D.PAR.zoneLocs == ...
+                                D.I.zoneArr(sum([D.C.rew_cnt{:}])+1));
                             
-                            % Check if next reward is cued
-                            if ...
-                                    D.PAR.cueFeed == 'All' || ...
-                                    (D.PAR.cueFeed == 'Half' && ~D.B.is_cued_rew)
-                                
-                                % Cue next lap
-                                D.B.is_cued_rew = true;
-                            else
-                                % Dont cue next lap
-                                D.B.is_cued_rew = false;
-                            end
+                            % Get new reward duration
+                            D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone);
                             
-                            % Check if cue should be forced
-                            if D.B.do_all_cue && D.B.is_cued_rew == false
-                                D.B.is_cued_rew = true;
-                            elseif D.B.do_block_cue && D.B.is_cued_rew == true
-                                D.B.is_cued_rew = false;
-                            end
+                            % Post NLX event: cue on
+                            NlxSendCommand(D.NLX.cue_on_evt);
+                        end
+                        
+                        % Reset patches
+                        set(D.UI.ptchFdH(:, D.I.rot), ...
+                            'EdgeColor', [0, 0, 0], ...
+                            'FaceAlpha', 0.15, ...
+                            'EdgeAlpha', 0.05);
+                        % Clear last duration
+                        set(D.UI.durNowTxtH(:, :), ...
+                            'Visible', 'off');
+                        
+                        % Check if this is cued reward
+                        if D.B.is_cued_rew
                             
-                            % Disable cue buttons 
-                            Set_Cue_Buttons('Disable');
+                            % Will send CS command with pos and zone
+                            pos_send = D.UI.rewSetpointRad(D.I.rot);
+                            zone_ind_send = D.I.zone;
                             
-                            % Rat triggered reward or first run
-                            pos_send = 0;
+                            % Show new reward taget patch
+                            set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
+                                'FaceAlpha', 0.75, ...
+                                'EdgeAlpha', 1);
+                            % Outline in active color
+                            set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
+                                'EdgeColor', D.UI.dfltActiveCol);
+                            % Print new duration
+                            set(D.UI.durNowTxtH(D.I.zone, D.I.rot), ...
+                                'Visible', 'on');
+                            
+                        else
+                            
+                            % Send reward center and no zone ind
+                            pos_send = D.UI.rewSetpointRad(D.I.rot);
                             zone_ind_send = 0;
-                            if D.B.flag_rew_confirmed || D.C.rew_cross_cnt == 0
-                                
-                                % Reset patches
-                                set(D.UI.ptchFdH(:, D.I.rot), ...
-                                    'EdgeColor', [0, 0, 0], ...
-                                    'FaceAlpha', 0.15, ...
-                                    'EdgeAlpha', 0.05);
-                                % Clear last duration
-                                set(D.UI.durNowTxtH(:, :), ...
-                                    'Visible', 'off');
-                                
-                                % Check if this is cued reward
-                                if D.B.is_cued_rew
-                                    
-                                    % Get new reward zone
-                                    D.I.zone = find(D.PAR.zoneLocs == ...
-                                        D.I.zoneArr(sum([D.C.rew_cnt{:}])+1));
-                                    
-                                    % Get new reward duration
-                                    D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone);
-                                    
-                                    % Will send CS command with pos and zone
-                                    pos_send = D.UI.rewSetpointRad(D.I.rot);
-                                    zone_ind_send = D.I.zone;
-                                    
-                                    % Show new reward taget patch
-                                    set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
-                                        'FaceAlpha', 0.75, ...
-                                        'EdgeAlpha', 1);
-                                    % Outline in active color
-                                    set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
-                                        'EdgeColor', D.UI.dfltActiveCol);
-                                    % Print new duration
-                                    set(D.UI.durNowTxtH(D.I.zone, D.I.rot), ...
-                                        'Visible', 'on');
-                                    
-                                    % Post NLX event: cue on
-                                    NlxSendCommand(D.NLX.cue_on_evt);
-                                    
-                                else
-                                    
-                                    % Send reward center and no zone ind
-                                    pos_send = D.UI.rewSetpointRad(D.I.rot);
-                                    zone_ind_send = 0;
-                                    
-                                    % Darken all zone patches
-                                    set(D.UI.ptchFdH(:, D.I.rot), ...
-                                        'FaceAlpha', 0.75)
-                                end
-                            end
                             
-                            % Send CS command
-                            Mat2CS('R', pos_send, zone_ind_send);
-                            
-                            % Hide reset patch
-                            set(D.UI.ptchFdRstH(D.I.rot), ...
-                                'FaceAlpha', 0.05);
-                            
-                            % Stop bulldozer if active
-                            D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
-                            if D.UI.bullLastVal == 1
-                                set(D.UI.btnBulldoze, 'Value', 0);
-                                Bulldoze();
-                            end
-                            
+                            % Darken all zone patches
+                            set(D.UI.ptchFdH(:, D.I.rot), ...
+                                'FaceAlpha', 0.75)
+                        end
+                        
+                        % Send CS command
+                        Mat2CS('R', pos_send, zone_ind_send);
+                        
+                        % Set flags
+                        D.B.flag_reset_crossed = true;
+                        D.B.check_rew_confirm = true;
+                        D.B.flag_rew_crossed = false;
+                        D.B.flag_rew_confirmed = false;
+                        
+                        % Hide reset patch
+                        set(D.UI.ptchFdRstH(D.I.rot), ...
+                            'FaceAlpha', 0.05);
+                        
+                        % Stop bulldozer if active
+                        D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
+                        if D.UI.bullLastVal == 1
+                            set(D.UI.btnBulldoze, 'Value', 0);
+                            Bulldoze();
                         end
                         
                     end
@@ -4022,12 +4029,6 @@ clear(PersistentVarNames{:});
                         % Get rewarded zone ind
                         D.I.zone = r2m_Z;
                         
-                        % Set flags
-                        D.B.flag_rew_confirmed = true;
-                        D.B.check_rew_confirm = false;
-                        r2m_Z = 0;
-                        D.B.plot_rew = true;
-                        
                         % Post NLX event: cue off
                         if D.B.is_cued_rew
                             NlxSendCommand(D.NLX.cue_off_evt);
@@ -4037,9 +4038,6 @@ clear(PersistentVarNames{:});
                         NlxSendCommand(...
                             sprintf(D.NLX.rew_evt, D.PAR.zoneLocs(D.I.zone), D.PAR.zoneRewDur(D.I.zone)));
                         
-                        % Store reward zone with range [-20,20]
-                        D.I.zoneHist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone);
-                        
                         % Add to total reward count
                         if D.B.rotated
                             D.C.rew_cnt{D.I.rot}(end) = D.C.rew_cnt{D.I.rot}(end) + 1;
@@ -4047,7 +4045,10 @@ clear(PersistentVarNames{:});
                             D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
                         end
                         
-                        % Reset patches
+                        % Store reward zone with range [-20,20]
+                        D.I.zoneHist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone);
+                        
+                        % Reset reward zone patches
                         set(D.UI.ptchFdH(:, D.I.rot), ...
                             'EdgeColor', [0, 0, 0], ...
                             'FaceAlpha', 0.15, ...
@@ -4098,12 +4099,14 @@ clear(PersistentVarNames{:});
                             'Parent',D.UI.axH(2));
                         uistack(D.UI.zoneAvgH, 'bottom');
                         
-                        % Set reset patch to visible
-                        set(D.UI.ptchFdRstH(D.I.rot), ...
-                            'FaceAlpha', 0.5);
-                        
                         % Force update GUI
                         drawnow;
+                        
+                        % Set flags
+                        D.B.flag_rew_confirmed = true;
+                        D.B.check_rew_confirm = false;
+                        r2m_Z = 0;
+                        D.B.plot_rew = true;
                         
                         Update_Console(sprintf('\rReward Detected \rRat Vel: %0.2fcm/sec \rTime: %s\r', ...
                             D.P.Rat.vel, datestr(now, 'HH:MM:SS')));
@@ -4113,16 +4116,15 @@ clear(PersistentVarNames{:});
                     % Track reward crossing
                     if ~D.B.flag_rew_crossed
                         
-                        % Check if rat is passed all bounds
-                        check_inbound = ...
-                            Check_Rad_Bnds(D.P.Rat.rad, ...
-                            [D.UI.rewBnds(end,2,D.I.rot)-deg2rad(15),D.UI.rewBnds(end,2,D.I.rot)-deg2rad(5)]);
-                        
+                        % Check if rat is 5-15 deg passed all zones
+                        check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.UI.rewPassBnds(D.I.rot,:));
+                            
                         if any(check_inbound) || D.B.flag_rew_confirmed
                             
                             % Set flags
                             D.B.flag_rew_crossed = true;
                             D.B.flag_reset_crossed = false;
+                            D.B.check_rew_confirm = false;
                             
                             % Itterate count
                             D.C.rew_cross_cnt = D.C.rew_cross_cnt+1;
@@ -4147,15 +4149,21 @@ clear(PersistentVarNames{:});
                                     D.B.is_cued_rew = true;
                                 end
                                 
-                                % Ligten reset patch partially
-                                set(D.UI.ptchFdRstH(D.I.rot), ...
-                                    'FaceAlpha', 0.25);
+                                % Reset reward zone patches
+                                set(D.UI.ptchFdH(:, D.I.rot), ...
+                                    'EdgeColor', [0, 0, 0], ...
+                                    'FaceAlpha', 0.15, ...
+                                    'EdgeAlpha', 0.05);
                                 
                                 % Print missed reward
-                                Update_Console(sprintf('\r   Detected Missed Reward: %d|%d \r   Time: %s\r', ...
+                                Update_Console(sprintf('\rDetected Missed Reward: %d|%d \r   Time: %s\r', ...
                                     D.C.missed_rew_cnt(1), D.C.missed_rew_cnt(2), datestr(now, 'HH:MM:SS')));
                                 
                             end
+                            
+                            % Set reset patch to visible
+                            set(D.UI.ptchFdRstH(D.I.rot), ...
+                                'FaceAlpha', 0.5);
                             
                             % Update reward info list
                             rew_ellapsed = etime(clock, D.T.rew_last);
@@ -4176,7 +4184,7 @@ clear(PersistentVarNames{:});
                             set(D.UI.popRewInfo, 'String', infstr);
                             
                             % Print reset bounds crossed
-                            Update_Console(sprintf('\r   Crossed Reward Bounds \r   Time: %s\r', ...
+                            Update_Console(sprintf('\rCrossed Reward Bounds \r   Time: %s\r', ...
                                 datestr(now, 'HH:MM:SS')));
                         end
                         
@@ -5584,13 +5592,11 @@ clear(PersistentVarNames{:});
         
         % REWARD
         function [] = BtnReward(~, ~, ~)
-            %             %TEST
-            %             rew_dur = D.PAR.zoneRewDur(ceil(rand(1,1)*7));
-            %             Mat2CS('R', 0, rew_dur/10)
-            %             Update_Console(sprintf('rew_dur = %d\r', rew_dur));
             % Tell CS to trigger reward
             Mat2CS('R', 0, find(D.PAR.zoneRewDur == max(D.PAR.zoneRewDur)));
             
+            % Track round trip time
+            D.T.manual_rew_sent = clock;
         end
         
         % BLOCK CUE
@@ -5709,19 +5715,7 @@ clear(PersistentVarNames{:});
                 end
             end
             
-            % Set vars for reward events
-            if strcmp(id, 'R')
-                if data1 == 0 && data2 == 0
-                    % set flag to check for rewarded zone
-                    D.B.check_rew_confirm = true;
-                    
-                else % if imediate reward
-                    % reward send time
-                    D.T.rew_sent = clock;
-                end
-            end
-            
-            Update_Console(sprintf('\rMat2CS\rm2c_id = %s\rm2c_dat1 = %2.2f\rm2c_dat2 = %2.2f\rTime: %s\r', ...
+            Update_Console(sprintf('\rMat2CS: id=%s d1=%2.2f d2=%2.2f\rTime: %s\r', ...
                 id, data1 , data2, datestr(now, 'HH:MM:SS')));
             
         end
