@@ -3,7 +3,7 @@
 #pragma region ---------DEBUG SETTINGS---------
 
 bool doPrintFlow = false;
-bool doPrintRcvdPack = true;
+bool doPrintRcvdPack = false;
 bool doPrintSentPack = false;
 bool doPrintResent = false;
 bool doTestPinMapping = false;
@@ -414,6 +414,7 @@ bool ParseSerial()
 
 	static char head = ' ';
 	static char foot = ' ';
+	static bool conf = false;
 	uint16_t pack = 0;
 	static bool pass = false;
 	doPackSend = false;
@@ -435,33 +436,32 @@ bool ParseSerial()
 		return pass = false;
 	}
 
-	// Wait for id packet
+	// Get id
 	while (Serial1.available() < 1);
-	// get id
 	u.b[1] = Serial1.read();
 	msg_id = u.c[1];
 
-	// Wait for data packet
+	// Get data
 	while (Serial1.available() < 1);
-	// get data
 	msg_dat = Serial1.read();
 
-	// Wait for pack number packet
+	// Get pack number
 	while (Serial1.available() < 2);
-	// get packet num
 	u.f = 0.0f;
 	u.b[0] = Serial1.read();
 	u.b[1] = Serial1.read();
 	pack = u.i16[0];
 
-	// Wait for foot packet
+	// Get send confirm request
 	while (Serial1.available() < 1);
+	conf = Serial1.read() == 1 ? true : false;
 
-	// Check for footer
+	// Get footer
+	while (Serial1.available() < 1);
 	u.b[2] = Serial1.read();
 	foot = u.c[2];
 
-	// Footer missing
+	// Check for missing footer
 	if (foot != r2a_foot) {
 		// mesage will be dumped
 		pass = false;
@@ -471,7 +471,7 @@ bool ParseSerial()
 		// Send back confirmation
 		doPackSend = true;
 		// Print rcvd pack
-		PrintRcvdPack(msg_id, msg_dat, pack);
+		PrintRcvdPack(msg_id, msg_dat, pack, conf);
 		pass = true;
 	}
 
@@ -544,7 +544,6 @@ void SendSerial(char id, uint16_t pack)
 
 #pragma endregion
 
-
 #pragma region --------REWARD---------
 
 // START REWARD
@@ -588,7 +587,6 @@ void EndRew()
 
 #pragma endregion
 
-
 #pragma region --------DEBUGGING---------
 
 // PRINT STATUS
@@ -601,14 +599,14 @@ void PrintState(String msg)
 }
 
 // PRINT RECIEVED PACKET
-void PrintRcvdPack(char id, byte dat, uint16_t pack)
+void PrintRcvdPack(char id, byte dat, uint16_t pack, bool conf)
 {
 
 	//// Print
 	if (doPrintRcvdPack)
 	{
 		char str[50];
-		sprintf(str, "rcvd_r2a: id=%c dat=%d pack=%d", id, dat, pack);
+		sprintf(str, "rcvd_r2a: id=%c dat=%d pack=%d conf=%s", id, dat, pack, conf ? "true" : "false");
 		PrintStr(str, millis());
 	}
 }
@@ -672,7 +670,6 @@ void PrintStr(String msg, uint32_t ts)
 }
 
 #pragma endregion
-
 
 #pragma region --------MINOR FUNCTIONS---------
 
@@ -765,7 +762,6 @@ void SetPort(uint32_t word_on, uint32_t word_off)
 }
 
 #pragma endregion
-
 
 #pragma region --------PHOTO TRANSDUCERS ---------
 

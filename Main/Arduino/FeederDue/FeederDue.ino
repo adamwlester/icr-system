@@ -1,15 +1,25 @@
 
 //-------FEEDERDUE-------
 
-#pragma region ---------DEBUG SETTINGS---------
+#pragma region ---------NOTES---------
 
 /*
-NOTES
-XBee DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
-XBee DO (to UART rx) buffer = 202 bytes
-DUE SERIAL_BUFFER_SIZE = 128
-SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
+	* XBee DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
+	* XBee DO (to UART rx) buffer = 202 bytes
+	* DUE SERIAL_BUFFER_SIZE = 128
+	* SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
+	* DATA TYPES:
+		byte = 1 byte
+		char = 1 byte
+		int = 4 byte
+		long = 4 byte
+		float = 4 byte
 */
+
+#pragma endregion
+
+
+#pragma region ---------DEBUG SETTINGS---------
 
 // LOG DEBUGGING
 
@@ -32,17 +42,17 @@ const bool doLog_dropped = true;
 // PRINT DEBUGGING
 
 // Where to print
-const bool doDB_PrintConsole = true;
+const bool doDB_PrintConsole = false;
 const bool doDB_PrintLCD = false;
 
 // What to print
-const bool doPrint_flow = true;
+const bool doPrint_flow = false;
 const bool doPrint_irSync = false;
 const bool doPrint_motorControl = false;
 const bool doPrint_motorBlocking = false;
 const bool doPrint_rcvd = false;
 const bool doPrint_r2c = false;
-const bool doPrint_r2a = true;
+const bool doPrint_r2a = false;
 const bool doPrint_pid = false;
 const bool doPrint_bull = false;
 const bool doPrint_resent = false;
@@ -63,8 +73,8 @@ Set kC and run ICR_Run.cs
 */
 const float kC = 5; // critical gain [2,3,4,5]
 const float pC = 1.5; // oscillation period [0,0,0,1.5]  
-const float c_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
-uint32_t c_nMeasPerSteps = 10;
+const float cal_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
+int cal_nMeasPerSteps = 10;
 bool do_pidCalibration = false;
 
 #pragma endregion
@@ -178,7 +188,6 @@ const int pin_IRdetect = 17;
 
 // Flow/state control
 String fc_motorControl = "None"; // ["None", "Open", "MoveTo", "Bull", "PID"]
-uint32_t blockDurTill = 0;
 bool fc_isBlockingTill = false;
 bool fc_doQuit = false;
 bool fc_isFirstPass = true;
@@ -190,7 +199,6 @@ bool fc_isTrackingEnabled = false;
 bool fc_isRewarding = false;
 bool fc_doMove = false;
 bool fc_doRew = false;
-bool fc_doCueReward = false;
 bool fc_doHalt = false;
 bool fc_isHalted = false;
 bool fc_doBulldoze = false;
@@ -203,8 +211,10 @@ bool fc_isEKFReady = false;
 // Log debugging
 const int logLng = 1000;
 String logList[logLng];
-uint16_t cnt_logStore = 0;
-uint16_t cnt_logSend = 0;
+int cnt_logStore = 0;
+int cnt_logSend = 0;
+int logByteTrack = 0;
+int logByteMax = 32000;
 
 // Print debugging
 String printQueue[10];
@@ -224,25 +234,26 @@ int cnt_timeoutEvt = 0;
 int cnt_packResend = 0;
 
 // Outgoing packet data
-byte r2_queue[10][7];
+byte r2_queue[10][8];
 const int r2_lngR = 10;
-const int r2_lngC = 7;
+const int r2_lngC = 8;
 int sendQueueInd = r2_lngR - 1;
 bool doPackSend = false;
-const uint32_t sendSentDel = 1;
-const uint32_t sendRcvdDel = 1;
-const uint32_t logSentDel = 1;
-const uint32_t logRcvdDel = 1;
+const int dt_sendSent = 1;
+const int dt_sendRcvd = 1;
+const int dt_logSent = 1;
+const int dt_logRcvd = 1;
 
 // Serial from CS
 const char c2r_head = '<';
 const char c2r_foot = '>';
-char c2r_id[13] = {
+char c2r_id[14] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
 	'M', // move to position
 	'R', // run reward
+	'C', // cue reward
 	'H', // halt movement
 	'B', // bulldoze rat
 	'I', // rat in/out
@@ -251,6 +262,9 @@ char c2r_id[13] = {
 	'L', // request log send/resend
 	'Y', // confirm done recieved
 };
+const int c2r_idLng = sizeof(c2r_id) / sizeof(c2r_id[0]);
+uint16_t c2r_packLast[c2r_idLng];
+int c2r_cntRepeat[c2r_idLng];
 char c2r_msg_id = ' ';
 bool c2r_isNew = false;
 uint32_t t_rcvd = millis(); // (ms)
@@ -259,12 +273,13 @@ uint32_t t_rcvdLast = 0; // (ms)
 // Serial to CS
 const char r2c_head = '<';
 const char r2c_foot = '>';
-char r2c_id[14] = {
+char r2c_id[15] = {
 	'T', // system test command
 	'S', // start session
 	'Q', // quit session
 	'M', // move to position
 	'R', // run reward
+	'C', // cue reward
 	'H', // halt movement
 	'B', // bulldoze rat
 	'I', // rat in/out
@@ -275,10 +290,18 @@ char r2c_id[14] = {
 	'J', // battery voltage
 	'Z', // reward zone
 };
+const int r2c_idLng = sizeof(r2c_id) / sizeof(r2c_id[0]);
 uint32_t t_resendDone = millis(); // (ms)
 uint32_t t_sent = millis(); // (ms)
-							//uint32_t resendDone_cnt = 0;
-							//uint32_t resendDone_max = 5;
+uint16_t r2c_packLast[r2c_idLng];
+byte r2c_datLast[r2c_idLng];
+
+// Robot to Matlab communication
+const char r2m_id[2] = {
+	'J', // battery voltage
+	'Z', // reward zone
+};
+const int r2m_idLng = sizeof(r2m_id) / sizeof(r2m_id[0]);
 
 // Serial to other ard
 const char r2a_head = '{';
@@ -292,38 +315,18 @@ char r2a_id[6] = {
 	'p', // pid mode [0, 1]
 	'b', // bull mode [0, 1]
 };
+const int r2a_idLng = sizeof(r2a_id) / sizeof(r2a_id[0]);
+uint16_t r2a_packLast[r2a_idLng];
+byte r2a_datLast[r2a_idLng];
+uint16_t r2a_sendTim[r2a_idLng];
+bool r2a_doRcvdCheck[r2a_idLng];
+int r2a_resendCnt[r2a_idLng];
+uint16_t r2a_resendDel = 100;
+uint16_t r2a_resendMax = 3;
 
 // Serial from other ard
 const char a2r_head = '{';
 const char a2r_foot = '}';
-
-// Serial packet tracking
-uint16_t packNow = 0;
-uint16_t packLast = 0;
-int packTot = 0;
-// last packet
-const int c2r_idLng = sizeof(c2r_id) / sizeof(c2r_id[0]);
-const int r2c_idLng = sizeof(r2c_id) / sizeof(r2c_id[0]);
-const int r2a_idLng = sizeof(r2a_id) / sizeof(r2a_id[0]);
-uint16_t c2r_packLast[c2r_idLng];
-uint16_t r2c_packLast[r2c_idLng];
-uint16_t c2r_packRepeat[c2r_idLng];
-int c2r_cntRepeat[c2r_idLng];
-// packet history
-uint16_t c2r_packHist[10];
-uint16_t r2c_packHist[10];
-char c2r_idHist[10];
-char r2c_idHist[10];
-const int c2r_hLng = sizeof(c2r_packHist) / sizeof(c2r_packHist[0]);
-const int r2c_hLng = sizeof(r2c_packHist) / sizeof(r2c_packHist[0]);
-// ard to ard packet handeling
-uint16_t r2a_packLast[r2a_idLng];
-byte r2a_datLast[r2a_idLng];
-bool r2a_doRcvCheck[r2a_idLng];
-uint16_t r2a_sendTim[r2a_idLng];
-int r2a_resendCnt[r2a_idLng];
-uint16_t r2a_resendDel = 100;
-uint16_t r2a_resendMax = 3;
 
 // Start/Quit
 byte msg_setupCmd[2];
@@ -332,7 +335,7 @@ uint32_t t_quitCmd = 0;
 // Serial VT
 byte msg_vtEnt = 0;
 float msg_vtCM[2] = { 0,0 };
-uint32_t msg_vtTS[2] = { 0,0 };
+uint32_t t_msg_vtTS[2] = { 0,0 };
 
 // Pixy
 const double pixyCoeff[5] = {
@@ -354,6 +357,7 @@ const byte kAcc = 60 * 2;
 const byte kDec = 60 * 2;
 const byte kRun = 60;
 const byte kHold = 60 / 2;
+int dt_blockMotor = 0;
 
 // Kalman model measures
 float ekfRatPos = 0;
@@ -379,13 +383,13 @@ byte msg_bullDel = 0;
 byte msg_bullSpeed = 0;
 
 // Reward
-uint32_t rewBlockDur = 10000; // (ms)
+int dt_blockRew = 10000; // (ms)
 float cuePos = 0;
 float cueDist[2] = { 0,0 };
 float cueStartPos[2] = { 0,0 };
 float msg_rewPos = 0;
+byte msg_rewDelay = 0;
 byte msg_rewZoneInd = 0;
-int rewCnt = 0;
 
 // EtOH 
 /*
@@ -393,8 +397,8 @@ EtOH run after min time or distance
 */
 bool doEtOHRun = true;
 bool isEtOHOpen = false;
-const uint32_t t_durEtOH = 1000; // (ms)
-const uint32_t t_delEtOH = 30000; // (ms)
+const int dt_durEtOH = 1000; // (ms)
+const int dt_delEtOH = 30000; // (ms)
 const float distMaxEtOH = (140 * PI) / 2; // (cm)
 
 // Volt tracking
@@ -421,9 +425,9 @@ bool btn_doRew = false;
 bool btn_doChangeLCDstate = false;
 
 // Interrupts 
-volatile uint32_t intrpt_irProxDebounce = millis();
-volatile bool intrpt_doIRhardStop = false;
-volatile uint32_t intrpt_irDetectDebounce = millis();
+volatile uint32_t t_irProxDebounce = millis();
+volatile bool t_doIRhardStop = false;
+volatile uint32_t t_irDetectDebounce = millis();
 volatile uint32_t t_irSyncLast = millis();
 volatile uint32_t t_sync = 0;
 volatile bool intrpt_doLogIR = false;
@@ -444,12 +448,11 @@ byte WaitBuffRead(char chr1);
 byte WaitBuffRead(char chr1, char chr2);
 // CHECK AND PROCESS RCVD PACKET NUMBER
 bool CheckPack(char id, uint16_t pack);
-// STORE BYTE SERIAL DATA FOR CS
-void Store4_CS(char id, byte d1, uint16_t pack);
-// STORE BYTE SERIAL DATA FOR ARD
-void Store4_Ard(char id);
-void Store4_Ard(char id, byte d1);
-void Store4_Ard(char id, byte d1, uint16_t pack);
+// STORE PACKET DATA TO BE SENT
+void StorePacketData(char targ, char id);
+void StorePacketData(char targ, char id, byte d1);
+void StorePacketData(char targ, char id, byte d1, uint16_t pack);
+void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf);
 // SEND SERIAL PACKET DATA
 void SendPacketData();
 // SEND SERIAL LOG DATA
@@ -465,7 +468,7 @@ bool RunMotor(char dir, float speed, String agent);
 // SET WHATS CONTROLLING THE MOTOR
 bool SetMotorControl(String set_to, String called_from);
 // BLOCK MOTOR TILL TIME ELLAPESED
-void BlockMotorTill(uint32_t dt, String called_from);
+void BlockMotorTill(int dt, String called_from);
 // CHECK IF TIME ELLAPESED
 void CheckBlockTimElapsed();
 // DO SETUP TO BEGIN TRACKING
@@ -501,13 +504,13 @@ void DebugResent(char id, uint16_t pack, int total);
 // LOG/PRING RECIEVED PACKET DEBUG STRING
 void DebugRcvd(char from, char id, uint16_t pack);
 // LOG/PRING IR SENSOR EVENT
-void DebugIRSync(String msg, uint32_t ts);
+void DebugIRSync(String msg, uint32_t t);
 // LOG/PRING MAIN EVENT
 void DebugFlow(String msg);
 // STORE STRING FOR PRINTING
-void StoreDBPrintStr(String msg, uint32_t ts);
+void StoreDBPrintStr(String msg, uint32_t t);
 // STORE STRING FOR LOGGING
-void StoreDBLogStr(String msg, uint32_t ts);
+void StoreDBLogStr(String msg, uint32_t t);
 // PRINT DEBUG STRINGS TO CONSOLE/LCD
 void PrintDebug();
 // FOR PRINTING TO LCD
@@ -515,7 +518,7 @@ void PrintLCD(String str_1);
 void PrintLCD(String str_1, String str_2, char f_siz);
 void ClearLCD();
 // GET ID INDEX
-int CharInd(char id, char id_arr[], int arr_size);
+int ID_Ind(char id, char id_arr[], int arr_size);
 // BLINK LEDS AT SETUP
 void SetupBlink();
 // BLICK LEDS WHEN RAT FIRST DETECTED
@@ -546,8 +549,8 @@ public:
 	String objID = " ";
 	int nSamp = 0;
 	float posArr[6] = { 0,0,0,0,0,0 };
-	uint32_t tsArr[6] = { 0,0,0,0,0,0 };
-	int t_skip = 0;
+	uint32_t t_tsArr[6] = { 0,0,0,0,0,0 };
+	int dt_skip = 0;
 	float velNow = 0.0f;
 	float posNow = 0.0f;
 	float posAbs = 0.0f;
@@ -556,7 +559,7 @@ public:
 	float nLaps = 0;
 	int sampCnt = 0;
 	bool newData = false;
-	uint32_t dtFrame = 0;
+	int dt_frame = 0;
 
 	// constructor
 	PosDat(String id, int l)
@@ -580,18 +583,18 @@ public:
 		for (int i = 0; i < this->nSamp - 1; i++)
 		{
 			this->posArr[i] = this->posArr[i + 1];
-			this->tsArr[i] = this->tsArr[i + 1];
+			this->t_tsArr[i] = this->t_tsArr[i + 1];
 		}
 		// Add new variables
 		this->posArr[nSamp - 1] = pos_new;
-		this->tsArr[nSamp - 1] = ts_new;
+		this->t_tsArr[nSamp - 1] = ts_new;
 
 		// Do not process early samples
 		if (this->sampCnt < this->nSamp + 1)
 		{
 			this->posNow = pos_new;
 			this->velNow = 0.0f;
-			this->dtFrame = 0;
+			this->dt_frame = 0;
 			newData = false;
 		}
 		else
@@ -599,7 +602,7 @@ public:
 			newData = true;
 
 			// Store frame capture dt
-			this->dtFrame = this->tsArr[nSamp - 1] - this->tsArr[nSamp - 2];
+			this->dt_frame = this->t_tsArr[nSamp - 1] - this->t_tsArr[nSamp - 2];
 
 			// COMPUTE TOTAL targ_dist RAN
 
@@ -631,20 +634,20 @@ public:
 				dist = this->posArr[i + 1] - this->posArr[i];
 				distSum += dist;
 				// compute dt
-				dt = this->tsArr[i + 1] - this->tsArr[i];
+				dt = this->t_tsArr[i + 1] - this->t_tsArr[i];
 				dtSum += (float)dt;
 			}
 			// compute vel
 			vel = distSum / (dtSum / 1000.0f);
 
 			// ignore outlyer values unless too many frames discarted
-			if (this->t_skip > 500 || abs(this->velNow - vel) < 150)
+			if (this->dt_skip > 500 || abs(this->velNow - vel) < 150)
 			{
 				this->velNow = vel;
-				this->t_skip = 0;
+				this->dt_skip = 0;
 			}
 			// add to skip time
-			else this->t_skip += dt;
+			else this->dt_skip += dt;
 		}
 	}
 
@@ -659,10 +662,10 @@ public:
 		return velNow;
 	}
 
-	void SetDat(float set_pos, uint32_t ms)
+	void SetDat(float set_pos, uint32_t t)
 	{
 		// Compute ts
-		uint32_t ts = t_tsNow + (ms - t_msNow);
+		uint32_t ts = t_tsNow + (t - t_msNow);
 
 		// Update pos
 		UpdatePos(set_pos, ts);
@@ -691,7 +694,7 @@ class PID
 
 public:
 	uint32_t t_lastLoop = 0;
-	float dtLoop = 0;
+	float dt_loop = 0;
 	bool wasLoopRan = false;
 	float p_term = 0;
 	float i_term = 0;
@@ -714,16 +717,16 @@ public:
 	float kD = 0;
 	float setPoint = 0;
 	uint32_t t_ekfStr = 0;
-	uint32_t t_ekfSettle = 250; // (ms)
+	int dt_ekfSettle = 250; // (ms)
 	bool ekfNew = false;
 	float dampAcc = 40;
 	float dampSpeedCut = 20;
-	uint32_t dampTimeCut = 4000;
+	const int dt_damp = 4000;
 	uint32_t t_dampTill = 0;
 	uint32_t t_lastDamp = millis();
 
 	// PID calibration
-	uint32_t cal_dtMin = 40; // (ms)
+	int cal_dtMin = 40; // (ms)
 	int cal_cntPcArr[4] = { 0, 0, 0, 0 };
 	int cal_stepNow = 0;
 	float cal_PcCnt = 0;  // oscillation count
@@ -838,8 +841,8 @@ public:
 
 					// Compute new terms
 					p_term = kP*error;
-					i_term = kI*dtLoop*integral;
-					d_term = kD / dtLoop*derivative;
+					i_term = kI*dt_loop*integral;
+					d_term = kD / dt_loop*derivative;
 					//if (error < 0) d_term = d_term * 2.0f;
 
 					// Compute updated vel
@@ -882,7 +885,7 @@ public:
 		mode = "Automatic";
 
 		// Tell ard pid is running
-		Store4_Ard('p', 1);
+		StorePacketData('a', 'p', 1);
 
 		PrintPID("pid: run [" + called_from + "]");
 	}
@@ -907,7 +910,7 @@ public:
 			!fc_isRewarding
 			)
 		{
-			Store4_Ard('p', 0);
+			StorePacketData('a', 'p', 0);
 		}
 
 		// Set mode
@@ -952,7 +955,7 @@ public:
 				delayMicroseconds(100);
 
 				// Set time to dampen till
-				t_dampTill = millis() + dampTimeCut;
+				t_dampTill = millis() + dt_damp;
 
 				// Set flags
 				isDampened = true;
@@ -1029,11 +1032,11 @@ public:
 		}
 	}
 
-	void CheckEKF(uint32_t now_ms)
+	void CheckEKF(uint32_t t)
 	{
 		if (!fc_isEKFReady)
 		{
-			if ((now_ms - t_ekfStr) > t_ekfSettle)
+			if ((t - t_ekfStr) > dt_ekfSettle)
 			{
 				fc_isEKFReady = true;
 			}
@@ -1047,14 +1050,14 @@ public:
 		PrintPID("pid: reset ekf [" + called_from + "]");
 	}
 
-	void SetLoopTime(uint32_t now_ms)
+	void SetLoopTime(uint32_t t)
 	{
 		ekfNew = true;
 		if (wasLoopRan)
 		{
-			dtLoop = (float)(now_ms - t_lastLoop) / 1000.0f;
+			dt_loop = (float)(t - t_lastLoop) / 1000.0f;
 			wasLoopRan = false;
-			t_lastLoop = now_ms;
+			t_lastLoop = t;
 		}
 	}
 
@@ -1086,7 +1089,7 @@ public:
 		{
 			// End of calibration 
 			if (
-				cal_cntPcArr[3] == c_nMeasPerSteps &&
+				cal_cntPcArr[3] == cal_nMeasPerSteps &&
 				cal_PcArr[3] > 0
 				)
 			{
@@ -1117,7 +1120,7 @@ public:
 				}
 
 				// Check if speed should be incrimented
-				if (cal_cntPcArr[cal_stepNow] == c_nMeasPerSteps)
+				if (cal_cntPcArr[cal_stepNow] == cal_nMeasPerSteps)
 				{
 					cal_PcArr[cal_stepNow] = cal_PcAvg;
 					cal_PcSum = 0;
@@ -1136,7 +1139,7 @@ public:
 				t_lastLoop = millis();
 
 				// Compute PID
-				cal_ekfRatVel = c_speedSteps[cal_stepNow];
+				cal_ekfRatVel = cal_speedSteps[cal_stepNow];
 				cal_ekfRatPos += cal_ekfRatVel * (cal_dtLoop / 1);
 
 				// Compute error 
@@ -1196,7 +1199,7 @@ class Bulldozer
 
 public:
 	uint32_t t_loopNext = 0;
-	uint32_t dtLoop = 50; // (ms)
+	int dt_loop = 50; // (ms)
 	float moveMin = 5; // (cm)
 	String mode = "Inactive"; // ["Active" "Inactive"]
 	String state = "Off"; // ["off", "On", "Hold"]
@@ -1271,7 +1274,7 @@ public:
 				}
 
 				// Set next loop time
-				t_loopNext = millis() + dtLoop;
+				t_loopNext = millis() + dt_loop;
 			}
 		}
 	}
@@ -1295,7 +1298,7 @@ public:
 		RunMotor('f', bSpeed, "Bull");
 
 		// Tell ard bull is running
-		Store4_Ard('b', 1);
+		StorePacketData('a', 'b', 1);
 
 		// Set mode
 		mode = "Active";
@@ -1319,7 +1322,7 @@ public:
 		t_bullNext = millis() + bDelay;
 
 		// Tell ard bull is stopped
-		Store4_Ard('b', 0);
+		StorePacketData('a', 'b', 0);
 
 		// Set mode
 		mode = "Inactive";
@@ -1432,15 +1435,15 @@ class Target
 {
 public:
 	String objID = " ";
-	uint32_t targSetTimeout = 1000;
-	uint32_t moveTimeout = 5000;
+	int targSetTimeout = 1000;
+	int moveTimeout = 5000;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
 	bool abortMove = false;
 	float posRel = 0;
 	float moveDiff = 0;
 	float minSpeed = 0;
-	const uint32_t t_updateDT = 10;
+	const int dt_update = 10;
 	uint32_t t_updateNext = 0;
 	float distLeft = 0;
 	float newSpeed = 0;
@@ -1570,7 +1573,7 @@ public:
 					if (newSpeed < speed_min) newSpeed = speed_min;
 
 					// Update loop time
-					t_updateNext = millis() + t_updateDT;
+					t_updateNext = millis() + dt_update;
 				}
 
 			}
@@ -1587,39 +1590,6 @@ public:
 		else newSpeed = 0;
 
 		return newSpeed;
-	}
-
-	bool CheckTargReached(float now_pos, float now_vel)
-	{
-		// Run if targ not reached
-		if (!isTargReached)
-		{
-			// Get velocity corrected targ_dist threshold
-			if (now_vel >= 20)
-			{
-				haltError =
-					velCoeff[0] * (now_vel * now_vel) +
-					velCoeff[1] * now_vel +
-					velCoeff[2];
-			}
-			else haltError = 1;
-
-			// Cap halt error at min of 1
-			haltError = haltError < 1 ? 1 : haltError;
-
-			// Compute remaining targ_dist
-			distLeft = abs(targDist) -
-				min((140 * PI) - abs(now_pos - posStart), abs(now_pos - posStart));
-
-			// Target is reached
-			if (distLeft < haltError)
-			{
-				// Set flag true
-				isTargReached = true;
-			}
-		}
-
-		return isTargReached;
 	}
 
 	float GetError(float now_pos)
@@ -1648,15 +1618,12 @@ public:
 };
 // Initialize object
 Target targ_moveTo("targ_moveTo");
-Target targ_cueRat("targ_cueRat");
-Target targ_cueRob("targ_cueRob");
 
 //----------CLASS: Reward----------
 class Reward
 {
 public:
-	const float velThresh = 5; // (cm/sec)
-	const uint32_t zoneRewDurs[9] = { // (ms)
+	const int zoneRewDurs[9] = { // (ms)
 		500,
 		910,
 		1420,
@@ -1678,29 +1645,36 @@ public:
 		-15,
 		-20,
 	};
-	uint32_t blockDur = 0; // (ms)
-	uint32_t duration = 0; // (ms) 
-	byte durationByte = 0; // (ms) 
-	float zoneBounds[9][2];
-	const int zoneLng =
+	static const int zoneLng =
 		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
+	float zoneBounds[zoneLng][2];
+	int zoneOccTim[zoneLng];
+	int zoneOccCnt[zoneLng];
+	uint32_t t_nowZoneCheck = 0;
+	uint32_t t_lastZoneCheck = 0;
+	String mode = "None"; // ["None" "Free" "Cue" "Now"]
+	int occThresh = 0; // (ms)
+	int dt_block = 0; // (ms)
+	int duration = 0; // (ms) 
+	byte durationByte = 0; // (ms) 
+	int zoneMin = 0;
+	int zoneMax = 0;
 	float boundMin = 0;
 	float boundMax = 0;
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
 	uint32_t t_moveArmStr = 0;
-	float rewCenterAbs = 0;
 	float rewCenterRel = 0;
 	bool isRewarding = false;
-	bool isCueing = false;
 	bool isButtonReward = false;
 	bool isBoundsSet = false;
 	bool isZoneTriggered = false;
 	bool isAllZonePassed = false;
 	bool is_ekfNew = false;
-	float zoneRewarded = 0;
 	byte zoneIndByte = 255;
+	float zoneRewarded = 0;
 	float boundsRewarded[2];
+	int occRewarded = 0;
 	float lapN = 0;
 	bool doArmMove = false;
 	bool isArmExtended = false;
@@ -1710,12 +1684,19 @@ public:
 	bool armStpOn = false;
 
 	// Constructor
-	Reward(uint32_t t_b)
+	Reward(int t_b)
 	{
-		this->blockDur = t_b;
+		this->dt_block = t_b;
 		this->duration = 2000;
 		this->durationByte = (byte)(duration / 10);
-		ResetFeedArm();
+
+		// Reset reward stuff
+		Reset();
+
+		// Initialize feeder arm
+		isArmExtended = true;
+		armPos = armExtStps;
+		RetractFeedArm();
 	}
 
 	// START REWARD
@@ -1723,9 +1704,6 @@ public:
 	{
 		// Set flag
 		isButtonReward = is_button_reward;
-
-		// Track rewards
-		rewCnt++;
 
 		// Set to extend feeder arm 
 		ExtendFeedArm();
@@ -1735,11 +1713,11 @@ public:
 		{
 			HardStop("StartRew");
 			// Set hold time
-			BlockMotorTill(blockDur, "REWARD.StartRew");
+			BlockMotorTill(dt_block, "REWARD.StartRew");
 		}
 
 		// Trigger reward tone on
-		Store4_Ard('r', durationByte);
+		StorePacketData('a', 'r', durationByte);
 
 		// Compute reward end time
 		t_closeSol = millis() + duration;
@@ -1808,29 +1786,47 @@ public:
 	// Set reward duration
 	void SetRewDur(byte zone_ind)
 	{
+		// Set duration
 		duration = zoneRewDurs[zone_ind];
 		durationByte = (byte)(duration / 10);
-	}
 
-	// Set reward pos
-	float SetRewPos(byte zone_ind)
-	{
+		// Save zone ind
 		zoneIndByte = zone_ind;
 	}
-	float SetRewPos(byte zone_ind, float rew_pos)
+
+	// Set rew mode
+	void SetRewMode(String mode_str, byte arg2)
 	{
-		// Local vars
-		byte zone_zer_ind = zone_ind - 1;
+		// Store mode
+		mode = mode_str;
 
-		// Get reward pos in radians
-		float zone_loc = zone_zer_ind != 0 ? zoneLocs[zone_zer_ind] : 0;
-		rewCenterAbs = rew_pos + (-1 * zone_loc * ((140 * PI) / 360));
+		// Store info
+		if (mode == "Free") {
 
-		// Store zone ind as byte
-		zoneIndByte = zone_ind;
+			// Include all zones
+			zoneMin = 0;
+			zoneMax = zoneLng - 1;
 
-		// Return pos
-		return rewCenterAbs;
+			// Store threshold
+			occThresh = (int)arg2 * 1000;
+
+		}
+		else if (mode == "Cue") {
+
+			// Include one zone
+			zoneMin = arg2;
+			zoneMax = arg2;
+
+			// Store threshold
+			occThresh = 0;
+
+		}
+		else if (mode == "Now") {
+
+			// Set duration
+			SetRewDur(arg2);
+
+		}
 	}
 
 	// Compute zone bounds
@@ -1860,7 +1856,7 @@ public:
 			rewCenterRel = rew_pos + lapN*(140 * PI);
 
 			// Compute bounds for each zone
-			for (int i = 0; i < zoneLng; i++)
+			for (int i = zoneMin; i <= zoneMax; i++)
 			{
 				// Compute 5 deg bounds
 				dist_center_cm = -1 * zoneLocs[i] * ((140 * PI) / 360);
@@ -1869,10 +1865,10 @@ public:
 				// Store in array
 				zoneBounds[i][0] = rewCenterRel + dist_start_cm;
 				zoneBounds[i][1] = rewCenterRel + dist_end_cm;
-				// Save bound min/max
-				boundMin = i == 0 ? zoneBounds[i][0] : boundMin;
-				boundMax = i == zoneLng - 1 ? zoneBounds[i][1] : boundMax;
 			}
+			// Save bound min/max
+			boundMin = zoneBounds[zoneMin][0];
+			boundMax = zoneBounds[zoneMax][0];
 			// Set flag
 			isBoundsSet = true;
 		}
@@ -1880,7 +1876,7 @@ public:
 	}
 
 	// Check bounds
-	bool CheckZoneBounds(float now_pos, float now_vel)
+	bool CheckZoneBounds(float now_pos)
 	{
 		// Run only if reward not already triggered
 		if (!isZoneTriggered)
@@ -1890,36 +1886,47 @@ public:
 			if (now_pos > boundMax + 5)
 			{
 				isAllZonePassed = true;
-				return isZoneTriggered;
 			}
-			// Check velocity
+			// Check if first bound reached
 			else if (
-				now_pos > boundMin &&
-				now_vel <= velThresh
+				now_pos > boundMin
 				)
 			{
 
 				// Check if rat in any bounds
-				for (int i = 0; i < zoneLng; i++)
+				for (int i = zoneMin; i <= zoneMax; i++)
 				{
 					if (
 						now_pos > zoneBounds[i][0] &&
 						now_pos < zoneBounds[i][1]
 						)
 					{
-						// Reward at this pos
-						SetRewDur(i);
 
-						// Store rewarded zone for debugging
-						zoneRewarded = zoneLocs[i];
-						boundsRewarded[0] = zoneBounds[i][0];
-						boundsRewarded[1] = zoneBounds[i][1];
+						// Update timers
+						t_lastZoneCheck = t_lastZoneCheck == 0 ? millis() : t_lastZoneCheck;
+						t_nowZoneCheck = millis();
 
-						// convert zone ind to byte to send
-						zoneIndByte = (byte)(i + 1);
+						// Store occupancy time
+						zoneOccTim[i] += t_nowZoneCheck - t_lastZoneCheck;
+						zoneOccCnt[i]++;
+						t_lastZoneCheck = t_nowZoneCheck;
 
-						// Set flag
-						isZoneTriggered = true;
+						// Check if occ thresh passed
+						if (zoneOccTim[i] >= occThresh)
+						{
+
+							// Reward at this pos
+							SetRewDur(i);
+
+							// Store reward info for debugging
+							zoneRewarded = zoneLocs[i] * -1;
+							boundsRewarded[0] = zoneBounds[i][0];
+							boundsRewarded[1] = zoneBounds[i][1];
+							occRewarded = zoneOccTim[i];
+
+							// Set flag
+							isZoneTriggered = true;
+						}
 					}
 				}
 			}
@@ -1981,20 +1988,12 @@ public:
 
 	}
 
-	// Reset feeder arm
-	void ResetFeedArm()
-	{
-		isArmExtended = true;
-		armPos = armExtStps;
-		RetractFeedArm();
-	}
-
 	// Extend feeder arm
 	void ExtendFeedArm()
 	{
 		if (!isArmExtended)
 		{
-			t_retractArm = millis() + blockDur;
+			t_retractArm = millis() + dt_block;
 			armZone = armExtStps;
 			doArmMove = true;
 		}
@@ -2067,17 +2066,44 @@ public:
 	// Reset
 	void Reset()
 	{
+		// Log zone info
+		if (mode == "Free" || mode == "Cue")
+		{
+			String str1 = "ZONE OCC:";
+			String str2 = "ZONE CNT:";
+			for (int i = zoneMin; i <= zoneMax; i++)
+			{
+				char chr1[50];
+				sprintf(chr1, " z%d=%dms", i, zoneOccTim[i]);
+				str1 += chr1;
+				char chr2[50];
+				sprintf(chr2, " z%d=%d", i, zoneOccCnt[i]);
+				str2 += chr2;
+			}
+			DebugFlow(str1);
+			DebugFlow(str2);
+		}
+
+		// Reset flags
+		mode = "None";
 		isRewarding = false;
-		isCueing = false;
 		isButtonReward = false;
 		isBoundsSet = false;
 		isZoneTriggered = false;
 		isAllZonePassed = false;
 		is_ekfNew = false;
+
+		// Reset occ time
+		for (int i = 0; i < zoneLng; i++) {
+			zoneOccTim[i] = 0;
+			zoneOccCnt[i] = 0;
+		}
+		t_nowZoneCheck = 0;
+		t_lastZoneCheck = 0;
 	}
 };
 // Initialize object
-Reward reward(rewBlockDur);
+Reward reward(dt_blockRew);
 
 //----------CLASS: Fuser----------
 class Fuser : public TinyEKF
@@ -2256,34 +2282,25 @@ void setup() {
 		}
 	}
 
-	// Initilize packet history
-	for (int i = 0; i < c2r_hLng; i++)
-	{
-		c2r_packHist[i] = 0;
-		c2r_idHist[i] = ' ';
-	}
-	for (int i = 0; i < r2c_hLng; i++)
-	{
-		r2c_packHist[i] = 0;
-		r2c_idHist[i] = ' ';
-	}
 
-	// Initialize last packet and repeat packet array
+	// Initialize c2r stuff
 	for (int i = 0; i < c2r_idLng; i++)
 	{
 		c2r_packLast[i] = 0;
-		c2r_packRepeat[i] = 0;
 		c2r_cntRepeat[i] = 0;
 	}
+
+	// Initialize r2c stuff
 	for (int i = 0; i < r2c_idLng; i++)
 	{
 		r2c_packLast[i] = 0;
+		r2c_datLast[i] = 0;
 	}
 
 	// Initialize r2a stuff
 	for (int i = 0; i < r2a_idLng; i++)
 	{
-		r2a_doRcvCheck[i] = false;
+		r2a_doRcvdCheck[i] = false;
 		r2a_sendTim[i] = 0;
 		r2a_packLast[i] = 0;
 		r2a_datLast[i] = 0;
@@ -2303,8 +2320,8 @@ void setup() {
 	// IR prox left
 	attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 	// IR detector
-	uint32_t check_ir = millis() + 500;
-	while (digitalRead(pin_IRdetect) == HIGH && check_ir < millis());
+	uint32_t t_check_ir = millis() + 500;
+	while (digitalRead(pin_IRdetect) == HIGH && t_check_ir < millis());
 	if (digitalRead(pin_IRdetect) == LOW)
 		attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
 
@@ -2321,11 +2338,11 @@ void loop() {
 	cnt_loop++;
 
 	// Store every 10 thousand loops
-	if (fc_isStreaming && cnt_loop % 10000 == 0) {
+	if (cnt_loop % 10000 == 0) {
 		// Print loop count and dt
 		static uint32_t t_loop_last = millis();
 		char chr[50];
-		sprintf(chr, "LOOP %d: dt=%d", cnt_loop, millis() - t_loop_last);
+		sprintf(chr, "LOOP %d: dt=%lu", cnt_loop, millis() - t_loop_last);
 		DebugFlow(chr);
 		// Store loop time
 		t_loop_last = millis();
@@ -2354,7 +2371,7 @@ void loop() {
 		ClearLCD();
 
 		// Reset volatiles
-		intrpt_doIRhardStop = false;
+		t_doIRhardStop = false;
 		intrpt_doLogIR = false;
 
 		// Print ad board status
@@ -2520,19 +2537,19 @@ void loop() {
 		if (msg_setupCmd[1] == 0)
 		{
 			// No sound
-			Store4_Ard('s', 0);
+			StorePacketData('a', 's', 0);
 			DebugFlow("NO SOUND");
 		}
 		else if (msg_setupCmd[1] == 1)
 		{
 			// Use white noise only
-			Store4_Ard('s', 1);
+			StorePacketData('a', 's', 1);
 			DebugFlow("DONT DO TONE");
 		}
 		else
 		{
 			// Use white and reward noise
-			Store4_Ard('s', 2);
+			StorePacketData('a', 's', 2);
 			DebugFlow("DO TONE");
 		}
 
@@ -2554,7 +2571,7 @@ void loop() {
 		t_quitCmd = millis() + 1000;
 
 		// Tell ard to quit
-		Store4_Ard('q');
+		StorePacketData('a', 'q');
 		DebugFlow("DO QUIT");
 
 		// Hold all motor control
@@ -2641,7 +2658,7 @@ void loop() {
 			if (!targ_moveTo.abortMove)
 			{
 				// Tell CS movement is done
-				Store4_CS('D', 255, c2r_packLast[CharInd('M', c2r_id, c2r_idLng)]);
+				StorePacketData('c', 'D', 255, c2r_packLast[ID_Ind('M', c2r_id, c2r_idLng)]);
 
 				// Print success message
 				sprintf(str, "FINISHED MOVE: to=%0.2fcm within=%0.2fcm",
@@ -2659,38 +2676,52 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- (R) RUN REWARD ---
+#pragma region //--- (R/C) RUN REWARD ---
 	if (c2r_msg_id == 'R' && c2r_isNew)
 	{
-		// Compute reward duration
-		if (msg_rewZoneInd != 0)
-			reward.SetRewDur(msg_rewZoneInd);
+		// Set mode
+		reward.SetRewMode("Free", msg_rewDelay);
+
+		// Reward zone
+		char str[100];
+		sprintf(str, "REWARD FREE: pos=%0.2fcm occ_thresh=%dms",
+			msg_rewPos, reward.occThresh);
+		DebugFlow(str);
+		fc_doRew = true;
+	}
+
+	if (c2r_msg_id == 'C' && c2r_isNew)
+	{
+
+		// Cued reward
+		if (msg_rewPos > 0)
+		{
+			// Set mode
+			reward.SetRewMode("Cue", msg_rewZoneInd);
+
+			// Cued reward
+			char str[100];
+			sprintf(str, "REWARD CUED: pos=%0.2fcm occ_thresh=%ldms",
+				msg_rewPos, reward.occThresh);
+			DebugFlow(str);
+			fc_doRew = true;
+		}
 
 		// Imediate reward
-		if (msg_rewPos == 0 && msg_rewZoneInd != 0) {
-			DebugFlow("REWARD NOW");
+		else {
 
-			// Set reward pos to zero
-			reward.SetRewPos(0);
+			// Set mode
+			reward.SetRewMode("Now", msg_rewZoneInd);
+			DebugFlow("REWARD NOW");
 
 			// Start reward
 			fc_isRewarding = reward.StartRew(true, false);
+
 		}
-		// Reward zone
-		else if (msg_rewPos != 0 && msg_rewZoneInd == 0) {
-			DebugFlow("REWARD ZONE");
-			fc_doRew = true;
-		}
-		// Cued reward
-		else if (msg_rewPos != 0 && msg_rewZoneInd != 0) {
-			DebugFlow("REWARD CUED");
-			// Get zone position
-			cuePos = reward.SetRewPos(msg_rewZoneInd, msg_rewPos);
-			fc_doCueReward = true;
-		}
+
 	}
 
-	// ZONE TRIGGERED REWARD
+	// CHECK REWARD BOUNDS
 	if (fc_doRew)
 	{
 		// If not rewarding 
@@ -2701,21 +2732,21 @@ void loop() {
 			{
 				reward.CompZoneBounds(ekfRatPos, msg_rewPos);
 				// Print message
-				char str[50];
+				char str[100];
 				sprintf(str, "SET REWARD ZONE: center=%0.2fcm from=%0.2fcm to=%0.2fcm",
-					reward.rewCenterRel, reward.zoneBounds[0][0], reward.zoneBounds[8][1]);
+					reward.rewCenterRel, reward.boundMin, reward.boundMax);
 				DebugFlow(str);
 			}
 			else if (!reward.isZoneTriggered)
 			{
-				if (reward.CheckZoneBounds(ekfRatPos, ekfRatVel))
+				if (reward.CheckZoneBounds(ekfRatPos))
 				{
 					// Start reward
 					fc_isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
-					sprintf(str, "REWARDED ZONE: zone=%0.2fcm from=%0.2fcm to=%0.2fcm",
-						reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1]);
+					sprintf(str, "REWARDED ZONE: occ=%dms zone=%0.2fcm from=%0.2fcm to=%0.2fcm",
+						reward.occRewarded, reward.zoneRewarded, reward.boundsRewarded[0], reward.boundsRewarded[1]);
 					DebugFlow(str);
 				}
 			}
@@ -2725,72 +2756,15 @@ void loop() {
 				!reward.isZoneTriggered
 				)
 			{
+				// Print reward missed
+				char str[50];
+				sprintf(str, "!!REWARD MISSED!!: rat=%0.2fcm bound_max=%0.2fcm",
+					ekfRatPos, reward.boundMax);
+				DebugFlow(str);
+
 				// Reset flags
 				reward.Reset();
 				fc_doRew = false;
-			}
-		}
-	}
-
-	// CUE REWARD
-	if (fc_doCueReward)
-	{
-		// If not rewarding 
-		if (!reward.isRewarding || !reward.isCueing)
-		{
-
-			// Compute target targ_dist
-			if (!(targ_cueRat.isTargSet && targ_cueRob.isTargSet))
-			{
-				// Compute target targ_dist for rat and robot
-				if (
-					targ_cueRat.CompTarg(ekfRatPos, cuePos, 0) &&
-					targ_cueRob.CompTarg(ekfRobPos, cuePos, -1 * defualtSetPoint)
-					)
-				{
-					// Print message
-					char str[50];
-					sprintf(str, "CUEING REWARD: rat_targ=%0.2fcm rob_targ=%0.2fcm rat_dist=%0.2fcm rob_dist=%0.2fcm",
-						targ_cueRat.offsetTarget, targ_cueRob.offsetTarget, targ_cueRat.targDist, targ_cueRob.targDist);
-					DebugFlow(str);
-				}
-			}
-
-			// Check if cue has been reached
-			if (targ_cueRat.isTargSet && targ_cueRob.isTargSet)
-			{
-				// Check if robot reached targed
-				if (!targ_cueRob.isTargReached)
-				{
-					if (targ_cueRob.CheckTargReached(ekfRobPos, ekfRobVel))
-					{
-						DebugFlow("ROBOT REACHED CUE TARGET");
-						// Hard stop
-						HardStop("MsgC");
-						// Set flag
-						reward.isCueing = true;
-						// Set hold time
-						BlockMotorTill(reward.blockDur, "MsgC");
-					}
-				}
-				// Check if rat reached target
-				if (!targ_cueRat.isTargReached)
-				{
-					if (targ_cueRat.CheckTargReached(ekfRatPos, 0))
-					{
-						DebugFlow("RAT REACHED CUE TARGET");
-						// Trigger reward without stopping
-						fc_isRewarding = reward.StartRew(false, false);
-					}
-				}
-				if (targ_cueRat.isTargReached && targ_cueRob.isTargReached)
-				{
-					// Print message
-					char str[50];
-					sprintf(str, "FINISHED CUEING: rat_targ=%0.2fcm rob_targ=%0.2fcm rat_dist=%0.2fcm rob_dist=%0.2fcm",
-						targ_cueRat.offsetTarget, targ_cueRob.offsetTarget, targ_cueRat.GetError(ekfRatPos), targ_cueRob.GetError(ekfRobPos));
-					DebugFlow(str);
-				}
 			}
 		}
 	}
@@ -2922,7 +2896,7 @@ void loop() {
 	// Check for streaming
 	if (fc_doStreamCheck && fc_isStreaming)
 	{
-		Store4_CS('D', 255, c2r_packLast[CharInd('V', c2r_id, c2r_idLng)]);
+		StorePacketData('c', 'D', 255, c2r_packLast[ID_Ind('V', c2r_id, c2r_idLng)]);
 		fc_doStreamCheck = false;
 		DebugFlow("STREAMING CONFIRMED");
 	}
@@ -2938,7 +2912,7 @@ void loop() {
 	if (fc_doCheckDoneRcvd && millis() > t_resendDone)
 	{
 		// Resend done confirmation
-		Store4_CS('D', 255, r2c_packLast[CharInd('D', r2c_id, r2c_idLng)]);
+		StorePacketData('c', 'D', 255, r2c_packLast[ID_Ind('D', r2c_id, r2c_idLng)]);
 		// Send again after 1 sec
 		t_resendDone = millis() + 1000;
 		DebugFlow("RESENT 'D'");
@@ -2951,11 +2925,11 @@ void loop() {
 		// Update vt pos data
 		if (msg_vtEnt == 0)
 		{
-			pos_ratVT.UpdatePos(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
+			pos_ratVT.UpdatePos(msg_vtCM[msg_vtEnt], t_msg_vtTS[msg_vtEnt]);
 		}
 		else
 		{
-			pos_robVT.UpdatePos(msg_vtCM[msg_vtEnt], msg_vtTS[msg_vtEnt]);
+			pos_robVT.UpdatePos(msg_vtCM[msg_vtEnt], t_msg_vtTS[msg_vtEnt]);
 		}
 	}
 #pragma endregion
@@ -2984,7 +2958,7 @@ void loop() {
 		else
 		{
 			// Send confirm done
-			Store4_CS('D', 255, c2r_packLast[CharInd('L', c2r_id, c2r_idLng)]);
+			StorePacketData('c', 'D', 255, c2r_packLast[ID_Ind('L', c2r_id, c2r_idLng)]);
 			DebugFlow("LOG SEND COMPLETE");
 			fc_doLogSend = false;
 			fc_isSendingLog = false;
@@ -3029,10 +3003,10 @@ void loop() {
 	}
 
 	// IR triggered halt
-	if (intrpt_doIRhardStop)
+	if (t_doIRhardStop)
 	{
 		Function_IRprox_Halt();
-		intrpt_doIRhardStop = false;
+		t_doIRhardStop = false;
 	}
 
 	// Log new ir events
@@ -3097,15 +3071,12 @@ void loop() {
 	{
 		if (reward.EndRew())
 		{
-			// Reset flags
-			targ_cueRat.Reset();
-			targ_cueRob.Reset();
 			fc_doRew = false;
-			fc_doCueReward = false;
 			fc_isRewarding = false;
 
 			// Tell CS what zone was rewarded
-			Store4_CS('Z', reward.zoneIndByte, 0);
+			if (reward.mode != "Now")
+				StorePacketData('c', 'Z', reward.zoneIndByte, 0);
 		}
 	}
 
@@ -3169,6 +3140,7 @@ bool ParseC2R()
 	// Local vars
 	bool pass = false;
 	byte buff = 0;
+	uint16_t pack = 0;
 	char foot = ' ';
 	c2r_msg_id == ' ';
 
@@ -3231,6 +3203,23 @@ bool ParseC2R()
 		msg_rewPos = u.f;
 
 		// Get reward diration 
+		msg_rewDelay = WaitBuffRead();
+	}
+
+	// Get Cue data
+	if (c2r_msg_id == 'C')
+	{
+		// Reset buffer
+		u.f = 0.0f;
+
+		// Get stop pos
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
+		msg_rewPos = u.f;
+
+		// Get reward diration 
 		msg_rewZoneInd = WaitBuffRead();
 	}
 
@@ -3279,7 +3268,7 @@ bool ParseC2R()
 		{
 			u.b[i] = WaitBuffRead();
 		}
-		msg_vtTS[msg_vtEnt] = u.i32;
+		t_msg_vtTS[msg_vtEnt] = u.i32;
 		// Get pos cm
 		u.f = 0.0f;
 		for (int i = 0; i < 4; i++)
@@ -3293,7 +3282,7 @@ bool ParseC2R()
 	u.f = 0.0f;
 	u.b[0] = WaitBuffRead();
 	u.b[1] = WaitBuffRead();
-	packNow = u.i16[0];
+	pack = u.i16[0];
 
 	// Check for footer
 	u.f = 0.0f;
@@ -3319,11 +3308,11 @@ bool ParseC2R()
 			fc_isStreaming = true;
 
 			// send sync start cmd to ard
-			Store4_Ard('t');
+			StorePacketData('a', 't');
 		}
 
 		// Process packet number
-		pass = CheckPack(c2r_msg_id, packNow);
+		pass = CheckPack(c2r_msg_id, pack);
 
 	}
 
@@ -3340,6 +3329,7 @@ void ParseA2R()
 	char foot = ' ';
 	char id = ' ';
 	uint16_t pack = 0;
+	int id_ind = 0;
 
 	// get id
 	u.f = 0.0f;
@@ -3359,11 +3349,11 @@ void ParseA2R()
 
 	// Update sent history
 	if (foot == a2r_foot) {
-		int id_ind = CharInd(id, r2a_id, r2a_idLng);
+		id_ind = ID_Ind(id, r2a_id, r2a_idLng);
 		if (id_ind != -1)
 		{
 			// Reset flags
-			r2a_doRcvCheck[id_ind] = false;
+			r2a_doRcvdCheck[id_ind] = false;
 
 			// Store revieved pack details
 			DebugRcvd('a', id, pack);
@@ -3383,7 +3373,7 @@ byte WaitBuffRead(char chr1)
 byte WaitBuffRead(char chr1, char chr2)
 {
 	// Local vars
-	static uint32_t timeout = 100;
+	static int timeout = 100;
 	uint32_t t_timeout = millis() + timeout;
 	byte buff = 0;
 	bool pass = false;
@@ -3467,11 +3457,16 @@ byte WaitBuffRead(char chr1, char chr2)
 bool CheckPack(char id, uint16_t pack)
 {
 	// Local vars
+	static uint16_t pack_last = 0;
 	bool pass = false;
 	int pack_diff = 0;
+	int pack_tot = 0;
 	int dropped_packs = 0;
 	bool do_use_pack = false;
 	int id_ind = 0;
+	
+	// Get id ind
+	id_ind = ID_Ind(id, c2r_id, c2r_idLng);
 
 	// SEND AND PRINT PACKET CONFIRMATON
 	if (id != 'P')
@@ -3483,47 +3478,38 @@ bool CheckPack(char id, uint16_t pack)
 		if (id != 'Y')
 		{
 			// Send revieved pack
-			Store4_CS(id, 255, pack);
+			StorePacketData('c', id, 255, pack);
 		}
-	}
-
-	// Update packet history
-	if (id != 'P')
-	{
-		for (int i = 0; i < c2r_hLng - 1; i++)
-		{
-			c2r_packHist[i] = c2r_packHist[i + 1];
-			c2r_idHist[i] = c2r_idHist[i + 1];
-		}
-		c2r_packHist[c2r_hLng - 1] = pack;
-		c2r_idHist[c2r_hLng - 1] = id;
 	}
 
 	// CHECK FOR DROPPED PACKETS
-	pack_diff = (int)(pack - packLast);
+	pack_diff = (int)(pack - pack_last);
 
 	if (pack_diff > 0)
 	{
 		// Save packet and set to process
-		packLast = pack;
+		pack_last = pack;
 
 		// Check for dropped packet
-		packTot += pack_diff;
+		pack_tot += pack_diff;
 		dropped_packs = pack_diff - 1;
 		// print dropped packs
 		if (dropped_packs > 0)
 		{
 			cnt_droppedPacks += dropped_packs;
-			DebugDropped(dropped_packs, cnt_droppedPacks, packTot);
+			DebugDropped(dropped_packs, cnt_droppedPacks, pack_tot);
 		}
 
 	}
 
 	// CHECK IF NEW PACK
-	if (c2r_packLast[CharInd(id, c2r_id, c2r_idLng)] != pack)
+	if (c2r_packLast[id_ind] != pack)
 	{
 		// Update last packet
-		c2r_packLast[CharInd(id, c2r_id, c2r_idLng)] = pack;
+		c2r_packLast[id_ind] = pack;
+
+		// Reset count
+		c2r_cntRepeat[id_ind] = 0;
 
 		// Pack should be used
 		do_use_pack = true;
@@ -3534,121 +3520,35 @@ bool CheckPack(char id, uint16_t pack)
 		// Do not reuse pack
 		do_use_pack = false;
 
-		// Loop through pack history
-		for (int i = 0; i < c2r_hLng - 1; i++)
-		{
-			if (pack == c2r_packHist[i])
-			{
+		// Itterate count
+		c2r_cntRepeat[id_ind]++;
 
-				// Make sure packet history corresponds to current id
-				if (c2r_idHist[i] == id)
-				{
+		// Print dropped packets
+		DebugResent(id, pack, c2r_cntRepeat[id_ind]);
 
-					// Get list index
-					id_ind = CharInd(c2r_idHist[i], c2r_id, c2r_idLng);
-
-					// Check caught pack is what we have stored
-					if (c2r_packRepeat[id_ind] != pack)
-					{
-						// reset count
-						c2r_cntRepeat[id_ind] = 1;
-						// update stored packet
-						c2r_packRepeat[id_ind] = c2r_packHist[i];
-					}
-					// itterate count
-					else
-					{
-						c2r_cntRepeat[id_ind]++;
-						cnt_packResend++;
-					}
-
-					if (c2r_cntRepeat[id_ind] > 0)
-					{
-						DebugResent(id, c2r_packRepeat[id_ind], c2r_cntRepeat[id_ind]);
-					}
-				}
-			}
-		}
 	}
 
 	// Packet not found in hist so process
 	return do_use_pack;
 }
 
-// STORE BYTE SERIAL DATA FOR CS
-void Store4_CS(char id, byte d1, uint16_t pack)
+// STORE PACKET DATA TO BE SENT
+void StorePacketData(char targ, char id)
 {
-	/*
-	STORE DATA FOR CS
-	FORMAT: head, id, data, packet num, footer
-	*/
-
-	// Local vars
-	int queue_ind = sendQueueInd;
-
-	// Update queue index
-	sendQueueInd--;
-
-	// Store reciever id in last col
-	r2_queue[queue_ind][6] = 'c';
-
-	// Store header
-	u.f = 0.0f;
-	u.c[0] = r2c_head;
-	r2_queue[queue_ind][0] = u.b[0];
-	// Store mesage id
-	u.f = 0.0f;
-	u.c[0] = id;
-	r2_queue[queue_ind][1] = u.b[0];
-	// Store mesage data 
-	r2_queue[queue_ind][2] = d1;
-	// Store packet number
-	u.f = 0.0f;
-	u.i16[0] = pack;
-	r2_queue[queue_ind][3] = u.b[0];
-	r2_queue[queue_ind][4] = u.b[1];
-	// Store footer
-	u.f = 0.0f;
-	u.c[0] = r2c_foot;
-	r2_queue[queue_ind][5] = u.b[0];
-
-
-	// Set to send
-	doPackSend = true;
-
-	// Update last packet array
-	r2c_packLast[CharInd(id, r2c_id, r2c_idLng)] = pack;
-
-	// Update packet history 
-	for (int i = 0; i < r2c_hLng - 1; i++)
-	{
-		// shift old values back
-		r2c_packHist[i] = r2c_packHist[i + 1];
-		r2c_idHist[i] = r2c_idHist[i + 1];
-	}
-	r2c_packHist[r2c_hLng - 1] = pack;
-	r2c_idHist[r2c_hLng - 1] = id;
-
-	// Check for done id
-	if (id == 'D')
-	{
-		// Set to check for done recieved
-		fc_doCheckDoneRcvd = true;
-		// Send done recieved request after 1 sec
-		t_resendDone = millis() + 1000;
-	}
+	bool conf = targ == 'a' ? true : false;
+	StorePacketData(targ, id, 255, 0, conf);
 }
-
-// STORE BYTE SERIAL DATA FOR ARD
-void Store4_Ard(char id)
+void StorePacketData(char targ, char id, byte d1)
 {
-	Store4_Ard(id, 255, 0);
+	bool conf = targ == 'a' ? true : false;
+	StorePacketData(targ, id, d1, 0, conf);
 }
-void Store4_Ard(char id, byte d1)
+void StorePacketData(char targ, char id, byte d1, uint16_t pack)
 {
-	Store4_Ard(id, d1, 0);
+	bool conf = targ == 'a' ? true : false;
+	StorePacketData(targ, id, d1, pack, conf);
 }
-void Store4_Ard(char id, byte d1, uint16_t pack)
+void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -3656,21 +3556,65 @@ void Store4_Ard(char id, byte d1, uint16_t pack)
 	*/
 
 	// Local vars
-	int queue_ind = r2_lngR - 1;
+	int queue_ind = 0;
+	char head = ' ';
+	char foot = ' ';
+	int id_ind = 0;
 
-	// Itterate packet
-	if (pack == 0)
+	// Store r2a data
+	if (targ == 'a')
 	{
-		r2a_packCnt++;
-		pack = r2a_packCnt;
+		// Shift data back so ard msg is first in queue
+		for (int i = 0; i < r2_lngR - 1; i++)
+		{
+			for (int j = 0; j < r2_lngC; j++)
+			{
+				r2_queue[i][j] = r2_queue[i + 1][j];
+			}
+		}
+
+		// Set queue ind to front
+		queue_ind = r2_lngR - 1;
+
+		// Itterate r2a packet number
+		if (pack == 0)
+		{
+			r2a_packCnt++;
+			pack = r2a_packCnt;
+		}
+
+		// Store header and footer
+		head = r2a_head;
+		foot = r2a_foot;
+
+		// Update last packet arrays
+		id_ind = ID_Ind(id, r2a_id, r2a_idLng);
+		r2a_datLast[id_ind] = d1;
+		r2a_packLast[id_ind] = pack;
 	}
 
-	// Shift data back so ard msg is first in queue
-	for (int i = 0; i < r2_lngR - 1; i++)
+	// Store r2c data
+	else if (targ == 'c')
 	{
-		for (int j = 0; j < r2_lngC; j++)
+		// Set queue ind to back
+		queue_ind = sendQueueInd;
+
+		// Store header and footer
+		head = r2c_head;
+		foot = r2c_foot;
+
+		// Update last packet arrays
+		id_ind = ID_Ind(id, r2c_id, r2c_idLng);
+		r2c_datLast[id_ind] = d1;
+		r2c_packLast[id_ind] = pack;
+
+		// Check for done id
+		if (id == 'D')
 		{
-			r2_queue[i][j] = r2_queue[i + 1][j];
+			// Set to check for done recieved
+			fc_doCheckDoneRcvd = true;
+			// Send done recieved request after 1 sec
+			t_resendDone = millis() + 1000;
 		}
 	}
 
@@ -3678,11 +3622,11 @@ void Store4_Ard(char id, byte d1, uint16_t pack)
 	sendQueueInd--;
 
 	// Store reciever id in last col
-	r2_queue[queue_ind][6] = 'a';
+	r2_queue[queue_ind][r2_lngC - 1] = targ;
 
 	// Store header
 	u.f = 0.0f;
-	u.c[0] = r2a_head;
+	u.c[0] = head;
 	r2_queue[queue_ind][0] = u.b[0];
 	// Store mesage id
 	u.f = 0.0f;
@@ -3695,15 +3639,12 @@ void Store4_Ard(char id, byte d1, uint16_t pack)
 	u.i16[0] = pack;
 	r2_queue[queue_ind][3] = u.b[0];
 	r2_queue[queue_ind][4] = u.b[1];
+	// Store confirm request
+	r2_queue[queue_ind][5] = conf ? 1 : 0;
 	// Store footer
 	u.f = 0.0f;
-	u.c[0] = r2a_foot;
-	r2_queue[queue_ind][5] = u.b[0];
-
-	// Store sent message data
-	int id_ind = CharInd(id, r2a_id, r2a_idLng);
-	r2a_datLast[id_ind] = d1;
-	r2a_packLast[id_ind] = pack;
+	u.c[0] = foot;
+	r2_queue[queue_ind][6] = u.b[0];
 
 	// Set to send
 	doPackSend = true;
@@ -3716,12 +3657,13 @@ void SendPacketData()
 	// Local vars
 	const int msg_size = r2_lngC - 1;
 	static byte msg[msg_size];
-	char rcv_id = ' ';
+	char targ = ' ';
 	bool do_send = false;
 	int buff_tx = 0;
 	int buff_rx = 0;
 	char id = ' ';
 	byte dat = 0;
+	bool conf = 0;
 	uint16_t pack = 0;
 
 	// Get total data in buffers
@@ -3730,7 +3672,7 @@ void SendPacketData()
 
 	// save msg id and reviever id
 	id = r2_queue[r2_lngR - 1][1];
-	rcv_id = r2_queue[r2_lngR - 1][6];
+	targ = r2_queue[r2_lngR - 1][r2_lngC - 1];
 
 	// Move next in queue to temp msg array
 	for (int j = 0; j < msg_size; j++)
@@ -3745,8 +3687,8 @@ void SendPacketData()
 		do_send = true;
 	}
 	// Avoid overlap between sent or rcvd events
-	else if (millis() > t_sent + sendSentDel &&
-		millis() > t_rcvd + sendRcvdDel)
+	else if (millis() > t_sent + dt_sendSent &&
+		millis() > t_rcvd + dt_sendRcvd)
 	{
 		do_send = true;
 	}
@@ -3765,11 +3707,11 @@ void SendPacketData()
 		t_sent = millis();
 
 		// Set flags for r2a comm
-		if (rcv_id == 'a')
+		if (targ == 'a')
 		{
-			int id_ind = CharInd(id, r2a_id, r2a_idLng);
+			int id_ind = ID_Ind(id, r2a_id, r2a_idLng);
 			r2a_sendTim[id_ind] = t_sent;
-			r2a_doRcvCheck[id_ind] = true;
+			r2a_doRcvdCheck[id_ind] = true;
 		}
 
 		// Update queue index
@@ -3796,15 +3738,13 @@ void SendPacketData()
 		}
 
 		// Print
-		if (
-			(((doPrint_r2c && rcv_id == 'c') ||
-			(doPrint_r2a && rcv_id == 'a')) &&
-				(doDB_PrintConsole || doDB_PrintLCD))
-			||
-			(((doLog_r2c && rcv_id == 'c') ||
-			(doLog_r2a && rcv_id == 'a')) &&
-				doDB_Log)
-			)
+		bool do_print = ((doPrint_r2c && targ == 'c') ||
+			(doPrint_r2a && targ == 'a')) &&
+			(doDB_PrintConsole || doDB_PrintLCD);
+		bool do_log = ((doLog_r2c && targ == 'c') ||
+			(doLog_r2a && targ == 'a')) &&
+			doDB_Log;
+		if (do_print || do_log)
 		{
 			// Store dat
 			dat = msg[2];
@@ -3813,22 +3753,18 @@ void SendPacketData()
 			u.b[0] = msg[3];
 			u.b[1] = msg[4];
 			pack = u.i16[0];
+			// Store conf 
+			conf = msg[5] == 1 ? true : false;
+
+			// Make string
+			char str[50];
+			sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d conf=%s", targ, id, dat, pack, conf ? "true" : "false");
 
 			// Store
-			char str[50];
-			if (
-				((doDB_PrintConsole || doDB_PrintLCD) &&
-				((doPrint_r2c && rcv_id == 'c') ||
-				(doPrint_r2a && rcv_id == 'a')))
-				||
-				(doDB_Log &&
-				((doLog_r2c && rcv_id == 'c') ||
-					(doLog_r2a && rcv_id == 'a')))
-				)
-			{
-				sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d", rcv_id, id, dat, pack);
+			if (do_print)
 				StoreDBPrintStr(str, t_sent);
-			}
+			if (do_log)
+				StoreDBLogStr(str, t_sent);
 
 		}
 
@@ -3854,8 +3790,8 @@ void SendLogData()
 
 
 	// Avoid overlap between sent or rcvd events
-	if (millis() > t_sent + logSentDel &&
-		millis() > t_rcvd + logRcvdDel)
+	if (millis() > t_sent + dt_logSent &&
+		millis() > t_rcvd + dt_logRcvd)
 	{
 		do_send = true;
 	}
@@ -3924,14 +3860,14 @@ bool CheckArdResend()
 	for (int i = 0; i < r2a_idLng; i++)
 	{
 		if (
-			r2a_doRcvCheck[i] &&
+			r2a_doRcvdCheck[i] &&
 			millis() > r2a_sendTim[i] + r2a_resendDel
 			)
 		{
 			if (r2a_resendCnt[i] < r2a_resendMax) {
 
 				// Resend data
-				Store4_Ard(r2a_id[i], r2a_datLast[i], r2a_packLast[i]);
+				StorePacketData('a', r2a_id[i], r2a_datLast[i], r2a_packLast[i]);
 
 				// Update count
 				r2a_resendCnt[i]++;
@@ -3939,11 +3875,11 @@ bool CheckArdResend()
 
 				// Set flags
 				do_pack_resend = true;
-				r2a_doRcvCheck[i] = false;
+				r2a_doRcvdCheck[i] = false;
 			}
 			// Com likely down
 			else {
-				r2a_doRcvCheck[i] = false;
+				r2a_doRcvdCheck[i] = false;
 			}
 		}
 	}
@@ -4031,20 +3967,15 @@ bool SetMotorControl(String set_to, String called_from)
 		// Cannot unset "None" unless certain conditions met
 		if (fc_motorControl == "None")
 		{
-			if (!fc_isBlockingTill)
+			// Can still move robot if rat not in
+			if (
+				set_to == "MoveTo" &&
+				!fc_isRatIn
+				)
 			{
-				// Can set to "MoveTo" 
-				if (set_to == "MoveTo")
-				{
-					fc_motorControl = set_to;
-				}
-				// Can set to open if tracking setup
-				else if (set_to == "Open" &&
-					fc_isTrackingEnabled)
-				{
-					fc_motorControl = set_to;
-				}
+				fc_motorControl = set_to;
 			}
+
 			// CheckBlockTimElapsed can unblock if tracking setup
 			else if (
 				fc_isTrackingEnabled &&
@@ -4061,7 +3992,8 @@ bool SetMotorControl(String set_to, String called_from)
 			}
 
 		}
-		// "MoveTo" can only be set to "Open"
+
+		// "MoveTo" can only be set to "Open" or "None"
 		else if (fc_motorControl == "MoveTo")
 		{
 			if (set_to == "Open")
@@ -4069,6 +4001,7 @@ bool SetMotorControl(String set_to, String called_from)
 				fc_motorControl = set_to;
 			}
 		}
+
 		// "Bull" can only be set to "MoveTo" or "Open"
 		else if (fc_motorControl == "Bull")
 		{
@@ -4077,11 +4010,13 @@ bool SetMotorControl(String set_to, String called_from)
 				fc_motorControl = set_to;
 			}
 		}
+
 		// Otherwise can set to anything
 		else if (fc_motorControl == "Open" || fc_motorControl == "PID")
 		{
 			fc_motorControl = set_to;
 		}
+
 	}
 
 	// Return true if set to input
@@ -4097,13 +4032,13 @@ bool SetMotorControl(String set_to, String called_from)
 }
 
 // BLOCK MOTOR TILL TIME ELLAPESED
-void BlockMotorTill(uint32_t dt, String called_from)
+void BlockMotorTill(int dt, String called_from)
 {
 	// Set blocking and time
 	fc_isBlockingTill = true;
 
 	// Update time to hold till
-	blockDurTill = millis() + dt;
+	dt_blockMotor = millis() + dt;
 
 	// Remove all motor controll
 	SetMotorControl("None", "BlockMotorTill");
@@ -4125,7 +4060,7 @@ void CheckBlockTimElapsed()
 			pos_ratPixy.posNow - (ekfRobPos + feedDist) > 0;
 
 		// Check for time elapsed or rat moved at least 3cm past feeder
-		if (millis() > blockDurTill || passed_feeder)
+		if (millis() > dt_blockMotor || passed_feeder)
 		{
 			// Print blocking finished
 			DebugMotorBocking("finished blocking motor: tim=", millis(), "CheckBlockTimElapsed");
@@ -4224,18 +4159,18 @@ void CheckSampDT() {
 	{
 
 		// Local vars
-		uint32_t max_frame_dt = 100;
-		uint32_t vt_dt = 0;
-		uint32_t pixy_dt = 0;
+		int dt_max_frame = 100;
+		int dt_vt = 0;
+		int dt_pixy = 0;
 
 		// Compute dt
-		vt_dt = millis() - pos_ratVT.t_msNow;
-		pixy_dt = millis() - pos_ratPixy.t_msNow;
+		dt_vt = millis() - pos_ratVT.t_msNow;
+		dt_pixy = millis() - pos_ratPixy.t_msNow;
 
 		// Check pixy
 		if (
-			pixy_dt >= max_frame_dt &&
-			vt_dt < pixy_dt
+			dt_pixy >= dt_max_frame &&
+			dt_vt < dt_pixy
 			)
 		{
 			// Use VT for Pixy data
@@ -4243,8 +4178,8 @@ void CheckSampDT() {
 		}
 		// Check VT 
 		else if (
-			vt_dt >= max_frame_dt &&
-			pixy_dt < vt_dt
+			dt_vt >= dt_max_frame &&
+			dt_pixy < dt_vt
 			)
 		{
 			// Use Pixy for VT data
@@ -4261,7 +4196,7 @@ void UpdatePixyPos() {
 	// Local vars
 	float px_rel = 0;
 	double px_abs = 0;
-	uint32_t px_ts = 0;
+	uint32_t t_px_ts = 0;
 	double pixy_pos_y = 0;
 
 	// Get new blocks
@@ -4272,7 +4207,7 @@ void UpdatePixyPos() {
 	{
 
 		// Save time stamp
-		px_ts = millis();
+		t_px_ts = millis();
 
 		// Get Y pos from last block and convert to CM
 		pixy_pos_y = pixy.blocks[blocks - 1].y;
@@ -4290,7 +4225,7 @@ void UpdatePixyPos() {
 			px_abs = px_abs - (140 * PI);
 		}
 		// Update pixy pos and vel
-		pos_ratPixy.UpdatePos((float)px_abs, px_ts);
+		pos_ratPixy.UpdatePos((float)px_abs, t_px_ts);
 
 	}
 
@@ -4342,6 +4277,14 @@ void UpdateEKF()
 		ekfRatVel = ekf.getX(2);
 		ekfRobVel = ekf.getX(3);
 		ekfSetPos = ekfRobPos + pid.setPoint;
+
+		// Check for nan values
+		if (isnan(ekfRatPos) || isnan(ekfRobPos) || isnan(ekfRatVel) || isnan(ekfRobVel)) {
+			char chr[50];
+			sprintf(chr, "!! \"nan\" EKF OUTPUT: ratVT.pos=%0.2f ratPixy.pos=%0.2f robVT.pos=%0.2f ratVT.vel=%0.2f ratPixy.vel=%0.2f robVT.vel=%0.2f !!",
+				pos_ratVT.posNow, pos_ratPixy.posNow, pos_robVT.posNow, pos_ratVT.velNow, pos_ratPixy.velNow, pos_robVT.velNow);
+			DebugFlow(chr);
+		}
 
 	}
 }
@@ -4408,7 +4351,7 @@ void CheckEtOH()
 	{
 		if (
 			!isEtOHOpen &&
-			(millis() > (t_etoh_start + t_delEtOH) || etoh_dist_diff > distMaxEtOH)
+			(millis() > (t_etoh_start + dt_delEtOH) || etoh_dist_diff > distMaxEtOH)
 			)
 		{
 
@@ -4427,7 +4370,7 @@ void CheckEtOH()
 		}
 		else if (
 			isEtOHOpen &&
-			millis() > (t_etoh_start + t_durEtOH)
+			millis() > (t_etoh_start + dt_durEtOH)
 			)
 		{
 			// Close solenoid
@@ -4478,7 +4421,7 @@ void CheckBattery()
 
 		// Add to queue if streaming established
 		if (fc_isStreaming)
-			Store4_CS('J', byte_out, 0);
+			StorePacketData('c', 'J', byte_out, 0);
 
 		char str[50];
 		sprintf(str, "VCC: %0.2fV", volt_avg);
@@ -4508,8 +4451,8 @@ void CheckButtons()
 	// Local vars
 	static bool is_pressed[3] = { false, false, false };
 	static uint32_t t_debounce[3] = { millis() + 1000, millis() + 1000, millis() + 1000 };
-	static uint32_t t_long_hold[3] = { 0, 0, 0 };
-	static uint32_t long_hold_del = 500;
+	static int dt_hold[3] = { 0, 0, 0 };
+	static int dt_long_hold = 500;
 	int btn_ind = 0;
 
 	// RUN BUTTON 1 OPPERATIONS (Trigger reward)
@@ -4540,7 +4483,7 @@ void CheckButtons()
 		if (t_debounce[btn_ind] > millis()) return;
 
 		// Get long hold time
-		t_long_hold[btn_ind] = millis() + long_hold_del;
+		dt_hold[btn_ind] = millis() + dt_long_hold;
 
 		// Set flag
 		is_pressed[btn_ind] = true;
@@ -4551,9 +4494,9 @@ void CheckButtons()
 		// short hold
 		bool is_short_hold =
 			digitalRead(pin_Btn[btn_ind]) == HIGH &&
-			millis() < t_long_hold[btn_ind];
+			millis() < dt_hold[btn_ind];
 		// long hold
-		bool is_long_hold = millis() > t_long_hold[btn_ind];
+		bool is_long_hold = millis() > dt_hold[btn_ind];
 
 		// Check for either condition
 		if (is_short_hold || is_long_hold) {
@@ -4571,7 +4514,7 @@ void CheckButtons()
 			}
 
 			// Reset flags
-			t_long_hold[btn_ind] = 0;
+			dt_hold[btn_ind] = 0;
 			is_pressed[btn_ind] = false;
 		}
 
@@ -4638,7 +4581,7 @@ void DebugMotorBocking(String msg, uint32_t t, String called_from)
 		)
 	{
 		char chr[50];
-		sprintf(chr, " %d ms ", t);
+		sprintf(chr, " %lu ms ", t);
 		String str;
 		str = msg + chr + " [" + called_from + "]";
 
@@ -4736,6 +4679,10 @@ void DebugRcvd(char from, char id, uint16_t pack)
 		}
 		else if (id == 'R')
 		{
+			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewDelay, pack);
+		}
+		else if (id == 'C')
+		{
 			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewZoneInd, pack);
 		}
 		else if (id == 'H')
@@ -4772,7 +4719,7 @@ void DebugRcvd(char from, char id, uint16_t pack)
 }
 
 // LOG/PRING IR SENSOR EVENT
-void DebugIRSync(String msg, uint32_t ts)
+void DebugIRSync(String msg, uint32_t t)
 {
 	if (
 		(doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4781,10 +4728,10 @@ void DebugIRSync(String msg, uint32_t ts)
 	{
 		// Add to print queue
 		if (doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(msg, ts);
+			StoreDBPrintStr(msg, t);
 		// Add to log queue
 		if (doLog_irSync && doDB_Log)
-			StoreDBLogStr(msg, ts);
+			StoreDBLogStr(msg, t);
 	}
 }
 
@@ -4793,7 +4740,7 @@ void DebugFlow(String msg)
 {
 	DebugFlow(msg, millis());
 }
-void DebugFlow(String msg, uint32_t ts)
+void DebugFlow(String msg, uint32_t t)
 {
 	if (
 		(doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD)) ||
@@ -4802,22 +4749,22 @@ void DebugFlow(String msg, uint32_t ts)
 	{
 		// Add to print queue
 		if (doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD))
-			StoreDBPrintStr(msg, millis());
+			StoreDBPrintStr(msg, t);
 		// Add to log queue
 		if (doLog_flow && doDB_Log)
-			StoreDBLogStr(msg, millis());
+			StoreDBLogStr(msg, t);
 	}
 }
 
 // STORE STRING FOR PRINTING
-void StoreDBPrintStr(String msg, uint32_t ts)
+void StoreDBPrintStr(String msg, uint32_t t)
 {
 	// Local vars
 	static String last_msg = " ";
-	static uint32_t t_last = millis();
-	char t_str_long[50];
-	char t_str_ellapsed[50];
-	uint32_t ts_norm = 0;
+	static uint32_t t_ts_last = millis();
+	char t_str_long[200];
+	char t_str_ellapsed[200];
+	uint32_t t_ts_norm = 0;
 	float t_c = 0;
 	float t_ellapsed = 0;
 
@@ -4828,14 +4775,14 @@ void StoreDBPrintStr(String msg, uint32_t ts)
 		last_msg = msg;
 
 		// Time now
-		ts_norm = t_sync == 0 ? ts : ts - t_sync;
+		t_ts_norm = t_sync == 0 ? t : t - t_sync;
 
 		// Total time
-		t_c = (float)(ts_norm) / 1000.0f;
+		t_c = (float)(t_ts_norm) / 1000.0f;
 
 		// Ellapsed time
-		t_ellapsed = (float)((millis() - t_last) / 1000.0f);
-		t_last = millis();
+		t_ellapsed = (float)((millis() - t_ts_last) / 1000.0f);
+		t_ts_last = millis();
 
 		// Save long and short string
 		sprintf(t_str_long, "[%0.2fs]", t_c);
@@ -4864,16 +4811,17 @@ void StoreDBPrintStr(String msg, uint32_t ts)
 }
 
 // STORE STRING FOR LOGGING
-void StoreDBLogStr(String msg, uint32_t ts)
+void StoreDBLogStr(String msg, uint32_t t)
 {
 	// Local vars
 	static String last_msg = " ";
-	char str_c[100];
-	char msg_c[100];
-	uint32_t ts_norm = 0;
+	char str_c[200];
+	char msg_c[200];
+	uint32_t t_ts_norm = 0;
 
 	// Dont store repeated string or log data while sending log
 	if (
+		fc_isStreaming &&
 		!fc_isSendingLog &&
 		msg != last_msg
 		)
@@ -4886,18 +4834,24 @@ void StoreDBLogStr(String msg, uint32_t ts)
 		cnt_logStore++;
 
 		// Check for overflow 
-		if (cnt_logStore < logLng)
+		if (
+			cnt_logStore < logLng &&
+			logByteTrack <= logByteMax
+			)
 		{
 			// Concatinate ts with message
-			msg.toCharArray(str_c, 100);
-			sprintf(msg_c, "[%d],%d,%s", cnt_logStore, ts, str_c);
+			msg.toCharArray(str_c, 200);
+			sprintf(msg_c, "[%d],%lu,%s", cnt_logStore, t, str_c);
 			logList[cnt_logStore - 1] = msg_c;
+
+			// Update byte count
+			logByteTrack += logList[cnt_logStore - 1].length();
 		}
 		// Log if full
 		else
 		{
 			// Store final message
-			sprintf(msg_c, "[%d],%d,!!LOG FULL!!", cnt_logStore, ts, str_c);
+			sprintf(msg_c, "[%d],%lu,!!LOG FULL: bytes=%d!!", cnt_logStore, t, logByteTrack);
 			logList[cnt_logStore - 1] = msg_c;
 
 			// Set flag to stop logging
@@ -4911,8 +4865,8 @@ void PrintDebug()
 {
 
 	// Avoid overlap between sent or rcvd events
-	if (millis() < t_sent + sendSentDel ||
-		millis() < t_rcvd + sendRcvdDel)
+	if (millis() < t_sent + dt_sendSent ||
+		millis() < t_rcvd + dt_sendRcvd)
 	{
 		return;
 	}
@@ -5036,7 +4990,7 @@ void ClearLCD()
 #pragma region --------MINOR FUNCTIONS---------
 
 // GET ID INDEX
-int CharInd(char id, char id_arr[], int arr_size)
+int ID_Ind(char id, char id_arr[], int arr_size)
 {
 
 	int ind = -1;
@@ -5055,16 +5009,16 @@ void SetupBlink()
 {
 	int duty[2] = { 100, 0 };
 	bool is_on = false;
-	int del = 100;
+	int dt = 100;
 	// Flash sequentially
 	for (int i = 0; i < 8; i++)
 	{
 		analogWrite(pin_Disp_LED, duty[(int)is_on]);
-		delay(del);
+		delay(dt);
 		analogWrite(pin_TrackLED, duty[(int)is_on]);
-		delay(del);
+		delay(dt);
 		analogWrite(pin_RewLED_R, duty[(int)is_on]);
-		delay(del);
+		delay(dt);
 		is_on = !is_on;
 	}
 	// Reset LEDs
@@ -5079,14 +5033,14 @@ void RatInBlink()
 	// Local vars
 	int duty[2] = { 255, 0 };
 	bool is_on = true;
-	int del = 50;
+	int dt = 50;
 
 	// Flash 
 	for (int i = 0; i < 3; i++)
 	{
 		analogWrite(pin_RewLED_R, duty[(int)is_on]);
 		analogWrite(pin_TrackLED, duty[(int)is_on]);
-		delay(del);
+		delay(dt);
 		is_on = !is_on;
 	}
 	// Reset LED
@@ -5103,20 +5057,20 @@ void RatInBlink()
 void Interupt_IRprox_Halt() {
 
 	// Exit if < 250 ms has not passed
-	if (intrpt_irProxDebounce > millis()) return;
+	if (t_irProxDebounce > millis()) return;
 
 	// Run stop in main loop
-	intrpt_doIRhardStop = true;
+	t_doIRhardStop = true;
 
 	// Update debounce
-	intrpt_irProxDebounce = millis() + 250;
+	t_irProxDebounce = millis() + 250;
 }
 
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect()
 {
 	// Exit if < 250 ms has not passed
-	if (intrpt_irDetectDebounce > millis()) return;
+	if (t_irDetectDebounce > millis()) return;
 
 	// Store time
 	t_irSyncLast = millis();
@@ -5131,6 +5085,6 @@ void Interupt_IR_Detect()
 	intrpt_doLogIR = true;
 
 	// Update debounce
-	intrpt_irDetectDebounce = millis() + 250;
+	t_irDetectDebounce = millis() + 250;
 }
 #pragma endregion
