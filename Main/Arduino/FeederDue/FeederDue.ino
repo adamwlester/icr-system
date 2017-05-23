@@ -14,6 +14,7 @@
 		int = 4 byte
 		long = 4 byte
 		float = 4 byte
+		double = 8 byte
 */
 
 #pragma endregion
@@ -60,9 +61,6 @@ const bool doPrint_dropped = false;
 const bool doPrint_log = false;
 
 // TESTING
-
-// Test message
-byte msg_testCmd[2];
 
 // Position
 const bool do_posDebug = false;
@@ -187,26 +185,30 @@ const int pin_IRdetect = 17;
 #pragma region ---------VARIABLE SETUP---------
 
 // Flow/state control
-String fc_motorControl = "None"; // ["None", "Open", "MoveTo", "Bull", "PID"]
-bool fc_isBlockingTill = false;
-bool fc_doQuit = false;
-bool fc_isFirstPass = true;
-bool fc_doStreamCheck = false;
-bool fc_isStreaming = false;
-bool fc_isManualSes = false;
-bool fc_isRatIn = false;
-bool fc_isTrackingEnabled = false;
-bool fc_isRewarding = false;
-bool fc_doMove = false;
-bool fc_doRew = false;
-bool fc_doHalt = false;
-bool fc_isHalted = false;
-bool fc_doBulldoze = false;
-bool fc_doCheckDoneRcvd = false;
-bool fc_isSendingLog = false;
-bool fc_doLogResend = false;
-bool fc_doLogSend = false;
-bool fc_isEKFReady = false;
+struct FC
+{
+	String motorControl = "None"; // ["None", "Open", "MoveTo", "Bull", "PID"]
+	bool isBlockingTill = false;
+	bool doQuit = false;
+	bool isFirstPass = true;
+	bool doStreamCheck = false;
+	bool isStreaming = false;
+	bool isManualSes = false;
+	bool isRatIn = false;
+	bool isTrackingEnabled = false;
+	bool isRewarding = false;
+	bool doMove = false;
+	bool doRew = false;
+	bool doHalt = false;
+	bool isHalted = false;
+	bool doBulldoze = false;
+	bool isSendingLog = false;
+	bool doLogResend = false;
+	bool doLogSend = false;
+	bool isEKFReady = false;
+}
+// Initialize
+fc;
 
 // Log debugging
 const int logLng = 1000;
@@ -214,7 +216,7 @@ String logList[logLng];
 int cnt_logStore = 0;
 int cnt_logSend = 0;
 int logByteTrack = 0;
-int logByteMax = 32000;
+int logByteMax = 8000;
 
 // Print debugging
 String printQueue[10];
@@ -233,109 +235,131 @@ int cnt_overflowEvt = 0;
 int cnt_timeoutEvt = 0;
 int cnt_packResend = 0;
 
-// Outgoing packet data
+// Serial com general
 byte r2_queue[10][8];
 const int r2_lngR = 10;
 const int r2_lngC = 8;
 int sendQueueInd = r2_lngR - 1;
 bool doPackSend = false;
-const int dt_sendSent = 1;
-const int dt_sendRcvd = 1;
-const int dt_logSent = 1;
-const int dt_logRcvd = 1;
+const int resendMax = 3;
+const int dt_sendSent = 1; // (ms)
+const int dt_sendRcvd = 1; // (ms)
+const int dt_logSent = 1; // (ms)
+const int dt_logRcvd = 1; // (ms)
+const int dt_resend = 100; // (ms)
+uint32_t t_sent = millis(); // (ms)
+uint32_t t_rcvd = millis(); // (ms)
 
 // Serial from CS
-const char c2r_head = '<';
-const char c2r_foot = '>';
-char c2r_id[14] = {
-	'T', // system test command
-	'S', // start session
-	'Q', // quit session
-	'M', // move to position
-	'R', // run reward
-	'C', // cue reward
-	'H', // halt movement
-	'B', // bulldoze rat
-	'I', // rat in/out
-	'P', // position data
-	'V', // request stream status
-	'L', // request log send/resend
-	'Y', // confirm done recieved
-};
-const int c2r_idLng = sizeof(c2r_id) / sizeof(c2r_id[0]);
-uint16_t c2r_packLast[c2r_idLng];
-int c2r_cntRepeat[c2r_idLng];
-char c2r_msg_id = ' ';
-bool c2r_isNew = false;
-uint32_t t_rcvd = millis(); // (ms)
-uint32_t t_rcvdLast = 0; // (ms)
+struct C2R
+{
+	const char head = '<';
+	const char foot = '>';
+	char idList[11] = {
+		'T', // system test command
+		'S', // start session
+		'Q', // quit session
+		'M', // move to position
+		'R', // run reward
+		'H', // halt movement
+		'B', // bulldoze rat
+		'I', // rat in/out
+		'P', // position data
+		'V', // request stream status
+		'L', // request log send/resend
+	};
+	const static int idLng = sizeof(idList) / sizeof(idList[0]);
+	uint16_t packList[idLng];
+	int cntRepeat[idLng];
+	char idNew = ' ';
+	bool isNew = false;
+	double dat[3] = { 255, 255, 255 };
+
+	// Data vars
+	byte testCond = 0;
+	byte testDat = 0;
+	byte sesCond = 0;
+	byte soundCond = 0;
+	byte vtEnt = 0;
+	float vtCM[2] = { 0,0 };
+	uint32_t vtTS[2] = { 0,0 };
+	float moveToTarg = 0;
+	byte bullDel = 0;
+	byte bullSpeed = 0;
+	float rewPos = 0;
+	byte rewZoneInd = 0;
+	byte rewDelay = 0;
+}
+// Initialize
+c2r;
 
 // Serial to CS
-const char r2c_head = '<';
-const char r2c_foot = '>';
-char r2c_id[15] = {
-	'T', // system test command
-	'S', // start session
-	'Q', // quit session
-	'M', // move to position
-	'R', // run reward
-	'C', // cue reward
-	'H', // halt movement
-	'B', // bulldoze rat
-	'I', // rat in/out
-	'D', // execution done
-	'V', // connected and streaming
-	'L', // request log send/resend
-	'U', // log pack
-	'J', // battery voltage
-	'Z', // reward zone
-};
-const int r2c_idLng = sizeof(r2c_id) / sizeof(r2c_id[0]);
-uint32_t t_resendDone = millis(); // (ms)
-uint32_t t_sent = millis(); // (ms)
-uint16_t r2c_packLast[r2c_idLng];
-byte r2c_datLast[r2c_idLng];
-
-// Robot to Matlab communication
-const char r2m_id[2] = {
-	'J', // battery voltage
-	'Z', // reward zone
-};
-const int r2m_idLng = sizeof(r2m_id) / sizeof(r2m_id[0]);
+struct R2C
+{
+	char idList[14] = {
+		'T', // system test command
+		'S', // start session
+		'Q', // quit session
+		'M', // move to position
+		'R', // run reward
+		'H', // halt movement
+		'B', // bulldoze rat
+		'I', // rat in/out
+		'D', // execution done
+		'V', // connected and streaming
+		'L', // request log send/resend
+		'U', // log pack
+		'J', // battery voltage
+		'Z', // reward zone
+	};
+	const char head = '<';
+	const char foot = '>';
+	const static int idLng = sizeof(idList) / sizeof(idList[0]);
+	uint16_t packList[idLng];
+	byte datList[idLng];
+	uint16_t sendTim[idLng];
+	bool doRcvCheck[idLng];
+	int resendCnt[idLng];
+}
+// Initialize
+r2c;
 
 // Serial to other ard
-const char r2a_head = '{';
-const char r2a_foot = '}';
-uint16_t r2a_packCnt = 0;
-char r2a_id[6] = {
-	't', // set sync time
-	'q', // quit/reset
-	'r', // reward
-	's', // sound cond [0, 1, 2]
-	'p', // pid mode [0, 1]
-	'b', // bull mode [0, 1]
-};
-const int r2a_idLng = sizeof(r2a_id) / sizeof(r2a_id[0]);
-uint16_t r2a_packLast[r2a_idLng];
-byte r2a_datLast[r2a_idLng];
-uint16_t r2a_sendTim[r2a_idLng];
-bool r2a_doRcvdCheck[r2a_idLng];
-int r2a_resendCnt[r2a_idLng];
-uint16_t r2a_resendDel = 100;
-uint16_t r2a_resendMax = 3;
+struct R2A
+{
+	char idList[6] = {
+		't', // set sync time
+		'q', // quit/reset
+		'r', // reward
+		's', // sound cond [0, 1, 2]
+		'p', // pid mode [0, 1]
+		'b', // bull mode [0, 1]
+	};
+	const char head = '{';
+	const char foot = '}';
+	uint16_t packCnt = 0;
+	const static int idLng = sizeof(idList) / sizeof(idList[0]);
+	uint16_t packList[idLng];
+	byte datList[idLng];
+	uint16_t sendTim[idLng];
+	bool doRcvCheck[idLng];
+	int resendCnt[idLng];
+}
+// Initialize
+r2a;
 
 // Serial from other ard
-const char a2r_head = '{';
-const char a2r_foot = '}';
+struct A2R
+{
+	const char head = '{';
+	const char foot = '}';
+	double dat[1] = { 255 };
+}
+// Initialize
+a2r;
 
 // Start/Quit
-byte msg_setupCmd[2];
 uint32_t t_quitCmd = 0;
-
-// Serial VT
-byte msg_vtEnt = 0;
-float msg_vtCM[2] = { 0,0 };
-uint32_t t_msg_vtTS[2] = { 0,0 };
 
 // Pixy
 const double pixyCoeff[5] = {
@@ -357,7 +381,7 @@ const byte kAcc = 60 * 2;
 const byte kDec = 60 * 2;
 const byte kRun = 60;
 const byte kHold = 60 / 2;
-int dt_blockMotor = 0;
+int dt_blockMotor = 0; // (ms)
 
 // Kalman model measures
 float ekfRatPos = 0;
@@ -376,20 +400,11 @@ float errorDefault = 0;
 
 // Movement
 float moveToSpeed = 80;
-float msg_moveToTarg = 0;
 float moveToDist = 0;
 float moveToStartPos = 0;
-byte msg_bullDel = 0;
-byte msg_bullSpeed = 0;
 
 // Reward
 int dt_blockRew = 10000; // (ms)
-float cuePos = 0;
-float cueDist[2] = { 0,0 };
-float cueStartPos[2] = { 0,0 };
-float msg_rewPos = 0;
-byte msg_rewDelay = 0;
-byte msg_rewZoneInd = 0;
 
 // EtOH 
 /*
@@ -425,11 +440,11 @@ bool btn_doRew = false;
 bool btn_doChangeLCDstate = false;
 
 // Interrupts 
-volatile uint32_t t_irProxDebounce = millis();
+volatile uint32_t t_irProxDebounce = millis(); // (ms)
+volatile uint32_t t_irDetectDebounce = millis(); // (ms)
+volatile uint32_t t_irSyncLast = millis(); // (ms)
+volatile uint32_t t_sync = 0; // (ms)
 volatile bool t_doIRhardStop = false;
-volatile uint32_t t_irDetectDebounce = millis();
-volatile uint32_t t_irSyncLast = millis();
-volatile uint32_t t_sync = 0;
 volatile bool intrpt_doLogIR = false;
 
 #pragma endregion 
@@ -437,28 +452,24 @@ volatile bool intrpt_doLogIR = false;
 
 #pragma region ---------CONSTRUCT FUNCTIONS---------
 // PARSE SERIAL INPUT
-bool ParseSerial();
+void ParseSerial();
 // PARSE CS MESSAGE
-bool ParseC2R();
-// PARSE CHEEAH DUE MESSAGE
-void ParseA2R();
+void ParseC2RData(char id);
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead();
 byte WaitBuffRead(char chr1);
 byte WaitBuffRead(char chr1, char chr2);
-// CHECK AND PROCESS RCVD PACKET NUMBER
-bool CheckPack(char id, uint16_t pack);
 // STORE PACKET DATA TO BE SENT
 void StorePacketData(char targ, char id);
 void StorePacketData(char targ, char id, byte d1);
 void StorePacketData(char targ, char id, byte d1, uint16_t pack);
-void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf);
+void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf);
 // SEND SERIAL PACKET DATA
 void SendPacketData();
 // SEND SERIAL LOG DATA
 void SendLogData();
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
-bool CheckArdResend();
+bool CheckResend(char targ);
 // HARD STOP
 void HardStop(String called_from);
 // IR TRIGGERED HARD STOP
@@ -518,7 +529,7 @@ void PrintLCD(String str_1);
 void PrintLCD(String str_1, String str_2, char f_siz);
 void ClearLCD();
 // GET ID INDEX
-int ID_Ind(char id, char id_arr[], int arr_size);
+int CharInd(char id, char id_arr[], int arr_size);
 // BLINK LEDS AT SETUP
 void SetupBlink();
 // BLICK LEDS WHEN RAT FIRST DETECTED
@@ -764,7 +775,7 @@ public:
 	{
 
 		// Wait till ekf ready
-		if (!fc_isEKFReady)
+		if (!fc.isEKFReady)
 		{
 			return -1;
 		}
@@ -892,7 +903,7 @@ public:
 
 	void Stop(String called_from)
 	{
-		if (fc_motorControl == "PID")
+		if (fc.motorControl == "PID")
 		{
 			// Stop movement
 			RunMotor('f', 0, "PID");
@@ -907,7 +918,7 @@ public:
 		// Tell ard pid is stopped
 		if (
 			// Dont send if rewarding
-			!fc_isRewarding
+			!fc.isRewarding
 			)
 		{
 			StorePacketData('a', 'p', 0);
@@ -1002,7 +1013,7 @@ public:
 	void CheckMotorControl()
 	{
 		// Check if motor control available
-		if ((fc_motorControl == "PID" || fc_motorControl == "Open") &&
+		if ((fc.motorControl == "PID" || fc.motorControl == "Open") &&
 			mode == "Hold")
 		{
 			// Print taking conrol
@@ -1011,7 +1022,7 @@ public:
 			// Run pid
 			Run("PID.CheckMotorControl");
 		}
-		else if ((fc_motorControl != "PID" && fc_motorControl != "Open") &&
+		else if ((fc.motorControl != "PID" && fc.motorControl != "Open") &&
 			mode == "Automatic")
 		{
 			// Print taking conrol
@@ -1034,18 +1045,18 @@ public:
 
 	void CheckEKF(uint32_t t)
 	{
-		if (!fc_isEKFReady)
+		if (!fc.isEKFReady)
 		{
 			if ((t - t_ekfStr) > dt_ekfSettle)
 			{
-				fc_isEKFReady = true;
+				fc.isEKFReady = true;
 			}
 		}
 	}
 
 	void ResetEKF(String called_from)
 	{
-		fc_isEKFReady = false;
+		fc.isEKFReady = false;
 		t_ekfStr = millis();
 		PrintPID("pid: reset ekf [" + called_from + "]");
 	}
@@ -1225,7 +1236,7 @@ public:
 
 			// Update when ready
 			if (
-				fc_isEKFReady &&
+				fc.isEKFReady &&
 				millis() > t_loopNext)
 			{
 
@@ -1313,7 +1324,7 @@ public:
 		RunMotor('f', 0, "Bull");
 
 		// Give over control
-		if (fc_motorControl == "Bull")
+		if (fc.motorControl == "Bull")
 		{
 			SetMotorControl("Open", "Bulldozer.Stop");
 		}
@@ -1400,13 +1411,13 @@ public:
 
 	void CheckMotorControl()
 	{
-		if ((fc_motorControl == "Bull" || fc_motorControl == "PID" || fc_motorControl == "Open") &&
+		if ((fc.motorControl == "Bull" || fc.motorControl == "PID" || fc.motorControl == "Open") &&
 			state == "Hold")
 		{
 			// Turn bull on
 			Resume("Bulldozer.CheckMotorControl");
 		}
-		else if ((fc_motorControl != "Bull" && fc_motorControl != "PID" && fc_motorControl != "Open") &&
+		else if ((fc.motorControl != "Bull" && fc.motorControl != "PID" && fc.motorControl != "Open") &&
 			state == "On")
 		{
 			// Turn bull off
@@ -1491,7 +1502,7 @@ public:
 		if (!isTargSet)
 		{
 			// Check pos data is ready
-			if (fc_isEKFReady)
+			if (fc.isEKFReady)
 			{
 				// Compute target targ_dist and move_dir
 				offsetTarget = targ + offset;
@@ -2167,13 +2178,14 @@ Fuser ekf;
 
 //----------CLASS: union----------
 union u_tag {
-	byte b[4]; // (byte) 1 byte
-	char c[4]; // (char) 1 byte
-	uint16_t i16[2]; // (int16) 2 byte
-	uint32_t i32; // (int32) 4 byte
-	int i; // (int) 4 byte
-	long l; // (long) 4 byte
-	float f; // (float) 4 byte
+	byte b[8]; // (byte) 1 byte
+	char c[8]; // (char) 1 byte
+	uint16_t i16[4]; // (int16) 2 byte
+	uint32_t i32[2]; // (int32) 4 byte
+	int i[2]; // (int) 4 byte
+	long l[2]; // (long) 4 byte
+	float f[2]; // (float) 4 byte
+	double d; // (double) 8 byte
 }
 // Initialize object
 u;
@@ -2284,27 +2296,30 @@ void setup() {
 
 
 	// Initialize c2r stuff
-	for (int i = 0; i < c2r_idLng; i++)
+	for (int i = 0; i < c2r.idLng; i++)
 	{
-		c2r_packLast[i] = 0;
-		c2r_cntRepeat[i] = 0;
+		c2r.packList[i] = 0;
+		c2r.cntRepeat[i] = 0;
 	}
 
 	// Initialize r2c stuff
-	for (int i = 0; i < r2c_idLng; i++)
+	for (int i = 0; i < r2c.idLng; i++)
 	{
-		r2c_packLast[i] = 0;
-		r2c_datLast[i] = 0;
+		r2c.packList[i] = 0;
+		r2c.datList[i] = 0;
+		r2c.doRcvCheck[i] = false;
+		r2c.sendTim[i] = 0;
+		r2c.resendCnt[i] = 0;
 	}
 
 	// Initialize r2a stuff
-	for (int i = 0; i < r2a_idLng; i++)
+	for (int i = 0; i < r2a.idLng; i++)
 	{
-		r2a_doRcvdCheck[i] = false;
-		r2a_sendTim[i] = 0;
-		r2a_packLast[i] = 0;
-		r2a_datLast[i] = 0;
-		r2a_resendCnt[i] = 0;
+		r2a.packList[i] = 0;
+		r2a.datList[i] = 0;
+		r2a.doRcvCheck[i] = false;
+		r2a.sendTim[i] = 0;
+		r2a.resendCnt[i] = 0;
 	}
 
 	// Initialize bat volt array
@@ -2357,7 +2372,7 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- FIRST PASS SETUP ---
-	if (fc_isFirstPass)
+	if (fc.isFirstPass)
 	{
 
 		// Make sure Xbee buffer empty
@@ -2384,7 +2399,7 @@ void loop() {
 		// Blink to show setup done
 		SetupBlink();
 
-		fc_isFirstPass = false;
+		fc.isFirstPass = false;
 		DebugFlow("RESET");
 
 		// Check if ir sensor needs to be disabled
@@ -2409,10 +2424,9 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- PARSE SERIAL ---
-	c2r_isNew = false; // reset before next loop
 	if (Serial1.available() > 0)
 	{
-		c2r_isNew = ParseSerial();
+		ParseSerial();
 	}
 #pragma endregion
 
@@ -2424,7 +2438,7 @@ void loop() {
 		SendPacketData();
 	}
 	// Send log
-	else if (fc_doLogSend)
+	else if (fc.doLogSend)
 	{
 		SendLogData();
 	}
@@ -2483,18 +2497,22 @@ void loop() {
 		}
 	}
 
-	if (c2r_msg_id == 'T' && c2r_isNew)
+	if (c2r.idNew == 'T' && c2r.isNew)
 	{
+		// Store message data
+		c2r.testCond = (byte)c2r.dat[0];
+		c2r.testDat = (byte)c2r.dat[1];
+
 		// Set run pid calibration flag
-		if (msg_testCmd[0] == 2)
+		if (c2r.testCond == 2)
 		{
 			do_pidCalibration = true;
 		}
 
 		// Update Hault Error test run speed
-		else if (msg_testCmd[0] == 3)
+		else if (c2r.testCond == 3)
 		{
-			float new_speed = float(msg_testCmd[1]);
+			float new_speed = float(c2r.testDat);
 			float speed_steps = new_speed*cm2stp;
 
 
@@ -2520,27 +2538,31 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (S) DO SETUP ---
-	if (c2r_msg_id == 'S' && c2r_isNew)
+	if (c2r.idNew == 'S' && c2r.isNew)
 	{
+		// Store message data
+		c2r.sesCond = (byte)c2r.dat[0];
+		c2r.soundCond = (byte)c2r.dat[1];
+
 		// Set condition
-		if (msg_setupCmd[0] == 1)
+		if (c2r.sesCond == 1)
 		{
-			fc_isManualSes = false;
+			fc.isManualSes = false;
 			DebugFlow("DO TRACKING");
 		}
 		else
 		{
-			fc_isManualSes = true;
+			fc.isManualSes = true;
 			DebugFlow("DONT DO TRACKING");
 		}
 		// Set reward tone
-		if (msg_setupCmd[1] == 0)
+		if (c2r.soundCond == 0)
 		{
 			// No sound
 			StorePacketData('a', 's', 0);
 			DebugFlow("NO SOUND");
 		}
-		else if (msg_setupCmd[1] == 1)
+		else if (c2r.soundCond == 1)
 		{
 			// Use white noise only
 			StorePacketData('a', 's', 1);
@@ -2554,7 +2576,7 @@ void loop() {
 		}
 
 		// Make sure lcd led is off
-		if (!fc_isManualSes &&
+		if (!fc.isManualSes &&
 			lcdLightOn)
 		{
 			btn_doChangeLCDstate = true;
@@ -2565,9 +2587,9 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (Q) DO QUIT ---
-	if (c2r_msg_id == 'Q' && c2r_isNew)
+	if (c2r.idNew == 'Q' && c2r.isNew)
 	{
-		fc_doQuit = true;
+		fc.doQuit = true;
 		t_quitCmd = millis() + 1000;
 
 		// Tell ard to quit
@@ -2575,15 +2597,16 @@ void loop() {
 		DebugFlow("DO QUIT");
 
 		// Hold all motor control
-		fc_isHalted = true;
+		fc.isHalted = true;
 		SetMotorControl("None", "MsgQ");
 
 	}
 
 	// Wait for queue buffer to empty and quit delay to pass 
 	if (
-		fc_doQuit && millis() > t_quitCmd &&
-		!CheckArdResend() &&
+		fc.doQuit && millis() > t_quitCmd &&
+		!CheckResend('a') &&
+		!CheckResend('c') &&
 		!doPackSend)
 	{
 		// Quit session
@@ -2593,21 +2616,25 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (M) DO MOVE ---
-	if (c2r_msg_id == 'M' && c2r_isNew)
+	if (c2r.idNew == 'M' && c2r.isNew)
 	{
-		fc_doMove = true;
+		// Store message data
+		c2r.moveToTarg = (float)c2r.dat[0];
+
+		// Set flags
+		fc.doMove = true;
 		DebugFlow("DO MOVE");
 	}
 
 	// Perform movement
-	if (fc_doMove)
+	if (fc.doMove)
 	{
 
 		// Compute move target
 		if (!targ_moveTo.isTargSet)
 		{
 			// If succesfull
-			if (targ_moveTo.CompTarg(ekfRobPos, msg_moveToTarg, -1 * feedDist))
+			if (targ_moveTo.CompTarg(ekfRobPos, c2r.moveToTarg, -1 * feedDist))
 			{
 				// Start running
 				if (
@@ -2624,7 +2651,7 @@ void loop() {
 				// Reset motor cotrol if run fails
 				else SetMotorControl("Open", "MsgM");
 			}
-			else if (!fc_isEKFReady)
+			else if (!fc.isEKFReady)
 				DebugFlow("NO MOVE BECAUSE EKF NOT READY");
 		}
 
@@ -2651,14 +2678,14 @@ void loop() {
 			SetMotorControl("None", "MsgM");
 
 			// Reset flags
-			fc_doMove = false;
+			fc.doMove = false;
 			targ_moveTo.Reset();
 
 			char str[50];
 			if (!targ_moveTo.abortMove)
 			{
 				// Tell CS movement is done
-				StorePacketData('c', 'D', 255, c2r_packLast[ID_Ind('M', c2r_id, c2r_idLng)]);
+				StorePacketData('c', 'D', 255, c2r.packList[CharInd('M', c2r.idList, c2r.idLng)]);
 
 				// Print success message
 				sprintf(str, "FINISHED MOVE: to=%0.2fcm within=%0.2fcm",
@@ -2676,53 +2703,65 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- (R/C) RUN REWARD ---
-	if (c2r_msg_id == 'R' && c2r_isNew)
+#pragma region //--- (R) RUN REWARD ---
+	if (c2r.idNew == 'R' && c2r.isNew)
 	{
-		// Set mode
-		reward.SetRewMode("Free", msg_rewDelay);
+		// Store message data
+		c2r.rewPos = (float)c2r.dat[0];
+		c2r.rewZoneInd = (byte)c2r.dat[1]-1;
+		c2r.rewDelay = (byte)c2r.dat[2];
 
-		// Reward zone
-		char str[100];
-		sprintf(str, "REWARD FREE: pos=%0.2fcm occ_thresh=%dms",
-			msg_rewPos, reward.occThresh);
-		DebugFlow(str);
-		fc_doRew = true;
-	}
-
-	if (c2r_msg_id == 'C' && c2r_isNew)
-	{
-
-		// Cued reward
-		if (msg_rewPos > 0)
+		// Free reward
+		if (
+			c2r.rewPos > 0 &&
+			c2r.rewZoneInd == 255
+			)
 		{
 			// Set mode
-			reward.SetRewMode("Cue", msg_rewZoneInd);
+			reward.SetRewMode("Free", c2r.rewDelay);
+
+			// Reward zone
+			char str[100];
+			sprintf(str, "REWARD FREE: pos=%0.2fcm occ_thresh=%dms",
+				c2r.rewPos, reward.occThresh);
+			DebugFlow(str);
+			fc.doRew = true;
+		}
+
+		// Cued reward
+		else if (
+			c2r.rewPos > 0 &&
+			c2r.rewZoneInd != 255
+			)
+		{
+			// Set mode
+			reward.SetRewMode("Cue", c2r.rewZoneInd);
 
 			// Cued reward
 			char str[100];
 			sprintf(str, "REWARD CUED: pos=%0.2fcm occ_thresh=%ldms",
-				msg_rewPos, reward.occThresh);
+				c2r.rewPos, reward.occThresh);
 			DebugFlow(str);
-			fc_doRew = true;
+			fc.doRew = true;
 		}
 
 		// Imediate reward
-		else {
+		else if (c2r.rewPos == 0)
+		{
 
 			// Set mode
-			reward.SetRewMode("Now", msg_rewZoneInd);
+			reward.SetRewMode("Now", c2r.rewZoneInd);
 			DebugFlow("REWARD NOW");
 
 			// Start reward
-			fc_isRewarding = reward.StartRew(true, false);
+			fc.isRewarding = reward.StartRew(true, false);
 
 		}
 
 	}
 
 	// CHECK REWARD BOUNDS
-	if (fc_doRew)
+	if (fc.doRew)
 	{
 		// If not rewarding 
 		if (!reward.isRewarding)
@@ -2730,7 +2769,7 @@ void loop() {
 			// Compute reward bounds
 			if (!reward.isBoundsSet)
 			{
-				reward.CompZoneBounds(ekfRatPos, msg_rewPos);
+				reward.CompZoneBounds(ekfRatPos, c2r.rewPos);
 				// Print message
 				char str[100];
 				sprintf(str, "SET REWARD ZONE: center=%0.2fcm from=%0.2fcm to=%0.2fcm",
@@ -2742,7 +2781,7 @@ void loop() {
 				if (reward.CheckZoneBounds(ekfRatPos))
 				{
 					// Start reward
-					fc_isRewarding = reward.StartRew(true, false);
+					fc.isRewarding = reward.StartRew(true, false);
 					// Print message
 					char str[50];
 					sprintf(str, "REWARDED ZONE: occ=%dms zone=%0.2fcm from=%0.2fcm to=%0.2fcm",
@@ -2764,7 +2803,7 @@ void loop() {
 
 				// Reset flags
 				reward.Reset();
-				fc_doRew = false;
+				fc.doRew = false;
 			}
 		}
 	}
@@ -2772,45 +2811,52 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (H) HALT ROBOT STATUS ---
-	if (c2r_msg_id == 'H' && c2r_isNew)
+	if (c2r.idNew == 'H' && c2r.isNew)
 	{
-		if (fc_doHalt)
+		// Store message data
+		fc.doHalt = c2r.dat[0] != 0 ? true : false;
+
+		if (fc.doHalt)
 		{
 			DebugFlow("HALT STARTED");
 			// Stop pid and set to manual
 			HardStop("MsgH");
 			// Remove motor control
-			fc_isHalted = true;
+			fc.isHalted = true;
 			SetMotorControl("None", "MsgH");
-			fc_doHalt = false;
+			fc.doHalt = false;
 		}
 		else
 		{
 			DebugFlow("HALT FINISHED");
 			// Open motor control
-			fc_isHalted = false;
+			fc.isHalted = false;
 			SetMotorControl("Open", "MsgH");
 		}
 	}
 #pragma endregion
 
 #pragma region //--- (B) BULLDOZE RAT STATUS ---
-	if (c2r_msg_id == 'B' && c2r_isNew)
+	if (c2r.idNew == 'B' && c2r.isNew)
 	{
+		// Store message data
+		c2r.bullDel = (byte)c2r.dat[0];
+		c2r.bullSpeed = (byte)c2r.dat[1];
+
 		// Local vars
 		bool is_mode_changed = false;
 
 		// Reinitialize bulldoze
-		bull.Reinitialize(msg_bullDel, msg_bullSpeed, "MsgB");
+		bull.Reinitialize(c2r.bullDel, c2r.bullSpeed, "MsgB");
 
 		// Check if mode should be changedchanged
-		if (msg_bullSpeed > 0)
+		if (c2r.bullSpeed > 0)
 		{
 			// Mode changed
-			if (!fc_doBulldoze)
+			if (!fc.doBulldoze)
 			{
 				is_mode_changed = true;
-				fc_doBulldoze = true;
+				fc.doBulldoze = true;
 				DebugFlow("SET BULLDOZE ON");
 			}
 			// Only settings changed
@@ -2819,10 +2865,10 @@ void loop() {
 		else
 		{
 			// Mode changed
-			if (fc_doBulldoze)
+			if (fc.doBulldoze)
 			{
 				is_mode_changed = true;
-				fc_doBulldoze = false;
+				fc.doBulldoze = false;
 				DebugFlow("SET BULLDOZE OFF");
 			}
 			// Only settings changed
@@ -2830,10 +2876,10 @@ void loop() {
 		}
 
 		// Don't exicute until rat is in and mode is changed
-		if (fc_isTrackingEnabled &&
+		if (fc.isTrackingEnabled &&
 			is_mode_changed)
 		{
-			if (fc_doBulldoze)
+			if (fc.doBulldoze)
 			{
 				// Turn bulldoze on
 				bull.TurnOn("MsgB");
@@ -2851,9 +2897,12 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (I) START/STOP PID ---
-	if (c2r_msg_id == 'I' && c2r_isNew)
+	if (c2r.idNew == 'I' && c2r.isNew)
 	{
-		if (fc_isRatIn)
+		// Store message data
+		fc.isRatIn = c2r.dat[0] != 0 ? true : false;
+
+		if (fc.isRatIn)
 		{
 			// Reset all vt data
 			pos_ratVT.SetPos(0, 0);
@@ -2868,7 +2917,7 @@ void loop() {
 
 			// Turn off bulldoze
 			bull.TurnOff("MsgI");
-			fc_doBulldoze = false;
+			fc.doBulldoze = false;
 
 			// Turn off pid
 			pid.Stop("MsgI");
@@ -2880,7 +2929,7 @@ void loop() {
 			HardStop("MsgI");
 
 			// Set to stop tracking
-			fc_isTrackingEnabled = false;
+			fc.isTrackingEnabled = false;
 
 			DebugFlow("RAT OUT");
 		}
@@ -2888,61 +2937,51 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- (V) GET STREAM STATUS ---
-	if (c2r_msg_id == 'V' && c2r_isNew)
+	if (c2r.idNew == 'V' && c2r.isNew)
 	{
-		fc_doStreamCheck = true;
+		fc.doStreamCheck = true;
 	}
 
 	// Check for streaming
-	if (fc_doStreamCheck && fc_isStreaming)
+	if (fc.doStreamCheck && fc.isStreaming)
 	{
-		StorePacketData('c', 'D', 255, c2r_packLast[ID_Ind('V', c2r_id, c2r_idLng)]);
-		fc_doStreamCheck = false;
+		StorePacketData('c', 'D', 255, c2r.packList[CharInd('V', c2r.idList, c2r.idLng)]);
+		fc.doStreamCheck = false;
 		DebugFlow("STREAMING CONFIRMED");
 	}
 #pragma endregion
 
-#pragma region //--- (Y) DONE RECIEVED ---
-	if (c2r_msg_id == 'Y' && c2r_isNew)
-	{
-		fc_doCheckDoneRcvd = false;
-		DebugFlow("CS RESIEVED 'DONE'");
-	}
-	// Request done recieved confirmation
-	if (fc_doCheckDoneRcvd && millis() > t_resendDone)
-	{
-		// Resend done confirmation
-		StorePacketData('c', 'D', 255, r2c_packLast[ID_Ind('D', r2c_id, r2c_idLng)]);
-		// Send again after 1 sec
-		t_resendDone = millis() + 1000;
-		DebugFlow("RESENT 'D'");
-	}
-#pragma endregion
-
 #pragma region //--- (P) VT DATA RECIEVED ---
-	if (c2r_msg_id == 'P' && c2r_isNew)
+	if (c2r.idNew == 'P' && c2r.isNew)
 	{
+		c2r.vtEnt = (byte)c2r.dat[0];
+		c2r.vtTS[c2r.vtEnt] = (long)c2r.dat[1];
+		c2r.vtCM[c2r.vtEnt] = (float)c2r.dat[2];
+
 		// Update vt pos data
-		if (msg_vtEnt == 0)
+		if (c2r.vtEnt == 0)
 		{
-			pos_ratVT.UpdatePos(msg_vtCM[msg_vtEnt], t_msg_vtTS[msg_vtEnt]);
+			pos_ratVT.UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
 		}
 		else
 		{
-			pos_robVT.UpdatePos(msg_vtCM[msg_vtEnt], t_msg_vtTS[msg_vtEnt]);
+			pos_robVT.UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
 		}
 	}
 #pragma endregion
 
 #pragma region //--- (L) SEND LOG ---
-	if (c2r_msg_id == 'L' && c2r_isNew)
+	if (c2r.idNew == 'L' && c2r.isNew)
 	{
+		// Store message data
+		fc.doLogResend = c2r.dat[0] != 0 ? true : false;
+
 		// Stop logging
 		if (doDB_Log)
 			doDB_Log = false;
 
 		// Send log data
-		if (!fc_doLogResend)
+		if (!fc.doLogResend)
 		{
 			cnt_logSend++;
 		}
@@ -2951,17 +2990,17 @@ void loop() {
 		// Check if end of list reached
 		if (cnt_logSend <= cnt_logStore)
 		{
-			fc_doLogSend = true;
-			fc_isSendingLog = true;
+			fc.doLogSend = true;
+			fc.isSendingLog = true;
 		}
 		// End reached
 		else
 		{
-			// Send confirm done
-			StorePacketData('c', 'D', 255, c2r_packLast[ID_Ind('L', c2r_id, c2r_idLng)]);
+			// Send get_confirm done
+			StorePacketData('c', 'D', 255, c2r.packList[CharInd('L', c2r.idList, c2r.idLng)]);
 			DebugFlow("LOG SEND COMPLETE");
-			fc_doLogSend = false;
-			fc_isSendingLog = false;
+			fc.doLogSend = false;
+			fc.isSendingLog = false;
 		}
 	}
 #pragma endregion
@@ -2990,7 +3029,7 @@ void loop() {
 	{
 		if (!reward.isRewarding)
 		{
-			fc_isRewarding = reward.StartRew(false, true);
+			fc.isRewarding = reward.StartRew(false, true);
 			btn_doRew = false;
 		}
 	}
@@ -3020,7 +3059,7 @@ void loop() {
 		}
 
 		// Log event if streaming started
-		if (fc_isStreaming)
+		if (fc.isStreaming)
 			DebugIRSync("ir sync event", t_irSyncLast);
 
 		// Reset flag
@@ -3067,12 +3106,12 @@ void loop() {
 #pragma region //--- OTHER OPPERATIONS ---
 
 	// End any ongoing reward
-	if (fc_isRewarding)
+	if (fc.isRewarding)
 	{
 		if (reward.EndRew())
 		{
-			fc_doRew = false;
-			fc_isRewarding = false;
+			fc.doRew = false;
+			fc.isRewarding = false;
 
 			// Tell CS what zone was rewarded
 			if (reward.mode != "Now")
@@ -3090,7 +3129,10 @@ void loop() {
 	CheckBattery();
 
 	// Check if ard data should be resent
-	CheckArdResend();
+	CheckResend('a');
+
+	// Check if cs data should be resent
+	CheckResend('c');
 
 
 #pragma endregion
@@ -3101,264 +3143,306 @@ void loop() {
 #pragma region --------COMMUNICATION---------
 
 // PARSE SERIAL INPUT
-bool ParseSerial()
+void ParseSerial()
 {
 	// Local vars
 	byte buff = 0;
 	char head = ' ';
-	bool is_new_c2a = false;
+	char id = ' ';
+	int id_ind = 0;
+	static uint16_t pack_last = 0;
+	static int pack_tot = 0;
+	uint16_t pack = 0;
+	char foot = ' ';
+	bool do_conf;
+	bool is_cs_msg = false;
+	c2r.idNew = ' ';
+	c2r.isNew = false;
 
 	// Dump data till msg header byte is reached
-	buff = WaitBuffRead(c2r_head, a2r_head);
+	buff = WaitBuffRead(c2r.head, a2r.head);
 	if (buff == 255)
 	{
-		return is_new_c2a = false;
+		return;
 	}
 	// store header
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.b[0] = buff;
 	head = u.c[0];
 
-	// Determine sender;
-	if (head == c2r_head)
-	{
-		is_new_c2a = ParseC2R();
-	}
-	else if (head == a2r_head)
-	{
-		ParseA2R();
-	}
-
-	// Return if this is new c2r data
-	return is_new_c2a;
-
-}
-
-// PARSE CS MESSAGE
-bool ParseC2R()
-{
-	// Local vars
-	bool pass = false;
-	byte buff = 0;
-	uint16_t pack = 0;
-	char foot = ' ';
-	c2r_msg_id == ' ';
-
 	// get id
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.b[0] = WaitBuffRead();
-	c2r_msg_id = u.c[0];
+	id = u.c[0];
 
-	// Get system test data
-	if (c2r_msg_id == 'T')
+	// Parse data;
+	if (head == c2r.head)
 	{
-
-		// Get test id
-		msg_testCmd[0] = WaitBuffRead();
-
-		// Get test argument
-		msg_testCmd[1] = WaitBuffRead();
-
+		is_cs_msg = true;
+		c2r.idNew = id;
+		ParseC2RData(id);
 	}
-
-	// Get setup data
-	if (c2r_msg_id == 'S')
+	else if (head == a2r.head)
 	{
-
-		// Get session comand
-		msg_setupCmd[0] = WaitBuffRead();
-
-		// Get tone condition
-		msg_setupCmd[1] = WaitBuffRead();
-
-	}
-
-	// Get MoveTo data
-	if (c2r_msg_id == 'M')
-	{
-
-		// Reset buffer
-		u.f = 0.0f;
-
-		// Get move posm
+		u.d = 0.0;
 		u.b[0] = WaitBuffRead();
-		u.b[1] = WaitBuffRead();
-		u.b[2] = WaitBuffRead();
-		u.b[3] = WaitBuffRead();
-		msg_moveToTarg = u.f;
-
-	}
-
-	// Get Reward data
-	if (c2r_msg_id == 'R')
-	{
-		// Reset buffer
-		u.f = 0.0f;
-
-		// Get stop pos
-		u.b[0] = WaitBuffRead();
-		u.b[1] = WaitBuffRead();
-		u.b[2] = WaitBuffRead();
-		u.b[3] = WaitBuffRead();
-		msg_rewPos = u.f;
-
-		// Get reward diration 
-		msg_rewDelay = WaitBuffRead();
-	}
-
-	// Get Cue data
-	if (c2r_msg_id == 'C')
-	{
-		// Reset buffer
-		u.f = 0.0f;
-
-		// Get stop pos
-		u.b[0] = WaitBuffRead();
-		u.b[1] = WaitBuffRead();
-		u.b[2] = WaitBuffRead();
-		u.b[3] = WaitBuffRead();
-		msg_rewPos = u.f;
-
-		// Get reward diration 
-		msg_rewZoneInd = WaitBuffRead();
-	}
-
-	// Get halt robot data
-	if (c2r_msg_id == 'H')
-	{
-		// Get halt bool
-		byte do_halt = WaitBuffRead();
-		fc_doHalt = do_halt == 1 ? true : false;
-	}
-
-	// Get bulldoze rat data
-	if (c2r_msg_id == 'B')
-	{
-		// Get delay in sec
-		msg_bullDel = WaitBuffRead();
-		// Get speed
-		msg_bullSpeed = WaitBuffRead();
-	}
-
-	// Get rat in/out
-	if (c2r_msg_id == 'I')
-	{
-		// Get session comand
-		byte rat_in = WaitBuffRead();
-		fc_isRatIn = rat_in == 1 ? true : false;
-	}
-
-	// Get log request data
-	if (c2r_msg_id == 'L')
-	{
-		// Get session comand
-		byte resend = WaitBuffRead();
-		fc_doLogResend = resend == 1 ? true : false;
-
-	}
-
-	// Get VT data
-	else if (c2r_msg_id == 'P')
-	{
-		// Get Ent
-		msg_vtEnt = WaitBuffRead();
-		// Get TS
-		u.f = 0.0f;
-		for (int i = 0; i < 4; i++)
-		{
-			u.b[i] = WaitBuffRead();
-		}
-		t_msg_vtTS[msg_vtEnt] = u.i32;
-		// Get pos cm
-		u.f = 0.0f;
-		for (int i = 0; i < 4; i++)
-		{
-			u.b[i] = WaitBuffRead();
-		}
-		msg_vtCM[msg_vtEnt] = u.f;
+		a2r.dat[0] = u.d;
 	}
 
 	// Get packet num
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.b[0] = WaitBuffRead();
 	u.b[1] = WaitBuffRead();
 	pack = u.i16[0];
 
+	// Check for recieved confirmation
+	u.d = 0.0;
+	u.b[0] = WaitBuffRead();
+	do_conf = u.b[0] != 0 ? true : false;
+
 	// Check for footer
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.b[0] = WaitBuffRead();
 	foot = u.c[0];
 
-	// Footer missing
-	if (foot != c2r_foot) {
-		// mesage will be dumped
-		pass = false;
+	// Process ard packet
+	if (!is_cs_msg && foot == a2r.foot) {
+		id_ind = CharInd(id, r2a.idList, r2a.idLng);
+		if (id_ind != -1)
+		{
+			// Update recive time
+			t_rcvd = millis();
+
+			// Reset flags
+			r2a.doRcvCheck[id_ind] = false;
+
+			// Store revieved pack details
+			DebugRcvd('a', id, pack);
+
+			// Send confirmation
+			if (do_conf)
+				StorePacketData('a', id, a2r.dat[0], pack);
+		}
 	}
-	// Process complete mesage
+
+	// Process cs packet
+	if (is_cs_msg && foot != c2r.foot) {
+		// mesage will be dumped
+		c2r.isNew = false;
+	}
 	else
 	{
 		// Update recive time
-		t_rcvdLast = t_rcvd;
 		t_rcvd = millis();
 
-		// CHECK FOR STREAMING STARTED
-		if (c2r_msg_id == 'P' && !fc_isStreaming)
+		// Check for streaming started
+		if (!fc.isStreaming)
 		{
 			// Signal streaming started
-			fc_isStreaming = true;
+			fc.isStreaming = true;
 
 			// send sync start cmd to ard
 			StorePacketData('a', 't');
 		}
 
-		// Process packet number
-		pass = CheckPack(c2r_msg_id, pack);
+		// Get id ind
+		id_ind = CharInd(c2r.idNew, c2r.idList, c2r.idLng);
 
+		// Store revieved pack details
+		DebugRcvd('c', c2r.idNew, pack);
+
+		// Reset flags
+		r2c.doRcvCheck[id_ind] = false;
+
+		// Send packet confirmation
+			if (do_conf)
+				StorePacketData('c', c2r.idNew, 0, pack);
+
+		// Check for dropped packets
+		int pack_diff = (int)(pack - pack_last);
+
+		if (pack_diff > 0)
+		{
+			// Save packet and set to process
+			pack_last = pack;
+
+			// Check for dropped packet
+			pack_tot += pack_diff;
+			int dropped_packs = pack_diff - 1;
+			// print dropped packs
+			if (dropped_packs > 0)
+			{
+				cnt_droppedPacks += dropped_packs;
+				DebugDropped(dropped_packs, cnt_droppedPacks, pack_tot);
+			}
+
+		}
+
+		// New pack
+		if (c2r.packList[id_ind] != pack)
+		{
+			// Update last packet
+			c2r.packList[id_ind] = pack;
+
+			// Reset count
+			c2r.cntRepeat[id_ind] = 0;
+
+			// Pack should be used
+			c2r.isNew = true;
+		}
+		// Resent pack
+		else
+		{
+			// Do not reuse pack
+			c2r.isNew = false;
+
+			// Itterate count
+			c2r.cntRepeat[id_ind]++;
+
+			// Print dropped packets
+			DebugResent(c2r.idNew, pack, c2r.cntRepeat[id_ind]);
+
+		}
 	}
-
-	// Return final status
-	return pass;
 
 }
 
-// PARSE CHEETAH DUE MESSAGE
-void ParseA2R()
+// PARSE CS MESSAGE
+void ParseC2RData(char id)
 {
 	// Local vars
+	bool pass = false;
 	byte buff = 0;
-	char foot = ' ';
-	char id = ' ';
-	uint16_t pack = 0;
 	int id_ind = 0;
+	c2r.dat[0] = 255;
+	c2r.dat[1] = 255;
+	c2r.dat[2] = 255;
 
-	// get id
-	u.f = 0.0f;
-	u.b[0] = WaitBuffRead();
-	id = u.c[0];
+	// Get system test data
+	if (c2r.idNew == 'T')
+	{
+		// Get test id
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.testCond = u.b[0];
 
-	// Get packet num
-	u.f = 0.0f;
-	u.b[0] = WaitBuffRead();
-	u.b[1] = WaitBuffRead();
-	pack = u.i16[0];
-
-	// Check for footer
-	u.f = 0.0f;
-	u.b[0] = WaitBuffRead();
-	foot = u.c[0];
-
-	// Update sent history
-	if (foot == a2r_foot) {
-		id_ind = ID_Ind(id, r2a_id, r2a_idLng);
-		if (id_ind != -1)
-		{
-			// Reset flags
-			r2a_doRcvdCheck[id_ind] = false;
-
-			// Store revieved pack details
-			DebugRcvd('a', id, pack);
-		}
+		// Get test argument
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.testDat = u.b[0];
 	}
+
+	// Get setup data
+	if (c2r.idNew == 'S')
+	{
+		// Get session comand
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+
+		// Get tone condition
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[1] = u.d;
+	}
+
+	// Get MoveTo data
+	if (c2r.idNew == 'M')
+	{
+		// Get move pos
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+	}
+
+	// Get Reward data
+	if (c2r.idNew == 'R')
+	{
+		// Get stop pos
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+
+		// Get zone ind 
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[1] = u.d;
+
+		// Get reward diration 
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[2] = u.d;
+	}
+
+	// Get halt robot data
+	if (c2r.idNew == 'H')
+	{
+		// Get halt bool
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+	}
+
+	// Get bulldoze rat data
+	if (c2r.idNew == 'B')
+	{
+		// Get delay in sec
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+
+		// Get speed
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[1] = u.d;
+	}
+
+	// Get rat in/out
+	if (c2r.idNew == 'I')
+	{
+		// Get session comand
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+	}
+
+	// Get log request data
+	if (c2r.idNew == 'L')
+	{
+		// Get session comand
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+	}
+
+	// Get VT data
+	else if (c2r.idNew == 'P')
+	{
+		// Get Ent
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		c2r.dat[0] = u.d;
+		// Get TS
+		u.d = 0.0;
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
+		c2r.dat[1] = u.d;
+		// Get pos cm
+		u.b[0] = WaitBuffRead();
+		u.b[1] = WaitBuffRead();
+		u.b[2] = WaitBuffRead();
+		u.b[3] = WaitBuffRead();
+		c2r.dat[2] = u.d;
+	}
+
 }
 
 // WAIT FOR BUFFER TO FILL
@@ -3368,7 +3452,7 @@ byte WaitBuffRead()
 }
 byte WaitBuffRead(char chr1)
 {
-	return WaitBuffRead(chr1, chr1);
+	return WaitBuffRead(chr1, ' ');
 }
 byte WaitBuffRead(char chr1, char chr2)
 {
@@ -3453,102 +3537,23 @@ byte WaitBuffRead(char chr1, char chr2)
 	return buff;
 }
 
-// CHECK AND PROCESS RCVD PACKET NUMBER
-bool CheckPack(char id, uint16_t pack)
-{
-	// Local vars
-	static uint16_t pack_last = 0;
-	bool pass = false;
-	int pack_diff = 0;
-	int pack_tot = 0;
-	int dropped_packs = 0;
-	bool do_use_pack = false;
-	int id_ind = 0;
-	
-	// Get id ind
-	id_ind = ID_Ind(id, c2r_id, c2r_idLng);
-
-	// SEND AND PRINT PACKET CONFIRMATON
-	if (id != 'P')
-	{
-		// Store revieved pack details
-		DebugRcvd('c', id, pack);
-
-		// Send back packet confirmation
-		if (id != 'Y')
-		{
-			// Send revieved pack
-			StorePacketData('c', id, 255, pack);
-		}
-	}
-
-	// CHECK FOR DROPPED PACKETS
-	pack_diff = (int)(pack - pack_last);
-
-	if (pack_diff > 0)
-	{
-		// Save packet and set to process
-		pack_last = pack;
-
-		// Check for dropped packet
-		pack_tot += pack_diff;
-		dropped_packs = pack_diff - 1;
-		// print dropped packs
-		if (dropped_packs > 0)
-		{
-			cnt_droppedPacks += dropped_packs;
-			DebugDropped(dropped_packs, cnt_droppedPacks, pack_tot);
-		}
-
-	}
-
-	// CHECK IF NEW PACK
-	if (c2r_packLast[id_ind] != pack)
-	{
-		// Update last packet
-		c2r_packLast[id_ind] = pack;
-
-		// Reset count
-		c2r_cntRepeat[id_ind] = 0;
-
-		// Pack should be used
-		do_use_pack = true;
-	}
-	// PROCESS RESENT PACKETS
-	else
-	{
-		// Do not reuse pack
-		do_use_pack = false;
-
-		// Itterate count
-		c2r_cntRepeat[id_ind]++;
-
-		// Print dropped packets
-		DebugResent(id, pack, c2r_cntRepeat[id_ind]);
-
-	}
-
-	// Packet not found in hist so process
-	return do_use_pack;
-}
-
 // STORE PACKET DATA TO BE SENT
 void StorePacketData(char targ, char id)
 {
-	bool conf = targ == 'a' ? true : false;
-	StorePacketData(targ, id, 255, 0, conf);
+	bool do_conf = targ == 'a' ? true : false;
+	StorePacketData(targ, id, 255, 0, do_conf);
 }
 void StorePacketData(char targ, char id, byte d1)
 {
-	bool conf = targ == 'a' ? true : false;
-	StorePacketData(targ, id, d1, 0, conf);
+	bool do_conf = targ == 'a' ? true : false;
+	StorePacketData(targ, id, d1, 0, do_conf);
 }
 void StorePacketData(char targ, char id, byte d1, uint16_t pack)
 {
-	bool conf = targ == 'a' ? true : false;
-	StorePacketData(targ, id, d1, pack, conf);
+	bool do_conf = targ == 'a' ? true : false;
+	StorePacketData(targ, id, d1, pack, do_conf);
 }
-void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf)
+void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -3579,18 +3584,18 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf)
 		// Itterate r2a packet number
 		if (pack == 0)
 		{
-			r2a_packCnt++;
-			pack = r2a_packCnt;
+			r2a.packCnt++;
+			pack = r2a.packCnt;
 		}
 
 		// Store header and footer
-		head = r2a_head;
-		foot = r2a_foot;
+		head = r2a.head;
+		foot = r2a.foot;
 
 		// Update last packet arrays
-		id_ind = ID_Ind(id, r2a_id, r2a_idLng);
-		r2a_datLast[id_ind] = d1;
-		r2a_packLast[id_ind] = pack;
+		id_ind = CharInd(id, r2a.idList, r2a.idLng);
+		r2a.datList[id_ind] = d1;
+		r2a.packList[id_ind] = pack;
 	}
 
 	// Store r2c data
@@ -3600,22 +3605,13 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf)
 		queue_ind = sendQueueInd;
 
 		// Store header and footer
-		head = r2c_head;
-		foot = r2c_foot;
+		head = r2c.head;
+		foot = r2c.foot;
 
 		// Update last packet arrays
-		id_ind = ID_Ind(id, r2c_id, r2c_idLng);
-		r2c_datLast[id_ind] = d1;
-		r2c_packLast[id_ind] = pack;
-
-		// Check for done id
-		if (id == 'D')
-		{
-			// Set to check for done recieved
-			fc_doCheckDoneRcvd = true;
-			// Send done recieved request after 1 sec
-			t_resendDone = millis() + 1000;
-		}
+		id_ind = CharInd(id, r2c.idList, r2c.idLng);
+		r2c.datList[id_ind] = d1;
+		r2c.packList[id_ind] = pack;
 	}
 
 	// Update queue index
@@ -3625,24 +3621,24 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool conf)
 	r2_queue[queue_ind][r2_lngC - 1] = targ;
 
 	// Store header
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.c[0] = head;
 	r2_queue[queue_ind][0] = u.b[0];
 	// Store mesage id
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.c[0] = id;
 	r2_queue[queue_ind][1] = u.b[0];
 	// Store mesage data 
 	r2_queue[queue_ind][2] = d1;
 	// Store packet number
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.i16[0] = pack;
 	r2_queue[queue_ind][3] = u.b[0];
 	r2_queue[queue_ind][4] = u.b[1];
-	// Store confirm request
-	r2_queue[queue_ind][5] = conf ? 1 : 0;
+	// Store get_confirm request
+	r2_queue[queue_ind][5] = do_conf ? 1 : 0;
 	// Store footer
-	u.f = 0.0f;
+	u.d = 0.0;
 	u.c[0] = foot;
 	r2_queue[queue_ind][6] = u.b[0];
 
@@ -3663,15 +3659,26 @@ void SendPacketData()
 	int buff_rx = 0;
 	char id = ' ';
 	byte dat = 0;
-	bool conf = 0;
+	bool do_conf = 0;
 	uint16_t pack = 0;
+	int id_ind = 0;
 
 	// Get total data in buffers
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 	buff_rx = Serial1.available();
 
-	// save msg id and reviever id
+	// pull out msg id
 	id = r2_queue[r2_lngR - 1][1];
+	// dat
+	dat = msg[2];
+	// pack
+	u.d = 0.0;
+	u.b[0] = msg[3];
+	u.b[1] = msg[4];
+	pack = u.i16[0];
+	// do_conf 
+	do_conf = msg[5] == 1 ? true : false;
+	// targ
 	targ = r2_queue[r2_lngR - 1][r2_lngC - 1];
 
 	// Move next in queue to temp msg array
@@ -3706,12 +3713,21 @@ void SendPacketData()
 		// Update send time 
 		t_sent = millis();
 
-		// Set flags for r2a comm
-		if (targ == 'a')
+		// Set flags for recieve confirmation
+		if (do_conf)
 		{
-			int id_ind = ID_Ind(id, r2a_id, r2a_idLng);
-			r2a_sendTim[id_ind] = t_sent;
-			r2a_doRcvdCheck[id_ind] = true;
+			if (targ == 'a')
+			{
+				id_ind = CharInd(id, r2a.idList, r2a.idLng);
+				r2a.sendTim[id_ind] = t_sent;
+				r2a.doRcvCheck[id_ind] = true;
+			}
+			else if (targ == 'c')
+			{
+				id_ind = CharInd(id, r2c.idList, r2c.idLng);
+				r2c.sendTim[id_ind] = t_sent;
+				r2c.doRcvCheck[id_ind] = true;
+			}
 		}
 
 		// Update queue index
@@ -3746,19 +3762,10 @@ void SendPacketData()
 			doDB_Log;
 		if (do_print || do_log)
 		{
-			// Store dat
-			dat = msg[2];
-			// Store packet number
-			u.f = 0.0f;
-			u.b[0] = msg[3];
-			u.b[1] = msg[4];
-			pack = u.i16[0];
-			// Store conf 
-			conf = msg[5] == 1 ? true : false;
 
 			// Make string
 			char str[50];
-			sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d conf=%s", targ, id, dat, pack, conf ? "true" : "false");
+			sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d do_conf=%s", targ, id, dat, pack, do_conf ? "true" : "false");
 
 			// Store
 			if (do_print)
@@ -3816,14 +3823,14 @@ void SendLogData()
 		msg_str.toCharArray(msg_char, 100);
 
 		// Load byte array
-		msg[0] = r2c_head;
-		u.f = 0.0f;
+		msg[0] = r2c.head;
+		u.d = 0.0;
 		u.c[0] = 'U';
 		msg[1] = u.b[0];
 		msg[2] = str_size;
 		for (int i = 0; i < str_size; i++)
 			msg[i + 3] = msg_char[i];
-		msg[str_size + 3] = r2c_foot;
+		msg[str_size + 3] = r2c.foot;
 
 		// Compute message size
 		msg_size = str_size + 4;
@@ -3845,41 +3852,75 @@ void SendLogData()
 		}
 
 		// Reset flag
-		fc_doLogSend = false;
+		fc.doLogSend = false;
 
 	}
 }
 
-// CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
-bool CheckArdResend()
+// CHECK IF ROB TO ARD PACKET SHOULD BE RESENT
+bool CheckResend(char targ)
 {
 	// Local vars
 	bool do_pack_resend = false;
 
-	// Loop through and check for data needing to be resent
-	for (int i = 0; i < r2a_idLng; i++)
+	// Loop and check ard flags
+	if (targ == 'a')
 	{
-		if (
-			r2a_doRcvdCheck[i] &&
-			millis() > r2a_sendTim[i] + r2a_resendDel
-			)
+		for (int i = 0; i < r2a.idLng; i++)
 		{
-			if (r2a_resendCnt[i] < r2a_resendMax) {
+			if (
+				r2a.doRcvCheck[i] &&
+				millis() > r2a.sendTim[i] + dt_resend
+				)
+			{
+				if (r2a.resendCnt[i] < resendMax) {
 
-				// Resend data
-				StorePacketData('a', r2a_id[i], r2a_datLast[i], r2a_packLast[i]);
+					// Resend data
+					StorePacketData('a', r2a.idList[i], r2a.datList[i], r2a.packList[i]);
 
-				// Update count
-				r2a_resendCnt[i]++;
-				DebugResent(r2a_id[i], r2a_packLast[i], r2a_resendCnt[i]);
+					// Update count
+					r2a.resendCnt[i]++;
+					DebugResent(r2a.idList[i], r2a.packList[i], r2a.resendCnt[i]);
 
-				// Set flags
-				do_pack_resend = true;
-				r2a_doRcvdCheck[i] = false;
+					// Set flags
+					do_pack_resend = true;
+					r2a.doRcvCheck[i] = false;
+				}
+				// Com likely down
+				else {
+					r2a.doRcvCheck[i] = false;
+				}
 			}
-			// Com likely down
-			else {
-				r2a_doRcvdCheck[i] = false;
+		}
+	}
+
+	// Loop and check cs flags
+	else if (targ == 'c')
+	{
+		for (int i = 0; i < r2c.idLng; i++)
+		{
+			if (
+				r2c.doRcvCheck[i] &&
+				millis() > r2c.sendTim[i] + dt_resend
+				)
+			{
+				if (r2c.resendCnt[i] < resendMax) {
+
+					// Resend data
+					StorePacketData('c', r2c.idList[i], r2c.datList[i], r2c.packList[i]);
+
+					// Update count
+					r2c.resendCnt[i]++;
+					DebugResent(r2c.idList[i], r2c.packList[i], r2c.resendCnt[i]);
+
+					// Set flags
+					do_pack_resend = true;
+					r2c.doRcvCheck[i] = false;
+				}
+				// Com likely down
+				else {
+					r2c.doRcvCheck[i] = false;
+				}
 			}
 		}
 	}
@@ -3904,7 +3945,7 @@ void HardStop(String called_from)
 	pid.Reset();
 
 	// Set to high impedance for manual session
-	if (fc_isManualSes)
+	if (fc.isManualSes)
 	{
 		delay(100);
 		ad_R.hardHiZ();
@@ -3919,7 +3960,7 @@ void HardStop(String called_from)
 void Function_IRprox_Halt()
 {
 	if (!(bull.mode == "Active" && bull.state == "On") &&
-		!fc_isManualSes)
+		!fc.isManualSes)
 	{
 		HardStop("Function_IRprox_Halt");
 	}
@@ -3932,7 +3973,7 @@ bool RunMotor(char dir, float speed, String agent)
 	float speed_steps = speed*cm2stp;
 
 	// Check that caller has control
-	if (agent == fc_motorControl)
+	if (agent == fc.motorControl)
 	{
 		if (dir == 'f')
 		{
@@ -3958,69 +3999,69 @@ bool SetMotorControl(String set_to, String called_from)
 	// Can always set to "None"
 	if (set_to == "None")
 	{
-		fc_motorControl = "None";
+		fc.motorControl = "None";
 	}
 
 	// Do not change control if halted
-	if (!fc_isHalted)
+	if (!fc.isHalted)
 	{
 		// Cannot unset "None" unless certain conditions met
-		if (fc_motorControl == "None")
+		if (fc.motorControl == "None")
 		{
 			// Can still move robot if rat not in
 			if (
 				set_to == "MoveTo" &&
-				!fc_isRatIn
+				!fc.isRatIn
 				)
 			{
-				fc_motorControl = set_to;
+				fc.motorControl = set_to;
 			}
 
 			// CheckBlockTimElapsed can unblock if tracking setup
 			else if (
-				fc_isTrackingEnabled &&
+				fc.isTrackingEnabled &&
 				(called_from == "CheckBlockTimElapsed")
 				)
 			{
-				fc_motorControl = set_to;
+				fc.motorControl = set_to;
 			}
 
 			// InitializeTracking can always unset "None"
 			if (called_from == "InitializeTracking")
 			{
-				fc_motorControl = set_to;
+				fc.motorControl = set_to;
 			}
 
 		}
 
 		// "MoveTo" can only be set to "Open" or "None"
-		else if (fc_motorControl == "MoveTo")
+		else if (fc.motorControl == "MoveTo")
 		{
 			if (set_to == "Open")
 			{
-				fc_motorControl = set_to;
+				fc.motorControl = set_to;
 			}
 		}
 
 		// "Bull" can only be set to "MoveTo" or "Open"
-		else if (fc_motorControl == "Bull")
+		else if (fc.motorControl == "Bull")
 		{
 			if (set_to == "MoveTo" || set_to == "Open")
 			{
-				fc_motorControl = set_to;
+				fc.motorControl = set_to;
 			}
 		}
 
 		// Otherwise can set to anything
-		else if (fc_motorControl == "Open" || fc_motorControl == "PID")
+		else if (fc.motorControl == "Open" || fc.motorControl == "PID")
 		{
-			fc_motorControl = set_to;
+			fc.motorControl = set_to;
 		}
 
 	}
 
 	// Return true if set to input
-	if (set_to == fc_motorControl)
+	if (set_to == fc.motorControl)
 	{
 		pass = true;
 	}
@@ -4035,7 +4076,7 @@ bool SetMotorControl(String set_to, String called_from)
 void BlockMotorTill(int dt, String called_from)
 {
 	// Set blocking and time
-	fc_isBlockingTill = true;
+	fc.isBlockingTill = true;
 
 	// Update time to hold till
 	dt_blockMotor = millis() + dt;
@@ -4050,11 +4091,11 @@ void BlockMotorTill(int dt, String called_from)
 // CHECK IF TIME ELLAPESED
 void CheckBlockTimElapsed()
 {
-	if (fc_isBlockingTill)
+	if (fc.isBlockingTill)
 	{
 		// Check that all 3 measures say rat has passed
 		bool passed_feeder =
-			fc_isTrackingEnabled &&
+			fc.isTrackingEnabled &&
 			ekfRatPos - (ekfRobPos + feedDist) > 0 &&
 			pos_ratVT.posNow - (ekfRobPos + feedDist) > 0 &&
 			pos_ratPixy.posNow - (ekfRobPos + feedDist) > 0;
@@ -4069,7 +4110,7 @@ void CheckBlockTimElapsed()
 			reward.RetractFeedArm();
 
 			// Set flag to stop checking
-			fc_isBlockingTill = false;
+			fc.isBlockingTill = false;
 
 			// Open up control
 			SetMotorControl("Open", "CheckBlockTimElapsed");
@@ -4081,8 +4122,8 @@ void CheckBlockTimElapsed()
 void InitializeTracking()
 {
 	// Reset pos data once after rat in
-	if (fc_isRatIn &&
-		!fc_isTrackingEnabled &&
+	if (fc.isRatIn &&
+		!fc.isTrackingEnabled &&
 		pos_ratVT.newData &&
 		pos_ratPixy.newData &&
 		pos_robVT.newData)
@@ -4121,13 +4162,13 @@ void InitializeTracking()
 		{
 
 			// Set flag
-			fc_isTrackingEnabled = true;
+			fc.isTrackingEnabled = true;
 
 			// Reset ekf
 			pid.ResetEKF("InitializeTracking");
 
 			// Don't start pid for manual sessions
-			if (!fc_isManualSes)
+			if (!fc.isManualSes)
 			{
 				// Open up motor control
 				SetMotorControl("Open", "InitializeTracking");
@@ -4138,7 +4179,7 @@ void InitializeTracking()
 			}
 
 			// Initialize bulldoze
-			if (fc_doBulldoze)
+			if (fc.doBulldoze)
 			{
 				// Run from initial blocked mode
 				bull.TurnOn("InitializeTracking");
@@ -4155,7 +4196,7 @@ void InitializeTracking()
 // CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
 void CheckSampDT() {
 
-	if (fc_isRatIn)
+	if (fc.isRatIn)
 	{
 
 		// Local vars
@@ -4236,7 +4277,7 @@ void UpdateEKF()
 {
 	// Check for new data w or w/o rat tracking
 	if ((pos_ratVT.newData && pos_ratPixy.newData && pos_robVT.newData) ||
-		(pos_robVT.newData && !fc_isRatIn))
+		(pos_robVT.newData && !fc.isRatIn))
 	{
 
 		// Check EKF progress
@@ -4246,13 +4287,13 @@ void UpdateEKF()
 		pid.SetLoopTime(millis());
 
 		// Set rat pos data to match robot
-		if (!fc_isRatIn)
+		if (!fc.isRatIn)
 		{
 			pos_ratVT.SetPos(0, 0);
 			pos_ratPixy.SetPos(0, 0);
 		}
 		// Set rat pos data to match robot
-		else if (fc_isTrackingEnabled)
+		else if (fc.isTrackingEnabled)
 		{
 			// Set flag for reward 
 			reward.is_ekfNew = true;
@@ -4420,7 +4461,7 @@ void CheckBattery()
 		byte_out = byte(round(volt_avg * 10));
 
 		// Add to queue if streaming established
-		if (fc_isStreaming)
+		if (fc.isStreaming)
 			StorePacketData('c', 'J', byte_out, 0);
 
 		char str[50];
@@ -4561,7 +4602,7 @@ void DebugMotorControl(bool pass, String set_to, String called_from)
 		char chr[50];
 		sprintf(chr, "mc change %s: set_in=", pass ? "succeeded" : "failed");
 		String str;
-		str = chr + set_to + " set_out=" + fc_motorControl + " [" + called_from + "]";
+		str = chr + set_to + " set_out=" + fc.motorControl + " [" + called_from + "]";
 
 		// Add to print queue
 		if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
@@ -4653,55 +4694,29 @@ void DebugResent(char id, uint16_t pack, int total)
 // LOG/PRING RECIEVED PACKET DEBUG STRING
 void DebugRcvd(char from, char id, uint16_t pack)
 {
+	// Local vars
+	double dat1 = 0;
+	double dat2 = 0;
+	double dat3 = 0;
+
+	if (from == 'c')
+	{
+		dat1 = c2r.dat[0];
+		dat2 = c2r.dat[0];
+		dat3 = c2r.dat[1];
+	}
+	else dat1 = a2r.dat[0];
+
 	if (
+		id != 'P' &&
 		(doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD)) ||
 		(doLog_rcvd && doDB_Log)
 		)
 	{
-		char chr[50];
+		char chr[100];
 
 		// Print specific pack contents
-		if (id == 'T')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d dat2=%d pack=%d", from, id, msg_testCmd[0], msg_testCmd[1], pack);
-		}
-		else if (id == 'S')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d dat2=%d pack=%d", from, id, msg_setupCmd[0], msg_setupCmd[1], pack);
-		}
-		else if (id == 'Q')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d dat2=%d pack=%d", from, id, pack);
-		}
-		else if (id == 'M')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f pack=%d", from, id, msg_moveToTarg, pack);
-		}
-		else if (id == 'R')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewDelay, pack);
-		}
-		else if (id == 'C')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%0.2f dat2=%d pack=%d", from, id, msg_rewPos, msg_rewZoneInd, pack);
-		}
-		else if (id == 'H')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, fc_doHalt, pack);
-		}
-		else if (id == 'B')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, msg_bullDel, pack);
-		}
-		else if (id == 'I')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, fc_isRatIn, pack);
-		}
-		else if (id == 'L')
-		{
-			sprintf(chr, "rcvd_%c2r: id=%c dat1=%d pack=%d", from, id, fc_doLogResend, pack);
-		}
-		else sprintf(chr, "rcvd_%c2r: id=%c pack=%d", from, id, pack);
+		sprintf(chr, "rcvd_%c2r: id=%c dat1=%lu dat2=%lu dat3=%lu pack=%d", from, id, dat1, dat2, dat3, pack);
 
 		// Convert to string
 		String str = chr;
@@ -4821,8 +4836,8 @@ void StoreDBLogStr(String msg, uint32_t t)
 
 	// Dont store repeated string or log data while sending log
 	if (
-		fc_isStreaming &&
-		!fc_isSendingLog &&
+		fc.isStreaming &&
+		!fc.isSendingLog &&
 		msg != last_msg
 		)
 	{
@@ -4990,7 +5005,7 @@ void ClearLCD()
 #pragma region --------MINOR FUNCTIONS---------
 
 // GET ID INDEX
-int ID_Ind(char id, char id_arr[], int arr_size)
+int CharInd(char id, char id_arr[], int arr_size)
 {
 
 	int ind = -1;

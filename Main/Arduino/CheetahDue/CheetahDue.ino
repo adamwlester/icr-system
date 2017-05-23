@@ -73,21 +73,31 @@ const int pin_ptEastOn = A0;
 
 #pragma region ---------VARIABLE DECLARATION---------
 
-// PHOTO TRANSDUCER VARS
+// Flow/state control
+struct FC
+{
+	bool doQuit = false;
+	bool isSesStarted = false;
+	bool doWhiteNoise = false;
+	bool doRewTone = false;
+	bool isRewarding = false;
+}
+// Initialize
+fc;
 
-// north vars
+// PT north vars
 volatile uint32_t t_inLastNorth = millis();
 volatile uint32_t t_outLastNorth = millis();
 volatile bool isOnNorth = false;
-// west vars
+// PT west vars
 volatile uint32_t t_inLastWest = millis();
 volatile uint32_t t_outLastWest = millis();
 volatile bool isOnWest = false;
-// south 
+// PT south 
 volatile uint32_t t_inLastSouth = millis();
 volatile uint32_t t_outLastSouth = millis();
 volatile bool isOnSouth = false;
-// east vars
+// PT east vars
 volatile uint32_t t_inLastEast = millis();
 volatile uint32_t t_outLastEast = millis();
 volatile bool isOnEast = false;
@@ -95,13 +105,6 @@ volatile bool isOnEast = false;
 // TTL timers
 uint32_t t_debounce = 10; // (ms)
 uint32_t t_pulseWdth = 50; // (ms)
-
-// Flow control
-bool fc_doQuit = false;
-bool fc_isSesStarted = false;
-bool fc_doWhiteNoise = false;
-bool fc_doRewTone = false;
-bool fc_isRewarding = false;
 
 // Serial
 char msg_id = ' ';
@@ -252,7 +255,7 @@ void loop()
 	}
 
 	// Check for sync time indicating session starting
-	if (!fc_isSesStarted)
+	if (!fc.isSesStarted)
 	{
 		if (r2a_isNew && msg_id == 't')
 		{
@@ -261,7 +264,7 @@ void loop()
 			CheckIRPulse();
 
 			// Set flag
-			fc_isSesStarted = true;
+			fc.isSesStarted = true;
 			PrintState("START SESSION");
 		}
 	}
@@ -287,26 +290,26 @@ void loop()
 				// No noise
 				if (msg_dat == 0)
 				{
-					fc_doWhiteNoise = false;
-					fc_doRewTone = false;
+					fc.doWhiteNoise = false;
+					fc.doRewTone = false;
 				}
 				// White noise only
 				else if (msg_dat == 1)
 				{
 					// set white noise pins
-					fc_doWhiteNoise = true;
-					fc_doRewTone = false;
+					fc.doWhiteNoise = true;
+					fc.doRewTone = false;
 				}
 				// White and reward sound
 				else if (msg_dat == 2)
 				{
 					// set white noise pins
-					fc_doWhiteNoise = true;
-					fc_doRewTone = true;
+					fc.doWhiteNoise = true;
+					fc.doRewTone = true;
 				}
 
 				// Get reward on port word
-				if (fc_doWhiteNoise && fc_doRewTone) {
+				if (fc.doWhiteNoise && fc.doRewTone) {
 					// white and tone pins
 					int sam_on_pins[3] = { sam_relRewTone, sam_ttlRewTone, sam_ttlRewOn };
 					word_rewOn = GetPortWord(0x0, sam_on_pins, 3);
@@ -321,7 +324,7 @@ void loop()
 					word_rewOff = GetPortWord(0x0, sam_off_pins, 1);
 				}
 				// Turn on white noise
-				if (fc_doWhiteNoise) {
+				if (fc.doWhiteNoise) {
 					// turn white on
 					int sam_white_pins[2] = { sam_relWhiteNoise, sam_ttlWhiteNoise };
 					uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
@@ -368,14 +371,14 @@ void loop()
 
 			// Quite and reset
 			else if (msg_id == 'q') {
-				fc_doQuit = true;
+				fc.doQuit = true;
 				PrintState("QUITING");
 			}
 
 		}
 
 		// Check for rew end
-		if (fc_isRewarding)
+		if (fc.isRewarding)
 		{
 			EndRew();
 		}
@@ -387,7 +390,7 @@ void loop()
 		CheckIRPulse();
 
 		// Check if ready to quit
-		if (fc_doQuit && !doPackSend)
+		if (fc.doQuit && !doPackSend)
 		{
 			// Run bleep bleep
 			QuitBleep();
@@ -400,7 +403,7 @@ void loop()
 	// Send message confirmation
 	if (doPackSend)
 	{
-		SendSerial(msg_id, r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)]);
+		SendSerial(msg_id, 255, r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)], false);
 	}
 
 }
@@ -496,10 +499,10 @@ bool ParseSerial()
 }
 
 // SEND SERIAL DATA
-void SendSerial(char id, uint16_t pack)
+void SendSerial(char id, byte d1, uint16_t pack, bool do_conf)
 {
 	// Local vars
-	const int msg_size = 5;
+	const int msg_size = 7;
 	byte msg[msg_size];
 	bool pass = false;
 
@@ -521,21 +524,25 @@ void SendSerial(char id, uint16_t pack)
 		u.f = 0.0f;
 		u.c[0] = id;
 		msg[1] = u.b[0];
+		// Store mesage data 
+		msg[2] = d1;
 		// Store packet number
 		u.f = 0.0f;
 		u.i16[0] = pack;
-		msg[2] = u.b[0];
-		msg[3] = u.b[1];
+		msg[3] = u.b[0];
+		msg[4] = u.b[1];
+		// Store get_confirm request
+		msg[5] = do_conf ? 1 : 0;
 		// Store footer
 		u.f = 0.0f;
 		u.c[0] = a2r_foot;
-		msg[4] = u.b[0];
+		msg[6] = u.b[0];
 
 		// Send
 		Serial1.write(msg, msg_size);
 
 		// Print sent
-		PrintSentPack(id, pack);
+		PrintSentPack(id, d1, pack, do_conf);
 
 		// Reset flag
 		doPackSend = false;
@@ -561,7 +568,7 @@ void StartRew()
 	PrintState("PID STOPPED");
 
 	// Set flag
-	fc_isRewarding = true;
+	fc.isRewarding = true;
 
 	// Print
 	char chr[50];
@@ -579,7 +586,7 @@ void EndRew()
 		// Set reward off pins
 		SetPort(word_rewOff, word_rewOn);
 
-		fc_isRewarding = false;
+		fc.isRewarding = false;
 		PrintState("REWARD OFF");
 
 	}
@@ -612,14 +619,14 @@ void PrintRcvdPack(char id, byte dat, uint16_t pack, bool conf)
 }
 
 // PRINT SENT PACKET
-void PrintSentPack(char id, uint16_t pack)
+void PrintSentPack(char id, byte d1, uint16_t pack, bool do_conf)
 {
 
 	//// Print
 	if (doPrintSentPack)
 	{
 		char str[50];
-		sprintf(str, "sent_a2r: id=%c pack=%d", id, pack);
+		sprintf(str, "sent_a2r: id=%c dat1=%d pack=%d do_conf=%s", id, d1, pack, do_conf ? "true" : "false");
 		PrintStr(str, millis());
 	}
 }
@@ -797,7 +804,7 @@ void NorthInterrupt()
 }
 void NorthFun()
 {
-	if (fc_isSesStarted)
+	if (fc.isSesStarted)
 	{
 		if (millis() - t_inLastNorth > t_debounce) {
 			digitalWrite(pin_ttlNorthOn, HIGH);
@@ -818,7 +825,7 @@ void WestInterrupt()
 }
 void WestFun()
 {
-	if (fc_isSesStarted)
+	if (fc.isSesStarted)
 	{
 		if (millis() - t_inLastWest > t_debounce) {
 			digitalWrite(pin_ttlWestOn, HIGH);
@@ -839,7 +846,7 @@ void SouthInterrupt()
 }
 void SouthFun()
 {
-	if (fc_isSesStarted)
+	if (fc.isSesStarted)
 	{
 		if (millis() - t_inLastSouth > t_debounce) {
 			digitalWrite(pin_ttlSouthOn, HIGH);
@@ -860,7 +867,7 @@ void EastInterrupt()
 }
 void EastFun()
 {
-	if (fc_isSesStarted)
+	if (fc.isSesStarted)
 	{
 		if (millis() - t_inLastEast > t_debounce) {
 			digitalWrite(pin_ttlEastOn, HIGH);
