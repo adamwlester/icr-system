@@ -24,41 +24,42 @@
 
 // LOG DEBUGGING
 
-// Do log
-bool doDB_Log = true;
+struct DB
+{
+	// Do log
+	bool Log = true;
+	// What to print
+	const bool log_flow = true;
+	const bool log_irSync = true;
+	const bool log_motorControl = true;
+	const bool log_motorBlocking = true;
+	const bool log_c2r = true;
+	const bool log_r2c = true;
+	const bool log_r2a = true;
+	const bool log_pid = true;
+	const bool log_bull = true;
+	const bool log_resent = true;
+	const bool log_dropped = true;
 
-// What to print
-const bool doLog_flow = true;
-const bool doLog_irSync = true;
-const bool doLog_motorControl = true;
-const bool doLog_motorBlocking = true;
-const bool doLog_rcvd = true;
-const bool doLog_r2c = true;
-const bool doLog_r2a = true;
-const bool doLog_pid = true;
-const bool doLog_bull = true;
-const bool doLog_resent = true;
-const bool doLog_dropped = true;
-
-// PRINT DEBUGGING
-
-// Where to print
-const bool doDB_PrintConsole = false;
-const bool doDB_PrintLCD = false;
-
-// What to print
-const bool doPrint_flow = false;
-const bool doPrint_irSync = false;
-const bool doPrint_motorControl = false;
-const bool doPrint_motorBlocking = false;
-const bool doPrint_rcvd = false;
-const bool doPrint_r2c = false;
-const bool doPrint_r2a = false;
-const bool doPrint_pid = false;
-const bool doPrint_bull = false;
-const bool doPrint_resent = false;
-const bool doPrint_dropped = false;
-const bool doPrint_log = false;
+    // Where to print
+	bool Console = false;
+	bool LCD = false;
+	// What to print
+	const bool print_flow = false;
+	const bool print_irSync = false;
+	const bool print_motorControl = false;
+	const bool print_motorBlocking = false;
+	const bool print_c2r = false;
+	const bool print_r2c = false;
+	const bool print_r2a = false;
+	const bool print_pid = false;
+	const bool print_bull = false;
+	const bool print_resent = false;
+	const bool print_dropped = false;
+	const bool print_log = false;
+}
+// Initialize
+db;
 
 // TESTING
 
@@ -273,7 +274,7 @@ struct C2R
 	int cntRepeat[idLng];
 	char idNew = ' ';
 	bool isNew = false;
-	double dat[3] = { 255, 255, 255 };
+	float dat[3] = { 0, 0, 0 };
 
 	// Data vars
 	byte testCond = 0;
@@ -353,7 +354,7 @@ struct A2R
 {
 	const char head = '{';
 	const char foot = '}';
-	double dat[1] = { 255 };
+	byte dat[1] = { 255 };
 }
 // Initialize
 a2r;
@@ -514,6 +515,8 @@ void DebugDropped(int missed, int missed_total, int total);
 void DebugResent(char id, uint16_t pack, int total);
 // LOG/PRING RECIEVED PACKET DEBUG STRING
 void DebugRcvd(char from, char id, uint16_t pack);
+// LOG/PRING SENT PACKET DEBUG STRING
+void DebugSent(char targ, char id, byte d1, uint16_t pack, bool do_conf);
 // LOG/PRING IR SENSOR EVENT
 void DebugIRSync(String msg, uint32_t t);
 // LOG/PRING MAIN EVENT
@@ -1075,11 +1078,11 @@ public:
 	void PrintPID(String str)
 	{
 		// Add to print queue
-		if (doPrint_pid && (doDB_PrintConsole || doDB_PrintLCD)) {
+		if (db.print_pid && (db.Console || db.LCD)) {
 			StoreDBPrintStr(str, millis());
 		}
 		// Add to log queue
-		if (doLog_pid && doDB_Log) {
+		if (db.log_pid && db.Log) {
 			StoreDBLogStr(str, millis());
 		}
 	}
@@ -1428,11 +1431,11 @@ public:
 	void PrintBull(String str)
 	{
 		// Add to print queue
-		if (doPrint_bull && (doDB_PrintConsole || doDB_PrintLCD)) {
+		if (db.print_bull && (db.Console || db.LCD)) {
 			StoreDBPrintStr(str, millis());
 		}
 		// Add to log queue
-		if (doLog_bull && doDB_Log) {
+		if (db.log_bull && db.Log) {
 			StoreDBLogStr(str, millis());
 		}
 	}
@@ -2176,16 +2179,14 @@ protected:
 Fuser ekf;
 
 
-//----------CLASS: union----------
 union u_tag {
-	byte b[8]; // (byte) 1 byte
-	char c[8]; // (char) 1 byte
-	uint16_t i16[4]; // (int16) 2 byte
-	uint32_t i32[2]; // (int32) 4 byte
-	int i[2]; // (int) 4 byte
-	long l[2]; // (long) 4 byte
-	float f[2]; // (float) 4 byte
-	double d; // (double) 8 byte
+	byte b[4]; // (byte) 1 byte
+	char c[4]; // (char) 1 byte
+	uint16_t i16[2]; // (int16) 2 byte
+	uint32_t i32; // (int32) 4 byte
+	int i; // (int) 4 byte
+	long l; // (long) 4 byte
+	float f; // (float) 4 byte
 }
 // Initialize object
 u;
@@ -2404,7 +2405,7 @@ void loop() {
 
 		// Check if ir sensor needs to be disabled
 		if (digitalRead(pin_IRdetect) == HIGH)
-			DebugFlow("!!IR SENSOR DISABLED!!");
+			DebugFlow("!!ERROR!! IR SENSOR DISABLED");
 
 
 		/*
@@ -2424,6 +2425,8 @@ void loop() {
 #pragma endregion
 
 #pragma region //--- PARSE SERIAL ---
+	c2r.isNew = false;
+	c2r.idNew = ' ';
 	if (Serial1.available() > 0)
 	{
 		ParseSerial();
@@ -2543,7 +2546,7 @@ void loop() {
 		// Store message data
 		c2r.sesCond = (byte)c2r.dat[0];
 		c2r.soundCond = (byte)c2r.dat[1];
-
+		millis();
 		// Set condition
 		if (c2r.sesCond == 1)
 		{
@@ -2619,11 +2622,14 @@ void loop() {
 	if (c2r.idNew == 'M' && c2r.isNew)
 	{
 		// Store message data
-		c2r.moveToTarg = (float)c2r.dat[0];
+		c2r.moveToTarg = c2r.dat[0];
 
 		// Set flags
 		fc.doMove = true;
-		DebugFlow("DO MOVE");
+
+		char str[100];
+		sprintf(str, "DO MOVE: pos=%0.2fcm", c2r.moveToTarg);
+		DebugFlow(str);
 	}
 
 	// Perform movement
@@ -2651,8 +2657,6 @@ void loop() {
 				// Reset motor cotrol if run fails
 				else SetMotorControl("Open", "MsgM");
 			}
-			else if (!fc.isEKFReady)
-				DebugFlow("NO MOVE BECAUSE EKF NOT READY");
 		}
 
 		// Check if robot is ready to be stopped
@@ -2695,7 +2699,9 @@ void loop() {
 			else
 			{
 				// Print failure message
-				sprintf(str, "!!ABORTED MOVE: to=%0.2fcm within=%0.2fcm!!",
+				if (!fc.isEKFReady)
+					DebugFlow("!!ERROR!! NO MOVE BECAUSE EKF NOT READY");
+				sprintf(str, "!!ERROR!! ABORTED MOVE: to=%0.2fcm within=%0.2fcm",
 					targ_moveTo.offsetTarget, targ_moveTo.GetError(ekfRobPos));
 				DebugFlow(str);
 			}
@@ -2707,8 +2713,8 @@ void loop() {
 	if (c2r.idNew == 'R' && c2r.isNew)
 	{
 		// Store message data
-		c2r.rewPos = (float)c2r.dat[0];
-		c2r.rewZoneInd = (byte)c2r.dat[1]-1;
+		c2r.rewPos = c2r.dat[0];
+		c2r.rewZoneInd = (byte)c2r.dat[1] - 1;
 		c2r.rewDelay = (byte)c2r.dat[2];
 
 		// Free reward
@@ -2797,7 +2803,7 @@ void loop() {
 			{
 				// Print reward missed
 				char str[50];
-				sprintf(str, "!!REWARD MISSED!!: rat=%0.2fcm bound_max=%0.2fcm",
+				sprintf(str, "REWARD MISSED: rat=%0.2fcm bound_max=%0.2fcm",
 					ekfRatPos, reward.boundMax);
 				DebugFlow(str);
 
@@ -2954,9 +2960,6 @@ void loop() {
 #pragma region //--- (P) VT DATA RECIEVED ---
 	if (c2r.idNew == 'P' && c2r.isNew)
 	{
-		c2r.vtEnt = (byte)c2r.dat[0];
-		c2r.vtTS[c2r.vtEnt] = (long)c2r.dat[1];
-		c2r.vtCM[c2r.vtEnt] = (float)c2r.dat[2];
 
 		// Update vt pos data
 		if (c2r.vtEnt == 0)
@@ -2977,15 +2980,15 @@ void loop() {
 		fc.doLogResend = c2r.dat[0] != 0 ? true : false;
 
 		// Stop logging
-		if (doDB_Log)
-			doDB_Log = false;
+		if (db.Log)
+			db.Log = false;
 
 		// Send log data
 		if (!fc.doLogResend)
 		{
 			cnt_logSend++;
 		}
-		else DebugFlow("!!RESEND LAST LOG PACKET!!");
+		else DebugFlow("!!ERROR!!: RESEND LAST LOG PACKET");
 
 		// Check if end of list reached
 		if (cnt_logSend <= cnt_logStore)
@@ -3115,7 +3118,7 @@ void loop() {
 
 			// Tell CS what zone was rewarded
 			if (reward.mode != "Now")
-				StorePacketData('c', 'Z', reward.zoneIndByte, 0);
+				StorePacketData('c', 'Z', reward.zoneIndByte+1, 0);
 		}
 	}
 
@@ -3156,8 +3159,6 @@ void ParseSerial()
 	char foot = ' ';
 	bool do_conf;
 	bool is_cs_msg = false;
-	c2r.idNew = ' ';
-	c2r.isNew = false;
 
 	// Dump data till msg header byte is reached
 	buff = WaitBuffRead(c2r.head, a2r.head);
@@ -3166,12 +3167,12 @@ void ParseSerial()
 		return;
 	}
 	// store header
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.b[0] = buff;
 	head = u.c[0];
 
 	// get id
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.b[0] = WaitBuffRead();
 	id = u.c[0];
 
@@ -3179,34 +3180,32 @@ void ParseSerial()
 	if (head == c2r.head)
 	{
 		is_cs_msg = true;
-		c2r.idNew = id;
 		ParseC2RData(id);
 	}
 	else if (head == a2r.head)
 	{
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		a2r.dat[0] = u.d;
+		a2r.dat[0] = WaitBuffRead();
 	}
 
 	// Get packet num
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.b[0] = WaitBuffRead();
 	u.b[1] = WaitBuffRead();
 	pack = u.i16[0];
 
 	// Check for recieved confirmation
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.b[0] = WaitBuffRead();
 	do_conf = u.b[0] != 0 ? true : false;
 
 	// Check for footer
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.b[0] = WaitBuffRead();
 	foot = u.c[0];
 
 	// Process ard packet
-	if (!is_cs_msg && foot == a2r.foot) {
+	if (!is_cs_msg && foot == a2r.foot)
+	{
 		id_ind = CharInd(id, r2a.idList, r2a.idLng);
 		if (id_ind != -1)
 		{
@@ -3226,14 +3225,18 @@ void ParseSerial()
 	}
 
 	// Process cs packet
-	if (is_cs_msg && foot != c2r.foot) {
+	if (is_cs_msg && foot != c2r.foot)
+	{
 		// mesage will be dumped
 		c2r.isNew = false;
 	}
-	else
+	else if (is_cs_msg && foot == c2r.foot)
 	{
 		// Update recive time
 		t_rcvd = millis();
+
+		// Store id
+		c2r.idNew = id;
 
 		// Check for streaming started
 		if (!fc.isStreaming)
@@ -3246,17 +3249,18 @@ void ParseSerial()
 		}
 
 		// Get id ind
-		id_ind = CharInd(c2r.idNew, c2r.idList, c2r.idLng);
+		id_ind = CharInd(id, c2r.idList, c2r.idLng);
 
 		// Store revieved pack details
-		DebugRcvd('c', c2r.idNew, pack);
+		if (id != 'P')
+			DebugRcvd('c', id, pack);
 
 		// Reset flags
 		r2c.doRcvCheck[id_ind] = false;
 
 		// Send packet confirmation
-			if (do_conf)
-				StorePacketData('c', c2r.idNew, 0, pack);
+		if (do_conf)
+			StorePacketData('c', id, 0, pack);
 
 		// Check for dropped packets
 		int pack_diff = (int)(pack - pack_last);
@@ -3300,7 +3304,7 @@ void ParseSerial()
 			c2r.cntRepeat[id_ind]++;
 
 			// Print dropped packets
-			DebugResent(c2r.idNew, pack, c2r.cntRepeat[id_ind]);
+			DebugResent(id, pack, c2r.cntRepeat[id_ind]);
 
 		}
 	}
@@ -3314,133 +3318,112 @@ void ParseC2RData(char id)
 	bool pass = false;
 	byte buff = 0;
 	int id_ind = 0;
-	c2r.dat[0] = 255;
-	c2r.dat[1] = 255;
-	c2r.dat[2] = 255;
+	c2r.dat[0] = 0;
+	c2r.dat[1] = 0;
+	c2r.dat[2] = 0;
+	a2r.dat[0] = 0;
 
 	// Get system test data
-	if (c2r.idNew == 'T')
+	if (id == 'T')
 	{
 		// Get test id
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.testCond = u.b[0];
+		c2r.dat[0] = (float)WaitBuffRead();
 
 		// Get test argument
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.testDat = u.b[0];
+		c2r.dat[1] = (float)WaitBuffRead();
 	}
 
 	// Get setup data
-	if (c2r.idNew == 'S')
+	if (id == 'S')
 	{
 		// Get session comand
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = (float)WaitBuffRead();
 
 		// Get tone condition
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[1] = u.d;
+		c2r.dat[1] = (float)WaitBuffRead();
 	}
 
 	// Get MoveTo data
-	if (c2r.idNew == 'M')
+	if (id == 'M')
 	{
 		// Get move pos
-		u.d = 0.0;
+		u.f = 0.0f;
 		u.b[0] = WaitBuffRead();
 		u.b[1] = WaitBuffRead();
 		u.b[2] = WaitBuffRead();
 		u.b[3] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = u.f;
 	}
 
 	// Get Reward data
-	if (c2r.idNew == 'R')
+	if (id == 'R')
 	{
 		// Get stop pos
-		u.d = 0.0;
+		u.f = 0.0f;
 		u.b[0] = WaitBuffRead();
 		u.b[1] = WaitBuffRead();
 		u.b[2] = WaitBuffRead();
 		u.b[3] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = u.f;
 
 		// Get zone ind 
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[1] = u.d;
+		c2r.dat[1] = (float)WaitBuffRead();
 
 		// Get reward diration 
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[2] = u.d;
+		c2r.dat[2] = (float)WaitBuffRead();
 	}
 
 	// Get halt robot data
-	if (c2r.idNew == 'H')
+	if (id == 'H')
 	{
 		// Get halt bool
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = (float)WaitBuffRead();
 	}
 
 	// Get bulldoze rat data
-	if (c2r.idNew == 'B')
+	if (id == 'B')
 	{
 		// Get delay in sec
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = (float)WaitBuffRead();
 
 		// Get speed
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[1] = u.d;
+		c2r.dat[1] = (float)WaitBuffRead();
 	}
 
 	// Get rat in/out
-	if (c2r.idNew == 'I')
+	if (id == 'I')
 	{
 		// Get session comand
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = (float)WaitBuffRead();
 	}
 
 	// Get log request data
-	if (c2r.idNew == 'L')
+	if (id == 'L')
 	{
 		// Get session comand
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.dat[0] = (float)WaitBuffRead();
 	}
 
 	// Get VT data
-	else if (c2r.idNew == 'P')
+	else if (id == 'P')
 	{
+
 		// Get Ent
-		u.d = 0.0;
-		u.b[0] = WaitBuffRead();
-		c2r.dat[0] = u.d;
+		c2r.vtEnt = WaitBuffRead();
 		// Get TS
-		u.d = 0.0;
+		u.f = 0.0f;
 		u.b[0] = WaitBuffRead();
 		u.b[1] = WaitBuffRead();
 		u.b[2] = WaitBuffRead();
 		u.b[3] = WaitBuffRead();
-		c2r.dat[1] = u.d;
+		c2r.vtTS[c2r.vtEnt] = u.l;
 		// Get pos cm
+		u.f = 0.0f;
 		u.b[0] = WaitBuffRead();
 		u.b[1] = WaitBuffRead();
 		u.b[2] = WaitBuffRead();
 		u.b[3] = WaitBuffRead();
-		c2r.dat[2] = u.d;
+		c2r.vtCM[c2r.vtEnt] = u.f;
 	}
 
 }
@@ -3621,24 +3604,24 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 	r2_queue[queue_ind][r2_lngC - 1] = targ;
 
 	// Store header
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.c[0] = head;
 	r2_queue[queue_ind][0] = u.b[0];
 	// Store mesage id
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.c[0] = id;
 	r2_queue[queue_ind][1] = u.b[0];
 	// Store mesage data 
 	r2_queue[queue_ind][2] = d1;
 	// Store packet number
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.i16[0] = pack;
 	r2_queue[queue_ind][3] = u.b[0];
 	r2_queue[queue_ind][4] = u.b[1];
 	// Store get_confirm request
 	r2_queue[queue_ind][5] = do_conf ? 1 : 0;
 	// Store footer
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.c[0] = foot;
 	r2_queue[queue_ind][6] = u.b[0];
 
@@ -3672,7 +3655,7 @@ void SendPacketData()
 	// dat
 	dat = msg[2];
 	// pack
-	u.d = 0.0;
+	u.f = 0.0f;
 	u.b[0] = msg[3];
 	u.b[1] = msg[4];
 	pack = u.i16[0];
@@ -3754,27 +3737,7 @@ void SendPacketData()
 		}
 
 		// Print
-		bool do_print = ((doPrint_r2c && targ == 'c') ||
-			(doPrint_r2a && targ == 'a')) &&
-			(doDB_PrintConsole || doDB_PrintLCD);
-		bool do_log = ((doLog_r2c && targ == 'c') ||
-			(doLog_r2a && targ == 'a')) &&
-			doDB_Log;
-		if (do_print || do_log)
-		{
-
-			// Make string
-			char str[50];
-			sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d do_conf=%s", targ, id, dat, pack, do_conf ? "true" : "false");
-
-			// Store
-			if (do_print)
-				StoreDBPrintStr(str, t_sent);
-			if (do_log)
-				StoreDBLogStr(str, t_sent);
-
-		}
-
+		DebugSent(targ, id, dat, pack, do_conf);
 	}
 }
 
@@ -3782,9 +3745,9 @@ void SendPacketData()
 void SendLogData()
 {
 	// Local vars
-	String msg_str = " ";
-	char msg_char[100];
-	byte str_size = 0;
+	String msg_s = " ";
+	char msg_c[100];
+	byte chksum = 0;
 	byte msg_size = 0;
 	byte msg[100];
 	bool do_send = false;
@@ -3814,41 +3777,46 @@ void SendLogData()
 		t_sent = millis();
 
 		// Pull out string
-		msg_str = logList[cnt_logSend - 1];
+		msg_s = logList[cnt_logSend - 1];
 
 		// Get message size
-		str_size = msg_str.length();
+		chksum = msg_s.length();
 
 		// Convert to char array
-		msg_str.toCharArray(msg_char, 100);
+		msg_s.toCharArray(msg_c, 100);
 
 		// Load byte array
+		// head
 		msg[0] = r2c.head;
-		u.d = 0.0;
+		// id
+		u.f = 0.0f;
 		u.c[0] = 'U';
 		msg[1] = u.b[0];
-		msg[2] = str_size;
-		for (int i = 0; i < str_size; i++)
-			msg[i + 3] = msg_char[i];
-		msg[str_size + 3] = r2c.foot;
+		// checksum
+		msg[2] = chksum;
+		// msg
+		for (int i = 0; i < chksum; i++)
+			msg[i + 3] = msg_c[i];
+		// foot
+		msg[chksum + 3] = r2c.foot;
 
 		// Compute message size
-		msg_size = str_size + 4;
+		msg_size = chksum + 4;
 
 		// Send
 		Serial1.write(msg, msg_size);
 
 		// Print
-		if (doPrint_log &&
-			(doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_log &&
+			(db.Console || db.LCD))
 		{
 			char chr[100];
 			String str;
 
 			// Store
-			sprintf(chr, "sent log: sent=%d stored=%d chksum=%d: ", cnt_logSend, cnt_logStore, str_size);
+			sprintf(chr, "sent log: sent=%d stored=%d chksum=%d: ", cnt_logSend, cnt_logStore, chksum);
 			str = chr;
-			StoreDBPrintStr(str + "\"" + msg_str + "\"", t_sent);
+			StoreDBPrintStr(str + "\"" + msg_s + "\"", t_sent);
 		}
 
 		// Reset flag
@@ -4322,7 +4290,7 @@ void UpdateEKF()
 		// Check for nan values
 		if (isnan(ekfRatPos) || isnan(ekfRobPos) || isnan(ekfRatVel) || isnan(ekfRobVel)) {
 			char chr[50];
-			sprintf(chr, "!! \"nan\" EKF OUTPUT: ratVT.pos=%0.2f ratPixy.pos=%0.2f robVT.pos=%0.2f ratVT.vel=%0.2f ratPixy.vel=%0.2f robVT.vel=%0.2f !!",
+			sprintf(chr, "!!ERROR!!: \"nan\" EKF OUTPUT: ratVT.pos=%0.2f ratPixy.pos=%0.2f robVT.pos=%0.2f ratVT.vel=%0.2f ratPixy.vel=%0.2f robVT.vel=%0.2f",
 				pos_ratVT.posNow, pos_ratPixy.posNow, pos_robVT.posNow, pos_ratVT.velNow, pos_ratPixy.velNow, pos_robVT.velNow);
 			DebugFlow(chr);
 		}
@@ -4595,8 +4563,8 @@ void QuitSession()
 void DebugMotorControl(bool pass, String set_to, String called_from)
 {
 	if (
-		(doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_motorControl && doDB_Log)
+		(db.print_motorControl && (db.Console || db.LCD)) ||
+		(db.log_motorControl && db.Log)
 		)
 	{
 		char chr[50];
@@ -4605,10 +4573,10 @@ void DebugMotorControl(bool pass, String set_to, String called_from)
 		str = chr + set_to + " set_out=" + fc.motorControl + " [" + called_from + "]";
 
 		// Add to print queue
-		if (doPrint_motorControl && (doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_motorControl && (db.Console || db.LCD))
 			StoreDBPrintStr(str, millis());
 		// Add to log queue
-		if (doLog_motorControl && doDB_Log)
+		if (db.log_motorControl && db.Log)
 			StoreDBLogStr(str, millis());
 	}
 }
@@ -4617,8 +4585,8 @@ void DebugMotorControl(bool pass, String set_to, String called_from)
 void DebugMotorBocking(String msg, uint32_t t, String called_from)
 {
 	if (
-		(doPrint_motorBlocking && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_motorBlocking && doDB_Log)
+		(db.print_motorBlocking && (db.Console || db.LCD)) ||
+		(db.log_motorBlocking && db.Log)
 		)
 	{
 		char chr[50];
@@ -4627,10 +4595,10 @@ void DebugMotorBocking(String msg, uint32_t t, String called_from)
 		str = msg + chr + " [" + called_from + "]";
 
 		// Add to print queue
-		if (doPrint_motorBlocking && (doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_motorBlocking && (db.Console || db.LCD))
 			StoreDBPrintStr(str, millis());
 		// Add to log queue
-		if (doLog_motorBlocking && doDB_Log)
+		if (db.log_motorBlocking && db.Log)
 			StoreDBLogStr(str, millis());
 	}
 }
@@ -4639,8 +4607,8 @@ void DebugMotorBocking(String msg, uint32_t t, String called_from)
 void DebugDropped(int missed, int missed_total, int total)
 {
 	if (
-		(doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_dropped && doDB_Log)
+		(db.print_dropped && (db.Console || db.LCD)) ||
+		(db.log_dropped && db.Log)
 		)
 	{
 		// Local vars
@@ -4652,13 +4620,13 @@ void DebugDropped(int missed, int missed_total, int total)
 		buff_rx = Serial1.available();
 
 		char str[50];
-		sprintf(str, "!!PACK LOST: tot=%d/%d/%d tx=%d rx=%d!!", missed, missed_total, total, buff_tx, buff_rx);
+		sprintf(str, "!!ERROR!! PACK LOST: tot=%d/%d/%d tx=%d rx=%d", missed, missed_total, total, buff_tx, buff_rx);
 
 		// Add to print queue
-		if (doPrint_dropped && (doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_dropped && (db.Console || db.LCD))
 			StoreDBPrintStr(str, millis());
 		// Add to log queue
-		if (doLog_dropped && doDB_Log)
+		if (db.log_dropped && db.Log)
 			StoreDBLogStr(str, millis());
 	}
 }
@@ -4667,8 +4635,8 @@ void DebugDropped(int missed, int missed_total, int total)
 void DebugResent(char id, uint16_t pack, int total)
 {
 	if (
-		(doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_resent && doDB_Log)
+		(db.print_resent && (db.Console || db.LCD)) ||
+		(db.log_resent && db.Log)
 		)
 	{
 		// Local vars
@@ -4680,13 +4648,13 @@ void DebugResent(char id, uint16_t pack, int total)
 		buff_rx = Serial1.available();
 
 		char str[50];
-		sprintf(str, "!!RESENT PACK: tot=%d tx=%d rx=%d id=%c pack=%d!!", total, buff_tx, buff_rx, id, pack);
+		sprintf(str, "!!ERROR!! RESENT PACK: tot=%d tx=%d rx=%d id=%c pack=%d", total, buff_tx, buff_rx, id, pack);
 
 		// Add to print queue
-		if (doPrint_resent && (doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_resent && (db.Console || db.LCD))
 			StoreDBPrintStr(str, millis());
 		// Add to log queue
-		if (doLog_resent && doDB_Log)
+		if (db.log_resent && db.Log)
 			StoreDBLogStr(str, millis());
 	}
 }
@@ -4694,41 +4662,60 @@ void DebugResent(char id, uint16_t pack, int total)
 // LOG/PRING RECIEVED PACKET DEBUG STRING
 void DebugRcvd(char from, char id, uint16_t pack)
 {
-	// Local vars
-	double dat1 = 0;
-	double dat2 = 0;
-	double dat3 = 0;
-
-	if (from == 'c')
-	{
-		dat1 = c2r.dat[0];
-		dat2 = c2r.dat[0];
-		dat3 = c2r.dat[1];
-	}
-	else dat1 = a2r.dat[0];
-
 	if (
-		id != 'P' &&
-		(doPrint_rcvd && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_rcvd && doDB_Log)
+		(db.print_c2r && (db.Console || db.LCD)) ||
+		(db.log_c2r && db.Log)
 		)
 	{
-		char chr[100];
-
 		// Print specific pack contents
-		sprintf(chr, "rcvd_%c2r: id=%c dat1=%lu dat2=%lu dat3=%lu pack=%d", from, id, dat1, dat2, dat3, pack);
-
-		// Convert to string
-		String str = chr;
+		char str[100];
+		if (from == 'c')
+		{
+			sprintf(str, "rcvd_%c2r: id=%c dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%d", from, id, c2r.dat[0], c2r.dat[1], c2r.dat[2], pack);
+		}
+		else
+			sprintf(str, "rcvd_%c2r: id=%c dat1=%0.2f pack=%d", from, id, a2r.dat[0], pack);
 
 		// Add to print queue
-		if (doPrint_rcvd &&
-			(doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_c2r &&
+			(db.Console || db.LCD))
 			StoreDBPrintStr(str, t_rcvd);
 
 		// Add to log queue
-		if (doLog_rcvd && doDB_Log)
+		if (db.log_c2r && db.Log)
 			StoreDBLogStr(str, t_rcvd);
+	}
+
+}
+
+// LOG/PRING SENT PACKET DEBUG STRING
+void DebugSent(char targ, char id, byte d1, uint16_t pack, bool do_conf)
+{
+	if (
+		(db.print_c2r && (db.Console || db.LCD)) ||
+		(db.log_c2r && db.Log)
+		)
+	{
+		bool do_print = ((db.print_r2c && targ == 'c') ||
+			(db.print_r2a && targ == 'a')) &&
+			(db.Console || db.LCD);
+		bool do_log = ((db.log_r2c && targ == 'c') ||
+			(db.log_r2a && targ == 'a')) &&
+			db.Log;
+		if (do_print || do_log)
+		{
+
+			// Make string
+			char str[50];
+			sprintf(str, "sent_r2%c: id=%c dat=%d pack=%d do_conf=%s", targ, id, d1, pack, do_conf ? "true" : "false");
+
+			// Store
+			if (do_print)
+				StoreDBPrintStr(str, t_sent);
+			if (do_log)
+				StoreDBLogStr(str, t_sent);
+
+		}
 	}
 
 }
@@ -4737,15 +4724,15 @@ void DebugRcvd(char from, char id, uint16_t pack)
 void DebugIRSync(String msg, uint32_t t)
 {
 	if (
-		(doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_irSync && doDB_Log)
+		(db.print_irSync && (db.Console || db.LCD)) ||
+		(db.log_irSync && db.Log)
 		)
 	{
 		// Add to print queue
-		if (doPrint_irSync && (doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_irSync && (db.Console || db.LCD))
 			StoreDBPrintStr(msg, t);
 		// Add to log queue
-		if (doLog_irSync && doDB_Log)
+		if (db.log_irSync && db.Log)
 			StoreDBLogStr(msg, t);
 	}
 }
@@ -4758,15 +4745,15 @@ void DebugFlow(String msg)
 void DebugFlow(String msg, uint32_t t)
 {
 	if (
-		(doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD)) ||
-		(doLog_flow && doDB_Log)
+		(db.print_flow && (db.Console || db.LCD)) ||
+		(db.log_flow && db.Log)
 		)
 	{
 		// Add to print queue
-		if (doPrint_flow && (doDB_PrintConsole || doDB_PrintLCD))
+		if (db.print_flow && (db.Console || db.LCD))
 			StoreDBPrintStr(msg, t);
 		// Add to log queue
-		if (doLog_flow && doDB_Log)
+		if (db.log_flow && db.Log)
 			StoreDBLogStr(msg, t);
 	}
 }
@@ -4775,75 +4762,61 @@ void DebugFlow(String msg, uint32_t t)
 void StoreDBPrintStr(String msg, uint32_t t)
 {
 	// Local vars
-	static String last_msg = " ";
 	static uint32_t t_ts_last = millis();
 	char t_str_long[200];
 	char t_str_ellapsed[200];
-	uint32_t t_ts_norm = 0;
-	float t_c = 0;
+	uint32_t t_m = 0;
+	float t_s = 0;
 	float t_ellapsed = 0;
 
-	// Dont store repeated string
-	if (msg != last_msg) {
+	// Time now
+	t_m = t_sync == 0 || t_sync == t ? t : t - t_sync;
 
-		// Save string
-		last_msg = msg;
+	// Total time
+	t_s = (float)(t_m) / 1000.0f;
 
-		// Time now
-		t_ts_norm = t_sync == 0 ? t : t - t_sync;
+	// Ellapsed time
+	t_ellapsed = (float)((millis() - t_ts_last) / 1000.0f);
+	t_ts_last = millis();
 
-		// Total time
-		t_c = (float)(t_ts_norm) / 1000.0f;
+	// Save long and short string
+	sprintf(t_str_long, "[%0.2fs]", t_s);
+	sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
 
-		// Ellapsed time
-		t_ellapsed = (float)((millis() - t_ts_last) / 1000.0f);
-		t_ts_last = millis();
-
-		// Save long and short string
-		sprintf(t_str_long, "[%0.2fs]", t_c);
-		sprintf(t_str_ellapsed, "[%0.0fs] ", t_ellapsed);
-
-		// Shift queue
-		for (int i = 0; i < printQueue_lng - 1; i++)
-		{
-			printQueue[i] = printQueue[i + 1];
-		}
-
-		// Set first entry to new string 
-		if (doDB_PrintLCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + msg;
-		else if (doDB_PrintConsole) printQueue[printQueue_lng - 1] = msg;
-
-		// Save total time to end
-		printQueue[0] = t_str_long;
-
-		// Set queue ind
-		printQueueInd--;
-
-		// Set flag
-		doPrint = true;
-
+	// Shift queue
+	for (int i = 0; i < printQueue_lng - 1; i++)
+	{
+		printQueue[i] = printQueue[i + 1];
 	}
+
+	// Set first entry to new string 
+	if (db.LCD) printQueue[printQueue_lng - 1] = t_str_ellapsed + msg;
+	else if (db.Console) printQueue[printQueue_lng - 1] = msg;
+
+	// Save total time to end
+	printQueue[0] = t_str_long;
+
+	// Set queue ind
+	printQueueInd--;
+
+	// Set flag
+	doPrint = true;
 }
 
 // STORE STRING FOR LOGGING
 void StoreDBLogStr(String msg, uint32_t t)
 {
 	// Local vars
-	static String last_msg = " ";
 	char str_c[200];
 	char msg_c[200];
-	uint32_t t_ts_norm = 0;
+	uint32_t t_m = 0;
 
 	// Dont store repeated string or log data while sending log
 	if (
 		fc.isStreaming &&
-		!fc.isSendingLog &&
-		msg != last_msg
+		!fc.isSendingLog
 		)
 	{
-
-		// Save string
-		last_msg = msg;
 
 		// Itterate log entry count
 		cnt_logStore++;
@@ -4854,9 +4827,12 @@ void StoreDBLogStr(String msg, uint32_t t)
 			logByteTrack <= logByteMax
 			)
 		{
+			// Time now
+			t_m = t_sync == 0 || t_sync == t ? t : t - t_sync;
+
 			// Concatinate ts with message
 			msg.toCharArray(str_c, 200);
-			sprintf(msg_c, "[%d],%lu,%s", cnt_logStore, t, str_c);
+			sprintf(msg_c, "[%d],%lu,%s", cnt_logStore, t_m, str_c);
 			logList[cnt_logStore - 1] = msg_c;
 
 			// Update byte count
@@ -4866,11 +4842,11 @@ void StoreDBLogStr(String msg, uint32_t t)
 		else
 		{
 			// Store final message
-			sprintf(msg_c, "[%d],%lu,!!LOG FULL: bytes=%d!!", cnt_logStore, t, logByteTrack);
+			sprintf(msg_c, "[%d],%lu,!!ERROR!! LOG FULL: bytes=%d", cnt_logStore, t, logByteTrack);
 			logList[cnt_logStore - 1] = msg_c;
 
 			// Set flag to stop logging
-			doDB_Log = false;
+			db.Log = false;
 		}
 	}
 }
@@ -4886,12 +4862,12 @@ void PrintDebug()
 		return;
 	}
 
-	if ((doDB_PrintLCD && !doBlockLCDlog) ||
-		doDB_PrintConsole)
+	if ((db.LCD && !doBlockLCDlog) ||
+		db.Console)
 	{
 
 		// Print to LCD
-		if (doDB_PrintLCD && !doBlockLCDlog)
+		if (db.LCD && !doBlockLCDlog)
 		{
 			// Local vars 
 			static int scale_ind = 40 / printQueue_lng;
@@ -4927,7 +4903,7 @@ void PrintDebug()
 		}
 
 		// Print to console
-		if (doDB_PrintConsole)
+		if (db.Console)
 		{
 
 			// Pad string

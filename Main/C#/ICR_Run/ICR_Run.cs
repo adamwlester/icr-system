@@ -49,8 +49,11 @@ namespace ICR_Run
         // Initialize callback object
         private static MNetCom.MNC_VTCallback deligate_netComCallback;
 
-        // Initialize serial port object to Xbee
+        // Initialize serial port object for Xbee
         private static System.IO.Ports.SerialPort sp_Xbee = new System.IO.Ports.SerialPort();
+
+        // Initialize serial port object for CheetahDue
+        private static System.IO.Ports.SerialPort sp_cheetahDue = new System.IO.Ports.SerialPort();
 
         // Initialize MATLAB COM object
         private static MLApp.MLApp com_Matlab = new MLApp.MLApp();
@@ -70,12 +73,14 @@ namespace ICR_Run
 
         // Create logging objects
         private static DB_Logger robLogger = new DB_Logger();
+        private static DB_Logger dueLogger = new DB_Logger();
         private static DB_Logger csLogger = new DB_Logger();
 
         // Directories
         private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLABMO\Startup";
-        private static string nlxRecDir = " "; // cheetah dir
-        private static string dueLogFi = @"FeederDueLogFile.csv"; // log file for FeederDue
+        private static string nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00"; // cheetah dir
+        private static string robLogFi = @"FeederDueLogFile.csv"; // log file for FeederDue
+        private static string dueLogFi = @"CheetahDueLogFile.csv"; // log file for CheetahDue
         private static string csLogFi = @"ICR_RunLogFile.csv"; // log file for ICR_Run
 
         // Matlab to CS
@@ -104,11 +109,13 @@ namespace ICR_Run
             _lockRcvd: lockRcvdCheck,
             _lockDone: lockDoneCheck,
             _idList:
-            new char[6] {
+            new char[8] {
+            'W', // sync time
             'J', // battery voltage
             'Z', // reward zone
             'V', // robot streaming
             'Y', // enable save
+            'O', // log dir
             'E', // enable exit
             'X', // confirm close
              }
@@ -189,6 +196,18 @@ namespace ICR_Run
             _foot: (byte)'}'
         );
 
+        // Robot to Ard
+        private static Pack_Track a2c = new Pack_Track(
+            _lockRcvd: new object(),
+            _lockDone: new object(),
+            _idList:
+            new char[1] {
+            ' '
+            },
+            _head: (byte)'<',
+            _foot: (byte)'>'
+        );
+
         // General communication
         private static long sendSentDel = 5; // (ms)
         private static long sendRcvdDel = 1; // (ms)
@@ -259,25 +278,6 @@ namespace ICR_Run
         {
             LogEvent("[Main] RUNNING: Main...");
 
-            // Setup debugging
-            if (db_systemTest != 0)
-            {
-                // Hide/show matlab app window
-                com_Matlab.Visible = 1;
-                // Set rec dir to test dir
-                nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00";
-
-                // Start thread to pass simulation rat data
-                if (db_systemTest == 4)
-                {
-                    new Thread(delegate ()
-                    {
-                        RelaySimRat();
-                    }).Start();
-                }
-            }
-            else com_Matlab.Visible = 0;
-
             // Initalize Matlab global vars
             com_Matlab.PutWorkspaceData("m2c_id", "global", 'N');
             com_Matlab.PutWorkspaceData("m2c_dat1", "global", 9999.0);
@@ -292,6 +292,26 @@ namespace ICR_Run
             {
                 com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m.idList[i]), "global", 0);
             }
+
+            // Setup debugging
+            if (db_systemTest != 0)
+            {
+                // Hide/show matlab app window
+                com_Matlab.Visible = 1;
+
+                // Set MATLAB break point
+                //com_Matlab.Execute(@"dbstop in ICR_GUI at 103");
+
+                // Start thread to pass simulation rat data
+                if (db_systemTest == 4)
+                {
+                    new Thread(delegate ()
+                    {
+                        RelaySimRat();
+                    }).Start();
+                }
+            }
+            else com_Matlab.Visible = 0;
 
             // Start primary timer
             sw_main.Start();
@@ -311,6 +331,16 @@ namespace ICR_Run
             // Open serial port connection
             sp_Xbee.Open();
             LogEvent("[Main] FINISHED: Xbee Serial Port Open");
+
+            // Setup and start CheetahDue serial
+            sp_cheetahDue.ReadTimeout = 100;
+            sp_cheetahDue.BaudRate = 57600;
+            sp_cheetahDue.PortName = "COM14";
+            // Create event handeler for incoming data
+            sp_cheetahDue.DataReceived += DataReceived_CheetahDue;
+            // Open serial port connection
+            sp_cheetahDue.Open();
+            LogEvent("[Main] FINISHED: CheetahDue Serial Port Open");
 
             // Setup ICR_GUI background worker
             bw_RunGUI.DoWork += DoWork_RunGUI;
@@ -361,15 +391,15 @@ namespace ICR_Run
             else
             {
                 // Program timed out because matlab was hanging on connect
-                LogEvent("[Main] !!ABORTED: Wait for AC Connect!!");
+                LogEvent("[Main] !!ERROR!! ABORTED: Wait for AC Connect");
                 fc.isMAThanging = true;
             }
 
             // Wait for ICR_GUI to load and connect to NLX
             LogEvent("[Main] RUNNING: Wait for ICR_GUI NLX Setup...");
-            pass = WaitForM2C('G', long.MaxValue);
+            pass = WaitForM2C('G');
             if (pass) LogEvent("[Main] FINISHED: Wait for ICR_GUI NLX Setup");
-            else LogEvent("[Main] !!ABORTED: Wait for ICR_GUI NLX Setup!!");
+            else LogEvent("[Main] !!ERROR!! ABORTED: Wait for ICR_GUI NLX Setup");
 
             // Setup and begin NetCom streaming
             if (!(com_netComClient.AreWeConnected()))
@@ -393,49 +423,49 @@ namespace ICR_Run
                         RepeatSendPack(id: 'V', check_done: true);
                     }).Start();
                     // Wait for confirmation from robot
-                    pass = WaitForR2C('V', long.MaxValue);
+                    pass = WaitForR2C('V');
                     if (pass)
                     {
                         SendMCOM(String.Format("c2m_{0} = 1;", 'V'));
                         LogEvent("[Main] FINISHED: Confirm Robot Streaming");
                     }
-                    else LogEvent("[Main] !!ABORTED: Confirm Robot Streaming!!");
+                    else LogEvent("[Main] !!ERROR!! ABORTED: Confirm Robot Streaming");
 
                     // Wait for setup command confirmation
                     LogEvent("[Main] RUNNING: Confirm Setup");
-                    pass = WaitForR2C('S', long.MaxValue);
+                    pass = WaitForR2C('S');
                     if (pass) LogEvent("[Main] FINISHED: Confirm Setup");
-                    else LogEvent("[Main] !!ABORTED: Confirm Setup!!");
+                    else LogEvent("[Main] !!ERROR!! ABORTED: Confirm Setup");
 
                     // Wait for initial move to command to complete
                     LogEvent("[Main] RUNNING: MoveTo Start...");
-                    pass = WaitForR2C('M', long.MaxValue);
+                    pass = WaitForR2C('M');
                     if (pass)
                     {
                         fc.isMovedToStart = true;
                         LogEvent("[Main] FINISHED: MoveTo Start");
                     }
-                    else LogEvent("[Main] !!ABORTED: MoveTo Start!!");
+                    else LogEvent("[Main] !!ERROR!! ABORTED: MoveTo Start");
 
                     // Main holding loop
                     LogEvent("[Main] RUNNING: Main Loop...");
                     // Stay in loop till rat is out
                     while (com_netComClient.AreWeConnected() && !fc.isRatOut && !fc.doAbort) ;
                     if (!fc.doAbort) LogEvent("[Main] FINISHED: Main Loop");
-                    else LogEvent("[Main] !!ABORTED: Main Loop!!");
+                    else LogEvent("[Main] !!ERROR!! ABORTED: Main Loop");
 
                     // Wait for reply on last sent packet
                     LogEvent("[Main] RUNNING: Wait for Last Pack...");
                     pass = WaitForR2C(c2r.idList, 5000);
                     if (pass) LogEvent("[Main] FINISHED: Wait for Last Pack");
-                    else LogEvent("[Main] !!ABORTED: Wait for Last Pack!!");
+                    else LogEvent("[Main] !!ERROR!! ABORTED: Wait for Last Pack");
 
                 }
                 // Failed to connect to NetCom
                 else
                 {
                     fc.doAbort = true;
-                    LogEvent("[Main] !!FAILED: TO CONNECT TO NETCOM!!");
+                    LogEvent("[Main] !!ERROR!! FAILED TO CONNECT TO NETCOM");
                 }
 
                 // Close down everything
@@ -462,7 +492,7 @@ namespace ICR_Run
                     // Wait for confirmation from robot
                     pass = WaitForR2C('M', 10000);
                     if (pass) LogEvent("[Main] FINISHED: MoveTo South");
-                    else LogEvent("[Main] !!ABORTED: MoveTo South!!");
+                    else LogEvent("[Main] !!ERROR!! ABORTED: MoveTo South");
 
                 }
 
@@ -495,13 +525,13 @@ namespace ICR_Run
                     SendMCOM(String.Format("c2m_{0} = 1;", 'Y'));
                     LogEvent("[Main] FINISHED: Save Enabled");
                 }
-                else LogEvent("[Main] !!ABORTED: Save Enabled!!");
+                else LogEvent("[Main] !!ERROR!! ABORTED: Save Enabled");
 
                 // Wait for reply on last sent packet
                 LogEvent("[Main] RUNNING: Wait for Last Pack...");
                 pass = WaitForR2C(c2r.idList, 5000);
                 if (pass) LogEvent("[Main] FINISHED: Wait for Last Pack");
-                else LogEvent("[Main] !!ABORTED: Wait for Last Pack!!");
+                else LogEvent("[Main] !!ERROR!! ABORTED: Wait for Last Pack");
 
                 // Request log data from robot
                 LogEvent("[Main] RUNNING: Import Robot Log...");
@@ -515,13 +545,13 @@ namespace ICR_Run
                     if (robLogger.isLogComplete)
                         LogEvent("[Main] FINISHED: Import Robot Log");
                     else
-                        LogEvent("[Main] !!ABORTED: Import Robot Log!!");
+                        LogEvent("[Main] !!ERROR!! ABORTED: Import Robot Log");
 
                     // Print log info
                     msg_str = String.Format("[Main] Logged {0} Robot Events and Dropped: {1} Packs", robLogger.logCnt, droppedPacks);
                     LogEvent(msg_str);
                 }
-                else LogEvent("[Main] !!ABORTED: Import Robot Log!!");
+                else LogEvent("[Main] !!ERROR!! ABORTED: Import Robot Log");
 
                 // Wait for save complete
                 LogEvent("[Main] RUNNING: Wait for ICR_GUI to Save");
@@ -539,8 +569,10 @@ namespace ICR_Run
                     LogEvent(msg_str);
 
                 }
-                else LogEvent("[Main] !!ABBORTED: Wait for ICR_GUI to Save!!");
+                else LogEvent("[Main] !!ERROR!! ABORTED: Wait for ICR_GUI to Save");
 
+                // Set log dir
+                SendMCOM(String.Format("c2m_O = \'{0}\';", nlxRecDir));
 
                 // Wait for quit command
                 while (!fc.isGUIquit && !fc.doAbort) ;
@@ -554,15 +586,17 @@ namespace ICR_Run
                 // Wait for quit confirmation from robot for fixed period of time
                 pass = WaitForR2C('Q', 3000);
                 if (pass) LogEvent("[Main] FINISHED: Confirm Robot Quit");
-                else LogEvent("[Main] !!ABORTED: Confirm Robot Quit!!");
+                else LogEvent("[Main] !!ERROR!! ABORTED: Confirm Robot Quit");
 
                 // Save robot log file
-                if (nlxRecDir != " ")
-                {
-                    robLogger.SaveLog(nlxRecDir, dueLogFi);
-                    // Confirm log saved
-                    LogEvent("[Main] FINISHED: Save Robot Log");
-                }
+                robLogger.SaveLog(nlxRecDir, robLogFi);
+                // Confirm log saved
+                LogEvent("[Main] FINISHED: Save Robot Log");
+
+                // Save due log file
+                dueLogger.SaveLog(nlxRecDir, dueLogFi);
+                // Confirm log saved
+                LogEvent("[Main] FINISHED: Save Robot Log");
 
                 // Hold for errors
                 if (db_systemTest != 0 || fc.doAbort)
@@ -604,21 +638,17 @@ namespace ICR_Run
                 com_Matlab.Quit();
 
                 // Kill that mother fucker!
-                if (!fc.isMAThanging)
+                if (fc.isMAThanging)
                 {
                     KillMatlab();
-                    LogEvent("[MAIN] !!KILLED MATLAB!!");
+                    LogEvent("[MAIN] !!ERROR!! HAD TO KILL MATLAB");
                 }
                 LogEvent("[Main] FINISHED: Close MatCOM COM");
 
                 // Save CS log file
-                if (nlxRecDir != " ")
-                {
-                    csLogger.SaveLog(nlxRecDir, csLogFi);
-                    // Confirm log saved
-                    LogEvent("[Main] FINISHED: Save CS Log");
-
-                }
+                csLogger.SaveLog(nlxRecDir, csLogFi);
+                // Confirm log saved
+                LogEvent("[Main] FINISHED: Save CS Log");
 
                 // Confirm end of program
                 LogEvent("[MAIN] FINISHED ALL");
@@ -645,41 +675,38 @@ namespace ICR_Run
             send_max = send_max == 0 ? resendMax : send_max;
 
             // Send new data with new packet number
-            pack = SendPack(id, dat1, dat2, dat2, 0, do_comf);
-
-            // Update c2r check flags
-            c2r.packList[c2r.ID_Ind(id)] = pack;
-            c2r.doRcvdCheck[c2r.ID_Ind(id)] = true;
-            c2r.doDoneCheck[c2r.ID_Ind(id)] = check_done ? true : false;
+            pack = SendPack(id, dat1, dat2, dat3, 0, do_comf, check_done);
 
             // Keep checking mesage was recieved
-            while (
-                do_comf &&
-                send_count < resendMax &&
-                !fc.doExit &&
-                fc.ContinueSerial()
-                )
+            if (do_comf)
             {
-
-                // Search for matching command packet
-                if (r2c.packList[r2c.ID_Ind(id)] == pack)
-                {
-                    // Message recieved
-                    pass_rcvd = true;
-                    continue;
-                }
-
-                // Need to resend
-                if (
+                while (
                     !pass_rcvd &&
-                    sw_main.ElapsedMilliseconds > t_timeout
+                    send_count < resendMax &&
+                    fc.ContinueSerial()
                     )
                 {
-                    SendPack(id, dat1, dat2, dat2, pack, do_comf);
-                    t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
-                    send_count++;
-                }
 
+                    // Search for matching command packet
+                    if (r2c.packList[r2c.ID_Ind(id)] == pack)
+                    {
+                        // Message recieved
+                        pass_rcvd = true;
+                        continue;
+                    }
+
+                    // Need to resend
+                    if (
+                        !pass_rcvd &&
+                        sw_main.ElapsedMilliseconds > t_timeout
+                        )
+                    {
+                        SendPack(id, dat1, dat2, dat2, pack, do_comf, check_done);
+                        t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
+                        send_count++;
+                    }
+
+                }
             }
 
             // Check if streaming has failed
@@ -691,7 +718,7 @@ namespace ICR_Run
         }
 
         // SEND PACK DATA
-        public static ushort SendPack(char id, double dat1, double dat2, double dat3, ushort pack, bool do_conf)
+        public static ushort SendPack(char id, double dat1, double dat2, double dat3, ushort pack, bool do_conf, bool check_done)
         {
             /* 
             SEND DATA TO ROBOT 
@@ -862,8 +889,16 @@ namespace ICR_Run
                     // Start sw_sync with first vt
                     if (t_sync == 0)
                     {
+                        // Store sync time
                         t_sync = sw_main.ElapsedMilliseconds;
                         LogEvent("SET SYNC TIME", t_sync);
+
+                        // Send to matlab 
+                        object result;
+                        com_Matlab.Feval("now", 1, out result);
+                        object[] res = result as object[];
+                        double mat_now = (double)res[0];
+                        SendMCOM(String.Format("c2m_W = {0};", mat_now));
                     }
                 }
 
@@ -900,6 +935,11 @@ namespace ICR_Run
 
                 // Update send time
                 c2r.t_now = sw_main.ElapsedMilliseconds;
+
+                // Update c2r check flags
+                c2r.packList[c2r.ID_Ind(id)] = pack;
+                c2r.doRcvdCheck[c2r.ID_Ind(id)] = true;
+                c2r.doDoneCheck[c2r.ID_Ind(id)] = check_done ? true : false;
 
                 // Print sent data
                 string msg_str;
@@ -945,12 +985,12 @@ namespace ICR_Run
         }
 
         // WAIT FOR R2C CONFIRMATION
-        public static bool WaitForR2C(char id, long timeout)
+        public static bool WaitForR2C(char id, long timeout = 60 * 60 * 1000)
         {
             char[] id_arr = new char[1] { id };
             return WaitForR2C(id_arr, timeout);
         }
-        public static bool WaitForR2C(char[] id_arr, long timeout)
+        public static bool WaitForR2C(char[] id_arr, long timeout = 60 * 60 * 1000)
         {
 
             long t_timeout = sw_main.ElapsedMilliseconds + timeout;
@@ -1012,7 +1052,7 @@ namespace ICR_Run
         }
 
         // WAIT FOR Pack_Track CONFIRMATION
-        public static bool WaitForM2C(char id, long timeout)
+        public static bool WaitForM2C(char id, long timeout = 60 * 60 * 1000)
         {
 
             long t_timeout = sw_main.ElapsedMilliseconds + timeout;
@@ -1129,7 +1169,7 @@ namespace ICR_Run
                 // Find id and check message is intended for CS
                 if (head_found)
                 {
-                    if (BuffReady(1))
+                    if (XbeeBuffReady(1))
                     {
                         sp_Xbee.Read(id_bytes, 0, 1);
                         // Get id
@@ -1158,7 +1198,7 @@ namespace ICR_Run
                     {
 
                         // Get data byte
-                        if (BuffReady(1))
+                        if (XbeeBuffReady(1))
                         {
                             // Read in data
                             sp_Xbee.Read(dat_bytes, 0, 1);
@@ -1166,7 +1206,7 @@ namespace ICR_Run
                         }
 
                         // Get first and second part of packet number
-                        if (BuffReady(2))
+                        if (XbeeBuffReady(2))
                         {
 
                             // Read in data
@@ -1176,13 +1216,21 @@ namespace ICR_Run
                             pack = u.s1;
                         }
 
+                        // Get recieved confirm byte
+                        if (XbeeBuffReady(1))
+                        {
+                            sp_Xbee.Read(conf_bytes, 0, 1);
+                            // Get bool
+                            do_conf = conf_bytes[0] == 1 ? true : false;
+                        }
+
                     }
 
                     // Parse log packet
                     else
                     {
                         // Get check sum
-                        if (BuffReady(1))
+                        if (XbeeBuffReady(1))
                         {
                             // Read in data
                             sp_Xbee.Read(chksum_bytes, 0, 1);
@@ -1191,7 +1239,7 @@ namespace ICR_Run
 
                         // Get complete message
                         byte[] log_bytes = new byte[chksum];
-                        if (BuffReady(chksum))
+                        if (XbeeBuffReady(chksum))
                         {
                             // Read in all data
                             sp_Xbee.Read(log_bytes, 0, chksum);
@@ -1201,16 +1249,8 @@ namespace ICR_Run
                         log_str = System.Text.Encoding.UTF8.GetString(log_bytes);
                     }
 
-                    // Get recieved confirm byte
-                    if (BuffReady(1))
-                    {
-                        sp_Xbee.Read(conf_bytes, 0, 1);
-                        // Get bool
-                        do_conf = conf_bytes[0] == 1 ? true : false;
-                    }
-
                     // Find footer
-                    if (BuffReady(1))
+                    if (XbeeBuffReady(1))
                     {
                         // Read in data
                         sp_Xbee.Read(foot_bytes, 0, 1);
@@ -1236,7 +1276,7 @@ namespace ICR_Run
                             // print data recieved
                             if (db_printRcvdLog)
                             {
-                                msg_str = String.Format("LOG[{0}]: dat=\"{1}\" chksum={2}", robLogger.logCnt, log_str, chksum);
+                                msg_str = String.Format("LOG_r2c[{0}]: dat=\"{1}\" chksum={2}", robLogger.logCnt, log_str, chksum);
                                 LogEvent(msg_str);
                             }
                         }
@@ -1322,13 +1362,24 @@ namespace ICR_Run
                     }
                     else
                     {
+                        // Add to count
                         droppedPacks++;
-                        msg_str = String.Format("!!PACK LOST: tot={0} tx={1} rx={2} head={3} id={4} dat={5} pack={6} chksum={7} foot={8}!!",
-                            droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, chksum, foot);
+
+                        // Print packet info
+                        if (!is_log_pack)
+                            msg_str = String.Format("!!ERROR!! R2C PACK LOST: tot={0} tx={1} rx={2} head={3} id={4} dat={5} pack={6} do_conf={7} foot={8}",
+                                droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, do_conf, foot);
+
+                        // Print log info
+                        else
+                            msg_str = String.Format("!!ERROR!! R2C PACK LOST: tot={0} tx={1} rx={2} head={3} id={4} log_str={5} chksum={6} foot={7}",
+                           droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, log_str, chksum, foot);
+
+                        // Print
                         LogEvent(msg_str);
 
                         // Wait for buffer to refil
-                        BuffReady(6);
+                        XbeeBuffReady(6);
                     }
                     // dump input buffer
                     //sp_Xbee.DiscardInBuffer();
@@ -1345,8 +1396,124 @@ namespace ICR_Run
 
         }
 
+        // PARSE RECIEVED CHEETAHDUE DATA 
+        public static void DataReceived_CheetahDue(object sender, SerialDataReceivedEventArgs e)
+        {
+            // Loop till all data read out
+            while (
+                sp_cheetahDue.BytesToRead > 0 &&
+                    fc.ContinueSerial()
+                    )
+            {
+                // Local vars
+                UnionHack u = new UnionHack(0, 0, 0, '0', 0);
+                bool head_found = false;
+                bool foot_found = false;
+                bool do_dump = false;
+                byte[] head_bytes = new byte[1];
+                byte[] id_bytes = new byte[1];
+                byte[] conf_bytes = new byte[1];
+                byte[] dat_bytes = new byte[1];
+                byte[] pack_bytes = new byte[2];
+                byte[] foot_bytes = new byte[1];
+                byte[] chksum_bytes = new byte[1];
+                char head = ' ';
+                ushort chksum = 0;
+                char foot = ' ';
+                string msg_str = " ";
+                string log_str = " ";
+
+                // Dump till header found
+                while (
+                    !head_found && sp_cheetahDue.BytesToRead > 0 &&
+                    fc.ContinueSerial()
+                    )
+                {
+                    sp_cheetahDue.Read(head_bytes, 0, 1);
+                    // Get header
+                    u.b1 = head_bytes[0];
+                    u.b2 = 0; // C# chars are 2 bytes
+                    head = u.c1;
+                    if (head == a2c.head[0])
+                    {
+                        head_found = true;
+                    }
+                }
+
+                // Find id and check message is intended for CS
+                if (head_found)
+                {
+                    // Get check sum
+                    if (DueBuffReady(1))
+                    {
+                        // Read in data
+                        sp_cheetahDue.Read(chksum_bytes, 0, 1);
+                        chksum = chksum_bytes[0];
+                    }
+
+                    // Get complete message
+                    byte[] log_bytes = new byte[chksum];
+                    if (DueBuffReady(chksum))
+                    {
+                        // Read in all data
+                        sp_cheetahDue.Read(log_bytes, 0, chksum);
+
+                    }
+                    // Convert to string
+                    log_str = System.Text.Encoding.UTF8.GetString(log_bytes);
+
+                    // Find footer
+                    if (DueBuffReady(1))
+                    {
+                        // Read in data
+                        sp_cheetahDue.Read(foot_bytes, 0, 1);
+
+                        // Check footer
+                        u.b1 = foot_bytes[0];
+                        u.b2 = 0;
+                        foot = u.c1;
+                        if (foot == a2c.foot[0])
+                        {
+                            foot_found = true;
+                        }
+                    }
+
+                    if (foot_found)
+                    {
+                        // Update list
+                        robLogger.UpdateList(log_str);
+
+                        // print data recieved
+                        if (db_printRcvdLog)
+                        {
+                            // Update list
+                            dueLogger.UpdateList(log_str);
+
+                            // Print
+                            msg_str = String.Format("LOG_a2c[{0}]: dat=\"{1}\" chksum={2}", robLogger.logCnt, log_str, chksum);
+                            LogEvent(msg_str);
+                        }
+                    }
+                    else
+                    {
+                        // Set dump flag
+                        do_dump = true;
+                    }
+
+                    // Dump incomplete packets
+                    if (do_dump)
+                    {
+                        msg_str = String.Format("!!ERROR!! A2C PACK LOST: tot={0} tx={1} rx={2} head={3} log_str={4} chksum={5} foot={6}",
+                           droppedPacks, sp_cheetahDue.BytesToWrite, sp_cheetahDue.BytesToRead, head, log_str, chksum, foot);
+                        // Print
+                        LogEvent(msg_str);
+                    }
+                }
+            }
+        }
+
         // WAIT FOR XBEE BUFFER TO FILL
-        public static bool BuffReady(int min_byte, long wait_max = 1000)
+        public static bool XbeeBuffReady(int min_byte, long wait_max = 1000)
         {
             // Local vars
             long t_timeout = sw_main.ElapsedMilliseconds + wait_max;
@@ -1361,6 +1528,26 @@ namespace ICR_Run
 
             // Check if buff filled
             pass = sp_Xbee.BytesToRead >= min_byte ? true : false;
+
+            return pass;
+        }
+
+        // WAIT FOR CHEETAHDUE BUFFER TO FILL
+        public static bool DueBuffReady(int min_byte, long wait_max = 1000)
+        {
+            // Local vars
+            long t_timeout = sw_main.ElapsedMilliseconds + wait_max;
+            bool pass = false;
+
+            // Wait for buffer to fill or time to ellapse
+            while (
+                sp_cheetahDue.BytesToRead < min_byte &&
+                sw_main.ElapsedMilliseconds <= t_timeout &&
+                fc.ContinueSerial()
+                ) ;
+
+            // Check if buff filled
+            pass = sp_cheetahDue.BytesToRead >= min_byte ? true : false;
 
             return pass;
         }
@@ -1543,11 +1730,6 @@ namespace ICR_Run
             com_Matlab.Feval("startup", 0, out result);
             LogEvent("[DoWork_RunGUI] RUNNING: ICR_GUI");
 
-            // Debugging
-
-            // Set MATLAB break point
-            //com_Matlab.Execute(@"dbstop in ICR_GUI at 251");
-
             // Run ICR_GUI.m
             try
             {
@@ -1555,7 +1737,7 @@ namespace ICR_Run
             }
             catch
             {
-                LogEvent("[DoWork_RunGUI] !!ABBORT: ICR_GUI!!");
+                LogEvent("[DoWork_RunGUI] !!ERROR!! ABBORTED: ICR_GUI");
             }
             LogEvent("[DoWork_RunGUI] FINISHED: ICR_GUI");
             e.Result = " ";
@@ -1611,7 +1793,7 @@ namespace ICR_Run
 
                         // Will print once
                         if (!fc.isGUIquit)
-                            LogEvent("[DoWork_MatCOM] !!FORCED QUIT!!");
+                            LogEvent("[DoWork_MatCOM] !!ERROR!! GUI FORCED QUIT");
                     }
 
                     // Set flag that GUI has quit
@@ -1629,7 +1811,7 @@ namespace ICR_Run
 
                         // Will print once
                         if (!fc.isGUIfinished)
-                            LogEvent("[DoWork_MatCOM] !!FORCED CLOSE!!");
+                            LogEvent("[DoWork_MatCOM] !!ERROR!! GUI FORCED CLOSE");
                     }
 
                     // Set flag that GUI has closed
@@ -1777,10 +1959,10 @@ namespace ICR_Run
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
             string nowDir = Directory.GetCurrentDirectory();
-            string newDir = @"C:\Program Files\Neuralynx\Cheetah5";
+            string newDir = @"C:\Program Files\Neuralynx\Cheetah";
             Directory.SetCurrentDirectory(newDir);
-            startInfo.FileName = @"C:\Program Files\Neuralynx\Cheetah5\Cheetah.exe";
-            startInfo.Arguments = string.Format("\"C:\\Program Files\\Neuralynx\\Cheetah5\\Configuration\\{0}\"&", config);
+            startInfo.FileName = @"C:\Program Files\Neuralynx\Cheetah\Cheetah.exe";
+            startInfo.Arguments = string.Format("\"C:\\Users\\Public\\Documents\\Cheetah\\Configuration\\{0}\"&", config);
             startInfo.WindowStyle = ProcessWindowStyle.Minimized;
             Process.Start(startInfo);
             Directory.SetCurrentDirectory(nowDir);
@@ -1825,7 +2007,7 @@ namespace ICR_Run
             {
                 // Local vars
                 long t_m = 0;
-                float t_c = 0;
+                float t_s = 0;
                 long dt = 0;
                 string msg_print = " ";
                 string ts_print = " ";
@@ -1833,8 +2015,9 @@ namespace ICR_Run
 
                 // Get time from start of Main()
                 t_m = t_now > 0 ? t_now : sw_main.ElapsedMilliseconds;
-                t_c = (float)(t_m - t_sync) / 1000.0f;
-                ts_print = String.Format("[{0:0.00}s]", t_c);
+                t_m = t_sync == 0 || t_sync == t_now ? t_m : t_m - t_sync;
+                t_s = (float)(t_m) / 1000.0f;
+                ts_print = String.Format("[{0:0.00}s]", t_s);
 
                 // No input time
                 if (t_last >= 0)
@@ -1972,6 +2155,7 @@ namespace ICR_Run
         private long _t_last;
         // Public vars
         public char[] idList;
+        public int listLength;
         public char idNow;
         public byte[] head = new byte[1] { 0 };
         public byte[] foot = new byte[1] { 0 };
@@ -2032,20 +2216,21 @@ namespace ICR_Run
             idNow = _idNow;
             head[0] = _head;
             foot[0] = _foot;
-            packList = new ushort[idList.Length];
-            _doRcvdCheck = new bool[idList.Length];
-            doRcvdCheck = new bool[idList.Length];
-            _doDoneCheck = new bool[idList.Length];
-            doDoneCheck = new bool[idList.Length];
+            listLength = _idList.Length;
+            packList = new ushort[listLength];
+            _doRcvdCheck = new bool[listLength];
+            doRcvdCheck = new bool[listLength];
+            _doDoneCheck = new bool[listLength];
+            doDoneCheck = new bool[listLength];
             t_now = 0;
             t_last = 0;
 
             // Initialize values to zero
-            for (int i = 0; i < idList.Length; i++)
+            for (int i = 0; i < listLength; i++)
             {
                 packList[i] = 0;
-                doRcvdCheck[i] = false;
-                doDoneCheck[i] = false;
+                _doRcvdCheck[i] = false;
+                _doDoneCheck[i] = false;
             }
         }
 
@@ -2256,62 +2441,6 @@ namespace ICR_Run
         }
 
     }
-
-    /*
-    // CLASS TO LOG CS DB INFO
-    class CS_Logger
-    {
-        // Private vars
-        private static List<string> _logList = new List<string>();
-        private static readonly object _lockLog = new object();
-        private static string _lastLogStr = " ";
-        private static int _logCnt;
-        // Public vars
-        public int logCnt
-        { get { return _logCnt; } }
-
-        // Constructor
-        public CS_Logger()
-        {
-            _logCnt = 0;
-        }
-
-        // Add new log entry
-        public void UpdateList(string log_str, long ts)
-        {
-            lock (_lockLog)
-            {
-
-                // Itterate count
-                _logCnt++;
-
-                // Add time and count
-                string str = String.Format("[{0}],{1},", _logCnt, ts) + log_str;
-
-                // Add to list
-                _logList.Add(str);
-
-                // Save log string
-                _lastLogStr = str;
-
-            }
-        }
-
-        // Save log data to csv
-        public void SaveLog(string log_dir, string log_fi)
-        {
-            string fi_path = @log_dir + @"\" + @log_fi;
-            using (System.IO.StreamWriter file_out = new System.IO.StreamWriter(fi_path))
-            {
-                foreach (string line in _logList)
-                {
-                    file_out.WriteLine(line);
-                }
-            }
-        }
-
-    }
-    */
 
     #endregion
 

@@ -2,11 +2,32 @@
 
 #pragma region ---------DEBUG SETTINGS---------
 
-bool doPrintFlow = false;
-bool doPrintRcvdPack = false;
-bool doPrintSentPack = false;
-bool doPrintResent = false;
-bool doTestPinMapping = false;
+struct DB
+{
+	// Do log
+	bool Log = true;
+	// What to print
+	bool log_flow = true;
+	bool log_r2a = true;
+	bool log_a2r = true;
+	bool log_resent = true;
+
+	// Print to console
+	bool Console = false;
+	// What to print
+	bool print_flow = true;
+	bool print_r2a = true;
+	bool print_a2r = true;
+	bool print_resent = true;
+	bool print_log = true;
+}
+// Initialize
+db;
+
+// TESTING 
+
+// Print pin mapping
+const bool doTestPinMapping = false;
 
 #pragma endregion 
 
@@ -106,25 +127,56 @@ volatile bool isOnEast = false;
 uint32_t t_debounce = 10; // (ms)
 uint32_t t_pulseWdth = 50; // (ms)
 
-// Serial
-char msg_id = ' ';
-byte msg_dat;
-char r2a_id[6] = {
-	't', // set sync time
-	'q', // quit/reset
-	'r', // reward
-	's', // sound cond [0, 1, 2]
-	'p', // pid mode [0, 1]
-	'b', // bull mode [0, 1]
-};
-const int r2a_idLng = sizeof(r2a_id) / sizeof(r2a_id[0]);
-uint16_t r2a_packLast[r2a_idLng];
-char r2a_head = '{';
-char r2a_foot = '}';
-bool r2a_isNew = false;
+// Serial from rob
+struct R2A
+{
+	char idList[6] = {
+		't', // set sync time
+		'q', // quit/reset
+		'r', // reward
+		's', // sound cond [0, 1, 2]
+		'p', // pid mode [0, 1]
+		'b', // bull mode [0, 1]
+	};
+	char head = '{';
+	char foot = '}';
+	char idNew = ' ';
+	byte dat = 0;
+	const static int idLng = sizeof(idList) / sizeof(idList[0]);
+	uint16_t packLast[idLng];
+	bool isNew = false;
+}
+// Initialize
+r2a;
+
+// Serial to rob
+struct A2R
+{
+	const char head = '{';
+	const char foot = '}';
+	byte dat[1] = { 255 };
+}
+// Initialize
+a2r;
+
+// Serial to CS
+struct A2C
+{
+	const char head = '<';
+	const char foot = '>';
+}
+// Initialize
+a2c;
+
+// Serial tracking
 bool doPackSend = false;
-const char a2r_head = '{';
-const char a2r_foot = '}';
+uint32_t t_sent = millis(); // (ms)
+uint32_t t_rcvd = millis(); // (ms)
+
+// Log debugging
+String logNow = " ";
+String logLast = " ";
+int cnt_logSend = 0;
 
 // Reward
 uint32_t rewDur; // (ms) 
@@ -134,7 +186,7 @@ uint32_t word_rewOff;
 
 // IR time sync LED
 const uint32_t syncDur = 5; // (ms)
-const uint32_t syncDel = 10000; // (ms)
+const uint32_t syncDel = 60000; // (ms)
 uint32_t t_sync = 0;
 uint32_t t_syncLast;
 uint32_t word_irOn;
@@ -155,8 +207,11 @@ union u_tag {
 // ---------SETUP---------
 void setup()
 {
-	// XBee.
+	// XBee
 	Serial1.begin(57600);
+
+	// CS through programming port
+	Serial.begin(57600);
 
 	// Set PT pin direction
 	pinMode(pin_ptNorthOn, INPUT);
@@ -212,7 +267,7 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(pin_ptSouthOn), SouthInterrupt, RISING); // south
 	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
 
-	PrintState("RESTART");
+	DebugFlow("RESTART");
 
 	// Test pin mapping
 	/*
@@ -220,25 +275,25 @@ void setup()
 	*/
 	if (doTestPinMapping) {
 		delay(5000);
-		bool print_flow = doPrintFlow;
-		doPrintFlow = true;
-		digitalWrite(pin_ttlNorthOn, HIGH); PrintState("North TTL"); delay(1000); digitalWrite(pin_ttlNorthOn, LOW);
-		digitalWrite(pin_ttlWestOn, HIGH); PrintState("West TTL"); delay(1000); digitalWrite(pin_ttlWestOn, LOW);
-		digitalWrite(pin_ttlSouthOn, HIGH); PrintState("South TTL"); delay(1000); digitalWrite(pin_ttlSouthOn, LOW);
-		digitalWrite(pin_ttlEastOn, HIGH); PrintState("East TTL"); delay(1000); digitalWrite(pin_ttlEastOn, LOW);
-		digitalWrite(pin_ttlIR, HIGH); PrintState("IR Sync TTL"); delay(1000); digitalWrite(pin_ttlIR, LOW);
-		digitalWrite(pin_ttlWhiteNoise, HIGH); PrintState("White Noise TTL"); delay(1000); digitalWrite(pin_ttlWhiteNoise, LOW);
-		digitalWrite(pin_ttlRewTone, HIGH); PrintState("Reward Tone TTL"); delay(1000); digitalWrite(pin_ttlRewTone, LOW);
-		digitalWrite(pin_ttlRewOn, HIGH); PrintState("Reward On TTL"); delay(1000); digitalWrite(pin_ttlRewOn, LOW);
-		digitalWrite(pin_ttlRewOff, HIGH); PrintState("Reward Off TTL"); delay(1000); digitalWrite(pin_ttlRewOff, LOW);
-		digitalWrite(pin_ttlPidRun, HIGH); PrintState("PID Run TTL"); delay(1000); digitalWrite(pin_ttlPidRun, LOW);
-		digitalWrite(pin_ttlPidStop, HIGH); PrintState("PID Stop TTL"); delay(1000); digitalWrite(pin_ttlPidStop, LOW);
-		digitalWrite(pin_ttlBullRun, HIGH); PrintState("Bull Run TTL"); delay(1000); digitalWrite(pin_ttlBullRun, LOW);
-		digitalWrite(pin_ttlBullStop, HIGH); PrintState("Bull Stop TTL"); delay(1000); digitalWrite(pin_ttlBullStop, LOW);
-		digitalWrite(pin_relIR, HIGH); PrintState("IR Sync Relay"); delay(1000); digitalWrite(pin_relIR, LOW);
-		digitalWrite(pin_relRewTone, HIGH); PrintState("Reward Tone Relay"); delay(1000); digitalWrite(pin_relRewTone, LOW);
-		digitalWrite(pin_relWhiteNoise, HIGH); PrintState("White Noise Relay"); delay(1000); digitalWrite(pin_relWhiteNoise, LOW);
-		doPrintFlow = print_flow;
+		bool p_flow = db.print_flow;
+		db.print_flow = true;
+		digitalWrite(pin_ttlNorthOn, HIGH); DebugFlow("North TTL"); delay(1000); digitalWrite(pin_ttlNorthOn, LOW);
+		digitalWrite(pin_ttlWestOn, HIGH); DebugFlow("West TTL"); delay(1000); digitalWrite(pin_ttlWestOn, LOW);
+		digitalWrite(pin_ttlSouthOn, HIGH); DebugFlow("South TTL"); delay(1000); digitalWrite(pin_ttlSouthOn, LOW);
+		digitalWrite(pin_ttlEastOn, HIGH); DebugFlow("East TTL"); delay(1000); digitalWrite(pin_ttlEastOn, LOW);
+		digitalWrite(pin_ttlIR, HIGH); DebugFlow("IR Sync TTL"); delay(1000); digitalWrite(pin_ttlIR, LOW);
+		digitalWrite(pin_ttlWhiteNoise, HIGH); DebugFlow("White Noise TTL"); delay(1000); digitalWrite(pin_ttlWhiteNoise, LOW);
+		digitalWrite(pin_ttlRewTone, HIGH); DebugFlow("Reward Tone TTL"); delay(1000); digitalWrite(pin_ttlRewTone, LOW);
+		digitalWrite(pin_ttlRewOn, HIGH); DebugFlow("Reward On TTL"); delay(1000); digitalWrite(pin_ttlRewOn, LOW);
+		digitalWrite(pin_ttlRewOff, HIGH); DebugFlow("Reward Off TTL"); delay(1000); digitalWrite(pin_ttlRewOff, LOW);
+		digitalWrite(pin_ttlPidRun, HIGH); DebugFlow("PID Run TTL"); delay(1000); digitalWrite(pin_ttlPidRun, LOW);
+		digitalWrite(pin_ttlPidStop, HIGH); DebugFlow("PID Stop TTL"); delay(1000); digitalWrite(pin_ttlPidStop, LOW);
+		digitalWrite(pin_ttlBullRun, HIGH); DebugFlow("Bull Run TTL"); delay(1000); digitalWrite(pin_ttlBullRun, LOW);
+		digitalWrite(pin_ttlBullStop, HIGH); DebugFlow("Bull Stop TTL"); delay(1000); digitalWrite(pin_ttlBullStop, LOW);
+		digitalWrite(pin_relIR, HIGH); DebugFlow("IR Sync Relay"); delay(1000); digitalWrite(pin_relIR, LOW);
+		digitalWrite(pin_relRewTone, HIGH); DebugFlow("Reward Tone Relay"); delay(1000); digitalWrite(pin_relRewTone, LOW);
+		digitalWrite(pin_relWhiteNoise, HIGH); DebugFlow("White Noise Relay"); delay(1000); digitalWrite(pin_relWhiteNoise, LOW);
+		db.print_flow = p_flow;
 		delay(5000);
 	}
 }
@@ -249,59 +304,62 @@ void loop()
 {
 
 	// Check for XBee input
-	r2a_isNew = false;
+	r2a.isNew = false;
 	if (Serial1.available() > 0) {
-		r2a_isNew = ParseSerial();
+		r2a.isNew = ParseSerial();
 	}
 
 	// Check for sync time indicating session starting
 	if (!fc.isSesStarted)
 	{
-		if (r2a_isNew && msg_id == 't')
+		if (r2a.isNew && r2a.idNew == 't')
 		{
-			// Set sync time and pulse IR
+			// Set sync time
 			t_sync = millis();
+			DebugFlow("SET SYNC TIME", t_sync);
+
+			// Set ir pulse
 			CheckIRPulse();
 
 			// Set flag
 			fc.isSesStarted = true;
-			PrintState("START SESSION");
+			DebugFlow("START SESSION");
 		}
 	}
 	else
 	{
 		// Exicute input
-		if (r2a_isNew)
+		if (r2a.isNew)
 		{
 
 			// Run reward tone
-			if (msg_id == 'r') {
+			if (r2a.idNew == 'r') {
 
 				// Get reward duration and convert to ms
-				rewDur = (uint32_t)msg_dat * 10;
+				rewDur = (uint32_t)r2a.dat * 10;
 
 				// Run tone
 				StartRew();
 			}
 
 			// Get noise settings
-			else if (msg_id == 's') {
+			else if (r2a.idNew == 's') {
 
 				// No noise
-				if (msg_dat == 0)
+				if (r2a.dat == 0)
 				{
 					fc.doWhiteNoise = false;
 					fc.doRewTone = false;
 				}
 				// White noise only
-				else if (msg_dat == 1)
+				else if (r2a.dat == 1)
 				{
 					// set white noise pins
 					fc.doWhiteNoise = true;
 					fc.doRewTone = false;
 				}
 				// White and reward sound
-				else if (msg_dat == 2)
+				else if (r2a.dat == 2)
 				{
 					// set white noise pins
 					fc.doWhiteNoise = true;
@@ -334,45 +392,45 @@ void loop()
 			}
 
 			// Signal PID mode
-			else if (msg_id == 'p') {
+			else if (r2a.idNew == 'p') {
 				// Signal PID stopped
-				if (msg_dat == 0)
+				if (r2a.dat == 0)
 				{
 					digitalWrite(pin_ttlPidStop, HIGH);
 					digitalWrite(pin_ttlPidRun, LOW);
-					PrintState("PID STOPPED");
+					DebugFlow("PID STOPPED");
 				}
 				// Signal PID running
-				else if (msg_dat == 1)
+				else if (r2a.dat == 1)
 				{
 					digitalWrite(pin_ttlPidRun, HIGH);
 					digitalWrite(pin_ttlPidStop, LOW);
-					PrintState("PID RUNNING");
+					DebugFlow("PID RUNNING");
 				}
 			}
 
 			// Signal bull running
-			else if (msg_id == 'b') {
+			else if (r2a.idNew == 'b') {
 				// Signal Bull stopped
-				if (msg_dat == 0)
+				if (r2a.dat == 0)
 				{
 					digitalWrite(pin_ttlBullStop, HIGH);
 					digitalWrite(pin_ttlBullRun, LOW);
-					PrintState("BULL STOPPED");
+					DebugFlow("BULL STOPPED");
 				}
 				// Signal Bull running
-				else if (msg_dat == 1)
+				else if (r2a.dat == 1)
 				{
 					digitalWrite(pin_ttlBullRun, HIGH);
 					digitalWrite(pin_ttlBullStop, LOW);
-					PrintState("BULL RUNNING");
+					DebugFlow("BULL RUNNING");
 				}
 			}
 
 			// Quite and reset
-			else if (msg_id == 'q') {
+			else if (r2a.idNew == 'q') {
 				fc.doQuit = true;
-				PrintState("QUITING");
+				DebugFlow("QUITING");
 			}
 
 		}
@@ -403,7 +461,7 @@ void loop()
 	// Send message confirmation
 	if (doPackSend)
 	{
-		SendSerial(msg_id, 255, r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)], false);
+		SendPacketData(r2a.idNew, 255, r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)], false);
 	}
 
 }
@@ -423,7 +481,7 @@ bool ParseSerial()
 	doPackSend = false;
 
 	// Dump data till header byte is reached
-	while (Serial1.peek() != r2a_head && Serial1.available() > 0)
+	while (Serial1.peek() != r2a.head && Serial1.available() > 0)
 	{
 		Serial1.read(); // dump
 	}
@@ -434,7 +492,7 @@ bool ParseSerial()
 	head = u.c[0];
 
 	// Check header
-	if (head != r2a_head) {
+	if (head != r2a.head) {
 		// mesage will be dumped
 		return pass = false;
 	}
@@ -442,11 +500,11 @@ bool ParseSerial()
 	// Get id
 	while (Serial1.available() < 1);
 	u.b[1] = Serial1.read();
-	msg_id = u.c[1];
+	r2a.idNew = u.c[1];
 
 	// Get data
 	while (Serial1.available() < 1);
-	msg_dat = Serial1.read();
+	r2a.dat = Serial1.read();
 
 	// Get pack number
 	while (Serial1.available() < 2);
@@ -465,7 +523,7 @@ bool ParseSerial()
 	foot = u.c[2];
 
 	// Check for missing footer
-	if (foot != r2a_foot) {
+	if (foot != r2a.foot) {
 		// mesage will be dumped
 		pass = false;
 	}
@@ -473,23 +531,27 @@ bool ParseSerial()
 	{
 		// Send back confirmation
 		doPackSend = true;
+
 		// Print rcvd pack
-		PrintRcvdPack(msg_id, msg_dat, pack, conf);
+		DebugRcvd(r2a.idNew, r2a.dat, pack, conf);
 		pass = true;
+
+		// Update recive time
+		t_rcvd = millis();
 	}
 
 	// Check if packet is new
 	if (pass)
 	{
-		if (r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)] != pack)
+		if (r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)] != pack)
 		{
 			// Update last packet
-			r2a_packLast[CharInd(msg_id, r2a_id, r2a_idLng)] = pack;
+			r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)] = pack;
 		}
 		else
 		{
 			// Print resent packet
-			PrintResent(msg_id, msg_dat, pack);
+			PrintResent(r2a.idNew, r2a.dat, pack);
 			pass = false;
 		}
 	}
@@ -498,8 +560,8 @@ bool ParseSerial()
 
 }
 
-// SEND SERIAL DATA
-void SendSerial(char id, byte d1, uint16_t pack, bool do_conf)
+// SEND SERIAL PACKET DATA
+void SendPacketData(char id, byte d1, uint16_t pack, bool do_conf)
 {
 	// Local vars
 	const int msg_size = 7;
@@ -508,9 +570,9 @@ void SendSerial(char id, byte d1, uint16_t pack, bool do_conf)
 
 	// Confirm message really intended for here
 
-	for (int i = 0; i < r2a_idLng; i++)
+	for (int i = 0; i < r2a.idLng; i++)
 	{
-		if (id == r2a_id[i])
+		if (id == r2a.idList[i])
 			pass = true;
 	}
 
@@ -518,7 +580,7 @@ void SendSerial(char id, byte d1, uint16_t pack, bool do_conf)
 	{
 		// Store header
 		u.f = 0.0f;
-		u.c[0] = a2r_head;
+		u.c[0] = a2r.head;
 		msg[0] = u.b[0];
 		// Store mesage id
 		u.f = 0.0f;
@@ -535,19 +597,82 @@ void SendSerial(char id, byte d1, uint16_t pack, bool do_conf)
 		msg[5] = do_conf ? 1 : 0;
 		// Store footer
 		u.f = 0.0f;
-		u.c[0] = a2r_foot;
+		u.c[0] = a2r.foot;
 		msg[6] = u.b[0];
 
 		// Send
 		Serial1.write(msg, msg_size);
+		t_sent = millis();
 
 		// Print sent
-		PrintSentPack(id, d1, pack, do_conf);
+		DebugSent(id, d1, pack, do_conf);
 
 		// Reset flag
 		doPackSend = false;
 	}
 }
+
+// SEND SERIAL LOG DATA
+void SendLogData(String str, uint32_t t)
+{
+	// Local vars
+	char str_c[200];
+	char msg_c[200];
+	byte chksum = 0;
+	byte msg_size = 0;
+	String msg_s = " ";
+	uint32_t t_m = 0;
+	byte msg[200];
+
+	// Itterate log entry count
+	cnt_logSend++;
+
+	// Time now
+	t_m = t_sync == 0 || t_sync == t ? t : t - t_sync;
+
+	// Concatinate ts with message
+	str.toCharArray(str_c, 200);
+	sprintf(msg_c, "[%d],%lu,%s", cnt_logSend, t_m, str_c);
+	msg_s = msg_c;
+
+	// Get message size
+	chksum = msg_s.length();
+
+	// Load byte array
+
+	// head
+	msg[0] = a2c.head;
+	// checksum
+	msg[1] = chksum;
+	// msg
+	for (int i = 0; i < chksum; i++)
+		msg[i + 2] = msg_c[i];
+	// foot
+	msg[chksum + 2] = a2c.foot;
+
+	// Compute message size
+	msg_size = chksum + 3;
+
+	// Send
+	Serial.write(msg, msg_size);
+
+	// Store message
+	logLast = logNow;
+	logNow = String((char *)msg);
+
+	// Print
+	if (db.print_log && db.Console)
+	{
+		char chr[100];
+		String str;
+
+		// Store
+		sprintf(chr, "sent log: sent=%d chksum=%d: ", cnt_logSend, chksum);
+		str = chr;
+		PrintDB(str + "\"" + msg_s + "\"", millis());
+	}
+}
+
 
 #pragma endregion
 
@@ -565,7 +690,7 @@ void StartRew()
 	// Signal PID stopped
 	digitalWrite(pin_ttlPidRun, LOW);
 	digitalWrite(pin_ttlPidStop, HIGH);
-	PrintState("PID STOPPED");
+	DebugFlow("PID STOPPED");
 
 	// Set flag
 	fc.isRewarding = true;
@@ -574,7 +699,7 @@ void StartRew()
 	char chr[50];
 	sprintf(chr, "REWARDING(%dms)...", rewDur);
 	String str = chr;
-	PrintState(str);
+	DebugFlow(str);
 }
 
 // END REWARD
@@ -587,7 +712,7 @@ void EndRew()
 		SetPort(word_rewOff, word_rewOn);
 
 		fc.isRewarding = false;
-		PrintState("REWARD OFF");
+		DebugFlow("REWARD OFF");
 
 	}
 }
@@ -596,75 +721,103 @@ void EndRew()
 
 #pragma region --------DEBUGGING---------
 
-// PRINT STATUS
-void PrintState(String msg)
+// LOG/PRING MAIN EVENT
+void DebugFlow(String msg)
 {
-	if (doPrintFlow)
-	{
-		PrintStr(msg, millis());
-	}
+	DebugFlow(msg, millis());
+}
+void DebugFlow(String msg, uint32_t t)
+{
+	// Local vars
+	bool do_print = db.Console && db.print_flow;
+	bool do_log = db.Log && db.log_flow;
+
+	if (do_print)
+		PrintDB(msg, millis());
+	if (do_log)
+		SendLogData(msg, millis());
 }
 
 // PRINT RECIEVED PACKET
-void PrintRcvdPack(char id, byte dat, uint16_t pack, bool conf)
+void DebugRcvd(char id, byte dat, uint16_t pack, bool conf)
 {
+	// Local vars
+	bool do_print = db.Console && db.print_r2a;
+	bool do_log = db.Log && db.log_r2a;
 
-	//// Print
-	if (doPrintRcvdPack)
+	// Print/Log
+	if (do_print || do_log)
 	{
 		char str[50];
 		sprintf(str, "rcvd_r2a: id=%c dat=%d pack=%d conf=%s", id, dat, pack, conf ? "true" : "false");
-		PrintStr(str, millis());
+		if (do_print)
+			PrintDB(str, t_rcvd);
+		if (do_log)
+			SendLogData(str, millis());
 	}
 }
 
-// PRINT SENT PACKET
-void PrintSentPack(char id, byte d1, uint16_t pack, bool do_conf)
+// LOG/PRING SENT PACKET DEBUG STRING
+void DebugSent(char id, byte d1, uint16_t pack, bool do_conf)
 {
+	// Local vars
+	bool do_print = db.Console && db.print_a2r;
+	bool do_log = db.Log && db.log_a2r;
 
-	//// Print
-	if (doPrintSentPack)
+	// Print/Log
+	if (do_print || do_log)
 	{
 		char str[50];
 		sprintf(str, "sent_a2r: id=%c dat1=%d pack=%d do_conf=%s", id, d1, pack, do_conf ? "true" : "false");
-		PrintStr(str, millis());
+		if (do_print)
+			PrintDB(str, t_sent);
+		if (do_log)
+			SendLogData(str, millis());
 	}
 }
 
 // PRINT RESENT PACKET
 void PrintResent(char id, byte dat, uint16_t pack)
 {
+	// Local vars
+	bool do_print = db.Console && db.print_resent;
+	bool do_log = db.Log && db.log_resent;
 	static int resent_cnt = 0;
-	resent_cnt++;
 
-	//// Print
-	if (doPrintResent)
+	// Print/Log
+	if (do_print || do_log)
 	{
+		// Itterate count
+		resent_cnt++;
+
 		char str[50];
 		sprintf(str, "!!RESENT PACK: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
-		PrintStr(str, millis());
+		if (do_print)
+			PrintDB(str, millis());
+		if (do_log)
+			SendLogData(str, millis());
+
 	}
 }
 
 // PRINT DB INFO
-void PrintStr(String msg, uint32_t ts)
+void PrintDB(String msg, uint32_t t)
 {
 	static uint32_t t1 = millis();
-	uint32_t ts_norm = 0;
-	float t_c = 0;
-	float t;
+	uint32_t t_m = 0;
+	float t_s = 0;
 
 	// Time now
-	ts_norm = t_sync == 0 ? ts : ts - t_sync;
+	t_m = t_sync == 0 || t_sync == t ? t : t - t_sync;
 
 	// Total time
-	t_c = (float)(ts_norm) / 1000.0f;
+	t_s = (float)(t_m) / 1000.0f;
 
 	// Pad string
 	char chr[50];
 	char chr_ts[50];
 	char arg[50];
-	sprintf(chr_ts, "[%0.2fs]", t_c);
+	sprintf(chr_ts, "[%0.2fs]", t_s);
 	String str_ts = chr_ts;
 	sprintf(arg, "%%%ds", 20 - str_ts.length());
 	sprintf(chr, arg, '_');
@@ -708,7 +861,7 @@ void CheckIRPulse()
 		// Set ir pins on
 		SetPort(word_irOn, 0x0);
 		t_syncLast = millis();
-		PrintState("IR SYNC ON");
+		DebugFlow("IR SYNC ON");
 		is_ir_on = true;
 	}
 	// Set low
@@ -718,7 +871,7 @@ void CheckIRPulse()
 		)
 	{
 		SetPort(0x0, word_irOn);
-		PrintState("IR SYNC OFF");
+		DebugFlow("IR SYNC OFF");
 		is_ir_on = false;
 	}
 
@@ -811,8 +964,8 @@ void NorthFun()
 			t_outLastNorth = millis();
 			isOnNorth = true;
 			// Print
-			if (doPrintFlow)
-				PrintStr("NORTH ON", t_outLastNorth);
+			if (db.print_flow)
+				PrintDB("NORTH ON", t_outLastNorth);
 		}
 		t_inLastNorth = millis();
 	}
@@ -832,8 +985,8 @@ void WestFun()
 			t_outLastWest = millis();
 			isOnWest = true;
 			// Print
-			if (doPrintFlow)
-				PrintStr("WEST ON", t_outLastWest);
+			if (db.print_flow)
+				PrintDB("WEST ON", t_outLastWest);
 		}
 		t_inLastWest = millis();
 	}
@@ -853,8 +1006,8 @@ void SouthFun()
 			t_outLastSouth = millis();
 			isOnSouth = true;
 			// Print
-			if (doPrintFlow)
-				PrintStr("SOUTH ON", t_outLastSouth);
+			if (db.print_flow)
+				PrintDB("SOUTH ON", t_outLastSouth);
 		}
 		t_inLastSouth = millis();
 	}
@@ -874,8 +1027,8 @@ void EastFun()
 			t_outLastEast = millis();
 			isOnEast = true;
 			// Print
-			if (doPrintFlow)
-				PrintStr("EAST ON", t_outLastEast);
+			if (db.print_flow)
+				PrintDB("EAST ON", t_outLastEast);
 		}
 		t_inLastEast = millis();
 	}
