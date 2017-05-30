@@ -4,7 +4,9 @@
 /*
 Connect pot and use to test motor function
 */
-const bool do_POT_Test = false;
+const bool do_POT_Test = true;
+const bool do_POT_PrintSpeed = true;
+const bool do_POT_PrintStat = true;
 
 // Feed Arm Test
 /*
@@ -188,6 +190,8 @@ int runSpeed = 0;
 int pastSpeed = 99;
 boolean switched = false;
 long switchLst = millis();
+uint16_t ad_r_stat;
+uint16_t ad_f_stat;
 
 // Button variables
 volatile uint32_t t_debounce[3] = { millis(), millis(), millis() };
@@ -228,7 +232,7 @@ extern unsigned char SmallFont[];
 #pragma endregion
 
 
-#pragma region ---------CLASS SETUP---------
+#pragma region ---------CLASS/STRUCT/UNION SETUP---------
 
 //----------CLASS: union----------
 union u_tag {
@@ -243,6 +247,15 @@ union u_tag {
 u;
 
 #pragma endregion
+
+
+#pragma region ---------FUNCTION DECLARATION---------
+
+int CheckAD_Status(uint16_t stat_reg, String stat_id);
+void AD_Reset();
+
+#pragma endregion
+
 
 void setup()
 {
@@ -291,18 +304,8 @@ void setup()
 	delayMicroseconds(100);
 	ad_F.SPIConfig();
 	delayMicroseconds(100);
-	// Reset each axis
-	ad_R.resetDev();
-	delayMicroseconds(100);
-	ad_F.resetDev();
-	delayMicroseconds(100);
-	// Configure each axis
-	dSPINConfig_board();
-	delayMicroseconds(100);
-	// Get the status to clear the UVLO Flag
-	ad_R.getStatus();
-	delayMicroseconds(100);
-	ad_F.getStatus();
+	// Reset 
+	AD_Reset();
 
 	// Make sure motor is stopped and in high impedance
 	ad_R.hardHiZ();
@@ -385,17 +388,46 @@ void setup()
 void loop()
 {
 	static bool first_pass = true;
-		if (first_pass)
-		{
-			// Blink to show setup done
-			SetupBlink();
-			first_pass = false;
-		}
+	if (first_pass)
+	{
+		// Blink to show setup done
+		SetupBlink();
+		first_pass = false;
+	}
 
 	// POT Test
 	if (do_POT_Test)
 	{
 		POT_Run();
+
+		// Check for errors
+		static uint32_t t_check = millis() + 100;
+		if (millis() > t_check)
+		{
+			char msg[50];
+			// Get rear board status
+			ad_r_stat = ad_R.getStatus();
+			int ocd_r = CheckAD_Status(ad_r_stat, "OCD");
+			int mot_r = CheckAD_Status(ad_r_stat, "MOT_STATUS");
+			// Get front board status
+			ad_f_stat = ad_F.getStatus();
+			int ocd_f = CheckAD_Status(ad_f_stat, "OCD");
+			int mot_f = CheckAD_Status(ad_f_stat, "MOT_STATUS");
+			// Print OCD vals
+			if (do_POT_PrintStat)
+			{
+				sprintf(msg, "AD: R_MOT=%d F_MOT=%d R_OCD=%d F_OCD=%d", mot_r, mot_f, ocd_r, ocd_f);
+				SerialUSB.println(msg);
+			}
+			// Check for errors
+			if (ocd_r == 0 || ocd_f == 0)
+			{
+				SerialUSB.println("!!ERROR!!");
+				pastSpeed = 0;
+				//AD_Reset();
+			}
+			t_check = millis() + 100;
+		}
 	}
 
 	// Voltage Test
@@ -422,25 +454,29 @@ void loop()
 
 }
 
-void POT_Run() {
+bool POT_Run() {
 
 	vccNow = analogRead(pin_POT_In);
 	vccNorm = vccNow / vccMax;
 	velNow = round(vccNorm * maxSpeed * 100) / 100;
 	runSpeed = velNow * cm2stp;
 	millis();
+	bool is_speed_changed = false;
 
 	if (!switched && runSpeed != pastSpeed) {
 		switchLst = millis();
 		switched = true;
 	}
 	if (switched && (millis() - switchLst >= 250)) {
-		SerialUSB.print("New Vcc: ");
-		SerialUSB.print(vccNow);
-		SerialUSB.print("    New Speed: ");
-		SerialUSB.println(runSpeed / cm2stp);
+		if (do_POT_PrintSpeed)
+		{
+			char msg[50];
+			sprintf(msg, "AD: New Speed = %0.2fcm/sec", runSpeed / cm2stp);
+			SerialUSB.println(msg);
+		}
 		pastSpeed = runSpeed;
 		switched = false;
+		is_speed_changed = true;
 		if (velNow <= 1)
 		{
 			ad_R.hardStop();
@@ -454,6 +490,7 @@ void POT_Run() {
 			analogWrite(13, 120);
 		}
 	}
+	return is_speed_changed;
 }
 
 void ExtendFeedArm()
@@ -489,10 +526,10 @@ void ExtendFeedArm()
 		}
 
 		// Unstep motor
-			digitalWrite(pin_ED_STP, LOW);
+		digitalWrite(pin_ED_STP, LOW);
 
 		// Sleep motor
-			digitalWrite(pin_ED_SLP, LOW);
+		digitalWrite(pin_ED_SLP, LOW);
 
 		is_armExtended = true;
 	}
@@ -541,7 +578,7 @@ void CheckBattery()
 {
 	// Local vars
 	static uint32_t t_lastUpdate = millis();
-	static uint32_t t_delUpdate = 100;
+	static uint32_t t_delUpdate = 500;
 	float bit_in;
 	float volt_in;
 	float volt_sum;
@@ -554,28 +591,28 @@ void CheckBattery()
 		digitalWrite(pin_Rel_EtOH, HIGH);
 	}
 
-		bit_in = analogRead(pin_BatVolt);
-		volt_in = bit_in * bit2volt;
-		volt_sum = 0;
-		// Shift array and compute average
-		for (int i = 99; i > 0; i--) {
-			batVoltArr[i] = batVoltArr[i - 1];
-			volt_sum += batVoltArr[i];
-		}
-		batVoltArr[0] = volt_in;
-		volt_avg = volt_sum / 99;
+	bit_in = analogRead(pin_BatVolt);
+	volt_in = bit_in * bit2volt;
+	volt_sum = 0;
+	// Shift array and compute average
+	for (int i = 99; i > 0; i--) {
+		batVoltArr[i] = batVoltArr[i - 1];
+		volt_sum += batVoltArr[i];
+	}
+	batVoltArr[0] = volt_in;
+	volt_avg = volt_sum / 99;
 
-		// Convert float to byte
-		bit_out = byte(round(volt_avg * 10));
+	// Convert float to byte
+	bit_out = byte(round(volt_avg * 10));
 
-		if (millis() > t_lastUpdate + t_delUpdate)
-		{
-			char str[50];
-			sprintf(str, "\r\nVOLTAGE: Float = %0.2fV Byte = %d", volt_avg, bit_out);
-			SerialUSB.print(str);
+	if (millis() > t_lastUpdate + t_delUpdate)
+	{
+		char str[50];
+		sprintf(str, "\r\nVOLTAGE: Float = %0.2fV Byte = %d", volt_avg, bit_out);
+		SerialUSB.print(str);
 
-			t_lastUpdate = millis();
-		}
+		t_lastUpdate = millis();
+	}
 }
 
 void XBeeRead()
@@ -684,7 +721,7 @@ void IR_LatComp()
 		// Turn off LED on FeederDue
 		else if (
 			is_IR_On &&
-			micros() > t_IR_Rcvd + t_LED_Dur*1000
+			micros() > t_IR_Rcvd + t_LED_Dur * 1000
 			)
 		{
 			// Turn off tracker LED
@@ -797,4 +834,107 @@ void SetupBlink()
 	analogWrite(pin_Disp_LED, 0);
 	analogWrite(pin_TrackLED, trackLEDduty);
 	analogWrite(pin_RewLED_R, rewLEDmin);
+}
+
+int CheckAD_Status(uint16_t stat_reg, String stat_id)
+{
+	// Local vars
+	String status_list[16] =
+	{
+		"HiZ",
+		"BUSY",
+		"SW_F",
+		"SW_EVN",
+		"DIR",
+		"MOT_STATUS",
+		"MOT_STATUS",
+		"NOTPERF_CMD",
+		"WRONG_CMD",
+		"UVLO",
+		"TH_WRN",
+		"TH_SD",
+		"OCD",
+		"STEP_LOSS_A",
+		"STEP_LOSS_B",
+		"SCK_MOD"
+	};
+	byte bit_ind[2] = { 0, 0 };
+	bool bit_set[2] = { false, false };
+	uint16_t bit_val = 0x0;
+
+	// Get id ind
+	for (int i = 0; i < 16; i++)
+	{
+		if (stat_id == status_list[i])
+		{
+			bit_ind[bit_set[0] ? 1 : 0] = i;
+			bit_set[bit_set[0] ? 1 : 0] = true;
+		}
+	}
+
+	// Get bit value
+	int n_loop = bit_set[1] ? 2 : 1;
+	for (int i = 0; i < n_loop; i++)
+	{
+		uint16_t mask = 1 << bit_ind[i];
+		uint16_t masked_n = stat_reg & mask;
+		uint16_t k = masked_n >> bit_ind[i];
+		bit_val |= bit_val & ~(1 << i) | (k << i);
+	}
+
+	// return bit value
+	return (int)bit_val;
+}
+
+void PrintBits(uint16_t stat_reg)
+{
+	String status_list[16] =
+	{
+		"HiZ",
+		"BUSY",
+		"SW_F",
+		"SW_EVN",
+		"DIR",
+		"MOT_STATUS",
+		"MOT_STATUS",
+		"NOTPERF_CMD",
+		"WRONG_CMD",
+		"UVLO",
+		"TH_WRN",
+		"TH_SD",
+		"OCD",
+		"STEP_LOSS_A",
+		"STEP_LOSS_B",
+		"SCK_MOD"
+	};
+	char c[50];
+	SerialUSB.println("\r\r");
+
+	for (int i = 0; i < 16; i++)
+	{
+		int k = i;
+		uint16_t mask = 1 << k;
+		uint16_t masked_n = stat_reg & mask;
+		uint16_t thebit = masked_n >> k;
+
+		sprintf(c, "[%d] ", thebit);
+		SerialUSB.println(c + status_list[i]);
+	}
+	SerialUSB.println("\r");
+}
+
+void AD_Reset()
+{
+	// Reset each axis
+	ad_R.resetDev();
+	delayMicroseconds(100);
+	ad_F.resetDev();
+	delayMicroseconds(100);
+	// Configure each axis
+	dSPINConfig_board();
+	delayMicroseconds(100);
+	ad_R.getStatus();
+	delayMicroseconds(100);
+	ad_F.getStatus();
+	delayMicroseconds(100);
 }

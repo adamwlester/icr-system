@@ -253,9 +253,6 @@ Disconnect_AC();
 % Disconnect from NetCom
 Disconnect_NLX();
 
-% Finish exiting
-Update_Console('FINISHED: Exit ICR_GUI');
-
 % CLEAR EVERYTHING
 
 % Close figure
@@ -264,12 +261,15 @@ close(FigH)
 delete(FigH)
 
 % Save log
+% Finish exiting
 if size(who('global'),1) > 0
     if ischar(c2m_O)
+        Update_Console('RUNNING: Save ICR_GUI log');
         fi_path = fullfile(c2m_O, 'ICR_GUI_Log.csv');
         fid = fopen(fi_path,'wt');
         fprintf(fid, logStr);
         fclose(fid);
+        Update_Console('FINISHED: Save ICR_GUI log');
     end
 end
 

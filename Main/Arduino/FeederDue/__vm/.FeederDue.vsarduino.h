@@ -227,5 +227,4 @@ __attribute__((always_inline)) static __INLINE void __set_PRIMASK(uint32_t priMa
 
 
 #include "FeederDue.ino"
-#include "dSPIN_config.ino"
 #endif
