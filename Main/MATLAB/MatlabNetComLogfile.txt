@@ -1,16 +1,17 @@
 NetCom Log File Opened - File Name:  MatlabNetComLogfile.txt
-Time Opened: (mm/dd/yyyy): 05/30/2017 At Time: 14:30:35
+Time Opened: (mm/dd/yyyy): 05/30/2017 At Time: 18:10:47
 NetCom Version 3.0.1
 
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:30:35 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26200.
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:30:35 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:30:35 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26201.
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:30:36 - NodeConnectionClient::AddStreamObject - Object VT1 has been added to our stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:30:36 - NodeConnectionClient::AddStreamObject - Object VT2 has been added to our stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:30:36 - NodeConnectionClient::AddStreamObject - Object EVENTS has been added to our stream list. Stream Type: Event
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:31:34 - NodeConnectionClient::RemoveStreamObject - Object VT1 stream reference count has been decremented to 0. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:31:34 - NodeConnectionClient::RemoveStreamObject - Object VT1 has been removed from the stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:31:34 - NodeConnectionClient::RemoveStreamObject - Object VT2 stream reference count has been decremented to 0. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:31:34 - NodeConnectionClient::RemoveStreamObject - Object VT2 has been removed from the stream list. Stream Type: Video
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:31:34 - NodeConnectionClient::RemoveStreamObject - Object EVENTS stream reference count has been decremented to 0. Stream Type: Event
--* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 14:31:34 - NodeConnectionClient::RemoveStreamObject - Object EVENTS has been removed from the stream list. Stream Type: Event
+-*  ERROR  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:10:48 - NetworkNodeClient::ConnectToServer - Error Connecting To Server, error code: WSAECONNREFUSED - The attempt to connect was forcefully rejected.
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:10:49 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26100.
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:10:50 - NodeConnectionClient::AddStreamObject - Object VT1 has been added to our stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:10:50 - NodeConnectionClient::AddStreamObject - Object VT2 has been added to our stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:10:50 - NodeConnectionClient::AddStreamObject - Object EVENTS has been added to our stream list. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:11:31 - NodeConnectionClient::RemoveStreamObject - Object VT1 stream reference count has been decremented to 0. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:11:31 - NodeConnectionClient::RemoveStreamObject - Object VT1 has been removed from the stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:11:31 - NodeConnectionClient::RemoveStreamObject - Object VT2 stream reference count has been decremented to 0. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:11:31 - NodeConnectionClient::RemoveStreamObject - Object VT2 has been removed from the stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:11:31 - NodeConnectionClient::RemoveStreamObject - Object EVENTS stream reference count has been decremented to 0. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 05/30/2017 At Time: 18:11:31 - NodeConnectionClient::RemoveStreamObject - Object EVENTS has been removed from the stream list. Stream Type: Event
+Log File Closed - End of File
+

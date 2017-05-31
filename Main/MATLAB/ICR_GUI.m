@@ -253,9 +253,6 @@ Disconnect_AC();
 % Disconnect from NetCom
 Disconnect_NLX();
 
-% Finish exiting
-Update_Console('FINISHED: Exit ICR_GUI');
-
 % CLEAR EVERYTHING
 
 % Close figure
@@ -264,12 +261,15 @@ close(FigH)
 delete(FigH)
 
 % Save log
+% Finish exiting
 if size(who('global'),1) > 0
     if ischar(c2m_O)
+        Update_Console('RUNNING: Save ICR_GUI log');
         fi_path = fullfile(c2m_O, 'ICR_GUI_Log.csv');
         fid = fopen(fi_path,'wt');
         fprintf(fid, logStr);
         fclose(fid);
+        Update_Console('FINISHED: Save ICR_GUI log');
     end
 end
 
@@ -370,7 +370,7 @@ clear(Vars{:});
                     
                     % ---------------------------POLL NETCOM------------------------------
                     
-                elseif D.B.poll_nlx                                          
+                elseif D.B.poll_nlx
                     
                     % GET ELLAPSED TIME
                     D.T.loop = Elapsed_Time(now, D.T.last_poll_tim);
@@ -379,7 +379,7 @@ clear(Vars{:});
                     SF_Evt_Proc();
                     
                     % HOLD FOR NETCOM BUFFERS
-                    if (D.T.loop >= D.PAR.polRate)                      
+                    if (D.T.loop >= D.PAR.polRate)
                         D.T.last_poll_tim = now;
                         
                         % PROCESS NLX VT
@@ -543,7 +543,7 @@ clear(Vars{:});
             % flag gui closed
             D.B.close = false;
             % rotation has occured
-            D.B.rotated = false;            
+            D.B.rotated = false;
             % track if reward in progress
             D.B.is_rewarding = false;
             % block any cueing
@@ -2347,7 +2347,10 @@ clear(Vars{:});
             
             % Get current Cheetah folder name
             dirs = dir(D.DIR.nlxTempTop);
-            D.DIR.recFi = dirs([dirs.datenum] == max([dirs.datenum])).name;
+            dirs = dirs(3:end);
+            fi_dat_num = ...
+                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
+            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
             
             %% START STREAMING
             
@@ -5750,47 +5753,6 @@ clear(Vars{:});
         
         %% ========================== MINOR FUNCTIONS =============================
         
-        % --------------------------SEND CS COMMAND--------------------------------
-        
-        function[] = Mat2CS(id, dat1, dat2, dat3)
-            
-            % Set mesage data
-            if nargin == 3
-                dat3 = 9999;
-            end
-            if nargin == 2
-                dat2 = 9999;
-                dat3 = 9999;
-            end
-            if nargin == 1
-                dat1 = 9999;
-                dat2 = 9999;
-                dat3 = 9999;
-            end
-            m2c_dat1 = dat1;
-            m2c_dat2 = dat2;
-            m2c_dat3 = dat3;
-            
-            % Set mesage ID
-            m2c_id = id;
-            
-            % Set flag
-            m2c_flag = true;
-            
-            % Post command to NLX
-            if isfield(D, 'NLX')
-                if ~isempty(D.NLX)
-                    if NlxAreWeConnected() == 1
-                        NlxSendCommand(sprintf(D.NLX.m2cs_evt, id, dat1, dat2, dat3));
-                    end
-                end
-            end
-            
-            Update_Console(sprintf('Mat2CS: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f', ...
-                id, dat1 , dat2, dat3));
-            
-        end
-        
         % ---------------------------GET BUTTON COLLOR-----------------------------
         function [C] = Btn_Col()
             
@@ -6078,6 +6040,47 @@ clear(Vars{:});
 
 
 %% =======================TOP LEVEL FUNCTIONS==============================
+
+% --------------------------SEND CS COMMAND--------------------------------
+
+    function[] = Mat2CS(id, dat1, dat2, dat3)
+        
+        % Set mesage data
+        if nargin == 3
+            dat3 = 9999;
+        end
+        if nargin == 2
+            dat2 = 9999;
+            dat3 = 9999;
+        end
+        if nargin == 1
+            dat1 = 9999;
+            dat2 = 9999;
+            dat3 = 9999;
+        end
+        m2c_dat1 = dat1;
+        m2c_dat2 = dat2;
+        m2c_dat3 = dat3;
+        
+        % Set mesage ID
+        m2c_id = id;
+        
+        % Set flag
+        m2c_flag = true;
+        
+        % Post command to NLX
+        if isfield(D, 'NLX')
+            if ~isempty(D.NLX)
+                if NlxAreWeConnected() == 1
+                    NlxSendCommand(sprintf(D.NLX.m2cs_evt, id, dat1, dat2, dat3));
+                end
+            end
+        end
+        
+        Update_Console(sprintf('Mat2CS: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f', ...
+            id, dat1 , dat2, dat3));
+        
+    end
 
 % ---------------------------PRINT TO CONSOLE------------------------------
     function [] = Update_Console(str)
