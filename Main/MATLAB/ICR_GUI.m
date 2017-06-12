@@ -1,26 +1,27 @@
-function[] = ICR_GUI(inArg, isMatSolo)
-% INPUT: inArg = [0,1,2,3,4]
-%        0: No test
-%        1: Run MATLAB in debug mode
-%        2: PID calibration
-%        3: Halt error test
-%        4: Simulated rat test
-
-
-
-
-
+function[] = ICR_GUI(sysTest, doDebug, isMatSolo, csTime)
+% INPUT: 
+%	sysTest = [0,1,2,3]
+%    	0: No test
+%     	1: PID calibration
+%   	2: Halt error test
+%    	3: Simulated rat test
+%   doDebug = [0,1]
+%     	0: Dont break on errors
+%       1: Break on errors
+%   isMatSolo = [true,false]
+%     	true: Matlab running alone
+%       true: Matlab running with other programs
 
 %% ========================= TOP LEVEL SETUP ==============================
 
 % Matlab globals
 global FigH; % UI figure handle
 global D; % Main data struct
+global startTime; % ICR_GUI.m start time (sec)
 global isErrExit; % bool for error handling
 global consoleStr; % console text
 global logStr; % log text
 global logCount; % log entry counter
-global startTime; % run start time
 global tcpIP; % server tcpip object
 global isTestRun;
 global doPidCalibrationTest;
@@ -50,7 +51,6 @@ isErrExit = false;
 consoleStr = [];
 logStr = [];
 logCount = 0;
-startTime = now;
 isTestRun = false;
 doPidCalibrationTest = false;
 doHaultErrorTest = false;
@@ -62,6 +62,34 @@ c2m_ind = ...
 c2m_ind = find(c2m_ind == 1);
 for z_v = 1:length(c2m_ind)
     eval(sprintf('%s = 0;', var_list{c2m_ind(z_v)}))
+end
+
+% Check if Matlab running alone
+if nargin == 0
+    isMatSolo = true;
+    sysTest = 1;
+else
+    isMatSolo = false;
+end
+
+% Set CS time
+startTime = 0;
+if nargin >= 4
+    % Convert to seconds
+    startTime = Elapsed_Seconds(0) - double(csTime)/1000;
+end
+
+% Get other input args
+switch sysTest
+    case 1
+        isTestRun = true;
+        doPidCalibrationTest = true;
+    case 2
+        isTestRun = true;
+        doHaultErrorTest = true;
+    case 3
+        isTestRun = true;
+        doSimRatTest = true;
 end
 
 %---------------------Important variable formats---------------------------
@@ -156,34 +184,6 @@ D.DB.ratStopTim = 5; % (sec)
 
 %% ========================= TOP LEVEL RUN ===============================
 
-% DEBUG/TESTING
-
-% Check if Matlab running alone
-if nargin == 0
-    isMatSolo = true;
-    inArg = 1;
-elseif nargin == 1
-    isMatSolo = false;
-end
-
-% Get other input args
-doDebug = true;
-switch inArg
-    case 0
-        doDebug = false;
-    case 1
-        doDebug = true;
-    case 2
-        isTestRun = true;
-        doPidCalibrationTest = true;
-    case 3
-        isTestRun = true;
-        doHaultErrorTest = true;
-    case 4
-        isTestRun = true;
-        doSimRatTest = true;
-end
-
 % Initilize top level vars
 FigH = figure('Visible', 'Off', ...
     'DeleteFcn', {@ExitCallback});
@@ -246,19 +246,22 @@ end
 % Start exiting
 Update_Console('RUNNING: Exit ICR_GUI...');
 
-% Pause then shut it all down
-pause(1);
-% Disconnect AC computer
-Disconnect_AC();
-% Disconnect from NetCom
-Disconnect_NLX();
-
-% CLEAR EVERYTHING
-
-% Close figure
-D.B.close = true;
-close(FigH)
-delete(FigH)
+% Check if GUI was forced close
+if ~D.B.force_close
+    
+    % Pause then shut it all down
+    pause(1);
+    % Disconnect AC computer
+    Disconnect_AC();
+    % Disconnect from NetCom
+    Disconnect_NLX();
+    
+    % Close figure
+    D.B.close = true;
+    close(FigH)
+    delete(FigH)
+    
+end
 
 % Save log
 % Finish exiting
@@ -347,7 +350,7 @@ clear(Vars{:});
                     
                     % Dump initial 1 sec of vt data
                     rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
-                    while Elapsed_Time(now, D.T.acq_tim) < 1 || ...
+                    while Time_Diff(Elapsed_Seconds(), D.T.acq_tim) < 1 || ...
                             rat_vt_recs > 0 || ...
                             rob_vt_recs > 0 || ...
                             evt_recs > 0
@@ -356,7 +359,7 @@ clear(Vars{:});
                         [~, ~, ~, ~ , ~, evt_recs, ~] = NlxGetNewEventData('Events');
                     end
                     % Set initial poll time
-                    D.T.last_poll_tim = now;
+                    D.T.last_poll_tim = Elapsed_Seconds();
                     
                     % Wait for robot streaming to start
                     if ~isMatSolo
@@ -373,14 +376,14 @@ clear(Vars{:});
                 elseif D.B.poll_nlx
                     
                     % GET ELLAPSED TIME
-                    D.T.loop = Elapsed_Time(now, D.T.last_poll_tim);
+                    D.T.loop = Time_Diff(Elapsed_Seconds(), D.T.last_poll_tim);
                     
                     % PROCESS NLX EVENTS
                     SF_Evt_Proc();
                     
                     % HOLD FOR NETCOM BUFFERS
                     if (D.T.loop >= D.PAR.polRate)
-                        D.T.last_poll_tim = now;
+                        D.T.last_poll_tim = Elapsed_Seconds();
                         
                         % PROCESS NLX VT
                         
@@ -404,7 +407,8 @@ clear(Vars{:});
                                 c2m_K == 1 && ...
                                 ~D.B.rat_in && ...
                                 D.B.rec && ...
-                                ~D.B.rec_done
+                                ~D.B.rec_done && ...
+                                ~D.B.quit
                             
                             SF_Rat_In_Check();
                         end
@@ -540,6 +544,8 @@ clear(Vars{:});
             D.B.do_save = false;
             % flag quit
             D.B.quit = false;
+            % flag gui forced exit
+            D.B.force_close = false;
             % flag gui closed
             D.B.close = false;
             % rotation has occured
@@ -552,6 +558,8 @@ clear(Vars{:});
             D.B.do_all_cue = false;
             % track if next lap should be cued for half cue cond
             D.B.is_cued_rew = false;
+            % flag if haulted
+            D.B.is_haulted = false;
             % track reward reset
             D.B.flag_rew_confirmed = false;
             % track reset crossing
@@ -576,9 +584,9 @@ clear(Vars{:});
             % TIMERS
             
             % last poll time
-            D.T.last_poll_tim = now;
+            D.T.last_poll_tim = Elapsed_Seconds();
             % time session starts
-            D.T.ses_str_tim = now;
+            D.T.ses_str_tim = Elapsed_Seconds();
             % total acq time
             D.T.acq_tot_tim = 0;
             % acq restart time
@@ -602,7 +610,7 @@ clear(Vars{:});
             % track manual reward sent time
             D.T.manual_rew_sent = 0;
             % track last reward time
-            D.T.rew_last = now;
+            D.T.rew_last = Elapsed_Seconds();
             % track reward start
             D.T.rew_start = 0;
             % track reward end
@@ -613,8 +621,8 @@ clear(Vars{:});
             D.T.strqd_inbnd_t1 = 0;
             D.T.strqd_inbnd_t2 = 0;
             % track last pos update
-            D.T.Rat.last_pos_update = now;
-            D.T.Rob.last_pos_update = now;
+            D.T.Rat.last_pos_update = Elapsed_Seconds();
+            D.T.Rob.last_pos_update = Elapsed_Seconds();
             
             % DEBUG VARS
             % track reward duration [now, min, max, sum, count]
@@ -2263,10 +2271,10 @@ clear(Vars{:});
             D.NLX.rot_evt{2} = '-PostEvent Post_Rotation_40_Deg 206 0';
             
             % Mat to CS event command string
-            D.NLX.m2cs_evt = '-PostEvent Post_Mat2CS_ID:%s_D1:%0.4f_D2:%0.4f 210 0';
+            D.NLX.m2cs_evt = '-PostEvent Post_Mat2CS_ID:%s_D1:%0.4f_D2:%0.4f_D3:%0.4f 210 0';
             
             % Reward Zoneet and Duration
-            D.NLX.rew_evt = '-PostEvent Post_Reward_Zoneet:%d_Duration:%d 211 0';
+            D.NLX.rew_evt = '-PostEvent Post_Reward_Zone:%d_Duration:%d 211 0';
             
             % Session end command string
             D.NLX.ses_end_evt = '-PostEvent Post_Session_End 211 0';
@@ -3250,10 +3258,10 @@ clear(Vars{:});
                         D.B.rat_in = true;
                         
                         % Save time
-                        D.T.run_str = now;
+                        D.T.run_str = Elapsed_Seconds();
                         
                         % Start tracking lap times
-                        D.T.lap_tim = now;
+                        D.T.lap_tim = Elapsed_Seconds();
                         
                         % Set patch to nonvisible
                         set(D.UI.ptchStQ, ...
@@ -3309,8 +3317,8 @@ clear(Vars{:});
                 
                 % PID CALIBRATION
                 if doPidCalibrationTest
-                    % Start pid test
-                    Mat2CS('T', inArg, 0);
+                    % Set flag to start pid
+                    D.B.pidStarted = false;
                 end
                 
                 % HALT ERROR TEST
@@ -3318,7 +3326,7 @@ clear(Vars{:});
                     D.DB.haltCnt = D.DB.stepSamp;
                     D.DB.haltDur = 5; % (sec)
                     D.DB.halt_error_str = '';
-                    D.DB.t_halt = now;
+                    D.DB.t_halt = Elapsed_Seconds();
                     D.DB.t_halt(6) = D.DB.t_halt(6) + 5;
                     D.DB.nowStep = 0;
                     D.DB.nowVel = 0;
@@ -3336,7 +3344,7 @@ clear(Vars{:});
                     D.B.simTSStart = NaN;
                     D.B.simTSLast = NaN;
                     D.B.holdForRew = false;
-                    D.B.holdTime = now;
+                    D.B.holdTime = Elapsed_Seconds();
                     D.B.initVals = true;
                     D.B.zoneInd = 5;
                     D.B.rewReset = false;
@@ -3424,13 +3432,13 @@ clear(Vars{:});
                     rad_diff_last < 0.9*(2 * pi);
                 
                 % Do not use exc_3/4 if more than reward duration of unused data
-                if Elapsed_Time(now, D.T.(fld).last_pos_update) > (D.PAR.rewDur+100)/1000
+                if Time_Diff(Elapsed_Seconds(), D.T.(fld).last_pos_update) > (D.PAR.rewDur+100)/1000
                     exc_3 = zeros(size(exc_3,1), 1);
                 end
                 
                 % Check that reward flag has not been set for too long
                 if D.T.rew_start > 0
-                    if Elapsed_Time(now, D.T.rew_start) > 5 && ...
+                    if Time_Diff(Elapsed_Seconds(), D.T.rew_start) > 5 && ...
                             D.B.is_rewarding == true
                         % reset flag
                         D.B.is_rewarding = false;
@@ -3473,7 +3481,7 @@ clear(Vars{:});
                     D.B.(fld).plot_pos = true;
                     
                     % Keep track of updates
-                    D.T.(fld).last_pos_update = now;
+                    D.T.(fld).last_pos_update = Elapsed_Seconds();
                     
                     % Save last usable rad value
                     D.P.(fld).radLast = rad(end);
@@ -3678,7 +3686,7 @@ clear(Vars{:});
                 if any(ismember(evtStr, D.NLX.rew_on_str))
                     
                     % Save reward start time
-                    D.T.rew_start = now;
+                    D.T.rew_start = Elapsed_Seconds();
                     
                     % Get time stamp
                     D.T.rew_nlx_ts(1) = evtTS(ismember(evtStr, D.NLX.rew_on_str));
@@ -3687,7 +3695,7 @@ clear(Vars{:});
                     if datenum(D.T.manual_rew_sent) > 0 && ...
                             datenum(D.T.manual_rew_sent) < datenum(D.T.rew_start)
                         % Save reward mesage round trip time
-                        D.DB.rew_round_trip(1) = Elapsed_Time(D.T.rew_start, D.T.manual_rew_sent) * 1000;
+                        D.DB.rew_round_trip(1) = Time_Diff(D.T.rew_start, D.T.manual_rew_sent) * 1000;
                         D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
                         D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
                         D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
@@ -3723,7 +3731,7 @@ clear(Vars{:});
                 if any(ismember(evtStr, D.NLX.rew_off_str))
                     
                     % Save reward end time
-                    D.T.rew_end = now;
+                    D.T.rew_end = Elapsed_Seconds();
                     
                     % Get time stamp
                     D.T.rew_nlx_ts(2) = evtTS(ismember(evtStr, D.NLX.rew_off_str));
@@ -3733,7 +3741,7 @@ clear(Vars{:});
                     % matlab time
                     if datenum(D.T.rew_start) > 0 && ...
                             datenum(D.T.rew_start) < datenum(D.T.rew_end)
-                        dt(1) = Elapsed_Time(D.T.rew_end, D.T.rew_start) * 1000;
+                        dt(1) = Time_Diff(D.T.rew_end, D.T.rew_start) * 1000;
                     end
                     % nlx ts time
                     if D.T.rew_nlx_ts(1) < D.T.rew_nlx_ts(2) && ...
@@ -4191,8 +4199,8 @@ clear(Vars{:});
                                 'FaceAlpha', 0.5);
                             
                             % Update reward info list
-                            rew_ellapsed = Elapsed_Time(now, D.T.rew_last);
-                            D.T.rew_last = now;
+                            rew_ellapsed = Time_Diff(Elapsed_Seconds(), D.T.rew_last);
+                            D.T.rew_last = Elapsed_Seconds();
                             D.UI.rewInfoList = [...
                                 D.UI.rewInfoList; ...
                                 {sprintf('%d: T:%0.2f P:%d M:%d', ...
@@ -4378,7 +4386,7 @@ clear(Vars{:});
                 D.P.Rob.vel_max_lap = 0;
                 
                 % Save time
-                lap_tim_ellapsed = Elapsed_Time(now, D.T.lap_tim);
+                lap_tim_ellapsed = Time_Diff(Elapsed_Seconds(), D.T.lap_tim);
                 
                 % Get average
                 D.T.lap_tim_sum = D.T.lap_tim_sum + lap_tim_ellapsed;
@@ -4397,7 +4405,7 @@ clear(Vars{:});
                 set(D.UI.popLapTim, 'String', infstr);
                 
                 % reset timer
-                D.T.lap_tim = now;
+                D.T.lap_tim = Elapsed_Seconds();
                 
             end
             
@@ -4670,23 +4678,23 @@ clear(Vars{:});
             %% Print time info
             
             % Get session time
-            nowTim(1) =  Elapsed_Time(now,D.T.ses_str_tim);
+            nowTim(1) =  Time_Diff(Elapsed_Seconds(),D.T.ses_str_tim);
             
             % Get recording elapsed time plus saved time
             if  D.B.rec
-                nowTim(2) = Elapsed_Time(now, D.T.rec_tim)  + D.T.rec_tot_tim;
+                nowTim(2) = Time_Diff(Elapsed_Seconds(), D.T.rec_tim)  + D.T.rec_tot_tim;
             else nowTim(2) = D.T.rec_tot_tim; % keep showing save time
             end
             
             % Get lap time
             if D.B.rat_in
-                nowTim(3) = Elapsed_Time(now, D.T.lap_tim);
+                nowTim(3) = Time_Diff(Elapsed_Seconds(), D.T.lap_tim);
             else nowTim(3) = 0;
             end
             
             % Run time
             if D.B.rat_in && ~D.B.rec_done
-                D.T.run_tim = Elapsed_Time(now, D.T.run_str);
+                D.T.run_tim = Time_Diff(Elapsed_Seconds(), D.T.run_str);
             end
             nowTim(4) = D.T.run_tim;
             
@@ -4733,13 +4741,23 @@ clear(Vars{:});
         function [] = SF_Run_Test()
             if isTestRun
                 
+                %% PID CALIBRATION
+                if doPidCalibrationTest && ...
+                        ~D.B.pidStarted && ...
+                        c2m_K ==1
+                    % Start pid test
+                    Mat2CS('T', sysTest, 0);
+                   % Set flag to start pid
+                    D.B.pidStarted = true;
+                end
+                
                 %% HALT ERROR TEST
                 if doHaultErrorTest
                     
                     % Check if robot should be restarted
                     if D.DB.isHalted && ...
-                            Elapsed_Time(now, D.DB.t_halt) > D.DB.haltDur && ...
-                            get(D.UI.btnHaltRob, 'Value') == 0
+                            ~D.B.is_haulted && ...
+                            Time_Diff(Elapsed_Seconds(), D.DB.t_halt) > D.DB.haltDur
                         
                         % Save and print halt error
                         % Store halt error
@@ -4785,7 +4803,7 @@ clear(Vars{:});
                         end
                         
                         % Tell CS to resume run
-                        Mat2CS('T', inArg, D.DB.nowVel);
+                        Mat2CS('T', sysTest, D.DB.nowVel);
                         
                         % Set flag
                         D.DB.isHalted = false;
@@ -4795,24 +4813,24 @@ clear(Vars{:});
                             D.P.Rob.vel < 5
                         
                         % Tell CS to resume run
-                        Mat2CS('T', inArg, D.DB.nowVel);
+                        Mat2CS('T', sysTest, D.DB.nowVel);
                         
                     end
                     
                     % Check if robot has passed 0 deg
                     if ~D.DB.isHalted && ...
-                            Elapsed_Time(now, D.DB.t_halt) > D.DB.haltDur+1 && ...
+                            Time_Diff(Elapsed_Seconds(), D.DB.t_halt) > D.DB.haltDur+1 && ...
                             any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
                         
                         % Incriment counter
                         D.DB.haltCnt = D.DB.haltCnt+1;
                         
                         % Tell CS to Halt Robot
-                        Mat2CS('T', inArg, 0);
+                        Mat2CS('T', sysTest, 0);
                         
                         % Store robots current pos and time
                         D.DB.sendPos = D.P.Rob.radLast;
-                        D.DB.t_halt = now;
+                        D.DB.t_halt = Elapsed_Seconds();
                         
                         % Set flag
                         D.DB.isHalted = true;
@@ -4829,7 +4847,7 @@ clear(Vars{:});
                     if D.B.rec
                         
                         % Wait for 5 sec after setup
-                        if Elapsed_Time(now, D.T.rec_tim) > 5
+                        if Time_Diff(Elapsed_Seconds(), D.T.rec_tim) > 5
                             
                             % Local vars
                             cm = 0;
@@ -4839,13 +4857,13 @@ clear(Vars{:});
                             if D.B.initVals
                                 D.B.simRadLast = mean(D.UI.strQuadBnds);
                                 D.B.simVelLast = 0;
-                                D.B.simTSStart = now;
+                                D.B.simTSStart = Elapsed_Seconds();
                                 D.B.simTSLast = 0;
                                 D.B.initVals = false;
                             end
                             
                             % Copy robot vt data
-                            ts_now = Elapsed_Time(now, D.B.simTSStart)*10^6;
+                            ts_now = Time_Diff(Elapsed_Seconds(), D.B.simTSStart)*10^6;
                             dt_sec = (ts_now - D.B.simTSLast) / 10^6;
                             D.B.simTSLast = ts_now;
                             
@@ -4856,35 +4874,41 @@ clear(Vars{:});
                                 end
                             end
                             
-                            % Check if rat should stop for reward
-                            check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.UI.rewBnds(D.B.zoneInd,:,D.I.rot));
-                            
-                            % Dont update rat pos if rewarding
-                            do_zone_stop = any(check_inbound) && D.B.rewReset;
-                            if (do_zone_stop || D.B.is_rewarding) && ~D.B.holdForRew
-                                D.B.holdForRew = true;
-                                D.B.holdTime = now;
-                                % Get new zone
-                                D.B.zoneInd =  ceil(rand(1,1)*9);
-                                % Reset flag
-                                D.B.rewReset = false;
-                            end
-                            
-                            % Check if rewarding or holding for 5 sec for setup
-                            if D.B.holdForRew || Elapsed_Time(now, D.B.simTSStart) < 5
-                                % Stop holding
-                                if Elapsed_Time(now, D.B.holdTime) > D.DB.ratStopTim
-                                    D.B.holdForRew = false;
+                            % Check if halted or holding for 5 sec for setup
+                            if ~D.B.is_haulted && Time_Diff(Elapsed_Seconds(), D.B.simTSStart) > 5
+                                
+                                % Check if rat should stop for reward
+                                check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.UI.rewBnds(D.B.zoneInd,:,D.I.rot));
+                                do_zone_stop = any(check_inbound) && D.B.rewReset;
+                                if (do_zone_stop || D.B.is_rewarding) && ~D.B.holdForRew
+                                    D.B.holdForRew = true;
+                                    D.B.holdTime = Elapsed_Seconds();
+                                    % Get new zone
+                                    D.B.zoneInd =  ceil(rand(1,1)*9);
+                                    % Reset flag
+                                    D.B.rewReset = false;
                                 end
+                                
+                                % Check if rewarding
+                                if D.B.holdForRew
+                                    % Stop holding
+                                    if Time_Diff(Elapsed_Seconds(), D.B.holdTime) > D.DB.ratStopTim
+                                        D.B.holdForRew = false;
+                                    end
+                                else
+                                    % Check if rat should speed up
+                                    if D.B.simVelLast < D.DB.ratMaxVel
+                                        vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
+                                    end
+                                    % Hold velocity
+                                    if   D.B.simVelLast >= D.DB.ratMaxVel
+                                        vel_now = D.DB.ratMaxVel;
+                                    end
+                                end
+                                
                             else
-                                % Check if rat should speed up
-                                if D.B.simVelLast < D.DB.ratMaxVel
-                                    vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
-                                end
-                                % Hold velocity
-                                if   D.B.simVelLast >= D.DB.ratMaxVel
-                                    vel_now = D.DB.ratMaxVel;
-                                end
+                                % Keep robot haulted
+                                vel_now = 0;
                             end
                             
                             % Compute new pos
@@ -5277,14 +5301,14 @@ clear(Vars{:});
                 % Set time tracking variables
                 if D.B.acq
                     % save out time before stopping
-                    D.T.acq_tot_tim = Elapsed_Time(now,D.T.acq_tim) + D.T.acq_tot_tim;
+                    D.T.acq_tot_tim = Time_Diff(Elapsed_Seconds(),D.T.acq_tim) + D.T.acq_tot_tim;
                 end
                 
                 % Change aquiring status
                 D.B.acq = ~D.B.acq;
                 
                 % Reset temp now
-                D.T.acq_tim = now;
+                D.T.acq_tim = Elapsed_Seconds();
                 
             end
             
@@ -5304,10 +5328,10 @@ clear(Vars{:});
             % Set time tracking variables
             if  D.B.rec
                 % save out time before stopping
-                D.T.rec_tot_tim = Elapsed_Time(now, D.T.rec_tim) + D.T.rec_tot_tim;
+                D.T.rec_tot_tim = Time_Diff(Elapsed_Seconds(), D.T.rec_tim) + D.T.rec_tot_tim;
             end
             D.B.rec = ~ D.B.rec;
-            D.T.rec_tim = now;
+            D.T.rec_tim = Elapsed_Seconds();
             
             % Enable icr button
             if strcmp(get(D.UI.btnICR, 'Enable'), 'off')
@@ -5400,7 +5424,7 @@ clear(Vars{:});
             D.B.rec_done = true;
             
             % Save end time
-            D.T.ses_end_tim = now;
+            D.T.ses_end_tim = Elapsed_Seconds();
             
             % Print end time
             infstr = datestr(D.T.ses_end_tim, 'HH:MM:SS');
@@ -5408,7 +5432,7 @@ clear(Vars{:});
             
             % Halt robot if not already halted
             if strcmp(get(D.UI.btnHaltRob, 'Enable'), 'on')
-                if (get(D.UI.btnHaltRob, 'Value') ~= 1)
+                if (~D.B.is_haulted)
                     set(D.UI.btnHaltRob, 'Value', 1);
                     BtnHaltRob();
                 end
@@ -5485,7 +5509,7 @@ clear(Vars{:});
             set(D.UI.panTimInf, 'HighlightColor', D.UI.disabledBckCol)
             
             % Stop halt if still active
-            if (get(D.UI.btnHaltRob, 'Value') == 1)
+            if (D.B.is_haulted)
                 set(D.UI.btnHaltRob, 'Value', 0);
                 BtnHaltRob();
             end
@@ -5557,7 +5581,7 @@ clear(Vars{:});
             end
             
             % Stop halt if still active
-            if (get(D.UI.btnHaltRob, 'Value') == 1)
+            if (D.B.is_haulted)
                 set(D.UI.btnHaltRob, 'Value', 0);
                 BtnHaltRob();
             end
@@ -5590,6 +5614,8 @@ clear(Vars{:});
                     'BackgroundColor', D.UI.activeCol);
                 % Tell CS to Halt Robot
                 Mat2CS('H', 1);
+                % Set flag
+                D.B.is_haulted = true;
             else
                 % Change backround color and text
                 set(D.UI.btnHaltRob, ...
@@ -5597,6 +5623,8 @@ clear(Vars{:});
                     'BackgroundColor', D.UI.enabledCol);
                 % Tell CS to stop halting
                 Mat2CS('H', 0);
+                % Set flag
+                D.B.is_haulted = false;
             end
         end
         
@@ -5642,7 +5670,7 @@ clear(Vars{:});
             Mat2CS('R', reward_pos_send, zone_ind_send, reward_delay_send);
             
             % Track round trip time
-            D.T.manual_rew_sent = now;
+            D.T.manual_rew_sent = Elapsed_Seconds();
         end
         
         % BLOCK CUE
@@ -5895,7 +5923,7 @@ clear(Vars{:});
             %% Change NLX recording directory
             
             % Save directory var
-            % formt: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
+            % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
             D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
             
             % Make directory if none exists
@@ -5924,7 +5952,7 @@ clear(Vars{:});
             D.SS_Out_ICR.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
             D.SS_Out_ICR.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
             D.SS_Out_ICR.(D.PAR.ratLab).Start_Time{rowInd} = datestr(D.T.ses_str_tim, 'HH:MM:SS');
-            D.SS_Out_ICR.(D.PAR.ratLab).Total_Time(rowInd) = Elapsed_Time(D.T.ses_end_tim ,D.T.ses_str_tim) / 60;
+            D.SS_Out_ICR.(D.PAR.ratLab).Total_Time(rowInd) = Time_Diff(D.T.ses_end_tim ,D.T.ses_str_tim) / 60;
             D.SS_Out_ICR.(D.PAR.ratLab).Session_Condition(rowInd) = char(D.PAR.sesCond);
             D.SS_Out_ICR.(D.PAR.ratLab).Session_Task(rowInd) = char(D.PAR.sesTask);
             % save session number of this condition
@@ -6047,16 +6075,16 @@ clear(Vars{:});
         
         % Set mesage data
         if nargin == 3
-            dat3 = 9999;
+            dat3 = -1;
         end
         if nargin == 2
-            dat2 = 9999;
-            dat3 = 9999;
+            dat2 = -1;
+            dat3 = -1;
         end
         if nargin == 1
-            dat1 = 9999;
-            dat2 = 9999;
-            dat3 = 9999;
+            dat1 = -1;
+            dat2 = -1;
+            dat3 = -1;
         end
         m2c_dat1 = dat1;
         m2c_dat2 = dat2;
@@ -6089,10 +6117,10 @@ clear(Vars{:});
         logCount = logCount+1;
         
         % Get time
-        if c2m_W > 0
-            t_s = Elapsed_Time(now, c2m_W);
+        if c2m_W == 0
+            t_s = Elapsed_Seconds();
         else
-            t_s = Elapsed_Time(now, startTime);
+            t_s = Elapsed_Seconds(c2m_W);
         end
         t_m = round(t_s*1000);
         
@@ -6125,9 +6153,25 @@ clear(Vars{:});
         end
     end
 
-% ---------------------------PRINT TO CONSOLE------------------------------
-    function [dt_sec] = Elapsed_Time(t2,t1)
-        dt_sec = (t2-t1)*24*60*60;
+% ---------------------------GET TIME NOW-------------------------------
+    function [dt_sec] = Elapsed_Seconds(t_sync)
+                
+        % Convert from days to seconds
+        t_sec = now*24*60*60;
+        
+        % Get corrected time
+        if nargin == 0
+            dt_sec = t_sec - startTime;
+        else
+            dt_sec = t_sec - t_sync;
+        end
+        
+    end
+
+% ---------------------------COMPUTE TIME DT-------------------------------
+    function [dt_sec] = Time_Diff(t2,t1)
+        % Convert from days to seconds
+        dt_sec = t2-t1;
     end
 
 % ------------------------Disconnect From NetCom---------------------------
@@ -6139,6 +6183,11 @@ clear(Vars{:});
         if isfield(D, 'NLX')
             if ~isempty(D.NLX)
                 if NlxAreWeConnected() == 1
+                    
+                    % Stop recording and aquisition
+                    NlxSendCommand('-StopAcquisition');
+                    NlxSendCommand('-StopRecording');
+                    pause(0.5);
                     
                     % Close VT stream
                     if isfield(D.NLX, 'vt_rat_ent')
@@ -6179,7 +6228,7 @@ clear(Vars{:});
         
         if exist('D','var')
             
-            Update_Console('RUNNING: Disconnect AC Computer...');
+            Update_Console('RUNNING: Disconnect from AC Computer...');
             
             % Disconnect from AC computer
             if isfield(D, 'AC')
@@ -6230,13 +6279,16 @@ clear(Vars{:});
             return;
         end
         
-        % Trigger GUI exit
-        c2m_E = 1;
         drawnow;
         % Disconnect AC computer
         Disconnect_AC();
         % Disconnect from NetCom
         Disconnect_NLX()
+        
+        % Set flags
+        c2m_E = 1;
+        D.B.force_close = true;
+        
         return;
     end
 

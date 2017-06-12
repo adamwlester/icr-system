@@ -54,7 +54,8 @@ reward_lft = reward_lft * 0.2;
 soundH = audioplayer([reward_lft,noise_rt], nsfs);
 
 % Start sound
-%play(soundH);
+%
+
 %stop(soundH);
 
 %% Loop indefinitely

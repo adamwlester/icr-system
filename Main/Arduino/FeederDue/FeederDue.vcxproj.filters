@@ -14,82 +14,82 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="src">
-      <UniqueIdentifier>{f768f0f0-9fa6-4040-ab0c-f968cc7cb3ee}</UniqueIdentifier>
+      <UniqueIdentifier>{5c3496a9-362b-4144-ba26-cbf9c35962b2}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly">
-      <UniqueIdentifier>{a6419d48-22a0-4d5a-892b-4ac0dd85c0f1}</UniqueIdentifier>
+      <UniqueIdentifier>{7fec0ed0-652f-45e2-a3d9-b168e882a8d1}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core">
-      <UniqueIdentifier>{25259831-37d2-455a-9839-e49a400b5363}</UniqueIdentifier>
+      <UniqueIdentifier>{0d30377e-792b-4f35-b096-12f61491c4d1}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\variants">
-      <UniqueIdentifier>{8ff39119-faf3-4ad1-bb61-f46db1e02057}</UniqueIdentifier>
+      <UniqueIdentifier>{7d0d9c12-e07a-42a4-9d1c-98e7eababbb1}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\variants\arduino_due_x">
-      <UniqueIdentifier>{2886cb4d-ddda-41d1-a6ca-faee88a8d628}</UniqueIdentifier>
+      <UniqueIdentifier>{a49cb572-2650-432f-8dea-c648bdff201f}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\avr">
-      <UniqueIdentifier>{fa157f29-9dc3-4014-8281-43ba740967d3}</UniqueIdentifier>
+      <UniqueIdentifier>{3b1a3b1e-7c0a-45d5-80bc-5d04edaec848}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\USB">
-      <UniqueIdentifier>{204cd1ee-839f-4d58-8661-9d58ad0f371a}</UniqueIdentifier>
+      <UniqueIdentifier>{1efd7b69-5e59-410d-8004-261900c1b85e}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries">
-      <UniqueIdentifier>{839096a0-cb6f-4050-a61a-1587ece0f2ed}</UniqueIdentifier>
+      <UniqueIdentifier>{982e0f4d-c977-4848-b834-46eeebf3057d}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\AutoDriver_Due">
-      <UniqueIdentifier>{48d2a7e3-e8e6-4f57-bdae-358b66d49152}</UniqueIdentifier>
+      <UniqueIdentifier>{e950179c-468a-426f-9b05-c74ea85c4d0c}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\LCD5110_Graph">
-      <UniqueIdentifier>{ae2cc8c0-fe75-4d20-8029-c184b76f1482}</UniqueIdentifier>
+      <UniqueIdentifier>{c644bb9a-f520-4cbe-8c92-3434b323cd99}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Pixy">
-      <UniqueIdentifier>{44caa0d5-9bb8-4816-ab35-03e1e69ce9ba}</UniqueIdentifier>
+      <UniqueIdentifier>{af169edf-b4e3-474f-a8c3-d34ebff49014}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI">
-      <UniqueIdentifier>{ea1a9bf1-2048-4589-879e-9f9e84064fb4}</UniqueIdentifier>
+      <UniqueIdentifier>{c1a90723-7b8e-43ec-954c-8164c99a8bc3}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\examples">
-      <UniqueIdentifier>{74abeda2-e921-4777-84de-5ecba12dedf5}</UniqueIdentifier>
+      <UniqueIdentifier>{ccf93de2-aa0e-4639-97fa-32a6598c92db}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\examples\BarometricPressureSensor">
-      <UniqueIdentifier>{eacfbe97-23cc-47e6-a7d8-c0e98f10e0f7}</UniqueIdentifier>
+      <UniqueIdentifier>{b72a0865-3b6a-45fa-b20b-6eb1977a12d9}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\examples\DigitalPotControl">
-      <UniqueIdentifier>{82df6a71-c998-4706-bc42-9764bff248bb}</UniqueIdentifier>
+      <UniqueIdentifier>{606af315-0041-4dfa-acc9-018dc79430c6}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\src">
-      <UniqueIdentifier>{20380f52-de1e-49ea-995c-0478de98bd3e}</UniqueIdentifier>
+      <UniqueIdentifier>{fb359eb2-19ae-4d1e-9a4c-017ece086c8b}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\TinyEKF">
-      <UniqueIdentifier>{7099967d-7964-4840-8332-1acbf181d46c}</UniqueIdentifier>
+      <UniqueIdentifier>{66bd10fa-31e7-4a0d-bff7-c1e8f1cf6ed0}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire">
-      <UniqueIdentifier>{ac883917-fa41-4ef0-85e8-08373656d39f}</UniqueIdentifier>
+      <UniqueIdentifier>{9c02153c-153d-48c3-b7ad-9613b50f8fa1}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples">
-      <UniqueIdentifier>{a5c31f66-c38f-4d8e-949d-f4881ef52a96}</UniqueIdentifier>
+      <UniqueIdentifier>{98e3e98c-f3bc-469b-b664-750efaae6897}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\digital_potentiometer">
-      <UniqueIdentifier>{4f00c20a-d0a4-48ca-88f0-fb9b5344d544}</UniqueIdentifier>
+      <UniqueIdentifier>{09a26178-c347-4381-b2f6-875d4e361e64}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\master_reader">
-      <UniqueIdentifier>{5766fac0-1ede-43d1-881b-9ed3dc648791}</UniqueIdentifier>
+      <UniqueIdentifier>{74c344ff-5d5b-4c9f-9916-44f66f2d58f0}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\master_writer">
-      <UniqueIdentifier>{fb754154-44ec-45ef-b698-156f5ec9ba65}</UniqueIdentifier>
+      <UniqueIdentifier>{fcda0f19-f749-4c8f-949e-7b405a445ce5}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\SFRRanger_reader">
-      <UniqueIdentifier>{0b18a66f-7b10-44b8-9ed9-2147be5132a4}</UniqueIdentifier>
+      <UniqueIdentifier>{2250d568-5525-42bb-8aa4-fbea74c20027}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\slave_receiver">
-      <UniqueIdentifier>{932d4380-d031-400b-a853-aa7ba061a9c3}</UniqueIdentifier>
+      <UniqueIdentifier>{d38aa86e-45d1-458b-ba77-aad8fd56c17f}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\slave_sender">
-      <UniqueIdentifier>{f48d4122-cbb1-496a-af44-4a8f4ffdb1dc}</UniqueIdentifier>
+      <UniqueIdentifier>{bb8d6864-3aa3-4517-8d6e-f13720463a55}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\src">
-      <UniqueIdentifier>{395e1143-b263-41d1-9507-69d650a87c53}</UniqueIdentifier>
+      <UniqueIdentifier>{dedc266f-587e-4030-b8b9-d47e5511f0cd}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

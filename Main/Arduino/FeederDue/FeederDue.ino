@@ -15,7 +15,7 @@ double = 8 byte
 */
 
 
-#pragma region ---------LIBRARIES & EXT DEFS ---------
+#pragma region ---------LIBRARIES & EXT DEFS---------
 
 
 //-------SOFTWARE RESET----------
@@ -33,11 +33,13 @@ double = 8 byte
 // AutoDriver
 
 #include <SPI.h>
+//
 #include "AutoDriver_Due.h"
 
 // Pixy
 
-#include <Wire.h>
+#include <Wire.h> 
+//
 #include <PixyI2C.h>
 
 // LCD
@@ -75,12 +77,12 @@ struct DB
 	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
-	const bool print_motorControl = true;
-	const bool print_c2r = true;
-	const bool print_r2c = true;
-	const bool print_r2a = true;
-	const bool print_pid = true;
-	const bool print_bull = true;
+	const bool print_motorControl = false;
+	const bool print_c2r = false;
+	const bool print_r2c = false;
+	const bool print_r2a = false;
+	const bool print_pid = false;
+	const bool print_bull = false;
 	const bool print_log = false;
 }
 // Initialize
@@ -104,7 +106,7 @@ bool do_pidCalibration = false;
 #pragma endregion
 
 
-#pragma region ---------PIN DECLARATION---------
+#pragma region ---------VARIABLE SETUP---------
 
 // Autodriver
 const int pin_AD_CSP_R = 5;
@@ -138,13 +140,16 @@ const int pin_ED_MS1 = 37;
 const int pin_ED_MS2 = 39;
 const int pin_ED_MS3 = 41;
 
+// OpenLog
+const int pin_OL_RST = 16;
+
 // Feeder switch
 /*
 Note: Do not use real ground pin as this will cause
 an upload error if switch is shorted when writing sketch
 */
-const int pin_FeedSwitch_Gnd = 14;
-const int pin_FeedSwitch = 15;
+const int pin_FeedSwitch_Gnd = 24;
+const int pin_FeedSwitch = 25;
 
 // Power off
 const int pin_PwrOff = 45;
@@ -166,11 +171,6 @@ const int pin_IRprox_Lft = 43;
 
 // IR detector
 const int pin_IRdetect = 17;
-
-#pragma endregion
-
-
-#pragma region ---------VARIABLE SETUP---------
 
 // Flow/state control
 struct FC
@@ -393,7 +393,7 @@ float moveToDist = 0;
 float moveToStartPos = 0;
 
 // Reward
-int dt_blockRew = 10000; // (ms)
+int dt_blockRew = 5000; // (ms)
 
 // EtOH 
 /*
@@ -432,8 +432,10 @@ bool btn_doChangeLCDstate = false;
 // Interrupts 
 volatile uint32_t t_irProxDebounce = millis(); // (ms)
 volatile uint32_t t_irDetectDebounce = millis(); // (ms)
-volatile uint32_t t_irSyncLast = millis(); // (ms)
+volatile uint32_t t_irSyncLast = 0; // (ms)
 volatile uint32_t t_sync = 0; // (ms)
+volatile int dt_ir = 0;
+volatile int cnt_ir = 0;
 volatile bool doIRhardStop = false;
 volatile bool doLogIR = false;
 
@@ -464,6 +466,8 @@ bool CheckResend(char targ);
 void AD_Config();
 // RESET AUTODRIVER BOARDS
 void AD_Reset();
+// CHECK AUTODRIVER STATUS
+void AD_CheckOC();
 // HARD STOP
 void HardStop(String called_from);
 // IR TRIGGERED HARD STOP
@@ -501,8 +505,8 @@ void QuitSession();
 // LOG/PRINT MAIN EVENT
 void DebugFlow(String msg);
 // LOG/PRINT ERRORS
-void DebugErrors(String msg);
-void DebugErrors(String msg, uint32_t t);
+void DebugError(String msg);
+void DebugError(String msg, uint32_t t);
 // LOG/PRINT DROPPED PACKET DEBUG STRING
 void DebugDropped(int missed, int missed_total, int total);
 // LOG/PRINT RESENT PACKET DEBUG STRING
@@ -529,6 +533,8 @@ void ClearLCD();
 int CheckAD_Status(uint16_t stat_reg, String stat_id);
 // GET ID INDEX
 int CharInd(char id, char id_arr[], int arr_size);
+// BLINK LEDS AT RESTART/UPLOAD
+void ResetBlink();
 // BLINK LEDS AT SETUP
 void SetupBlink();
 // BLICK LEDS WHEN RAT FIRST DETECTED
@@ -1004,7 +1010,7 @@ public:
 
 				// Reset flag
 				isThrottled = false;
-				PrintPID("pid: finished throttling");
+				PrintPID("pid: finished throttle");
 			}
 		}
 	}
@@ -1453,7 +1459,6 @@ public:
 	uint32_t t_tryMoveTill = 0;
 	bool doAbortMove = false;
 	float posRel = 0;
-	float moveDiff = 0;
 	float minSpeed = 0;
 	const int dt_update = 10;
 	uint32_t t_updateNext = 0;
@@ -1463,7 +1468,7 @@ public:
 	float targ = 0;
 	float offsetTarget = 0;
 	float targDist = 0;
-	char moveDir = ' ';
+	char moveDir = 'f';
 	float baseSpeed = 0;
 	bool isTargSet = false;
 	bool isTargReached = false;
@@ -1483,7 +1488,7 @@ public:
 	bool CompTarg(float now_pos, float targ_pos, float offset)
 	{
 		// Local vars
-		int diam = 0;
+		int circ = 0;
 		int pos = 0;
 
 		// Copy to public vars
@@ -1507,32 +1512,16 @@ public:
 			{
 				// Compute target targ_dist and move_dir
 				offsetTarget = targ + offset;
-				if (offsetTarget < 0)
-					offsetTarget = offsetTarget + (140 * PI);
-				else if (offsetTarget > (140 * PI))
-					offsetTarget = offsetTarget - (140 * PI);
+				offsetTarget = offsetTarget < 0 ? offsetTarget + (140 * PI) : offsetTarget;
 
 				// Current relative pos on track
-				diam = (int)(140 * PI * 100);
+				circ = (int)(140 * PI * 100);
 				pos = (int)(now_pos * 100);
-				posRel = (float)(pos % diam) / 100;
+				posRel = (float)(pos % circ) / 100;
 
 				// Diff and absolute targ_dist
-				moveDiff = offsetTarget - posRel;
-				targDist =
-					min((140 * PI) - abs(moveDiff), abs(moveDiff));
-
-				// Set to negative for reverse move
-				if ((moveDiff > 0 && abs(moveDiff) == targDist) ||
-					(moveDiff < 0 && abs(moveDiff) != targDist))
-				{
-					moveDir = 'f';
-				}
-				else
-				{
-					moveDir = 'r';
-					targDist = targDist*-1;
-				}
+				targDist = offsetTarget - posRel;
+				targDist = targDist < 0 ? targDist + (140 * PI) : targDist;
 
 				// Set vars for later
 				t_updateNext = millis();
@@ -1564,9 +1553,7 @@ public:
 			}
 
 			// Compute remaining targ_dist
-			distLeft = abs(targDist) -
-				min((140 * PI) - abs(now_pos - posStart), abs(now_pos - posStart));
-
+			distLeft = targDist - (now_pos - posStart);
 			// Check if rob is dec_pos cm from target
 			if (distLeft <= dec_pos)
 			{
@@ -1690,7 +1677,7 @@ public:
 	float lapN = 0;
 	bool doArmMove = false;
 	bool isArmExtended = false;
-	const int armExtStps = 200;
+	const int armExtStps = 220;
 	int armPos = 0;
 	int armZone = 0;
 	bool isArmStpOn = false;
@@ -2060,6 +2047,7 @@ public:
 
 			// Set step high
 			digitalWrite(pin_ED_STP, HIGH);
+			delayMicroseconds(500);
 
 			// Set flag
 			isArmStpOn = true;
@@ -2069,6 +2057,7 @@ public:
 		{
 			// Set step low
 			digitalWrite(pin_ED_STP, LOW);
+			delayMicroseconds(500);
 
 			// Set flag
 			isArmStpOn = false;
@@ -2203,34 +2192,97 @@ void setup() {
 
 	// XBee
 	Serial1.begin(57600);
+	
+	// SETUP OUTPUT PINS
 
-	// SETUP OUTPUT POWER AND GROUND PINS
-
-	// Set output pins
+	// Autodriver
+	pinMode(pin_AD_CSP_R, OUTPUT);
+	pinMode(pin_AD_CSP_F, OUTPUT);
+	pinMode(pin_AD_RST, OUTPUT);
+	// Display
+	pinMode(pin_Disp_SCK, OUTPUT);
+	pinMode(pin_Disp_MOSI, OUTPUT);
+	pinMode(pin_Disp_DC, OUTPUT);
+	pinMode(pin_Disp_RST, OUTPUT);
+	pinMode(pin_Disp_CS, OUTPUT);
+	pinMode(pin_Disp_LED, OUTPUT);
+	// LEDs
+	pinMode(pin_RewLED_R, OUTPUT);
+	pinMode(pin_RewLED_C, OUTPUT);
+	pinMode(pin_TrackLED, OUTPUT);
+	// Relays
 	pinMode(pin_Rel_Rew, OUTPUT);
 	pinMode(pin_Rel_EtOH, OUTPUT);
-	pinMode(pin_ED_STP, OUTPUT);
-	pinMode(pin_ED_DIR, OUTPUT);
+	// BigEasyDriver
+	pinMode(pin_ED_RST, OUTPUT);
 	pinMode(pin_ED_SLP, OUTPUT);
+	pinMode(pin_ED_DIR, OUTPUT);
+	pinMode(pin_ED_STP, OUTPUT);
+	pinMode(pin_ED_ENBL, OUTPUT);
 	pinMode(pin_ED_MS1, OUTPUT);
 	pinMode(pin_ED_MS2, OUTPUT);
-	pinMode(pin_ED_ENBL, OUTPUT);
-	pinMode(pin_PwrOff, OUTPUT);
+	pinMode(pin_ED_MS3, OUTPUT);
+	// OpenLog
+	pinMode(pin_OL_RST, OUTPUT);
+	// Feeder switch
 	pinMode(pin_FeedSwitch_Gnd, OUTPUT);
-
-	// Set power/ground pins
+	// Power off
+	pinMode(pin_PwrOff, OUTPUT);
+	delayMicroseconds(100);
+	
+	// Autodriver
+	digitalWrite(pin_AD_CSP_R, LOW);
+	digitalWrite(pin_AD_CSP_F, LOW);
+	digitalWrite(pin_AD_RST, LOW);
+	// Display
+	digitalWrite(pin_Disp_SCK, LOW);
+	digitalWrite(pin_Disp_MOSI, LOW);
+	digitalWrite(pin_Disp_DC, LOW);
+	digitalWrite(pin_Disp_RST, LOW);
+	digitalWrite(pin_Disp_CS, LOW);
+	digitalWrite(pin_Disp_LED, LOW);
+	// LEDs
+	digitalWrite(pin_RewLED_R, LOW);
+	digitalWrite(pin_RewLED_C, LOW);
+	digitalWrite(pin_TrackLED, LOW);
+	// Relays
+	digitalWrite(pin_Rel_Rew, LOW);
+	digitalWrite(pin_Rel_EtOH, LOW);
+	// BigEasyDriver
+	digitalWrite(pin_ED_RST, LOW);
+	digitalWrite(pin_ED_SLP, LOW);
+	digitalWrite(pin_ED_DIR, LOW);
+	digitalWrite(pin_ED_STP, LOW);
+	digitalWrite(pin_ED_ENBL, LOW);
+	digitalWrite(pin_ED_MS1, LOW);
+	digitalWrite(pin_ED_MS2, LOW);
+	digitalWrite(pin_ED_MS3, LOW);
+	// OpenLog
+	digitalWrite(pin_OL_RST, LOW);
+	// Feeder switch
 	digitalWrite(pin_FeedSwitch_Gnd, LOW);
+	// Power off
+	digitalWrite(pin_PwrOff, LOW);
+	delayMicroseconds(100);
+
+	// SET INPUT PINS
+
+	// Feeder switch
+	pinMode(pin_FeedSwitch, INPUT);
+	// Voltage monitor
+	pinMode(pin_BatVolt, INPUT);
+	// IR proximity sensors
+	pinMode(pin_IRprox_Rt, INPUT);
+	pinMode(pin_IRprox_Lft, INPUT);
+	// IR detector
+	pinMode(pin_IRdetect, INPUT);
 
 	// Set button pins enable internal pullup
 	for (int i = 0; i <= 2; i++) {
 		pinMode(pin_Btn[i], INPUT_PULLUP);
 	}
 	pinMode(pin_FeedSwitch, INPUT_PULLUP);
-
-	// Make sure certain pins low
-	digitalWrite(pin_Rel_Rew, LOW);
-	digitalWrite(pin_Rel_EtOH, LOW);
-	digitalWrite(pin_PwrOff, LOW);
+	delayMicroseconds(100);
 
 	// SETUP AUTODRIVER
 
@@ -2252,9 +2304,6 @@ void setup() {
 	digitalWrite(pin_ED_MS1, HIGH);
 	digitalWrite(pin_ED_MS2, LOW);
 	digitalWrite(pin_ED_MS3, LOW);
-
-	// Start BigEasyDriver in sleep
-	digitalWrite(pin_ED_SLP, LOW);
 
 	// INITIALIZE LCD
 	myGLCD.InitLCD();
@@ -2316,6 +2365,22 @@ void setup() {
 		batVoltArr[i] = -1;
 	}
 
+	// DUMP BUFFER
+	while (Serial1.available() > 0)
+		Serial1.read();
+
+	// RESET VOLITILES AND RELAYS
+	t_irProxDebounce = millis(); // (ms)
+	t_irDetectDebounce = millis(); // (ms)
+	t_irSyncLast = 0; // (ms)
+	t_sync = 0; // (ms)
+	dt_ir = 0;
+	cnt_ir = 0;
+	doIRhardStop = false;
+	doLogIR = false;
+	digitalWrite(pin_Rel_Rew, LOW);
+	digitalWrite(pin_Rel_EtOH, LOW);
+
 	// DEFINE EXTERNAL INTERUPTS
 
 	// IR prox right
@@ -2327,14 +2392,30 @@ void setup() {
 	while (digitalRead(pin_IRdetect) == HIGH && t_check_ir < millis());
 	if (digitalRead(pin_IRdetect) == LOW)
 		attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
+	else
+	{
+		// Skip ir sync setup
+		t_sync = 1;
+		DebugFlow("!!ERROR!! IR SENSOR DISABLED");
+	}
+	int pin_state = digitalRead(pin_IRdetect);
+	
+	// RUN SETUP BLINK
+	ResetBlink();
 
+	// CLEAR LCD
+	ClearLCD();
+
+	// PRINT SETUP FINISHED
+	DebugFlow("FINISHED SETUP/RESET");
 }
 
 
 // ---------MAIN LOOP---------
 void loop() {
 
-#pragma region //--- DEBUG ---
+
+#pragma region //--- ONGOING OPPERATIONS ---
 
 	// Store loop time
 	static uint32_t t_loop_last = millis();
@@ -2362,25 +2443,89 @@ void loop() {
 	}
 
 	// Check autodriver board status
-	if (millis() > t_checkAD)
+	AD_CheckOC();
+
+	// Check for button input
+	CheckButtons();
+
+	// Open/close rew solonoid
+	if (btn_doRewSolStateChange)
 	{
-		adR_stat = ad_R.getStatus();
-		int ocd_r = CheckAD_Status(adR_stat, "OCD");
-		adF_stat = ad_F.getStatus();
-		int ocd_f = CheckAD_Status(adF_stat, "OCD");
-
-		// Check for overcurrent shut down
-		if (ocd_r == 0 || ocd_f == 0)
-		{
-			char chr[50];
-			sprintf(chr, "!!ERROR!! AD OCD: R_OCD=%d F_OCD=%d", ocd_r, ocd_f);
-			DebugErrors(chr);
-			//AD_Reset();
-		}
-
-		// Set next check
-		t_checkAD = millis() + dt_checkAD;
+		OpenCloseRewSolenoid();
+		btn_doRewSolStateChange = false;
 	}
+
+	// Open/close etoh solonoid
+	if (btn_doEtOHSolStateChange)
+	{
+		OpenCloseEtOHSolenoid();
+		btn_doEtOHSolStateChange = false;
+	}
+
+	// Button triggered reward
+	if (btn_doRew)
+	{
+		if (!reward.isRewarding)
+		{
+			fc.isRewarding = reward.StartRew(false, true);
+			btn_doRew = false;
+		}
+	}
+
+	// Turn LCD on/off
+	if (btn_doChangeLCDstate)
+	{
+		ChangeLCDlight();
+		btn_doChangeLCDstate = false;
+	}
+
+	// IR triggered halt
+	if (doIRhardStop)
+	{
+		Function_IRprox_Halt();
+		doIRhardStop = false;
+	}
+
+	// Log new ir events
+	if (doLogIR)
+	{
+		// Log event if streaming started
+		char chr[50];
+		sprintf(chr, "IR Sync Event: tot=%d dt=%dms", cnt_ir, dt_ir);
+		DebugFlow(chr, t_irSyncLast);
+
+		// Reset flag
+		doLogIR = false;
+	}
+
+	// End any ongoing reward
+	if (fc.isRewarding)
+	{
+		if (reward.EndRew())
+		{
+			fc.doRew = false;
+			fc.isRewarding = false;
+
+			// Tell CS what zone was rewarded
+			if (reward.mode != "Now")
+				StorePacketData('c', 'Z', reward.zoneIndByte + 1, 0);
+		}
+	}
+
+	// Check if feeder arm should be moved
+	reward.CheckFeedArm();
+
+	// Check if EtOH should be dispensed
+	CheckEtOH();
+
+	// Get and send voltage level
+	GetBattVolt();
+
+	// Check if ard data should be resent
+	CheckResend('a');
+
+	// Check if cs data should be resent
+	CheckResend('c');
 
 #pragma endregion
 
@@ -2388,19 +2533,33 @@ void loop() {
 	if (fc.isFirstPass)
 	{
 
-		// Make sure Xbee buffer empty
-		while (Serial1.available() > 0) Serial1.read();
+		// Wait for first sync event to start
+		if (t_sync == 0)
+		{
+			// Check for setup ir pulse
+			if (
+				abs(75 - dt_ir) < 10
+				)
+			{
+				// Set sync time
+				t_sync = t_irSyncLast;
+				DebugFlow("SET SYNC TIME", t_sync);
+			}
+			// Restart loop
+			else return;
+		}
 
-		// Make sure relays are off
-		digitalWrite(pin_Rel_Rew, LOW);
-		digitalWrite(pin_Rel_EtOH, LOW);
+		// Reset OpenLog
+		if (SetupOpenLog())
+			DebugFlow("FINISHED: OpenLog Setup");
+		else
+			DebugError("!!ERROR!! ABORTED: OpenLog Setup");
 
-		// Clear LCD
+		// Indicate setup complete
+		SetupBlink();
+
+		// CLEAR LCD
 		ClearLCD();
-
-		// Reset volatiles
-		doIRhardStop = false;
-		doLogIR = false;
 
 		// Print ad board status
 		char chr[20];
@@ -2409,15 +2568,8 @@ void loop() {
 		sprintf(chr, "BOARD F STATUS: %04X", ad_F.getStatus());
 		DebugFlow(chr);
 
-		// Blink to show setup done
-		SetupBlink();
-
 		fc.isFirstPass = false;
-		DebugFlow("RESET");
-
-		// Check if ir sensor needs to be disabled
-		if (digitalRead(pin_IRdetect) == HIGH)
-			DebugFlow("!!ERROR!! IR SENSOR DISABLED");
+		DebugFlow("READY TO ROCK!");
 
 	}
 
@@ -2455,7 +2607,7 @@ void loop() {
 		c2r.testDat = (byte)c2r.dat[1];
 
 		// Set run pid calibration flag
-		if (c2r.testCond == 2)
+		if (c2r.testCond == 1)
 		{
 			do_pidCalibration = true;
 
@@ -2466,7 +2618,7 @@ void loop() {
 		}
 
 		// Update Hault Error test run speed
-		else if (c2r.testCond == 3)
+		else if (c2r.testCond == 2)
 		{
 			float new_speed = float(c2r.testDat);
 			float speed_steps = new_speed*cm2stp;
@@ -3010,70 +3162,6 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- BUTTON/INTERUPT TRIGGERED ---
-
-	// Check for button input
-	CheckButtons();
-
-	// Open/close rew solonoid
-	if (btn_doRewSolStateChange)
-	{
-		OpenCloseRewSolenoid();
-		btn_doRewSolStateChange = false;
-	}
-
-	// Open/close etoh solonoid
-	if (btn_doEtOHSolStateChange)
-	{
-		OpenCloseEtOHSolenoid();
-		btn_doEtOHSolStateChange = false;
-	}
-
-	// Button triggered reward
-	if (btn_doRew)
-	{
-		if (!reward.isRewarding)
-		{
-			fc.isRewarding = reward.StartRew(false, true);
-			btn_doRew = false;
-		}
-	}
-
-	// Turn LCD on/off
-	if (btn_doChangeLCDstate)
-	{
-		ChangeLCDlight();
-		btn_doChangeLCDstate = false;
-	}
-
-	// IR triggered halt
-	if (doIRhardStop)
-	{
-		Function_IRprox_Halt();
-		doIRhardStop = false;
-	}
-
-	// Log new ir events
-	if (doLogIR)
-	{
-		// Log first sync event
-		static bool is_first_sync = true;
-		if (is_first_sync) {
-			DebugFlow("SET SYNC TIME", t_sync);
-			is_first_sync = false;
-		}
-
-		// Log event if streaming started
-		if (fc.isStreaming)
-			DebugFlow("IR Sync Event", t_irSyncLast);
-
-		// Reset flag
-		doLogIR = false;
-	}
-
-
-#pragma endregion
-
 #pragma region //--- RUN TRACKING ---
 
 	// UPDATE PIXY
@@ -3105,39 +3193,6 @@ void loop() {
 
 	// UPDATE BULLDOZER
 	bull.UpdateBull();
-
-#pragma endregion
-
-#pragma region //--- OTHER OPPERATIONS ---
-
-	// End any ongoing reward
-	if (fc.isRewarding)
-	{
-		if (reward.EndRew())
-		{
-			fc.doRew = false;
-			fc.isRewarding = false;
-
-			// Tell CS what zone was rewarded
-			if (reward.mode != "Now")
-				StorePacketData('c', 'Z', reward.zoneIndByte + 1, 0);
-		}
-	}
-
-	// Check if feeder arm should be moved
-	reward.CheckFeedArm();
-
-	// Check if EtOH should be dispensed
-	CheckEtOH();
-
-	// Get and send voltage level
-	GetBattVolt();
-
-	// Check if ard data should be resent
-	CheckResend('a');
-
-	// Check if cs data should be resent
-	CheckResend('c');
 
 #pragma endregion
 
@@ -4049,6 +4104,34 @@ void AD_Reset()
 	delayMicroseconds(100);
 }
 
+// CHECK AUTODRIVER STATUS
+void AD_CheckOC()
+{
+	// Local vars
+	int ocd_r;
+	int ocd_f;
+
+	if (millis() > t_checkAD)
+	{
+		adR_stat = ad_R.getStatus();
+		ocd_r = CheckAD_Status(adR_stat, "OCD");
+		adF_stat = ad_F.getStatus();
+		ocd_f = CheckAD_Status(adF_stat, "OCD");
+
+		// Check for overcurrent shut down
+		if (ocd_r == 0 || ocd_f == 0)
+		{
+			char chr[50];
+			sprintf(chr, "!!ERROR!! AD OCD: R_OCD=%d F_OCD=%d", ocd_r, ocd_f);
+			DebugError(chr);
+			//AD_Reset();
+		}
+
+		// Set next check
+		t_checkAD = millis() + dt_checkAD;
+	}
+}
+
 // HARD STOP
 void HardStop(String called_from)
 {
@@ -4444,7 +4527,7 @@ void UpdateEKF()
 			char chr[50];
 			sprintf(chr, "!!ERROR!!: \"nan\" EKF OUTPUT: ratVT.pos=%0.2f ratPixy.pos=%0.2f robVT.pos=%0.2f ratVT.vel=%0.2f ratPixy.vel=%0.2f robVT.vel=%0.2f",
 				pos_ratVT.posNow, pos_ratPixy.posNow, pos_robVT.posNow, pos_ratVT.velNow, pos_ratPixy.velNow, pos_robVT.velNow);
-			DebugErrors(chr);
+			DebugError(chr);
 		}
 
 	}
@@ -4736,6 +4819,33 @@ void QuitSession()
 
 #pragma region --------DEBUGGING---------
 
+// SETUP OPENLOG
+bool SetupOpenLog()
+{
+	// Local vars
+	bool pass = false;
+
+	// Reset OpenLog
+	digitalWrite(pin_OL_RST, LOW);
+	delay(100);
+	digitalWrite(pin_OL_RST, HIGH);
+	Serial3.begin(9600);
+
+	// Wait for com char '<'
+	uint32_t ol_timeout = millis() + 5000;
+	while (
+		!pass &&
+		millis() < ol_timeout
+		)
+	{
+		if (Serial3.available())
+			if (Serial3.read() == '<')
+				pass = true;
+	}
+
+	return pass;
+}
+
 // LOG/PRINT MAIN EVENT
 void DebugFlow(String msg)
 {
@@ -4759,11 +4869,11 @@ void DebugFlow(String msg, uint32_t t)
 }
 
 // LOG/PRINT ERRORS
-void DebugErrors(String msg)
+void DebugError(String msg)
 {
-	DebugErrors(msg, millis());
+	DebugError(msg, millis());
 }
-void DebugErrors(String msg, uint32_t t)
+void DebugError(String msg, uint32_t t)
 {
 	// Local vars
 	bool do_print = db.print_errors && (db.Console || db.LCD);
@@ -5228,8 +5338,8 @@ int CharInd(char id, char id_arr[], int arr_size)
 
 }
 
-// BLINK LEDS AT SETUP
-void SetupBlink()
+// BLINK LEDS AT RESTART/UPLOAD
+void ResetBlink()
 {
 	int duty[2] = { 100, 0 };
 	bool is_on = false;
@@ -5241,6 +5351,27 @@ void SetupBlink()
 		delay(dt);
 		analogWrite(pin_TrackLED, duty[(int)is_on]);
 		delay(dt);
+		analogWrite(pin_RewLED_R, duty[(int)is_on]);
+		delay(dt);
+		is_on = !is_on;
+	}
+	// Reset LEDs
+	analogWrite(pin_Disp_LED, 0);
+	analogWrite(pin_TrackLED, trackLEDduty);
+	analogWrite(pin_RewLED_R, rewLEDmin);
+}
+
+// BLINK LEDS AT SETUP
+void SetupBlink()
+{
+	int duty[2] = { 100, 0 };
+	bool is_on = false;
+	int dt = 100;
+	// Flash sequentially
+	for (int i = 0; i < 10; i++)
+	{
+		analogWrite(pin_Disp_LED, duty[(int)is_on]);
+		analogWrite(pin_TrackLED, duty[(int)is_on]);
 		analogWrite(pin_RewLED_R, duty[(int)is_on]);
 		delay(dt);
 		is_on = !is_on;
@@ -5293,23 +5424,20 @@ void Interupt_IRprox_Halt() {
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect()
 {
-	// Exit if < 250 ms has not passed
-	if (t_irDetectDebounce > millis()) return;
+	// Exit if < 25 ms has not passed
+	if (millis() < t_irDetectDebounce) return;
 
 	// Store time
-	t_irSyncLast = millis();
-
-	// Check if this if first event
-	if (t_sync == 0)
-	{
-		t_sync = t_irSyncLast;
-	}
+	dt_ir = millis() - t_irSyncLast;
+	t_irSyncLast += dt_ir;
+	cnt_ir++;
 
 	// Set flag
-	doLogIR = true;
+	if (t_sync != 0)
+		doLogIR = true;
 
 	// Update debounce
-	t_irDetectDebounce = millis() + 250;
+	t_irDetectDebounce = millis() + 50;
 }
 
 #pragma endregion

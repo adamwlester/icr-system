@@ -24,12 +24,19 @@ namespace ICR_Run
             // Run system test
             /*
                 0: No test
-                1: Run MATLAB in debug mode
-                2: PID calibration
-                3: Halt error test
-                4: Simulated rat test
+                1: PID calibration
+                2: Halt error test
+                3: Simulated rat test
             */
             public double systemTest;
+            // Debug matlab
+            /*
+                true: Dont break on errors
+                false: Break on errors
+            */
+            public bool debugMat;
+            // Breakpoint line for matlab debugging
+            public int breakLine;
             // Print all blocked vt recs
             public bool printBlockedVt;
             // Print all sent vt recs
@@ -42,6 +49,8 @@ namespace ICR_Run
             // Constructor:
             public DB(
                 double system_test,
+                bool debug_mat,
+                int break_line,
                 bool print_blocked_vt,
                 bool print_sent_vt,
                 bool print_rob_log,
@@ -49,6 +58,8 @@ namespace ICR_Run
                 )
             {
                 systemTest = system_test;
+                debugMat = debug_mat;
+                breakLine = break_line;
                 printBlockedVt = print_blocked_vt;
                 printSentVT = print_sent_vt;
                 printRobLog = print_rob_log;
@@ -56,7 +67,9 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 4,
+            system_test: 3,
+            debug_mat: false,
+            break_line: 6160,
             print_blocked_vt: false,
             print_sent_vt: false,
             print_rob_log: false,
@@ -308,48 +321,22 @@ namespace ICR_Run
         static void Main()
         {
             #region --------- [MAIN] SETUP ---------
-
-            // Start primary timer
-            sw_main.Start();
             LogEvent("[Main] RUNNING: Main...");
-
-            // Initalize Matlab global vars
-            com_Matlab.PutWorkspaceData("m2c_id", "global", 'N');
-            com_Matlab.PutWorkspaceData("m2c_dat1", "global", 9999.0);
-            com_Matlab.PutWorkspaceData("m2c_dat2", "global", 9999.0);
-            com_Matlab.PutWorkspaceData("m2c_dat3", "global", 9999.0);
-            com_Matlab.PutWorkspaceData("m2c_flag", "global", false);
-            com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
-            // c2m vars
-            for (int i = 0; i < c2m.idList.Length; i++)
-            {
-                com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m.idList[i]), "global", 0);
-            }
-
-            // Setup debugging
-            if (db.systemTest != 0)
-            {
-                // Hide/show matlab app window
-                com_Matlab.Visible = 1;
-
-                // Set MATLAB break point
-                //com_Matlab.Execute(@"dbstop in ICR_GUI at 103");
-
-                // Start thread to pass simulation rat data
-                if (db.systemTest == 4)
-                {
-                    new Thread(delegate ()
-                    {
-                        RelaySimRat();
-                    }).Start();
-                }
-            }
-            else com_Matlab.Visible = 0;
 
             // Local vars
             bool pass;
             double move_to;
             string msg_str;
+
+            // Setup and start CheetahDue serial
+            sp_cheetahDue.ReadTimeout = 100;
+            sp_cheetahDue.BaudRate = 57600;
+            sp_cheetahDue.PortName = "COM14";
+            // Create event handeler for incoming data
+            sp_cheetahDue.DataReceived += DataReceived_CheetahDue;
+            // Open serial port connection
+            sp_cheetahDue.Open();
+            LogEvent("[Main] FINISHED: CheetahDue Serial Port Open");
 
             // Setup and start Xbee serial
             sp_Xbee.ReadTimeout = 100;
@@ -361,15 +348,48 @@ namespace ICR_Run
             sp_Xbee.Open();
             LogEvent("[Main] FINISHED: Xbee Serial Port Open");
 
-            // Setup and start CheetahDue serial
-            sp_cheetahDue.ReadTimeout = 100;
-            sp_cheetahDue.BaudRate = 57600;
-            sp_cheetahDue.PortName = "COM14";
-            // Create event handeler for incoming data
-            sp_cheetahDue.DataReceived += DataReceived_CheetahDue;
-            // Open serial port connection
-            sp_cheetahDue.Open();
-            LogEvent("[Main] FINISHED: CheetahDue Serial Port Open");
+            // Send/confirm start
+            LogEvent("[Main] RUNNING: Setup Handshake...");
+            pass = SetupHandshake(5000);
+            if (pass) LogEvent("[Main] FINISHED: Setup Handshake");
+            else LogEvent("!!ERROR!! [Main] ABORTED: Setup Handshake");
+
+            // Start primary timer
+            sw_main.Start();
+
+            // Initalize Matlab global vars
+            com_Matlab.PutWorkspaceData("m2c_id", "global", 'N');
+            com_Matlab.PutWorkspaceData("m2c_dat1", "global", -1.00);
+            com_Matlab.PutWorkspaceData("m2c_dat2", "global", -1.00);
+            com_Matlab.PutWorkspaceData("m2c_dat3", "global", -1.00);
+            com_Matlab.PutWorkspaceData("m2c_flag", "global", false);
+            com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
+            // c2m vars
+            for (int i = 0; i < c2m.idList.Length; i++)
+            {
+                com_Matlab.PutWorkspaceData(String.Format("c2m_{0}", c2m.idList[i]), "global", 0);
+            }
+
+            // Setup debugging
+            if (db.systemTest != 0 || db.debugMat)
+            {
+                // Hide/show matlab app window
+                com_Matlab.Visible = 1;
+
+                // Set MATLAB break point
+                if (db.debugMat)
+                    SendMCOM(String.Format("dbstop in ICR_GUI at {0};", db.breakLine));
+
+                // Start thread to pass simulation rat data
+                if (db.systemTest == 4)
+                {
+                    new Thread(delegate ()
+                    {
+                        RelaySimRat();
+                    }).Start();
+                }
+            }
+            else com_Matlab.Visible = 0;
 
             // Setup ICR_GUI background worker
             bw_RunGUI.DoWork += DoWork_RunGUI;
@@ -426,7 +446,7 @@ namespace ICR_Run
 
             // Wait for ICR_GUI to load and connect to NLX
             LogEvent("[Main] RUNNING: Wait for ICR_GUI NLX Setup...");
-            pass = WaitForM2C('G', do_abort: fc.doAbort);
+            pass = WaitForM2C('G', do_abort: true);
             if (pass) LogEvent("[Main] FINISHED: Wait for ICR_GUI NLX Setup");
             else LogEvent("!!ERROR!! [Main] ABORTED: Wait for ICR_GUI NLX Setup");
 
@@ -456,7 +476,7 @@ namespace ICR_Run
                     RepeatSendPack(id: 'V', check_done: true);
                 }).Start();
                 // Wait for confirmation from robot
-                pass = WaitForR2C('V', do_abort: fc.doAbort);
+                pass = WaitForR2C('V', timeout: 5000, do_abort: true);
                 if (pass)
                 {
                     // Send confirm stream to Matlbab
@@ -467,17 +487,17 @@ namespace ICR_Run
 
                 // Wait for setup command confirmation
                 LogEvent("[Main] RUNNING: Confirm Setup");
-                pass = WaitForM2C('S', do_abort: fc.doAbort);
+                pass = WaitForM2C('S', do_abort: true);
                 if (pass)
-                    pass = WaitForR2C('S', do_abort: fc.doAbort);
+                    pass = WaitForR2C('S', do_abort: true);
                 if (pass) LogEvent("[Main] FINISHED: Confirm Setup");
                 else LogEvent("!!ERROR!! [Main] ABORTED: Confirm Setup");
 
                 // Wait for initial move to command to complete
                 LogEvent("[Main] RUNNING: MoveTo Start...");
-                pass = WaitForM2C('M', do_abort: fc.doAbort);
+                pass = WaitForM2C('M', do_abort: true);
                 if (pass)
-                    pass = WaitForR2C('M', do_abort: fc.doAbort);
+                    pass = WaitForR2C('M', do_abort: true);
                 if (pass)
                 {
                     // Send confirm robot in place to Matlbab
@@ -534,7 +554,7 @@ namespace ICR_Run
                     RepeatSendPack(id: 'M', dat1: move_to, check_done: true);
                 }).Start();
                 // Wait for confirmation from robot
-                pass = WaitForR2C('M');
+                pass = WaitForR2C('M', timeout: 10000);
                 if (pass) LogEvent("[Main] FINISHED: MoveTo South");
                 else LogEvent("!!ERROR!! [Main] ABORTED: MoveTo South");
 
@@ -628,7 +648,7 @@ namespace ICR_Run
             // Wait for quit command
             LogEvent("[Main] RUNNING: Wait for ICR_GUI Quit command...");
             if (!fc.isGUIquit)
-                pass = WaitForM2C('X');
+                pass = WaitForM2C('X', do_abort:true);
             else pass = true;
             if (pass)
                 LogEvent("[Main] FINISHED: Wait for ICR_GUI Quit command");
@@ -658,7 +678,7 @@ namespace ICR_Run
             LogEvent("[Main] FINISHED: Save Robot Log");
 
             // Hold for errors
-            if (db.systemTest != 0 || fc.doAbort)
+            if (db.systemTest != 0 || db.debugMat || fc.doAbort)
             {
                 Thread.Sleep(1000);
                 LogEvent("PRESS ANY KEY TO EXIT");
@@ -728,6 +748,62 @@ namespace ICR_Run
         }
 
         #region ---------COMMUNICATION---------
+
+        // PERFORM SETUP HANDSHAKE WITH CHEETAHDUE
+        public static bool SetupHandshake(long timeout)
+        {
+            // Local vars
+            UnionHack u = new UnionHack(0, 0, 0, '0', 0);
+            Stopwatch sw = new Stopwatch();
+            bool pass = false;
+            byte[] in_byte = new byte[1];
+            byte[] out_byte = new byte[1];
+            char id = '+';
+           
+           
+            // Start timer
+            sw.Start();
+
+            // Store id
+            u.c1 = id;
+            out_byte[0] = u.b1;
+
+            do
+            {
+                // Make sure port open
+                if (sp_cheetahDue.IsOpen)
+                {
+                    // Send/resend id
+                    sp_cheetahDue.Write(out_byte, 0, 1);
+                    Thread.Sleep(10);
+                    // Check for reply for 1.5 second
+                    long t_check_till = sw.ElapsedMilliseconds + 1500;
+                    while (
+                        !pass &&
+                        sw.ElapsedMilliseconds < t_check_till
+                        )
+                    {
+                        if (sp_cheetahDue.BytesToRead > 0)
+                        {
+                            sp_cheetahDue.Read(in_byte, 0, 1);
+                            pass = in_byte[0] == out_byte[0];
+                        }
+                    }
+                }
+            }
+            while (
+            !pass &&
+            sw.ElapsedMilliseconds < timeout
+            );
+
+            // Set flags
+            if (pass)
+                fc.isHandshook = true;
+            else
+                fc.doAbort = true;
+
+            return pass;
+        }
 
         // SEND PACK DATA REPEATEDLY TILL RECIEVED CONFIRMED
         public static bool RepeatSendPack(int send_max = 0, char id = ' ', double dat1 = double.NaN, double dat2 = double.NaN, double dat3 = double.NaN, bool do_comf = true, bool check_done = false)
@@ -806,6 +882,7 @@ namespace ICR_Run
                 vtBlocker.Block(id);
 
                 // Local vars
+                UnionHack u = new UnionHack(0, 0, 0, '0', 0);
                 byte[] msg_id = new byte[1];
                 byte[] msg_data = null;
                 byte[] msg_pack = new byte[2];
@@ -831,8 +908,6 @@ namespace ICR_Run
                         fc.ContinueSerial();
 
                 } while (do_loop);
-
-                UnionHack u = new UnionHack(0, 0, 0, '0', 0);
 
                 // Store pack number
                 u.s1 = pack;
@@ -965,7 +1040,8 @@ namespace ICR_Run
                         com_Matlab.Feval("now", 1, out result);
                         object[] res = result as object[];
                         double mat_now = (double)res[0];
-                        SendMCOM(String.Format("c2m_W = {0};", mat_now));
+                        double mat_sec = mat_now * 24 * 60 * 60;
+                        SendMCOM(String.Format("c2m_{0} = {1};", 'W', mat_sec));
                     }
                 }
 
@@ -1080,7 +1156,7 @@ namespace ICR_Run
                     do_loop = false;
                 }
                 else if (
-                    do_abort ||
+                    (do_abort && fc.doAbort) ||
                     !fc.ContinueMatCom() ||
                     (sw_main.ElapsedMilliseconds > t_timeout)
                     )
@@ -1168,7 +1244,7 @@ namespace ICR_Run
                     }
                     // Need to abort
                     else if (
-                        do_abort ||
+                        (do_abort && fc.doAbort) ||
                         !fc.ContinueSerial() ||
                         sw_main.ElapsedMilliseconds > t_timeout
                         )
@@ -1485,6 +1561,7 @@ namespace ICR_Run
         {
             // Loop till all data read out
             while (
+                fc.isHandshook &&
                 sp_cheetahDue.BytesToRead > 0 &&
                     fc.ContinueSerial()
                     )
@@ -1565,10 +1642,10 @@ namespace ICR_Run
                     if (foot_found)
                     {
                         // Update list
-                        robLogger.UpdateList(log_str);
+                        dueLogger.UpdateList(log_str);
 
                         // print data recieved
-                        if (db.printRobLog)
+                        if (db.printDueLog)
                         {
                             // Update list
                             dueLogger.UpdateList(log_str);
@@ -1576,7 +1653,7 @@ namespace ICR_Run
                             // Print
                             if (db.printDueLog)
                             {
-                                msg_str = String.Format("LOG_a2c[{0}]: dat=\"{1}\" chksum={2}", robLogger.logCnt, log_str, chksum);
+                                msg_str = String.Format("LOG_a2c[{0}]: dat=\"{1}\" chksum={2}", dueLogger.logCnt, log_str, chksum);
                                 LogEvent(msg_str);
                             }
                         }
@@ -1813,14 +1890,14 @@ namespace ICR_Run
             object result = null;
 
             // Set Matlab paths
-            com_Matlab.Execute(@"addpath(genpath('" + matStartDir + "'));");
+            SendMCOM(@"addpath(genpath('" + matStartDir + "'));");
             com_Matlab.Feval("startup", 0, out result);
             LogEvent("[DoWork_RunGUI] RUNNING: ICR_GUI");
 
             // Run ICR_GUI.m
             try
             {
-                com_Matlab.Feval("ICR_GUI", 0, out result, db.systemTest);
+                com_Matlab.Feval("ICR_GUI", 0, out result, db.systemTest, db.debugMat, false, sw_main.ElapsedMilliseconds);
             }
             catch
             {
@@ -1871,15 +1948,15 @@ namespace ICR_Run
                     // Get new data
                     // data1
                     var d1 = com_Matlab.GetVariable("m2c_dat1", "global");
-                    dat1 = d1 != 9999 ? (double)d1 : Double.NaN;
+                    dat1 = d1 != -1 ? (double)d1 : Double.NaN;
 
                     // data2
                     var d2 = com_Matlab.GetVariable("m2c_dat2", "global");
-                    dat2 = d2 != 9999 ? (double)d2 : Double.NaN;
+                    dat2 = d2 != -1 ? (double)d2 : Double.NaN;
 
                     // data3
                     var d3 = com_Matlab.GetVariable("m2c_dat3", "global");
-                    dat3 = d3 != 9999 ? (double)d3 : Double.NaN;
+                    dat3 = d3 != -1 ? (double)d3 : Double.NaN;
 
                     // Reset flag
                     SendMCOM("m2c_flag = false;");
@@ -2073,8 +2150,10 @@ namespace ICR_Run
                 string dt_print = " ";
 
                 // Get time from start of Main()
-                t_m = t_now > 0 ? t_now : sw_main.ElapsedMilliseconds;
-                t_m = t_sync == 0 || t_sync == t_now ? t_m : t_m - t_sync;
+                if (sw_main.IsRunning)
+                    t_m = t_now > 0 ? t_now : sw_main.ElapsedMilliseconds;
+                else
+                    t_m = t_now > 0 ? t_now : 0;
                 t_s = (float)(t_m) / 1000.0f;
                 ts_print = String.Format("[{0:0.00}s]", t_s);
 
@@ -2162,6 +2241,7 @@ namespace ICR_Run
         private static bool _doAbort = false;
         private static bool _isMAThanging = false;
         // Public vars
+        public bool isHandshook = false;
         public bool isNlxConnected = false;
         public bool isRobStreaming = false;
         public bool isMovedToStart = false;

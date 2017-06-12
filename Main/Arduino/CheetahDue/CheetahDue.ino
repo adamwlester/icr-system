@@ -13,13 +13,13 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool Console = false;
+	bool Console = true;
 	// What to print
 	bool print_flow = true;
-	bool print_r2a = true;
-	bool print_a2r = true;
-	bool print_resent = true;
-	bool print_log = true;
+	bool print_r2a = false;
+	bool print_a2r = false;
+	bool print_resent = false;
+	bool print_log = false;
 }
 // Initialize
 db;
@@ -125,7 +125,7 @@ volatile bool isOnEast = false;
 
 // TTL timers
 uint32_t t_debounce = 10; // (ms)
-uint32_t t_pulseWdth = 50; // (ms)
+uint32_t dt_ttlPulse = 50; // (ms)
 
 // Serial from rob
 struct R2A
@@ -185,9 +185,10 @@ uint32_t word_rewOn;
 uint32_t word_rewOff;
 
 // IR time sync LED
-const uint32_t syncDur = 5; // (ms)
-const uint32_t syncDel = 60000; // (ms)
+const uint32_t dt_syncPulse = 10; // (ms)
+uint32_t del_syncPulse = 60000; // (ms)
 uint32_t t_sync = 0;
+bool is_irOn = false;
 uint32_t t_syncLast;
 uint32_t word_irOn;
 
@@ -267,35 +268,22 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(pin_ptSouthOn), SouthInterrupt, RISING); // south
 	attachInterrupt(digitalPinToInterrupt(pin_ptEastOn), EastInterrupt, RISING); // east
 
-	DebugFlow("RESTART");
-
 	// Test pin mapping
 	/*
 	Note: make sure Cheetah aquiring
 	*/
-	if (doTestPinMapping) {
-		delay(5000);
-		bool p_flow = db.print_flow;
-		db.print_flow = true;
-		digitalWrite(pin_ttlNorthOn, HIGH); DebugFlow("North TTL"); delay(1000); digitalWrite(pin_ttlNorthOn, LOW);
-		digitalWrite(pin_ttlWestOn, HIGH); DebugFlow("West TTL"); delay(1000); digitalWrite(pin_ttlWestOn, LOW);
-		digitalWrite(pin_ttlSouthOn, HIGH); DebugFlow("South TTL"); delay(1000); digitalWrite(pin_ttlSouthOn, LOW);
-		digitalWrite(pin_ttlEastOn, HIGH); DebugFlow("East TTL"); delay(1000); digitalWrite(pin_ttlEastOn, LOW);
-		digitalWrite(pin_ttlIR, HIGH); DebugFlow("IR Sync TTL"); delay(1000); digitalWrite(pin_ttlIR, LOW);
-		digitalWrite(pin_ttlWhiteNoise, HIGH); DebugFlow("White Noise TTL"); delay(1000); digitalWrite(pin_ttlWhiteNoise, LOW);
-		digitalWrite(pin_ttlRewTone, HIGH); DebugFlow("Reward Tone TTL"); delay(1000); digitalWrite(pin_ttlRewTone, LOW);
-		digitalWrite(pin_ttlRewOn, HIGH); DebugFlow("Reward On TTL"); delay(1000); digitalWrite(pin_ttlRewOn, LOW);
-		digitalWrite(pin_ttlRewOff, HIGH); DebugFlow("Reward Off TTL"); delay(1000); digitalWrite(pin_ttlRewOff, LOW);
-		digitalWrite(pin_ttlPidRun, HIGH); DebugFlow("PID Run TTL"); delay(1000); digitalWrite(pin_ttlPidRun, LOW);
-		digitalWrite(pin_ttlPidStop, HIGH); DebugFlow("PID Stop TTL"); delay(1000); digitalWrite(pin_ttlPidStop, LOW);
-		digitalWrite(pin_ttlBullRun, HIGH); DebugFlow("Bull Run TTL"); delay(1000); digitalWrite(pin_ttlBullRun, LOW);
-		digitalWrite(pin_ttlBullStop, HIGH); DebugFlow("Bull Stop TTL"); delay(1000); digitalWrite(pin_ttlBullStop, LOW);
-		digitalWrite(pin_relIR, HIGH); DebugFlow("IR Sync Relay"); delay(1000); digitalWrite(pin_relIR, LOW);
-		digitalWrite(pin_relRewTone, HIGH); DebugFlow("Reward Tone Relay"); delay(1000); digitalWrite(pin_relRewTone, LOW);
-		digitalWrite(pin_relWhiteNoise, HIGH); DebugFlow("White Noise Relay"); delay(1000); digitalWrite(pin_relWhiteNoise, LOW);
-		db.print_flow = p_flow;
-		delay(5000);
-	}
+	if (doTestPinMapping)
+		DebugPinMap();
+
+	// Dump buffers
+	while (Serial.available())
+		Serial.read();
+	while (Serial1.available())
+		Serial1.read();
+
+	// Blink LEDs at setup
+	ResetBlink();
+
 }
 
 
@@ -303,159 +291,237 @@ void setup()
 void loop()
 {
 
+	// Keep checking for start command
+	if (!fc.isSesStarted)
+	{
+		// Local vars
+		byte in_byte[1] = { 0 };
+		byte out_byte[1] = { 0 };
+		bool is_rcvd = false;
+		int send_cnt = 0;
+		String err_str = " ";
+
+		// Get id byte
+		u.f = 0.0f;
+		u.c[0] = '+';
+		out_byte[0] = u.b[0];
+
+		// Loop till message found
+		while (!fc.isSesStarted)
+		{
+			// Check if IR should be pulsed 
+			PulseIR(1000, dt_syncPulse);
+
+			// Get new data
+			if (Serial.available() > 0)
+			{
+				in_byte[0] = Serial.read();
+				millis();
+				// Check for match
+				if (in_byte[0] == out_byte[0])
+				{
+					// Store time
+					t_sync = millis();
+
+					// Send confirmation
+					Serial.write(out_byte, 1);
+					send_cnt++;
+
+					// Pulse ir
+					if (!is_irOn) PulseIR(); // turn on
+					delay(10 - (millis() - t_syncLast));
+					PulseIR();  // turn off
+					delay(75);
+					PulseIR(); // turn on
+					delay(10);
+					PulseIR();  // turn off
+
+					// Dump buffer
+					while (Serial.available())
+						Serial.read();
+
+					// Wait and make sure message recieved
+					while (!is_rcvd)
+					{
+						delay(1000);
+						if (Serial.available() > 0)
+						{
+							in_byte[0] == Serial.read();
+							if (in_byte[0] == out_byte[0])
+							{
+								// Resend confirmation
+								Serial.write(out_byte, 1);
+								send_cnt++;
+								char chr[20];
+								sprintf(chr, "!!ERROR!! HANDSHAKE FAILED: tot=%d", send_cnt);
+								err_str = chr;
+							}
+						}
+						else
+						{
+							// Log any failures
+							if (err_str != " ")
+								DebugFlow(err_str);
+
+							// Log success
+							DebugFlow("HANDSHAKE SUCCEEDED");
+
+							// Log sync time
+							DebugFlow("SET SYNC TIME", t_sync);
+
+							// Set flags
+							is_rcvd = true;
+							fc.isSesStarted = true;
+							DebugFlow("START SESSION");
+						}
+
+					}
+
+				}
+			}
+
+		}
+	}
+
 	// Check for XBee input
 	r2a.isNew = false;
 	if (Serial1.available() > 0) {
 		r2a.isNew = ParseSerial();
 	}
 
-	// Check for sync time indicating session starting
-	if (!fc.isSesStarted)
+
+	// Exicute input
+	if (r2a.isNew)
 	{
-		if (r2a.isNew && r2a.idNew == 't')
-		{
-			// Set sync time
-			t_sync = millis();
-			DebugFlow("SET SYNC TIME", t_sync);
 
-			// Set ir pulse
-			CheckIRPulse();
+		// Run reward tone
+		if (r2a.idNew == 'r') {
 
-			// Set flag
-			fc.isSesStarted = true;
-			DebugFlow("START SESSION");
+			// Get reward duration and convert to ms
+			rewDur = (uint32_t)r2a.dat * 10;
+
+			// Run tone
+			StartRew();
 		}
+
+		// Get noise settings
+		else if (r2a.idNew == 's') {
+
+			// No noise
+			if (r2a.dat == 0)
+			{
+				fc.doWhiteNoise = false;
+				fc.doRewTone = false;
+			}
+			// White noise only
+			else if (r2a.dat == 1)
+			{
+				// set white noise pins
+				fc.doWhiteNoise = true;
+				fc.doRewTone = false;
+			}
+			// White and reward sound
+			else if (r2a.dat == 2)
+			{
+				// set white noise pins
+				fc.doWhiteNoise = true;
+				fc.doRewTone = true;
+			}
+
+			// Get reward on port word
+			if (fc.doWhiteNoise && fc.doRewTone) {
+				// white and tone pins
+				int sam_on_pins[3] = { sam_relRewTone, sam_ttlRewTone, sam_ttlRewOn };
+				word_rewOn = GetPortWord(0x0, sam_on_pins, 3);
+				int sam_off_pins[3] = { sam_relWhiteNoise, sam_ttlWhiteNoise, sam_ttlRewOff };
+				word_rewOff = GetPortWord(0x0, sam_off_pins, 3);
+			}
+			else {
+				// rew event pins only
+				int sam_on_pins[1] = { sam_ttlRewOn };
+				word_rewOn = GetPortWord(0x0, sam_on_pins, 1);
+				int sam_off_pins[1] = { sam_ttlRewOff };
+				word_rewOff = GetPortWord(0x0, sam_off_pins, 1);
+			}
+			// Turn on white noise
+			if (fc.doWhiteNoise) {
+				// turn white on
+				int sam_white_pins[2] = { sam_relWhiteNoise, sam_ttlWhiteNoise };
+				uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
+				SetPort(word_white, 0x0);
+			}
+
+		}
+
+		// Signal PID mode
+		else if (r2a.idNew == 'p') {
+			// Signal PID stopped
+			if (r2a.dat == 0)
+			{
+				digitalWrite(pin_ttlPidStop, HIGH);
+				digitalWrite(pin_ttlPidRun, LOW);
+				DebugFlow("PID STOPPED");
+			}
+			// Signal PID running
+			else if (r2a.dat == 1)
+			{
+				digitalWrite(pin_ttlPidRun, HIGH);
+				digitalWrite(pin_ttlPidStop, LOW);
+				DebugFlow("PID RUNNING");
+			}
+		}
+
+		// Signal bull running
+		else if (r2a.idNew == 'b') {
+			// Signal Bull stopped
+			if (r2a.dat == 0)
+			{
+				digitalWrite(pin_ttlBullStop, HIGH);
+				digitalWrite(pin_ttlBullRun, LOW);
+				DebugFlow("BULL STOPPED");
+			}
+			// Signal Bull running
+			else if (r2a.dat == 1)
+			{
+				digitalWrite(pin_ttlBullRun, HIGH);
+				digitalWrite(pin_ttlBullStop, LOW);
+				DebugFlow("BULL RUNNING");
+			}
+		}
+
+		// Quite and reset
+		else if (r2a.idNew == 'q') {
+			fc.doQuit = true;
+			DebugFlow("QUITING");
+		}
+
 	}
-	else
+
+	// Check for rew end
+	if (fc.isRewarding)
 	{
-		// Exicute input
-		if (r2a.isNew)
-		{
+		EndRew();
+	}
 
-			// Run reward tone
-			if (r2a.idNew == 'r') {
+	// Set output pins back to low
+	ResetTTL();
 
-				// Get reward duration and convert to ms
-				rewDur = (uint32_t)r2a.dat * 10;
+	// Check if IR should be pulsed 
+	if (PulseIR(del_syncPulse, dt_syncPulse))
+	{
+		if (is_irOn)
+			DebugFlow("IR SYNC ON");
+		else
+			DebugFlow("IR SYNC OFF");
+	}
 
-				// Run tone
-				StartRew();
-			}
-
-			// Get noise settings
-			else if (r2a.idNew == 's') {
-
-				// No noise
-				if (r2a.dat == 0)
-				{
-					fc.doWhiteNoise = false;
-					fc.doRewTone = false;
-				}
-				// White noise only
-				else if (r2a.dat == 1)
-				{
-					// set white noise pins
-					fc.doWhiteNoise = true;
-					fc.doRewTone = false;
-				}
-				// White and reward sound
-				else if (r2a.dat == 2)
-				{
-					// set white noise pins
-					fc.doWhiteNoise = true;
-					fc.doRewTone = true;
-				}
-
-				// Get reward on port word
-				if (fc.doWhiteNoise && fc.doRewTone) {
-					// white and tone pins
-					int sam_on_pins[3] = { sam_relRewTone, sam_ttlRewTone, sam_ttlRewOn };
-					word_rewOn = GetPortWord(0x0, sam_on_pins, 3);
-					int sam_off_pins[3] = { sam_relWhiteNoise, sam_ttlWhiteNoise, sam_ttlRewOff };
-					word_rewOff = GetPortWord(0x0, sam_off_pins, 3);
-				}
-				else {
-					// rew event pins only
-					int sam_on_pins[1] = { sam_ttlRewOn };
-					word_rewOn = GetPortWord(0x0, sam_on_pins, 1);
-					int sam_off_pins[1] = { sam_ttlRewOff };
-					word_rewOff = GetPortWord(0x0, sam_off_pins, 1);
-				}
-				// Turn on white noise
-				if (fc.doWhiteNoise) {
-					// turn white on
-					int sam_white_pins[2] = { sam_relWhiteNoise, sam_ttlWhiteNoise };
-					uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
-					SetPort(word_white, 0x0);
-				}
-
-			}
-
-			// Signal PID mode
-			else if (r2a.idNew == 'p') {
-				// Signal PID stopped
-				if (r2a.dat == 0)
-				{
-					digitalWrite(pin_ttlPidStop, HIGH);
-					digitalWrite(pin_ttlPidRun, LOW);
-					DebugFlow("PID STOPPED");
-				}
-				// Signal PID running
-				else if (r2a.dat == 1)
-				{
-					digitalWrite(pin_ttlPidRun, HIGH);
-					digitalWrite(pin_ttlPidStop, LOW);
-					DebugFlow("PID RUNNING");
-				}
-			}
-
-			// Signal bull running
-			else if (r2a.idNew == 'b') {
-				// Signal Bull stopped
-				if (r2a.dat == 0)
-				{
-					digitalWrite(pin_ttlBullStop, HIGH);
-					digitalWrite(pin_ttlBullRun, LOW);
-					DebugFlow("BULL STOPPED");
-				}
-				// Signal Bull running
-				else if (r2a.dat == 1)
-				{
-					digitalWrite(pin_ttlBullRun, HIGH);
-					digitalWrite(pin_ttlBullStop, LOW);
-					DebugFlow("BULL RUNNING");
-				}
-			}
-
-			// Quite and reset
-			else if (r2a.idNew == 'q') {
-				fc.doQuit = true;
-				DebugFlow("QUITING");
-			}
-
-		}
-
-		// Check for rew end
-		if (fc.isRewarding)
-		{
-			EndRew();
-		}
-
-		// Set output pins back to low
-		ResetTTL();
-
-		// Check if IR should be pulsed 
-		CheckIRPulse();
-
-		// Check if ready to quit
-		if (fc.doQuit && !doPackSend)
-		{
-			// Run bleep bleep
-			QuitBleep();
-			// Restart Arduino
-			REQUEST_EXTERNAL_RESET;
-		}
-
+	// Check if ready to quit
+	if (fc.doQuit && !doPackSend)
+	{
+		// Run bleep bleep
+		QuitBleep();
+		// Restart Arduino
+		REQUEST_EXTERNAL_RESET;
 	}
 
 	// Send message confirmation
@@ -721,6 +787,32 @@ void EndRew()
 
 #pragma region --------DEBUGGING---------
 
+// TEST PIN MAPPING
+void DebugPinMap()
+{
+	delay(5000);
+	bool p_flow = db.print_flow;
+	db.print_flow = true;
+	digitalWrite(pin_ttlNorthOn, HIGH); DebugFlow("North TTL"); delay(1000); digitalWrite(pin_ttlNorthOn, LOW);
+	digitalWrite(pin_ttlWestOn, HIGH); DebugFlow("West TTL"); delay(1000); digitalWrite(pin_ttlWestOn, LOW);
+	digitalWrite(pin_ttlSouthOn, HIGH); DebugFlow("South TTL"); delay(1000); digitalWrite(pin_ttlSouthOn, LOW);
+	digitalWrite(pin_ttlEastOn, HIGH); DebugFlow("East TTL"); delay(1000); digitalWrite(pin_ttlEastOn, LOW);
+	digitalWrite(pin_ttlIR, HIGH); DebugFlow("IR Sync TTL"); delay(1000); digitalWrite(pin_ttlIR, LOW);
+	digitalWrite(pin_ttlWhiteNoise, HIGH); DebugFlow("White Noise TTL"); delay(1000); digitalWrite(pin_ttlWhiteNoise, LOW);
+	digitalWrite(pin_ttlRewTone, HIGH); DebugFlow("Reward Tone TTL"); delay(1000); digitalWrite(pin_ttlRewTone, LOW);
+	digitalWrite(pin_ttlRewOn, HIGH); DebugFlow("Reward On TTL"); delay(1000); digitalWrite(pin_ttlRewOn, LOW);
+	digitalWrite(pin_ttlRewOff, HIGH); DebugFlow("Reward Off TTL"); delay(1000); digitalWrite(pin_ttlRewOff, LOW);
+	digitalWrite(pin_ttlPidRun, HIGH); DebugFlow("PID Run TTL"); delay(1000); digitalWrite(pin_ttlPidRun, LOW);
+	digitalWrite(pin_ttlPidStop, HIGH); DebugFlow("PID Stop TTL"); delay(1000); digitalWrite(pin_ttlPidStop, LOW);
+	digitalWrite(pin_ttlBullRun, HIGH); DebugFlow("Bull Run TTL"); delay(1000); digitalWrite(pin_ttlBullRun, LOW);
+	digitalWrite(pin_ttlBullStop, HIGH); DebugFlow("Bull Stop TTL"); delay(1000); digitalWrite(pin_ttlBullStop, LOW);
+	digitalWrite(pin_relIR, HIGH); DebugFlow("IR Sync Relay"); delay(1000); digitalWrite(pin_relIR, LOW);
+	digitalWrite(pin_relRewTone, HIGH); DebugFlow("Reward Tone Relay"); delay(1000); digitalWrite(pin_relRewTone, LOW);
+	digitalWrite(pin_relWhiteNoise, HIGH); DebugFlow("White Noise Relay"); delay(1000); digitalWrite(pin_relWhiteNoise, LOW);
+	db.print_flow = p_flow;
+	delay(5000);
+}
+
 // LOG/PRING MAIN EVENT
 void DebugFlow(String msg)
 {
@@ -833,48 +925,20 @@ void PrintDB(String msg, uint32_t t)
 
 #pragma region --------MINOR FUNCTIONS---------
 
-// GET ID INDEX
-int CharInd(char id, char id_arr[], int arr_size)
+// BLINK LEDS AT RESTART/UPLOAD
+void ResetBlink()
 {
-
-	int ind = -1;
-	for (int i = 0; i < arr_size; i++)
+	bool is_on = false;
+	int dt = 100;
+	// Flash 
+	for (int i = 0; i < 10; i++)
 	{
-		if (id == id_arr[i])
-			ind = i;
+		digitalWrite(pin_relIR, is_on ? LOW : HIGH);
+		delay(dt);
+		is_on = !is_on;
 	}
-
-	return ind;
-
-}
-
-// PULSE IR
-void CheckIRPulse()
-{
-	static bool is_ir_on = false;
-	// Set high
-	if (
-		!is_ir_on &&
-		millis() > t_syncLast + syncDel
-		)
-	{
-		// Set ir pins on
-		SetPort(word_irOn, 0x0);
-		t_syncLast = millis();
-		DebugFlow("IR SYNC ON");
-		is_ir_on = true;
-	}
-	// Set low
-	else if (
-		is_ir_on &&
-		millis() > t_syncLast + syncDur
-		)
-	{
-		SetPort(0x0, word_irOn);
-		DebugFlow("IR SYNC OFF");
-		is_ir_on = false;
-	}
-
+	// Reset LED
+	digitalWrite(pin_relIR, LOW);
 }
 
 // PLAY SOUND WHEN QUITING
@@ -898,6 +962,56 @@ void QuitBleep()
 	}
 	digitalWrite(pin_relWhiteNoise, HIGH);
 	digitalWrite(pin_relRewTone, LOW);
+}
+
+// PULSE IR
+bool PulseIR()
+{
+	return PulseIR(-1, -1);
+}
+bool PulseIR(int del_sync, int dt_sync)
+{
+	// Local vars
+	bool is_changed = false;
+
+	// Set high
+	if (
+		!is_irOn &&
+		millis() > t_syncLast + del_sync
+		)
+	{
+		// Set ir pins on
+		SetPort(word_irOn, 0x0);
+		t_syncLast = millis();
+		is_irOn = true;
+		is_changed = true;
+	}
+	// Set low
+	else if (
+		is_irOn &&
+		millis() > t_syncLast + dt_sync
+		)
+	{
+		SetPort(0x0, word_irOn);
+		is_irOn = false;
+		is_changed = true;
+	}
+	return is_changed;
+}
+
+// GET ID INDEX
+int CharInd(char id, char id_arr[], int arr_size)
+{
+
+	int ind = -1;
+	for (int i = 0; i < arr_size; i++)
+	{
+		if (id == id_arr[i])
+			ind = i;
+	}
+
+	return ind;
+
 }
 
 // GET 32 BIT WORD FOR PORT
@@ -929,22 +1043,22 @@ void SetPort(uint32_t word_on, uint32_t word_off)
 void ResetTTL()
 {
 	// north
-	if (isOnNorth && millis() - t_outLastNorth > t_pulseWdth) {
+	if (isOnNorth && millis() - t_outLastNorth > dt_ttlPulse) {
 		digitalWrite(pin_ttlNorthOn, LOW); // set back to LOW
 		isOnNorth = false;
 	}
 	// west
-	if (isOnWest && millis() - t_outLastWest > t_pulseWdth) {
+	if (isOnWest && millis() - t_outLastWest > dt_ttlPulse) {
 		digitalWrite(pin_ttlWestOn, LOW); // set back to LOW
 		isOnWest = false;
 	}
 	// south
-	if (isOnSouth && millis() - t_outLastSouth > t_pulseWdth) {
+	if (isOnSouth && millis() - t_outLastSouth > dt_ttlPulse) {
 		digitalWrite(pin_ttlSouthOn, LOW); // set back to LOW
 		isOnSouth = false;
 	}
 	// east
-	if (isOnEast && millis() - t_outLastEast > t_pulseWdth) {
+	if (isOnEast && millis() - t_outLastEast > dt_ttlPulse) {
 		digitalWrite(pin_ttlEastOn, LOW); // set back to LOW
 		isOnEast = false;
 	}

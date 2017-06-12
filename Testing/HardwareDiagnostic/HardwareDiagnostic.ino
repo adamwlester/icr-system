@@ -4,9 +4,9 @@
 /*
 Connect pot and use to test motor function
 */
-const bool do_POT_Test = true;
-const bool do_POT_PrintSpeed = true;
-const bool do_POT_PrintStat = true;
+const bool do_POT_Test = false;
+const bool do_POT_PrintSpeed = false;
+const bool do_POT_PrintStat = false;
 
 // Feed Arm Test
 /*
@@ -33,15 +33,15 @@ Open Rew sol w/ button 1 and EtOH w/ button 2
 */
 const bool do_SolTest = false;
 
-// IR Detector test 
+// IR Detector Timing test 
 /*
 Upload code to both CheetahDue and FeederDue)
 Connect 34 on FeederDue to IR relay pin on CheetahDue
 Make sure pin A8 is shorted to A9 on CheetahDue
 */
-const bool do_IR_ComTest = false;
-const uint32_t t_IR_Del = 1000; // (ms)
-const uint32_t t_IR_Dur = 5; // (ms)
+const bool do_IR_ComTest = true;
+const uint32_t t_IR_Del = 5000; // [1000, 5000] (ms)
+const uint32_t t_IR_Dur = 5000; // [5, 5000] (ms)
 const uint32_t t_LED_Dur = 250; // (ms)
 
 #pragma endregion
@@ -119,15 +119,25 @@ const int pin_ED_MS1 = 37;
 const int pin_ED_MS2 = 39;
 const int pin_ED_MS3 = 41;
 
+// OpenLog
+const int pin_OL_RST = 16;
+
 // Feeder switch
-const int pin_FeedSwitch_Gnd = 14;
-const int pin_FeedSwitch = 15;
+/*
+Note: Do not use real ground pin as this will cause
+an upload error if switch is shorted when writing sketch
+*/
+const int pin_FeedSwitch_Gnd = 24;
+const int pin_FeedSwitch = 25;
 
 // Power off
 const int pin_PwrOff = 45;
 
 // Voltage monitor
 const int pin_BatVolt = A11;
+
+// Buttons
+const int pin_Btn[3] = { A3, A2, A1 };
 
 /*
 Note: pins bellow are all used for external interupts
@@ -150,7 +160,7 @@ int pin_POT_In = A9;
 int pin_POT_Vcc = A8;
 
 // IR detector test
-int pin_IRdetect_Relay = 9;
+int pin_IRdetect_Relay = 51;
 int pin_IRdetect_PlsIn = 24;
 int pin_CheetahDueID_Gnd = A8;
 int pin_CheetahDueID_IP = A9;
@@ -270,32 +280,96 @@ void setup()
 	// XBee
 	Serial1.begin(57600);
 
-	// SETUP OUTPUT POWER AND GROUND PINS
+	// SETUP OUTPUT PINS
 
-	// Set output pins
+	// Autodriver
+	pinMode(pin_AD_CSP_R, OUTPUT);
+	pinMode(pin_AD_CSP_F, OUTPUT);
+	pinMode(pin_AD_RST, OUTPUT);
+	// Display
+	pinMode(pin_Disp_SCK, OUTPUT);
+	pinMode(pin_Disp_MOSI, OUTPUT);
+	pinMode(pin_Disp_DC, OUTPUT);
+	pinMode(pin_Disp_RST, OUTPUT);
+	pinMode(pin_Disp_CS, OUTPUT);
+	pinMode(pin_Disp_LED, OUTPUT);
+	// LEDs
+	pinMode(pin_RewLED_R, OUTPUT);
+	pinMode(pin_RewLED_C, OUTPUT);
+	pinMode(pin_TrackLED, OUTPUT);
+	// Relays
 	pinMode(pin_Rel_Rew, OUTPUT);
 	pinMode(pin_Rel_EtOH, OUTPUT);
-	pinMode(pin_ED_STP, OUTPUT);
-	pinMode(pin_ED_DIR, OUTPUT);
+	// BigEasyDriver
+	pinMode(pin_ED_RST, OUTPUT);
 	pinMode(pin_ED_SLP, OUTPUT);
+	pinMode(pin_ED_DIR, OUTPUT);
+	pinMode(pin_ED_STP, OUTPUT);
+	pinMode(pin_ED_ENBL, OUTPUT);
 	pinMode(pin_ED_MS1, OUTPUT);
 	pinMode(pin_ED_MS2, OUTPUT);
-	pinMode(pin_ED_ENBL, OUTPUT);
-	pinMode(pin_PwrOff, OUTPUT);
+	pinMode(pin_ED_MS3, OUTPUT);
+	// OpenLog
+	pinMode(pin_OL_RST, OUTPUT);
+	// Feeder switch
 	pinMode(pin_FeedSwitch_Gnd, OUTPUT);
+	// Power off
+	pinMode(pin_PwrOff, OUTPUT);
+	delayMicroseconds(100);
 
-	// Set power/ground pins
+	// Autodriver
+	digitalWrite(pin_AD_CSP_R, LOW);
+	digitalWrite(pin_AD_CSP_F, LOW);
+	digitalWrite(pin_AD_RST, LOW);
+	// Display
+	digitalWrite(pin_Disp_SCK, LOW);
+	digitalWrite(pin_Disp_MOSI, LOW);
+	digitalWrite(pin_Disp_DC, LOW);
+	digitalWrite(pin_Disp_RST, LOW);
+	digitalWrite(pin_Disp_CS, LOW);
+	digitalWrite(pin_Disp_LED, LOW);
+	// LEDs
+	digitalWrite(pin_RewLED_R, LOW);
+	digitalWrite(pin_RewLED_C, LOW);
+	digitalWrite(pin_TrackLED, LOW);
+	// Relays
+	digitalWrite(pin_Rel_Rew, LOW);
+	digitalWrite(pin_Rel_EtOH, LOW);
+	// BigEasyDriver
+	digitalWrite(pin_ED_RST, LOW);
+	digitalWrite(pin_ED_SLP, LOW);
+	digitalWrite(pin_ED_DIR, LOW);
+	digitalWrite(pin_ED_STP, LOW);
+	digitalWrite(pin_ED_ENBL, LOW);
+	digitalWrite(pin_ED_MS1, LOW);
+	digitalWrite(pin_ED_MS2, LOW);
+	digitalWrite(pin_ED_MS3, LOW);
+	// OpenLog
+	digitalWrite(pin_OL_RST, LOW);
+	// Feeder switch
 	digitalWrite(pin_FeedSwitch_Gnd, LOW);
+	// Power off
+	digitalWrite(pin_PwrOff, LOW);
+	delayMicroseconds(100);
+
+	// SET INPUT PINS
+
+	// Feeder switch
+	pinMode(pin_FeedSwitch, INPUT);
+	// Voltage monitor
+	pinMode(pin_BatVolt, INPUT);
+	// IR proximity sensors
+	pinMode(pin_IRprox_Rt, INPUT);
+	pinMode(pin_IRprox_Lft, INPUT);
+	// IR detector
+	pinMode(pin_IRdetect, INPUT);
 
 	// Set button pins enable internal pullup
 	for (int i = 0; i <= 2; i++) {
 		pinMode(pin_Btn[i], INPUT_PULLUP);
 	}
 	pinMode(pin_FeedSwitch, INPUT_PULLUP);
-
-	// Make sure relay pins low
-	digitalWrite(pin_Rel_Rew, LOW);
-	digitalWrite(pin_Rel_EtOH, LOW);
+	delayMicroseconds(100);
 
 	// SETUP AUTODRIVER
 
