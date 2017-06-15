@@ -72,7 +72,7 @@ namespace ICR_Run
             break_line: 6160,
             print_blocked_vt: false,
             print_sent_vt: false,
-            print_rob_log: false,
+            print_rob_log: true,
             print_due_log: true
             );
 
@@ -203,7 +203,7 @@ namespace ICR_Run
             _lockRcvd: lockRcvdCheck,
             _lockDone: lockDoneCheck,
             _idList:
-            new char[14] {
+            new char[15] {
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -215,6 +215,7 @@ namespace ICR_Run
             'D', // execution done
             'V', // connected and streaming
             'L', // request log send/resend
+            '+', // Setup handshake
             'U', // log pack
             'J', // battery voltage
             'Z', // reward zone
@@ -228,9 +229,8 @@ namespace ICR_Run
             _lockRcvd: lockRcvdCheck,
             _lockDone: lockDoneCheck,
             _idList:
-            new char[6] {
-            't', // set sync time
-	        'q', // quit/reset
+            new char[5] {
+            'q', // quit/reset
 	        'r', // reward
 	        's', // sound cond [0, 1, 2]
 	        'p', // pid mode [0, 1]
@@ -348,7 +348,7 @@ namespace ICR_Run
             sp_Xbee.Open();
             LogEvent("[Main] FINISHED: Xbee Serial Port Open");
 
-            // Send/confirm start
+            // Run setup handshake start
             LogEvent("[Main] RUNNING: Setup Handshake...");
             pass = SetupHandshake(5000);
             if (pass) LogEvent("[Main] FINISHED: Setup Handshake");
@@ -356,6 +356,27 @@ namespace ICR_Run
 
             // Start primary timer
             sw_main.Start();
+
+            // TEMP
+            // Request log data from robot
+            LogEvent("[Main] RUNNING: Import Robot Log...");
+            if (fc.ContinueSerial())
+            {
+                pass = GetRobotLog();
+            }
+            else pass = false;
+            if (pass)
+            {
+                if (robLogger.isLogComplete)
+                    LogEvent("[Main] FINISHED: Import Robot Log");
+                else
+                    LogEvent("!!ERROR!! [Main] ABORTED: Import Robot Log");
+
+                // Print log info
+                msg_str = String.Format("[Main] Logged {0} Robot Events and Dropped: {1} Packs", robLogger.logCnt, droppedPacks);
+                LogEvent(msg_str);
+            }
+            else LogEvent("!!ERROR!! [Main] ABORTED: Import Robot Log");
 
             // Initalize Matlab global vars
             com_Matlab.PutWorkspaceData("m2c_id", "global", 'N');
@@ -469,7 +490,6 @@ namespace ICR_Run
                 LogEvent("[Main] FINISHED: Nlx Stream");
 
                 // Send streaming check request on seperate thread
-                // Run CheckDone on new thread
                 LogEvent("[Main] RUNNING: Confirm Robot Streaming...");
                 new Thread(delegate ()
                 {
@@ -648,7 +668,7 @@ namespace ICR_Run
             // Wait for quit command
             LogEvent("[Main] RUNNING: Wait for ICR_GUI Quit command...");
             if (!fc.isGUIquit)
-                pass = WaitForM2C('X', do_abort:true);
+                pass = WaitForM2C('X', do_abort: true);
             else pass = true;
             if (pass)
                 LogEvent("[Main] FINISHED: Wait for ICR_GUI Quit command");
@@ -755,54 +775,65 @@ namespace ICR_Run
             // Local vars
             UnionHack u = new UnionHack(0, 0, 0, '0', 0);
             Stopwatch sw = new Stopwatch();
-            bool pass = false;
+            bool rob_pass = false;
+            bool due_pass = false;
             byte[] in_byte = new byte[1];
             byte[] out_byte = new byte[1];
-            char id = '+';
-           
-           
+            char handshake_id = '+';
+
             // Start timer
             sw.Start();
 
             // Store id
-            u.c1 = id;
+            u.c1 = handshake_id;
             out_byte[0] = u.b1;
 
             do
             {
-                // Make sure port open
-                if (sp_cheetahDue.IsOpen)
+                // Wait for ports to open
+                while (
+                    !sp_Xbee.IsOpen &&
+                    !sp_cheetahDue.IsOpen &&
+                    sw.ElapsedMilliseconds < timeout
+                    ) ;
+
+                // Send/resend CheetahDue message
+                sp_cheetahDue.Write(out_byte, 0, 1);
+                Thread.Sleep(10);
+
+                // Send FeederDue message
+                new Thread(delegate ()
                 {
-                    // Send/resend id
-                    sp_cheetahDue.Write(out_byte, 0, 1);
-                    Thread.Sleep(10);
-                    // Check for reply for 1.5 second
-                    long t_check_till = sw.ElapsedMilliseconds + 1500;
-                    while (
-                        !pass &&
-                        sw.ElapsedMilliseconds < t_check_till
-                        )
+                    RepeatSendPack(id: handshake_id, check_done: true);
+                }).Start();
+
+                // Check for reply from CheetahDue for 1.5 second
+                long t_check_till = sw.ElapsedMilliseconds + 1500;
+                while (
+                    !due_pass &&
+                    sw.ElapsedMilliseconds < t_check_till
+                    )
+                {
+                    if (sp_cheetahDue.BytesToRead > 0)
                     {
-                        if (sp_cheetahDue.BytesToRead > 0)
-                        {
-                            sp_cheetahDue.Read(in_byte, 0, 1);
-                            pass = in_byte[0] == out_byte[0];
-                        }
+                        sp_cheetahDue.Read(in_byte, 0, 1);
+                        due_pass = in_byte[0] == out_byte[0];
                     }
                 }
             }
             while (
-            !pass &&
+            !rob_pass &&
+            !due_pass &&
             sw.ElapsedMilliseconds < timeout
             );
 
             // Set flags
-            if (pass)
+            if (due_pass)
                 fc.isHandshook = true;
             else
                 fc.doAbort = true;
 
-            return pass;
+            return due_pass;
         }
 
         // SEND PACK DATA REPEATEDLY TILL RECIEVED CONFIRMED
@@ -873,7 +904,8 @@ namespace ICR_Run
         {
             /* 
             SEND DATA TO ROBOT 
-            FORMAT: head, id, data, packet_number, footer
+            FORMAT: head, id, data, packet_number, do_confirm, footer
+            EXAMPLE: ASCII {<,L,r,ÿ,ÿ,\0,>} DEC {60,76,1,255,255,0,60}
             */
             lock (lock_sendData)
             {
@@ -1033,15 +1065,21 @@ namespace ICR_Run
                     {
                         // Store sync time
                         t_sync = sw_main.ElapsedMilliseconds;
-                        LogEvent("SET SYNC TIME", t_sync);
+                        LogEvent(String.Format("SET SYNC TIME: {0}ms", t_sync), t_sync);
 
                         // Send to matlab 
+
+                        /*
                         object result;
                         com_Matlab.Feval("now", 1, out result);
                         object[] res = result as object[];
                         double mat_now = (double)res[0];
                         double mat_sec = mat_now * 24 * 60 * 60;
                         SendMCOM(String.Format("c2m_{0} = {1};", 'W', mat_sec));
+                        */
+
+                        double t_sync_sec = (double)t_sync / 1000;
+                        SendMCOM(String.Format("c2m_{0} = {1};", 'W', t_sync_sec));
                     }
                 }
 
@@ -1732,7 +1770,7 @@ namespace ICR_Run
                 if (robLogger.SendReady())
                 {
                     double send_what = robLogger.sendWhat;
-                    RepeatSendPack(id: 'L', dat2: robLogger.sendWhat);
+                    RepeatSendPack(send_max: 1, id: 'L', dat2: robLogger.sendWhat, do_comf: false);
                 }
 
                 // Check if list complete
@@ -2151,10 +2189,17 @@ namespace ICR_Run
 
                 // Get time from start of Main()
                 if (sw_main.IsRunning)
-                    t_m = t_now > 0 ? t_now : sw_main.ElapsedMilliseconds;
+                    t_now = t_now > 0 ? t_now : sw_main.ElapsedMilliseconds;
                 else
-                    t_m = t_now > 0 ? t_now : 0;
-                t_s = (float)(t_m) / 1000.0f;
+                    t_now = t_now > 0 ? t_now : 0;
+
+                // Get sync correction
+                t_m = t_now - t_sync;
+
+                // Convert to seconds
+                t_s = t_m > 0 ? (float)(t_m) / 1000.0f : 0;
+
+                // Convert to string
                 ts_print = String.Format("[{0:0.00}s]", t_s);
 
                 // No input time
@@ -2511,7 +2556,7 @@ namespace ICR_Run
         {
             _sw.Start();
             _doSend = true;
-            sendWhat = 0;
+            sendWhat = 1;
             _logCnt = 0;
             _t_lastUpdate = _sw.ElapsedMilliseconds + 1000;
         }
@@ -2553,7 +2598,7 @@ namespace ICR_Run
         }
 
         // Add new log entry
-        public void UpdateList(string log_str, long ts = 0)
+        public void UpdateList(string log_str, long ts = -1)
         {
             lock (_lockLog)
             {
@@ -2566,12 +2611,14 @@ namespace ICR_Run
                     // Itterate count
                     _logCnt++;
 
-                    // Add count
+                    // Add count and time
                     string str;
-                    if (ts == 0)
-                        str = String.Format("[{0}],", _logCnt) + log_str;
+                    if (ts < 0)
+                        // Add count but skip time
+                        str = String.Format("[{0}],{1}", _logCnt, log_str);
                     else
-                        str = String.Format("[{0}],{1},", _logCnt, ts) + log_str;
+                        // Add count and time
+                        str = String.Format("[{0}],{1},{2}", _logCnt, ts, log_str);
 
                     // Add to list
                     _logList.Add(str);
@@ -2583,7 +2630,7 @@ namespace ICR_Run
 
                 // Flag to send next
                 _doSend = true;
-                sendWhat = 0;
+                sendWhat = 1;
             }
         }
 
@@ -2594,7 +2641,7 @@ namespace ICR_Run
             {
                 // Flag to send last
                 _doSend = true;
-                sendWhat = 1;
+                sendWhat = 0;
             }
         }
 

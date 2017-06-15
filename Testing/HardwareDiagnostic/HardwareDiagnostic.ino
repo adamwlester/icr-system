@@ -25,7 +25,7 @@ const bool do_VoltTest = false;
 /*
 Send keyboard entries from XBee on XCTU
 */
-const bool do_XBeeTest = false;
+const bool do_XBeeTest = true;
 
 // Solenoid Test 
 /*
@@ -39,7 +39,7 @@ Upload code to both CheetahDue and FeederDue)
 Connect 34 on FeederDue to IR relay pin on CheetahDue
 Make sure pin A8 is shorted to A9 on CheetahDue
 */
-const bool do_IR_ComTest = true;
+const bool do_IR_ComTest = false;
 const uint32_t t_IR_Del = 5000; // [1000, 5000] (ms)
 const uint32_t t_IR_Dur = 5000; // [5, 5000] (ms)
 const uint32_t t_LED_Dur = 250; // (ms)
@@ -86,84 +86,88 @@ const uint32_t t_LED_Dur = 250; // (ms)
 
 
 #pragma region ---------PIN DECLARATION---------
+// Pin mapping
+struct PIN
+{
+	// Autodriver
+	const int AD_CSP_R = 5;
+	const int AD_CSP_F = 6;
+	const int AD_RST = 7;
 
-// Autodriver
-const int pin_AD_CSP_R = 5;
-const int pin_AD_CSP_F = 6;
-const int pin_AD_RST = 7;
+	// Display
+	const int Disp_SCK = 8;
+	const int Disp_MOSI = 9;
+	const int Disp_DC = 10;
+	const int Disp_RST = 11;
+	const int Disp_CS = 12;
+	const int Disp_LED = 13;
 
-// Display
-const int pin_Disp_SCK = 8;
-const int pin_Disp_MOSI = 9;
-const int pin_Disp_DC = 10;
-const int pin_Disp_RST = 11;
-const int pin_Disp_CS = 12;
-const int pin_Disp_LED = 13;
+	// LEDs
+	const int RewLED_R = 4;
+	const int RewLED_C = 3;
+	const int TrackLED = 2;
 
-// LEDs
-const int pin_RewLED_R = 4;
-const int pin_RewLED_C = 3;
-const int pin_TrackLED = 2;
+	// Relays
+	const int Rel_EtOH = 22;
+	const int Rel_Rew = 23;
 
-// Relays
-const int pin_Rel_EtOH = 22;
-const int pin_Rel_Rew = 23;
+	// BigEasyDriver
+	const int ED_RST = 47;
+	const int ED_SLP = 49;
+	const int ED_DIR = 51;
+	const int ED_STP = 53;
+	const int ED_ENBL = 35;
+	const int ED_MS1 = 37;
+	const int ED_MS2 = 39;
+	const int ED_MS3 = 41;
 
-// BigEasyDriver
-const int pin_ED_RST = 47;
-const int pin_ED_SLP = 49;
-const int pin_ED_DIR = 51;
-const int pin_ED_STP = 53;
-const int pin_ED_ENBL = 35;
-const int pin_ED_MS1 = 37;
-const int pin_ED_MS2 = 39;
-const int pin_ED_MS3 = 41;
+	// OpenLog
+	const int OL_RST = 16;
 
-// OpenLog
-const int pin_OL_RST = 16;
+	// Feeder switch
+	/*
+	Note: Do not use real ground pin as this will cause
+	an upload error if switch is shorted when writing sketch
+	*/
+	const int FeedSwitch_Gnd = 24;
+	const int FeedSwitch = 25;
 
-// Feeder switch
-/*
-Note: Do not use real ground pin as this will cause
-an upload error if switch is shorted when writing sketch
-*/
-const int pin_FeedSwitch_Gnd = 24;
-const int pin_FeedSwitch = 25;
+	// Power off
+	const int PwrOff = 45;
 
-// Power off
-const int pin_PwrOff = 45;
+	// Voltage monitor
+	const int BatVolt = A11;
 
-// Voltage monitor
-const int pin_BatVolt = A11;
+	// Buttons
+	const int Btn[3] = { A3, A2, A1 };
 
-// Buttons
-const int pin_Btn[3] = { A3, A2, A1 };
+	/*
+	Note: pins bellow are all used for external interupts
+	and must all be members of the same port (PortA)
+	*/
 
-/*
-Note: pins bellow are all used for external interupts
-and must all be members of the same port (PortA)
-*/
+	// IR proximity sensors
+	const int IRprox_Rt = 42;
+	const int IRprox_Lft = 43;
 
-// IR proximity sensors
-const int pin_IRprox_Rt = 42;
-const int pin_IRprox_Lft = 43;
+	// IR detector
+	const int IRdetect = 17;
 
-// IR detector
-const int pin_IRdetect = 17;
+	// POT switch test
+	int POT_Gnd = A10;
+	int POT_In = A9;
+	int POT_Vcc = A8;
 
-// Buttons
-const int pin_Btn[3] = { A3, A2, A1 };
+	// IR detector test
+	int IRdetect_Relay = 51;
+	int IRdetect_PlsIn = 24;
+	int CheetahDueID_Gnd = A8;
+	int CheetahDueID_IP = A9;
+}
+// Initialize
+pin;
 
-// POT switch test
-int pin_POT_Gnd = A10;
-int pin_POT_In = A9;
-int pin_POT_Vcc = A8;
 
-// IR detector test
-int pin_IRdetect_Relay = 51;
-int pin_IRdetect_PlsIn = 24;
-int pin_CheetahDueID_Gnd = A8;
-int pin_CheetahDueID_IP = A9;
 
 #pragma endregion
 
@@ -232,11 +236,11 @@ volatile bool is_Pls_Rcvd = false;
 //----------INITILIZE OBJECTS----------
 
 // AutoDriver
-AutoDriver_Due ad_R(pin_AD_CSP_R, pin_AD_RST);
-AutoDriver_Due ad_F(pin_AD_CSP_F, pin_AD_RST);
+AutoDriver_Due ad_R(pin.AD_CSP_R, pin.AD_RST);
+AutoDriver_Due ad_F(pin.AD_CSP_F, pin.AD_RST);
 
 // LCD
-LCD5110 myGLCD(pin_Disp_CS, pin_Disp_RST, pin_Disp_DC, pin_Disp_MOSI, pin_Disp_SCK);
+LCD5110 myGLCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
 extern unsigned char SmallFont[];
 
 #pragma endregion
@@ -283,92 +287,81 @@ void setup()
 	// SETUP OUTPUT PINS
 
 	// Autodriver
-	pinMode(pin_AD_CSP_R, OUTPUT);
-	pinMode(pin_AD_CSP_F, OUTPUT);
-	pinMode(pin_AD_RST, OUTPUT);
+	pinMode(pin.AD_CSP_R, OUTPUT);
+	pinMode(pin.AD_CSP_F, OUTPUT);
+	pinMode(pin.AD_RST, OUTPUT);
 	// Display
-	pinMode(pin_Disp_SCK, OUTPUT);
-	pinMode(pin_Disp_MOSI, OUTPUT);
-	pinMode(pin_Disp_DC, OUTPUT);
-	pinMode(pin_Disp_RST, OUTPUT);
-	pinMode(pin_Disp_CS, OUTPUT);
-	pinMode(pin_Disp_LED, OUTPUT);
+	pinMode(pin.Disp_SCK, OUTPUT);
+	pinMode(pin.Disp_MOSI, OUTPUT);
+	pinMode(pin.Disp_DC, OUTPUT);
+	pinMode(pin.Disp_RST, OUTPUT);
+	pinMode(pin.Disp_CS, OUTPUT);
+	pinMode(pin.Disp_LED, OUTPUT);
 	// LEDs
-	pinMode(pin_RewLED_R, OUTPUT);
-	pinMode(pin_RewLED_C, OUTPUT);
-	pinMode(pin_TrackLED, OUTPUT);
+	pinMode(pin.RewLED_R, OUTPUT);
+	pinMode(pin.RewLED_C, OUTPUT);
+	pinMode(pin.TrackLED, OUTPUT);
 	// Relays
-	pinMode(pin_Rel_Rew, OUTPUT);
-	pinMode(pin_Rel_EtOH, OUTPUT);
+	pinMode(pin.Rel_Rew, OUTPUT);
+	pinMode(pin.Rel_EtOH, OUTPUT);
 	// BigEasyDriver
-	pinMode(pin_ED_RST, OUTPUT);
-	pinMode(pin_ED_SLP, OUTPUT);
-	pinMode(pin_ED_DIR, OUTPUT);
-	pinMode(pin_ED_STP, OUTPUT);
-	pinMode(pin_ED_ENBL, OUTPUT);
-	pinMode(pin_ED_MS1, OUTPUT);
-	pinMode(pin_ED_MS2, OUTPUT);
-	pinMode(pin_ED_MS3, OUTPUT);
+	pinMode(pin.ED_RST, OUTPUT);
+	pinMode(pin.ED_SLP, OUTPUT);
+	pinMode(pin.ED_DIR, OUTPUT);
+	pinMode(pin.ED_STP, OUTPUT);
+	pinMode(pin.ED_ENBL, OUTPUT);
+	pinMode(pin.ED_MS1, OUTPUT);
+	pinMode(pin.ED_MS2, OUTPUT);
+	pinMode(pin.ED_MS3, OUTPUT);
 	// OpenLog
-	pinMode(pin_OL_RST, OUTPUT);
+	pinMode(pin.OL_RST, OUTPUT);
 	// Feeder switch
-	pinMode(pin_FeedSwitch_Gnd, OUTPUT);
+	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
 	// Power off
-	pinMode(pin_PwrOff, OUTPUT);
+	pinMode(pin.PwrOff, OUTPUT);
 	delayMicroseconds(100);
 
 	// Autodriver
-	digitalWrite(pin_AD_CSP_R, LOW);
-	digitalWrite(pin_AD_CSP_F, LOW);
-	digitalWrite(pin_AD_RST, LOW);
+	digitalWrite(pin.AD_CSP_R, LOW);
+	digitalWrite(pin.AD_CSP_F, LOW);
+	digitalWrite(pin.AD_RST, LOW);
 	// Display
-	digitalWrite(pin_Disp_SCK, LOW);
-	digitalWrite(pin_Disp_MOSI, LOW);
-	digitalWrite(pin_Disp_DC, LOW);
-	digitalWrite(pin_Disp_RST, LOW);
-	digitalWrite(pin_Disp_CS, LOW);
-	digitalWrite(pin_Disp_LED, LOW);
+	digitalWrite(pin.Disp_SCK, LOW);
+	digitalWrite(pin.Disp_MOSI, LOW);
+	digitalWrite(pin.Disp_DC, LOW);
+	digitalWrite(pin.Disp_RST, LOW);
+	digitalWrite(pin.Disp_CS, LOW);
+	digitalWrite(pin.Disp_LED, LOW);
 	// LEDs
-	digitalWrite(pin_RewLED_R, LOW);
-	digitalWrite(pin_RewLED_C, LOW);
-	digitalWrite(pin_TrackLED, LOW);
+	digitalWrite(pin.RewLED_R, LOW);
+	digitalWrite(pin.RewLED_C, LOW);
+	digitalWrite(pin.TrackLED, LOW);
 	// Relays
-	digitalWrite(pin_Rel_Rew, LOW);
-	digitalWrite(pin_Rel_EtOH, LOW);
-	// BigEasyDriver
-	digitalWrite(pin_ED_RST, LOW);
-	digitalWrite(pin_ED_SLP, LOW);
-	digitalWrite(pin_ED_DIR, LOW);
-	digitalWrite(pin_ED_STP, LOW);
-	digitalWrite(pin_ED_ENBL, LOW);
-	digitalWrite(pin_ED_MS1, LOW);
-	digitalWrite(pin_ED_MS2, LOW);
-	digitalWrite(pin_ED_MS3, LOW);
+	digitalWrite(pin.Rel_Rew, LOW);
+	digitalWrite(pin.Rel_EtOH, LOW);
 	// OpenLog
-	digitalWrite(pin_OL_RST, LOW);
+	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
-	digitalWrite(pin_FeedSwitch_Gnd, LOW);
+	digitalWrite(pin.FeedSwitch_Gnd, LOW);
 	// Power off
-	digitalWrite(pin_PwrOff, LOW);
+	digitalWrite(pin.PwrOff, LOW);
 	delayMicroseconds(100);
 
 	// SET INPUT PINS
 
-	// Feeder switch
-	pinMode(pin_FeedSwitch, INPUT);
 	// Voltage monitor
-	pinMode(pin_BatVolt, INPUT);
+	pinMode(pin.BatVolt, INPUT);
 	// IR proximity sensors
-	pinMode(pin_IRprox_Rt, INPUT);
-	pinMode(pin_IRprox_Lft, INPUT);
+	pinMode(pin.IRprox_Rt, INPUT);
+	pinMode(pin.IRprox_Lft, INPUT);
 	// IR detector
-	pinMode(pin_IRdetect, INPUT);
+	pinMode(pin.IRdetect, INPUT);
 
 	// Set button pins enable internal pullup
 	for (int i = 0; i <= 2; i++) {
-		pinMode(pin_Btn[i], INPUT_PULLUP);
+		pinMode(pin.Btn[i], INPUT_PULLUP);
 	}
-	pinMode(pin_FeedSwitch, INPUT_PULLUP);
+	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
 
 	// SETUP AUTODRIVER
@@ -395,18 +388,22 @@ void setup()
 	// SETUP BIG EASY DRIVER
 
 	// Set to 1/2 step mode
-	digitalWrite(pin_ED_MS1, HIGH);
-	digitalWrite(pin_ED_MS2, LOW);
-	digitalWrite(pin_ED_MS3, LOW);
+	digitalWrite(pin.ED_MS1, HIGH);
+	digitalWrite(pin.ED_MS2, LOW);
+	digitalWrite(pin.ED_MS3, LOW);
 
 	// Start BigEasyDriver in sleep
-	digitalWrite(pin_ED_SLP, LOW);
+	digitalWrite(pin.ED_RST, HIGH);
+	digitalWrite(pin.ED_SLP, LOW);
+	digitalWrite(pin.ED_DIR, LOW);
+	digitalWrite(pin.ED_STP, LOW);
+	digitalWrite(pin.ED_ENBL, LOW);
 
 	// DEFINE EXTERNAL INTERUPTS
 	if (do_POT_Test)
 	{
-		attachInterrupt(digitalPinToInterrupt(pin_IRprox_Rt), InteruptIRproxHalt, FALLING);
-		attachInterrupt(digitalPinToInterrupt(pin_IRprox_Lft), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), InteruptIRproxHalt, FALLING);
 	}
 
 	// INITIALIZE LCD
@@ -417,10 +414,10 @@ void setup()
 	// TEST STUFF SETUP
 
 	// POT vcc and Gnd
-	pinMode(pin_POT_Gnd, OUTPUT);
-	pinMode(pin_POT_Vcc, OUTPUT);
-	digitalWrite(pin_POT_Vcc, HIGH);
-	digitalWrite(pin_POT_Gnd, LOW);
+	pinMode(pin.POT_Gnd, OUTPUT);
+	pinMode(pin.POT_Vcc, OUTPUT);
+	digitalWrite(pin.POT_Vcc, HIGH);
+	digitalWrite(pin.POT_Gnd, LOW);
 
 	// Initialize bat volt array
 	for (int i = 0; i < 100; i++) {
@@ -430,31 +427,31 @@ void setup()
 
 	if (do_IR_ComTest)
 	{
-		pinMode(pin_CheetahDueID_IP, INPUT_PULLUP);
-		pinMode(pin_CheetahDueID_Gnd, OUTPUT);
-		digitalWrite(pin_CheetahDueID_Gnd, LOW);
+		pinMode(pin.CheetahDueID_IP, INPUT_PULLUP);
+		pinMode(pin.CheetahDueID_Gnd, OUTPUT);
+		digitalWrite(pin.CheetahDueID_Gnd, LOW);
 		delay(10);
 		// Detect if code is running on FeederDue
-		if (digitalRead(pin_CheetahDueID_IP) == HIGH)
+		if (digitalRead(pin.CheetahDueID_IP) == HIGH)
 		{
 			is_FeederDue = true;
-			attachInterrupt(digitalPinToInterrupt(pin_IRdetect), Interupt_IR_Detect, HIGH);
-			attachInterrupt(digitalPinToInterrupt(pin_IRdetect_PlsIn), Interupt_Pulse_Detect, HIGH);
+			attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, HIGH);
+			attachInterrupt(digitalPinToInterrupt(pin.IRdetect_PlsIn), Interupt_Pulse_Detect, HIGH);
 			SerialUSB.println("Running on FeederDue");
 		}
 		else
 		{
 			// Set all relays low on CheetahDue
-			pinMode(pin_IRdetect_Relay, OUTPUT);
+			pinMode(pin.IRdetect_Relay, OUTPUT);
 			pinMode(11, OUTPUT);
 			pinMode(12, OUTPUT);
-			digitalWrite(pin_IRdetect_Relay, LOW);
+			digitalWrite(pin.IRdetect_Relay, LOW);
 			digitalWrite(11, LOW);
 			digitalWrite(12, LOW);
 			SerialUSB.println("Running on CheetahDue");
 		}
-		pinMode(pin_CheetahDueID_IP, INPUT);
-		pinMode(pin_CheetahDueID_Gnd, INPUT);
+		pinMode(pin.CheetahDueID_IP, INPUT);
+		pinMode(pin.CheetahDueID_Gnd, INPUT);
 	}
 
 }
@@ -514,6 +511,7 @@ void loop()
 	if (do_XBeeTest)
 	{
 		XBeeRead();
+		ConsoleRead();
 	}
 
 	// IR Com Test
@@ -530,7 +528,7 @@ void loop()
 
 bool POT_Run() {
 
-	vccNow = analogRead(pin_POT_In);
+	vccNow = analogRead(pin.POT_In);
 	vccNorm = vccNow / vccMax;
 	velNow = round(vccNorm * maxSpeed * 100) / 100;
 	runSpeed = velNow * cm2stp;
@@ -578,32 +576,32 @@ void ExtendFeedArm()
 		SerialUSB.println("Extending Feed Arm");
 
 		// Wake motor
-		digitalWrite(pin_ED_SLP, HIGH);
+		digitalWrite(pin.ED_SLP, HIGH);
 
 		// Set arm direction
-		digitalWrite(pin_ED_DIR, LOW); // extend
+		digitalWrite(pin.ED_DIR, LOW); // extend
 
 		while (stepCnt < 200)
 		{
 			if (!armStpOn)
 			{
 				delay(1);
-				digitalWrite(pin_ED_STP, HIGH);
+				digitalWrite(pin.ED_STP, HIGH);
 				stepCnt++;
 			}
 			else
 			{
 				delay(1);
-				digitalWrite(pin_ED_STP, LOW);
+				digitalWrite(pin.ED_STP, LOW);
 			}
 			armStpOn = !armStpOn;
 		}
 
 		// Unstep motor
-		digitalWrite(pin_ED_STP, LOW);
+		digitalWrite(pin.ED_STP, LOW);
 
 		// Sleep motor
-		digitalWrite(pin_ED_SLP, LOW);
+		digitalWrite(pin.ED_SLP, LOW);
 
 		is_armExtended = true;
 	}
@@ -618,31 +616,31 @@ void RetractFeedArm()
 		SerialUSB.println("Extending Feed Arm");
 
 		// Wake motor
-		digitalWrite(pin_ED_SLP, HIGH);
+		digitalWrite(pin.ED_SLP, HIGH);
 
 		// Set arm direction
-		digitalWrite(pin_ED_DIR, HIGH); // retract
+		digitalWrite(pin.ED_DIR, HIGH); // retract
 
-		while (digitalRead(pin_FeedSwitch) == HIGH)
+		while (digitalRead(pin.FeedSwitch) == HIGH)
 		{
 			if (!armStpOn)
 			{
 				delay(1);
-				digitalWrite(pin_ED_STP, HIGH);
+				digitalWrite(pin.ED_STP, HIGH);
 			}
 			else
 			{
 				delay(1);
-				digitalWrite(pin_ED_STP, LOW);
+				digitalWrite(pin.ED_STP, LOW);
 			}
 			armStpOn = !armStpOn;
 		}
 
 		// Unstep motor
-		digitalWrite(pin_ED_STP, LOW);
+		digitalWrite(pin.ED_STP, LOW);
 
 		// Sleep motor
-		digitalWrite(pin_ED_SLP, LOW);
+		digitalWrite(pin.ED_SLP, LOW);
 
 		is_armExtended = false;
 	}
@@ -660,12 +658,12 @@ void CheckBattery()
 	byte bit_out;
 
 	// Make sure relay is open
-	if (digitalRead(pin_Rel_EtOH) == LOW)
+	if (digitalRead(pin.Rel_EtOH) == LOW)
 	{
-		digitalWrite(pin_Rel_EtOH, HIGH);
+		digitalWrite(pin.Rel_EtOH, HIGH);
 	}
 
-	bit_in = analogRead(pin_BatVolt);
+	bit_in = analogRead(pin.BatVolt);
 	volt_in = bit_in * bit2volt;
 	volt_sum = 0;
 	// Shift array and compute average
@@ -693,10 +691,19 @@ void XBeeRead()
 {
 	byte buff_b;
 	char buff_c;
-	if (Serial1.available() > 0) {
+	while (Serial1.available() > 0) {
 		buff_b = Serial1.read();
 		buff_c = buff_b;
 		SerialUSB.print(buff_c);
+	}
+}
+
+void ConsoleRead()
+{
+	byte buff_b;
+	while (SerialUSB.available() > 0) {
+		buff_b = SerialUSB.read();
+		Serial1.write(buff_b);
 	}
 }
 
@@ -710,7 +717,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur + t_IR_Del
 			)
 		{
-			digitalWrite(pin_IRdetect_Relay, HIGH);
+			digitalWrite(pin.IRdetect_Relay, HIGH);
 			t_IR_Sent = millis();
 			cnt_IR_Sent++;
 			is_IR_On = true;
@@ -722,7 +729,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur
 			)
 		{
-			digitalWrite(pin_IRdetect_Relay, LOW);
+			digitalWrite(pin.IRdetect_Relay, LOW);
 			is_IR_On = false;
 			SerialUSB.println("IR Off");
 		}
@@ -769,7 +776,7 @@ void IR_LatComp()
 		if (is_IR_Rcvd && is_Pls_Rcvd)
 		{
 			// Turn on tracker LED
-			analogWrite(pin_TrackLED, 100);
+			analogWrite(pin.TrackLED, 100);
 			// Compute delay between pulse and IR
 			t_IR_Lat = t_IR_Rcvd - t_Pls_Rcvd;
 			// Print info
@@ -799,14 +806,14 @@ void IR_LatComp()
 			)
 		{
 			// Turn off tracker LED
-			analogWrite(pin_TrackLED, 0);
+			analogWrite(pin.TrackLED, 0);
 			is_IR_On = false;
 		}
 	}
 }
 
 void FeedSwitch() {
-	if (digitalRead(pin_FeedSwitch) == LOW)
+	if (digitalRead(pin.FeedSwitch) == LOW)
 	{
 
 	}
@@ -815,7 +822,7 @@ void FeedSwitch() {
 void CheckButtons()
 {
 	// RUN BUTTON 1 OPPERATIONS
-	if (digitalRead(pin_Btn[0]) == LOW)
+	if (digitalRead(pin.Btn[0]) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[0] > millis()) return;
@@ -830,15 +837,15 @@ void CheckButtons()
 		// Solenoid Test
 		if (do_SolTest)
 		{
-			if (digitalRead(pin_Rel_Rew) == LOW)
-				digitalWrite(pin_Rel_Rew, HIGH);
-			else digitalWrite(pin_Rel_Rew, LOW);
+			if (digitalRead(pin.Rel_Rew) == LOW)
+				digitalWrite(pin.Rel_Rew, HIGH);
+			else digitalWrite(pin.Rel_Rew, LOW);
 		}
 
 		SerialUSB.println("Button 1");
 	}
 	// RUN BUTTON 2 OPPERATIONS
-	else if (digitalRead(pin_Btn[1]) == LOW)
+	else if (digitalRead(pin.Btn[1]) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[1] > millis()) return;
@@ -853,15 +860,15 @@ void CheckButtons()
 		// Solenoid Test
 		if (do_SolTest)
 		{
-			if (digitalRead(pin_Rel_EtOH) == LOW)
-				digitalWrite(pin_Rel_EtOH, HIGH);
-			else digitalWrite(pin_Rel_EtOH, LOW);
+			if (digitalRead(pin.Rel_EtOH) == LOW)
+				digitalWrite(pin.Rel_EtOH, HIGH);
+			else digitalWrite(pin.Rel_EtOH, LOW);
 		}
 
 		SerialUSB.println("Button 2");
 	}
 	// RUN BUTTON 3 OPPERATIONS
-	else if (digitalRead(pin_Btn[2]) == LOW)
+	else if (digitalRead(pin.Btn[2]) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[2] > millis()) return;
@@ -871,8 +878,8 @@ void CheckButtons()
 		if (do_IR_ComTest)
 		{
 			static bool is_LCD_On = false;
-			if (is_LCD_On) { analogWrite(pin_Disp_LED, 25); }
-			else { analogWrite(pin_Disp_LED, 0); }
+			if (is_LCD_On) { analogWrite(pin.Disp_LED, 25); }
+			else { analogWrite(pin.Disp_LED, 0); }
 			is_LCD_On = !is_LCD_On;
 		}
 
@@ -896,18 +903,18 @@ void SetupBlink()
 	// Flash sequentially
 	for (int i = 0; i < 8; i++)
 	{
-		analogWrite(pin_Disp_LED, duty[(int)isOn]);
+		analogWrite(pin.Disp_LED, duty[(int)isOn]);
 		delay(del);
-		analogWrite(pin_TrackLED, duty[(int)isOn]);
+		analogWrite(pin.TrackLED, duty[(int)isOn]);
 		delay(del);
-		analogWrite(pin_RewLED_R, duty[(int)isOn]);
+		analogWrite(pin.RewLED_R, duty[(int)isOn]);
 		delay(del);
 		isOn = !isOn;
 	}
 	// Reset LEDs
-	analogWrite(pin_Disp_LED, 0);
-	analogWrite(pin_TrackLED, trackLEDduty);
-	analogWrite(pin_RewLED_R, rewLEDmin);
+	analogWrite(pin.Disp_LED, 0);
+	analogWrite(pin.TrackLED, trackLEDduty);
+	analogWrite(pin.RewLED_R, rewLEDmin);
 }
 
 int CheckAD_Status(uint16_t stat_reg, String stat_id)

@@ -42,7 +42,6 @@ global c2m_E; % exit
 global c2m_C; % confirm close
 
 % Set top level vars
-D.DB.startTime = 0;
 D.DB.startTime = Elapsed_Seconds(0);
 D.DB.isErrExit = false;
 D.DB.consoleStr = [];
@@ -6271,7 +6270,7 @@ clear(Vars{:});
         if nargin == 0
             dt_sec = t_sec - D.DB.startTime;
         else
-            dt_sec = t_sec - D.DB.startTime - t_sync;
+            dt_sec = t_sec - t_sync;
         end
         
     end
