@@ -190,7 +190,7 @@ D.DB.simTS = 0;
 
 % Initilize top level vars
 FigH = figure('Visible', 'On', ...
-    'DeleteFcn', {@ExitCallback});
+    'DeleteFcn', {@ForceClose});
 
 % RUN MAIN FUNCTION
 % Print start
@@ -271,21 +271,14 @@ if ~D.B.force_close
     delete(FigH)
 end
 
-% Save log
-if (isMatSolo)
+% Save log dir and string
+if ischar(c2m_O)
+    log_dir = c2m_O;
+else
     % Set log dir to default
-    c2m_O = fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.jpg');
+    log_dir = fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'ICR_GUI_Log.csv');
 end
-if size(who('global'),1) > 0
-    if ischar(c2m_O)
-        Update_Console('RUNNING: Save ICR_GUI log');
-        fi_path = fullfile(c2m_O, 'ICR_GUI_Log.csv');
-        fid = fopen(fi_path,'wt');
-        fprintf(fid, D.DB.logStr);
-        fclose(fid);
-        Update_Console('FINISHED: Save ICR_GUI log');
-    end
-end
+log_str = D.DB.logStr;
 
 % Confirm GUI closed
 Mat2CS('C');
@@ -295,6 +288,22 @@ if ~isMatSolo
     Update_Console('RUNNING: Wait for GUI Closed Confirm...');
     while c2m_C == 0; drawnow; end;
     Update_Console('FINISHED: Wait for GUI Closed Confirm');
+end
+
+% Save log
+Update_Console('RUNNING: Save ICR_GUI Log...');
+if size(who('global'),1) > 0
+    % Make new file
+    if ~exist(log_dir, 'file');
+        mkdir(log_dir);
+    end
+    fi_path = fullfile(log_dir, 'ICR_GUI_Log.csv');
+    fid = fopen(fi_path,'wt');
+    fprintf(fid, log_str);
+    fclose(fid);
+    Update_Console(sprintf('FINISHED: Save ICR_GUI Log to \"%s\"', log_dir));
+else
+    Update_Console('ABBORTED: Save ICR_GUI Log');
 end
 
 % Clear all variables
@@ -2378,13 +2387,6 @@ clear(Vars{:});
             
             % IR time sync LED
             NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.ir_ts_bit{1}, ' ', D.NLX.ir_ts_bit{2}, ' ', D.NLX.ir_ts_str]);
-            
-            % Get current Cheetah folder name
-            dirs = dir(D.DIR.nlxTempTop);
-            dirs = dirs(3:end);
-            fi_dat_num = ...
-                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
-            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
             
             %% START STREAMING
             
@@ -6008,6 +6010,13 @@ clear(Vars{:});
             % Log/print
             Update_Console('RUNNING: Save Session Data...');
             
+            % Get current Cheetah recording dir
+            dirs = dir(D.DIR.nlxTempTop);
+            dirs = dirs(3:end);
+            fi_dat_num = ...
+                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
+            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
+            
             %% Disconnect from NetCom
             
             Disconnect_NLX()
@@ -6271,7 +6280,7 @@ clear(Vars{:});
         if nargin == 0
             dt_sec = t_sec - D.DB.startTime;
         else
-            dt_sec = t_sec - D.DB.startTime - t_sync;
+            dt_sec = t_sec - t_sync;
         end
         
     end
@@ -6348,28 +6357,33 @@ clear(Vars{:});
                     if exist('tcpIP', 'var')
                         if isa(tcpIP, 'tcpip')
                             if isvalid(tcpIP)
-                                % Close AC connection
+                                
+                                % Pause to allow image to close
                                 D.AC.data = zeros(1, length(D.AC.data));
-                                % keep connection
                                 D.AC.data(1) = 1;
-                                % post to AC computer
-                                try fwrite(tcpIP,D.AC.data,'int8'); catch; end;
-                                % pause to allow image to close
+                                fwrite(tcpIP,D.AC.data,'int8');
                                 pause(0.01);
-                                % close all
+                                
+                                % Send command to terminate run
                                 D.AC.data = zeros(1, length(D.AC.data));
-                                % post to AC computer
-                                try fwrite(tcpIP,D.AC.data,'int8'); catch; end;
-                                % close AC computer connection
-                                try fclose(tcpIP); catch; end;
+                                fwrite(tcpIP,D.AC.data,'int8'); 
+                                
+                                % Close AC computer connection
+                                fclose(tcpIP); 
                                 
                                 % Show status disconnected
                                 Update_Console(sprintf('FINISHED: Disconnect from AC Computer IP=%s', ...
                                     D.AC.IP));
+                                
+                            else Update_Console('!!ERROR!! \''tcpIP\'' Does Not Exist');
                             end
+                        else Update_Console('!!ERROR!! \''tcpIP\'' is Not a \''tcpIP\'' Object');
                         end
+                    else Update_Console('!!ERROR!! \''tcpIP\'' Does Not Exist');
                     end
+                else Update_Console('!!ERROR!! \''D.AC\'' is Empty');
                 end
+            else Update_Console('!!ERROR!! \''AC\'' Not a Field of \''D\''');
             end
             try fclose(tcpIP); catch; end;
             try delete(tcpIP); catch; end;
@@ -6379,7 +6393,7 @@ clear(Vars{:});
     end
 
 % ------------------------------FORCE QUIT---------------------------------
-    function [] = ExitCallback(~, ~, ~)
+    function [] = ForceClose(~, ~, ~)
         
         % Dont run if global vars already deleted
         if size(who('global'),1) == 0
@@ -6392,7 +6406,7 @@ clear(Vars{:});
         end
         
         % Log/print
-        Update_Console('RUNNING: ExitCallback...');
+        Update_Console('RUNNING: ForceClose Exit Procedure...');
         
         drawnow;
         % Disconnect AC computer
@@ -6403,9 +6417,6 @@ clear(Vars{:});
         % Set flags
         c2m_E = 1;
         D.B.force_close = true;
-        
-                % Log/print
-        Update_Console('FINISHED: ExitCallback...');
         
         return;
     end

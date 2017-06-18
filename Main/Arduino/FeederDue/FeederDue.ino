@@ -33,6 +33,8 @@ double = 8 byte
 
 // General
 #include <string.h>
+//
+#include <MemoryFree.h>
 
 // AutoDriver
 
@@ -64,7 +66,7 @@ double = 8 byte
 struct DB
 {
 	// Do log
-	bool Log = true;
+	bool Log = false;
 	// What to print
 	const bool log_errors = true;
 	const bool log_flow = true;
@@ -82,7 +84,7 @@ struct DB
 	const bool print_errors = false;
 	const bool print_flow = false;
 	const bool print_motorControl = false;
-	const bool print_c2r = true;
+	const bool print_c2r = false;
 	const bool print_r2c = false;
 	const bool print_r2a = false;
 	const bool print_pid = false;
@@ -203,7 +205,6 @@ struct FC
 	bool doHalt = false;
 	bool isHalted = false;
 	bool doBulldoze = false;
-	bool isSendingLog = false;
 	bool doLogResend = false;
 	bool doLogSend = false;
 	bool isEKFReady = false;
@@ -212,25 +213,24 @@ struct FC
 fc;
 
 // Print debugging
-const int queueRows = 10;
-const int queueCols = 200;
-char queueList[queueRows][queueCols] = { {0} };
-int queueInd = queueRows;
+const int printQueueRows = 15;
+const int printQueueCols = 200;
+char printQueue[printQueueRows][printQueueCols] = { {0} };
+int printQueueInd = printQueueRows;
 bool doPrint = false;
 bool doBlockLCDlog = false;
 
 // Debug tracking
-uint32_t t_loopRead = millis();
 int cnt_droppedPacks = 0;
 int cnt_overflowEvt = 0;
 int cnt_timeoutEvt = 0;
 int cnt_packResend = 0;
 
 // Serial com general
-const int r2_lngR = 10;
-const int r2_lngC = 8;
-byte r2_queue[r2_lngR][r2_lngC] = { {0 } };
-int sendQueueInd = r2_lngR - 1;
+const int sendQueueRows = 10;
+const int sendQueueCols = 8;
+byte sendQueue[sendQueueRows][sendQueueCols] = { {0 } };
+int sendQueueInd = sendQueueRows - 1;
 bool doPackSend = false;
 const int resendMax = 3;
 const int dt_sendSent = 1; // (ms)
@@ -246,7 +246,8 @@ struct C2R
 {
 	const char head = '<';
 	const char foot = '>';
-	char idList[11] = {
+	const char idList[12] = {
+		'+', // Setup handshake
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -287,7 +288,8 @@ c2r;
 // Serial to CS
 struct R2C
 {
-	char idList[15] = {
+	const char idList[15] = {
+		'+', // Setup handshake
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -299,7 +301,6 @@ struct R2C
 		'D', // execution done
 		'V', // connected and streaming
 		'L', // request log send/resend
-		'+', // Setup handshake
 		'U', // log pack
 		'J', // battery voltage
 		'Z', // reward zone
@@ -319,7 +320,7 @@ r2c;
 // Serial to other ard
 struct R2A
 {
-	char idList[5] = {
+	const char idList[5] = {
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
@@ -376,7 +377,6 @@ int dt_blockMotor = 0; // (ms)
 uint16_t adR_stat = 0x0;
 uint16_t adF_stat = 0x0;
 const int dt_checkAD = 10; // (ms)
-uint32_t t_checkAD = millis() + dt_checkAD; // (ms)
 
 // Kalman model measures
 struct EKF
@@ -455,6 +455,7 @@ volatile bool doLogIR = false;
 class POSTRACK
 {
 public:
+	// VARS
 	String objID = " ";
 	int nSamp = 0;
 	float posArr[6] = { 0,0,0,0,0,0 };
@@ -469,7 +470,9 @@ public:
 	int sampCnt = 0;
 	bool isDataNew = false;
 	int dt_frame = 0;
-	POSTRACK(String obj_id, int l);
+	uint32_t t_init;
+	// METHODS
+	POSTRACK(uint32_t t, String obj_id, int l);
 	void UpdatePos(float pos_new, uint32_t ts_new);
 	float GetPos();
 	float GetVel();
@@ -484,6 +487,7 @@ class PID
 {
 
 public:
+	// VARS
 	uint32_t t_lastLoop = 0;
 	float dt_loop = 0;
 	bool isLoopRan = false;
@@ -540,7 +544,9 @@ public:
 	float cal_ratVel = 0;
 	bool cal_isPidUpdated = false;
 	bool cal_isCalFinished = false;
-	PID(const float kC, const float pC, const float set_point);
+	uint32_t t_init;
+	// METHODS
+	PID(uint32_t t, const float kC, const float pC, const float set_point);
 	float UpdatePID();
 	void Run(char called_from[]);
 	void Stop(char called_from[]);
@@ -563,6 +569,7 @@ public:
 class BULLDOZE
 {
 public:
+	// VARS
 	uint32_t t_loopNext = 0;
 	int dt_loop = 50; // (ms)
 	float moveMin = 5; // (cm)
@@ -578,6 +585,9 @@ public:
 	bool isMoved = false;
 	bool isTimeUp = false;
 	bool isPassedReset = false;
+	uint32_t t_init;
+	// METHODS
+	BULLDOZE(uint32_t t);
 	void UpdateBull();
 	void Reinitialize(byte del, byte spd, char called_from[]);
 	void Run(char called_from[]);
@@ -597,6 +607,7 @@ public:
 class TARGET
 {
 public:
+	// VARS
 	int targSetTimeout = 1000;
 	int moveTimeout = 5000;
 	uint32_t t_tryTargSetTill = 0;
@@ -622,6 +633,9 @@ public:
 		0.131160714285714,
 		-2.425892857142854,
 	};
+	uint32_t t_init;
+	// METHODS
+	TARGET(uint32_t t);
 	bool CompTarg(float now_pos, float targ_pos, float offset);
 	float DecelToTarg(float now_pos, float now_vel, float dec_pos, float speed_min);
 	float GetError(float now_pos);
@@ -634,6 +648,7 @@ public:
 class REWARD
 {
 public:
+	// VARS
 	const int zoneRewDurs[9] = { // (ms)
 		500,
 		910,
@@ -693,7 +708,9 @@ public:
 	int armPos = 0;
 	int armZone = 0;
 	bool isArmStpOn = false;
-	REWARD(int t_b);
+	uint32_t t_init;
+	// METHODS
+	REWARD(uint32_t t, int t_b);
 	bool StartRew(bool do_stop, bool is_button_reward = false);
 	bool EndRew();
 	void SetRewDur(byte zone_ind);
@@ -713,12 +730,13 @@ public:
 class LOGGER
 {
 public:
+	// VARS
 	uint32_t t_sent = 0;
 	uint32_t t_rcvd = 0;
 	uint32_t t_write = 0;
 	int cntLogStored = 0;
 	int cntLogSent = 0;
-	bool logCleared = false;
+	bool isAllSent = false;
 	static const int maxBytesStore = 1000;
 	char rcvdArr[maxBytesStore] = { 0 };
 	char mode = '\0'; // ['<', '>']
@@ -726,6 +744,10 @@ public:
 	int logNum = 0;
 	char logCntStr[10] = { 0 };
 	int logLength = 0;
+	uint16_t donePack = 0;
+	uint32_t t_init;
+	// METHODS
+	LOGGER(uint32_t t);
 	bool Setup();
 	int OpenNewLog();
 	bool SetToCmdMode();
@@ -735,7 +757,6 @@ public:
 	bool SetToLogMode();
 	bool StoreLogEntry(char msg[], uint32_t t = millis());
 	bool SendLogEntry();
-	char* PrintEscChar(char chr);
 	void PrintLOGGER(char msg[], bool start_entry = false);
 };
 
@@ -817,14 +838,14 @@ AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
 AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 PixyI2C Pixy(0x54);
 LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
-POSTRACK RatVT("RatVT", 4);
-POSTRACK RobVT("RobVT", 4);
-POSTRACK RatPixy("RatPixy", 6);
-PID Pid(kC, pC, pidSetPoint);
-BULLDOZE Bull;
-TARGET Targ;
-REWARD Reward(dt_blockRew);
-LOGGER Log;
+POSTRACK RatVT(millis(), "RatVT", 4);
+POSTRACK RobVT(millis(), "RobVT", 4);
+POSTRACK RatPixy(millis(), "RatPixy", 6);
+PID Pid(millis(), kC, pC, pidSetPoint);
+BULLDOZE Bull(millis());
+TARGET Targ(millis());
+REWARD Reward(millis(), dt_blockRew);
+LOGGER Log(millis());
 
 #pragma endregion 
 
@@ -909,14 +930,16 @@ void PrintDebug();
 void PrintLCD(char msg_1[], char msg_2[] = { 0 }, char f_siz = 's');
 // CLEAR LCD
 void ClearLCD();
+// PRINT SPECIAL CHARICTERS
+char* PrintSpecialChars(char chr, bool do_show_byte = false);
 // CHECK AUTODRIVER BOARD STATUS
 int CheckAD_Status(uint16_t stat_reg, String stat_str);
+// CHECK LOOP TIME AND MEMORY
+void CheckLoop(int free_mem);
 // GET ID INDEX
-int CharInd(char id, char id_arr[], int arr_size);
+int CharInd(char id, const char id_arr[], int arr_size);
 // BLINK LEDS AT RESTART/UPLOAD
-void ResetBlink(int n_blinks);
-// BLINK LEDS AT SETUP
-void SetupBlink();
+void StatusBlink(int n_blinks, int dt_led = 0);
 // BLICK LEDS WHEN RAT FIRST DETECTED
 void RatInBlink();
 // HALT RUN ON IR TRIGGER
@@ -931,8 +954,9 @@ void Interupt_IR_Detect();
 
 #pragma region ----------CLASS: POSTRACK----------
 
-POSTRACK::POSTRACK(String obj_id, int l)
+POSTRACK::POSTRACK(uint32_t t, String obj_id, int l)
 {
+	this->t_init = t;
 	this->objID = obj_id;
 	this->nSamp = l;
 	for (int i = 0; i < l; i++) this->posArr[i] = 0.0f;
@@ -1055,8 +1079,9 @@ void POSTRACK::SetPos(float set_pos, float set_laps)
 
 #pragma region ----------CLASS: PID----------
 
-PID::PID(const float kC, const float pC, const float set_point)
+PID::PID(uint32_t t, const float kC, const float pC, const float set_point)
 {
+	this->t_init = t;
 	this->kP = 0.6 * kC; // proportional constant
 	this->kI = 2 * kP / pC; // integral constant
 	this->kD = kP*pC / 8; // derivative constant
@@ -1508,6 +1533,11 @@ float PID::RunPidCalibration()
 
 #pragma region ----------CLASS: BULLDOZE----------
 
+BULLDOZE::BULLDOZE(uint32_t t)
+{
+	this->t_init = t;
+}
+
 void BULLDOZE::UpdateBull()
 {
 	// Check who has motor control
@@ -1744,6 +1774,11 @@ void BULLDOZE::PrintBull(char msg[])
 
 #pragma region ----------CLASS: TARGET----------
 
+TARGET::TARGET(uint32_t t)
+{
+	this->t_init = t;
+}
+
 bool TARGET::CompTarg(float now_pos, float targ_pos, float offset)
 {
 	// Local vars
@@ -1878,8 +1913,9 @@ void TARGET::Reset()
 
 #pragma region ----------CLASS: REWARD----------
 
-REWARD::REWARD(int t_b)
+REWARD::REWARD(uint32_t t, int t_b)
 {
+	this->t_init = t;
 	this->dt_block = t_b;
 	this->duration = 2000;
 	this->durationByte = (byte)(duration / 10);
@@ -2304,6 +2340,11 @@ void REWARD::Reset()
 
 #pragma region ----------CLASS: LOGGER----------
 
+LOGGER::LOGGER(uint32_t t)
+{
+	this->t_init = t;
+}
+
 bool LOGGER::Setup()
 {
 	/*
@@ -2437,12 +2478,22 @@ bool LOGGER::SetToCmdMode()
 	while (
 		millis() < t_timeout &&
 		match != '>'
-		)
-	{
+		) {
 		match = SendCommand(rstArr);
-		delay(10);
 	}
 	pass = match == '>' ? true : false;
+
+	// Pause to let OpenLog get its shit together
+	if (pass) {
+		delay(100);
+	}
+	// Log/print error
+	else {
+		char str[100];
+		sprintf(str, "!!ERROR!! LOGGER::SetToCmdMode Failed: mode=%c", mode);
+		DebugError(str);
+	}
+
 	return pass;
 }
 
@@ -2482,7 +2533,7 @@ char LOGGER::SendCommand(char msg[], bool do_comf)
 	{
 		PrintLOGGER("SENT[=======================", true);
 		for (int i = 0; i < strlen(msg) + 1; i++)
-			PrintLOGGER(PrintEscChar(msg[i]));
+			PrintLOGGER(PrintSpecialChars(msg[i]));
 		PrintLOGGER("\n=======================]SENT\n\n");
 	}
 
@@ -2558,6 +2609,9 @@ char LOGGER::GetReply(uint32_t timeout)
 				pass = true;
 		}
 	}
+	// Set null terminator
+	rcvdArr[arr_ind + 1] = '\0';
+
 	if (db.print_o2a)
 		PrintLOGGER("\n===================]RCVD_FORMATED\n");
 
@@ -2565,13 +2619,12 @@ char LOGGER::GetReply(uint32_t timeout)
 	if (db.print_o2aRaw)
 	{
 		PrintLOGGER("RCVD_RAW[==============", true);
-		for (int i = 0; i <= arr_ind; i++)
+		for (int i = 0; i <= arr_ind + 1; i++)
 		{
-			//sprintf(str, "[%d]\'%s\'", rcvdArr[i], PrintEscChar(rcvdArr[i]));
-			sprintf(str, "\'%s\'", PrintEscChar(rcvdArr[i]));
+			//sprintf(str, "[%d]\'%s\'", rcvdArr[i], PrintSpecialChars(rcvdArr[i]));
+			sprintf(str, "\'%s\'", PrintSpecialChars(rcvdArr[i]));
 			PrintLOGGER(str);
 		}
-		rcvdArr[arr_ind + 1] = '\0';
 		PrintLOGGER("\n==============]RCVD_RAW\n");
 	}
 
@@ -2623,14 +2676,21 @@ char LOGGER::GetReply(uint32_t timeout)
 		PrintLOGGER(str);
 	}
 
+	// Log/print error
+	if (!pass) {
+		sprintf(str, "!!ERROR!! LOGGER::GetReply Timedout: dt=%d bytes_read=%d", timeout, arr_ind);
+		DebugError(str);
+	}
+
 	// Return cmd 
 	return cmd_reply;
 }
 
 bool LOGGER::SetToLogMode()
 {
-	// Local vars
+	// Local varsFINISHED: OpenLog Setup
 	char str[100] = { 0 };
+	bool pass = false;
 
 	// Check if already in log mode
 	if (mode == '<')
@@ -2638,230 +2698,282 @@ bool LOGGER::SetToLogMode()
 
 	// Send append file command
 	sprintf(str, "append %s\r", logFile);
-	if (SendCommand(str) == '!')
-		return false;
-	return true;
+	if (SendCommand(str) != '!')
+		pass = true;
+
+	// Pause to let OpenLog get its shit together
+	if (pass) {
+		delay(100);
+	}
+	// Log/print error
+	else {
+		sprintf(str, "!!ERROR!! LOGGER::SetToLogMode Failed: mode=%c", mode);
+		DebugError(str);
+	}
+
+	return pass;
 }
 
 bool LOGGER::StoreLogEntry(char msg[], uint32_t t)
 {
+	/*
+	STORE LOG DATA FOR CS
+	FORMAT: "[log_cnt],ts_ms,message,\r\n"
+	*/
+
 	// Local vars
 	uint32_t t_timeout = millis() + 1000;
-	char str[200] = { 0 };
+	char msg_out[200] = { 0 };
+	char str[200];
 	uint32_t t_m = 0;
 
 	// Send
 	if (mode == '<')
 	{
-		// itterate count
-		cntLogStored++;
-
 		// Get sync correction
 		t_m = t - t_sync;
 
+		// itterate count
+		cntLogStored++;
+
 		// Put it all together
-		sprintf(str, "[%d],%lu,%s\n", cntLogStored, t_m, msg);
+		sprintf(msg_out, "[%d],%lu,%s\r\n", cntLogStored, t_m, msg);
 
 		// Send it
-		Serial3.write(str);
+		Serial3.write(msg_out);
 		t_write = millis();
 
-		// Print sent
-		if (db.print_logging)
-		{
-			PrintLOGGER("LOG[========================", true);
-			for (int i = 0; i < strlen(str) + 1; i++)
-				PrintLOGGER(PrintEscChar(str[i]));
-			PrintLOGGER("\n========================]LOG\n\n");
+		// Print stored log
+		if (db.print_logging) {
+			msg_out[strlen(msg_out) - 1] = '\0';
+			sprintf(str, "stored log %d: \"%s\"", cntLogStored, msg_out);
+			StoreDBPrintStr(str, millis());
 		}
 
 		// Return success
 		return true;
 	}
-	else return false;
+	else
+		return false;
 }
 
 bool LOGGER::SendLogEntry()
 {
 	// Local vars
-	const static int read_len = 200;
-	static bool do_retry_send = false;
-	static int log_ind = 0;
+	const int timeout = 1000;
+	uint32_t t_timeout = millis() + timeout;
+	const static int read_len = 70;
+	static bool is_msg_ready = false;
+	static int log_ind[2] = { 0, read_len };
 	static char msg_out[200] = { 0 };
 	static int msg_lng = 0;
+	static int log_num = 0;
 	char num_str[10] = { 0 };
 	char msg_in[200] = { 0 };
-	uint32_t t_timeout = millis() + 1000;
 	int log_bound[2] = { 0 };
 	char str[200] = { 0 };
-	int log_num = 0;
 	byte chksum = 0;
+	bool pass = false;
+
+	// Bail if all logs sent
+	if (isAllSent)
+		return false;
 
 	// Make sure in command mode
 	if (!SetToCmdMode())
 		return false;
 
-	// Check if all sent
-	if (cntLogSent < cntLogStored)
+	// Check if resending last log
+	if (
+		!fc.doLogResend &&
+		!is_msg_ready
+		)
 	{
-		// Check if resending last log
-		if (
-			!fc.doLogResend &&
-			!do_retry_send
-			)
-		{	// Send command to read
-			sprintf(str, "read %s %d %d\r", logFile, log_ind, read_len);
-			SendCommand(str, false);
+		// Send command to read
+		sprintf(str, "read %s %d %d\r", logFile, log_ind[0], log_ind[1]);
+		SendCommand(str, false);
 
-			// Get entry bounds
-			int i = 0;
-			while (millis() < t_timeout)
+		// Get entry bounds
+		int read_ind = 0;
+		while (millis() < t_timeout)
+		{
+			if (Serial3.available() > 0)
 			{
-				if (Serial3.available() > 0)
-				{
-					// Get next byte
-					msg_in[i] = Serial3.read();
+				// Get next byte
+				msg_in[read_ind] = Serial3.read();
 
-					// Check for start
-					if (log_bound[0] == 0 && i >= 2)
-						log_bound[0] =
-						msg_in[i - 2] == '\r' && msg_in[i - 1] == '\n' ?
-						i : log_bound[0];
-					// Check for end
-					else if (log_bound[0] != 0)
-						log_bound[1] =
-						msg_in[i] == '\n' ?
-						i - 1 : log_bound[1];
+				// Check for start
+				if (log_bound[0] == 0 && read_ind >= 2)
+					log_bound[0] =
+					msg_in[read_ind - 2] == '\r' && msg_in[read_ind - 1] == '\n' ?
+					read_ind : log_bound[0];
 
-					// Break
-					if (log_bound[1] != 0)
-						break;
+				// Check for end
+				else if (log_bound[0] != 0)
+					log_bound[1] =
+					msg_in[read_ind - 1] == '\r' && msg_in[read_ind] == '\n' ?
+					read_ind - 2 : log_bound[1];
 
-					// Itterate
-					i++;
+				// Break
+				if (log_bound[1] != 0) {
+					pass = true;
+					break;
 				}
+
+				// Itterate
+				read_ind++;
 			}
-
-			// Get length
-			chksum = log_bound[1] - log_bound[0] + 1;
-
-			// Get log number
-			int ii = 0;
-			for (int i = strcspn(msg_in, "[") + 1; i < strcspn(msg_in, "]"); i++) {
-				num_str[ii] = msg_in[i];
-				ii++;
-			}
-			num_str[ii + 1] = '\0';
-			log_num = atoi(num_str);
-
-			// Load byte array
-			msg_lng = 0;
-			// head
-			msg_out[msg_lng++] = r2c.head;
-			// id
-			msg_out[msg_lng++] = 'U';
-			// checksum
-			msg_out[msg_lng++] = chksum;
-			// msg
-			for (int i = log_bound[0]; i <= log_bound[1]; i++)
-				msg_out[msg_lng++] = msg_in[i];
-			// foot
-			msg_out[msg_lng++] = r2c.foot;
-			// null
-			msg_out[msg_lng + 1] = '\0';
-
-			// Update log ind
-			log_ind = log_ind + chksum + 1;
 		}
 
-		// Exit if not ready to send
-		if (
-			millis() < t_sent + dt_logSent ||
-			millis() < t_rcvd + dt_logRcvd ||
-			Serial1.availableForWrite() < msg_lng + 10 ||
-			Serial1.available() > 0
-			) {
-			// Resend on next pass
-			do_retry_send = true;
+		// Check if timedout
+		if (!pass) {
+			// Print error
+			sprintf(str, "!!ERROR!! LOGGER::SendLogEntry Timedout: dt-%dms bytes_read=%d", timeout, read_ind);
+			DebugError(str);
+
+			// Set flag so read is attempted again
+			is_msg_ready = false;
 			return false;
 		}
 
-		// Send data
-		Serial1.write(msg_out, msg_lng);
+		// Get length
+		chksum = log_bound[1] - log_bound[0] + 1;
 
-		// Itterate count
-		cntLogSent++;
+		// Get log number
+		int ii = 0;
+		for (int i = strcspn(msg_in, "[") + 1; i < strcspn(msg_in, "]"); i++) {
+			num_str[ii] = msg_in[i];
+			ii++;
+		}
+		num_str[ii + 1] = '\0';
+		log_num = atoi(num_str);
 
-		// TEMP
-		if (cntLogSent != log_num)
-		{
-			millis();
-			sprintf(str, "!!ERROR!! MISSED LOG: \ncnt=%d\nred=%d\n", cntLogSent, log_num);
+		// Check if log numbers dont match up
+		if (cntLogSent + 1 != log_num) {
+			sprintf(str, "!!ERROR!! LOGGER::SendLogEntry Wrong/Corrupted Log: cnt=%d read=%d", cntLogSent, log_num);
 			DebugError(str);
+
+			// TEMP
+			SerialUSB.print("\nmsg_in-------------------\n");
+			for (int i = 0; i < strlen(msg_in) + 1; i++)
+			{
+				sprintf(str, "%s", PrintSpecialChars(msg_in[i]));
+				SerialUSB.print(str);
+			}
+			SerialUSB.print("-------------------------\n");
+
+			// Set flag so read is attempted again
+			is_msg_ready = false;
+			return false;
 		}
 
-		// Dump rest of buffer
-		if (Serial3.available() > 0)
-			while (Serial3.read() != '>');
+		// Load byte array
+		msg_lng = 0;
+		// head
+		msg_out[msg_lng++] = r2c.head;
+		// id
+		msg_out[msg_lng++] = 'U';
+		// checksum
+		msg_out[msg_lng++] = chksum;
+		// msg
+		for (int i = log_bound[0]; i <= log_bound[1]; i++)
+			msg_out[msg_lng++] = msg_in[i];
+		// foot
+		msg_out[msg_lng++] = r2c.foot;
+		// null
+		msg_out[msg_lng] = '\0';
 
-		// Print
-		if (db.print_logging)
-		{
-			sprintf(str, "%s log: \"%s\"", fc.doLogResend ? "!!ERROR!! resent" : "sent", msg_out);
-			PrintLOGGER(str, true);
-		}
+		// Update log ind to exclude terminating '\r' '\n'
+		log_ind[0] = log_ind[0] + chksum + 2;
+		log_ind[1] = log_ind[0] + read_len;
 
-		// Reset flags
-		do_retry_send = false;
-		fc.doLogSend = false;
-		fc.doLogResend = false;
+		//// TEMP
+
+		//PrintLOGGER("\n\nmsg_in\n");
+		//for (int i = 0; i < strlen(msg_in) + 1; i++)
+		//{
+		//	sprintf(str, "%s", PrintSpecialChars(msg_in[i]));
+		//	PrintLOGGER(str);
+		//}
+
+		//PrintLOGGER("\n\nmsg_out\n");
+		//for (int i = 0; i < strlen(msg_out) + 1; i++)
+		//{
+		//	sprintf(str, "%s", PrintSpecialChars(msg_out[i]));
+		//	PrintLOGGER(str);
+		//}
+		//PrintLOGGER("\n\n");
+
+		//sprintf(str, "\n\npass=%s\nlog_bound[0]=%d\nlog_bound[1]=%d\nread_ind=%d\n\n", pass ? "true" : "false", log_bound[0], log_bound[1], read_ind);
+		//PrintLOGGER(str);
+
 
 	}
-	else
+
+	// Exit if not ready to send
+	if (
+		millis() < t_sent + dt_logSent ||
+		millis() < t_rcvd + dt_logRcvd ||
+		Serial1.availableForWrite() < msg_lng + 10 ||
+		Serial1.available() > 0
+		) {
+		// Resend on next pass
+		is_msg_ready = true;
+		return false;
+	}
+
+	//TEMP
+	//PrintLOGGER(msg_out, true);
+
+	// Send data
+	Serial1.write(msg_out, msg_lng);
+	delay(100);
+
+	// Itterate count
+	cntLogSent++;
+
+	// Print send status
+	if (db.print_logging) {
+		sprintf(str, "sent log: cnt=%d/%d range=%d-%d msg=\"%s\"", cntLogSent, cntLogStored, log_ind[0], log_ind[1], msg_out);
+		StoreDBPrintStr(str, millis());
+	}
+
+	// Print error if log was resent
+	if (fc.doLogResend) {
+		sprintf(str, "!!ERROR!! LOGGER::SendLogEntry Resent: cnt=%d/%d range=%d-%d msg=\"%s\"", cntLogSent, cntLogStored, log_ind[0], log_ind[1], msg_out);
+		DebugError(str);
+	}
+
+	// TEMP
+	// Make sure all read in
+	pass = false;
+	while (millis() < t_timeout) {
+		if (Serial3.available() > 0) {
+			if (Serial3.read() == '>') {
+				pass = true;
+				break;
+			}
+		}
+	}
+	if (!pass)
+		SerialUSB.print("!!ERROR!! LOGGER::SendLogEntry Failed to Empty Buffer\n");
+
+	// Reset flags
+	is_msg_ready = false;
+	fc.doLogSend = false;
+	fc.doLogResend = false;
+
+	// Check if all sent
+	if (cntLogSent == cntLogStored)
 	{
+		// Send confirm done
+		StorePacketData('c', 'D', 255, donePack);
+		DebugFlow("LOG SEND COMPLETE");
+		fc.doLogSend = false;
+
 		// Set flag
-		logCleared = true;
+		isAllSent = true;
 	}
-}
-
-char* LOGGER::PrintEscChar(char chr)
-{
-	/*
-	Character					ASCII Representation	ASCII Value		Escape Sequence
-	---------                   --------------------    -----------     ---------------
-	Newline						NL(LF)					10				\n
-	Horizontal tab				HT						9				\t
-	Vertical tab				VT						11				\v
-	Backspace					BS						8				\b
-	Carriage return				CR						13				\r
-	Formfeed					FF						12				\f
-	Alert						BEL						7				\a
-	Backslash					\						92				\\
-	Question mark				?						63				\?
-	Single quotation mark		'						39				\'
-	Double quotation mark		"						34				\"
-	Null character				NUL						0				\0
-	*/
-
-	// Local vars
-	char *str = new char[20];
-	byte b = chr;
-	switch (b) {
-	case 10: sprintf(str, "\\n\n"); break;
-	case 9: sprintf(str, "\\t\t"); break;
-	case 11: sprintf(str, "\\v\v"); break;
-	case 8: sprintf(str, "\\b\b"); break;
-	case 13: sprintf(str, "\\r\r"); break;
-	case 12: sprintf(str, "\\f\f"); break;
-	case 7: sprintf(str, "\\a\a"); break;
-	case 92: sprintf(str, "\\\\\\"); break;
-	case 63: sprintf(str, "\\?\?"); break;
-		//case 39: sprintf(str, "\\'\""); break;
-		//case 34: sprintf(str, "\\\"\""); break;
-	case 0: sprintf(str, "\\0\0"); break;
-	default: sprintf(str, "%c", b); break;
-	}
-	return str;
 }
 
 void LOGGER::PrintLOGGER(char msg[], bool start_entry)
@@ -2921,7 +3033,7 @@ void GetSerial()
 
 	// Dump data till msg header byte is reached
 	buff = WaitBuffRead(c2r.head, a2r.head);
-	if (buff == 255)
+	if (buff == 0)
 	{
 		return;
 	}
@@ -3188,10 +3300,6 @@ byte WaitBuffRead(char chr1, char chr2)
 	byte buff = 0;
 	bool pass = false;
 
-	// Convert char to byte
-	byte match1 = chr1 == '\0' ? 255 : byte(chr1);
-	byte match2 = chr2 == '\0' ? 255 : byte(chr2);
-
 	// Check for overflow
 	if (Serial1.available() < SERIAL_BUFFER_SIZE - 1)
 	{
@@ -3200,7 +3308,7 @@ byte WaitBuffRead(char chr1, char chr2)
 			millis() < t_timeout);
 
 		// Store next byte
-		if (match1 == 255)
+		if (chr1 == '\0')
 		{
 			if (Serial1.available() > 0)
 			{
@@ -3219,12 +3327,12 @@ byte WaitBuffRead(char chr1, char chr2)
 					buff = Serial1.read(); // dump
 				}
 			} while (
-				buff != match1  &&
-				buff != match2  &&
+				buff != chr1  &&
+				buff != chr2  &&
 				millis() < t_timeout &&
 				Serial1.available() < SERIAL_BUFFER_SIZE - 1);
 			// check match was found
-			if (buff == match1 || buff == match2)
+			if (buff == chr1 || buff == chr2)
 			{
 				pass = true;
 			}
@@ -3234,6 +3342,7 @@ byte WaitBuffRead(char chr1, char chr2)
 	// Failed
 	if (!pass)
 	{
+		char str[100];
 
 		// Buffer flooded
 		if (Serial1.available() >= SERIAL_BUFFER_SIZE - 1)
@@ -3244,20 +3353,24 @@ byte WaitBuffRead(char chr1, char chr2)
 				Serial1.read();
 			}
 			cnt_overflowEvt++;
+			// Log/print error
+			sprintf(str, "!!ERROR!! WaitBuffRead(): Buffer Overflowed RX = %d", Serial1.available());
 		}
-
 		// Timed out
-		if (millis() > t_timeout)
-		{
+		else if (millis() > t_timeout) {
 			cnt_timeoutEvt++;
+			// Log/print error
+			sprintf(str, "!!ERROR!! WaitBuffRead(): Timeout %d", cnt_timeoutEvt);
+		}
+		// Byte not found
+		else if (chr1 != '\0' || chr2 != '\0') {
+			// Log/print error
+			sprintf(str, "!!ERROR!! WaitBuffRead(): Char %c and %c Not Found", chr1, chr2);
 		}
 
-		// Set buff to 255 ((byte)-1) if !pass
-		buff = 255;
+		// Set buff to '\0' ((byte)-1) if !pass
+		buff = '\0';
 	}
-
-	// Store time
-	t_loopRead = millis() - (t_timeout - timeout);
 
 	// Return buffer
 	return buff;
@@ -3268,7 +3381,7 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
-	FORMAT: head, id, data, packet num, do confirm, footer
+	FORMAT: [0]head, [1]id, [2]dat, [3]pack, [4]do_conf, [5]footer, [6]targ
 	*/
 
 	// Local vars
@@ -3281,16 +3394,16 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 	if (targ == 'a')
 	{
 		// Shift data back so ard msg is first in queue
-		for (int i = 0; i < r2_lngR - 1; i++)
+		for (int i = 0; i < sendQueueRows - 1; i++)
 		{
-			for (int j = 0; j < r2_lngC; j++)
+			for (int j = 0; j < sendQueueCols; j++)
 			{
-				r2_queue[i][j] = r2_queue[i + 1][j];
+				sendQueue[i][j] = sendQueue[i + 1][j];
 			}
 		}
 
 		// Set queue ind to front
-		queue_ind = r2_lngR - 1;
+		queue_ind = sendQueueRows - 1;
 
 		// Itterate r2a packet number
 		if (pack == 0)
@@ -3332,23 +3445,23 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 	sendQueueInd--;
 
 	// Store reciever id in last col
-	r2_queue[queue_ind][r2_lngC - 1] = targ;
+	sendQueue[queue_ind][sendQueueCols - 1] = targ;
 
 	// Store header
-	r2_queue[queue_ind][0] = head;
+	sendQueue[queue_ind][0] = head;
 	// Store mesage id
-	r2_queue[queue_ind][1] = id;
+	sendQueue[queue_ind][1] = id;
 	// Store mesage data 
-	r2_queue[queue_ind][2] = d1;
+	sendQueue[queue_ind][2] = d1;
 	// Store packet number
 	U.f = 0.0f;
 	U.i16[0] = pack;
-	r2_queue[queue_ind][3] = U.b[0];
-	r2_queue[queue_ind][4] = U.b[1];
+	sendQueue[queue_ind][3] = U.b[0];
+	sendQueue[queue_ind][4] = U.b[1];
 	// Store get_confirm request
-	r2_queue[queue_ind][5] = do_conf ? 1 : 0;
+	sendQueue[queue_ind][5] = do_conf ? 1 : 0;
 	// Store footer
-	r2_queue[queue_ind][6] = foot;
+	sendQueue[queue_ind][6] = foot;
 
 	// Set to send
 	doPackSend = true;
@@ -3358,8 +3471,13 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 // SEND SERIAL PACKET DATA
 void SendPacketData()
 {
+	/*
+	STORE DATA FOR CHEETAH DUE
+	FORMAT: [0]head, [1]id, [2]dat, [3]pack, [4]do_conf, [5]footer, [6]targ
+	*/
+
 	// Local vars
-	const int msg_lng = r2_lngC - 1;
+	const int msg_lng = sendQueueCols - 1;
 	static byte msg[msg_lng] = { 0 };
 	char targ = '\0';
 	bool do_send = false;
@@ -3370,7 +3488,7 @@ void SendPacketData()
 	int id_ind = 0;
 
 	// pull out msg id
-	id = r2_queue[r2_lngR - 1][1];
+	id = sendQueue[sendQueueRows - 1][1];
 	// dat
 	dat = msg[2];
 	// pack
@@ -3381,17 +3499,17 @@ void SendPacketData()
 	// do_conf 
 	do_conf = msg[5] == 1 ? true : false;
 	// targ
-	targ = r2_queue[r2_lngR - 1][r2_lngC - 1];
+	targ = sendQueue[sendQueueRows - 1][sendQueueCols - 1];
 
 	// Move next in queue to temp msg array
 	for (int j = 0; j < msg_lng; j++)
 	{
-		msg[j] = r2_queue[r2_lngR - 1][j];
+		msg[j] = sendQueue[sendQueueRows - 1][j];
 	}
 
-	// Send r2a sync time or rew tone immediately
+	// Send sync time or rew tone immediately
 	if (
-		id == 'r' &&
+		(id == 'r' || id == '+') &&
 		Serial1.availableForWrite() > msg_lng + 10 &&
 		Serial1.available() < 100
 		)
@@ -3439,21 +3557,21 @@ void SendPacketData()
 		sendQueueInd++;
 
 		// Remove sent msg from front of queue
-		for (int i = r2_lngR - 1; i >= 1; i--)
+		for (int i = sendQueueRows - 1; i >= 1; i--)
 		{
-			for (int j = 0; j < r2_lngC; j++)
+			for (int j = 0; j < sendQueueCols; j++)
 			{
-				r2_queue[i][j] = r2_queue[i - 1][j];
+				sendQueue[i][j] = sendQueue[i - 1][j];
 			}
 		}
 		// Set first entry to all zeros
-		for (int j = 0; j < r2_lngC; j++)
+		for (int j = 0; j < sendQueueCols; j++)
 		{
-			r2_queue[0][j] = 0;
+			sendQueue[0][j] = 0;
 		}
 
 		// Set to not send again if all sent
-		if (sendQueueInd == r2_lngR - 1)
+		if (sendQueueInd == sendQueueRows - 1)
 		{
 			doPackSend = false;
 		}
@@ -3690,10 +3808,20 @@ void AD_Reset()
 void AD_CheckOC()
 {
 	// Local vars
+	static uint32_t t_checkAD = 0;
+	static bool dp_disable = false;
+	static int cnt_errors = 0;
+	char str[100] = { 0 };
 	int ocd_r;
 	int ocd_f;
 
-	if (millis() > t_checkAD)
+	if (dp_disable)
+		return;
+
+	if (
+		millis() > t_checkAD &&
+		cnt_errors < 5
+		)
 	{
 		adR_stat = AD_R.getStatus();
 		ocd_r = CheckAD_Status(adR_stat, "OCD");
@@ -3703,15 +3831,22 @@ void AD_CheckOC()
 		// Check for overcurrent shut down
 		if (ocd_r == 0 || ocd_f == 0)
 		{
-			char str[100] = { 0 };
 			sprintf(str, "!!ERROR!! AD OCD: R_OCD=%d F_OCD=%d", ocd_r, ocd_f);
 			DebugError(str);
+			cnt_errors++;
 			//AD_Reset();
 		}
 
 		// Set next check
 		t_checkAD = millis() + dt_checkAD;
 	}
+	// Disable error checking after 5 hits
+	else if (cnt_errors >= 5) {
+		sprintf(str, "!!ERROR!! DISABLED AD CHECK AFTER %d ERRORS", cnt_errors);
+		DebugError(str);
+		dp_disable = true;
+	}
+
 }
 
 // HARD STOP
@@ -4314,7 +4449,7 @@ bool GetButtonInput()
 	if (digitalRead(pin.Btn[btn_ind]) == LOW)
 	{
 		// exit if < debounce time has not passed
-		if (t_debounce[btn_ind] > millis()) return;
+		if (t_debounce[btn_ind] > millis()) return false;
 
 		// Set to start reward function
 		btn_doRew = true;
@@ -4337,7 +4472,7 @@ bool GetButtonInput()
 		)
 	{
 		// exit if < debounce time has not passed
-		if (t_debounce[btn_ind] > millis()) return;
+		if (t_debounce[btn_ind] > millis()) return false;
 
 		// Get long hold time
 		dt_hold[btn_ind] = millis() + dt_long_hold;
@@ -4385,7 +4520,7 @@ bool GetButtonInput()
 	if (digitalRead(pin.Btn[btn_ind]) == LOW)
 	{
 		// exit if < 250 ms has not passed
-		if (t_debounce[btn_ind] > millis()) return;
+		if (t_debounce[btn_ind] > millis()) return false;
 
 		// Set flag to change lcd state
 		btn_doChangeLCDstate = true;
@@ -4586,11 +4721,9 @@ void DebugRcvd(char from, char id, uint16_t pack)
 void DebugSent(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 {
 	// Local vars
-	bool do_print = ((db.print_r2c && targ == 'c') ||
-		(db.print_r2a && targ == 'a')) &&
+	bool do_print = ((db.print_r2c && targ == 'c') || (db.print_r2a && targ == 'a')) &&
 		(db.Console || db.LCD);
-	bool do_log = ((db.log_r2c && targ == 'c') ||
-		(db.log_r2a && targ == 'a')) &&
+	bool do_log = ((db.log_r2c && targ == 'c') || (db.log_r2a && targ == 'a')) &&
 		db.Log;
 
 	if (do_print || do_log)
@@ -4614,17 +4747,30 @@ void DebugSent(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 void StoreDBPrintStr(char msg[], uint32_t t)
 {
 	// Local vars
-	static uint32_t t_ts_last = millis();
-	char msg_print[200] = { 0 };
+	char msg_store[200] = { 0 };
 	char str_tim[200] = { 0 };
 	uint32_t t_m = 0;
 	float t_s = 0;
-	float t_ellapsed = 0;
+
+	// Make sure data should be printed
+	if (!db.LCD && !db.Console)
+		return;
 
 	// Shift queue
-	for (int r = 0; r < queueRows - 1; r++)
-		for (int c = 0; c < queueCols; c++)
-			queueList[r][c] = queueList[r + 1][c];
+	for (int r = 0; r < printQueueRows - 1; r++)
+		for (int c = 0; c < printQueueCols; c++)
+			printQueue[r][c] = printQueue[r + 1][c];
+
+	// Set queue ind and check for overflow
+	if (printQueueInd == 0)
+	{
+		// Store error so this is printed
+		char err_str[100] = "!!ERROR!! PRINT QUEUE OVERFLOWED";
+		for (int c = 0; c < strlen(err_str) + 1; c++)
+			msg[c] = err_str[c];
+	}
+	else
+		printQueueInd--;
 
 	// Get sync correction
 	t_m = t - t_sync;
@@ -4632,29 +4778,25 @@ void StoreDBPrintStr(char msg[], uint32_t t)
 	// Convert to seconds
 	t_s = (float)(t_m) / 1000.0f;
 
-	// Ellapsed time
-	t_ellapsed = (float)((millis() - t_ts_last) / 1000.0f);
-	t_ts_last = millis();
-
-	// Save long and short string
+	// Make time string
 	sprintf(str_tim, "[%0.2fs]", t_s);
 
-	// Set first entry to new string 
-	if (db.LCD)
-		sprintf(msg_print, "[%0.0fs] %s%s", t_ellapsed, msg);
-	else if (db.Console)
-		sprintf(msg_print, "%s", msg);
+	// Get string with time
+	char spc[50] = { 0 };
+	char arg[50] = { 0 };
+	sprintf(arg, "%%%ds", 20 - strlen(str_tim));
+	sprintf(spc, arg, '_');
 
-	// Store new entry including '\0'
-	for (int c = 0; c < strlen(msg_print) + 1; c++)
-		queueList[queueRows - 1][c] = msg_print[c];
+	// Put it all together
+	char msg_send[200] = { 0 };
+	sprintf(msg_store, "%s%s%s\n", str_tim, spc, msg);
 
-	// Save total time  including '\0' to last row
-	for (int c = 0; c < strlen(str_tim) + 1; c++)
-		queueList[0][c] = str_tim[c];
-
-	// Set queue ind
-	queueInd--;
+	// Store current message
+	for (int c = 0; c < printQueueCols; c++) {
+		printQueue[printQueueRows - 1][c] = msg_store[c];
+		if (printQueue[printQueueRows - 1][c] == '\0')
+			break;
+	}
 
 	// Set flag
 	doPrint = true;
@@ -4664,11 +4806,9 @@ void StoreDBPrintStr(char msg[], uint32_t t)
 void PrintDebug()
 {
 	// Local vars 
-	static int scale_ind = 40 / queueRows;
+	static int scale_ind = 40 / printQueueRows;
 	int lcd_pos = 0;
-	char str_tim[50] = { 0 };
-	char str_msg[200] = { 0 };
-
+	char msg_print[200] = { 0 };
 
 	// Avoid overlap between sent or rcvd events
 	if (millis() < t_sent + dt_sendSent ||
@@ -4680,9 +4820,19 @@ void PrintDebug()
 	if ((db.LCD && !doBlockLCDlog) ||
 		db.Console)
 	{
-		// Get time string including '\0'
-		for (int c = 0; c < queueCols + 1; c++)
-			str_tim[c] = queueList[0][c];
+		// Print to console
+		if (db.Console)
+		{
+			// Get current message
+			for (int c = 0; c < printQueueCols; c++) {
+				msg_print[c] = printQueue[printQueueInd][c];
+				if (msg_print[c] == '\0')
+					break;
+			}
+
+			// Print
+			SerialUSB.print(msg_print);
+		}
 
 		// Print to LCD
 		if (db.LCD && !doBlockLCDlog)
@@ -4695,58 +4845,36 @@ void PrintDebug()
 			LCD.clrScr();
 			LCD.update();
 
-			// Print time entry
-			LCD.print(str_tim, LEFT, lcd_pos);
-
 			// Print all entries
-			for (int r = queueRows - 1; r >= queueRows - 9; r--)
+			for (int r = printQueueRows - 1; r >= printQueueRows - 9; r--)
 			{
 				// Break for empty strings
-				if (queueList[r][0] == '\0')
+				if (printQueue[r][0] == '\0')
 					break;
 
 				// Get pos ind
 				lcd_pos += 6;
 
 				// Print next entry including '\0'
-				for (int c = 0; c < queueCols + 1; c++)
-					str_msg[c] = queueList[r][c];
-				LCD.print(str_msg, LEFT, lcd_pos);
+				for (int c = 0; c < printQueueCols; c++) {
+					msg_print[c] = printQueue[r][c];
+					if (msg_print[c] == '\0')
+						break;
+				}
+				LCD.print(msg_print, LEFT, lcd_pos);
 
 				// Update
 				LCD.update();
 			}
 		}
 
-		// Print to console
-		if (db.Console)
-		{
-			// Get current message
-			for (int c = 0; c < queueCols + 1; c++)
-				str_msg[c] = queueList[queueInd][c];
-
-			// Get string with time
-			char str[200] = { 0 };
-			char spc[50] = { 0 };
-			char arg[50] = { 0 };
-			sprintf(arg, "%%%ds", 20 - strlen(str_tim));
-			sprintf(spc, arg, '_');
-
-			// Put it all together
-			sprintf(str, "%s%s%s\n", str_tim, spc, str_msg);
-
-			// Print
-			SerialUSB.print(str);
-		}
-
 		// Update queue index
-		queueInd++;
+		printQueueInd++;
 
 		// Set to not print again if all printed
-		if (queueInd == queueRows)
-		{
+		if (printQueueInd >= printQueueRows)
 			doPrint = false;
-		}
+
 	}
 }
 
@@ -4790,6 +4918,74 @@ void ClearLCD()
 
 	// Stop blocking LCD log
 	doBlockLCDlog = false;
+}
+
+// PRINT SPECIAL CHARICTERS
+char* PrintSpecialChars(char chr, bool do_show_byte)
+{
+	/*
+	Character					ASCII Representation	ASCII Value		Escape Sequence
+	---------                   --------------------    -----------     ---------------
+	Newline						NL(LF)					10				\n
+	Horizontal tab				HT						9				\t
+	Vertical tab				VT						11				\v
+	Backspace					BS						8				\b
+	Carriage return				CR						13				\r
+	Formfeed					FF						12				\f
+	Alert						BEL						7				\a
+	Backslash					\						92				\\
+	Question mark				?						63				\?
+	Single quotation mark		'						39				\'
+	Double quotation mark		"						34				\"
+	Null character				NUL						0				\0
+	*/
+
+	// Local vars
+	static char str[10] = { 0 };
+	byte b = chr;
+
+	for (int i = 0; i < 10; i++)
+		str[i] = '\0';
+
+	if (!do_show_byte)
+	{
+		// Get normal and special chars in quots
+		switch (b) {
+		case 10: sprintf(str, "\\n\n"); break;
+		case 9: sprintf(str, "\\t\t"); break;
+		case 11: sprintf(str, "\\v\v"); break;
+		case 8: sprintf(str, "\\b\b"); break;
+		case 13: sprintf(str, "\\r\r"); break;
+		case 12: sprintf(str, "\\f\f"); break;
+		case 7: sprintf(str, "\\a\a"); break;
+		case 92: sprintf(str, "\\\\"); break;
+		case 63: sprintf(str, "\\?\?"); break;
+		case 39: sprintf(str, "\\'\""); break;
+		case 34: sprintf(str, "\\\"\""); break;
+		case 0: sprintf(str, "\\0\0"); break;
+		default: sprintf(str, "%c", b); break;
+		}
+	}
+	else
+	{
+		switch (b) {
+		case 10: sprintf(str, "[10]\'\\n\'\n"); break;
+		case 9: sprintf(str, "[9]\'\\t\'\t"); break;
+		case 11: sprintf(str, "[11]\'\\v\'\v"); break;
+		case 8: sprintf(str, "[8]\'\\b\'\b"); break;
+		case 13: sprintf(str, "[13]\'\\r\'\r"); break;
+		case 12: sprintf(str, "[12]\'\\f\'\f"); break;
+		case 7: sprintf(str, "[7]\'\\a\'\a"); break;
+		case 92: sprintf(str, "[92]\'\\\'\\"); break;
+		case 63: sprintf(str, "[63]\'\\?\'\?"); break;
+		case 39: sprintf(str, "[39]\'\\'\'\""); break;
+		case 34: sprintf(str, "[34]\'\\\"\'\""); break;
+		case 0: sprintf(str, "[0]\'\\0\'\0"); break;
+		default: sprintf(str, "[%d]\'%c\'", b, b); break;
+		}
+	}
+
+	return str;
 }
 
 // CHECK AUTODRIVER BOARD STATUS
@@ -4843,15 +5039,65 @@ int CheckAD_Status(uint16_t stat_reg, String stat_str)
 	return (int)bit_val;
 }
 
+// CHECK LOOP TIME AND MEMORY
+void CheckLoop(int free_mem)
+{
+	// Local static vars
+	static int cnt_loop = 0;
+	static bool first_run = true;
+	static bool first_log = true;
+	static int last_mem = 0;
+	static uint32_t t_loop_last = millis();
+	static int dt_loop_last = 0;
+
+	cnt_loop++;
+	if (
+		first_log ||
+		first_run ||
+		cnt_loop % 1000 == 0
+		)
+	{
+		// Get current vals
+		int dt_mem = abs(free_mem - last_mem);
+		uint32_t t_loop = millis();
+		int dt_loop = t_loop - t_loop_last;
+		int dt_dt_loop = abs(dt_loop - dt_loop_last);
+
+		// Bail on first run
+		if (first_run) {
+			first_run = false;
+			return;
+		}
+
+		// Check for big changes
+		if (
+			first_log ||
+			dt_mem > 100 ||
+			dt_dt_loop > 1000
+			)
+		{
+			char str[200] = { 0 };
+			sprintf(str, "LOOP CHECK: loop=%d dt=%lums free_ram=%dKB", cnt_loop, dt_loop, free_mem);
+			DebugFlow(str);
+			first_log = false;
+		}
+
+		// Store vars
+		last_mem = free_mem;
+		t_loop_last = t_loop;
+		dt_loop_last = dt_loop;
+	}
+}
+
 #pragma endregion
 
 
 #pragma region --------MINOR FUNCTIONS---------
 
 // GET ID INDEX
-int CharInd(char id, char id_arr[], int arr_size)
+int CharInd(char id, const char id_arr[], int arr_size)
 {
-
+	// Return -1 if not found
 	int ind = -1;
 	for (int i = 0; i < arr_size; i++)
 	{
@@ -4859,50 +5105,35 @@ int CharInd(char id, char id_arr[], int arr_size)
 			ind = i;
 	}
 
+	// Print error if not found
+	if (ind == -1) {
+		char str[100];
+		sprintf(str, "!!ERROR!! FeederDue::CharInd: ID \'%c\' Not Found", id);
+		DebugError(str);
+	}
+
 	return ind;
 
 }
 
 // BLINK LEDS AT RESTART/UPLOAD
-void ResetBlink(int n_blinks)
+void StatusBlink(int n_blinks, int dt_led)
 {
 	int duty[2] = { 100, 0 };
 	bool is_on = false;
-	int dt = 100;
 	int cnt_blnk = 0;
 
 	// Flash sequentially
 	while (cnt_blnk <= n_blinks)
 	{
 		analogWrite(pin.Disp_LED, duty[(int)is_on]);
-		delay(dt);
+		delay(dt_led);
 		analogWrite(pin.TrackLED, duty[(int)is_on]);
-		delay(dt);
+		delay(dt_led);
 		analogWrite(pin.RewLED_R, duty[(int)is_on]);
-		delay(dt);
+		delay(100);
 		is_on = !is_on;
 		cnt_blnk = !is_on ? cnt_blnk + 1 : cnt_blnk;
-	}
-	// Reset LEDs
-	analogWrite(pin.Disp_LED, 0);
-	analogWrite(pin.TrackLED, trackLEDduty);
-	analogWrite(pin.RewLED_R, rewLEDmin);
-}
-
-// BLINK LEDS AT SETUP
-void SetupBlink()
-{
-	int duty[2] = { 100, 0 };
-	bool is_on = false;
-	int dt = 100;
-	// Flash sequentially
-	for (int i = 0; i < 10; i++)
-	{
-		analogWrite(pin.Disp_LED, duty[(int)is_on]);
-		analogWrite(pin.TrackLED, duty[(int)is_on]);
-		analogWrite(pin.RewLED_R, duty[(int)is_on]);
-		delay(dt);
-		is_on = !is_on;
 	}
 	// Reset LEDs
 	analogWrite(pin.Disp_LED, 0);
@@ -4975,17 +5206,33 @@ void Interupt_IR_Detect()
 
 void setup() {
 
-	// SHOW RESTART BLINK
-	ResetBlink(1);
+
 
 	// SET UP SERIAL STUFF
 	delayMicroseconds(100);
 
-	// Serial monitor
-	SerialUSB.begin(0);
-
 	// XBee
 	Serial1.begin(57600);
+
+	// Serial monitor
+	SerialUSB.begin(0);
+	if (db.Console)
+		while (!SerialUSB);
+
+	// PRINT SETUP RUNNING
+	char str[200];
+	sprintf(str, "RUNNING FeederDue::Setup: Free RAM = %dKB", freeMemory());
+	DebugFlow(str);
+
+	// PRINT OBJECT INIT TIME
+	/*
+	sprintf(str, "FINISHED: Initilized RatVT(%dms) RobVT(%dms) RatPixy(%dms) Pid(%dms) Bull(%dms) Targ(%dms) Reward(%dms) Log(%dms)",
+		RatVT.t_init, RobVT.t_init, RatPixy.t_init, Pid.t_init, Bull.t_init, Targ.t_init, Reward.t_init, Log.t_init);
+	DebugFlow(str);
+	*/
+
+	// SHOW RESTART BLINK
+	StatusBlink(1, 0);
 
 	// SETUP OUTPUT PINS
 
@@ -5123,18 +5370,18 @@ void setup() {
 	// SETUP OPENLOG
 
 	// Setup OpenLog
+	DebugFlow("RUNNING: OpenLog Setup");
 	if (Log.Setup())
 		DebugFlow("FINISHED: OpenLog Setup");
 	else
-		DebugError("!!ERROR!! ABORTED: OpenLog Setup");
+		DebugError("!!ERROR!! FeederDue::Setup: Aborted OpenLog Setup");
 	// Create new log file
 	if (Log.OpenNewLog() != 0) {
-		char str[100];
 		sprintf(str, "FINISHED: Open Log File %s", Log.logFile);
 		DebugFlow(str);
 	}
 	else
-		DebugError("!!ERROR!! ABORTED: Open Log File");
+		DebugError("!!ERROR!! FeederDue::Setup: Aborted Open Log File");
 
 	// DEFINE EXTERNAL INTERUPTS
 
@@ -5157,11 +5404,23 @@ void setup() {
 	// CLEAR LCD
 	ClearLCD();
 
-	// RUN SETUP BLINK
-	ResetBlink(4);
-
 	// PRINT SETUP FINISHED
-	DebugFlow("FINISHED SETUP/RESET");
+	sprintf(str, "FINISHED FeederDue::Setup: Free RAM = %dKB", freeMemory());
+	DebugFlow(str);
+
+	// PRINT ALL IN QUEUE
+	while (doPrint)
+		PrintDebug();
+
+	// TEMP
+	int num = random(999);
+	for (int i = 0; i < 25; i++)
+	{
+		char str[50];
+		sprintf(str, "New Entry fuck %d ducks and stuff", num);
+		Log.StoreLogEntry(str);
+		num = random(999);
+	}
 }
 
 
@@ -5171,24 +5430,24 @@ void loop() {
 
 	// Local vars
 	static char horeStr[200] = { 0 };
-	static uint32_t t_loop_last = millis();
-	static int cnt_loop = 0;
 
 	// PARSE SERIAL INPUT
-		GetSerial();
+	GetSerial();
 
-	// STORE LOOP TIME
-	cnt_loop++;
-	if (cnt_loop % 100000 == 0) {
+	// CHECK LOOP TIME AND MEMORY
+	CheckLoop(freeMemory());
 
-		if (!fc.isFirstPass)
-		{
-			sprintf(horeStr, "LOOP %d: dt=%lu", cnt_loop, millis() - t_loop_last);
-			DebugFlow(horeStr);
-		}
+	// SEND SERIAL DATA
 
-		// Store loop check time
-		t_loop_last = millis();
+	// Prioritize packet
+	if (doPackSend)
+	{
+		SendPacketData();
+	}
+	// Send log
+	else if (fc.doLogSend)
+	{
+		Log.SendLogEntry();
 	}
 
 	// PRINT DB
@@ -5292,6 +5551,17 @@ void loop() {
 #pragma region //--- FIRST PASS SETUP ---
 	if (fc.isFirstPass)
 	{
+		// Pulse tracker while in wait state
+		static bool is_on = false;
+		static int t_pulse_last = millis() - 1001;
+		if (
+			(is_on && millis() >= t_pulse_last + 10) ||
+			(!is_on && millis() >= t_pulse_last + 1000)
+			) {
+			analogWrite(pin.TrackLED, is_on ? 0 : 100);
+			is_on = !is_on;
+			t_pulse_last = is_on ? millis() : t_pulse_last;
+		}
 
 		// Wait for first sync event to start
 		if (t_sync == 0)
@@ -5303,6 +5573,12 @@ void loop() {
 			{
 				// Set sync time
 				t_sync = t_irSyncLast;
+
+				// Store and send CS handshake recieved
+				StorePacketData('c', 'D', 255, c2r.packList[CharInd('+', c2r.idList, c2r.idLng)]);
+				SendPacketData();
+
+				// Log/print sync time
 				sprintf(horeStr, "SET SYNC TIME: %dms", t_sync);
 				DebugFlow(horeStr);
 			}
@@ -5311,7 +5587,7 @@ void loop() {
 		}
 
 		// Indicate setup complete
-		SetupBlink();
+		StatusBlink(5);
 
 		// CLEAR LCD
 		ClearLCD();
@@ -5327,20 +5603,6 @@ void loop() {
 
 	}
 
-#pragma endregion
-
-#pragma region //--- SEND SERIAL DATA ---
-
-	// Prioritize packet
-	if (doPackSend)
-	{
-		SendPacketData();
-	}
-	// Send log
-	else if (fc.doLogSend)
-	{
-		Log.SendLogEntry();
-	}
 #pragma endregion
 
 #pragma region //--- (T) SYSTEM TESTS ---
@@ -5870,28 +6132,16 @@ void loop() {
 		fc.doLogResend = c2r.dat[0] == 0 ? true : false;
 
 		// Stop logging
-		if (db.Log)
-			db.Log = false;
+		db.Log = false;
 
-		// Print error
-		if (fc.doLogResend)
-			DebugError("!!ERROR!!: RESEND LAST LOG PACKET");
+		// Save first log request packet for later
+		Log.donePack = Log.donePack != 0 ? Log.donePack :
+			c2r.packList[CharInd('L', c2r.idList, c2r.idLng)];
 
 		// Check if end of list reached
-		if (Log.cntLogSent <= Log.cntLogStored)
-		{
+		if (!Log.isAllSent)
 			fc.doLogSend = true;
-			fc.isSendingLog = true;
-		}
-		// End reached
-		else
-		{
-			// Send confirm done
-			StorePacketData('c', 'D', 255, c2r.packList[CharInd('L', c2r.idList, c2r.idLng)]);
-			DebugFlow("LOG SEND COMPLETE");
-			fc.doLogSend = false;
-			fc.isSendingLog = false;
-		}
+
 	}
 #pragma endregion
 

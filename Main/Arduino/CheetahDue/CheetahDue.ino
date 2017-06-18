@@ -134,15 +134,15 @@ uint32_t dt_ttlPulse = 50; // (ms)
 // Serial from rob
 struct R2A
 {
-	char idList[5] = {
+	const char idList[5] = {
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
 		'p', // pid mode [0, 1]
 		'b', // bull mode [0, 1]
 	};
-	char head = '{';
-	char foot = '}';
+	const char head = '{';
+	const char foot = '}';
 	char idNew = ' ';
 	byte dat = 0;
 	const static int idLng = sizeof(idList) / sizeof(idList[0]);
@@ -219,7 +219,6 @@ bool AwaitStart()
 		byte in_byte[1] = { 0 };
 		byte out_byte[1] = { 0 };
 		bool is_rcvd = false;
-		int send_cnt = 0;
 		char str[200] = { 0 };
 
 		// Get id byte
@@ -242,10 +241,6 @@ bool AwaitStart()
 					// Store time
 					t_sync = millis();
 
-					// Send confirmation
-					Serial.write(out_byte, 1);
-					send_cnt++;
-
 					// Pulse ir
 					if (!is_irOn) PulseIR(); // turn on
 					delay(10 - (millis() - t_syncLast));
@@ -259,45 +254,20 @@ bool AwaitStart()
 					while (Serial.available())
 						Serial.read();
 
-					// Wait and make sure message recieved
-					while (!is_rcvd)
-					{
-						delay(1000);
-						if (Serial.available() > 0)
-						{
-							in_byte[0] == Serial.read();
-							if (in_byte[0] == out_byte[0])
-							{
-								// Resend confirmation
-								Serial.write(out_byte, 1);
-								send_cnt++;
-								sprintf(str, "!!ERROR!! HANDSHAKE FAILED: tot=%d", send_cnt);
-							}
-						}
-						else
-						{
-							// Log any failures
-							if (str[0] != '\0')
-								DebugFlow(str);
+					// Log success
+					DebugFlow("HANDSHAKE SUCCEEDED");
 
-							// Log success
-							DebugFlow("HANDSHAKE SUCCEEDED");
+					// Log sync time
+					sprintf(str, "SET SYNC TIME: %dms", t_sync);
+					DebugFlow(str, t_sync);
 
-							// Log sync time
-							sprintf(str, "SET SYNC TIME: %dms", t_sync);
-							DebugFlow(str, t_sync);
-
-							// Set flags
-							is_rcvd = true;
-							fc.isSesStarted = true;
-							DebugFlow("START SESSION");
-						}
-
-					}
+					// Set flags
+					is_rcvd = true;
+					fc.isSesStarted = true;
+					DebugFlow("START SESSION");
 
 				}
 			}
-
 		}
 	}
 }
@@ -743,14 +713,22 @@ bool PulseIR(int del_sync, int dt_sync)
 }
 
 // GET ID INDEX
-int CharInd(char id, char id_arr[], int arr_size)
+int CharInd(char id, const char id_arr[], int arr_size)
 {
 
+	// Return -1 if not found
 	int ind = -1;
 	for (int i = 0; i < arr_size; i++)
 	{
 		if (id == id_arr[i])
 			ind = i;
+	}
+
+	// Print error if not found
+	if (ind == -1) {
+		char str[100];
+		sprintf(str, "!!ERROR!! CharInd(): ID \'%c\' Not Found", id);
+		DebugFlow(str);
 	}
 
 	return ind;

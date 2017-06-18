@@ -136,6 +136,7 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDu
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/USB/USBAPI.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Stream.h \
+ C:\Users\lester\MeDocuments\AppData\Arduino\libraries\Arduino-MemoryFree/MemoryFree.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\SPI\src/SPI.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\AutoDriver_Due/AutoDriver_Due.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\AutoDriver_Due/dSPINConstants_Due.h \
