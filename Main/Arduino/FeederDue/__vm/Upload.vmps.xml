@@ -8,6 +8,37 @@
     <VCCodeModel>
       <VCCodeMacros />
     </VCCodeModel>
-    <BreakPoints />
+    <BreakPoints>
+      <BreakPoint Index="1" Name="FeederDue.ino, line 2966" Id="17c0a0aa-7af3-4aa9-a8e4-3b8cfda586a6" Enabled="1" Message="{dt_read_mu}{dt_read_min}{dt_read_max}{dt_read_tot}{dt_write_mu}{dt_write_min}{dt_write_max}{dt_write_tot}" MessageTextType="2" PreProcessedMessage="{0}{1}{2}{3}{4}{5}{6}{7}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="2966" FileColumn="1" FunctionName="SendLogEntry()" FunctionLineOffset="181" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='17c0a0aa-7af3-4aa9-a8e4-3b8cfda586a6'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
+        <Source>2959			do_abort = true;
+2960			sprintf(err_str, "Run Timedout");
+2961		}
+2962	
+2963		// TEMP
+2964		//{dt_read_mu}{dt_read_min}{dt_read_max}{dt_read_tot}{dt_write_mu}{dt_write_min}{dt_write_max}{dt_write_tot}
+2965		dt_write_mu = dt_write_sum / dt_write_tot;
+--&gt;2966		dt_read_mu = dt_read_sum / dt_read_tot;
+2967	
+2968	
+2969		// Send confirm done incase CS missed footer
+2970		StorePacketData('c', 'D', 255, donePack);
+2971	
+2972		// Print status
+2973		float t_s = (float)(millis() - t_start) / 1000.0f;
+2974		if (!do_abort) {
+2975			sprintf(str, "[LOGGER::SendLogEntry] FINISHED: Send Logs: dt=%0.2fs sent=%dB stored=%dB", t_s, bytesSent, bytesStored);
+</Source>
+        <MessageVariables>
+          <MessageVariable Name="dt_read_mu" Index="1" />
+          <MessageVariable Name="dt_read_min" Index="2" />
+          <MessageVariable Name="dt_read_max" Index="3" />
+          <MessageVariable Name="dt_read_tot" Index="4" />
+          <MessageVariable Name="dt_write_mu" Index="5" />
+          <MessageVariable Name="dt_write_min" Index="6" />
+          <MessageVariable Name="dt_write_max" Index="7" />
+          <MessageVariable Name="dt_write_tot" Index="8" />
+        </MessageVariables>
+      </BreakPoint>
+    </BreakPoints>
   </Program>
 </VisualMicro>

@@ -37,7 +37,6 @@ global c2m_Z; % reward zone
 global c2m_V; % robot streaming
 global c2m_K; % robot in place
 global c2m_Y; % enable save button
-global c2m_O; % log dir
 global c2m_E; % exit
 global c2m_C; % confirm close
 
@@ -162,6 +161,10 @@ D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
 D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
 D.DIR.recFi = '0000-00-00_00-00-00';
 
+% Log dirs
+D.DIR.logFi = 'ICR_GUI_Log.csv';
+D.DIR.logTemp = fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00', D.DIR.logFi);
+
 % DEBUG/TESTING
 
 % Session conditions
@@ -271,15 +274,6 @@ if ~D.B.force_close
     delete(FigH)
 end
 
-% Save log dir and string
-if ischar(c2m_O)
-    log_dir = c2m_O;
-else
-    % Set log dir to default
-    log_dir = fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'ICR_GUI_Log.csv');
-end
-log_str = D.DB.logStr;
-
 % Confirm GUI closed
 Mat2CS('C');
 
@@ -294,14 +288,14 @@ end
 Update_Console('RUNNING: Save ICR_GUI Log...');
 if size(who('global'),1) > 0
     % Make new file
-    if ~exist(log_dir, 'file');
-        mkdir(log_dir);
+    if ~exist(D.DIR.logTemp, 'file');
+        mkdir(D.DIR.logTemp);
     end
-    fi_path = fullfile(log_dir, 'ICR_GUI_Log.csv');
+    fi_path = fullfile(D.DIR.logTemp, 'ICR_GUI_Log.csv');
     fid = fopen(fi_path,'wt');
     fprintf(fid, log_str);
     fclose(fid);
-    Update_Console(sprintf('FINISHED: Save ICR_GUI Log to \"%s\"', log_dir));
+    Update_Console(sprintf('FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
 else
     Update_Console('ABBORTED: Save ICR_GUI Log');
 end
