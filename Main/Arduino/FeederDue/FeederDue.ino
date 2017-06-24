@@ -2790,12 +2790,12 @@ void LOGGER::SendLogEntry()
 {
 	// Local vars
 	const int timeout = 1200000;
+	const int read_max = 1000;
 	static int cnt_err_read = 0;
 	static int cnt_err_set_mode = 0;
 	uint32_t t_start = millis(); // (ms)
-	uint32_t t_last_read = micros(); // (us)
-	uint32_t t_last_write = micros(); // (us)
-	const int read_max = 5000;
+	uint32_t t_last_read = millis(); // (us)
+	uint32_t t_last_write = millis(); // (us)
 	int read_str = 0;
 	int read_ind = 0;
 	char str[200] = { 0 };
@@ -2809,7 +2809,7 @@ void LOGGER::SendLogEntry()
 	float dt_read[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max, mu}
 	float dt_write[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max, mu}
 
-											// Make sure in command mode
+	// Make sure in command mode
 	if (!SetToCmdMode()) {
 		cnt_err_set_mode++;
 		// Leave function
@@ -2846,8 +2846,8 @@ void LOGGER::SendLogEntry()
 		read_ind = 0;
 		c_arr[0] = 0; c_arr[1] = 0; c_arr[2] = 0;
 		if (bytesSent == 0) {
-			t_last_read = micros();
-			t_last_write = micros();
+			t_last_read = millis();
+			t_last_write = millis();
 		}
 
 		// Read byte at a time
@@ -2857,7 +2857,7 @@ void LOGGER::SendLogEntry()
 			if (Serial3.available() == 0)
 			{
 				// Wait for new data
-				if (micros() - t_last_read < 500000 ||
+				if (millis() - t_last_read < 500 ||
 					bytesSent == 0)
 					continue;
 				// Abort if too much time ellapsed sinse last read
@@ -2871,7 +2871,7 @@ void LOGGER::SendLogEntry()
 
 			// Track dt read
 			if (bytesSent > 0) {
-				int dt = micros() - t_last_read;
+				int dt = millis() - t_last_read;
 				dt_read[0] += dt;
 				dt_read[1]++;
 				dt_read[3] = dt > dt_read[3] ? dt : dt_read[3];
@@ -2882,7 +2882,7 @@ void LOGGER::SendLogEntry()
 			c_arr[0] = c_arr[1];
 			c_arr[1] = c_arr[2];
 			c_arr[2] = Serial3.read();
-			t_last_read = micros();
+			t_last_read = millis();
 			read_ind++;
 
 			// Check for leading "\r\n"
@@ -2929,7 +2929,7 @@ void LOGGER::SendLogEntry()
 
 			// Track dt write
 			if (bytesSent > 0) {
-				int dt = micros() - t_last_write;
+				int dt = millis() - t_last_write;
 				dt_write[0] += dt;
 				dt_write[1]++;
 				dt_write[3] = dt > dt_write[3] ? dt : dt_write[3];
@@ -2939,7 +2939,7 @@ void LOGGER::SendLogEntry()
 			// Send new byte
 			SerialUSB.write(PrintSpecialChars(c_arr[2]));
 			Serial1.write(c_arr[2]);
-			t_last_write = micros();
+			t_last_write = millis();
 			bytesSent++;
 
 			// Check if all bytes sent
@@ -3801,14 +3801,14 @@ void AD_Config()
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-												// Overcurent enable
+		// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-												// Motor V compensation
-												/*
-												VS_COMP_ENABLE, VS_COMP_DISABLE
-												*/
+		// Motor V compensation
+	/*
+	VS_COMP_ENABLE, VS_COMP_DISABLE
+	*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
@@ -3816,11 +3816,11 @@ void AD_Config()
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-												// Slew rate
-												/*
-												Upping the edge speed increases torque
-												SR_180V_us, SR_290V_us, SR_530V_us
-												*/
+		// Slew rate
+	/*
+	Upping the edge speed increases torque
+	SR_180V_us, SR_290V_us, SR_530V_us
+	*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -3887,19 +3887,19 @@ void AD_Config()
 	AD_R.setRunKVAL(50);					    // This controls the run current
 	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-												// NIMA 17 24V
+	// NIMA 17 24V
 	AD_F.setAccKVAL(50);				        // This controls the acceleration current
 	AD_F.setDecKVAL(50);				        // This controls the deceleration current
 	AD_F.setRunKVAL(50);					    // This controls the run current
 	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-												/*
-												// NIMA 17 12V
-												AD_F.setAccKVAL(100);				        // This controls the acceleration current
-												AD_F.setDecKVAL(100);				        // This controls the deceleration current
-												AD_F.setRunKVAL(120);					    // This controls the run current
-												AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
-												*/
+	/*
+	// NIMA 17 12V
+	AD_F.setAccKVAL(100);				        // This controls the acceleration current
+	AD_F.setDecKVAL(100);				        // This controls the deceleration current
+	AD_F.setRunKVAL(120);					    // This controls the run current
+	AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
+	*/
 }
 
 // RESET AUTODRIVER BOARDS
@@ -5578,8 +5578,8 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	Log.TestLoad(0, "LOG00001.CSV");
-	//Log.TestLoad(5000);
+	//Log.TestLoad(0, "LOG00001.CSV");
+	Log.TestLoad(100);
 
 }
 
