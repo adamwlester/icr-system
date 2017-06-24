@@ -731,7 +731,7 @@ public:
 	uint32_t t_rcvd = 0;
 	uint32_t t_write = 0;
 	int cntLogStored = 0;
-	static const int maxBytesStore = 1000;
+	static const int maxBytesStore = 2500;
 	char rcvdArr[maxBytesStore] = { 0 };
 	char mode = '\0'; // ['<', '>']
 	char logFile[50] = { 0 };
@@ -752,7 +752,10 @@ public:
 	bool SetToLogMode(char log_file[]);
 	bool StoreLogEntry(char msg[], uint32_t t = millis());
 	void SendLogEntry();
+	void TestLoad(int n_entry = 0, char log_file[] = '\0');
+	int GetFileSize(char log_file[]);
 	void PrintLOGGER(char msg[], bool start_entry = false);
+
 };
 
 #pragma endregion 
@@ -2579,8 +2582,9 @@ char LOGGER::GetReply(uint32_t timeout)
 			char c = Serial3.read();
 
 			// Print new byte
-			if (db.print_o2a)
-				PrintLOGGER(str);
+			if (db.print_o2a) {
+				SerialUSB.print(c);
+			}
 
 			// Itterate byte ind
 			if (
@@ -2786,9 +2790,11 @@ void LOGGER::SendLogEntry()
 {
 	// Local vars
 	const int timeout = 1200000;
-	uint32_t t_start = millis();
-	uint32_t t_last_read = millis();
-	uint32_t t_last_write = millis();
+	static int cnt_err_read = 0;
+	static int cnt_err_set_mode = 0;
+	uint32_t t_start = millis(); // (ms)
+	uint32_t t_last_read = micros(); // (us)
+	uint32_t t_last_write = micros(); // (us)
 	const int read_max = 5000;
 	int read_str = 0;
 	int read_ind = 0;
@@ -2797,30 +2803,27 @@ void LOGGER::SendLogEntry()
 	bool send_done = false;
 	bool do_abort = false;
 	char err_str[100] = { 0 };
-	int err_cnt = 0;
 	char c_arr[3] = { '\0', '\0', '\0' };
-
-	// Reset bytes sent
-	bytesSent = 0;
-
-	// Make sure in command mode
-	if (!SetToCmdMode())
-		return;
-
-	// TEMP
-	float dt_read_sum = 0;
-	int dt_read_tot = 0;
-	uint32_t dt_read_max = 0;
-	uint32_t dt_read_min = 1000000;
 	float dt_read_mu = 0;
-	float dt_write_sum = 0;
-	int dt_write_tot = 0;
-	uint32_t dt_write_max = 0;
-	uint32_t dt_write_min = 1000000;
 	float dt_write_mu = 0;
+	float dt_read[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max, mu}
+	float dt_write[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max, mu}
+
+											// Make sure in command mode
+	if (!SetToCmdMode()) {
+		cnt_err_set_mode++;
+		// Leave function
+		if (cnt_err_set_mode < 3)
+			return;
+		// Abort after 3 failures
+		else {
+			do_abort = true;
+			sprintf(err_str, "Log \"$$$\" Failed");
+		}
+	}
 
 	// Request/Re-request log data
-	while (millis() < t_start + timeout) {
+	while (millis() < (t_start + timeout)) {
 
 		// Dump anything left
 		uint32_t tout = millis() + 50;
@@ -2834,34 +2837,27 @@ void LOGGER::SendLogEntry()
 			sprintf(str, "read %s %d %d\r", logFile, read_str, read_max);
 			SendCommand(str, 5000, false);
 		}
-		// End reached send ">>>"
+		// Finished
 		else
-		{
-			byte msg_end[4] = { '>','>','>' ,'\n' };
-			Serial1.write(msg_end, 3);
-			SerialUSB.write(msg_end, 4);
-
-			// Break
 			break;
-		}
 
 		// Reset vars
 		head_passed = false;
 		read_ind = 0;
 		c_arr[0] = 0; c_arr[1] = 0; c_arr[2] = 0;
 		if (bytesSent == 0) {
-			t_last_read = millis();
-			t_last_write = millis();
+			t_last_read = micros();
+			t_last_write = micros();
 		}
 
 		// Read byte at a time
-		while (millis() < t_start + timeout) {
+		while (millis() < (t_start + timeout)) {
 
 			// Check for new data
 			if (Serial3.available() == 0)
 			{
 				// Wait for new data
-				if (millis() - t_last_read < 500 ||
+				if (micros() - t_last_read < 500000 ||
 					bytesSent == 0)
 					continue;
 				// Abort if too much time ellapsed sinse last read
@@ -2873,20 +2869,20 @@ void LOGGER::SendLogEntry()
 				}
 			}
 
-			// TEMP
-			if (bytesSent > 0 && !do_abort) {
-				int dt = millis() - t_last_read;
-				dt_read_sum += dt;
-				dt_read_tot++;
-				dt_read_max = dt > dt_read_max ? dt : dt_read_max;
-				dt_read_min = dt < dt_read_min ? dt : dt_read_min;
+			// Track dt read
+			if (bytesSent > 0) {
+				int dt = micros() - t_last_read;
+				dt_read[0] += dt;
+				dt_read[1]++;
+				dt_read[3] = dt > dt_read[3] ? dt : dt_read[3];
+				dt_read[2] = dt < dt_read[2] ? dt : dt_read[2];
 			}
 
 			// Get next bytes
 			c_arr[0] = c_arr[1];
 			c_arr[1] = c_arr[2];
 			c_arr[2] = Serial3.read();
-			t_last_read = millis();
+			t_last_read = micros();
 			read_ind++;
 
 			// Check for leading "\r\n"
@@ -2905,8 +2901,8 @@ void LOGGER::SendLogEntry()
 					c_arr[1] == '\n')
 				{
 					// Retry only once
-					err_cnt++;
-					if (err_cnt > 1) {
+					cnt_err_read++;
+					if (cnt_err_read > 1) {
 						do_abort = true;
 						sprintf(err_str, "Log \"read\" Failed");
 					}
@@ -2925,25 +2921,25 @@ void LOGGER::SendLogEntry()
 			{
 				// Set next read start
 				read_str = bytesSent;
-				
+
 				// Dump remaining
 				while (Serial3.read() != '>');
 				break;
 			}
 
-			// TEMP
+			// Track dt write
 			if (bytesSent > 0) {
-				int dt = millis() - t_last_write;
-				dt_write_sum += dt;
-				dt_write_tot++;
-				dt_write_max = dt > dt_write_max ? dt : dt_write_max;
-				dt_write_min = dt < dt_write_min ? dt : dt_write_min;
+				int dt = micros() - t_last_write;
+				dt_write[0] += dt;
+				dt_write[1]++;
+				dt_write[3] = dt > dt_write[3] ? dt : dt_write[3];
+				dt_write[2] = dt < dt_write[2] ? dt : dt_write[2];
 			}
 
 			// Send new byte
 			SerialUSB.write(PrintSpecialChars(c_arr[2]));
 			Serial1.write(c_arr[2]);
-			t_last_write = millis();
+			t_last_write = micros();
 			bytesSent++;
 
 			// Check if all bytes sent
@@ -2960,13 +2956,22 @@ void LOGGER::SendLogEntry()
 		sprintf(err_str, "Run Timedout");
 	}
 
-	// TEMP
-	//{dt_read_mu}{dt_read_min}{dt_read_max}{dt_read_tot}{dt_write_mu}{dt_write_min}{dt_write_max}{dt_write_tot}
-	dt_write_mu = dt_write_sum / dt_write_tot;
-	dt_read_mu = dt_read_sum / dt_read_tot;
+	// Compute mean dt read/write
+	/*
+	{dt_read_mu}{dt_read[2]}{dt_read[3]}{dt_write_mu}{dt_write[2]}{dt_write[3]}
+	*/
+	dt_read_mu = (float)dt_write[0] / (float)dt_write[1];
+	dt_write_mu = (float)dt_read[0] / (float)dt_read[1];
 
+	// End reached send ">>>"
+	byte msg_end[4] = { '>','>','>' ,'\n' };
 
-	// Send confirm done incase CS missed footer
+	SerialUSB.write(msg_end, 4);
+
+	Serial1.write(msg_end, 3);
+	delay(100);
+
+	// Send confirm done in case CS missed footer
 	StorePacketData('c', 'D', 255, donePack);
 
 	// Print status
@@ -2980,8 +2985,109 @@ void LOGGER::SendLogEntry()
 		DebugError(str);
 	}
 
+	// Reset vars
+	bytesSent = 0;
+	cnt_err_read = 0;
+	cnt_err_set_mode = 0;
+
 	// Reset flag
 	fc.doLogSend = false;
+}
+
+void LOGGER::TestLoad(int n_entry, char log_file[])
+{
+	// Local vars
+	char str[200] = { 0 };
+	bool pass = false;
+
+	// Load existing log file
+	if (log_file != '\0') {
+		sprintf(str, "[LOGGER::TestLoad] RUNNING: Load Log: file_name=%s", log_file);
+		DebugFlow(str);
+		if (SetToCmdMode())
+		{
+			// Get bytes
+			if (SendCommand("ls\r") != '!') {
+				bytesStored = GetFileSize(log_file);
+				pass = true;
+			}
+			// Start writing to file
+			if (pass)
+				if (!SetToLogMode(log_file))
+					pass = false;
+		}
+		if (pass) {
+			sprintf(str, "[LOGGER::TestLoad] FINISHED: Load Log: file_name=%s size=%dB", logFile, bytesStored);
+			DebugFlow(str);
+		}
+		else
+			DebugError("!!ERROR!! [LOGGER::TestLoad] ABORTED: Load Log File");
+	}
+
+	// Write n_entry entries to log
+	else if (n_entry != 0) {
+		sprintf(str, "[LOGGER::TestLoad] RUNNING: Write %d Logs", n_entry);
+		DebugFlow(str);
+		while (PrintDebug());
+		randomSeed(analogRead(A0));
+		for (int i = 0; i < n_entry - 1; i++)
+		{
+			char num_str[15] = { 0 };
+			char msg[200] = { 0 };
+			for (int i = 0; i < 18; i++)
+			{
+				int num = random(999999999);
+				sprintf(num_str, "%d", num);
+				num_str[random(10) + 1] = '\0';
+				strcat(msg, num_str);
+			}
+			StoreLogEntry(msg, millis());
+			msg[0] = '\0';
+		}
+		sprintf(str, "[LOGGER::TestLoad] FINISHED: Write %d Logs", n_entry);
+		DebugFlow(str);
+	}
+}
+
+int LOGGER::GetFileSize(char log_file[])
+{
+	// Local vars
+	int ind = -1;
+	int fi_size = 0;
+	char num_str[20] = { 0 };
+
+	// Find file index in array
+	for (int i = strlen(rcvdArr) - strlen(log_file); i >= 0; i--)
+	{
+		int ii = 0;
+		for (ii = strlen(log_file) - 1; ii >= 0; ii--) {
+			millis();
+			if (log_file[ii] != rcvdArr[i + ii])
+				break;
+			else if (ii == 0) {
+				ind = ii + i;
+				break;
+			}
+		}
+		if (ind != -1)
+			break;
+	}
+
+	// Get file size
+	if (ind != -1) {
+		int i = ind + strlen(log_file) + 3;
+		int ii = 0;
+		while (i < strlen(rcvdArr) && rcvdArr[i] != '\r')
+		{
+			num_str[ii] = rcvdArr[i];
+			i++;
+			ii++;
+		}
+		num_str[ii] = '\0';
+		fi_size = atoi(num_str);
+	}
+
+	return fi_size;
 }
 
 void LOGGER::PrintLOGGER(char msg[], bool start_entry)
@@ -3006,6 +3112,7 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 	if (start_entry)
 		SerialUSB.print('\n');
 }
+
 
 #pragma endregion 
 
@@ -5471,43 +5578,9 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	if (false) {
-		int n_logs = 5000;
-		sprintf(str, "RUNNING Test Prestore %d Logs", n_logs);
-		DebugFlow(str);
-		while (PrintDebug());
-		randomSeed(analogRead(A0));
-		for (int i = 0; i < n_logs - 1; i++)
-		{
-			char s[15] = { 0 };
-			char msg[200] = { 0 };
-			for (int i = 0; i < 18; i++)
-			{
-				int num = random(999999999);
-				sprintf(s, "%d", num);
-				s[random(10) + 1] = '\0';
-				strcat(msg, s);
-			}
-			Log.StoreLogEntry(msg, millis());
-			msg[0] = '\0';
-		}
-		DebugFlow("FINISHED Test Prestore Logs");
-		while (PrintDebug());
-	}
+	Log.TestLoad(0, "LOG00001.CSV");
+	//Log.TestLoad(5000);
 
-	// TEMP
-	if (true) {
-		if (Log.SetToCmdMode())
-		{
-			char fi[20] = "LOG00045.CSV";
-			if (!Log.SetToLogMode(fi))
-				DebugError("FAIL FI CHANGE");
-			else
-				Log.bytesStored = 556330;
-		}
-		else
-			DebugError("FAIL SET TO");
-	}
 }
 
 

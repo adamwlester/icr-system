@@ -361,22 +361,28 @@ namespace ICR_Run
             pass = WaitForR2C('+', timeout: 5000, do_abort: true);
 
             // Start importing robot log on seperate thread
-            LogEvent("[Main] RUNNING: Import Robot Log...");
+            LogEvent("[Main] RUNNING: Robot Log Import/Store/Save...");
             new Thread(delegate ()
             {
                 GetRobotLog();
             }).Start();
 
             // Wait for robot log save to complete
-            LogEvent("[Main] RUNNING: Wait for Robot Log Importing...");
+            LogEvent("[Main] RUNNING: Wait for Robot Log Import/Store/Save...");
             while (!robLogger.isLogFinished) ;
 
             // Check if complete log was imported
             if (robLogger.isLogComplete)
-                msg_str = String.Format("[Main] FINISHED: Robot Log Importing: logged={0} dropped={1} dt={2}ms", robLogger.cntLogged, robLogger.cntDropped, robLogger.logDT);
+                msg_str = String.Format("[Main] FINISHED: Robot Log Import/Store/Save: logged={0} dropped={1} dt={2}ms", robLogger.cntLogged, robLogger.cntDropped, robLogger.logDT);
             else
-                msg_str = String.Format("!!ERROR!! [Main] ABORTED: Robot Log Importing: logged={0} dropped={1} dt={2}ms", robLogger.cntLogged, robLogger.cntDropped, robLogger.logDT);
+                msg_str = String.Format("!!ERROR!! [Main] ABORTED: Robot Log Import/Store/Save: logged={0} dropped={1} dt={2}ms", robLogger.cntLogged, robLogger.cntDropped, robLogger.logDT);
             LogEvent(msg_str);
+
+            // TEMP
+            // Save CS log file
+            csLogger.SaveLog(nlxRecDir, csLogFi);
+            // Confirm log saved
+            LogEvent("[Main] FINISHED: Save CS Log");
 
             // Initalize Matlab global vars
             com_Matlab.PutWorkspaceData("m2c_id", "global", 'N');
@@ -1638,7 +1644,10 @@ namespace ICR_Run
         public static void GetRobotLog()
         {
             // Local vars
-            long t_timeout = sw_main.ElapsedMilliseconds + importLogTimeout;
+            long t_start = sw_main.ElapsedMilliseconds;
+            long t_timeout = t_start + importLogTimeout;
+            long t_read_last = 0;
+            bool do_timeout = false;
             ushort conf_pack = 0;
             int msg_lng = 0;
             char[] c_arr = new char[3] { '\0', '\0', '\0' };
@@ -1657,11 +1666,9 @@ namespace ICR_Run
             // Read stream till ">>>" string
             int read_ind = 0;
             char[] in_arr = new char[1000000];
-            while (
+            while (!do_timeout &&
                     fc.isRobStreaming &&
-                    (sw_main.ElapsedMilliseconds < t_timeout || read_ind > 0) &&
-                    conf_pack != r2c.packList[r2c.ID_Ind('D')]
-                )
+                    conf_pack != r2c.packList[r2c.ID_Ind('D')])
             {
                 // Get next byte
                 if (sp_Xbee.BytesToRead > 0)
@@ -1684,8 +1691,24 @@ namespace ICR_Run
 
                     // Itterate
                     read_ind++;
+
+                    // Check for timeout
+                    if (sw_main.ElapsedMilliseconds > t_timeout)
+                    {
+                        if (sw_main.ElapsedMilliseconds - t_read_last > 1000)
+                        {
+                            long dt_run = sw_main.ElapsedMilliseconds - t_start;
+                            long dt_read = t_read_last == 0 ? 0 : sw_main.ElapsedMilliseconds - t_read_last;
+                            do_timeout = true;
+                            LogEvent(String.Format("!!ERROR!! [GetRobotLog] Read Timedout: dt_read={0}ms dt_run={1}ms", dt_read, dt_run));
+                        }
+                    }
+                    t_read_last = sw_main.ElapsedMilliseconds;
                 }
             }
+
+            // Log finished import
+            LogEvent(String.Format("[GetRobotLog] FINISHED: Robot Log Import: bytes={0}B dt={1}ms", read_ind + 1, sw_main.ElapsedMilliseconds - t_start));
 
             // Reset timeout and logging flag
             sp_Xbee.ReadTimeout = 100;
@@ -1693,13 +1716,6 @@ namespace ICR_Run
 
             // Store message length
             msg_lng = read_ind + 1;
-
-            // Print what was read in
-            for (int i = 0; i < msg_lng; i++)
-            {
-                Console.Write(in_arr[i]);
-            }
-            Console.WriteLine("END\n");
 
             // Parse string and store logs
             char[] out_arr = new char[300];
@@ -1712,6 +1728,9 @@ namespace ICR_Run
             int rec_last = 0;
             for (int i = 0; i < msg_lng; i++)
             {
+                // TEMP
+                Console.Write(in_arr[i]);
+
                 // Get next char
                 c = in_arr[i];
 
@@ -1743,15 +1762,16 @@ namespace ICR_Run
                     // Create new string to store
                     string new_log = new string(out_arr, 0, write_ind);
 
+                    // Print current log
                     if (db.printRobLog)
                         Console.WriteLine(String.Format("   log_r2c[{0}]: message=\"{1}\"", rec_now, new_log));
 
+                    // Check for missed log
+                    if (rec_now != rec_last + 1)
+                        LogEvent(String.Format("!!ERROR!! [GetRobotLog] Lost Log: read={0} stored={1}", rec_now, robLogger.cntLogged));
+
                     // Update list
                     robLogger.UpdateList(new_log);
-
-                    // Check for missed log
-                    if (rec_now != rec_last+1)
-                        LogEvent(String.Format("!!ERROR!! [GetRobotLog] Lost Log: read={0} stored={1}", rec_now, robLogger.cntLogged));
 
                     // Save record number 
                     rec_last = rec_now;
@@ -1767,8 +1787,13 @@ namespace ICR_Run
                 }
             }
 
+            // Log finished import
+            LogEvent(String.Format("[GetRobotLog] FINISHED: Robot Log Store: logged={0}B dt={1}ms", robLogger.cntLogged, sw_main.ElapsedMilliseconds - t_start));
+
             // Save robot log file
             robLogger.SaveLog(logDir, robLogFi);
+            // Log finished save
+            LogEvent("[GetRobotLog] FINISHED: Robot Log Save");
 
             // Set flag that log is finished
             robLogger.isLogFinished = true;
@@ -2578,7 +2603,7 @@ namespace ICR_Run
                         str = String.Format("[{0}],{1},{2}", cntLogged, ts, log_str);
 
                     // Add to list
-                    _logList[cntLogged-1] = str;
+                    _logList[cntLogged - 1] = str;
 
                 }
 
