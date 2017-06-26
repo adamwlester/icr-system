@@ -2790,13 +2790,13 @@ void LOGGER::SendLogEntry()
 {
 	// Local vars
 	const int timeout = 1200000;
-	const int read_max = 1000;
+	const int read_max = 5000;
 	static int cnt_err_read = 0;
 	static int cnt_err_set_mode = 0;
 	uint32_t t_start = millis(); // (ms)
-	uint32_t t_last_read = millis(); // (us)
-	uint32_t t_last_write = millis(); // (us)
-	int read_str = 0;
+	uint32_t t_last_read = micros(); // (us)
+	uint32_t t_last_write = micros(); // (us)
+	int read_start = 0;
 	int read_ind = 0;
 	char str[200] = { 0 };
 	bool head_passed = false;
@@ -2804,12 +2804,12 @@ void LOGGER::SendLogEntry()
 	bool do_abort = false;
 	char err_str[100] = { 0 };
 	char c_arr[3] = { '\0', '\0', '\0' };
-	float dt_read_mu = 0;
-	float dt_write_mu = 0;
-	float dt_read[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max, mu}
-	float dt_write[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max, mu}
+	float dt_read_mu = 0; // (us)
+	float dt_write_mu = 0; // (us)
+	uint32_t dt_read[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max}
+	uint32_t dt_write[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max}
 
-	// Make sure in command mode
+											   // Make sure in command mode
 	if (!SetToCmdMode()) {
 		cnt_err_set_mode++;
 		// Leave function
@@ -2825,8 +2825,13 @@ void LOGGER::SendLogEntry()
 	// Request/Re-request log data
 	while (millis() < (t_start + timeout)) {
 
+		// Print current send ind
+		sprintf(str, "[LOGGER::SendLogEntry] RUNNING: Send Logs: sent=%dB stored=%dB", bytesSent, bytesStored);
+		DebugFlow(str);
+		while (PrintDebug());
+
 		// Dump anything left
-		uint32_t tout = millis() + 50;
+		uint32_t tout = millis() + 10;
 		while (millis() < tout || Serial3.available() > 0)
 			if (Serial3.available() > 0)
 				Serial3.read();
@@ -2834,7 +2839,7 @@ void LOGGER::SendLogEntry()
 		// Send/resend command to read
 		if (!send_done &&
 			!do_abort) {
-			sprintf(str, "read %s %d %d\r", logFile, read_str, read_max);
+			sprintf(str, "read %s %d %d\r", logFile, read_start, read_max);
 			SendCommand(str, 5000, false);
 		}
 		// Finished
@@ -2846,8 +2851,8 @@ void LOGGER::SendLogEntry()
 		read_ind = 0;
 		c_arr[0] = 0; c_arr[1] = 0; c_arr[2] = 0;
 		if (bytesSent == 0) {
-			t_last_read = millis();
-			t_last_write = millis();
+			t_last_read = micros();
+			t_last_write = micros();
 		}
 
 		// Read byte at a time
@@ -2857,7 +2862,7 @@ void LOGGER::SendLogEntry()
 			if (Serial3.available() == 0)
 			{
 				// Wait for new data
-				if (millis() - t_last_read < 500 ||
+				if (micros() - t_last_read < 500000 ||
 					bytesSent == 0)
 					continue;
 				// Abort if too much time ellapsed sinse last read
@@ -2871,18 +2876,18 @@ void LOGGER::SendLogEntry()
 
 			// Track dt read
 			if (bytesSent > 0) {
-				int dt = millis() - t_last_read;
+				uint32_t dt = micros() - t_last_read;
 				dt_read[0] += dt;
 				dt_read[1]++;
-				dt_read[3] = dt > dt_read[3] ? dt : dt_read[3];
 				dt_read[2] = dt < dt_read[2] ? dt : dt_read[2];
+				dt_read[3] = dt > dt_read[3] ? dt : dt_read[3];
 			}
 
 			// Get next bytes
 			c_arr[0] = c_arr[1];
 			c_arr[1] = c_arr[2];
 			c_arr[2] = Serial3.read();
-			t_last_read = millis();
+			t_last_read = micros();
 			read_ind++;
 
 			// Check for leading "\r\n"
@@ -2920,7 +2925,7 @@ void LOGGER::SendLogEntry()
 				)
 			{
 				// Set next read start
-				read_str = bytesSent;
+				read_start = bytesSent;
 
 				// Dump remaining
 				while (Serial3.read() != '>');
@@ -2928,18 +2933,26 @@ void LOGGER::SendLogEntry()
 			}
 
 			// Track dt write
+			uint32_t dt = micros() - t_last_write;
+			// Add min delay
+			if (dt < 150) {
+				int del = 150 - dt;
+				if (del > 0) {
+					delayMicroseconds(del);
+					dt = micros() - t_last_write;
+				}
+			}
 			if (bytesSent > 0) {
-				int dt = millis() - t_last_write;
 				dt_write[0] += dt;
 				dt_write[1]++;
-				dt_write[3] = dt > dt_write[3] ? dt : dt_write[3];
 				dt_write[2] = dt < dt_write[2] ? dt : dt_write[2];
+				dt_write[3] = dt > dt_write[3] ? dt : dt_write[3];
 			}
 
 			// Send new byte
-			SerialUSB.write(PrintSpecialChars(c_arr[2]));
+			//SerialUSB.write(PrintSpecialChars(c_arr[2]));
 			Serial1.write(c_arr[2]);
-			t_last_write = millis();
+			t_last_write = micros();
 			bytesSent++;
 
 			// Check if all bytes sent
@@ -2964,9 +2977,7 @@ void LOGGER::SendLogEntry()
 	dt_write_mu = (float)dt_read[0] / (float)dt_read[1];
 
 	// End reached send ">>>"
-	byte msg_end[4] = { '>','>','>' ,'\n' };
-
-	SerialUSB.write(msg_end, 4);
+	byte msg_end[3] = { '>','>','>'};
 
 	Serial1.write(msg_end, 3);
 	delay(100);
@@ -3032,17 +3043,21 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 		randomSeed(analogRead(A0));
 		for (int i = 0; i < n_entry - 1; i++)
 		{
-			char num_str[15] = { 0 };
-			char msg[200] = { 0 };
-			for (int i = 0; i < 18; i++)
-			{
-				int num = random(999999999);
-				sprintf(num_str, "%d", num);
-				num_str[random(10) + 1] = '\0';
-				strcat(msg, num_str);
-			}
+			//char num_str[15] = { 0 };
+			//char msg[200] = { 0 };
+			//for (int i = 0; i < 18; i++)
+			//{
+			//	int num = random(999999999);
+			//	sprintf(num_str, "%d", num);
+			//	num_str[random(10) + 1] = '\0';
+			//	strcat(msg, num_str);
+			//}
+			//StoreLogEntry(msg, millis());
+			//msg[0] = '\0';
+			// TEMP
+			//char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLL";
+			char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEE";
 			StoreLogEntry(msg, millis());
-			msg[0] = '\0';
 		}
 		sprintf(str, "[LOGGER::TestLoad] FINISHED: Write %d Logs", n_entry);
 		DebugFlow(str);
@@ -3801,14 +3816,14 @@ void AD_Config()
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-		// Overcurent enable
+												// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-		// Motor V compensation
-	/*
-	VS_COMP_ENABLE, VS_COMP_DISABLE
-	*/
+												// Motor V compensation
+												/*
+												VS_COMP_ENABLE, VS_COMP_DISABLE
+												*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
@@ -3816,11 +3831,11 @@ void AD_Config()
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-		// Slew rate
-	/*
-	Upping the edge speed increases torque
-	SR_180V_us, SR_290V_us, SR_530V_us
-	*/
+												// Slew rate
+												/*
+												Upping the edge speed increases torque
+												SR_180V_us, SR_290V_us, SR_530V_us
+												*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -3887,19 +3902,19 @@ void AD_Config()
 	AD_R.setRunKVAL(50);					    // This controls the run current
 	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-	// NIMA 17 24V
+												// NIMA 17 24V
 	AD_F.setAccKVAL(50);				        // This controls the acceleration current
 	AD_F.setDecKVAL(50);				        // This controls the deceleration current
 	AD_F.setRunKVAL(50);					    // This controls the run current
 	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-	/*
-	// NIMA 17 12V
-	AD_F.setAccKVAL(100);				        // This controls the acceleration current
-	AD_F.setDecKVAL(100);				        // This controls the deceleration current
-	AD_F.setRunKVAL(120);					    // This controls the run current
-	AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
-	*/
+												/*
+												// NIMA 17 12V
+												AD_F.setAccKVAL(100);				        // This controls the acceleration current
+												AD_F.setDecKVAL(100);				        // This controls the deceleration current
+												AD_F.setRunKVAL(120);					    // This controls the run current
+												AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
+												*/
 }
 
 // RESET AUTODRIVER BOARDS
@@ -5578,8 +5593,8 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	//Log.TestLoad(0, "LOG00001.CSV");
-	Log.TestLoad(100);
+	Log.TestLoad(0, "LOG00074.CSV");
+	//Log.TestLoad(5000);
 
 }
 

@@ -8,6 +8,35 @@
     <VCCodeModel>
       <VCCodeMacros />
     </VCCodeModel>
-    <BreakPoints />
+    <BreakPoints>
+      <BreakPoint Index="1" Name="FeederDue.ino, line 2977" Id="d09a7902-65e0-4ff6-8971-0b8da53c3e06" Enabled="1" Message="{dt_read_mu}{dt_read[2]}{dt_read[3]}{dt_write_mu}{dt_write[2]}{dt_write[3]}" MessageTextType="2" PreProcessedMessage="{0}{1}{2}{3}{4}{5}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="2977" FileColumn="1" FunctionName="SendLogEntry()" FunctionLineOffset="183" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='d09a7902-65e0-4ff6-8971-0b8da53c3e06'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
+        <Source>2970		}
+2971	
+2972		// Compute mean dt read/write
+2973		/*
+2974		{dt_read_mu}{dt_read[2]}{dt_read[3]}{dt_write_mu}{dt_write[2]}{dt_write[3]}
+2975		*/
+2976		dt_read_mu = (float)dt_write[0] / (float)dt_write[1];
+--&gt;2977		dt_write_mu = (float)dt_read[0] / (float)dt_read[1];
+2978	
+2979		// End reached send "&gt;&gt;&gt;"
+2980		byte msg_end[3] = { '&gt;','&gt;','&gt;'};
+2981	
+2982		Serial1.write(msg_end, 3);
+2983		delay(100);
+2984	
+2985		// Send confirm done in case CS missed footer
+2986		StorePacketData('c', 'D', 255, donePack);
+</Source>
+        <MessageVariables>
+          <MessageVariable Name="dt_read_mu" Index="1" />
+          <MessageVariable Name="dt_read[2]" Index="2" />
+          <MessageVariable Name="dt_read[3]" Index="3" />
+          <MessageVariable Name="dt_write_mu" Index="4" />
+          <MessageVariable Name="dt_write[2]" Index="5" />
+          <MessageVariable Name="dt_write[3]" Index="6" />
+        </MessageVariables>
+      </BreakPoint>
+    </BreakPoints>
   </Program>
 </VisualMicro>

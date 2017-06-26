@@ -1658,7 +1658,7 @@ namespace ICR_Run
                 conf_pack = c2r.packList[c2r.ID_Ind('L')];
 
             // Increase timeout
-            sp_Xbee.ReadTimeout = 500;
+            sp_Xbee.ReadTimeout = 10;
 
             // Prevent xBee event handeler from running
             robLogger.isLogging = true;
@@ -1666,7 +1666,8 @@ namespace ICR_Run
             // Read stream till ">>>" string
             int read_ind = 0;
             char[] in_arr = new char[1000000];
-            while (!do_timeout &&
+            while (
+                    !do_timeout &&
                     fc.isRobStreaming &&
                     conf_pack != r2c.packList[r2c.ID_Ind('D')])
             {
@@ -1711,7 +1712,7 @@ namespace ICR_Run
             LogEvent(String.Format("[GetRobotLog] FINISHED: Robot Log Import: bytes={0}B dt={1}ms", read_ind + 1, sw_main.ElapsedMilliseconds - t_start));
 
             // Reset timeout and logging flag
-            sp_Xbee.ReadTimeout = 100;
+            sp_Xbee.ReadTimeout = 500;
             robLogger.isLogging = false;
 
             // Store message length
@@ -1728,8 +1729,6 @@ namespace ICR_Run
             int rec_last = 0;
             for (int i = 0; i < msg_lng; i++)
             {
-                // TEMP
-                Console.Write(in_arr[i]);
 
                 // Get next char
                 c = in_arr[i];
@@ -1745,8 +1744,18 @@ namespace ICR_Run
                 }
                 else if (do_rec_store)
                 {
-                    int_str[int_cnt] = c;
-                    int_cnt++;
+                    if (int_cnt < 5)
+                    {
+                        int_str[int_cnt] = c;
+                        int_cnt++;
+                    }
+                    // Lost ']' byte
+                    else
+                    {
+                        rec_now = 0;
+                        int_cnt = 0;
+                        do_rec_store = false;
+                    }
                 }
 
                 // Store next char
@@ -1768,7 +1777,10 @@ namespace ICR_Run
 
                     // Check for missed log
                     if (rec_now != rec_last + 1)
-                        LogEvent(String.Format("!!ERROR!! [GetRobotLog] Lost Log: read={0} stored={1}", rec_now, robLogger.cntLogged));
+                    {
+                        robLogger.cntDropped++;
+                        LogEvent(String.Format("!!ERROR!! [GetRobotLog] Lost Log: read={0} stored={1} dropped={2}", rec_now, robLogger.cntLogged, robLogger.cntDropped));
+                    }
 
                     // Update list
                     robLogger.UpdateList(new_log);
