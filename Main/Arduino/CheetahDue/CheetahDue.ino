@@ -106,6 +106,7 @@ struct FC
 	bool doWhiteNoise = false;
 	bool doRewTone = false;
 	bool isRewarding = false;
+	bool doPackSend = false;
 }
 // Initialize
 fc;
@@ -126,6 +127,8 @@ volatile bool isOnSouth = false;
 volatile uint32_t t_inLastEast = millis();
 volatile uint32_t t_outLastEast = millis();
 volatile bool isOnEast = false;
+// Any pin
+volatile bool isOnAny = false;
 
 // TTL timers
 uint32_t t_debounce = 10; // (ms)
@@ -172,7 +175,6 @@ struct A2C
 a2c;
 
 // Serial tracking
-bool doPackSend = false;
 uint32_t t_sent = millis(); // (ms)
 uint32_t t_rcvd = millis(); // (ms)
 
@@ -255,7 +257,7 @@ bool AwaitStart()
 						Serial.read();
 
 					// Log success
-					DebugFlow("HANDSHAKE SUCCEEDED");
+					DebugFlow("[AwaitStart] HANDSHAKE SUCCEEDED");
 
 					// Log sync time
 					sprintf(str, "SET SYNC TIME: %dms", t_sync);
@@ -264,7 +266,7 @@ bool AwaitStart()
 					// Set flags
 					is_rcvd = true;
 					fc.isSesStarted = true;
-					DebugFlow("START SESSION");
+					DebugFlow("[AwaitStart] START SESSION");
 
 				}
 			}
@@ -278,10 +280,10 @@ bool ParseSerial()
 
 	static char head = ' ';
 	static char foot = ' ';
-	static bool conf = false;
+	static bool do_conf = false;
 	uint16_t pack = 0;
 	static bool pass = false;
-	doPackSend = false;
+	fc.doPackSend = false;
 
 	// Dump data till header byte is reached
 	while (Serial1.peek() != r2a.head && Serial1.available() > 0)
@@ -315,7 +317,7 @@ bool ParseSerial()
 
 	// Get send confirm request
 	while (Serial1.available() < 1);
-	conf = Serial1.read() == 1 ? true : false;
+	do_conf = Serial1.read() == 1 ? true : false;
 
 	// Get footer
 	while (Serial1.available() < 1);
@@ -329,10 +331,10 @@ bool ParseSerial()
 	else
 	{
 		// Send back confirmation
-		doPackSend = true;
+		fc.doPackSend = true;
 
 		// Print rcvd pack
-		DebugRcvd(r2a.idNew, r2a.dat, pack, conf);
+		DebugRcvd(r2a.idNew, r2a.dat, pack, do_conf);
 		pass = true;
 
 		// Update recive time
@@ -401,7 +403,7 @@ void SendPacketData(char id, byte d1, uint16_t pack, bool do_conf)
 		DebugSent(id, d1, pack, do_conf);
 
 		// Reset flag
-		doPackSend = false;
+		fc.doPackSend = false;
 	}
 }
 
@@ -470,14 +472,14 @@ void StartRew()
 	// Signal PID stopped
 	digitalWrite(pin.ttlPidRun, LOW);
 	digitalWrite(pin.ttlPidStop, HIGH);
-	DebugFlow("PID STOPPED");
+	DebugFlow("[StartRew] PID STOPPED");
 
 	// Set flag
 	fc.isRewarding = true;
 
 	// Print
 	char str[100];
-	sprintf(str, "REWARDING(%dms)...", rewDur);
+	sprintf(str, "[StartRew] REWARDING(%dms)...", rewDur);
 	DebugFlow(str);
 }
 
@@ -491,7 +493,7 @@ void EndRew()
 		SetPort(word_rewOff, word_rewOn);
 
 		fc.isRewarding = false;
-		DebugFlow("REWARD OFF");
+		DebugFlow("[EndRew] REWARD OFF");
 
 	}
 }
@@ -506,22 +508,22 @@ void DebugPinMap()
 	delay(5000);
 	bool p_flow = db.print_flow;
 	db.print_flow = true;
-	digitalWrite(pin.ttlNorthOn, HIGH); DebugFlow("North TTL"); delay(1000); digitalWrite(pin.ttlNorthOn, LOW);
-	digitalWrite(pin.ttlWestOn, HIGH); DebugFlow("West TTL"); delay(1000); digitalWrite(pin.ttlWestOn, LOW);
-	digitalWrite(pin.ttlSouthOn, HIGH); DebugFlow("South TTL"); delay(1000); digitalWrite(pin.ttlSouthOn, LOW);
-	digitalWrite(pin.ttlEastOn, HIGH); DebugFlow("East TTL"); delay(1000); digitalWrite(pin.ttlEastOn, LOW);
-	digitalWrite(pin.ttlIR, HIGH); DebugFlow("IR Sync TTL"); delay(1000); digitalWrite(pin.ttlIR, LOW);
-	digitalWrite(pin.ttlWhiteNoise, HIGH); DebugFlow("White Noise TTL"); delay(1000); digitalWrite(pin.ttlWhiteNoise, LOW);
-	digitalWrite(pin.ttlRewTone, HIGH); DebugFlow("Reward Tone TTL"); delay(1000); digitalWrite(pin.ttlRewTone, LOW);
-	digitalWrite(pin.ttlRewOn, HIGH); DebugFlow("Reward On TTL"); delay(1000); digitalWrite(pin.ttlRewOn, LOW);
-	digitalWrite(pin.ttlRewOff, HIGH); DebugFlow("Reward Off TTL"); delay(1000); digitalWrite(pin.ttlRewOff, LOW);
-	digitalWrite(pin.ttlPidRun, HIGH); DebugFlow("PID Run TTL"); delay(1000); digitalWrite(pin.ttlPidRun, LOW);
-	digitalWrite(pin.ttlPidStop, HIGH); DebugFlow("PID Stop TTL"); delay(1000); digitalWrite(pin.ttlPidStop, LOW);
-	digitalWrite(pin.ttlBullRun, HIGH); DebugFlow("Bull Run TTL"); delay(1000); digitalWrite(pin.ttlBullRun, LOW);
-	digitalWrite(pin.ttlBullStop, HIGH); DebugFlow("Bull Stop TTL"); delay(1000); digitalWrite(pin.ttlBullStop, LOW);
-	digitalWrite(pin.relIR, HIGH); DebugFlow("IR Sync Relay"); delay(1000); digitalWrite(pin.relIR, LOW);
-	digitalWrite(pin.relRewTone, HIGH); DebugFlow("Reward Tone Relay"); delay(1000); digitalWrite(pin.relRewTone, LOW);
-	digitalWrite(pin.relWhiteNoise, HIGH); DebugFlow("White Noise Relay"); delay(1000); digitalWrite(pin.relWhiteNoise, LOW);
+	digitalWrite(pin.ttlNorthOn, HIGH); DebugFlow("[DebugPinMap] North TTL"); delay(1000); digitalWrite(pin.ttlNorthOn, LOW);
+	digitalWrite(pin.ttlWestOn, HIGH); DebugFlow("[DebugPinMap] West TTL"); delay(1000); digitalWrite(pin.ttlWestOn, LOW);
+	digitalWrite(pin.ttlSouthOn, HIGH); DebugFlow("[DebugPinMap] South TTL"); delay(1000); digitalWrite(pin.ttlSouthOn, LOW);
+	digitalWrite(pin.ttlEastOn, HIGH); DebugFlow("[DebugPinMap] East TTL"); delay(1000); digitalWrite(pin.ttlEastOn, LOW);
+	digitalWrite(pin.ttlIR, HIGH); DebugFlow("[DebugPinMap] IR Sync TTL"); delay(1000); digitalWrite(pin.ttlIR, LOW);
+	digitalWrite(pin.ttlWhiteNoise, HIGH); DebugFlow("[DebugPinMap] White Noise TTL"); delay(1000); digitalWrite(pin.ttlWhiteNoise, LOW);
+	digitalWrite(pin.ttlRewTone, HIGH); DebugFlow("[DebugPinMap] Reward Tone TTL"); delay(1000); digitalWrite(pin.ttlRewTone, LOW);
+	digitalWrite(pin.ttlRewOn, HIGH); DebugFlow("[DebugPinMap] Reward On TTL"); delay(1000); digitalWrite(pin.ttlRewOn, LOW);
+	digitalWrite(pin.ttlRewOff, HIGH); DebugFlow("[DebugPinMap] Reward Off TTL"); delay(1000); digitalWrite(pin.ttlRewOff, LOW);
+	digitalWrite(pin.ttlPidRun, HIGH); DebugFlow("[DebugPinMap] PID Run TTL"); delay(1000); digitalWrite(pin.ttlPidRun, LOW);
+	digitalWrite(pin.ttlPidStop, HIGH); DebugFlow("[DebugPinMap] PID Stop TTL"); delay(1000); digitalWrite(pin.ttlPidStop, LOW);
+	digitalWrite(pin.ttlBullRun, HIGH); DebugFlow("[DebugPinMap] Bull Run TTL"); delay(1000); digitalWrite(pin.ttlBullRun, LOW);
+	digitalWrite(pin.ttlBullStop, HIGH); DebugFlow("[DebugPinMap] Bull Stop TTL"); delay(1000); digitalWrite(pin.ttlBullStop, LOW);
+	digitalWrite(pin.relIR, HIGH); DebugFlow("[DebugPinMap] IR Sync Relay"); delay(1000); digitalWrite(pin.relIR, LOW);
+	digitalWrite(pin.relRewTone, HIGH); DebugFlow("[DebugPinMap] Reward Tone Relay"); delay(1000); digitalWrite(pin.relRewTone, LOW);
+	digitalWrite(pin.relWhiteNoise, HIGH); DebugFlow("[DebugPinMap] White Noise Relay"); delay(1000); digitalWrite(pin.relWhiteNoise, LOW);
 	db.print_flow = p_flow;
 	delay(5000);
 }
@@ -544,7 +546,7 @@ void DebugFlow(char msg[], uint32_t t)
 }
 
 // PRINT RECIEVED PACKET
-void DebugRcvd(char id, byte dat, uint16_t pack, bool conf)
+void DebugRcvd(char id, byte dat, uint16_t pack, bool do_conf)
 {
 	// Local vars
 	bool do_print = db.Console && db.print_r2a;
@@ -554,11 +556,11 @@ void DebugRcvd(char id, byte dat, uint16_t pack, bool conf)
 	if (do_print || do_log)
 	{
 		char str[100];
-		sprintf(str, "rcvd_r2a: id=%c dat=%d pack=%d conf=%s", id, dat, pack, conf ? "true" : "false");
+		sprintf(str, "   [RCVD] r2a: id=%c dat=%d pack=%d do_conf=%s", id, dat, pack, do_conf ? "true" : "false");
 		if (do_print)
 			PrintDB(str, t_rcvd);
 		if (do_log)
-			SendLogData(str, millis());
+			SendLogData(str, t_rcvd);
 	}
 }
 
@@ -573,11 +575,11 @@ void DebugSent(char id, byte d1, uint16_t pack, bool do_conf)
 	if (do_print || do_log)
 	{
 		char str[100];
-		sprintf(str, "sent_a2r: id=%c dat1=%d pack=%d do_conf=%s", id, d1, pack, do_conf ? "true" : "false");
+		sprintf(str, "   [SENT] a2r: id=%c dat1=%d pack=%d do_conf=%s", id, d1, pack, do_conf ? "true" : "false");
 		if (do_print)
 			PrintDB(str, t_sent);
 		if (do_log)
-			SendLogData(str, millis());
+			SendLogData(str, t_sent);
 	}
 }
 
@@ -727,7 +729,7 @@ int CharInd(char id, const char id_arr[], int arr_size)
 	// Print error if not found
 	if (ind == -1) {
 		char str[100];
-		sprintf(str, "!!ERROR!! CharInd(): ID \'%c\' Not Found", id);
+		sprintf(str, "!!ERROR!! [CharInd]: ID \'%c\' Not Found", id);
 		DebugFlow(str);
 	}
 
@@ -783,6 +785,7 @@ void ResetTTL()
 		digitalWrite(pin.ttlEastOn, LOW); // set back to LOW
 		isOnEast = false;
 	}
+	isOnAny = isOnNorth || isOnWest || isOnSouth || isOnEast;
 }
 
 // North
@@ -798,9 +801,10 @@ void NorthFun()
 			digitalWrite(pin.ttlNorthOn, HIGH);
 			t_outLastNorth = millis();
 			isOnNorth = true;
+			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("NORTH ON", t_outLastNorth);
+				PrintDB("[NorthFun] NORTH ON", t_outLastNorth);
 		}
 		t_inLastNorth = millis();
 	}
@@ -819,9 +823,10 @@ void WestFun()
 			digitalWrite(pin.ttlWestOn, HIGH);
 			t_outLastWest = millis();
 			isOnWest = true;
+			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("WEST ON", t_outLastWest);
+				PrintDB("[WestFun] WEST ON", t_outLastWest);
 		}
 		t_inLastWest = millis();
 	}
@@ -840,9 +845,10 @@ void SouthFun()
 			digitalWrite(pin.ttlSouthOn, HIGH);
 			t_outLastSouth = millis();
 			isOnSouth = true;
+			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("SOUTH ON", t_outLastSouth);
+				PrintDB("[SouthFun] SOUTH ON", t_outLastSouth);
 		}
 		t_inLastSouth = millis();
 	}
@@ -861,9 +867,10 @@ void EastFun()
 			digitalWrite(pin.ttlEastOn, HIGH);
 			t_outLastEast = millis();
 			isOnEast = true;
+			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("EAST ON", t_outLastEast);
+				PrintDB("[EastFun] EAST ON", t_outLastEast);
 		}
 		t_inLastEast = millis();
 	}
@@ -1038,14 +1045,14 @@ void loop()
 			{
 				digitalWrite(pin.ttlPidStop, HIGH);
 				digitalWrite(pin.ttlPidRun, LOW);
-				DebugFlow("PID STOPPED");
+				DebugFlow("[loop] PID STOPPED");
 			}
 			// Signal PID running
 			else if (r2a.dat == 1)
 			{
 				digitalWrite(pin.ttlPidRun, HIGH);
 				digitalWrite(pin.ttlPidStop, LOW);
-				DebugFlow("PID RUNNING");
+				DebugFlow("[loop] PID RUNNING");
 			}
 		}
 
@@ -1056,56 +1063,54 @@ void loop()
 			{
 				digitalWrite(pin.ttlBullStop, HIGH);
 				digitalWrite(pin.ttlBullRun, LOW);
-				DebugFlow("BULL STOPPED");
+				DebugFlow("[loop] BULL STOPPED");
 			}
 			// Signal Bull running
 			else if (r2a.dat == 1)
 			{
 				digitalWrite(pin.ttlBullRun, HIGH);
 				digitalWrite(pin.ttlBullStop, LOW);
-				DebugFlow("BULL RUNNING");
+				DebugFlow("[loop] BULL RUNNING");
 			}
 		}
 
 		// Quite and reset
 		else if (r2a.idNew == 'q') {
 			fc.doQuit = true;
-			DebugFlow("QUITING");
+			DebugFlow("[loop] QUITING");
 		}
 
 	}
 
 	// Check for rew end
-	if (fc.isRewarding)
-	{
+	if (fc.isRewarding){
 		EndRew();
 	}
 
+	// Send message confirmation
+	if (fc.doPackSend){
+		SendPacketData(r2a.idNew, 255, r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)], false);
+	}
+
 	// Set output pins back to low
-	ResetTTL();
+	if (isOnAny) {
+		ResetTTL();
+	}
 
 	// Check if IR should be pulsed 
-	if (PulseIR(del_syncPulse, dt_syncPulse))
-	{
+	if (PulseIR(del_syncPulse, dt_syncPulse)){
 		if (is_irOn)
-			DebugFlow("IR SYNC ON");
+			DebugFlow("[loop] IR SYNC ON");
 		else
-			DebugFlow("IR SYNC OFF");
+			DebugFlow("[loop] IR SYNC OFF");
 	}
 
 	// Check if ready to quit
-	if (fc.doQuit && !doPackSend)
-	{
+	if (fc.doQuit && !fc.doPackSend){
 		// Run bleep bleep
 		QuitBleep();
 		// Restart Arduino
 		REQUEST_EXTERNAL_RESET;
-	}
-
-	// Send message confirmation
-	if (doPackSend)
-	{
-		SendPacketData(r2a.idNew, 255, r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)], false);
 	}
 
 }

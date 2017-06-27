@@ -66,7 +66,7 @@ double = 8 byte
 struct DB
 {
 	// Do log
-	bool Log = false;
+	bool Log = true;
 	// What to print
 	const bool log_errors = true;
 	const bool log_flow = true;
@@ -78,13 +78,13 @@ struct DB
 	const bool log_bull = true;
 
 	// Where to print
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_motorControl = false;
-	const bool print_c2r = true;
+	const bool print_c2r = false;
 	const bool print_r2c = false;
 	const bool print_r2a = false;
 	const bool print_pid = false;
@@ -252,7 +252,7 @@ struct C2R
 {
 	const char head = '<';
 	const char foot = '>';
-	const char idList[12] = {
+	const char idList[14] = {
 		'+', // Setup handshake
 		'T', // system test command
 		'S', // start session
@@ -262,9 +262,11 @@ struct C2R
 		'H', // halt movement
 		'B', // bulldoze rat
 		'I', // rat in/out
-		'P', // position data
 		'V', // request stream status
 		'L', // request log send/resend
+		'J', // battery voltage
+		'Z', // reward zone
+		'P', // position data
 	};
 	const static int idLng = sizeof(idList) / sizeof(idList[0]);
 	uint16_t packList[idLng] = { 0 };
@@ -304,11 +306,11 @@ struct R2C
 		'H', // halt movement
 		'B', // bulldoze rat
 		'I', // rat in/out
-		'D', // execution done
 		'V', // connected and streaming
 		'L', // request log send/resend
 		'J', // battery voltage
 		'Z', // reward zone
+		'D', // execution done
 	};
 	const char head = '<';
 	const char foot = '>';
@@ -348,6 +350,13 @@ r2a;
 // Serial from other ard
 struct A2R
 {
+	const char idList[5] = {
+		'q', // quit/reset
+		'r', // reward
+		's', // sound cond [0, 1, 2]
+		'p', // pid mode [0, 1]
+		'b', // bull mode [0, 1]
+	};
 	const char head = '{';
 	const char foot = '}';
 	byte dat[1] = { 255 };
@@ -405,20 +414,20 @@ float moveToDist = 0;
 float moveToStartPos = 0;
 
 // REWARD
-int dt_blockRew = 5000; // (ms)
+int dt_blockRew = 15000; // (ms)
 
-						// EtOH 
-						/*
-						EtOH run after min time or distance
-						*/
+// EtOH 
+/*
+EtOH run after min time or distance
+*/
 const int dt_durEtOH = 1000; // (ms)
 const int dt_delEtOH = 30000; // (ms)
 const float distMaxEtOH = (140 * PI) / 2; // (cm)
 
-										  // Volt tracking
-										  /*
-										  Updated when EtOH relay opened
-										  */
+// Volt tracking
+/*
+Updated when EtOH relay opened
+*/
 const float bit2volt = 0.0164;
 float voltNew = 0;
 float batVoltArr[100] = { 0 };
@@ -428,7 +437,7 @@ const int trackLEDduty = 75; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-						 // LCD
+// LCD
 extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 
@@ -1067,12 +1076,9 @@ void POSTRACK::SetDat(float set_pos, uint32_t t)
 void POSTRACK::SetPos(float set_pos, float set_laps)
 {
 	posNow = set_pos;
+	nLaps = set_laps;
 	sampCnt = 0;
 	isDataNew = false;
-	if (set_pos != -100)
-	{
-		nLaps = set_laps;
-	}
 }
 
 #pragma endregion 
@@ -1186,7 +1192,7 @@ float PID::UpdatePID()
 
 				if (isFirstRun)
 				{
-					PrintPID("pid: first run");
+					PrintPID("[PID::UpdatePID] First Run");
 					isFirstRun = false;
 				}
 
@@ -1203,7 +1209,7 @@ float PID::UpdatePID()
 void PID::Run(char called_from[])
 {
 	// Take motor control
-	SetMotorControl("Pid", "Pid.Run");
+	SetMotorControl("Pid", "PID::Run");
 
 	// Reset
 	Reset();
@@ -1214,7 +1220,7 @@ void PID::Run(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "pid: run [%s]", called_from);
+	sprintf(str, "[PID::Run] Run [%s]", called_from);
 	PrintPID(str);
 }
 
@@ -1229,7 +1235,7 @@ void PID::Stop(char called_from[])
 		runSpeed = 0;
 
 		// Give over control
-		SetMotorControl("Open", "Pid.Stop");
+		SetMotorControl("Open", "PID::Stop");
 	}
 
 	// Tell ard pid is stopped
@@ -1246,7 +1252,7 @@ void PID::Stop(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "pid: stop [%s]", called_from);
+	sprintf(str, "[PID::Stop] Stop [%s]", called_from);
 	PrintPID(str);
 }
 
@@ -1260,7 +1266,7 @@ void PID::Hold(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "pid: hold [%s]", called_from);
+	sprintf(str, "[PID::Hold] Hold [%s]", called_from);
 	PrintPID(str);
 }
 
@@ -1296,7 +1302,7 @@ void PID::SetThrottle()
 			doThrottle = false;
 
 			char str[100] = { 0 };
-			sprintf(str, "pid: throttle acc to %0.2fcm/sec", throttleAcc);
+			sprintf(str, "[PID::SetThrottle] Throttle ACC to %0.2fcm/sec", throttleAcc);
 			PrintPID(str);
 		}
 		else
@@ -1329,7 +1335,7 @@ void PID::CheckThrottle()
 
 			// Reset flag
 			isThrottled = false;
-			PrintPID("pid: finished throttle");
+			PrintPID("[PID::CheckThrottle] Finished Throttle");
 		}
 	}
 }
@@ -1341,19 +1347,19 @@ void PID::CheckMotorControl()
 		mode == "Hold")
 	{
 		// Print taking conrol
-		PrintPID("pid: take motor conrol [Pid.CheckMotorControl]");
+		PrintPID("[PID::CheckMotorControl] Take Motor Control [PID::CheckMotorControl]");
 
 		// Run pid
-		Run("Pid.CheckMotorControl");
+		Run("PID::CheckMotorControl");
 	}
 	else if ((fc.motorControl != "Pid" && fc.motorControl != "Open") &&
 		mode == "Automatic")
 	{
 		// Print taking conrol
-		PrintPID("pid: give up motor conrol [Pid.CheckMotorControl]");
+		PrintPID("[PID::CheckMotorControl] Surender Motor Control [PID::CheckMotorControl]");
 
 		// Hold pid
-		Hold("Pid.CheckMotorControl");
+		Hold("PID::CheckMotorControl");
 	}
 }
 
@@ -1363,7 +1369,7 @@ void PID::CheckSetpointCrossing()
 	if (isHolding4cross && error > 0)
 	{
 		isHolding4cross = false;
-		PrintPID("pid: crossed setpoint");
+		PrintPID("[PID::CheckSetpointCrossing] Crossed Setpoint");
 	}
 }
 
@@ -1385,7 +1391,7 @@ void PID::ResetEKF(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "pid: reset ekf [%s]", called_from);
+	sprintf(str, "[PID::ResetEKF] Reset EKF [%s]", called_from);
 	PrintPID(str);
 }
 
@@ -1577,7 +1583,7 @@ void BULLDOZE::UpdateBull()
 				if (isTimeUp &&
 					mode == "Inactive")
 				{
-					Run("BULLDOZE.UpdateBull");
+					Run("BULLDOZE::UpdateBull");
 				}
 			}
 			// Has moved minimal targ_dist
@@ -1594,7 +1600,7 @@ void BULLDOZE::UpdateBull()
 					mode == "Active" &&
 					bDelay != 0)
 				{
-					Stop("BULLDOZE.UpdateBull");
+					Stop("BULLDOZE::UpdateBull");
 				}
 			}
 
@@ -1613,14 +1619,14 @@ void BULLDOZE::Reinitialize(byte del, byte spd, char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "bull: reinitialize [%s]", called_from);
+	sprintf(str, "[BULLDOZE::Reinitialize] Reinitialize Bull [%s]", called_from);
 	PrintBull(str);
 }
 
 void BULLDOZE::Run(char called_from[])
 {
 	// Take control
-	SetMotorControl("Bull", "BULLDOZE.Run");
+	SetMotorControl("Bull", "BULLDOZE::Run");
 
 	// Start bulldozer
 	RunMotor('f', bSpeed, "Bull");
@@ -1633,7 +1639,7 @@ void BULLDOZE::Run(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "bull: run [%s]", called_from);
+	sprintf(str, "[BULLDOZE::Run] Run [%s]", called_from);
 	PrintBull(str);
 }
 
@@ -1645,7 +1651,7 @@ void BULLDOZE::Stop(char called_from[])
 	// Give over control
 	if (fc.motorControl == "Bull")
 	{
-		SetMotorControl("Open", "BULLDOZE.Stop");
+		SetMotorControl("Open", "BULLDOZE::Stop");
 	}
 
 	// Reset bull next
@@ -1659,7 +1665,7 @@ void BULLDOZE::Stop(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "bull: stop [%s]", called_from);
+	sprintf(str, "[BULLDOZE::Stop] Stop [%s]", called_from);
 	PrintBull(str);
 }
 
@@ -1673,7 +1679,7 @@ void BULLDOZE::TurnOn(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "bull: on [%s]", called_from);
+	sprintf(str, "[BULLDOZE::TurnOn] Turn On [%s]", called_from);
 	PrintBull(str);
 }
 
@@ -1686,12 +1692,12 @@ void BULLDOZE::TurnOff(char called_from[])
 	if (mode == "Active")
 	{
 		// Stop bull
-		Stop("BULLDOZE.TurnOff");
+		Stop("BULLDOZE::TurnOff");
 	}
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "bull: off [%s]", called_from);
+	sprintf(str, "[BULLDOZE::TurnOff] Turn Off [%s]", called_from);
 	PrintBull(str);
 }
 
@@ -1704,7 +1710,7 @@ void BULLDOZE::Hold(char called_from[])
 	if (mode == "Active")
 	{
 		// Run stop bulldozer
-		Stop("BULLDOZE.Hold");
+		Stop("BULLDOZE::Hold");
 
 		// Set mode back to active for later
 		mode = "Active";
@@ -1726,7 +1732,7 @@ void BULLDOZE::Resume(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "bull: resume [%s]", called_from);
+	sprintf(str, "[BULLDOZE::Resume] Resume [%s]", called_from);
 	PrintBull(str);
 }
 
@@ -1748,13 +1754,13 @@ void BULLDOZE::CheckMotorControl()
 		state == "Hold")
 	{
 		// Turn bull on
-		Resume("BULLDOZE.CheckMotorControl");
+		Resume("BULLDOZE::CheckMotorControl");
 	}
 	else if ((fc.motorControl != "Bull" && fc.motorControl != "Pid" && fc.motorControl != "Open") &&
 		state == "On")
 	{
 		// Turn bull off
-		Hold("BULLDOZE.CheckMotorControl");
+		Hold("BULLDOZE::CheckMotorControl");
 	}
 }
 
@@ -1942,7 +1948,7 @@ bool REWARD::StartRew(bool do_stop, bool is_button_reward)
 	{
 		HardStop("StartRew");
 		// Set hold time
-		BlockMotorTill(dt_block, "REWARD.StartRew");
+		BlockMotorTill(dt_block, "REWARD::StartRew");
 	}
 
 	// Store and send packet imediately
@@ -1966,7 +1972,7 @@ bool REWARD::StartRew(bool do_stop, bool is_button_reward)
 	else
 	{
 		char str[100] = { 0 };
-		sprintf(str, "REWARDING FOR %dms...", duration);
+		sprintf(str, "{REWARD::StartRew] RUNNING: Reward for %dms...", duration);
 		DebugFlow(str);
 	}
 
@@ -2000,7 +2006,7 @@ bool REWARD::EndRew()
 		}
 		else
 		{
-			DebugFlow("REWARD FINISHED");
+			DebugFlow("[REWARD::EndRew] FINISHED: Reward");
 		}
 
 		// Set/reset flags
@@ -2304,8 +2310,8 @@ void REWARD::Reset()
 	// Log zone info
 	if (mode == "Free" || mode == "Cue")
 	{
-		char str1[200] = "ZONE OCC:";
-		char str2[200] = "ZONE CNT:";
+		char str1[200] = "[REWARD::Reset] ZONE OCC:";
+		char str2[200] = "[REWARD::Reset] ZONE CNT:";
 		for (int i = zoneMin; i <= zoneMax; i++)
 		{
 			char ss1[50];
@@ -2460,7 +2466,7 @@ int LOGGER::OpenNewLog()
 		return 0;
 
 	// Write first log entry
-	sprintf(str, "Begin %s", logFile);
+	sprintf(str, "Begin Logging to \"%s\"", logFile);
 	StoreLogEntry(str);
 
 	// Return log number
@@ -2730,7 +2736,6 @@ bool LOGGER::StoreLogEntry(char msg[], uint32_t t)
 	// Local vars
 	uint32_t t_timeout = millis() + 1000;
 	char msg_out[200] = { 0 };
-	char str[300];
 	int log_bytes = 0;
 	uint32_t t_m = 0;
 
@@ -2743,19 +2748,20 @@ bool LOGGER::StoreLogEntry(char msg[], uint32_t t)
 		// itterate count
 		cntLogStored++;
 
-		// Remove leading white spaces
-		int ii = 0;
-		while (msg[ii] == ' ')
-			ii++;
-		int ws_lng = ii;
-		for (int i = 0; i < strlen(msg) - ws_lng; i++) {
-			str[i] = msg[ii];
-			ii++;
-		}
-		str[strlen(msg) - ws_lng] = '\0';
+		//// Remove leading white spaces
+		//char str[300];
+		//int ii = 0;
+		//while (msg[ii] == ' ')
+		//	ii++;
+		//int ws_lng = ii;
+		//for (int i = 0; i < strlen(msg) - ws_lng; i++) {
+		//	str[i] = msg[ii];
+		//	ii++;
+		//}
+		//str[strlen(msg) - ws_lng] = '\0';
 
 		// Put it all together
-		sprintf(msg_out, "[%d],%lu,%s\r\n", cntLogStored, t_m, str);
+		sprintf(msg_out, "[%d],%lu,%s\r\n", cntLogStored, t_m, msg);
 
 		// Add min delay
 		if (millis() - t_write < 15) {
@@ -2775,8 +2781,8 @@ bool LOGGER::StoreLogEntry(char msg[], uint32_t t)
 		// Print stored log
 		if (db.print_logging) {
 			msg_out[strlen(msg_out) - 1] = '\0';
-			sprintf(str, "   stored log: num=%d bytes=%d/%d msg=\"%s\"", cntLogStored, log_bytes, bytesStored, msg_out);
-			StoreDBPrintStr(str, millis());
+			sprintf(msg, "   [LOG] r2c: num=%d bytes=%d/%d msg=\"%s\"", cntLogStored, log_bytes, bytesStored, msg_out);
+			StoreDBPrintStr(msg, millis());
 		}
 
 		// Return success
@@ -2902,14 +2908,19 @@ void LOGGER::SendLogEntry()
 
 			// Check for error
 			if (c_arr[2] == '!') {
-				if (c_arr[0] == '\r' &&
-					c_arr[1] == '\n')
+				if ((c_arr[0] == '\r' && c_arr[1] == '\n') ||
+					read_ind < 3)
 				{
 					// Retry only once
 					cnt_err_read++;
 					if (cnt_err_read > 1) {
 						do_abort = true;
 						sprintf(err_str, "Log \"read\" Failed");
+					}
+					else {
+						sprintf(str, "WARNING [LOGGER::GetReply] Log \"read\" Failure %d", cnt_err_read);
+						DebugError(str);
+						while (PrintDebug());
 					}
 
 					// Break
@@ -2950,7 +2961,9 @@ void LOGGER::SendLogEntry()
 			}
 
 			// Send new byte
-			//SerialUSB.write(PrintSpecialChars(c_arr[2]));
+			/*
+			SerialUSB.write(PrintSpecialChars(c_arr[2]));
+			*/
 			Serial1.write(c_arr[2]);
 			t_last_write = micros();
 			bytesSent++;
@@ -2977,7 +2990,7 @@ void LOGGER::SendLogEntry()
 	dt_write_mu = (float)dt_read[0] / (float)dt_read[1];
 
 	// End reached send ">>>"
-	byte msg_end[3] = { '>','>','>'};
+	byte msg_end[3] = { '>','>','>' };
 
 	Serial1.write(msg_end, 3);
 	delay(100);
@@ -3043,6 +3056,7 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 		randomSeed(analogRead(A0));
 		for (int i = 0; i < n_entry - 1; i++)
 		{
+			// Make random sized strings
 			//char num_str[15] = { 0 };
 			//char msg[200] = { 0 };
 			//for (int i = 0; i < 18; i++)
@@ -3054,9 +3068,11 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 			//}
 			//StoreLogEntry(msg, millis());
 			//msg[0] = '\0';
-			// TEMP
-			//char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLL";
-			char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEE";
+
+			// Make uniformed size strings
+			char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLL";
+			//char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEE";
+
 			StoreLogEntry(msg, millis());
 		}
 		sprintf(str, "[LOGGER::TestLoad] FINISHED: Write %d Logs", n_entry);
@@ -3511,7 +3527,7 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
-	FORMAT: [0]head, [1]id, [2]dat, [3]pack, [4]do_conf, [5]footer, [6]targ
+	FORMAT: [0]head, [1]id, [2]dat, [3:4]pack, [5]do_conf, [6]footer, [7]targ
 	*/
 
 	// Local vars
@@ -3574,9 +3590,6 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 	// Update queue index
 	sendQueueInd--;
 
-	// Store reciever id in last col
-	sendQueue[queue_ind][sendQueueCols - 1] = targ;
-
 	// Store header
 	sendQueue[queue_ind][0] = head;
 	// Store mesage id
@@ -3593,6 +3606,9 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 	// Store footer
 	sendQueue[queue_ind][6] = foot;
 
+	// Store reciever id in last col
+	sendQueue[queue_ind][7] = targ;
+
 	// Set to send
 	fc.doPackSend = true;
 
@@ -3603,7 +3619,7 @@ void SendPacketData()
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
-	FORMAT: [0]head, [1]id, [2]dat, [3]pack, [4]do_conf, [5]footer, [6]targ
+	FORMAT: [0]head, [1]id, [2]dat, [3:4]pack, [5]do_conf, [6]footer, [7]targ
 	*/
 
 	// Local vars
@@ -3617,8 +3633,16 @@ void SendPacketData()
 	uint16_t pack = 0;
 	int id_ind = 0;
 
+	// Move next in queue to temp msg array
+	for (int j = 0; j < msg_lng; j++){
+		msg[j] = sendQueue[sendQueueRows - 1][j];
+	}
+
+	// Copy target from last row
+	targ = sendQueue[sendQueueRows - 1][sendQueueCols - 1];
+
 	// pull out msg id
-	id = sendQueue[sendQueueRows - 1][1];
+	id = msg[1];
 	// dat
 	dat = msg[2];
 	// pack
@@ -3628,14 +3652,6 @@ void SendPacketData()
 	pack = U.i16[0];
 	// do_conf 
 	do_conf = msg[5] == 1 ? true : false;
-	// targ
-	targ = sendQueue[sendQueueRows - 1][sendQueueCols - 1];
-
-	// Move next in queue to temp msg array
-	for (int j = 0; j < msg_lng; j++)
-	{
-		msg[j] = sendQueue[sendQueueRows - 1][j];
-	}
 
 	// Send sync time or rew tone immediately
 	if (
@@ -3730,7 +3746,7 @@ bool CheckResend(char targ)
 				if (r2a.resendCnt[i] < resendMax) {
 
 					// Resend data
-					StorePacketData('a', r2a.idList[i], r2a.datList[i], r2a.packList[i]);
+					StorePacketData('a', r2a.idList[i], r2a.datList[i], r2a.packList[i], true);
 
 					// Update count
 					r2a.resendCnt[i]++;
@@ -3761,7 +3777,7 @@ bool CheckResend(char targ)
 				if (r2c.resendCnt[i] < resendMax) {
 
 					// Resend data
-					StorePacketData('c', r2c.idList[i], r2c.datList[i], r2c.packList[i]);
+					StorePacketData('c', r2c.idList[i], r2c.datList[i], r2c.packList[i], true);
 
 					// Update count
 					r2c.resendCnt[i]++;
@@ -3961,7 +3977,7 @@ void AD_CheckOC()
 		// Check for overcurrent shut down
 		if (ocd_r == 0 || ocd_f == 0)
 		{
-			sprintf(str, "!!ERROR!! AD OCD: R_OCD=%d F_OCD=%d", ocd_r, ocd_f);
+			sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected: R_OCD=%d F_OCD=%d", ocd_r, ocd_f);
 			DebugError(str);
 			cnt_errors++;
 			//AD_Reset();
@@ -3972,7 +3988,7 @@ void AD_CheckOC()
 	}
 	// Disable error checking after 5 hits
 	else if (cnt_errors >= 5) {
-		sprintf(str, "!!ERROR!! DISABLED AD CHECK AFTER %d ERRORS", cnt_errors);
+		sprintf(str, "!!ERROR!! [AD_CheckOC] Disabled AD Check After %d Errors", cnt_errors);
 		DebugError(str);
 		dp_disable = true;
 	}
@@ -3999,7 +4015,7 @@ void HardStop(char called_from[])
 
 	// Print event
 	char str[100] = { 0 };
-	sprintf(str, "HARD STOP [%s]", called_from);
+	sprintf(str, "[HardStop] Hard Stop [%s]", called_from);
 	DebugFlow(str);
 }
 
@@ -4132,7 +4148,7 @@ void BlockMotorTill(int dt, char called_from[])
 	SetMotorControl("None", "BlockMotorTill");
 
 	// Print blocking finished
-	DebugMotorBocking("blocking motor for: dt=", dt, called_from);
+	DebugMotorBocking("Blocking Motor for ", dt, called_from);
 }
 
 // CHECK IF TIME ELLAPESED
@@ -4151,7 +4167,7 @@ void CheckBlockTimElapsed()
 		if (millis() > dt_blockMotor || is_passed_feeder)
 		{
 			// Print blocking finished
-			DebugMotorBocking("finished blocking motor: tim=", millis(), "CheckBlockTimElapsed");
+			DebugMotorBocking("Finished Blocking Motor at ", millis(), "CheckBlockTimElapsed");
 
 			// Retract feeder arm
 			Reward.RetractFeedArm();
@@ -4176,20 +4192,21 @@ void InitializeTracking()
 		RobVT.isDataNew)
 	{
 		// Local vars
+		char str[200] = { 0 };
 		int n_laps = 0;
 		float cm_diff = 0;
 		float cm_dist = 0;
 
-		// Print process
-		DebugFlow("INITIALIZING RAT TRACKING");
+		// Log/Print
+		DebugFlow("[InitializeTracking] RUNNING: Initialize Rat Tracking");
 
 		// Check that rat pos > robot pos
 		n_laps = RatVT.posNow > RobVT.posNow ? 0 : 1;
-		if (n_laps > 0)
-			DebugFlow("SET RAT POS AHEAD");
 		// set n_laps for rat vt data
 		RatVT.SetPos(RatVT.posNow, n_laps);
 		RatPixy.SetPos(RatPixy.posNow, n_laps);
+		if (n_laps > 0)
+			DebugFlow("WARINING [InitializeTracking] Set Rat Ahead of Robot");
 
 		// Check that results make sense
 		cm_diff = RatVT.posNow - RobVT.posNow;
@@ -4202,41 +4219,45 @@ void InitializeTracking()
 			RatVT.SetPos(0, 0);
 			RatPixy.SetPos(0, 0);
 			RobVT.SetPos(0, 0);
-			DebugFlow("RAT POS WRONG SO POS DATA RESET");
+			DebugFlow("WARINING [InitializeTracking] Had to Reset Position Data");
+			return;
 		}
-		// Good to go
-		else
+
+		// Log/print rat and robot starting pos
+		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f", RatVT.posNow, RatPixy.posNow, RobVT.posNow);
+		DebugFlow(str);
+
+		// Set flag
+		fc.isTrackingEnabled = true;
+
+		// Reset ekf
+		Pid.ResetEKF("InitializeTracking");
+
+		// Don't start pid for manual sessions
+		if (!fc.isManualSes)
 		{
+			// Open up motor control
+			SetMotorControl("Open", "InitializeTracking");
 
-			// Set flag
-			fc.isTrackingEnabled = true;
-
-			// Reset ekf
-			Pid.ResetEKF("InitializeTracking");
-
-			// Don't start pid for manual sessions
-			if (!fc.isManualSes)
-			{
-				// Open up motor control
-				SetMotorControl("Open", "InitializeTracking");
-
-				// Run Pid
-				Pid.Run("InitializeTracking");
-				DebugFlow("Pid STARTED");
-			}
-
-			// Initialize bulldoze
-			if (fc.doBulldoze)
-			{
-				// Run from initial blocked mode
-				Bull.TurnOn("InitializeTracking");
-				DebugFlow("BULLDOZE INITIALIZED");
-			}
-
-			// Blink lcd display
-			RatInBlink();
-
+			// Run Pid
+			Pid.Run("InitializeTracking");
+			DebugFlow("[InitializeTracking] PID STARTED");
 		}
+
+		// Initialize bulldoze
+		if (fc.doBulldoze)
+		{
+			// Run from initial blocked mode
+			Bull.TurnOn("InitializeTracking");
+			DebugFlow("[InitializeTracking] BULLDOZE INITIALIZED");
+		}
+
+		// Blink lcd display
+		RatInBlink();
+
+		// Log/Print
+		DebugFlow("[InitializeTracking] FINISHED: Initialize Rat Tracking");
+
 	}
 }
 
@@ -4333,16 +4354,13 @@ void UpdateEKF()
 		// Update pid next loop time
 		Pid.SetLoopTime(millis());
 
-		// Set rat pos data to match robot
-		if (!fc.isRatIn)
-		{
+		// Hold rat pos at 0
+		if (!fc.isRatIn){
 			RatVT.SetPos(0, 0);
 			RatPixy.SetPos(0, 0);
 		}
-		// Set rat pos data to match robot
-		else if (fc.isTrackingEnabled)
-		{
-			// Set flag for reward 
+		// Set flag for reward
+		else if (fc.isTrackingEnabled){
 			Reward.is_ekfNew = true;
 		}
 
@@ -4374,7 +4392,7 @@ void UpdateEKF()
 		// Check for nan values
 		if (isnan(rat_pos) || isnan(rob_pos) || isnan(rat_vel) || isnan(rob_vel)) {
 			char str[200] = { 0 };
-			sprintf(str, "!!ERROR!! \"nan\" EKF OUTPUT: ratVT=%0.2f|%0.2f ratPixy=%0.2f|%0.2f robVT=%0.2f|%0.2f",
+			sprintf(str, "!!ERROR!! [UpdateEKF] \"nan\" EKF Output: ratVT=%0.2f|%0.2f ratPixy=%0.2f|%0.2f robVT=%0.2f|%0.2f",
 				RatVT.posNow, RatVT.velNow, RatPixy.posNow, RatPixy.velNow, RobVT.posNow, RatVT.velNow);
 			DebugError(str);
 		}
@@ -4469,7 +4487,7 @@ void CheckEtOH()
 				fc.isEtOHOpen = true;
 
 				// Print to debug
-				DebugFlow("EtOH SOLENOID OPEN");
+				DebugFlow("[CheckEtOH] EtOH Solenoid Open");
 			}
 		}
 
@@ -4486,7 +4504,7 @@ void CheckEtOH()
 			fc.isEtOHOpen = false;
 
 			// Print to debug
-			DebugFlow("EtOH SOLENOID CLOSE");
+			DebugFlow("[CheckEtOH] EtOH Solenoid Closed");
 		}
 	}
 }
@@ -4541,8 +4559,8 @@ void GetBattVolt()
 		if (fc.isStreaming)
 			StorePacketData('c', 'J', byte_out, 0);
 
-		char str[50] = { 0 };
-		sprintf(str, "VCC: %0.2fV", volt_avg);
+		char str[100] = { 0 };
+		sprintf(str, "[GetBattVolt] VCC=%0.2fV", volt_avg);
 		DebugFlow(str);
 
 		// Reset flag
@@ -4767,7 +4785,7 @@ void DebugDropped(int missed, int missed_total, int total)
 		buff_rx = Serial1.available();
 
 		char str[200] = { 0 };
-		sprintf(str, "!!ERROR!! PACK LOST: tot=%d/%d/%d tx=%d rx=%d", missed, missed_total, total, buff_tx, buff_rx);
+		sprintf(str, "!!ERROR!! [DebugDropped] Dropped Packet: tot=%d/%d tx=%d rx=%d", missed_total, total, buff_tx, buff_rx);
 
 		// Add to print queue
 		if (do_print)
@@ -4796,7 +4814,7 @@ void DebugResent(char id, uint16_t pack, int total)
 		buff_rx = Serial1.available();
 
 		char str[200] = { 0 };
-		sprintf(str, "!!ERROR!! RESENT PACK: tot=%d tx=%d rx=%d id=%c pack=%d", total, buff_tx, buff_rx, id, pack);
+		sprintf(str, "!!ERROR!! [DebugResent] Resent Packet: tot=%d tx=%d rx=%d id=%c pack=%d", total, buff_tx, buff_rx, id, pack);
 
 		// Add to print queue
 		if (do_print)
@@ -4817,7 +4835,7 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 	if (do_print || do_log)
 	{
 		char str[200] = { 0 };
-		sprintf(str, "   mc change %s: set_in=%s set_out=%s [%s]", pass ? "succeeded" : "failed", set_to, fc.motorControl.c_str(), called_from);
+		sprintf(str, "[DebugMotorControl] Change %s: set_in=%s set_out=%s [%s]", pass ? "Succeeded" : "Failed", set_to, fc.motorControl.c_str(), called_from);
 
 		// Add to print queue
 		if (do_print)
@@ -4838,7 +4856,7 @@ void DebugMotorBocking(char msg[], uint32_t t, char called_from[])
 	if (do_print || do_log)
 	{
 		char str[100] = { 0 };
-		sprintf(str, "   %s %lu ms [%s]", msg, t, called_from);
+		sprintf(str, "[DebugMotorBocking] %s %lu ms [%s]", msg, t, called_from);
 
 		// Add to print queue
 		if (do_print)
@@ -4862,10 +4880,10 @@ void DebugRcvd(char from, char id, uint16_t pack)
 		char str[200] = { 0 };
 		if (from == 'c')
 		{
-			sprintf(str, "   rcvd_%c2r: id=%c dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%d", from, id, c2r.dat[0], c2r.dat[1], c2r.dat[2], pack);
+			sprintf(str, "   [RCVD] %c2r: id=%c dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%d", from, id, c2r.dat[0], c2r.dat[1], c2r.dat[2], pack);
 		}
 		else
-			sprintf(str, "   rcvd_%c2r: id=%c dat1=%0.2f pack=%d", from, id, a2r.dat[0], pack);
+			sprintf(str, "   [RCVD] %c2r: id=%c dat1=%0.2f pack=%d", from, id, a2r.dat[0], pack);
 
 		// Add to print queue
 		if (do_print)
@@ -4891,7 +4909,7 @@ void DebugSent(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 
 		// Make string
 		char str[200];
-		sprintf(str, "   sent_r2%c: id=%c dat=%d pack=%d do_conf=%s", targ, id, d1, pack, do_conf ? "true" : "false");
+		sprintf(str, "   [SENT] r2%c: id=%c dat=%d pack=%d do_conf=%s", targ, id, d1, pack, do_conf ? "true" : "false");
 
 		// Store
 		if (do_print)
@@ -4925,7 +4943,7 @@ void StoreDBPrintStr(char msg[], uint32_t t)
 	if (printQueueInd == 0)
 	{
 		// Store error so this is printed
-		char err_str[100] = "!!ERROR!! PRINT QUEUE OVERFLOWED";
+		char err_str[100] = "!!ERROR!! [StoreDBPrintStr] Print Queue Overflowed";
 		for (int c = 0; c < strlen(err_str) + 1; c++)
 			msg[c] = err_str[c];
 	}
@@ -5390,9 +5408,6 @@ void setup() {
 	DebugFlow(str);
 	while (PrintDebug());
 
-	// SHOW RESTART BLINK
-	StatusBlink(1, 0);
-
 	// SETUP OUTPUT PINS
 
 	// Autodriver
@@ -5526,6 +5541,9 @@ void setup() {
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
 
+	// SHOW RESTART BLINK
+	StatusBlink(1, 0);
+
 	// SETUP OPENLOG
 	DebugFlow("[setup] RUNNING: OpenLog Setup");
 	while (PrintDebug());
@@ -5593,7 +5611,7 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	Log.TestLoad(0, "LOG00074.CSV");
+	//Log.TestLoad(0, "LOG00074.CSV");
 	//Log.TestLoad(5000);
 
 }

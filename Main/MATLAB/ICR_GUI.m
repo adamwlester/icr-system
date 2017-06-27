@@ -1,4 +1,4 @@
-function[] = ICR_GUI(sysTest, doDebug, isMatSolo, csTime)
+function[] = ICR_GUI(sysTest, doDebug, isMatSolo)
 % INPUT:
 %	sysTest = [0,1,2,3]
 %    	0: No test
@@ -30,6 +30,7 @@ global m2c_dat2; % data out to CS
 global m2c_dat3; % data out to CS
 global m2c_flag; % new data flag out to CS
 global m2c_dir; % current cheetah directory
+global posSim; % array for sim data
 % CS to Matlba communication
 global c2m_W; % sync time
 global c2m_J; % battery voltage
@@ -62,9 +63,6 @@ for z_v = 1:length(c2m_ind)
 end
 
 % Handle input args
-if nargin < 4
-    csTime = 0;
-end
 if nargin < 3
     isMatSolo = true;
 end
@@ -74,9 +72,6 @@ end
 if nargin < 1
     sysTest = 0;
 end
-
-% Get corrected start time in seconds
-D.DB.startTime = D.DB.startTime - double(csTime)/1000;
 
 % Get testing condition
 switch sysTest
@@ -101,17 +96,17 @@ end
 %   val 3 = rotation direction [-1, 1], [ACW, CW]
 %   val 4 = sound state [0, 1], [no sound, sound]
 %...........................m2c_id...................................
-%    'S', // start session [(byte)ses_cond, (byte)sound_cond]
+%    'T', // system test command [(byte)test]
+%    'G', // matlab gui loaded [NA]
+%    'N', // netcom setup [NA]
+%    'A', // connected to AC computer [NA]
+%    'S', // setup session [(byte)ses_cond, (byte)sound_cond]
 %    'M', // move to position [(float)targ_pos]
 %    'R', // run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
 %    'H', // halt movement [(byte)halt_state]
 %    'B', // bulldoze rat [(byte)bull_delay, (byte)bull_speed]
 %    'I', // rat in/out [(byte)in/out]
-%    'N', // matlab not loaded [NA]
-%    'G', // matlab gui loaded [NA]
-%    'A', // connected to AC computer [NA]
 %    'F', // data saved [NA]
-%    'T', // system test command [(byte)test]
 %    'X', // confirm quit
 %    'C', // confirm close
 %...........................c2m_id...................................
@@ -173,26 +168,21 @@ D.DB.Session_Condition = 'Behavior_Training';
 D.DB.Cue_Condition = 'None';
 
 % Halt Error test
-D.DB.velSteps = 10:10:80; % (cm/sec)
-D.DB.stepSamp = 4;
+%D.DB.velSteps = 10:10:80; % (cm/sec)
+%D.DB.stepSamp = 4;
+D.DB.velSteps = 40:10:80; % (cm/sec)
+D.DB.stepSamp = 2;
 
 % Simulated rat test
 D.DB.ratMaxVel = 30; % (cm/sec)
 D.DB.ratMaxAcc = 10; % (cm/sec/sec)
 D.DB.ratStopTim = 5; % (sec)
-D.DB.simX = 0;
-D.DB.simY = 0;
-D.DB.simTS = 0;
-
-
-
-
-
+posSim(:) = 0;
 
 %% ========================= TOP LEVEL RUN ===============================
 
 % Initilize top level vars
-FigH = figure('Visible', 'On', ...
+FigH = figure('Visible', 'Off', ...
     'DeleteFcn', {@ForceClose});
 
 % RUN MAIN FUNCTION
@@ -222,7 +212,7 @@ else
             ME.identifier, ...
             ME.message);
         for z_line = 1:length(ME.stack)
-            err = [err, sprintf('Fun: %s\rLine: %d\r', ME.stack(z_line).name, ME.stack(z_line).line)];
+            err = [err, sprintf('Fun: %s\rLine: %d\r', ME.stack(z_line).name, ME.stack(z_line).line)]; %#ok<AGROW>
         end
         err = [err, sprintf('\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')];
         % Log/print error message
@@ -267,8 +257,27 @@ if ~D.B.force_close
     Disconnect_AC();
     % Disconnect from NetCom
     Disconnect_NLX();
-    
-    % Close figure
+   
+end
+
+% Save log
+Update_Console('RUNNING: Save ICR_GUI Log...');
+if size(who('global'),1) > 0
+    % Make new file
+    if ~exist(D.DIR.logTemp, 'file');
+        mkdir(D.DIR.logTemp);
+    end
+    fi_path = D.DIR.logTemp;
+    fid = fopen(fi_path,'wt');
+    fprintf(fid, D.DB.logStr);
+    fclose(fid);
+    Update_Console(sprintf('FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
+else
+    Update_Console('ABBORTED: Save ICR_GUI Log');
+end
+
+% Close figure
+if ~D.B.force_close
     D.B.close = true;
     close(FigH)
     delete(FigH)
@@ -282,22 +291,6 @@ if ~isMatSolo
     Update_Console('RUNNING: Wait for GUI Closed Confirm...');
     while c2m_C == 0; drawnow; end;
     Update_Console('FINISHED: Wait for GUI Closed Confirm');
-end
-
-% Save log
-Update_Console('RUNNING: Save ICR_GUI Log...');
-if size(who('global'),1) > 0
-    % Make new file
-    if ~exist(D.DIR.logTemp, 'file');
-        mkdir(D.DIR.logTemp);
-    end
-    fi_path = fullfile(D.DIR.logTemp, 'ICR_GUI_Log.csv');
-    fid = fopen(fi_path,'wt');
-    fprintf(fid, log_str);
-    fclose(fid);
-    Update_Console(sprintf('FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
-else
-    Update_Console('ABBORTED: Save ICR_GUI Log');
 end
 
 % Clear all variables
@@ -334,18 +327,15 @@ clear(Vars{:});
             
             % Run UI setup code
             SF_UI_Setup();
+            Mat2CS('G');
             
             % Run AC setup code
             SF_AC_Setup();
-            
-            % Tell CS Matlab is connected to AC
             Mat2CS('A');
             
             % Run NLX setup code
             SF_NLX_Setup();
-            
-            % Tell CS Matlab is connected to Cheetah
-            Mat2CS('G');
+            Mat2CS('N');
             
             % Run testing setup
             SF_Run_Test_Setup();
@@ -1590,6 +1580,7 @@ clear(Vars{:});
             % QUIT ALL
             pos = [D.UI.main_ax_bounds(1)/2, D.UI.main_ax_bounds(2), D.UI.main_ax_bounds(1)/2, 0.05];
             D.UI.btnQuit = uicontrol('Style','push', ...
+                'Enable', 'off', ...
                 'String','QUIT', ...
                 'Callback', {@BtnQuit}, ...
                 'Unit', 'Normalized', ...
@@ -2394,7 +2385,8 @@ clear(Vars{:});
             set(D.UI.btnAcq, 'Value', 1)
             BtnAcq(D.UI.btnAcq);
             
-            %% ENABLE SETUP BUTTONS ONCE CONNECTED
+            %% ENABLE BUTTONS ONCE CONNECTED
+            
             % Enable all setup buttons
             set(D.UI.panStup, 'ForegroundColor', D.UI.enabledCol, ...
                 'HighlightColor',D.UI.enabledCol)
@@ -2411,6 +2403,11 @@ clear(Vars{:});
             set(D.UI.btnSetupDone, 'Enable', 'on', ...
                 'ForegroundColor', D.UI.enabledBtnFrgCol, ...
                 'BackgroundColor', D.UI.enabledCol)
+            
+            % Enable Quit
+            set( D.UI.btnQuit, 'Enable', 'on');
+            
+            % Force update gui
             drawnow;
             
             % Log/print
@@ -3355,7 +3352,6 @@ clear(Vars{:});
                     D.DB.haltDur = 5; % (sec)
                     D.DB.halt_error_str = '';
                     D.DB.t_halt = Elapsed_Seconds();
-                    D.DB.t_halt(6) = D.DB.t_halt(6) + 5;
                     D.DB.nowStep = 0;
                     D.DB.nowVel = 0;
                     D.DB.isHalted = true;
@@ -4826,11 +4822,15 @@ clear(Vars{:});
                                 fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
                                 fprintf(file_id,D.DB.halt_error_str(3:end));
                                 fclose(file_id);
+                                % Log/print
+                                Update_Console(sprintf('Saved Hault Error Test: %s', ...
+                                    fi_out));
                             end
                             
                             % Log/print
                             Update_Console(sprintf('Hault Error Test: New Vel=%dcm/sec', ...
                                 D.DB.nowVel));
+                            
                         end
                         
                         % Tell CS to resume run
@@ -4907,7 +4907,10 @@ clear(Vars{:});
                             end
                             
                             % Check if halted or holding for 5 sec for setup
-                            if ~D.B.is_haulted && Time_Diff(Elapsed_Seconds(), D.B.simTSStart) > 5
+                            if ...
+                                    D.B.rat_in && ...
+                                    ~D.B.is_haulted && ...
+                                    Time_Diff(Elapsed_Seconds(), D.T.run_str) > 5
                                 
                                 % Check if rat should stop for reward
                                 check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.UI.rewBnds(D.B.zoneInd,:,D.I.rot));
@@ -4969,9 +4972,9 @@ clear(Vars{:});
                             xy_pos = reshape(xy_pos', 1, []);
                             
                             % Update globals
-                            D.DB.simX = x;
-                            D.DB.simY = y;
-                            D.DB.simTS = ts_now;
+                            posSim(1) = ts_now;
+                            posSim(2) = x;
+                            posSim(3) = y;
                             
                             % Update simulated rat data
                             D.B.simRadLast = rad_now;
@@ -6004,13 +6007,6 @@ clear(Vars{:});
             % Log/print
             Update_Console('RUNNING: Save Session Data...');
             
-            % Get current Cheetah recording dir
-            dirs = dir(D.DIR.nlxTempTop);
-            dirs = dirs(3:end);
-            fi_dat_num = ...
-                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
-            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
-            
             %% Disconnect from NetCom
             
             Disconnect_NLX()
@@ -6031,6 +6027,16 @@ clear(Vars{:});
             % Save directory var
             % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
             D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
+            
+            % Get current Cheetah recording dir
+            dirs = dir(D.DIR.nlxTempTop);
+            dirs = dirs(3:end);
+            fi_dat_num = ...
+                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
+            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
+            
+            % Save to global for CS
+            m2c_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.recFi);
             
             % Make directory if none exists
             if exist(D.DIR.nlxSaveRat, 'dir') == 0
@@ -6143,9 +6149,6 @@ clear(Vars{:});
             
             % Set flags
             D.UI.save_done = true;
-            
-            % Save to global
-            m2c_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.recFi);
             
             % Tell CS Matlab session saved
             Mat2CS('F');
