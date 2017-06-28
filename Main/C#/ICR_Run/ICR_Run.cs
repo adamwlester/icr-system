@@ -249,7 +249,7 @@ namespace ICR_Run
         private static long resendTimeout = 500; // (ms)
         private static long guiLoadTimeout = 15000; // (ms)
         private static long acConnectTimeout = 15000; // (ms)
-        private static long importLogTimeout = 15000; // (ms)
+        private static long importLogTimeout = 10000; // (ms)
         private static int resendMax = 5;
         private static int droppedPacks = 0;
 
@@ -810,19 +810,21 @@ namespace ICR_Run
         #region ---------COMMUNICATION---------
 
         // SEND PACK DATA REPEATEDLY TILL RECIEVED CONFIRMED
-        public static bool RepeatSendPack(int send_max = 0, char id = ' ', double dat1 = double.NaN, double dat2 = double.NaN, double dat3 = double.NaN, bool do_comf = true, bool check_done = false)
+        public static bool RepeatSendPack(int send_max = 0, char id = ' ', double dat1 = double.NaN, double dat2 = double.NaN, double dat3 = double.NaN, ushort pack = 0, bool do_conf = true, bool check_done = false)
         {
             bool pass_rcvd = false;
             long t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
             int send_count = 1;
-            ushort pack = 0;
 
             // Specify max send attempts
             send_max = send_max == 0 ? resendMax : send_max;
 
             // Get new packet number
-            c2r.packCnt++;
-            pack = c2r.packCnt;
+            if (pack == 0)
+            {
+                c2r.packCnt++;
+                pack = c2r.packCnt;
+            }
 
             // Update c2r check flags
             c2r.Update(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
@@ -830,10 +832,10 @@ namespace ICR_Run
             c2r.doDoneCheck[c2r.ID_Ind(id)] = check_done ? true : false;
 
             // Send new data with new packet number
-            SendPack(id, dat1, dat2, dat3, pack, do_comf);
+            SendPack(id, dat1, dat2, dat3, pack, do_conf);
 
             // Keep checking mesage was received
-            if (do_comf)
+            if (do_conf)
             {
                 while (
                     !pass_rcvd &&
@@ -856,7 +858,8 @@ namespace ICR_Run
                         sw_main.ElapsedMilliseconds > t_timeout
                         )
                     {
-                        SendPack(id, dat1, dat2, dat2, pack, do_comf);
+                        LogEvent(String.Format("WARNING [RepeatSendPack] Resending: id={0} dat1={1:0.00} dat2={2:0.00} dat3={3:0.00} pack={4} do_conf={5}", id, dat1, dat2, dat3, pack, do_conf ? "true" : "false"));
+                        SendPack(id, dat1, dat2, dat2, pack, do_conf);
                         t_timeout = sw_main.ElapsedMilliseconds + resendTimeout;
                         send_count++;
                     }
@@ -1112,7 +1115,8 @@ namespace ICR_Run
         public static bool WaitForM2C(char id, bool do_abort = false, long timeout = long.MaxValue)
         {
             // Local vars
-            long t_timeout = timeout == long.MaxValue ? long.MaxValue : sw_main.ElapsedMilliseconds + timeout;
+            long t_start = sw_main.ElapsedMilliseconds;
+            long t_timeout = timeout == long.MaxValue ? long.MaxValue : t_start + timeout;
             string str = " ";
             bool pass = false;
             bool do_loop = true;
@@ -1150,6 +1154,15 @@ namespace ICR_Run
                     (sw_main.ElapsedMilliseconds > t_timeout)
                     )
                 {
+                    // Log/print error
+                    if (do_abort && fc.doAbort)
+                        LogEvent(String.Format("!!ERROR!! [WaitForM2C] Forced Abort After {0}ms", sw_main.ElapsedMilliseconds - t_start));
+                    else if (!fc.ContinueMatCom())
+                        LogEvent(String.Format("!!ERROR!! [WaitForM2C] Lost Comms After {0}ms", sw_main.ElapsedMilliseconds - t_start));
+                    else if (sw_main.ElapsedMilliseconds > t_timeout)
+                        LogEvent(String.Format("!!ERROR!! [WaitForM2C] Timedout After {0}ms", sw_main.ElapsedMilliseconds - t_start));
+
+                    // Set flags
                     pass = false;
                     do_loop = false;
                     fc.doAbort = true;
@@ -1173,7 +1186,8 @@ namespace ICR_Run
         public static bool WaitForR2C(char[] id_arr, bool do_abort = false, long timeout = long.MaxValue)
         {
             // Local vars
-            long t_timeout = timeout == long.MaxValue ? long.MaxValue : sw_main.ElapsedMilliseconds + timeout;
+            long t_start = sw_main.ElapsedMilliseconds;
+            long t_timeout = timeout == long.MaxValue ? long.MaxValue : t_start + timeout;
             char id = ' ';
             bool pass = false;
             bool do_check_send = false;
@@ -1201,8 +1215,8 @@ namespace ICR_Run
                     // Check if sent within past second
                     if (do_check_send)
                         is_sent = !is_sent ?
-                            c2r.Recent(id: id, t_now: sw_main.ElapsedMilliseconds, dt_max: 1000) ||
-                            r2c.Recent(id: id, t_now: sw_main.ElapsedMilliseconds, dt_max: 1000) :
+                            c2r.Recent(id: id, t_now: sw_main.ElapsedMilliseconds, dt_max: 5000) ||
+                            r2c.Recent(id: id, t_now: sw_main.ElapsedMilliseconds, dt_max: 5000) :
                             is_sent;
                     else
                         is_sent = true;
@@ -1216,10 +1230,7 @@ namespace ICR_Run
                     {
                         // Print info
                         if (first_loop)
-                        {
-                            string str = String.Format("[WaitForR2C] waiting for r2c: id={0} pack={1}...", id, c2r.packList[c2r.ID_Ind(id)]);
-                            LogEvent(str);
-                        }
+                            LogEvent(String.Format("[WaitForR2C] Waiting for r2c: id={0} pack={1}...", id, c2r.packList[c2r.ID_Ind(id)]));
                         first_loop = false;
                     }
                     // Done with this id
@@ -1238,6 +1249,15 @@ namespace ICR_Run
                         sw_main.ElapsedMilliseconds > t_timeout
                         )
                     {
+                        // Log/print error
+                        if (do_abort && fc.doAbort)
+                            LogEvent(String.Format("!!ERROR!! [WaitForR2C] Forced Abort After {0}ms", sw_main.ElapsedMilliseconds - t_start));
+                        else if (!fc.ContinueSerial())
+                            LogEvent(String.Format("!!ERROR!! [WaitForR2C] Lost Comms After {0}ms", sw_main.ElapsedMilliseconds - t_start));
+                        else if (sw_main.ElapsedMilliseconds > t_timeout)
+                            LogEvent(String.Format("!!ERROR!! [WaitForR2C] Timedout After {0}ms", sw_main.ElapsedMilliseconds - t_start));
+
+                        // Set flags                         
                         pass = false;
                         do_loop = false;
                         fc.doAbort = true;
@@ -1401,12 +1421,12 @@ namespace ICR_Run
                             c2r.doRcvdCheck[c2r.ID_Ind(id)] = false;
 
                         // Check if this is a done confirmation
-                        if (id == 'D' && c2r.PackInd(pack) != -1)
+                        if (id == 'D')
                             c2r.doDoneCheck[c2r.PackInd(pack)] = false;
 
                         // Send recieve confirmation
                         if (do_conf)
-                            RepeatSendPack(send_max: 1, id: id, dat1: dat, do_comf: false);
+                            RepeatSendPack(send_max: 1, id: id, dat1: dat, pack: pack, do_conf: false);
 
                         // Check if data should be relayed to Matlab
                         if (c2m.ID_Ind(id) != -1)
@@ -1449,7 +1469,7 @@ namespace ICR_Run
                         droppedPacks++;
 
                         // Print packet info
-                        msg_str = String.Format("!!ERROR!! R2C PACK LOST: tot={0} tx={1} rx={2} head={3} id={4} dat={5} pack={6} do_conf={7} foot={8}",
+                        msg_str = String.Format("!!ERROR!! Lost R2C Packet: tot={0} tx={1} rx={2} head={3} id={4} dat={5} pack={6} do_conf={7} foot={8}",
                             droppedPacks, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, head, id, dat, pack, do_conf, foot);
 
                         // Print
@@ -1581,7 +1601,7 @@ namespace ICR_Run
                     if (do_dump)
                     {
                         // Print
-                        LogEvent(String.Format("!!ERROR!! [DataReceived_CheetahDue] Lost Log: tot={0} tx={1} rx={2} head={3} log_str={4} chksum={5} foot={6}",
+                        LogEvent(String.Format("!!ERROR!! [DataReceived_CheetahDue] Lost A2C Log: tot={0} tx={1} rx={2} head={3} log_str={4} chksum={5} foot={6}",
                            droppedPacks, sp_cheetahDue.BytesToWrite, sp_cheetahDue.BytesToRead, head, log_str, chksum, foot));
                     }
                 }
@@ -1641,8 +1661,8 @@ namespace ICR_Run
             char[] c_arr = new char[3] { '\0', '\0', '\0' };
 
             // Send log request
-            RepeatSendPack(id: 'L', dat1: 1, do_comf: true, check_done: true);
-            while (conf_pack == 0)
+            RepeatSendPack(id: 'L', dat1: 1, do_conf: true, check_done: true);
+            while (conf_pack == 0 && sw_main.ElapsedMilliseconds < t_timeout)
                 conf_pack = c2r.packList[c2r.ID_Ind('L')];
 
             // Prevent xBee event handeler from running
@@ -1764,7 +1784,7 @@ namespace ICR_Run
                     if (rec_now != rec_last + 1)
                     {
                         robLogger.cntDropped++;
-                        LogEvent(String.Format("!!ERROR!! [GetRobotLog] Lost Log: read={0} stored={1} dropped={2}", rec_now, robLogger.cntLogged, robLogger.cntDropped));
+                        LogEvent(String.Format("!!ERROR!! [GetRobotLog] Lost R2C Log: read={0} stored={1} dropped={2}", rec_now, robLogger.cntLogged, robLogger.cntDropped));
                     }
 
                     // Update list
@@ -1902,7 +1922,7 @@ namespace ICR_Run
                 // Send data
                 if (pass)
                 {
-                    RepeatSendPack(send_max: 1, id: 'P', do_comf: false);
+                    RepeatSendPack(send_max: 1, id: 'P', do_conf: false);
                 }
             }
             else if (db.printBlockedVt)
@@ -2083,7 +2103,7 @@ namespace ICR_Run
                     }
 
                     // Send data
-                    RepeatSendPack(id: id, dat1: dat1, dat2: dat2, dat3: dat3, do_comf: true, check_done: do_check_done);
+                    RepeatSendPack(id: id, dat1: dat1, dat2: dat2, dat3: dat3, do_conf: true, check_done: do_check_done);
                 }
         }
 
@@ -2236,10 +2256,17 @@ namespace ICR_Run
             while (fc.isRobStreaming && fc.ContinueMatCom())
             {
                 // Get matlab var
-                var pos_sim = com_Matlab.GetVariable("posSim", "global");
-                ts_now = (ulong)(pos_sim.GetValue(0, 0));
-                x_now = (double)(pos_sim.GetValue(0, 1));
-                y_now = (double)(pos_sim.GetValue(0, 2));
+                try
+                {
+                    var pos_sim = com_Matlab.GetVariable("posSim", "global");
+                    ts_now = (ulong)(pos_sim.GetValue(0, 0));
+                    x_now = (double)(pos_sim.GetValue(0, 1));
+                    y_now = (double)(pos_sim.GetValue(0, 2));
+                }
+                catch
+                {
+                    break;
+                }
 
                 // Check if different from last
                 if (ts_now != ts_last)
@@ -2249,7 +2276,7 @@ namespace ICR_Run
                     // Send data
                     if (pass)
                     {
-                        RepeatSendPack(send_max: 1, id: 'P', do_comf: false);
+                        RepeatSendPack(send_max: 1, id: 'P', do_conf: false);
                     }
 
                     // Update ts_last

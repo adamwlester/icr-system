@@ -274,6 +274,7 @@ struct C2R
 	char idNew = '\0';
 	bool isNew = false;
 	float dat[3] = { 0, 0, 0 };
+	uint16_t packLast = 0;
 
 	// Data vars
 	byte testCond = 0;
@@ -756,7 +757,7 @@ public:
 	int OpenNewLog();
 	bool SetToCmdMode();
 	void GetCommand();
-	char SendCommand(char msg[], uint32_t timeout = 5000, bool do_comf = true);
+	char SendCommand(char msg[], uint32_t timeout = 5000, bool do_conf = true);
 	char GetReply(uint32_t timeout);
 	bool SetToLogMode(char log_file[]);
 	bool StoreLogEntry(char msg[], uint32_t t = millis());
@@ -868,9 +869,9 @@ void ParseC2RData(char id);
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(char chr1 = '\0', char chr2 = '\0');
 // STORE PACKET DATA TO BE SENT
-void StorePacketData(char targ, char id, byte d1 = 255, uint16_t pack = 0, bool do_conf = false);
+void QueuePacket(char targ, char id, byte d1 = 255, uint16_t pack = 0, bool do_conf = false);
 // SEND SERIAL PACKET DATA
-void SendPacketData();
+void SendPacket();
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
 bool CheckResend(char targ);
 // CONFIGURE AUTODRIVER BOARDS
@@ -919,8 +920,6 @@ void RunErrorHold(char msg[], uint32_t t = millis());
 void DebugFlow(char msg[], uint32_t t = millis());
 // LOG/PRINT ERRORS
 void DebugError(char msg[], uint32_t t = millis());
-// LOG/PRINT DROPPED PACKET DEBUG STRING
-void DebugDropped(int missed, int missed_total, int total);
 // LOG/PRINT RESENT PACKET DEBUG STRING
 void DebugResent(char id, uint16_t pack, int total);
 // LOG/PRINT MOTOR CONTROL DEBUG STRING
@@ -1216,7 +1215,7 @@ void PID::Run(char called_from[])
 	mode = "Automatic";
 
 	// Tell ard pid is running
-	StorePacketData('a', 'p', 1);
+	QueuePacket('a', 'p', 1);
 
 	// Print event
 	char str[100] = { 0 };
@@ -1244,7 +1243,7 @@ void PID::Stop(char called_from[])
 		!fc.isRewarding
 		)
 	{
-		StorePacketData('a', 'p', 0);
+		QueuePacket('a', 'p', 0);
 	}
 
 	// Set mode
@@ -1632,7 +1631,7 @@ void BULLDOZE::Run(char called_from[])
 	RunMotor('f', bSpeed, "Bull");
 
 	// Tell ard bull is running
-	StorePacketData('a', 'b', 1);
+	QueuePacket('a', 'b', 1);
 
 	// Set mode
 	mode = "Active";
@@ -1658,7 +1657,7 @@ void BULLDOZE::Stop(char called_from[])
 	t_bullNext = millis() + bDelay;
 
 	// Tell ard bull is stopped
-	StorePacketData('a', 'b', 0);
+	QueuePacket('a', 'b', 0);
 
 	// Set mode
 	mode = "Inactive";
@@ -1952,8 +1951,8 @@ bool REWARD::StartRew(bool do_stop, bool is_button_reward)
 	}
 
 	// Store and send packet imediately
-	StorePacketData('a', 'r', durationByte);
-	SendPacketData();
+	QueuePacket('a', 'r', durationByte);
+	SendPacket();
 
 	// Compute reward end time
 	t_closeSol = millis() + duration;
@@ -2530,7 +2529,7 @@ void LOGGER::GetCommand()
 	}
 }
 
-char LOGGER::SendCommand(char msg[], uint32_t timeout, bool do_comf)
+char LOGGER::SendCommand(char msg[], uint32_t timeout, bool do_conf)
 {
 	// Send
 	Serial3.write(msg);
@@ -2547,7 +2546,7 @@ char LOGGER::SendCommand(char msg[], uint32_t timeout, bool do_comf)
 	}
 
 	// Get confirmation
-	if (do_comf)
+	if (do_conf)
 		m = GetReply(timeout);
 	else m = mode;
 
@@ -2996,7 +2995,7 @@ void LOGGER::SendLogEntry()
 	delay(100);
 
 	// Send confirm done in case CS missed footer
-	StorePacketData('c', 'D', 255, donePack);
+	QueuePacket('c', 'D', 255, donePack);
 
 	// Print status
 	float t_s = (float)(millis() - t_start) / 1000.0f;
@@ -3158,20 +3157,21 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 void GetSerial()
 {
 	// Local vars
+	char str[200] = { 0 };
+	int buff_tx = 0;
+	int buff_rx = 0;
 	byte buff = 0;
-	char head = '\0';
-	char id = '\0';
+	char head = ' ';
+	char id = ' ';
 	int id_ind = 0;
-	static uint16_t pack_last = 0;
-	static int pack_tot = 0;
 	uint16_t pack = 0;
-	char foot = '\0';
+	char foot = ' ';
 	bool do_conf;
 	bool is_cs_msg = false;
 
 	// Reset c2r flags
 	c2r.isNew = false;
-	c2r.idNew = '\0';
+	c2r.idNew = ' ';
 
 	// Bail if no new input
 	if (Serial1.available() == 0)
@@ -3215,78 +3215,70 @@ void GetSerial()
 	// Get footer
 	foot = WaitBuffRead();
 
-	// Process ard packet
-	if (!is_cs_msg && foot == a2r.foot)
-	{
-		id_ind = CharInd(id, r2a.idList, r2a.idLng);
-		if (id_ind != -1)
-		{
-			// Update recive time
-			t_rcvd = millis();
+	// Get total data left in buffers
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = Serial1.available();
 
-			// Reset flags
-			r2a.doRcvCheck[id_ind] = false;
-
-			// Store revieved pack details
-			DebugRcvd('a', id, pack);
-
-			// Send confirmation
-			if (do_conf)
-				StorePacketData('a', id, a2r.dat[0], pack);
-		}
-	}
-
-	// Process cs packet
-	if (is_cs_msg && foot != c2r.foot)
-	{
-		// mesage will be dumped
-		c2r.isNew = false;
-	}
-	else if (is_cs_msg && foot == c2r.foot)
+	// Check for matching footer
+	if (foot == a2r.foot || foot == c2r.foot)
 	{
 		// Update recive time
 		t_rcvd = millis();
 
-		// Store id
-		c2r.idNew = id;
+		// Store revieved pack details
+		if (id != 'P')
+			DebugRcvd(is_cs_msg ? 'c' : 'a', id, pack);
+
+		// Send confirmation
+		if (do_conf)
+			QueuePacket(is_cs_msg ? 'c' : 'a', id, 255, pack);
 
 		// Check for streaming started
 		if (!fc.isStreaming)
-		{
-			// Signal streaming started
 			fc.isStreaming = true;
-		}
+	}
+	// Packet lost
+	else {
+		cnt_droppedPacks++;
+		sprintf(str, "!!ERROR!! [GetSerial] Missing Footer: dropped_tot=%d head=%c id=%c pack=%d foot=%c tx=%d rx=%d", cnt_droppedPacks, head, id, pack, foot, buff_tx, buff_rx);
+		DebugError(str);
+	}
+
+	// Process ard packet
+	if (!is_cs_msg && foot == a2r.foot) {
+		//// Reset flags
+		r2a.doRcvCheck[id_ind] = false;
+	}
+
+	// Process cs packet
+	if (is_cs_msg && foot == c2r.foot)
+	{
+		// Store id
+		c2r.idNew = id;
 
 		// Get id ind
 		id_ind = CharInd(id, c2r.idList, c2r.idLng);
 
-		// Store revieved pack details
-		if (id != 'P')
-			DebugRcvd('c', id, pack);
-
 		// Reset flags
 		r2c.doRcvCheck[id_ind] = false;
 
-		// Send packet confirmation
-		if (do_conf)
-			StorePacketData('c', id, 0, pack);
-
 		// Check for dropped packets
-		int pack_diff = (int)(pack - pack_last);
+		int pack_diff = (pack - c2r.packLast);
 
 		if (pack_diff > 0)
 		{
 			// Save packet and set to process
-			pack_last = pack;
+			c2r.packLast = pack;
 
 			// Check for dropped packet
-			pack_tot += pack_diff;
 			int dropped_packs = pack_diff - 1;
+
 			// print dropped packs
 			if (dropped_packs > 0)
 			{
 				cnt_droppedPacks += dropped_packs;
-				DebugDropped(dropped_packs, cnt_droppedPacks, pack_tot);
+				sprintf(str, "!!ERROR!! [GetSerial] Dropped C2R Packets: dropped_tot=%d head=%c id=%c pack=%d foot=%c tx=%d rx=%d", cnt_droppedPacks, head, id, pack, foot, buff_tx, buff_rx);
+				DebugError(str);
 			}
 
 		}
@@ -3523,7 +3515,7 @@ byte WaitBuffRead(char chr1, char chr2)
 }
 
 // STORE PACKET DATA TO BE SENT
-void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
+void QueuePacket(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -3615,7 +3607,7 @@ void StorePacketData(char targ, char id, byte d1, uint16_t pack, bool do_conf)
 }
 
 // SEND SERIAL PACKET DATA
-void SendPacketData()
+void SendPacket()
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -3746,7 +3738,7 @@ bool CheckResend(char targ)
 				if (r2a.resendCnt[i] < resendMax) {
 
 					// Resend data
-					StorePacketData('a', r2a.idList[i], r2a.datList[i], r2a.packList[i], true);
+					QueuePacket('a', r2a.idList[i], r2a.datList[i], r2a.packList[i], true);
 
 					// Update count
 					r2a.resendCnt[i]++;
@@ -3777,7 +3769,7 @@ bool CheckResend(char targ)
 				if (r2c.resendCnt[i] < resendMax) {
 
 					// Resend data
-					StorePacketData('c', r2c.idList[i], r2c.datList[i], r2c.packList[i], true);
+					QueuePacket('c', r2c.idList[i], r2c.datList[i], r2c.packList[i], true);
 
 					// Update count
 					r2c.resendCnt[i]++;
@@ -4557,7 +4549,7 @@ void GetBattVolt()
 
 		// Add to queue if streaming established
 		if (fc.isStreaming)
-			StorePacketData('c', 'J', byte_out, 0);
+			QueuePacket('c', 'J', byte_out, 0);
 
 		char str[100] = { 0 };
 		sprintf(str, "[GetBattVolt] VCC=%0.2fV", volt_avg);
@@ -4764,35 +4756,6 @@ void DebugError(char msg[], uint32_t t)
 		// Add to log queue
 		if (do_log)
 			Log.StoreLogEntry(msg, t);
-	}
-}
-
-// LOG/PRINT DROPPED PACKET DEBUG STRING
-void DebugDropped(int missed, int missed_total, int total)
-{
-	// Local vars
-	bool do_print = db.print_errors && (db.Console || db.LCD);
-	bool do_log = db.log_errors && db.Log;
-
-	if (do_print || do_log)
-	{
-		// Local vars
-		int buff_tx = 0;
-		int buff_rx = 0;
-
-		// Get total data in buffers
-		buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-		buff_rx = Serial1.available();
-
-		char str[200] = { 0 };
-		sprintf(str, "!!ERROR!! [DebugDropped] Dropped Packet: tot=%d/%d tx=%d rx=%d", missed_total, total, buff_tx, buff_rx);
-
-		// Add to print queue
-		if (do_print)
-			StoreDBPrintStr(str, millis());
-		// Add to log queue
-		if (do_log)
-			Log.StoreLogEntry(str, millis());
 	}
 }
 
@@ -5635,7 +5598,7 @@ void loop() {
 	// Prioritize packet
 	if (fc.doPackSend)
 	{
-		SendPacketData();
+		SendPacket();
 	}
 	// Send log
 	else if (fc.doLogSend)
@@ -5720,7 +5683,7 @@ void loop() {
 				Reward.mode != "Now" &&
 				!Reward.isButtonReward
 				)
-				StorePacketData('c', 'Z', Reward.zoneIndByte + 1, 0, true);
+				QueuePacket('c', 'Z', Reward.zoneIndByte + 1, 0, true);
 		}
 	}
 
@@ -5768,8 +5731,8 @@ void loop() {
 				t_sync = v_t_irSyncLast;
 
 				// Store and send CS handshake recieved
-				StorePacketData('c', 'D', 255, c2r.packList[CharInd('+', c2r.idList, c2r.idLng)]);
-				SendPacketData();
+				QueuePacket('c', 'D', 255, c2r.packList[CharInd('+', c2r.idList, c2r.idLng)]);
+				SendPacket();
 
 				// Log/print sync time
 				sprintf(horeStr, "SET SYNC TIME: %dms", t_sync);
@@ -5914,19 +5877,19 @@ void loop() {
 		if (c2r.soundCond == 0)
 		{
 			// No sound
-			StorePacketData('a', 's', 0);
+			QueuePacket('a', 's', 0);
 			DebugFlow("[loop] NO SOUND");
 		}
 		else if (c2r.soundCond == 1)
 		{
 			// Use white noise only
-			StorePacketData('a', 's', 1);
+			QueuePacket('a', 's', 1);
 			DebugFlow("[loop] DONT DO TONE");
 		}
 		else
 		{
 			// Use white and reward noise
-			StorePacketData('a', 's', 2);
+			QueuePacket('a', 's', 2);
 			DebugFlow("[loop] DO TONE");
 		}
 
@@ -5948,7 +5911,7 @@ void loop() {
 		t_quitCmd = millis() + 1000;
 
 		// Tell ard to quit
-		StorePacketData('a', 'q');
+		QueuePacket('a', 'q');
 		DebugFlow("[loop] DO QUIT");
 
 		// Hold all motor control
@@ -6039,7 +6002,7 @@ void loop() {
 			if (!Targ.doAbortMove)
 			{
 				// Tell CS movement is done
-				StorePacketData('c', 'D', 255, c2r.packList[CharInd('M', c2r.idList, c2r.idLng)]);
+				QueuePacket('c', 'D', 255, c2r.packList[CharInd('M', c2r.idList, c2r.idLng)]);
 
 				// Print success message
 				sprintf(horeStr, "[loop] FINISHED: MoveTo: to=%0.2fcm within=%0.2fcm",
@@ -6296,7 +6259,7 @@ void loop() {
 	// Check for streaming
 	if (fc.doStreamCheck && fc.isStreaming)
 	{
-		StorePacketData('c', 'D', 255, c2r.packList[CharInd('V', c2r.idList, c2r.idLng)]);
+		QueuePacket('c', 'D', 255, c2r.packList[CharInd('V', c2r.idList, c2r.idLng)]);
 		fc.doStreamCheck = false;
 		DebugFlow("[loop] STREAMING CONFIRMED");
 	}
