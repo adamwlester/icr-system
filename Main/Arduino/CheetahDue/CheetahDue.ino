@@ -5,7 +5,7 @@
 //######################################
 
 
-#pragma region ========= LIBRARIES & EXT DEFS =========
+#pragma region ========= LIBRARIES & EXT DEFS ==========
 
 // SOFTWARE RESET
 #define SYSRESETREQ    (1<<2)
@@ -17,7 +17,7 @@
 #pragma endregion 
 
 
-#pragma region ========= DEBUG SETTINGS =========
+#pragma region ============ DEBUG SETTINGS =============
 
 struct DB
 {
@@ -30,11 +30,11 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool Console = true;
+	bool Console = false;
 	// What to print
 	bool print_flow = true;
-	bool print_r2a = false;
-	bool print_a2r = false;
+	bool print_r2a = true;
+	bool print_a2r = true;
 	bool print_resent = false;
 	bool print_log = false;
 }
@@ -49,7 +49,7 @@ const bool doTestPinMapping = false;
 #pragma endregion 
 
 
-#pragma region ========= VARIABLE SETUP =========
+#pragma region ============ VARIABLE SETUP =============
 
 // Pin mapping
 struct PIN
@@ -277,6 +277,9 @@ bool AwaitStart()
 // PARSE SERIAL INPUT
 bool ParseSerial()
 {
+	/*
+	FORMAT: [0]head, [1]id, [2]dat, [3:4]pack, [5]do_conf, [6]footer
+	*/
 
 	static char head = ' ';
 	static char foot = ' ';
@@ -330,6 +333,9 @@ bool ParseSerial()
 	}
 	else
 	{
+		// Update recive time
+		t_rcvd = millis();
+
 		// Send back confirmation
 		fc.doPackSend = true;
 
@@ -337,13 +343,7 @@ bool ParseSerial()
 		DebugRcvd(r2a.idNew, r2a.dat, pack, do_conf);
 		pass = true;
 
-		// Update recive time
-		t_rcvd = millis();
-	}
-
-	// Check if packet is new
-	if (pass)
-	{
+		// Check if packet is new
 		if (r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)] != pack)
 		{
 			// Update last packet
@@ -364,13 +364,16 @@ bool ParseSerial()
 // SEND SERIAL PACKET DATA
 void SendPacketData(char id, byte d1, uint16_t pack, bool do_conf)
 {
+	/*
+	FORMAT: [0]head, [1]id, [2]dat, [3:4]pack, [5]do_conf, [6]footer
+	*/
+
 	// Local vars
 	const int msg_size = 7;
 	byte msg[msg_size];
 	bool pass = false;
 
 	// Confirm message really intended for here
-
 	for (int i = 0; i < r2a.idLng; i++)
 	{
 		if (id == r2a.idList[i])
@@ -450,7 +453,7 @@ void SendLogData(char msg[], uint32_t t)
 	if (db.print_log && db.Console)
 	{
 		// Store
-		sprintf(str, "sent log: \"%s\"", msg_out);
+		sprintf(str, "   [LOG]: \"%s\"", msg_out);
 		PrintDB(str, millis());
 	}
 }
@@ -598,7 +601,7 @@ void PrintResent(char id, byte dat, uint16_t pack)
 		resent_cnt++;
 
 		char str[100];
-		sprintf(str, "!!RESENT PACK: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
+		sprintf(str, "!!ERROR!! [PrintResent] Resent Packet: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
 		if (do_print)
 			PrintDB(str, millis());
 		if (do_log)
@@ -729,7 +732,7 @@ int CharInd(char id, const char id_arr[], int arr_size)
 	// Print error if not found
 	if (ind == -1) {
 		char str[100];
-		sprintf(str, "!!ERROR!! [CharInd]: ID \'%c\' Not Found", id);
+		sprintf(str, "!!ERROR!! [CharInd] ID \'%c\' Not Found", id);
 		DebugFlow(str);
 	}
 
@@ -1083,12 +1086,12 @@ void loop()
 	}
 
 	// Check for rew end
-	if (fc.isRewarding){
+	if (fc.isRewarding) {
 		EndRew();
 	}
 
 	// Send message confirmation
-	if (fc.doPackSend){
+	if (fc.doPackSend) {
 		SendPacketData(r2a.idNew, 255, r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)], false);
 	}
 
@@ -1098,7 +1101,7 @@ void loop()
 	}
 
 	// Check if IR should be pulsed 
-	if (PulseIR(del_syncPulse, dt_syncPulse)){
+	if (PulseIR(del_syncPulse, dt_syncPulse)) {
 		if (is_irOn)
 			DebugFlow("[loop] IR SYNC ON");
 		else
@@ -1106,7 +1109,7 @@ void loop()
 	}
 
 	// Check if ready to quit
-	if (fc.doQuit && !fc.doPackSend){
+	if (fc.doQuit && !fc.doPackSend) {
 		// Run bleep bleep
 		QuitBleep();
 		// Restart Arduino

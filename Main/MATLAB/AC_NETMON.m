@@ -2,9 +2,8 @@ function[] = AC_NETMON()
 
 % NOTE: packet contains [1,4] numiric data
 %   val 1 = conection [0, 1], [no, yes] 
-%   val 2 = display image [0, 1, 2], [Close all, 0-deg, 40-deg]
-%   val 3 = rotation direction [-1, 1], [ACW, CW]
-%   val 4 = sound state [0, 1], [no sound, sound]
+%   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
+%   val 3 = sound state [0, 1], [no sound, sound]
 
 %% Wall image paramiters
     
@@ -22,7 +21,7 @@ function[] = AC_NETMON()
 % Network paramiters
 DgLynxIP = '172.17.0.2';
 % number of data packets
-NDat = 4;
+NDat = 3;
 % buffer size based on recieved packets
 tcpipBuff = NDat;
 
@@ -55,7 +54,7 @@ soundH = audioplayer([reward_lft,noise_rt], nsfs);
 
 % Start sound
 %
-
+ 
 %stop(soundH);
 
 %% Loop indefinitely
@@ -64,7 +63,7 @@ while true
     %% Set/reinitialize paramiters
     
     % Setup network connection object
-    tcpIP = tcpip(DgLynxIP,55000,'NetworkRole','Client');
+    tcpIP = tcpip(DgLynxIP,55000,'NetworkRole','Client'); %#ok<TNMLP>
     % sets buffer size
     set(tcpIP,'InputBufferSize',tcpipBuff);
     % sets data transfer to zero
@@ -74,7 +73,7 @@ while true
     trgDel = 0.1;
     
     % Image files
-    fiIn = [{'Img1.bmp'}, {'Img2.bmp'}];
+    fiIn = [{'Img1.bmp'}, {'Img2.bmp'}, {'Img3.bmp'}];
     
     % Initialize main vars
     % var to save sent data
@@ -136,26 +135,6 @@ while true
         
         %% EXECUTE CHANGES WITH NEW INCOMING DATA
         
-        % CHANGE FILE ORDER
-        % NOTE: for rats with CW rotation, image files are flipped
-        if ...
-                data(1) == 1 && ...
-                data(3) ~= 0
-            
-            % Flip file list
-            if data(3) == 2
-                fiIn = fliplr(fiIn);
-            end
-            
-            % Set to zero so only run once
-            data(3) = 0;
-            
-            % Print status message
-            fprintf('\r\tset file order: %s\r', ...
-                datestr(now, 'HH:MM:SS AM'))
-            
-        end
-        
         % UPDATE DISPLAY IMAGE
         if ...
                 data(1) == 1 && ...
@@ -166,7 +145,7 @@ while true
             img_ind = data(2);
             
             % Show image trigger
-            frame_java = fullscreenAWL(fullfile(imgDir,subDir{2},fiIn{1,img_ind}));
+            frame_java = fullscreenAWL(fullfile(imgDir,subDir{2},fiIn{1,img_ind})); %#ok<NASGU>
             
             % Pause to allow trigger to register
             pause(trgDel);
@@ -175,13 +154,13 @@ while true
             frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},fiIn{1,img_ind}));
             
             % Print status message
-            fprintf('\r\tchange image: %s\r', ...
-                datestr(now, 'HH:MM:SS AM'))
+            fprintf('\r\tchange image to \"%s\": %s\r', ...
+                fiIn{1,img_ind}, datestr(now, 'HH:MM:SS AM'))
             
         end
         
         % STOP/START/RESTART SOUND
-        if data(4) == 1
+        if data(3) == 1
             % Start sound
             if ~isplaying(soundH)
                 play(soundH);
