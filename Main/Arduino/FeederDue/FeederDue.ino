@@ -73,7 +73,6 @@
 #pragma region ============ DEBUG SETTINGS =============
 
 // LOG DEBUGGING
-
 struct DB
 {
 	// Do log
@@ -89,7 +88,7 @@ struct DB
 	const bool log_bull = true;
 
 	// Where to print
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -435,8 +434,8 @@ EtOH run after min time or distance
 */
 const int dt_durEtOH = 500; // (ms)
 const int dt_delEtOH = 10000; // (ms)
-uint32_t t_etohSolOpen = 0;
-uint32_t t_rewSolOpen = 0;
+uint32_t t_solOpen = 0;
+uint32_t t_solClose = 0;
 
 // Volt tracking
 /*
@@ -638,7 +637,6 @@ public:
 	const int dt_update = 10;
 	uint32_t t_updateNext = 0;
 	double distLeft = 0;
-	double newSpeed = 0;
 	double posStart = 0;
 	double targPos = 0;
 	double targDist = 0;
@@ -1844,54 +1842,65 @@ TARGET::TARGET(uint32_t t)
 bool TARGET::CompTarg(double now_pos, float targ_pos)
 {
 	// Run only if targ not set
-	if (!isTargSet)
-	{
-		// Local vars
-		char str[200] = { 0 };
-		int circ = 0;
-		int pos = 0;
+	if (isTargSet)
+		return isTargSet;
 
-		// Copy to public vars
-		posStart = now_pos;
-		targPos = targ_pos;
+	// Local vars
+	char str[200] = { 0 };
+	double move_diff = 0;
+	int circ = 0;
+	int pos = 0;
 
-		// Get abort timeout
-		if (t_tryTargSetTill == 0)
-			t_tryTargSetTill = millis() + targSetTimeout;
+	// Copy to public vars
+	posStart = now_pos;
+	targPos = targ_pos;
 
-		// Check if time out reached
-		if (millis() > t_tryTargSetTill) {
-			doAbortMove = true;
-			// Log/print error
-			sprintf(str, "!!ERROR!! [TARGET::CompTarg] Timedout after %dms", targSetTimeout);
-			DebugError(str);
-			return false;
-		}
-		// Check pos data is ready
-		if (fc.isEKFReady)
-		{
-			// Current relative pos on track
-			circ = (int)(140 * PI * 100);
-			pos = (int)(now_pos * 100);
-			posRel = (double)(pos % circ) / 100;
+	// Get abort timeout
+	if (t_tryTargSetTill == 0)
+		t_tryTargSetTill = millis() + targSetTimeout;
 
-			// Diff and absolute distance
-			targDist = targPos - posRel;
-			targDist = targDist < 0 ? targDist + (140 * PI) : targDist;
-
-			// Set vars for later
-			t_updateNext = millis();
-			baseSpeed = 0;
-
-			// Set flag true
-			isTargSet = true;
-
-			// Log/print
-			sprintf(str, "[TARGET::CompTarg] FINISHED: Set Target: start=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm", posStart, targPos, targDist);
-			DebugFlow(str);
-		}
-
+	// Check if time out reached
+	if (millis() > t_tryTargSetTill) {
+		doAbortMove = true;
+		// Log/print error
+		sprintf(str, "!!ERROR!! [TARGET::CompTarg] Timedout after %dms", targSetTimeout);
+		DebugError(str);
+		return isTargSet;
 	}
+
+	// Bail if ekf pos data not ready
+	if (!fc.isEKFReady)
+		return isTargSet;
+
+	// Current relative pos on track
+	circ = (int)(140 * PI * 100);
+	pos = (int)(now_pos * 100);
+	posRel = (double)(pos % circ) / 100;
+
+	// Diff and absolute distance
+	move_diff = targPos - posRel;
+	move_diff = move_diff < 0 ? move_diff + (140 * PI) : move_diff;
+
+	// Get minimum distance to target
+	targDist = min((140 * PI) - abs(move_diff), abs(move_diff));
+
+	// Set to negative for reverse move
+	if ((move_diff > 0 && abs(move_diff) == targDist) ||
+		(move_diff < 0 && abs(move_diff) != targDist))
+		moveDir = 'f';
+	else
+		moveDir = 'r';
+
+	// Set vars for later
+	t_updateNext = millis();
+	baseSpeed = 0;
+
+	// Set flag true
+	isTargSet = true;
+
+	// Log/print
+	sprintf(str, "[TARGET::CompTarg] FINISHED: Set Target: start=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm", posStart, targPos, targDist);
+	DebugFlow(str);
 
 	// Retern flag
 	return isTargSet;
@@ -1899,68 +1908,69 @@ bool TARGET::CompTarg(double now_pos, float targ_pos)
 
 double TARGET::DecelToTarg(double now_pos, double now_vel, float dec_pos, double speed_min)
 {
+	// Local vars
+	char str[200] = { 0 };
+	double new_speed = 0;
+
 	// Run if targ not reached
-	if (!isTargReached)
-	{
-		// Local vars
-		char str[200] = { 0 };
+	if (isTargReached)
+		return 0;
 
-		// Get abort timeout
-		if (t_tryMoveTill == 0)
-			t_tryMoveTill = millis() + moveTimeout;
+	// Get abort timeout
+	if (t_tryMoveTill == 0)
+		t_tryMoveTill = millis() + moveTimeout;
 
-		// Check if time out reached
-		if (millis() > t_tryMoveTill) {
-			doAbortMove = true;
-			// Log/print error
-			sprintf(str, "!!ERROR!! [TARGET::DecelToTarg] Timedout after %dms", moveTimeout);
-			DebugError(str);
-			return false;
-		}
-
-		// Compute remaining distance
-		distLeft = targDist - (now_pos - posStart);
-		// Check if rob is dec_pos cm from target
-		if (distLeft <= dec_pos)
-		{
-			// Get base speed to decelerate from
-			if (baseSpeed == 0)
-			{
-				baseSpeed = abs(now_vel);
-			}
-			// Update decel speed
-			else if (millis() > t_updateNext)
-			{
-				// Compute new speed
-				newSpeed = (distLeft / dec_pos) * baseSpeed;
-
-				// Maintain at min speed
-				if (newSpeed < speed_min) newSpeed = speed_min;
-
-				// Update loop time
-				t_updateNext = millis() + dt_update;
-			}
-
-		}
-
-		// TARGET reached
-		if (distLeft < 1)
-		{
-			// Set flag true
-			isTargReached = true;
-
-			// Stop movement
-			newSpeed = 0;
-
-			// Log/print
-			sprintf(str, "[TARGET::DecelToTarg] FINISHED: MoveTo: start=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm", posStart, targPos, targDist, distLeft);
-			DebugFlow(str);
-		}
+	// Check if time out reached
+	if (millis() > t_tryMoveTill) {
+		doAbortMove = true;
+		// Log/print error
+		sprintf(str, "!!ERROR!! [TARGET::DecelToTarg] Timedout after %dms", moveTimeout);
+		DebugError(str);
+		return 0;
 	}
-	else newSpeed = 0;
+
+	// Compute remaining distance
+	distLeft = targDist - abs(now_pos - posStart);
+
+	// Check if rob is dec_pos cm from target
+	if (distLeft <= dec_pos)
+	{
+		// Get base speed to decelerate from
+		if (baseSpeed == 0)
+		{
+			baseSpeed = abs(now_vel);
+		}
+		// Update decel speed
+		else if (millis() > t_updateNext)
+		{
+			// Compute new speed
+			new_speed = (distLeft / dec_pos) * baseSpeed;
+
+			// Maintain at min speed
+			if (new_speed < speed_min) new_speed = speed_min;
+
+			// Update loop time
+			t_updateNext = millis() + dt_update;
+		}
+
+	}
+
+	// TARGET reached
+	if (distLeft < 1)
+	{
+		// Set flag true
+		isTargReached = true;
+
+		// Stop movement
+		new_speed = 0;
+
+		// Log/print
+		sprintf(str, "[TARGET::DecelToTarg] FINISHED: MoveTo: start=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm", posStart, targPos, targDist, distLeft);
+		DebugFlow(str);
+	}
 
 	// Return new speed
-	return newSpeed;
+	return new_speed;
 }
 
 double TARGET::GetError(double now_pos)
@@ -2304,6 +2314,9 @@ void REWARD::ExtendFeedArm()
 		t_retractArm = millis() + dt_block;
 		armZone = armExtStps;
 		doArmMove = true;
+		// Set to half step
+		if (digitalRead(pin.ED_MS2) == HIGH)
+			digitalWrite(pin.ED_MS2, LOW);
 	}
 }
 
@@ -2313,6 +2326,9 @@ void REWARD::RetractFeedArm()
 	{
 		armZone = 0;
 		doArmMove = true;
+		// Set to quarter step
+		if (digitalRead(pin.ED_MS2) == LOW)
+			digitalWrite(pin.ED_MS2, HIGH);
 	}
 }
 
@@ -2333,21 +2349,18 @@ void REWARD::MoveFeedArm()
 	{
 
 		// Extend arm
-		if (armPos < armZone)
-		{
+		if (armPos < armZone) {
 			digitalWrite(pin.ED_DIR, LOW); // extend
 		}
 
 		// Retract arm
 		else
 		{
-			if (digitalRead(pin.FeedSwitch) == HIGH)
-			{
+			if (digitalRead(pin.FeedSwitch) == HIGH) {
 				digitalWrite(pin.ED_DIR, HIGH); // retract
 			}
 			// Home pos reached
-			else
-			{
+			else {
 				// Take presure off botton
 				armPos = -20;
 				isArmExtended = false;
@@ -4151,13 +4164,14 @@ bool ManualRun(char dir)
 	// Local vars
 	char speed_str[100] = { 0 };
 	char volt_str[100] = { 0 };
-	int inc_speed = 5; // (cm/sec)
+	int inc_speed = 10; // (cm/sec)
 	double new_speed;
 
 	// Incriment speed
-	if (dir != runDirNow)
-		// Reset speed if direction changed
-		new_speed = inc_speed;
+	if (dir != runDirNow ||
+		runSpeedNow == 0)
+		// Set to start speed
+		new_speed = 5;
 	else
 		new_speed = runSpeedNow <= maxSpeed - inc_speed ?
 		runSpeedNow + inc_speed : runSpeedNow;
@@ -4166,8 +4180,8 @@ bool ManualRun(char dir)
 	RunMotor(dir, new_speed, "Override");
 
 	// Print voltage and speed to LCD
-	sprintf(volt_str, "VCC = %0.2fV", voltNow);
-	sprintf(speed_str, "VEL = %s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
+	sprintf(volt_str, "VCC=%0.2fV", voltNow);
+	sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
 	PrintLCD(volt_str, speed_str);
 }
 
@@ -4564,7 +4578,7 @@ bool GetButtonInput()
 	static uint32_t t_debounce[3] = { millis() + 1000, millis() + 1000, millis() + 1000 };
 	static uint32_t t_hold_min[3] = { 0, 0, 0 };
 	static uint32_t t_long_hold[3] = { 0, 0, 0 };
-	int dt_debounce[3][2] = { { Reward.duration + 100, 100 },{ 100, 100 },{ 100, 100 } };
+	int dt_debounce[3] = { 100, 100, 100 };
 	int dt_hold_min = 50;
 	int dt_long_hold = 500;
 	int btn_ind = 0;
@@ -4582,16 +4596,16 @@ bool GetButtonInput()
 			// Exit if < debounce time has not passed
 			if (t_debounce[btn_ind] > millis()) return false;
 
-			// Check dt hold min
-			t_hold_min[btn_ind] = t_hold_min[btn_ind] == 0 ? millis() + dt_hold_min : t_hold_min[btn_ind];
-			if (millis() < t_hold_min[btn_ind])
-				return false;
-
 			// Get long hold time
 			t_long_hold[btn_ind] = millis() + dt_long_hold - dt_hold_min;
 
 			// Set flag
 			is_pressed[btn_ind] = true;
+
+			// Log/print
+			char str[100];
+			sprintf(str, "[GetButtonInput] Pressed button %d", i);
+			DebugFlow(str);
 		}
 
 		// Check released
@@ -4599,6 +4613,12 @@ bool GetButtonInput()
 			is_pressed[btn_ind] &&
 			!is_running[btn_ind])
 		{
+
+			// Bail if not dt hold min
+			t_hold_min[btn_ind] = t_hold_min[btn_ind] == 0 ? millis() + dt_hold_min : t_hold_min[btn_ind];
+			if (millis() < t_hold_min[btn_ind])
+				return false;
+
 			// Check for short hold
 			bool is_short_hold =
 				digitalRead(pin.Btn[btn_ind]) == HIGH &&
@@ -4611,25 +4631,26 @@ bool GetButtonInput()
 			if (is_short_hold || is_long_hold) {
 
 				// Run short hold function
-				if (is_short_hold) {
+				if (is_short_hold)
 					do_flag_fun[btn_ind][0] = true;
-					t_debounce[btn_ind] = millis() + dt_debounce[btn_ind][0];
-				}
 
 				// Run long hold function
-				if (is_long_hold) {
+				if (is_long_hold)
 					do_flag_fun[btn_ind][1] = true;
-					t_debounce[btn_ind] = millis() + dt_debounce[btn_ind][1];
-				}
 
 				// Make tracker LED brighter
 				analogWrite(pin.TrackLED, 255);
 
-				// Set flag
+				// Set running flag
 				is_running[btn_ind] = true;
 
 				// Flag input rcvd
 				is_new_input = true;
+
+				// Log/print
+				char str[100];
+				sprintf(str, "[GetButtonInput] Triggered button %d", i);
+				DebugFlow(str);
 			}
 		}
 
@@ -4641,11 +4662,17 @@ bool GetButtonInput()
 				millis() > t_long_hold[btn_ind])
 			{
 				// Reset flags etc
+				t_debounce[btn_ind] = millis() + dt_debounce[btn_ind];
 				analogWrite(pin.TrackLED, trackLEDduty);
 				is_running[btn_ind] = false;
 				t_hold_min[btn_ind] = 0;
 				t_long_hold[btn_ind] = 0;
 				is_pressed[btn_ind] = false;
+
+				// Log/print
+				char str[100];
+				sprintf(str, "[GetButtonInput] Reset button %d", i);
+				DebugFlow(str);
 			}
 		}
 
@@ -4668,7 +4695,7 @@ bool GetButtonInput()
 		}
 	}
 
-	// Set function flag
+	// Set button 1 function flag
 	if (do_flag_fun[0][0]) {
 		fc.doBtnRew = true;
 		DebugFlow("[GetButtonInput] Button 1 \"fc.doBtnRew\" Triggered");
@@ -4677,7 +4704,7 @@ bool GetButtonInput()
 		fc.doMoveRobFwd = true;
 		DebugFlow("[GetButtonInput] Button 1 \"fc.doMoveRobFwd\" Triggered");
 	}
-
+	// Set button 2 function flag
 	else if (do_flag_fun[1][0]) {
 		fc.doRewSolStateChange = true;
 		DebugFlow("[GetButtonInput] Button 2 \"fc.doRewSolStateChange\" Triggered");
@@ -4686,7 +4713,7 @@ bool GetButtonInput()
 		fc.doMoveRobRev = true;
 		DebugFlow("[GetButtonInput] Button 2 \"fc.doMoveRobRev\" Triggered");
 	}
-
+	// Set button 3 function flag
 	else if (do_flag_fun[2][0]) {
 		fc.doEtOHSolStateChange = true;
 		DebugFlow("[GetButtonInput] Button 3 \"fc.doEtOHSolStateChange\" Triggered");
@@ -4713,15 +4740,19 @@ void OpenCloseRewSolenoid()
 
 	// Store open time
 	if (is_sol_open)
-		t_rewSolOpen = millis();
+		t_solOpen = millis();
+	else
+		t_solClose = millis();
 
 	// Open/close solenoid
 	digitalWrite(pin.Rel_Rew, is_sol_open);
 
 	// Print etoh and rew sol state to LCD
+	fc.doBlockLCDlog = false;
 	sprintf(rew_str, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
 	sprintf(etoh_str, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
 	PrintLCD(rew_str, etoh_str, 's');
+	if (is_sol_open) fc.doBlockLCDlog = true;
 }
 
 // OPEN/CLOSE EtOH SOLENOID
@@ -4738,19 +4769,22 @@ void OpenCloseEtOHSolenoid()
 	// Open/close solenoid
 	digitalWrite(pin.Rel_EtOH, is_sol_open);
 
-	// Make sure periodic drip does not run
+	// Store time and make sure periodic drip does not run
 	if (is_sol_open) {
+		t_solOpen = millis();
 		fc.doEtOHRun = false;
-		t_etohSolOpen = millis();
 	}
 	else {
+		t_solClose = millis();
 		fc.doEtOHRun = true;
 	}
 
 	// Print etoh and rew sol state to LCD
+	fc.doBlockLCDlog = false;
 	sprintf(rew_str, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
 	sprintf(etoh_str, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
 	PrintLCD(rew_str, etoh_str, 's');
+	if (is_sol_open) fc.doBlockLCDlog = true;
 }
 
 // CHECK FOR ETOH UPDATE
@@ -4773,7 +4807,7 @@ void CheckEtOH()
 	if (!is_sol_open) {
 
 		// Open if dt run has ellapsed and robot has moved
-		do_open = millis() > (t_etohSolOpen + dt_delEtOH);// &&
+		do_open = millis() > (t_solOpen + dt_delEtOH);// &&
 			//etoh_dist_diff > 1;
 
 		// Open if robot has covered half the trak
@@ -4789,7 +4823,7 @@ void CheckEtOH()
 
 	// Close if open and dt close has ellapsed
 	else
-		do_close = millis() > (t_etohSolOpen + dt_durEtOH);
+		do_close = millis() > (t_solOpen + dt_durEtOH);
 
 	// Check if sol should be opened
 	if (do_open)
@@ -4798,7 +4832,7 @@ void CheckEtOH()
 		digitalWrite(pin.Rel_EtOH, HIGH);
 
 		// Reset vars
-		t_etohSolOpen = millis();
+		t_solOpen = millis();
 		etoh_dist_start = ekf.RobPos;
 	}
 
@@ -4811,7 +4845,7 @@ void CheckEtOH()
 		// Print to debug
 		if (fc.isSesStarted) {
 			char str[100];
-			sprintf(str, "[CheckEtOH] Ran EtOH: dt=%d", millis() - t_etohSolOpen);
+			sprintf(str, "[CheckEtOH] Ran EtOH: dt=%d", millis() - t_solOpen);
 			DebugFlow(str);
 		}
 	}
@@ -4884,11 +4918,13 @@ void GetBattVolt()
 			DebugFlow(str);
 
 		// Print voltage and speed to LCD
-		char volt_str[100];
-		char speed_str[100];
-		sprintf(volt_str, "VCC = %0.2fV", voltNow);
-		sprintf(speed_str, "VEL = %s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
-		PrintLCD(volt_str, speed_str);
+		if (millis() > t_solClose + 100) {
+			char volt_str[100];
+			char speed_str[100];
+			sprintf(volt_str, "VCC=%0.2fV", voltNow);
+			sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
+			PrintLCD(volt_str, speed_str);
+		}
 
 		// Check if voltage critically low
 		do_shutdown = true;
@@ -5282,6 +5318,23 @@ void PrintLCD(char msg_1[], char msg_2[], char f_siz)
 
 	// Clear
 	LCD.clrScr();
+
+	// Make both strings same length
+	if (msg_2[0] != '\0' &&
+		strlen(msg_1) != strlen(msg_2))
+	{
+		bool is_m1_shorter = strlen(msg_1) < strlen(msg_2);
+		int len_max = !is_m1_shorter ? strlen(msg_1) : strlen(msg_2);
+		int len_min = is_m1_shorter ? strlen(msg_1) : strlen(msg_2);
+		for (int i = len_min; i < len_max; i++) {
+			if (is_m1_shorter)
+				msg_1[i] = ' ';
+			else
+				msg_2[i] = ' ';
+		}
+		msg_1[len_max] = '\0';
+		msg_2[len_max] = '\0';
+	}
 
 	// Print
 	if (msg_2[0] != '\0')
@@ -5866,8 +5919,8 @@ void loop() {
 		if (fc.doBtnRew) {
 			if (!Reward.isRewarding) {
 				fc.isRewarding = Reward.StartRew(false, true);
-				fc.doBtnRew = false;
 			}
+			fc.doBtnRew = false;
 		}
 
 		// Open/close Rew sol
@@ -5940,10 +5993,10 @@ void loop() {
 	Reward.CheckFeedArm();
 
 	// Check if solonoids have been open more than 2 min
-	if (digitalRead(pin.Rel_EtOH) == HIGH && millis() > (t_etohSolOpen + 120000))
+	if (digitalRead(pin.Rel_EtOH) == HIGH && millis() > (t_solOpen + 120000))
 		// Close etoh sol
 		OpenCloseEtOHSolenoid();
-	if (digitalRead(pin.Rel_Rew) == HIGH && millis() > (t_rewSolOpen + 120000))
+	if (digitalRead(pin.Rel_Rew) == HIGH && millis() > (t_solOpen + 120000))
 		// Close rew sol
 		OpenCloseRewSolenoid();
 
@@ -6223,8 +6276,8 @@ void loop() {
 					)
 				{
 					// Print message
-					sprintf(horeStr, "[loop] RUNNING: MoveTo: start=%0.2fcm targ=%0.2fcm dist=%0.2fcm",
-						Targ.posStart, Targ.targPos, Targ.targDist);
+					sprintf(horeStr, "[loop] RUNNING: MoveTo: start=%0.2fcm targ=%0.2fcm dist=%0.2fcm dir=\'%c\'",
+						Targ.posStart, Targ.targPos, Targ.targDist, Targ.moveDir);
 					DebugFlow(horeStr);
 					// Set flag
 					Targ.isMoveStarted = true;
@@ -6267,15 +6320,15 @@ void loop() {
 				QueuePacket('c', 'D', 255, c2r.packList[CharInd('M', c2r.idList, c2r.idLng)]);
 
 				// Print success message
-				sprintf(horeStr, "[loop] FINISHED: MoveTo: start=%0.2fcm targ=%0.2fcm dist=%0.2fcm dist_left=%0.2fcm",
-					Targ.posStart, Targ.targPos, Targ.targDist, Targ.GetError(ekf.RobPos));
+				sprintf(horeStr, "[loop] FINISHED: MoveTo: start=%0.2fcm targ=%0.2fcm dist=%0.2fcm error=%0.2fcm dir=\'%c\'",
+					Targ.posStart, Targ.targPos, Targ.targDist, Targ.GetError(ekf.RobPos), Targ.moveDir);
 				DebugFlow(horeStr);
 			}
 			else
 			{
 				// Print failure message
-				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s start=%0.2fcm targ=%0.2fcm dist=%0.2fcm dist_left=%0.2fcm",
-					Targ.isTargSet ? "true" : "false", fc.isEKFReady ? "true" : "false", Targ.isMoveStarted ? "true" : "false", Targ.posStart, Targ.targPos, Targ.targDist, Targ.GetError(ekf.RobPos));
+				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s start=%0.2fcm targ=%0.2fcm dist=%0.2fcm error=%0.2fcm dir=\'%c\'",
+					Targ.isTargSet ? "true" : "false", fc.isEKFReady ? "true" : "false", Targ.isMoveStarted ? "true" : "false", Targ.posStart, Targ.targPos, Targ.targDist, Targ.GetError(ekf.RobPos), Targ.moveDir);
 				DebugError(horeStr);
 			}
 

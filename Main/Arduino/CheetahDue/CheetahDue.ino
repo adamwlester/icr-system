@@ -35,8 +35,8 @@ struct DB
 	bool print_flow = true;
 	bool print_r2a = true;
 	bool print_a2r = true;
-	bool print_resent = false;
-	bool print_log = false;
+	bool print_resent = true;
+	bool print_log = true;
 }
 // Initialize
 db;
@@ -772,21 +772,29 @@ void ResetTTL()
 	if (isOnNorth && millis() - t_outLastNorth > dt_ttlPulse) {
 		digitalWrite(pin.ttlNorthOn, LOW); // set back to LOW
 		isOnNorth = false;
+		// Print
+		if (db.print_flow) PrintDB("[ResetTTL] NORTH OFF", millis());
 	}
 	// west
 	if (isOnWest && millis() - t_outLastWest > dt_ttlPulse) {
 		digitalWrite(pin.ttlWestOn, LOW); // set back to LOW
 		isOnWest = false;
+		// Print
+		if (db.print_flow) PrintDB("[ResetTTL] WEST OFF", millis());
 	}
 	// south
 	if (isOnSouth && millis() - t_outLastSouth > dt_ttlPulse) {
 		digitalWrite(pin.ttlSouthOn, LOW); // set back to LOW
 		isOnSouth = false;
+		// Print
+		if (db.print_flow) PrintDB("[ResetTTL] SOUTH OFF", millis());
 	}
 	// east
 	if (isOnEast && millis() - t_outLastEast > dt_ttlPulse) {
 		digitalWrite(pin.ttlEastOn, LOW); // set back to LOW
 		isOnEast = false;
+		// Print
+		if (db.print_flow) PrintDB("[ResetTTL] EAST OFF", millis());
 	}
 	isOnAny = isOnNorth || isOnWest || isOnSouth || isOnEast;
 }

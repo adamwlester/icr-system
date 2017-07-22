@@ -14,82 +14,85 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="src">
-      <UniqueIdentifier>{5c3496a9-362b-4144-ba26-cbf9c35962b2}</UniqueIdentifier>
+      <UniqueIdentifier>{47ec8e40-ceb1-4c85-affa-5ec81709a993}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly">
-      <UniqueIdentifier>{7fec0ed0-652f-45e2-a3d9-b168e882a8d1}</UniqueIdentifier>
+      <UniqueIdentifier>{f36e733e-39d0-4f70-8b6d-23f790939df5}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core">
-      <UniqueIdentifier>{0d30377e-792b-4f35-b096-12f61491c4d1}</UniqueIdentifier>
+      <UniqueIdentifier>{d4996b52-b924-4c11-b096-09b41a227797}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\variants">
-      <UniqueIdentifier>{7d0d9c12-e07a-42a4-9d1c-98e7eababbb1}</UniqueIdentifier>
+      <UniqueIdentifier>{12460642-f4b5-4cd6-876c-2ac7d3081583}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\variants\arduino_due_x">
-      <UniqueIdentifier>{a49cb572-2650-432f-8dea-c648bdff201f}</UniqueIdentifier>
+      <UniqueIdentifier>{19718c4a-0b9f-43f9-94e7-d1a1f709c2b5}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\avr">
-      <UniqueIdentifier>{3b1a3b1e-7c0a-45d5-80bc-5d04edaec848}</UniqueIdentifier>
+      <UniqueIdentifier>{3cfb8499-fc48-4ede-bc6b-9e1b4d5aafc6}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\USB">
-      <UniqueIdentifier>{1efd7b69-5e59-410d-8004-261900c1b85e}</UniqueIdentifier>
+      <UniqueIdentifier>{4530d879-dd9e-44bb-a512-47e9fdcbb4ee}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries">
-      <UniqueIdentifier>{982e0f4d-c977-4848-b834-46eeebf3057d}</UniqueIdentifier>
+      <UniqueIdentifier>{f060098e-99fe-4645-99e2-d821fec0fc1d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\_micro-api-readonly\libraries\Arduino-MemoryFree">
+      <UniqueIdentifier>{48f0b022-d81a-4def-a3ce-aec993cb427c}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\AutoDriver_Due">
-      <UniqueIdentifier>{e950179c-468a-426f-9b05-c74ea85c4d0c}</UniqueIdentifier>
+      <UniqueIdentifier>{e7268b1c-bae7-4a07-b0eb-b57d83d8fd78}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\LCD5110_Graph">
-      <UniqueIdentifier>{c644bb9a-f520-4cbe-8c92-3434b323cd99}</UniqueIdentifier>
+      <UniqueIdentifier>{4af8e575-8d4f-49a8-b86f-6301488fa4a2}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Pixy">
-      <UniqueIdentifier>{af169edf-b4e3-474f-a8c3-d34ebff49014}</UniqueIdentifier>
+      <UniqueIdentifier>{41c86d6d-9ab3-40f1-a2ce-4f2b1dd4e8fd}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI">
-      <UniqueIdentifier>{c1a90723-7b8e-43ec-954c-8164c99a8bc3}</UniqueIdentifier>
+      <UniqueIdentifier>{c6855cc1-2df4-4472-b911-98a46657bd88}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\examples">
-      <UniqueIdentifier>{ccf93de2-aa0e-4639-97fa-32a6598c92db}</UniqueIdentifier>
+      <UniqueIdentifier>{b2c8f90b-4d2e-4bca-9e04-cce24c0b7ab1}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\examples\BarometricPressureSensor">
-      <UniqueIdentifier>{b72a0865-3b6a-45fa-b20b-6eb1977a12d9}</UniqueIdentifier>
+      <UniqueIdentifier>{041b000e-3cef-4594-8486-2d5a7ac2b6b5}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\examples\DigitalPotControl">
-      <UniqueIdentifier>{606af315-0041-4dfa-acc9-018dc79430c6}</UniqueIdentifier>
+      <UniqueIdentifier>{fed13bdc-f304-45ca-ae00-59066683c28f}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI\src">
-      <UniqueIdentifier>{fb359eb2-19ae-4d1e-9a4c-017ece086c8b}</UniqueIdentifier>
+      <UniqueIdentifier>{5427071d-2bb4-4fd6-881f-e5e1e0bab018}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\TinyEKF">
-      <UniqueIdentifier>{66bd10fa-31e7-4a0d-bff7-c1e8f1cf6ed0}</UniqueIdentifier>
+      <UniqueIdentifier>{de53bc2b-db3b-499b-be26-e6358f37c1f3}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire">
-      <UniqueIdentifier>{9c02153c-153d-48c3-b7ad-9613b50f8fa1}</UniqueIdentifier>
+      <UniqueIdentifier>{6d629597-d158-4765-985b-93c9e011d583}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples">
-      <UniqueIdentifier>{98e3e98c-f3bc-469b-b664-750efaae6897}</UniqueIdentifier>
+      <UniqueIdentifier>{714bf64b-61c8-4ebc-827a-73c40fbeed55}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\digital_potentiometer">
-      <UniqueIdentifier>{09a26178-c347-4381-b2f6-875d4e361e64}</UniqueIdentifier>
+      <UniqueIdentifier>{87fc0e61-04d2-40e4-9c1c-bace9382186c}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\master_reader">
-      <UniqueIdentifier>{74c344ff-5d5b-4c9f-9916-44f66f2d58f0}</UniqueIdentifier>
+      <UniqueIdentifier>{2a82b534-1920-47ec-b75c-0e21260942bd}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\master_writer">
-      <UniqueIdentifier>{fcda0f19-f749-4c8f-949e-7b405a445ce5}</UniqueIdentifier>
+      <UniqueIdentifier>{182425da-e970-4c55-a1ed-32cb8018cf82}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\SFRRanger_reader">
-      <UniqueIdentifier>{2250d568-5525-42bb-8aa4-fbea74c20027}</UniqueIdentifier>
+      <UniqueIdentifier>{c61a9978-6a39-4840-b35a-fd14ec3f3daf}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\slave_receiver">
-      <UniqueIdentifier>{d38aa86e-45d1-458b-ba77-aad8fd56c17f}</UniqueIdentifier>
+      <UniqueIdentifier>{bab50012-37ac-4fa6-9a69-ac9136b04f5d}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\slave_sender">
-      <UniqueIdentifier>{bb8d6864-3aa3-4517-8d6e-f13720463a55}</UniqueIdentifier>
+      <UniqueIdentifier>{79358e0d-0f49-4d84-a488-7fee9f6e9e87}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire\src">
-      <UniqueIdentifier>{dedc266f-587e-4030-b8b9-d47e5511f0cd}</UniqueIdentifier>
+      <UniqueIdentifier>{56f7834f-bfa9-4df1-a9d7-eb53d192e90f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -216,6 +219,12 @@
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\variant.h">
       <Filter>src\_micro-api-readonly\variants\arduino_due_x</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.h">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.h">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriver_Due.h">
       <Filter>src\_micro-api-readonly\libraries\AutoDriver_Due</Filter>
     </ClInclude>
@@ -340,6 +349,12 @@
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\USB\USBCore.cpp">
       <Filter>src\_micro-api-readonly\core\USB</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.cpp">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.cpp">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriverCommands_Due.cpp">
       <Filter>src\_micro-api-readonly\libraries\AutoDriver_Due</Filter>

@@ -382,14 +382,14 @@ clear(Vars{:});
                     D.T.last_poll_tim = Elapsed_Seconds();
                     
                     % Wait for robot streaming to start
-                        Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
-                        while c2m_V==0 && c2m_E==0; drawnow; end;
-                        if c2m_E==0
-                            Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
-                        else
-                            Console_Write('!!ERROR!! [MainLoop] ABORTED: Wait for Robot Streaming');
-                            return
-                        end
+                    Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
+                    while c2m_V==0 && c2m_E==0; drawnow; end;
+                    if c2m_E==0
+                        Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
+                    else
+                        Console_Write('!!ERROR!! [MainLoop] ABORTED: Wait for Robot Streaming');
+                        return
+                    end
                     
                     % Run Finish setup code
                     Finish_Setup();
@@ -3333,13 +3333,13 @@ clear(Vars{:});
                 ses_next = ...
                     D.SS_In_All{ratInd, var_ind}(col_ind) + 1;
                 % Get session total
-                ses_num_all = D.SS_In_All{ratInd, 'Session_Manual_Training'}(col_ind) + ...;
+                ses_all_next = D.SS_In_All{ratInd, 'Session_Manual_Training'}(col_ind) + ...;
                 D.SS_In_All{ratInd, 'Session_Behavior_Training'}(col_ind) + ...
                 D.SS_In_All{ratInd, 'Session_Implant_Training'}(col_ind) + ...
-                D.SS_In_All{ratInd, 'Session_Rotation'};
+                D.SS_In_All{ratInd, 'Session_Rotation'} + 1;
                 
                 % Set start quad
-                D.SS_In_All.Start_Quadrant{ratInd}(ses_num_all) = D.DB.Start_Quadrant;
+                D.SS_In_All.Start_Quadrant{ratInd}(ses_all_next) = D.DB.Start_Quadrant;
                 % Set rot dir
                 D.SS_In_All.Rotation_Direction{ratInd}(ses_next) = D.DB.Rotation_Direction;
                 % Set rot pos
