@@ -87,19 +87,21 @@ struct DB
 	const bool log_pid = true;
 	const bool log_bull = true;
 
-	// Where to print
-	bool Console = false;
+	// Do print
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
+	const bool print_logging = false;
 	const bool print_motorControl = false;
 	const bool print_c2r = false;
 	const bool print_r2c = false;
 	const bool print_r2a = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
-	const bool print_logging = false;
+	const bool print_logMode = false;
+	const bool print_logStore = false;
 	const bool print_a2o = false;
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
@@ -116,9 +118,9 @@ const bool do_posDebug = false;
 /*
 Set kC and run ICR_Run.cs
 */
-const float kC = 5; // critical gain [1.5,2,3,4,5]
-const float pC = 1.5; // oscillation period [2.75,0,1.9,0,1.5]  
-const float cal_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
+const float kC = 3; // critical gain [3,5]
+const float pC = 1.5; // oscillation period [0,1.68]  
+const double cal_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
 int cal_nMeasPerSteps = 10;
 bool do_pidCalibration = false;
 
@@ -432,8 +434,8 @@ uint32_t t_rewBlockMove = 0; // (ms)
 /*
 EtOH run after min time or distance
 */
-const int dt_durEtOH = 500; // (ms)
-const int dt_delEtOH = 10000; // (ms)
+const int dt_durEtOH = 1000; // (ms)
+const int dt_delEtOH = 2000; // (ms)
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
 
@@ -442,9 +444,9 @@ uint32_t t_solClose = 0;
 Updated when EtOH relay opened
 */
 const float bit2volt = 0.0164;
-uint32_t t_voltUpdate = 0;
-float voltNow = 0;
-float voltCutoff = 11.6;
+uint32_t t_vccUpdate = 0;
+float vccNow = 0;
+float vccCutoff = 11.6;
 float batVoltArr[100] = { 0 };
 
 // LEDs
@@ -559,8 +561,8 @@ public:
 	float cal_errSum = 0;
 	float cal_errMax = 0;
 	float cal_errMin = 0;
-	float cal_ratPos = 0;
-	float cal_ratVel = 0;
+	double cal_ratPos = 0;
+	double cal_ratVel = 0;
 	bool cal_isPidUpdated = false;
 	bool cal_isCalFinished = false;
 	uint32_t t_init;
@@ -755,7 +757,7 @@ public:
 	int cntLogStored = 0;
 	static const int maxBytesStore = 2500;
 	char rcvdArr[maxBytesStore] = { 0 };
-	char mode = '\0'; // ['<', '>']
+	char mode = ' '; // ['<', '>']
 	char openLgSettings[100] = { 0 };
 	char logFile[50] = { 0 };
 	int logNum = 0;
@@ -924,9 +926,9 @@ void OpenCloseEtOHSolenoid();
 // CHECK FOR ETOH UPDATE
 void CheckEtOH();
 // CHECK BATTERY VOLTAGE
-void GetBattVolt();
+float GetBattVolt();
 // TURN LCD LIGHT ON/OFF
-void ChangeLCDlight();
+void ChangeLCDlight(uint32_t duty = 256);
 // QUIT AND RESTART ARDUINO
 void QuitSession();
 // HOLD FOR CRITICAL ERRORS
@@ -988,6 +990,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	// Local vars
 	static int cnt_error = 0;
 	static bool is_error_last = false;
+	static double pos_last = 0;
 	double pos_diff = 0;
 	double dist = 0;
 	double dist_sum = 0;
@@ -1005,16 +1008,6 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	// Update itteration count
 	this->sampCnt++;
 
-	// Shift and add data
-	for (int i = 0; i < this->nSamp - 1; i++)
-	{
-		this->posArr[i] = this->posArr[i + 1];
-		this->t_tsArr[i] = this->t_tsArr[i + 1];
-	}
-	// Add new variables
-	this->posArr[nSamp - 1] = pos_new;
-	this->t_tsArr[nSamp - 1] = ts_new;
-
 	// Do not process early samples
 	if (this->sampCnt < this->nSamp + 1)
 	{
@@ -1031,11 +1024,9 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	else
 		isDataNew = true;
 
-	// COMPUTE TOTAL DISTANCE RAN
-
 	// Check for zero crossing
-	pos_diff = pos_new - this->posArr[this->nSamp - 2];
-	if (abs(pos_diff) > 140 * (PI / 2))
+	pos_diff = pos_new - pos_last;
+	if (abs(pos_diff) > (140 * PI) * 0.9)
 	{
 		// Crossed over
 		if (pos_diff < 0)
@@ -1046,10 +1037,23 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 			this->nLaps--;
 	}
 
+	// Save pos
+	pos_last = pos_new;
+
 	// Store cumulative position in cm
 	this->posNow = pos_new + this->nLaps*(140 * PI);
 
-	// COMPUTE VELOCITY
+	// Shift and add data
+	for (int i = 0; i < this->nSamp - 1; i++)
+	{
+		this->posArr[i] = this->posArr[i + 1];
+		this->t_tsArr[i] = this->t_tsArr[i + 1];
+	}
+	// Add new variables
+	this->posArr[nSamp - 1] = this->posNow;
+	this->t_tsArr[nSamp - 1] = ts_new;
+
+	// Compute velocity
 	for (int i = 0; i < this->nSamp - 1; i++)
 	{
 		// Compute total distance
@@ -1095,7 +1099,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 		cnt_error++;
 		if (!is_error_last) {
 			char str[200];
-			sprintf(str, "!!ERROR!! [POSTRACK::UpdatePos] %s Update Failed: dist_sum=%0.2f dt_sec=%0.2f vel_diff=%0.2f errors=%d", objID, dist_sum, dt_sec, vel_diff, cnt_error);
+			sprintf(str, "WARNING [POSTRACK::UpdatePos] %s Update Failed: dist_sum=%0.2f dt_sec=%0.2f vel_diff=%0.2f errors=%d", objID, dist_sum, dt_sec, vel_diff, cnt_error);
 			DebugError(str);
 		}
 		is_error_last = true;
@@ -1483,6 +1487,8 @@ double PID::RunPidCalibration()
 	Kd = 2*Kp * dT/Pc
 	Ki = Kp*Pc / (8*dT)
 	*/
+	// Local vars
+	float pc_sum = 0;
 
 	if (!cal_isCalFinished)
 	{
@@ -1492,21 +1498,27 @@ double PID::RunPidCalibration()
 			cal_PcArr[3] > 0
 			)
 		{
-			float _pc_sum = 0;
 			// Compute overal average
 			for (int i = 0; i < 4; i++)
 			{
-				_pc_sum += cal_PcArr[i];
+				pc_sum += cal_PcArr[i];
 			}
-			cal_PcAll = _pc_sum / 4;
+			cal_PcAll = pc_sum / 4;
+
+			// Set flags
 			cal_isPidUpdated = true;
 			cal_isCalFinished = true;
+
+			// Log/print
+			DebugFlow("[PID::RunPidCalibration] Finished PID Calibration");
 			return 0;
 		}
-		else if (!is_ekfNew || ekf.RobPos <= 0)
-		{
+
+		// Bail if pos data not ready
+		if (!is_ekfNew)
 			return -1;
-		}
+
+		// Check if ready to get new pc val
 		else if (millis() > t_lastLoop + cal_dt_min)
 		{
 
@@ -1531,6 +1543,11 @@ double PID::RunPidCalibration()
 				// Incriment step or bail if max reached
 				if (cal_stepNow < 3) cal_stepNow++;
 				else return -1;
+
+				// Log/print
+				char str[200] = { 0 };
+				sprintf(str, "[PID::RunPidCalibration] Set Speed to %0.2fcm/sec", cal_speedSteps[cal_stepNow]);
+				DebugFlow(str);
 			}
 
 			// Get loop dt
@@ -2454,43 +2471,42 @@ bool LOGGER::Setup()
 	*/
 
 	// Local vars
-	bool pass = false;
 	byte match = '\0';
-	char str[100] = { 0 };
 
 	// Start serial
 	Serial3.begin(57600);
 
 	// Reset OpenLog
+	t_sent = millis();
 	digitalWrite(pin.OL_RST, HIGH);
 	delay(100);
 	digitalWrite(pin.OL_RST, LOW);
 	delay(100);
 	match = GetReply(5000);
-	pass = match == '>' || match == '<' ? true : false;
 
 	// Bail if setup failed
-	if (!pass) {
-		DebugError("!!ERROR!! [LOGGER::Setup] ABORTING: Did Not Get Initial \'>\' or \'<\'");
+	if (match != '>' && match != '<') {
+		PrintLOGGER("!!ERROR!! [LOGGER::Setup] ABORTING: Did Not Get Initial \'>\' or \'<\'", true);
 		return false;
 	}
 
 	// Set to command mode;
-	if (match == '<')
-		pass = SetToCmdMode();
+	if (match == '<') {
+		if (!SetToCmdMode())
+			return false;
+	}
 
 	// Turn off verbose mode and echo mode
 	SendCommand("verbose off\r");
 	SendCommand("echo off\r");
 
 	// Get settings
-	sprintf(str, "get\r");
-	if (SendCommand(str) == '!')
-		pass = false;
+	if (SendCommand("get\r") == '!')
+		return false;
 	else
 		strcpy(openLgSettings, rcvdArr);
 
-	return pass;
+	return true;
 }
 
 int LOGGER::OpenNewLog()
@@ -2507,25 +2523,27 @@ int LOGGER::OpenNewLog()
 	// Check/cd to log directory
 	if (SendCommand("cd LOGS\r") == '!')
 	{
-		DebugFlow("[OpenNewLog] Make \"LOGS\" Directory");
+		// Make new log dir
 		if (SendCommand("md LOGS\r") == '!')
 			return 0;
 		if (SendCommand("cd LOGS\r") == '!')
 			return 0;
-	}
+		PrintLOGGER("[OpenNewLog] Made \"LOGS\" Directory", true);
 
-	// Check for log count file
-	if (SendCommand("read LOGCNT.TXT\r") == '!')
-	{
+		// Make new log count file
 		logNum = 1;
 		if (SendCommand("new LOGCNT.TXT\r") == '!')
 			return 0;
+		PrintLOGGER("[OpenNewLog] Made \"LOGCNT.TXT\" File", true);
 	}
-	// Store count
-	else
-	{
+
+	// Get log count
+	else if (SendCommand("read LOGCNT.TXT\r") != '!')
+		// Store count
 		logNum = atoi(logCntStr) + 1;
-	}
+	else
+		return 0;
+
 
 	// Check if more than 100 logs saved
 	if (logNum > 100)
@@ -2538,9 +2556,20 @@ int LOGGER::OpenNewLog()
 			return 0;
 		// Print 
 		sprintf(str, "[OpenNewLog] Deleted Log Directory: log_count=%d", logNum);
-		DebugFlow(str);
-		// Rerun 
-		OpenNewLog();
+		PrintLOGGER(str, true);
+		
+		// Make new log dir
+		if (SendCommand("md LOGS\r") == '!')
+			return 0;
+		if (SendCommand("cd LOGS\r") == '!')
+			return 0;
+		PrintLOGGER("[OpenNewLog] Made \"LOGS\" Directory", true);
+
+		// Make new log count file
+		logNum = 1;
+		if (SendCommand("new LOGCNT.TXT\r") == '!')
+			return 0;
+		PrintLOGGER("[OpenNewLog] Made \"LOGCNT.TXT\" File", true);
 	}
 
 	// Update count
@@ -2594,14 +2623,14 @@ bool LOGGER::SetToCmdMode()
 		// Print status
 		char str[100];
 		sprintf(str, "[LOGGER::SetToCmdMode] OpenLog Set to Cmd Mode: mode = %c", mode);
-		DebugFlow(str);
+		PrintLOGGER(str, true);
 	}
 	// Log/print error
 	else {
 		pass = false;
 		char str[100];
 		sprintf(str, "!!ERROR!! [LOGGER::SetToCmdMode] ABORTED: mode=%c", mode);
-		DebugError(str);
+		PrintLOGGER(str, true);
 	}
 
 	return pass;
@@ -2633,10 +2662,19 @@ void LOGGER::GetCommand()
 
 char LOGGER::SendCommand(char msg[], uint32_t timeout, bool do_conf)
 {
+	// Local vars
+	char reply = '\0';
+
+	// Add min delay
+	if (millis() - t_sent < 15) {
+		int del = 15 - (millis() - t_sent);
+		if (del > 0)
+			delay(del);
+	}
+
 	// Send
 	Serial3.write(msg);
 	t_sent = millis();
-	char reply = '\0';
 
 	// Print sent
 	if (db.print_a2o)
@@ -2656,7 +2694,7 @@ char LOGGER::SendCommand(char msg[], uint32_t timeout, bool do_conf)
 			msg[strlen(msg) - 1] = msg[strlen(msg) - 1] == '\r' ? '\0' : msg[strlen(msg) - 1];
 			char str[100];
 			sprintf(str, "WARNING [LOGGER::SendCommand] Command %s Failed", msg);
-			DebugError(str);
+			PrintLOGGER(str, true);
 		}
 	}
 	else reply = mode;
@@ -2673,7 +2711,7 @@ char LOGGER::GetReply(uint32_t timeout)
 	uint32_t t_timeout = millis() + timeout;
 	int dat_ind[2] = { 0,0 };
 	int arr_ind = -1;
-	char cmd_reply = '\0';
+	char cmd_reply = ' ';
 	bool pass = false;
 
 	// Wait for new data
@@ -2685,7 +2723,7 @@ char LOGGER::GetReply(uint32_t timeout)
 
 	// Check for match byte
 	if (db.print_o2a)
-		PrintLOGGER("RCVD_FORMATED[===================", true);
+		PrintLOGGER("[LOGGER::GetReply] RCVD_FORMATED[==========", true);
 	while (
 		!pass &&
 		millis() < t_timeout
@@ -2733,19 +2771,19 @@ char LOGGER::GetReply(uint32_t timeout)
 	rcvdArr[arr_ind + 1] = '\0';
 
 	if (db.print_o2a)
-		PrintLOGGER("\n===================]RCVD_FORMATED\n");
+		PrintLOGGER("\n============================================]RCVD_FORMATED\n");
 
 	// Print formated string
 	if (db.print_o2aRaw)
 	{
-		PrintLOGGER("RCVD_RAW[==============", true);
+		PrintLOGGER("[LOGGER::GetReply] RCVD_RAW[==========", true);
 		for (int i = 0; i <= arr_ind + 1; i++)
 		{
 			//sprintf(str, "[%d]\'%s\'", rcvdArr[i], PrintSpecialChars(rcvdArr[i]));
 			sprintf(str, "\'%s\'", PrintSpecialChars(rcvdArr[i]));
 			PrintLOGGER(str);
 		}
-		PrintLOGGER("\n==============]RCVD_RAW\n");
+		PrintLOGGER("\n============================================]RCVD_RAW\n");
 	}
 
 	// Save values
@@ -2791,15 +2829,15 @@ char LOGGER::GetReply(uint32_t timeout)
 	mode = cmd_reply == '>' || cmd_reply == '<' ? cmd_reply : mode;
 
 	// Print mode and round trip time
-	if (db.print_o2a || db.print_o2aRaw) {
-		sprintf(str, "mode=\'%c\' reply=\'%c\' dt=%dms bytes=%d\n\n", mode, cmd_reply, t_rcvd - t_sent, arr_ind + 1);
-		PrintLOGGER(str);
+	if (db.print_logMode || db.print_o2a || db.print_o2aRaw) {
+		sprintf(str, "[LOGGER::GetReply] mode=\'%c\' reply=\'%c\' dt=%dms bytes=%d", mode, cmd_reply, t_rcvd - t_sent, arr_ind + 1);
+		PrintLOGGER(str, true);
 	}
 
 	// Log/print error
 	if (!pass) {
 		sprintf(str, "WARNING [LOGGER::GetReply] Timedout: dt=%d bytes=%d", timeout, arr_ind + 1);
-		DebugError(str);
+		PrintLOGGER(str, true);
 	}
 
 	// Return cmd 
@@ -2830,7 +2868,7 @@ bool LOGGER::SetToLogMode(char log_file[])
 	// Log/print error
 	else {
 		sprintf(str, "!!ERROR!! [LOGGER::SetToLogMode] ABORTED: mode=%c", mode);
-		DebugError(str);
+		PrintLOGGER(str, true);
 	}
 
 	return pass;
@@ -2859,18 +2897,6 @@ bool LOGGER::StoreLogEntry(char msg[], uint32_t t)
 	// itterate count
 	cntLogStored++;
 
-	//// Remove leading white spaces
-	//char str[300];
-	//int ii = 0;
-	//while (msg[ii] == ' ')
-	//	ii++;
-	//int ws_lng = ii;
-	//for (int i = 0; i < strlen(msg) - ws_lng; i++) {
-	//	str[i] = msg[ii];
-	//	ii++;
-	//}
-	//str[strlen(msg) - ws_lng] = '\0';
-
 	// Put it all together
 	sprintf(msg_out, "[%d],%lu,%s\r\n", cntLogStored, t_m, msg);
 
@@ -2890,7 +2916,7 @@ bool LOGGER::StoreLogEntry(char msg[], uint32_t t)
 	bytesStored += log_bytes;
 
 	// Print stored log
-	if (db.print_logging) {
+	if (db.print_logStore) {
 		msg_out[strlen(msg_out) - 1] = '\0';
 		sprintf(msg, "   [LOG] r2c: num=%d bytes=%d/%d msg=\"%s\"", cntLogStored, log_bytes, bytesStored, msg_out);
 		StoreDBPrintStr(msg, millis());
@@ -2941,8 +2967,7 @@ void LOGGER::SendLogEntry()
 
 		// Print current send ind
 		sprintf(str, "[LOGGER::SendLogEntry] RUNNING: Send Logs: sent=%dB stored=%dB", bytesSent, bytesStored);
-		DebugFlow(str);
-		while (PrintDebug());
+		PrintLOGGER(str, true);
 
 		// Dump anything left
 		uint32_t t_out = millis() + 10;
@@ -3027,8 +3052,7 @@ void LOGGER::SendLogEntry()
 					}
 					else {
 						sprintf(str, "WARNING [LOGGER::GetReply] Log \"read\" Failure %d", cnt_err_read);
-						DebugError(str);
-						while (PrintDebug());
+						PrintLOGGER(str, true);
 					}
 
 					// Break
@@ -3110,11 +3134,11 @@ void LOGGER::SendLogEntry()
 	float t_s = (float)(millis() - t_start) / 1000.0f;
 	if (!do_abort) {
 		sprintf(str, "[LOGGER::SendLogEntry] FINISHED: Send Logs: dt=%0.2fs sent=%dB stored=%dB", t_s, bytesSent, bytesStored);
-		DebugFlow(str);
+		PrintLOGGER(str, true);
 	}
 	else {
 		sprintf(str, "!!ERROR!! [LOGGER::SendLogEntry] ABORTED: Send Logs: %s: dt=%0.2fs sent=%dB stored=%dB", err_str, t_s, bytesSent, bytesStored);
-		DebugError(str);
+		PrintLOGGER(str, true);
 	}
 
 	// Reset vars
@@ -3135,7 +3159,7 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 	// Load existing log file
 	if (log_file != '\0') {
 		sprintf(str, "[LOGGER::TestLoad] RUNNING: Load Log: file_name=%s", log_file);
-		DebugFlow(str);
+		PrintLOGGER(str, true);
 		if (SetToCmdMode())
 		{
 			// Get bytes
@@ -3150,17 +3174,16 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 		}
 		if (pass) {
 			sprintf(str, "[LOGGER::TestLoad] FINISHED: Load Log: file_name=%s size=%dB", logFile, bytesStored);
-			DebugFlow(str);
+			PrintLOGGER(str, true);
 		}
 		else
-			DebugError("!!ERROR!! [LOGGER::TestLoad] ABORTED: Load Log File");
+			PrintLOGGER("!!ERROR!! [LOGGER::TestLoad] ABORTED: Load Log File", true);
 	}
 
 	// Write n_entry entries to log
 	else if (n_entry != 0) {
 		sprintf(str, "[LOGGER::TestLoad] RUNNING: Write %d Logs", n_entry);
-		DebugFlow(str);
-		while (PrintDebug());
+		PrintLOGGER(str, true);
 		randomSeed(analogRead(A0));
 		for (int i = 0; i < n_entry - 1; i++)
 		{
@@ -3184,7 +3207,7 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 			StoreLogEntry(msg, millis());
 		}
 		sprintf(str, "[LOGGER::TestLoad] FINISHED: Write %d Logs", n_entry);
-		DebugFlow(str);
+		PrintLOGGER(str, true);
 	}
 }
 
@@ -3236,20 +3259,20 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 	uint32_t t_m = 0;
 	float t_s = 0;
 
-	// Print time
+	// Bail if logging should not be printed
+	if (!db.print_logging)
+		return;
+
+	// Print like normal entry
 	if (start_entry) {
-		t_m = millis() - t_sync;
-		t_s = t_m > 0 ? (float)(t_m) / 1000.0f : 0;
-		sprintf(str, "[%0.2fs] ", t_s);
-		SerialUSB.print(str);
+		StoreDBPrintStr(msg, millis());
+		// Print right away
+		while (PrintDebug());
 	}
 
-	// Print message
-	SerialUSB.print(msg);
-
-	// Print new line
-	if (start_entry)
-		SerialUSB.print('\n');
+	// Print directly 
+	else
+		SerialUSB.print(msg);
 }
 
 
@@ -4050,10 +4073,12 @@ void AD_Reset()
 void AD_CheckOC()
 {
 	// Local vars
+	char str[200] = { 0 };
 	static uint32_t t_checkAD = 0;
 	static bool dp_disable = false;
 	static int cnt_errors = 0;
-	char str[200] = { 0 };
+	static int ocd_last_r = 1;
+	static int ocd_last_f = 1;
 	int ocd_r;
 	int ocd_f;
 
@@ -4073,11 +4098,20 @@ void AD_CheckOC()
 		// Check for overcurrent shut down
 		if (ocd_r == 0 || ocd_f == 0)
 		{
-			sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected: R_OCD=%d F_OCD=%d", ocd_r, ocd_f);
-			DebugError(str);
+			// Track events
 			cnt_errors++;
-			//AD_Reset();
+
+			// Reset motors
+			AD_Reset();
+
+			// Log/print
+			sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected & Motor Reset: now OCD R|F=%d|%d last OCD R|F=%d|%d", ocd_r, ocd_f, ocd_last_r, ocd_last_f);
+			DebugError(str);
 		}
+
+		// Store status
+		ocd_last_r = ocd_r;
+		ocd_last_f = ocd_f;
 
 		// Set next check
 		t_checkAD = millis() + dt_checkAD;
@@ -4163,7 +4197,7 @@ bool ManualRun(char dir)
 {
 	// Local vars
 	char speed_str[100] = { 0 };
-	char volt_str[100] = { 0 };
+	char vcc_str[100] = { 0 };
 	int inc_speed = 10; // (cm/sec)
 	double new_speed;
 
@@ -4180,9 +4214,9 @@ bool ManualRun(char dir)
 	RunMotor(dir, new_speed, "Override");
 
 	// Print voltage and speed to LCD
-	sprintf(volt_str, "VCC=%0.2fV", voltNow);
+	sprintf(vcc_str, "VCC=%0.2fV", vccNow);
 	sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
-	PrintLCD(volt_str, speed_str);
+	PrintLCD(vcc_str, speed_str);
 }
 
 // SET WHATS CONTROLLING THE MOTOR
@@ -4816,7 +4850,7 @@ void CheckEtOH()
 
 		// Open if vel has not been updated recently
 		do_open =
-			do_open || (millis() > t_voltUpdate + 60000 &&
+			do_open || (millis() > t_vccUpdate + 60000 &&
 				CheckAD_Status(adR_stat, "MOT_STATUS") == 0 &&
 				CheckAD_Status(adF_stat, "MOT_STATUS") == 0);
 	}
@@ -4852,16 +4886,17 @@ void CheckEtOH()
 }
 
 // CHECK BATTERY VOLTAGE
-void GetBattVolt()
+float GetBattVolt()
 {
 	// Local vars
-	static float volt_arr[10] = { 0 };
-	static bool do_volt_update = false;
-	static float volt_avg = 0;
+	static float vcc_arr[10] = { 0 };
+	static bool do_vcc_update = false;
+	static float vcc_avg = 0;
+	static float vcc_last = 0;
 	static int n_samples = 0;
 	float bit_in = 0;
-	float volt_in = 0;
-	float volt_sum = 0;
+	float vcc_in = 0;
+	float vcc_sum = 0;
 	byte byte_out = 0;
 	byte do_shutdown = false;
 
@@ -4874,89 +4909,99 @@ void GetBattVolt()
 		)
 	{
 		bit_in = analogRead(pin.BatVolt);
-		volt_in = bit_in * bit2volt;
-		volt_sum = 0;
+		vcc_in = bit_in * bit2volt;
+		vcc_sum = 0;
 		// Shift array and compute average
 		for (int i = 99; i > 0; i--) {
 			batVoltArr[i] = batVoltArr[i - 1];
-			volt_sum += batVoltArr[i];
+			vcc_sum += batVoltArr[i];
 		}
-		batVoltArr[0] = volt_in;
-		volt_avg = volt_sum / 99;
+		batVoltArr[0] = vcc_in;
+		vcc_avg = vcc_sum / 99;
 
 		// Set flag to send update if array full
 		n_samples = n_samples < 100 ? n_samples + 1 : n_samples;
 		if (n_samples >= 100)
-			do_volt_update = true;
+			do_vcc_update = true;
 	}
 
 	// Send updated voltage
-	else if (do_volt_update)
+	else if (do_vcc_update)
 	{
 		// Store new voltage level
-		voltNow = volt_avg;
+		vcc_last = vccNow;
+		vccNow = vcc_avg;
 
 		// Store time
-		t_voltUpdate = millis();
+		t_vccUpdate = millis();
 
 		// Add to array
 		for (int i = 0; i < 10 - 1; i++)
-			volt_arr[i] = volt_arr[i + 1];
-		volt_arr[9] = voltNow;
+			vcc_arr[i] = vcc_arr[i + 1];
+		vcc_arr[9] = vccNow;
 
 		// Convert float to byte
-		byte_out = byte(round(volt_avg * 10));
+		byte_out = byte(round(vcc_avg * 10));
 
-		// Add to queue if streaming established
-		if (fc.isStreaming)
-			QueuePacket('c', 'J', byte_out, (uint16_t)1);
+		// Send and print if voltage changed
+		if (round(vccNow * 100) != round(vcc_last * 100)) {
 
-		// Log/print voltage
-		char str[100] = { 0 };
-		sprintf(str, "[GetBattVolt] VCC=%0.2fV", volt_avg);
-		if (fc.isSesStarted)
-			DebugFlow(str);
+			// Add to queue if streaming established
+			if (fc.isStreaming)
+				QueuePacket('c', 'J', byte_out, (uint16_t)1);
+
+			// Log/print voltage
+			char str[100] = { 0 };
+			sprintf(str, "[GetBattVolt] VCC=%0.2fV", vcc_avg);
+			if (fc.isSesStarted)
+				DebugFlow(str);
+		}
 
 		// Print voltage and speed to LCD
 		if (millis() > t_solClose + 100) {
-			char volt_str[100];
+			char vcc_str[100];
 			char speed_str[100];
-			sprintf(volt_str, "VCC=%0.2fV", voltNow);
+			sprintf(vcc_str, "VCC=%0.2fV", vccNow);
 			sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
-			PrintLCD(volt_str, speed_str);
+			PrintLCD(vcc_str, speed_str);
 		}
 
 		// Check if voltage critically low
 		do_shutdown = true;
 		for (int i = 0; i < 10 - 1; i++) {
-			do_shutdown = do_shutdown && volt_arr[i] < voltCutoff && volt_arr[i] > 0 ?
+			do_shutdown = do_shutdown && vcc_arr[i] < vccCutoff && vcc_arr[i] > 0 ?
 				true : false;
 		}
 
 		// Perform shutdown
 		if (do_shutdown) {
-			// Run error hold then shutdown
+			// Run error hold then shutdown after 5 min
 			char str[100] = { 0 };
-			sprintf(str, "BATT LOW %0.2fV", voltNow);
-			RunErrorHold(str, 60000);
+			sprintf(str, "BATT LOW %0.2fV", vccNow);
+			RunErrorHold(str, 60000 * 5);
 		}
 
 		// Reset flag
-		do_volt_update = false;
+		do_vcc_update = false;
 	}
+
+	// Return battery voltage
+	return vcc_avg;
 }
 
 // TURN LCD LIGHT ON/OFF
-void ChangeLCDlight()
+void ChangeLCDlight(uint32_t duty)
 {
-	if (!fc.isLitLCD) {
-		analogWrite(pin.Disp_LED, 50);
-		fc.isLitLCD = true;
+	// Check if new duty given
+	if (duty == 256) {
+		fc.isLitLCD = !fc.isLitLCD;
+		duty = fc.isLitLCD ? 50 : 0;
 	}
-	else {
-		analogWrite(pin.Disp_LED, 0);
-		fc.isLitLCD = false;
-	}
+	else
+		fc.isLitLCD = duty > 0;
+
+	// Set LCD duty
+	analogWrite(pin.Disp_LED, duty);
 }
 
 // QUIT AND RESTART ARDUINO
@@ -4987,8 +5032,11 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 	int dt = 250;
 	float t_s = 0;
 
+	// Print anything left in print queue
+	while (PrintDebug());
+
 	// Turn on LCD LED
-	digitalWrite(pin.Disp_LED, 100);
+	ChangeLCDlight(100);
 
 	// Get time seconds
 	t_s = (float)(millis() - t_sync) / 1000.0f;
@@ -5646,26 +5694,8 @@ void Interupt_IR_Detect()
 
 
 void setup() {
-
-	// SET UP SERIAL STUFF
-	delayMicroseconds(100);
-
-	// XBee
-	Serial1.begin(57600);
-
-	// Serial monitor
-	SerialUSB.begin(0);
-
-	// Wait for SerialUSB if debugging
-	uint32_t t_check = millis() + 100;
-	if (db.Console)
-		while (!SerialUSB && millis() < t_check);
-
-	// PRINT SETUP RUNNING
-	char str[200];
-	sprintf(str, "[setup] RUNNING: Setup: free_ram=%dKB", freeMemory());
-	DebugFlow(str);
-	while (PrintDebug());
+	// TEMP
+	//while (true);
 
 	// SETUP OUTPUT PINS
 
@@ -5747,6 +5777,40 @@ void setup() {
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
 
+	// SHOW RESTART BLINK
+	delayMicroseconds(100);
+	StatusBlink(1, 0);
+
+	// SET UP SERIAL STUFF
+
+	// XBee
+	Serial1.begin(57600);
+
+	// Serial monitor
+	SerialUSB.begin(0);
+
+	// Wait for SerialUSB if debugging
+	uint32_t t_check = millis() + 100;
+	if (db.Console)
+		while (!SerialUSB && millis() < t_check);
+
+	// INITIALIZE LCD
+	LCD.InitLCD();
+	LCD.setFont(SmallFont);
+	LCD.invert(true);
+
+	// PRINT SETUP RUNNING
+
+	// Print to LCD
+	ChangeLCDlight(50);
+	PrintLCD("RUNNING", "SETUP");
+
+	// Print to console
+	char str[200];
+	sprintf(str, "[setup] RUNNING: Setup: free_ram=%dKB", freeMemory());
+	DebugFlow(str);
+	while (PrintDebug());
+
 	// SETUP AUTODRIVER
 
 	// Configure SPI
@@ -5775,11 +5839,6 @@ void setup() {
 	digitalWrite(pin.ED_STP, LOW);
 	digitalWrite(pin.ED_ENBL, LOW);
 
-	// INITIALIZE LCD
-	LCD.InitLCD();
-	LCD.setFont(SmallFont);
-	LCD.invert(true);
-
 	// INITIALIZE PIXY
 	Pixy.init();
 	Wire.begin();
@@ -5800,8 +5859,19 @@ void setup() {
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
 
-	// SHOW RESTART BLINK
-	StatusBlink(1, 0);
+	// CHECK THAT POWER ON
+	digitalWrite(pin.Rel_EtOH, HIGH);
+	uint32_t t_check_vcc = millis() + 1000;
+	while (GetBattVolt() == 0 && millis() < t_check_vcc);
+	// Exit with error if power not on
+	if (GetBattVolt() == 0) {
+		// Hold for error
+		DebugError("!!ERROR!! [setup] ABORTED: Power Off");
+		while (PrintDebug());
+		digitalWrite(pin.Rel_EtOH, LOW);
+		RunErrorHold("POWER OFF");
+	}
+	digitalWrite(pin.Rel_EtOH, LOW);
 
 	// SETUP OPENLOG
 	DebugFlow("[setup] RUNNING: OpenLog Setup");
@@ -5859,6 +5929,7 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 
 	// CLEAR LCD
+	ChangeLCDlight(0);
 	ClearLCD();
 
 	// PRINT SETUP FINISHED
