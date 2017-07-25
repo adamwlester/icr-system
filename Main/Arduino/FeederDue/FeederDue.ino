@@ -118,8 +118,8 @@ const bool do_posDebug = false;
 /*
 Set kC and run ICR_Run.cs
 */
-const float kC = 3; // critical gain [3,5]
-const float pC = 1.5; // oscillation period [0,1.68]  
+const float kC = 1.5; // critical gain [1.5,3,5]
+const float pC = 2.75; // oscillation period [2.75,2,1.68]  
 const double cal_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
 int cal_nMeasPerSteps = 10;
 bool do_pidCalibration = false;
@@ -434,8 +434,8 @@ uint32_t t_rewBlockMove = 0; // (ms)
 /*
 EtOH run after min time or distance
 */
-const int dt_durEtOH = 1000; // (ms)
-const int dt_delEtOH = 2000; // (ms)
+const int dt_durEtOH = 500; // (ms)
+const int dt_delEtOH = 5000; // (ms)
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
 
@@ -990,7 +990,6 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	// Local vars
 	static int cnt_error = 0;
 	static bool is_error_last = false;
-	static double pos_last = 0;
 	double pos_diff = 0;
 	double dist = 0;
 	double dist_sum = 0;
@@ -1008,6 +1007,16 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	// Update itteration count
 	this->sampCnt++;
 
+	// Shift and add data
+	for (int i = 0; i < this->nSamp - 1; i++)
+	{
+		this->posArr[i] = this->posArr[i + 1];
+		this->t_tsArr[i] = this->t_tsArr[i + 1];
+	}
+	// Add new variables
+	this->posArr[nSamp - 1] = pos_new;
+	this->t_tsArr[nSamp - 1] = ts_new;
+
 	// Do not process early samples
 	if (this->sampCnt < this->nSamp + 1)
 	{
@@ -1024,9 +1033,11 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	else
 		isDataNew = true;
 
+	// COMPUTE TOTAL DISTANCE RAN
+
 	// Check for zero crossing
-	pos_diff = pos_new - pos_last;
-	if (abs(pos_diff) > (140 * PI) * 0.9)
+	pos_diff = pos_new - this->posArr[this->nSamp - 2];
+	if (abs(pos_diff) > 140 * (PI / 2))
 	{
 		// Crossed over
 		if (pos_diff < 0)
@@ -1037,23 +1048,10 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 			this->nLaps--;
 	}
 
-	// Save pos
-	pos_last = pos_new;
-
 	// Store cumulative position in cm
 	this->posNow = pos_new + this->nLaps*(140 * PI);
 
-	// Shift and add data
-	for (int i = 0; i < this->nSamp - 1; i++)
-	{
-		this->posArr[i] = this->posArr[i + 1];
-		this->t_tsArr[i] = this->t_tsArr[i + 1];
-	}
-	// Add new variables
-	this->posArr[nSamp - 1] = this->posNow;
-	this->t_tsArr[nSamp - 1] = ts_new;
-
-	// Compute velocity
+	// COMPUTE VELOCITY
 	for (int i = 0; i < this->nSamp - 1; i++)
 	{
 		// Compute total distance
@@ -1099,7 +1097,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 		cnt_error++;
 		if (!is_error_last) {
 			char str[200];
-			sprintf(str, "WARNING [POSTRACK::UpdatePos] %s Update Failed: dist_sum=%0.2f dt_sec=%0.2f vel_diff=%0.2f errors=%d", objID, dist_sum, dt_sec, vel_diff, cnt_error);
+			sprintf(str, "!!ERROR!! [POSTRACK::UpdatePos] %s Update Failed: dist_sum=%0.2f dt_sec=%0.2f vel_diff=%0.2f errors=%d", objID, dist_sum, dt_sec, vel_diff, cnt_error);
 			DebugError(str);
 		}
 		is_error_last = true;
@@ -4155,8 +4153,7 @@ void HardStop(char called_from[])
 // IR TRIGGERED HARD STOP
 void IRprox_Halt()
 {
-	if (!(Bull.mode == "Active" && Bull.state == "On") &&
-		!fc.isManualSes)
+	if (!(Bull.mode == "Active" && Bull.state == "On"))
 	{
 		HardStop("IRprox_Halt");
 	}
@@ -5931,6 +5928,9 @@ void setup() {
 	// CLEAR LCD
 	ChangeLCDlight(0);
 	ClearLCD();
+
+	// SET DEFAULTS
+	fc.isManualSes = true;
 
 	// PRINT SETUP FINISHED
 	sprintf(str, "[setup] FINISHED: Setup: free_ram=%dKB", freeMemory());
