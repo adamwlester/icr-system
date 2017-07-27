@@ -177,6 +177,8 @@ a2c;
 // Serial tracking
 uint32_t t_sent = millis(); // (ms)
 uint32_t t_rcvd = millis(); // (ms)
+int bytesRead = 0;
+int bytesSent = 0;
 
 // Log debugging
 int cnt_logSend = 0;
@@ -287,15 +289,18 @@ bool ParseSerial()
 	uint16_t pack = 0;
 	static bool pass = false;
 	fc.doPackSend = false;
+	bytesRead = 0;
 
 	// Dump data till header byte is reached
 	while (Serial1.peek() != r2a.head && Serial1.available() > 0)
 	{
 		Serial1.read(); // dump
+		bytesRead += 1;
 	}
 
 	// Save header
 	head = Serial1.read();
+	bytesRead += 1;
 
 	// Check header
 	if (head != r2a.head) {
@@ -306,25 +311,30 @@ bool ParseSerial()
 	// Get id
 	while (Serial1.available() < 1);
 	r2a.idNew = Serial1.read();
+	bytesRead += 1;
 
 	// Get data
 	while (Serial1.available() < 1);
 	r2a.dat = Serial1.read();
+	bytesRead += 1;
 
 	// Get pack number
 	while (Serial1.available() < 2);
 	U.f = 0.0f;
 	U.b[0] = Serial1.read();
 	U.b[1] = Serial1.read();
+	bytesRead += 2;
 	pack = U.i16[0];
 
 	// Get send confirm request
 	while (Serial1.available() < 1);
 	do_conf = Serial1.read() == 1 ? true : false;
+	bytesRead += 1;
 
 	// Get footer
 	while (Serial1.available() < 1);
 	foot = Serial1.read();
+	bytesRead += 1;
 
 	// Check for missing footer
 	if (foot != r2a.foot) {
@@ -352,7 +362,7 @@ bool ParseSerial()
 		else
 		{
 			// Print resent packet
-			PrintResent(r2a.idNew, r2a.dat, pack);
+			DebugResent(r2a.idNew, r2a.dat, pack);
 			pass = false;
 		}
 	}
@@ -369,9 +379,10 @@ void SendPacketData(char id, byte d1, uint16_t pack, bool do_conf)
 	*/
 
 	// Local vars
-	const int msg_size = 7;
-	byte msg[msg_size];
+	const int msg_lng = 7;
+	byte msg[msg_lng];
 	bool pass = false;
+	bytesSent = 0;
 
 	// Confirm message really intended for here
 	for (int i = 0; i < r2a.idLng; i++)
@@ -399,8 +410,9 @@ void SendPacketData(char id, byte d1, uint16_t pack, bool do_conf)
 		msg[6] = a2r.foot;
 
 		// Send
-		Serial1.write(msg, msg_size);
+		Serial1.write(msg, msg_lng);
 		t_sent = millis();
+		bytesSent = msg_lng;
 
 		// Print sent
 		DebugSent(id, d1, pack, do_conf);
@@ -419,6 +431,9 @@ void SendLogData(char msg[], uint32_t t)
 	byte chksum = 0;
 	byte msg_lng = 0;
 	uint32_t t_m = 0;
+	bytesSent = 0;
+	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	int buff_rx = Serial1.available();
 
 	// Itterate log entry count
 	cnt_logSend++;
@@ -448,13 +463,15 @@ void SendLogData(char msg[], uint32_t t)
 
 	// Send
 	Serial.write(msg_out, msg_lng);
+	bytesSent = msg_lng;
 
 	// Print
 	if (db.print_log && db.Console)
 	{
 		// Store
-		sprintf(str, "   [LOG]: \"%s\"", msg_out);
-		PrintDB(str, millis());
+		sprintf(str, "   [LOG] a2c: message=\"%s\" bytes_sent=%d tx=%d rx=%d", 
+			msg_out, bytesSent, buff_tx, buff_rx);
+		PrintDebug(str, millis());
 	}
 }
 
@@ -543,7 +560,7 @@ void DebugFlow(char msg[], uint32_t t)
 	bool do_log = db.Log && db.log_flow;
 
 	if (do_print)
-		PrintDB(msg, millis());
+		PrintDebug(msg, millis());
 	if (do_log)
 		SendLogData(msg, millis());
 }
@@ -554,14 +571,17 @@ void DebugRcvd(char id, byte dat, uint16_t pack, bool do_conf)
 	// Local vars
 	bool do_print = db.Console && db.print_r2a;
 	bool do_log = db.Log && db.log_r2a;
+	int buff_rx = Serial1.available();
+	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 
 	// Print/Log
 	if (do_print || do_log)
 	{
 		char str[100];
-		sprintf(str, "   [RCVD] r2a: id=%c dat=%d pack=%d do_conf=%s", id, dat, pack, do_conf ? "true" : "false");
+		sprintf(str, "   [RCVD] r2a: id=%c dat=%d pack=%d do_conf=%s bytesRead=%d rx=%d tx=%d", 
+			id, dat, pack, do_conf ? "true" : "false", bytesRead, buff_rx, buff_tx);
 		if (do_print)
-			PrintDB(str, t_rcvd);
+			PrintDebug(str, t_rcvd);
 		if (do_log)
 			SendLogData(str, t_rcvd);
 	}
@@ -573,21 +593,24 @@ void DebugSent(char id, byte d1, uint16_t pack, bool do_conf)
 	// Local vars
 	bool do_print = db.Console && db.print_a2r;
 	bool do_log = db.Log && db.log_a2r;
+	int buff_rx = Serial1.available();
+	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 
 	// Print/Log
 	if (do_print || do_log)
 	{
 		char str[100];
-		sprintf(str, "   [SENT] a2r: id=%c dat1=%d pack=%d do_conf=%s", id, d1, pack, do_conf ? "true" : "false");
+		sprintf(str, "   [SENT] a2r: id=%c dat1=%d pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d", 
+			id, d1, pack, do_conf ? "true" : "false", bytesSent, buff_tx, buff_rx);
 		if (do_print)
-			PrintDB(str, t_sent);
+			PrintDebug(str, t_sent);
 		if (do_log)
 			SendLogData(str, t_sent);
 	}
 }
 
 // PRINT RESENT PACKET
-void PrintResent(char id, byte dat, uint16_t pack)
+void DebugResent(char id, byte dat, uint16_t pack)
 {
 	// Local vars
 	bool do_print = db.Console && db.print_resent;
@@ -601,9 +624,9 @@ void PrintResent(char id, byte dat, uint16_t pack)
 		resent_cnt++;
 
 		char str[100];
-		sprintf(str, "!!ERROR!! [PrintResent] Resent Packet: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
+		sprintf(str, "!!ERROR!! [DebugResent] Resent Packet: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
 		if (do_print)
-			PrintDB(str, millis());
+			PrintDebug(str, millis());
 		if (do_log)
 			SendLogData(str, millis());
 
@@ -611,7 +634,7 @@ void PrintResent(char id, byte dat, uint16_t pack)
 }
 
 // PRINT DB INFO
-void PrintDB(char msg[], uint32_t t)
+void PrintDebug(char msg[], uint32_t t)
 {
 	static uint32_t t1 = millis();
 	uint32_t t_m = 0;
@@ -628,7 +651,7 @@ void PrintDB(char msg[], uint32_t t)
 	char str_tim[50] = { 0 };
 	char spc[50] = { 0 };
 	char arg[50] = { 0 };
-	sprintf(str_tim, "[%0.2fs]", t_s);
+	sprintf(str_tim, "[%0.3f]", t_s);
 	sprintf(arg, "%%%ds", 20 - strlen(str_tim));
 	sprintf(spc, arg, '_');
 
@@ -773,28 +796,28 @@ void ResetTTL()
 		digitalWrite(pin.ttlNorthOn, LOW); // set back to LOW
 		isOnNorth = false;
 		// Print
-		if (db.print_flow) PrintDB("[ResetTTL] NORTH OFF", millis());
+		if (db.print_flow) PrintDebug("[ResetTTL] NORTH OFF", millis());
 	}
 	// west
 	if (isOnWest && millis() - t_outLastWest > dt_ttlPulse) {
 		digitalWrite(pin.ttlWestOn, LOW); // set back to LOW
 		isOnWest = false;
 		// Print
-		if (db.print_flow) PrintDB("[ResetTTL] WEST OFF", millis());
+		if (db.print_flow) PrintDebug("[ResetTTL] WEST OFF", millis());
 	}
 	// south
 	if (isOnSouth && millis() - t_outLastSouth > dt_ttlPulse) {
 		digitalWrite(pin.ttlSouthOn, LOW); // set back to LOW
 		isOnSouth = false;
 		// Print
-		if (db.print_flow) PrintDB("[ResetTTL] SOUTH OFF", millis());
+		if (db.print_flow) PrintDebug("[ResetTTL] SOUTH OFF", millis());
 	}
 	// east
 	if (isOnEast && millis() - t_outLastEast > dt_ttlPulse) {
 		digitalWrite(pin.ttlEastOn, LOW); // set back to LOW
 		isOnEast = false;
 		// Print
-		if (db.print_flow) PrintDB("[ResetTTL] EAST OFF", millis());
+		if (db.print_flow) PrintDebug("[ResetTTL] EAST OFF", millis());
 	}
 	isOnAny = isOnNorth || isOnWest || isOnSouth || isOnEast;
 }
@@ -815,7 +838,7 @@ void NorthFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("[NorthFun] NORTH ON", t_outLastNorth);
+				PrintDebug("[NorthFun] NORTH ON", t_outLastNorth);
 		}
 		t_inLastNorth = millis();
 	}
@@ -837,7 +860,7 @@ void WestFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("[WestFun] WEST ON", t_outLastWest);
+				PrintDebug("[WestFun] WEST ON", t_outLastWest);
 		}
 		t_inLastWest = millis();
 	}
@@ -859,7 +882,7 @@ void SouthFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("[SouthFun] SOUTH ON", t_outLastSouth);
+				PrintDebug("[SouthFun] SOUTH ON", t_outLastSouth);
 		}
 		t_inLastSouth = millis();
 	}
@@ -881,7 +904,7 @@ void EastFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDB("[EastFun] EAST ON", t_outLastEast);
+				PrintDebug("[EastFun] EAST ON", t_outLastEast);
 		}
 		t_inLastEast = millis();
 	}
@@ -975,7 +998,6 @@ void setup()
 
 void loop()
 {
-
 	// Keep checking for start command
 	AwaitStart();
 
