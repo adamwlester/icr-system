@@ -25,16 +25,19 @@ function[] = ICR_GUI(sysTest, doDebug, isMatSolo)
 global FigH; % UI figure handle
 global D; % Main data struct
 global tcpIP; % TCP object
+
 % Matlab to CS communication
-global m2c_ready; % ready message to CS
 global m2c_id; % message out to CS
 global m2c_dat1; % data out to CS
 global m2c_dat2; % data out to CS
 global m2c_dat3; % data out to CS
 global m2c_pack; % packet number out to CS
+global m2c_hist; % message history
 global m2c_dir; % current cheetah directory
-global posSim; % array for sim data
+global m2c_posSim; % array for sim data
+
 % CS to Matlab communication
+global request_m2c; % request m2c data
 global timer_c2m; % timer to check c2m
 global c2m_W; % sync time
 global c2m_J; % battery voltage
@@ -44,6 +47,24 @@ global c2m_K; % robot in place
 global c2m_Y; % enable save button
 global c2m_E; % exit
 global c2m_C; % confirm close
+
+% m2c send history
+m2c_hist = {...
+    '+', 0, 0, 0, 0; ... % matlab ready [NA]
+    'T', 0, 0, 0, 0; ... % system test command [(byte)test]
+    'G', 0, 0, 0, 0; ... % matlab gui loaded [NA]
+    'N', 0, 0, 0, 0; ... % netcom setup [NA]
+    'A', 0, 0, 0, 0; ... % connected to AC computer [NA]
+    'S', 0, 0, 0, 0; ... % setup session [(byte)ses_cond, (byte)sound_cond]
+    'M', 0, 0, 0, 0; ... % move to position [(float)targ_pos]
+    'R', 0, 0, 0, 0; ... % run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
+    'H', 0, 0, 0, 0; ... % halt movement [(byte)halt_state]
+    'B', 0, 0, 0, 0; ... % bulldoze rat [(byte)bull_delay, (byte)bull_speed]
+    'I', 0, 0, 0, 0; ... % rat in/out [(byte)in/out]
+    'F', 0, 0, 0, 0; ... % data saved [NA]
+    'X', 0, 0, 0, 0; ... % confirm quit
+    'C', 0, 0, 0, 0; ... % confirm close
+    };
 
 % Set top level vars
 D.DB.startTime = now;
@@ -55,6 +76,7 @@ D.DB.doPidCalibrationTest = false;
 D.DB.doHaultErrorTest = false;
 D.DB.doSimRatTest = false;
 D.DB.isErrExit = false;
+D.DB.isForceClose = false;
 
 % Handle input args
 if nargin < 3
@@ -98,6 +120,7 @@ end
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]
 %...........................m2c_id...................................
+%    '+', // matlab ready [NA]
 %    'T', // system test command [(byte)test]
 %    'G', // matlab gui loaded [NA]
 %    'N', // netcom setup [NA]
@@ -181,77 +204,87 @@ D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 D.DB.ratVelStart = 20;
 D.DB.ratMaxAcc = 60; % (cm/sec/sec)
 D.DB.ratMaxDec = 100; % (cm/sec/sec)
-posSim(:) = 0;
+m2c_posSim(:) = 0;
 
 % Halt Error test
 D.DB.velSteps = 10:10:80; % (cm/sec)
 D.DB.stepSamp = 4;
 
-% Wait for sync time
-if ~isMatSolo
-    % Wait for vars to initialize
-    while isempty(m2c_ready); pause(0.1); end
-    % Set CS flag
-    m2c_ready = true;
-    % Wait for handshake signal
-    while c2m_W == 0 && c2m_E == 0; pause(0.1); end
-end
-D.DB.startTime = now;
-Console_Write(sprintf('SET SYNC TIME: %ddays',D.DB.startTime));
-
-% Setup c2m timer
+% Setup c2m globals
 timer_c2m = timer;
 timer_c2m.ExecutionMode = 'fixedRate';
 timer_c2m.Period = 0.1;
 timer_c2m.TimerFcn = @CheckC2M;
 start(timer_c2m);
 
+% Wait for sync time
+if ~isMatSolo
+    % Tell CS Matlab ready
+    SendM2C('+');
+    % Wait for handshake signal
+    while c2m_W == 0 && c2m_E == 0; pause(0.1); end
+end
+
+% Set sync time
+if (c2m_W ~= 0)
+    D.DB.startTime = now;
+    Console_Write(sprintf('SET SYNC TIME: %ddays',D.DB.startTime));
+end
+
 % Open figure
-FigH = figure('Visible', 'Off', ...
-    'DeleteFcn', {@ForceClose});
+if (c2m_E == 0)
+    FigH = figure('Visible', 'Off', ...
+        'DeleteFcn', {@ForceClose});
+end
 
 % ------------------------- RUN MAIN FUNCTION -----------------------------
 
 % RUN MAIN FUNCTION
-Console_Write('[ICR_GUI] RUNNING: ICR_GUI.m');
-
-% Run in debug mode
-if doDebug
+if (c2m_E == 0)
+    Console_Write('[ICR_GUI] RUNNING: ICR_GUI.m');
     
-    % Stop on error
-    dbstop if error;
-    Console_Write('[ICR_GUI] RUNNING: In Debug Mode');
-    
-    % Run main script
-    RunScript();
-    
-end
-
-% Run in catch error mode
-if ~doDebug
-    
-    % Catch and print error in console
-    dbclear if caught error;
-    Console_Write(sprintf('[ICR_GUI] RUNNING: In Release Mode'));
-    
-    % Run main script
-    try RunScript();
-    catch ME
-        D.DB.isErrExit = true;
-        % Log/print error
-        err = sprintf(['!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!\r\r', ...
-            'Time: %s\r\r', ...
-            'ID: %s\r\r', ...
-            'Msg: %s\r\r'], ...
-            datestr(now, 'HH:MM:SS'), ...
-            ME.identifier, ...
-            ME.message);
-        for z_line = 1:length(ME.stack)
-            err = [err, sprintf('Fun: %s\rLine: %d\r', ME.stack(z_line).name, ME.stack(z_line).line)]; %#ok<AGROW>
-        end
-        err = [err, sprintf('\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')];
-        Console_Write(err);
+    % Run in debug mode
+    if doDebug
+        
+        % Stop on error
+        dbstop if error;
+        Console_Write('[ICR_GUI] RUNNING: In Debug Mode');
+        
+        % Run main script
+        RunScript();
+        
     end
+    
+    % Run in catch error mode
+    if ~doDebug
+        
+        % Catch and print error in console
+        dbclear if caught error;
+        Console_Write(sprintf('[ICR_GUI] RUNNING: In Release Mode'));
+        
+        % Run main script
+        try RunScript();
+        catch ME
+            D.DB.isErrExit = true;
+            % Log/print error
+            err = sprintf(['!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!\r\r', ...
+                'Time: %s\r\r', ...
+                'ID: %s\r\r', ...
+                'Msg: %s\r\r'], ...
+                datestr(now, 'HH:MM:SS'), ...
+                ME.identifier, ...
+                ME.message);
+            for z_line = 1:length(ME.stack)
+                err = [err, sprintf('Fun: %s\rLine: %d\r', ME.stack(z_line).name, ME.stack(z_line).line)]; %#ok<AGROW>
+            end
+            err = [err, sprintf('\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')];
+            Console_Write(err);
+        end
+    end
+    
+    % SKIP RUN AND ABORT
+else
+    Console_Write('!!ERROR!! [ICR_GUI] ABORTING: ICR_GUI.m');
 end
 
 % ---------------------------- EXIT PROGRAM -------------------------------
@@ -260,7 +293,7 @@ end
 Console_Write('[ICR_GUI] RUNNING: Exit ICR_GUI...');
 
 % Check if GUI was forced close
-if ~D.B.force_close
+if ~D.DB.isForceClose
     
     % Log/print 
     Console_Write('[ICR_GUI] RUNNING: Normal Exit Procedure...');
@@ -293,7 +326,7 @@ else
 end
 
 % Close figure
-if ~D.B.force_close
+if ~D.DB.isForceClose
     D.B.close = true;
     close(FigH)
     delete(FigH)
@@ -324,7 +357,7 @@ clear(Vars{:});
 
 
 
-%% ==========================MAIN FUNCTION==================================
+%% =========================MAIN FUNCTIONS=================================
 
     function[] = RunScript()
         
@@ -572,7 +605,7 @@ clear(Vars{:});
             % flag quit
             D.B.quit = false;
             % flag gui forced exit
-            D.B.force_close = false;
+            D.DB.isForceClose = false;
             % flag gui closed
             D.B.close = false;
             % rotation has occured
@@ -4997,9 +5030,9 @@ clear(Vars{:});
                             xy_pos = reshape(xy_pos', 1, []);
                             
                             % Update globals
-                            posSim(1) = ts_now;
-                            posSim(2) = x;
-                            posSim(3) = y;
+                            m2c_posSim(1) = ts_now;
+                            m2c_posSim(2) = x;
+                            m2c_posSim(3) = y;
                             
                             % Update simulated rat data
                             D.B.simRadLast = rad_now;
@@ -6214,7 +6247,7 @@ clear(Vars{:});
 
 % --------------------------SEND CS COMMAND--------------------------------
 
-    function[] = SendM2C(id, dat1, dat2, dat3)
+    function[] = SendM2C(id, dat1, dat2, dat3, pack)
         
         % Local var
         persistent pack_last;
@@ -6261,8 +6294,15 @@ clear(Vars{:});
         m2c_dat3 = dat3;
         
         % Get new packet number
+        if nargin < 5
         m2c_pack = pack_last+1;
         pack_last = pack_last+1;
+        else
+            m2c_pack = pack;
+        end
+        
+        % Store in history
+        m2c_hist(ismember(m2c_hist(:,1), id), 2:end) = {dat1, dat2, dat3, m2c_pack};
         
         % Log/print
         Console_Write(sprintf('   [SENT] m2c: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
@@ -6298,6 +6338,8 @@ clear(Vars{:});
                     eval(sprintf('%s = 0;', var_list{c2m_ind(z_v)}));
                 end
             end
+            % Bail on first run
+            return;
         end
         
         % Loop through and check each var
@@ -6308,6 +6350,24 @@ clear(Vars{:});
                 Console_Write(sprintf('   [RCVD] c2m: id=%s dat=%d', id_list{i}, now_val));
                 id_last(i) = now_val;
             end
+        end
+        
+        % Check for resend request
+        if ~ischar(request_m2c)
+            return
+        end
+        
+        if ~strcmp(request_m2c, ' ')
+            Console_Write(sprintf('   [RCVD] Send Request: id=%s', request_m2c));
+            id_ind = ismember(m2c_hist(:,1), request_m2c);
+            
+            % Send again if any history of this id
+            if m2c_hist{id_ind,5} > 0
+                SendM2C(m2c_hist{id_ind,1}, m2c_hist{id_ind,2}, m2c_hist{id_ind,3}, m2c_hist{id_ind,4}, m2c_hist{id_ind,5});
+            end
+            
+            % Reset flag
+            request_m2c = ' ';
         end
         
     end
@@ -6454,19 +6514,19 @@ clear(Vars{:});
                                 Console_Write(sprintf('[Disconnect_AC] FINISHED: Disconnect from AC Computer IP=%s', ...
                                     D.AC.IP));
                                 
-                            else Console_Write('!!ERROR!! [Disconnect_AC] \"tcpIP\" Does Not Exist');
+                            else Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" Does Not Exist');
                             end
-                        else Console_Write('!!ERROR!! [Disconnect_AC] \"tcpIP\" is Not a tcpIP Object');
+                        else Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" is Not a tcpIP Object');
                         end
-                    else Console_Write('!!ERROR!! [Disconnect_AC] \"tcpIP\" Does Not Exist');
+                    else Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" Does Not Exist');
                     end
-                else Console_Write('!!ERROR!! [Disconnect_AC] \"D.AC\" is Empty');
+                else Console_Write('**WARNING** [Disconnect_AC] \"D.AC\" is Empty');
                 end
-            else Console_Write('!!ERROR!! [Disconnect_AC] \"AC\" Not a Field of \"D\"');
+            else Console_Write('**WARNING** [Disconnect_AC] \"AC\" Not a Field of \"D\"');
             end
-            try fclose(tcpIP); catch; end;
-            try delete(tcpIP); catch; end;
-            try clear tcpIP; catch; end;
+            %try fclose(tcpIP); catch; end;
+            %try delete(tcpIP); catch; end;
+            %try clear tcpIP; catch; end;
             
         end
     end
@@ -6494,7 +6554,7 @@ clear(Vars{:});
         
         % Set flags
         c2m_E = 1;
-        D.B.force_close = true;
+        D.DB.isForceClose = true;
         
         return;
     end

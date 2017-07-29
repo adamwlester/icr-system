@@ -88,7 +88,7 @@ struct DB
 	const bool log_bull = true;
 
 	// Printing
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -98,6 +98,7 @@ struct DB
 	const bool print_c2r = false;
 	const bool print_r2c = false;
 	const bool print_r2a = false;
+	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
 	const bool print_logMode = false;
@@ -118,8 +119,8 @@ db;
 /*
 Set kC and run ICR_Run.cs
 */
-const float kC = 1.5; // critical gain [1.5,3,5]
-const float pC = 2.75; // oscillation period [2.75,2,1.68]  
+const float kC = 3; // critical gain [1.5,3,5]
+const float pC = 1.75; // oscillation period [0,1.75,1.5]  
 const double cal_speedSteps[4] = { 10, 20, 30, 40 }; // (cm/sec) [{ 10, 20, 30, 40 }]
 int cal_nMeasPerSteps = 10;
 
@@ -435,7 +436,7 @@ uint32_t t_rewBlockMove = 0; // (ms)
 /*
 EtOH run after min time or distance
 */
-const int dt_durEtOH = 500; // (ms)
+const int dt_durEtOH[2] = { 250, 100 }; // (ms)
 const int dt_delEtOH[2] = { 10000, 60000 }; // (ms)
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
@@ -723,11 +724,18 @@ public:
 	double boundsRewarded[2] = { 0 };
 	int occRewarded = 0;
 	int lapN = 0;
+	uint32_t armMoveTimeout = 5000;
 	bool doArmMove = false;
-	bool isArmExtended = false;
+	bool doExtendArm = false;
+	bool doRetractArm = false;
+	bool doSwtchRelease = false;
+	bool isArmExtended = true;
 	const int armExtStps = 220;
+	const int armSwtchReleaseStps = 20;
+	const int dt_step_high = 500; // (us)
+	const int dt_step_low = 500; // (us)
 	int armPos = 0;
-	int armZone = 0;
+	int armTarg = 0;
 	bool isArmStpOn = false;
 	uint32_t t_init;
 	// METHODS
@@ -738,9 +746,9 @@ public:
 	void SetRewMode(String mode_str, byte arg2);
 	bool CompZoneBounds(double now_pos, double rew_pos);
 	bool CheckZoneBounds(double now_pos);
-	void CheckFeedArm();
 	void ExtendFeedArm();
 	void RetractFeedArm();
+	void CheckFeedArm();
 	void MoveFeedArm();
 	void Reset();
 };
@@ -863,9 +871,11 @@ AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
 AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 PixyI2C Pixy(0x54);
 LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
-POSTRACK RatVT(millis(), "RatVT", 4);
-POSTRACK RobVT(millis(), "RobVT", 4);
-POSTRACK RatPixy(millis(), "RatPixy", 6);
+POSTRACK Pos[3] = {
+	POSTRACK(millis(), "RatVT", 4),
+	POSTRACK(millis(), "RobVT", 4),
+	POSTRACK(millis(), "RatPixy", 6)
+};
 PID Pid(millis(), kC, pC, pidSetPoint);
 BULLDOZE Bull(millis());
 TARGET Targ(millis());
@@ -1081,6 +1091,13 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	// Compute change in vel
 	vel_diff = abs(velNow - vel);
 
+	//// TEMP
+	//if (strcmp("RatVT", objID) == 0) {
+	//	char str[100];
+	//	sprintf(str, "%s: %0.2f %0.2f %d %lu", objID, pos_new, vel, ts_new - this->t_tsArr[nSamp - 2], ts_new);
+	//	SerialUSB.println(str);
+	//}
+
 	// Check for problem vals
 	bool do_skip_vel =
 		dist_sum == 0 ||
@@ -1106,7 +1123,8 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 		cnt_error++;
 		if (!is_error_last) {
 			char str[200];
-			sprintf(str, "**WARNING** [POSTRACK::UpdatePos] Bad Values: id=%s pos_new=%0.2f pos_last=%0.2f pos_tot=%0.2f dist_sum=%0.2f dt_sec=%0.2f vel_diff=%0.2f errors=%d", objID, pos_new, this->posArr[this->nSamp - 2], this->posNow, dist_sum, dt_sec, vel_diff, cnt_error);
+			sprintf(str, "**WARNING** [POSTRACK::UpdatePos] Bad Values: id=%s pos_new=%0.2f pos_last=%0.2f dist_sum=%0.2f dt_sec=%0.2f vel_diff=%0.2f errors=%d",
+				objID, pos_new, this->posArr[this->nSamp - 2], dist_sum, dt_sec, vel_diff, cnt_error);
 			DebugError(str);
 		}
 		is_error_last = true;
@@ -2034,11 +2052,6 @@ REWARD::REWARD(uint32_t t)
 
 	// Reset reward stuff
 	Reset();
-
-	// Initialize feeder arm
-	isArmExtended = true;
-	armPos = armExtStps;
-	RetractFeedArm();
 }
 
 bool REWARD::StartRew(bool do_stop, bool is_button_reward)
@@ -2281,66 +2294,26 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	return isZoneTriggered;
 }
 
-void REWARD::CheckFeedArm()
-{
-	if (doArmMove)
-	{
-		// Save start time
-		if (t_moveArmStr == 0)
-			t_moveArmStr = millis();
-
-		// Check if arm should be moved
-		if (
-			armPos != armZone &&
-			millis() < t_moveArmStr + 1000)
-		{
-			MoveFeedArm();
-		}
-		// TARGET reached
-		else
-		{
-			// Unstep motor
-			if (digitalRead(pin.ED_STP) == HIGH)
-			{
-				digitalWrite(pin.ED_STP, LOW);
-				isArmStpOn = false;
-			}
-			// Sleep motor
-			digitalWrite(pin.ED_SLP, LOW);
-
-			// Set flag
-			if (!isArmExtended && armPos > 0)
-				isArmExtended = true;
-			else if (isArmExtended && armPos == 0)
-				isArmExtended = false;
-			doArmMove = false;
-			t_moveArmStr = 0;
-		}
-	}
-	// Check if its time to retract arm
-	else if (
-		isArmExtended &&
-		millis() > t_retractArm
-		) {
-		RetractFeedArm();
-	}
-	else if (digitalRead(pin.ED_SLP) == HIGH) {
-		// Sleep motor
-		digitalWrite(pin.ED_SLP, LOW);
-	}
-
-}
-
 void REWARD::ExtendFeedArm()
 {
 	if (!isArmExtended)
 	{
+		// Set targ and flag
+		armTarg = armExtStps;
+		doExtendArm = true;
+
+		// Set retract time
 		t_retractArm = millis() + dt_block;
-		armZone = armExtStps;
-		doArmMove = true;
+
+		// Wake motor
+		digitalWrite(pin.ED_SLP, HIGH);
+
 		// Set to half step
 		if (digitalRead(pin.ED_MS2) == HIGH)
 			digitalWrite(pin.ED_MS2, LOW);
+
+		// Set direction to extend
+		digitalWrite(pin.ED_DIR, LOW);
 	}
 }
 
@@ -2348,56 +2321,144 @@ void REWARD::RetractFeedArm()
 {
 	if (isArmExtended)
 	{
-		armZone = 0;
-		doArmMove = true;
+		// Set flag
+		doRetractArm = true;
+
+		// Wake motor
+		digitalWrite(pin.ED_SLP, HIGH);
+
 		// Set to quarter step
 		if (digitalRead(pin.ED_MS2) == LOW)
 			digitalWrite(pin.ED_MS2, HIGH);
+
+		// Set direction to retract
+		digitalWrite(pin.ED_DIR, HIGH);
 	}
+}
+
+void REWARD::CheckFeedArm()
+{
+	// Local vars
+	bool is_move_done = false;
+	bool is_timedout = false;
+
+	if (doExtendArm || doRetractArm)
+	{
+		// Save start time
+		if (t_moveArmStr == 0)
+			t_moveArmStr = millis();
+
+		// Check if still extending
+		if (doExtendArm)
+			if (armPos >= armTarg)
+				is_move_done = true;
+
+		// Check if still retracting
+		if (doRetractArm)
+		{
+			// Check if switch not triggered
+			if (digitalRead(pin.FeedSwitch) == HIGH &&
+				(doSwtchRelease && armPos >= armTarg))
+				is_move_done = true;
+
+			// Set to release tension on switch
+			else if (digitalRead(pin.FeedSwitch) == LOW &&
+				!doSwtchRelease) {
+
+				// Set direction to extend
+				digitalWrite(pin.ED_DIR, LOW);
+
+				// Set pos and target
+				armPos = 0;
+				armTarg = armSwtchReleaseStps;
+
+				// Set flags
+				doSwtchRelease = true;
+			}
+		}
+
+		// Check if timedout
+		if (millis() > t_moveArmStr + armMoveTimeout) {
+			is_move_done = true;
+			is_timedout = true;
+		}
+
+		// Move arm
+		if (!is_move_done) {
+			MoveFeedArm();
+		}
+
+		// Target reached
+		else
+		{
+			// Unstep motor
+			if (digitalRead(pin.ED_STP) == HIGH)
+				digitalWrite(pin.ED_STP, LOW);
+
+			// Sleep motor
+			digitalWrite(pin.ED_SLP, LOW);
+
+			// Set arm state flags
+			if (doExtendArm)
+				isArmExtended = true;
+			else if (doRetractArm)
+				isArmExtended = false;
+
+			// Log/print status
+			char str[200];
+			if (!is_timedout) {
+				sprintf(str, "[REWARD::CheckFeedArm] FINISHED: Arm %s: arm_pos=%d dt_move=%d",
+					isArmExtended ? "Extend" : "Retract", armPos, millis() - t_moveArmStr);
+				DebugFlow(str);
+			}
+			else {
+				sprintf(str, "!!ERROR!! [REWARD::CheckFeedArm] TIMEDOUT: Arm %s: arm_pos=%d dt_move=%d",
+					isArmExtended ? "Extend" : "Retract", armPos, millis() - t_moveArmStr);
+				DebugError(str);
+			}
+
+			// Reset pos time and flags
+			armPos = isArmExtended ? armExtStps : 0;
+			t_moveArmStr = 0;
+			isArmStpOn = false;
+			doExtendArm = false;
+			doRetractArm = false;
+			doSwtchRelease = false;
+		}
+	}
+
+	// Make sure motor asleep
+	else if (digitalRead(pin.ED_SLP) == HIGH) {
+		// Sleep motor
+		digitalWrite(pin.ED_SLP, LOW);
+	}
+
+	// Check if its time to retract arm
+	else if (isArmExtended) {
+		// Do not retract if in Manual mode
+		if (millis() > t_retractArm && !fc.isManualSes)
+			RetractFeedArm();
+	}
+
 }
 
 void REWARD::MoveFeedArm()
 {
 	// Local vars
-	static uint32_t t_step_high = millis();
-	static uint32_t t_step_low = millis();
-
-	// Wake motor
-	if (digitalRead(pin.ED_SLP) == LOW)
-	{
-		digitalWrite(pin.ED_SLP, HIGH);
-	}
+	static uint32_t t_step_high = micros(); // (us)
+	static uint32_t t_step_low = micros(); // (us)
 
 	// Step motor
 	if (!isArmStpOn)
 	{
-
-		// Extend arm
-		if (armPos < armZone) {
-			digitalWrite(pin.ED_DIR, LOW); // extend
-		}
-
-		// Retract arm
-		else
-		{
-			if (digitalRead(pin.FeedSwitch) == HIGH) {
-				digitalWrite(pin.ED_DIR, HIGH); // retract
-			}
-			// Home pos reached
-			else {
-				// Take presure off botton
-				armPos = -20;
-				isArmExtended = false;
-			}
-		}
-
-		// Check for min time ellapsed
-		if (millis() - t_step_low < 1)
-			return;
+		// Add min delay
+		int del = dt_step_low - (micros() - t_step_low);
+		if (del > 0)
+			delayMicroseconds(del);
 
 		// Set step high
 		digitalWrite(pin.ED_STP, HIGH);
-		t_step_high = millis();
+		t_step_high = micros();
 
 		// Incriment step
 		armPos++;
@@ -2408,13 +2469,14 @@ void REWARD::MoveFeedArm()
 	// Unstep motor
 	else
 	{
-		// Check for min time ellapsed
-		if (millis() - t_step_high < 1)
-			return;
+		// Add min delay
+		int del = dt_step_high - (micros() - t_step_high);
+		if (del > 0)
+			delayMicroseconds(del);
 
 		// Set step low
 		digitalWrite(pin.ED_STP, LOW);
-		t_step_low = millis();
+		t_step_low = micros();
 
 		// Set flag
 		isArmStpOn = false;
@@ -3376,9 +3438,8 @@ void GetSerial()
 		// Update recive time
 		t_rcvd = millis();
 
-		// Store revieved pack details
-		if (id != 'P')
-			DebugRcvd(is_cs_msg ? 'c' : 'a', id, pack);
+		// Log/print
+		DebugRcvd(is_cs_msg ? 'c' : 'a', id, pack);
 
 		// Send confirmation
 		if (do_conf)
@@ -3463,13 +3524,12 @@ void GetSerial()
 			c2r.cntRepeat[id_ind]++;
 
 			// Print resent packet
-			sprintf(str, "!!ERROR!! [GetSerial] Duplicate C2R Packet: id=%c pack=%d duplicates=%d bytesRead=%d rx=%d tx=%d",
+			sprintf(str, "**WARNING** [GetSerial] Duplicate C2R Packet: id=%c pack=%d duplicates=%d bytesRead=%d rx=%d tx=%d",
 				id, pack, c2r.cntRepeat[id_ind], bytesRead, buff_rx, buff_tx);
 			DebugError(str);
 
 		}
 	}
-
 }
 
 // PARSE CS MESSAGE
@@ -3564,7 +3624,6 @@ void ParseC2R(char id)
 	// Get VT data
 	else if (id == 'P')
 	{
-
 		// Get Ent
 		c2r.vtEnt = WaitBuffRead();
 		// Get TS
@@ -4347,8 +4406,8 @@ void CheckBlockTimElapsed()
 		bool is_passed_feeder =
 			fc.isTrackingEnabled &&
 			ekf.RatPos - (ekf.RobPos + feedDist) > 0 &&
-			RatVT.posNow - (ekf.RobPos + feedDist) > 0 &&
-			RatPixy.posNow - (ekf.RobPos + feedDist) > 0;
+			Pos[0].posNow - (ekf.RobPos + feedDist) > 0 &&
+			Pos[2].posNow - (ekf.RobPos + feedDist) > 0;
 
 		// Check for time elapsed or rat moved at least 3cm past feeder
 		if (millis() > t_rewBlockMove || is_passed_feeder)
@@ -4374,9 +4433,9 @@ void InitializeTracking()
 	// Reset pos data once after rat in
 	if (fc.isRatIn &&
 		!fc.isTrackingEnabled &&
-		RatVT.isDataNew &&
-		RatPixy.isDataNew &&
-		RobVT.isDataNew)
+		Pos[0].isDataNew &&
+		Pos[2].isDataNew &&
+		Pos[1].isDataNew)
 	{
 		// Local vars
 		char str[200] = { 0 };
@@ -4388,30 +4447,30 @@ void InitializeTracking()
 		DebugFlow("[InitializeTracking] RUNNING: Initialize Rat Tracking");
 
 		// Check that rat pos > robot pos
-		n_laps = RatVT.posNow > RobVT.posNow ? 0 : 1;
+		n_laps = Pos[0].posNow > Pos[1].posNow ? 0 : 1;
 		// set n_laps for rat vt data
-		RatVT.SetPos(RatVT.posNow, n_laps);
-		RatPixy.SetPos(RatPixy.posNow, n_laps);
+		Pos[0].SetPos(Pos[0].posNow, n_laps);
+		Pos[2].SetPos(Pos[2].posNow, n_laps);
 		if (n_laps > 0)
 			DebugFlow("WARINING [InitializeTracking] Set Rat Ahead of Robot");
 
 		// Check that results make sense
-		cm_diff = RatVT.posNow - RobVT.posNow;
+		cm_diff = Pos[0].posNow - Pos[1].posNow;
 		cm_dist = min((140 * PI) - abs(cm_diff), abs(cm_diff));
 
 		// Rat should be no more than 90 deg rom rob
 		if (cm_dist > ((140 * PI) / 4))
 		{
 			// Will have to run again with new samples
-			RatVT.SetPos(0, 0);
-			RatPixy.SetPos(0, 0);
-			RobVT.SetPos(0, 0);
+			Pos[0].SetPos(0, 0);
+			Pos[2].SetPos(0, 0);
+			Pos[1].SetPos(0, 0);
 			DebugFlow("WARINING [InitializeTracking] Had to Reset Position Data");
 			return;
 		}
 
 		// Log/print rat and robot starting pos
-		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f", RatVT.posNow, RatPixy.posNow, RobVT.posNow);
+		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f", Pos[0].posNow, Pos[2].posNow, Pos[1].posNow);
 		DebugFlow(str);
 
 		// Set flag
@@ -4451,39 +4510,76 @@ void InitializeTracking()
 // CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
 void CheckSampDT() {
 
-	if (fc.isRatIn)
-	{
+	// Local vars
+	static bool was_swapped_vt = false;
+	static bool was_swapped_pixy = false;
+	static int cnt_swap_vt = 0;
+	static int cnt_swap_pixy = 0;
+	bool do_swap_vt = false;
+	bool do_swap_pixy = false;
+	int dt_max_vt = 150;
+	int dt_max_pixy = 100;
+	int dt_vt = 0;
+	int dt_pixy = 0;
 
-		// Local vars
-		int dt_max_frame = 100;
-		int dt_vt = 0;
-		int dt_pixy = 0;
+	// Bail if rat not in yet
+	if (!fc.isRatIn)
+		return;
 
-		// Compute dt
-		dt_vt = millis() - RatVT.t_msNow;
-		dt_pixy = millis() - RatPixy.t_msNow;
+	// Compute dt
+	dt_vt = millis() - Pos[0].t_msNow;
+	dt_pixy = millis() - Pos[2].t_msNow;
 
-		// Check pixy
-		if (
-			dt_pixy >= dt_max_frame &&
-			dt_vt < dt_pixy
-			)
-		{
-			// Use VT for Pixy data
-			RatPixy.SwapPos(RatVT.posAbs, RatVT.t_msNow);
+	// Check pixy
+	if (dt_pixy >= dt_max_pixy &&
+		dt_vt < dt_pixy)
+		do_swap_pixy = true;
+
+	// Check VT 
+	if (dt_vt >= dt_max_vt &&
+		dt_pixy < dt_vt)
+		do_swap_vt = true;
+
+
+	// Bail if both are over max
+	if (do_swap_pixy && do_swap_vt)
+		return;
+
+	// Use VT for Pixy data
+	else if (do_swap_pixy) {
+		Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+		cnt_swap_pixy++;
+
+		// Log print
+		if (!was_swapped_pixy) {
+			char str[200];
+			sprintf(str, "**WARNING** [CheckSampDT] Pixy Used VT Data: dt_frame=%d count=%d",
+				dt_pixy, cnt_swap_vt);
+			DebugError(str);
 		}
-		// Check VT 
-		else if (
-			dt_vt >= dt_max_frame &&
-			dt_pixy < dt_vt
-			)
-		{
-			// Use Pixy for VT data
-			RatVT.SwapPos(RatPixy.posAbs, RatPixy.t_msNow);
-		}
 
+		// Set flags
+		was_swapped_pixy = true;
+		was_swapped_vt = false;
 	}
 
+	// Use Pixy for VT data
+	else if (do_swap_vt) {
+		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_msNow);
+		cnt_swap_vt++;
+
+		// Log print
+		if (!was_swapped_vt) {
+			char str[200];
+			sprintf(str, "**WARNING** [CheckSampDT] VT Used Pixy Data: dt_frame=%d count=%d",
+				dt_vt, cnt_swap_vt);
+			DebugError(str);
+		}
+
+		// Set flags
+		was_swapped_vt = false;
+		was_swapped_pixy = false;
+	}
 }
 
 // PROCESS PIXY STREAM
@@ -4515,13 +4611,13 @@ void UpdatePixyPos() {
 			pixyCoeff[4];
 
 		// Scale to abs space with rob vt data
-		px_abs = px_rel + RobVT.posAbs;
+		px_abs = px_rel + Pos[1].posAbs;
 		if (px_abs > (140 * PI))
 		{
 			px_abs = px_abs - (140 * PI);
 		}
 		// Update pixy pos and vel
-		RatPixy.UpdatePos(px_abs, t_px_ts);
+		Pos[2].UpdatePos(px_abs, t_px_ts);
 
 	}
 
@@ -4538,8 +4634,8 @@ void UpdateEKF()
 	double rob_vel = 0;
 
 	// Check for new data w or w/o rat tracking
-	if ((RatVT.isDataNew && RatPixy.isDataNew && RobVT.isDataNew) ||
-		(RobVT.isDataNew && !fc.isRatIn))
+	if ((Pos[0].isDataNew && Pos[2].isDataNew && Pos[1].isDataNew) ||
+		(Pos[1].isDataNew && !fc.isRatIn))
 	{
 
 		// Check EKF progress
@@ -4550,8 +4646,8 @@ void UpdateEKF()
 
 		// Hold rat pos at 0
 		if (!fc.isRatIn) {
-			RatVT.SetPos(0, 0);
-			RatPixy.SetPos(0, 0);
+			Pos[0].SetPos(0, 0);
+			Pos[2].SetPos(0, 0);
 		}
 		// Set flag for reward
 		else if (fc.isTrackingEnabled) {
@@ -4560,12 +4656,12 @@ void UpdateEKF()
 
 		//----------UPDATE EKF---------
 		double z[M] = {
-			RatVT.GetPos(),
-			RatPixy.GetPos(),
-			RobVT.GetPos(),
-			RatVT.GetVel(),
-			RatPixy.GetVel(),
-			RobVT.GetVel(),
+			Pos[0].GetPos(),
+			Pos[2].GetPos(),
+			Pos[1].GetPos(),
+			Pos[0].GetVel(),
+			Pos[2].GetVel(),
+			Pos[1].GetVel(),
 		};
 
 		// Run EKF
@@ -4591,8 +4687,8 @@ void UpdateEKF()
 				return;
 
 			char str[200] = { 0 };
-			sprintf(str, "!!ERROR!! [UpdateEKF] \"nan\" EKF Output: ratVT=%0.2f|%0.2f ratPixy=%0.2f|%0.2f robVT=%0.2f|%0.2f",
-				RatVT.posNow, RatVT.velNow, RatPixy.posNow, RatPixy.velNow, RobVT.posNow, RatVT.velNow);
+			sprintf(str, "!!ERROR!! [UpdateEKF] \"nan\" EKF Output: Pos[0]=%0.2f|%0.2f Pos[2]=%0.2f|%0.2f Pos[1]=%0.2f|%0.2f",
+				Pos[0].posNow, Pos[0].velNow, Pos[2].posNow, Pos[2].velNow, Pos[1].posNow, Pos[0].velNow);
 			DebugError(str);
 
 			// Set flag
@@ -4614,7 +4710,7 @@ bool GetButtonInput()
 	// Notes
 	/*
 	BUTTON 1:
-		Short Hold: Trigger reward
+		Short Hold: Trigger reward or retract feeder arm
 		Long Hold:	Move robot forward
 	BUTTON 2:
 		Short Hold: open/close Reward solonoid
@@ -4752,8 +4848,15 @@ bool GetButtonInput()
 
 	// Set button 1 function flag
 	if (do_flag_fun[0][0]) {
-		fc.doBtnRew = true;
-		DebugFlow("[GetButtonInput] Button 1 \"fc.doBtnRew\" Triggered");
+		// Reward or retract feeder arm
+		if (!fc.isManualSes || !Reward.isArmExtended) {
+			fc.doBtnRew = true;
+			DebugFlow("[GetButtonInput] Button 1 \"fc.doBtnRew\" Triggered");
+		}
+		else {
+			Reward.RetractFeedArm();
+			DebugFlow("[GetButtonInput] Button 1 \"Reward.RetractFeedArm()\" Triggered");
+		}
 	}
 	else if (do_flag_fun[0][1]) {
 		fc.doMoveRobFwd = true;
@@ -4878,7 +4981,7 @@ void CheckEtOH()
 
 	// Close if open and dt close has ellapsed
 	else
-		do_close = millis() > (t_solOpen + dt_durEtOH);
+		do_close = millis() > (t_solOpen + dt_durEtOH[fc.isSesStarted ? 0 : 1]);
 
 	// Check if sol should be opened
 	if (do_open)
@@ -4886,7 +4989,8 @@ void CheckEtOH()
 		// Open solenoid
 		digitalWrite(pin.Rel_EtOH, HIGH);
 
-		// Reset vars
+
+		// Store current time and pos
 		t_solOpen = millis();
 		etoh_dist_start = ekf.RobPos;
 	}
@@ -4899,8 +5003,11 @@ void CheckEtOH()
 
 		// Print to debug
 		char str[100];
-		sprintf(str, "[CheckEtOH] Ran EtOH: dt=%d", millis() - t_solOpen);
+		sprintf(str, "[CheckEtOH] Ran EtOH: dt_close=%d dt_open=%d", t_solOpen - t_solClose, millis() - t_solOpen);
 		DebugFlow(str);
+
+		// Store current time and pos
+		t_solClose = millis();
 	}
 }
 
@@ -5171,18 +5278,27 @@ void DebugMotorBocking(char msg[], uint32_t t, char called_from[])
 void DebugRcvd(char from, char id, uint16_t pack)
 {
 	// Local vars
-	bool do_print = db.print_c2r && (db.Console || db.LCD);
-	bool do_log = db.log_c2r && db.Log;
+	bool do_print = false;
+	bool do_log = false;
 	int buff_rx = Serial1.available();
 	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+
+	// Get print status
+	do_print = (db.print_c2r || (db.print_rcvdVT && id == 'P')) &&
+		(db.Console || db.LCD);
+	do_log = db.log_c2r && id != 'P' && db.Log;
 
 	if (do_print || do_log)
 	{
 		// Print specific pack contents
 		char str[200] = { 0 };
 		if (from == 'c')
-			sprintf(str, "   [RCVD] %c2r: id=%c dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%d bytesRead=%d rx=%d tx=%d",
-				from, id, c2r.dat[0], c2r.dat[1], c2r.dat[2], pack, bytesRead, buff_rx, buff_tx);
+			if (id != 'P')
+				sprintf(str, "   [RCVD] %c2r: id=%c dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%d bytesRead=%d rx=%d tx=%d",
+					from, id, c2r.dat[0], c2r.dat[1], c2r.dat[2], pack, bytesRead, buff_rx, buff_tx);
+			else
+				sprintf(str, "   [RCVD] %c2r: id=%c vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d bytesRead=%d rx=%d tx=%d",
+					from, id, c2r.vtEnt, c2r.vtTS[c2r.vtEnt], c2r.vtCM[c2r.vtEnt], millis() - Pos[c2r.vtEnt].t_msNow, pack, bytesRead, buff_rx, buff_tx);
 		else
 			sprintf(str, "   [RCVD] %c2r: id=%c dat1=%d pack=%d bytesRead=%d rx=%d tx=%d",
 				from, id, a2r.dat[0], pack, bytesRead, buff_rx, buff_tx);
@@ -5954,6 +6070,9 @@ void setup() {
 	ChangeLCDlight(0);
 	ClearLCD();
 
+	// RESET FEEDER ARM
+	Reward.RetractFeedArm();
+
 	// SET DEFAULTS
 	fc.isManualSes = true;
 
@@ -6226,7 +6345,7 @@ void loop() {
 			rat_rob_dist = ekf.RatPos - ekf.RobPos;
 			// Plot pos
 			/*
-			{@Plot.Pos.ratPixy.Green RatPixy.posNow}{@Plot.Pos.ratVT.Blue RatVT.posNow}{@Plot.Pos.ratEKF.Black ekf.RatPos}{@Plot.Pos.robVT.Orange RobVT.posNow}{@Plot.Pos.robEKF.Red ekf.RobPos}
+			{@Plot.Pos.Pos[2].Green Pos[2].posNow}{@Plot.Pos.Pos[0].Blue Pos[0].posNow}{@Plot.Pos.ratEKF.Black ekf.RatPos}{@Plot.Pos.Pos[1].Orange Pos[1].posNow}{@Plot.Pos.robEKF.Red ekf.RobPos}
 			*/
 			millis();
 			// Turn on rew led when near setpoint
@@ -6635,9 +6754,9 @@ void loop() {
 		if (fc.isRatIn)
 		{
 			// Reset all vt data
-			RatVT.SetPos(0, 0);
-			RatPixy.SetPos(0, 0);
-			RobVT.SetPos(0, 0);
+			Pos[0].SetPos(0, 0);
+			Pos[2].SetPos(0, 0);
+			Pos[1].SetPos(0, 0);
 
 			// Pid started by InitializeTracking()
 			DebugFlow("[loop] RAT IN");
@@ -6687,11 +6806,11 @@ void loop() {
 
 		// Update Rat VT
 		if (c2r.vtEnt == 0)
-			RatVT.UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
+			Pos[0].UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
 
 		// Update Robot VT
 		else
-			RobVT.UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
+			Pos[1].UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
 
 	}
 #pragma endregion
