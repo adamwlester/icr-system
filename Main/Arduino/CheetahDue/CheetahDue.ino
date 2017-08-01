@@ -137,7 +137,7 @@ uint32_t dt_ttlPulse = 50; // (ms)
 // Serial from rob
 struct R2A
 {
-	const char idList[5] = {
+	const char id[5] = {
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
@@ -146,10 +146,10 @@ struct R2A
 	};
 	const char head = '{';
 	const char foot = '}';
-	char idNew = ' ';
+	char idNow = ' ';
 	byte dat = 0;
-	const static int idLng = sizeof(idList) / sizeof(idList[0]);
-	uint16_t packLast[idLng] = { 0 };
+	const static int lng = sizeof(id) / sizeof(id[0]);
+	uint16_t pack[lng] = { 0 };
 	bool isNew = false;
 }
 // Initialize
@@ -226,7 +226,7 @@ bool AwaitStart()
 		char str[200] = { 0 };
 
 		// Get id byte
-		out_byte[0] = '+';
+		out_byte[0] = 'h';
 
 		// Loop till message found
 		while (!fc.isSesStarted)
@@ -310,7 +310,7 @@ bool ParseSerial()
 
 	// Get id
 	while (Serial1.available() < 1);
-	r2a.idNew = Serial1.read();
+	r2a.idNow = Serial1.read();
 	bytesRead += 1;
 
 	// Get data
@@ -350,19 +350,19 @@ bool ParseSerial()
 		fc.doPackSend = true;
 
 		// Print rcvd pack
-		DebugRcvd(r2a.idNew, r2a.dat, pack, do_conf);
+		DebugRcvd(r2a.idNow, r2a.dat, pack, do_conf);
 		pass = true;
 
 		// Check if packet is new
-		if (r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)] != pack)
+		if (r2a.pack[CharInd(r2a.idNow, r2a.id, r2a.lng)] != pack)
 		{
 			// Update last packet
-			r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)] = pack;
+			r2a.pack[CharInd(r2a.idNow, r2a.id, r2a.lng)] = pack;
 		}
 		else
 		{
 			// Print resent packet
-			DebugResent(r2a.idNew, r2a.dat, pack);
+			DebugResent(r2a.idNow, r2a.dat, pack);
 			pass = false;
 		}
 	}
@@ -385,9 +385,9 @@ void SendPacketData(char id, byte d1, uint16_t pack, bool do_conf)
 	bytesSent = 0;
 
 	// Confirm message really intended for here
-	for (int i = 0; i < r2a.idLng; i++)
+	for (int i = 0; i < r2a.lng; i++)
 	{
-		if (id == r2a.idList[i])
+		if (id == r2a.id[i])
 			pass = true;
 	}
 
@@ -463,6 +463,7 @@ void SendLogData(char msg[], uint32_t t)
 
 	// Send
 	Serial.write(msg_out, msg_lng);
+	t_sent = millis();
 	bytesSent = msg_lng;
 
 	// Print
@@ -615,16 +616,16 @@ void DebugResent(char id, byte dat, uint16_t pack)
 	// Local vars
 	bool do_print = db.Console && db.print_resent;
 	bool do_log = db.Log && db.log_resent;
-	static int resent_cnt = 0;
+	static int cnt_repeat = 0;
 
 	// Print/Log
 	if (do_print || do_log)
 	{
 		// Itterate count
-		resent_cnt++;
+		cnt_repeat++;
 
 		char str[100];
-		sprintf(str, "!!ERROR!! [DebugResent] Resent Packet: tot=%d id=%c dat=%d pack=%d!!", resent_cnt, id, dat, pack);
+		sprintf(str, "   [*RE-RCVD*] r2a: tot=%d id=%c dat=%d pack=%d!!", cnt_repeat, id, dat, pack);
 		if (do_print)
 			PrintDebug(str, millis());
 		if (do_log)
@@ -1013,7 +1014,7 @@ void loop()
 	{
 
 		// Run reward tone
-		if (r2a.idNew == 'r') {
+		if (r2a.idNow == 'r') {
 
 			// Get reward duration and convert to ms
 			rewDur = (uint32_t)r2a.dat * 10;
@@ -1023,7 +1024,7 @@ void loop()
 		}
 
 		// Get noise settings
-		else if (r2a.idNew == 's') {
+		else if (r2a.idNow == 's') {
 
 			// No noise
 			if (r2a.dat == 0)
@@ -1072,7 +1073,7 @@ void loop()
 		}
 
 		// Signal PID mode
-		else if (r2a.idNew == 'p') {
+		else if (r2a.idNow == 'p') {
 			// Signal PID stopped
 			if (r2a.dat == 0)
 			{
@@ -1090,7 +1091,7 @@ void loop()
 		}
 
 		// Signal bull running
-		else if (r2a.idNew == 'b') {
+		else if (r2a.idNow == 'b') {
 			// Signal Bull stopped
 			if (r2a.dat == 0)
 			{
@@ -1108,7 +1109,7 @@ void loop()
 		}
 
 		// Quite and reset
-		else if (r2a.idNew == 'q') {
+		else if (r2a.idNow == 'q') {
 			fc.doQuit = true;
 			DebugFlow("[loop] QUITING");
 		}
@@ -1122,7 +1123,7 @@ void loop()
 
 	// Send message confirmation
 	if (fc.doPackSend) {
-		SendPacketData(r2a.idNew, 255, r2a.packLast[CharInd(r2a.idNew, r2a.idList, r2a.idLng)], false);
+		SendPacketData(r2a.idNow, 255, r2a.pack[CharInd(r2a.idNow, r2a.id, r2a.lng)], false);
 	}
 
 	// Set output pins back to low
@@ -1139,7 +1140,9 @@ void loop()
 	}
 
 	// Check if ready to quit
-	if (fc.doQuit && !fc.doPackSend) {
+	if (fc.doQuit && 
+		!fc.doPackSend &&
+		millis() > t_sent+1000) {
 		// Run bleep bleep
 		QuitBleep();
 		// Restart Arduino

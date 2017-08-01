@@ -1,4 +1,4 @@
-function[] = ICR_GUI(sysTest, doDebug, isMatSolo)
+function[status] = ICR_GUI(sysTest, doDebug, isMatSolo)
 % INPUT:
 %	sysTest = [0,1,2,3]
 %    	0: No test
@@ -22,61 +22,32 @@ function[] = ICR_GUI(sysTest, doDebug, isMatSolo)
 % ----------------------------- SETUP GLOBALS -----------------------------
 
 % Matlab globals
-global FigH; % UI figure handle
-global D; % Main data struct
-global tcpIP; % TCP object
+global ME; % error handeling
+global doExit; % exit flag
+global FigH; % ui figure handle
+global D; % main data struct
+global tcpIP; % tcp object
+global timer_c2m; % timer to check c2m
 
 % Matlab to CS communication
+global m2c; % data struct
 global m2c_id; % message out to CS
-global m2c_dat1; % data out to CS
-global m2c_dat2; % data out to CS
-global m2c_dat3; % data out to CS
+global m2c_dat; % data out to CS
 global m2c_pack; % packet number out to CS
-global m2c_hist; % message history
 global m2c_dir; % current cheetah directory
 global m2c_posSim; % array for sim data
 
 % CS to Matlab communication
-global request_m2c; % request m2c data
-global timer_c2m; % timer to check c2m
-global c2m_W; % sync time
-global c2m_J; % battery voltage
-global c2m_Z; % reward zone
-global c2m_V; % robot streaming
-global c2m_K; % robot in place
-global c2m_Y; % enable save button
-global c2m_E; % exit
-global c2m_C; % confirm close
+global c2m; % data struct
 
-% m2c send history
-m2c_hist = {...
-    '+', 0, 0, 0, 0; ... % matlab ready [NA]
-    'T', 0, 0, 0, 0; ... % system test command [(byte)test]
-    'G', 0, 0, 0, 0; ... % matlab gui loaded [NA]
-    'N', 0, 0, 0, 0; ... % netcom setup [NA]
-    'A', 0, 0, 0, 0; ... % connected to AC computer [NA]
-    'S', 0, 0, 0, 0; ... % setup session [(byte)ses_cond, (byte)sound_cond]
-    'M', 0, 0, 0, 0; ... % move to position [(float)targ_pos]
-    'R', 0, 0, 0, 0; ... % run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
-    'H', 0, 0, 0, 0; ... % halt movement [(byte)halt_state]
-    'B', 0, 0, 0, 0; ... % bulldoze rat [(byte)bull_delay, (byte)bull_speed]
-    'I', 0, 0, 0, 0; ... % rat in/out [(byte)in/out]
-    'F', 0, 0, 0, 0; ... % data saved [NA]
-    'X', 0, 0, 0, 0; ... % confirm quit
-    'C', 0, 0, 0, 0; ... % confirm close
-    };
+% Get start time
+startTime = now;
 
-% Set top level vars
-D.DB.startTime = now;
-D.DB.consoleStr = [repmat(' ',1000,150),repmat('\r',1000,1)];
-D.DB.logStr = cell(1000,1);
-D.DB.logCount = 0;
-D.DB.isTestRun = false;
-D.DB.doPidCalibrationTest = false;
-D.DB.doHaultErrorTest = false;
-D.DB.doSimRatTest = false;
-D.DB.isErrExit = false;
-D.DB.isForceClose = false;
+% ------------------------- SETUP ERROR HANDELING -------------------------
+
+% Preset status abort flag
+status = 'failed';
+doExit = false;
 
 % Handle input args
 if nargin < 3
@@ -89,26 +60,13 @@ if nargin < 1
     sysTest = 0;
 end
 
-% Get testing condition
-switch sysTest
-    case 1
-        D.DB.isTestRun = true;
-        D.DB.doPidCalibrationTest = true;
-    case 2
-        D.DB.isTestRun = true;
-        D.DB.doHaultErrorTest = true;
-    case 3
-        D.DB.isTestRun = true;
-        D.DB.doSimRatTest = true;
-end
-
-
-% Bypass some things if running solo
-if isMatSolo
-    c2m_V = 1;
-    c2m_K = 1;
-    c2m_Y = 1;
-    c2m_C = 1;
+% Setup error handeling
+if doDebug
+    % Stop on error
+    dbstop if error;
+else
+    % Catch and print error in console
+    dbclear if caught error;
 end
 
 %---------------------Important variable formats---------------------------
@@ -119,251 +77,287 @@ end
 %   val 1 = conection [0, 1], [no, yes]
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]
-%...........................m2c_id...................................
-%    '+', // matlab ready [NA]
-%    'T', // system test command [(byte)test]
-%    'G', // matlab gui loaded [NA]
-%    'N', // netcom setup [NA]
-%    'A', // connected to AC computer [NA]
-%    'S', // setup session [(byte)ses_cond, (byte)sound_cond]
-%    'M', // move to position [(float)targ_pos]
-%    'R', // run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
-%    'H', // halt movement [(byte)halt_state]
-%    'B', // bulldoze rat [(byte)bull_delay, (byte)bull_speed]
-%    'I', // rat in/out [(byte)in/out]
-%    'F', // data saved [NA]
-%    'X', // confirm quit
-%    'C', // confirm close
-%...........................c2m_id...................................
-%    'J', // battery voltage
-%    'Z', // reward zone
-%    'V', // robot streaming exit
-%    'K', // robot in place
-%    'Y', // enable save
-%    'E', // exit
-%    'C', // confirm close
-%--------------------------------------------------------------------------
-
-% ---------------------------- SET PARAMETERS -----------------------------
-
-% MAIN RUN PARAMETERS
-
-% Poll fs (sec)
-D.PAR.polRate = 1/30;
-% Min time in start quad (sec)
-D.PAR.strQdDel = 0.5;
-% Warning battery voltage level
-D.PAR.batVoltWarning = 11.6;
-% Replace battery voltage level
-D.PAR.batVoltReplace = 11.8;
-% Robot guard dist
-D.PAR.guardDist = 4.5 * ((2 * pi)/(140 * pi));
-% PID setPoint
-D.PAR.setPoint = 42 * ((2 * pi)/(140 * pi));
-% Robot butt dist
-D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
-% Feeder dist from rob tracker
-D.PAR.feedDist = 66 * ((2 * pi)/(140 * pi));
-
-% DIRECTORIES
-
-% Top directory
-D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
-
-% IO dirs
-D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
-D.DIR.ioTestOut = fullfile(D.DIR.top,'Testing','Output');
-D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images','plot_images','wall_top_down.png');
-D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
-D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
-D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
-
-% Cheetah dirs
-D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
-D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
-D.DIR.recFi = '0000-00-00_00-00-00';
-
-% Log dirs
-D.DIR.logFi = 'ICR_GUI_Log.csv';
-D.DIR.logTemp = fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00', D.DIR.logFi);
-
-% DEBUG/TESTING
-
-% Session conditions
-D.DB.ratLab = 'r0000';
-D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
-D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
-D.DB.Reward_Delay = '1.0';
-D.DB.Cue_Condition = 'None';
-D.DB.Sound_Conditions = [1,1];
-D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
-D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
-
-% Simulated rat test
-D.DB.ratVelStart = 20;
-D.DB.ratMaxAcc = 60; % (cm/sec/sec)
-D.DB.ratMaxDec = 100; % (cm/sec/sec)
-m2c_posSim(:) = 0;
-
-% Halt Error test
-D.DB.velSteps = 10:10:80; % (cm/sec)
-D.DB.stepSamp = 4;
-
-% Setup c2m globals
-timer_c2m = timer;
-timer_c2m.ExecutionMode = 'fixedRate';
-timer_c2m.Period = 0.1;
-timer_c2m.TimerFcn = @CheckC2M;
-start(timer_c2m);
-
-% Wait for sync time
-if ~isMatSolo
-    % Tell CS Matlab ready
-    SendM2C('+');
-    % Wait for handshake signal
-    while c2m_W == 0 && c2m_E == 0; pause(0.1); end
-end
-
-% Set sync time
-if (c2m_W ~= 0)
-    D.DB.startTime = now;
-    Console_Write(sprintf('SET SYNC TIME: %ddays',D.DB.startTime));
-end
-
-% Open figure
-if (c2m_E == 0)
-    FigH = figure('Visible', 'Off', ...
-        'DeleteFcn', {@ForceClose});
-end
 
 % ------------------------- RUN MAIN FUNCTION -----------------------------
 
-% RUN MAIN FUNCTION
-if (c2m_E == 0)
-    Console_Write('[ICR_GUI] RUNNING: ICR_GUI.m');
+% Run in debug mode
+if doDebug
     
-    % Run in debug mode
-    if doDebug
-        
-        % Stop on error
-        dbstop if error;
-        Console_Write('[ICR_GUI] RUNNING: In Debug Mode');
-        
-        % Run main script
-        RunScript();
-        
+    % Log print error handeling
+    Console_Write('[ICR_GUI] RUNNING ICR_GUI.m IN DEBUG MODE');
+    
+    % RUN MAIN SETUP
+    if ~doExit
+        Setup();
     end
     
-    % Run in catch error mode
-    if ~doDebug
-        
-        % Catch and print error in console
-        dbclear if caught error;
-        Console_Write(sprintf('[ICR_GUI] RUNNING: In Release Mode'));
-        
-        % Run main script
-        try RunScript();
-        catch ME
-            D.DB.isErrExit = true;
-            % Log/print error
-            err = sprintf(['!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!\r\r', ...
-                'Time: %s\r\r', ...
-                'ID: %s\r\r', ...
-                'Msg: %s\r\r'], ...
-                datestr(now, 'HH:MM:SS'), ...
-                ME.identifier, ...
-                ME.message);
-            for z_line = 1:length(ME.stack)
-                err = [err, sprintf('Fun: %s\rLine: %d\r', ME.stack(z_line).name, ME.stack(z_line).line)]; %#ok<AGROW>
-            end
-            err = [err, sprintf('\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')];
-            Console_Write(err);
+    % RUN MAIN RUN
+    if ~doExit
+        Run();
+    end
+    
+    % RUN MAIN EXIT
+    Exit();
+    
+end
+
+% Run in catch error mode
+if ~doDebug
+    
+    % Log print error handeling
+    Console_Write(sprintf('[ICR_GUI] RUNNING ICR_GUI.m IN RELEASE MODE'));
+    
+    % RUN MAIN SETUP
+    try
+        if ~doExit
+            Setup();
         end
+    catch ME
+        doExit = true;
     end
     
-    % SKIP RUN AND ABORT
-else
-    Console_Write('!!ERROR!! [ICR_GUI] ABORTING: ICR_GUI.m');
-end
-
-% ---------------------------- EXIT PROGRAM -------------------------------
-
-% Start exiting
-Console_Write('[ICR_GUI] RUNNING: Exit ICR_GUI...');
-
-% Check if GUI was forced close
-if ~D.DB.isForceClose
-    
-    % Log/print 
-    Console_Write('[ICR_GUI] RUNNING: Normal Exit Procedure...');
-    
-    % Pause then shut it all down
-    pause(1);
-    % Disconnect AC computer
-    Disconnect_AC();
-    % Disconnect from NetCom
-    Disconnect_NLX();
-   
-end
-
-% Save log
-Console_Write('[ICR_GUI] RUNNING: Save ICR_GUI Log...');
-if size(who('global'),1) > 0
-    % Make new file
-    if ~exist(D.DIR.logTemp, 'file');
-        mkdir(D.DIR.logTemp);
+    % RUN MAIN RUN
+    try
+        if ~doExit
+            Run();
+        end
+    catch ME
+        doExit = true;
     end
-    fi_path = D.DIR.logTemp;
-    fid = fopen(fi_path,'wt');
-    for z_l = 1:D.DB.logCount
-        fprintf(fid, D.DB.logStr{z_l});
+    
+    % RUN MAIN EXIT
+    try
+        Exit();
+    catch ME
+        doExit = true;
     end
-    fclose(fid);
-    Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
-else
-    Console_Write('!!ERROR!! [ICR_GUI] ABBORTED: Save ICR_GUI Log');
+    
+    % Handle errors
+    if ~isempty(ME)
+        D.DB.isErrExit = true;
+        % Log/print error
+        err = sprintf([ ...
+            'Time: %0.2f\r\n', ...
+            'ID: %s\r\n', ...
+            'Msg: \"%s\"\r\n', ...
+            'Function: %s\r\n', ...
+            'Lines: '], ...
+            Elapsed_Seconds(now), ...
+            ME.identifier, ...
+            ME.message, ...
+            ME.stack(1).name);
+        for z_line = 1:length(ME.stack)
+            err = [err, sprintf('%d/', ME.stack(z_line).line)]; %#ok<AGROW>
+        end
+        err = err(1:end-1);
+        err_print = [sprintf('!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!\r\n'), err, ...
+            sprintf('\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n')];
+        Console_Write(err_print);
+        
+        % Store status
+        err_status = regexprep(err, '\r\n', ' ');
+        err_status = regexprep(err_status, '\s*', ' ');
+        status = err_status;
+    end
 end
 
-% Close figure
-if ~D.DB.isForceClose
-    D.B.close = true;
-    close(FigH)
-    delete(FigH)
+% Set status and exit
+if isempty(ME)
+    status = 'succeeded';
 end
 
-% Confirm GUI closed
-SendM2C('C');
-
-% Wait for recieved confirmation
-Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
-while c2m_C == 0; drawnow; end;
-Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
-
-% Clear all variables
-stop(timer_c2m);
-delete(timer_c2m);
-clearvars -global;
-clearvars;
-close all;
-
-% For added measure
-Vars=whos;
-Vars={Vars.name};
-clear(Vars{:});
 
 
 
 
 
+%% ========================= MAIN FUNCTIONS ===============================
 
-%% =========================MAIN FUNCTIONS=================================
+% -----------------------------MAIN SETUP----------------------------------
+    function[] = Setup()
+        
+        % ---------------------------- SET PARAMETERS ---------------------
+        
+        % MAIN RUN PARAMETERS
+        
+        % Poll fs (sec)
+        D.PAR.polRate = 1/30;
+        % Min time in start quad (sec)
+        D.PAR.strQdDel = 0.5;
+        % Warning battery voltage level
+        D.PAR.batVoltWarning = 11.6;
+        % Replace battery voltage level
+        D.PAR.batVoltReplace = 11.8;
+        % Robot guard dist
+        D.PAR.guardDist = 4.5 * ((2 * pi)/(140 * pi));
+        % PID setPoint
+        D.PAR.setPoint = 42 * ((2 * pi)/(140 * pi));
+        % Robot butt dist
+        D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
+        % Feeder dist from rob tracker
+        D.PAR.feedDist = 66 * ((2 * pi)/(140 * pi));
+        
+        % DIRECTORIES
+        
+        % Top directory
+        D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
+        
+        % IO dirs
+        D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
+        D.DIR.ioTestOut = fullfile(D.DIR.top,'Testing','Output');
+        D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images','plot_images','wall_top_down.png');
+        D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
+        D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
+        D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
+        
+        % Cheetah dirs
+        D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
+        D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
+        D.DIR.recFi = '0000-00-00_00-00-00';
+        
+        % Log dirs
+        D.DIR.logFi = 'ICR_GUI_Log.csv';
+        D.DIR.logTemp = fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00', D.DIR.logFi);
+        
+        % DEBUG/TESTING
+        
+        % Session conditions
+        D.DB.ratLab = 'r0000';
+        D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
+        D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
+        D.DB.Reward_Delay = '1.0';
+        D.DB.Cue_Condition = 'None';
+        D.DB.Sound_Conditions = [1,1];
+        D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
+        D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
+        D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
+        
+        % Simulated rat test
+        D.DB.ratVelStart = 20;
+        D.DB.ratMaxAcc = 60; % (cm/sec/sec)
+        D.DB.ratMaxDec = 100; % (cm/sec/sec)
+        m2c_posSim(:) = 0;
+        
+        % Halt Error test
+        D.DB.velSteps = 10:10:80; % (cm/sec)
+        D.DB.stepSamp = 4;
+        
+        % m2c struct
+        id_list = [ ...
+            'h', ... % setup handshake [NA]
+            'G', ... % matlab gui loaded [NA]
+            'A', ... % connected to AC computer [NA]
+            'N', ... % netcom setup [NA]
+            'F', ... % data saved [NA]
+            'X', ... % confirm quit
+            'C', ... % confirm close
+            'T', ... % system test command [(byte)test]
+            'S', ... % setup session [(byte)ses_cond, (byte)sound_cond]
+            'M', ... % move to position [(float)targ_pos]
+            'R', ... % run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
+            'H', ... % halt movement [(byte)halt_state]
+            'B', ... % bulldoze rat [(byte)bull_delay, (byte)bull_speed]
+            'I' ... % rat in/out [(byte)in/out]
+            ];
+        for z_id = 1:length(id_list)
+            m2c.(id_list(z_id)) = cell2struct( ...
+                {id_list(z_id), 0, 0, 0, 0, 0}, ...
+                {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast'}, 2);
+        end
+        m2c.cnt_pack = 0;
+        
+        % c2m struct
+        id_list = [ ...
+            'g', ... % request m2c data
+            'W', ... % sync time
+            'J', ... % battery voltage
+            'Z', ... % reward zone
+            'V', ... % robot streaming exit
+            'K', ... % robot in place
+            'Y', ... % enable save
+            'E', ... % exit
+            'C' ... % confirm close
+            ];
+        for z_id = 1:length(id_list)
+            c2m.(id_list(z_id)) = cell2struct( ...
+                {id_list(z_id), 0, 0, 0}, ...
+                {'id', 'dat1', 'pack', 'packLast'}, 2);
+        end
+        
+        % Set top level vars
+        D.DB.consoleStr = [repmat(' ',1000,150),repmat('\r',1000,1)];
+        D.DB.logStr = cell(1000,1);
+        D.DB.logCount = 0;
+        D.DB.isTestRun = false;
+        D.DB.doPidCalibrationTest = false;
+        D.DB.doHaultErrorTest = false;
+        D.DB.doSimRatTest = false;
+        D.DB.isErrExit = false;
+        D.DB.isForceClose = false;
+        
+        % Get testing condition
+        switch sysTest
+            case 1
+                D.DB.isTestRun = true;
+                D.DB.doPidCalibrationTest = true;
+            case 2
+                D.DB.isTestRun = true;
+                D.DB.doHaultErrorTest = true;
+            case 3
+                D.DB.isTestRun = true;
+                D.DB.doSimRatTest = true;
+        end
+        
+        % Bypass some things if running solo
+        if isMatSolo
+            c2m.('V').dat1 = 1;
+            c2m.('K').dat1 = 1;
+            c2m.('Y').dat1 = 1;
+            c2m.('C').dat1 = 1;
+        end
+        
+        % Start c2m com check timer
+        timer_c2m = timer;
+        timer_c2m.ExecutionMode = 'fixedRate';
+        timer_c2m.Period = 0.1;
+        timer_c2m.TimerFcn = @CheckC2M;
+        start(timer_c2m);
+        
+        % Wait for sync time
+        if ~isMatSolo
+            
+            % Tell CS Matlab ready
+            SendM2C('h');
+            
+            % Wait for sync time
+            while ...
+                    c2m.('W').dat1 == 0 && ...
+                    ~doExit;
+                startTime = now;
+                pause(0.01);
+            end
+        end
+        
+        % Set sync time
+        if (c2m.('W').dat1 ~= 0)
+            startTime = now;
+            Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
+        end
+        
+        % Open figure
+        if (~doExit)
+            FigH = figure('Visible', 'Off', ...
+                'DeleteFcn', {@ForceClose});
+        end
+        
+    end
 
-    function[] = RunScript()
+% ------------------------------MAIN RUN-----------------------------------
+    function[] = Run()
         
         MainLoop();
         
-        %% =========================== MAIN LOOP ================================
+        %% =========================== MAIN LOOP ==========================
         
         function[] = MainLoop()
             
@@ -388,7 +382,7 @@ clear(Vars{:});
             % Run testing setup
             Run_Test_Setup();
             
-            while c2m_E == 0
+            while ~doExit
                 
                 % -----------------------CHECK FOR UI SETUP---------------------------
                 
@@ -403,7 +397,7 @@ clear(Vars{:});
                     
                     % Dump initial 1 sec of vt data
                     rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
-                    while Elapsed_Seconds() - D.T.acq_tim < 1 || ...
+                    while Elapsed_Seconds(now) - D.T.acq_tim < 1 || ...
                             rat_vt_recs > 0 || ...
                             rob_vt_recs > 0 || ...
                             evt_recs > 0
@@ -412,15 +406,19 @@ clear(Vars{:});
                         [~, ~, ~, ~ , ~, evt_recs, ~] = NlxGetNewEventData('Events');
                     end
                     % Set initial poll time
-                    D.T.last_poll_tim = Elapsed_Seconds();
+                    D.T.last_poll_tim = Elapsed_Seconds(now);
                     
                     % Wait for robot streaming to start
                     Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
-                    while c2m_V==0 && c2m_E==0; drawnow; end;
-                    if c2m_E==0
+                    while ...
+                            c2m.('V').dat1 == 0 && ...
+                            ~doExit;
+                        drawnow;
+                    end;
+                    if ~doExit
                         Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
                     else
-                        Console_Write('!!ERROR!! [MainLoop] ABORTED: Wait for Robot Streaming');
+                        Console_Write('**WARNING** [MainLoop] ABORTED: Wait for Robot Streaming');
                         return
                     end
                     
@@ -436,14 +434,14 @@ clear(Vars{:});
                 elseif D.B.poll_nlx
                     
                     % GET ELLAPSED TIME
-                    D.T.loop = Elapsed_Seconds() - D.T.last_poll_tim;
+                    D.T.loop = Elapsed_Seconds(now) - D.T.last_poll_tim;
                     
                     % PROCESS NLX EVENTS
                     Evt_Proc();
                     
                     % HOLD FOR NETCOM BUFFERS
                     if (D.T.loop >= D.PAR.polRate)
-                        D.T.last_poll_tim = Elapsed_Seconds();
+                        D.T.last_poll_tim = Elapsed_Seconds(now);
                         
                         % PROCESS NLX VT
                         
@@ -464,7 +462,7 @@ clear(Vars{:});
                         
                         % Run rat in check code
                         if ...
-                                c2m_K == 1 && ...
+                                c2m.('K').dat1 == 1 && ...
                                 ~D.B.rat_in && ...
                                 D.B.rec && ...
                                 ~D.B.rec_done && ...
@@ -512,13 +510,14 @@ clear(Vars{:});
                     end
                     
                     % Check if CS has enabled save
-                    if c2m_Y == 1 && D.B.rec_done
+                    if c2m.('Y').dat1 == 1 && ...
+                            ~strcmp(get(D.UI.btnSave, 'Enable'), 'on') && ...
+                            D.B.rec_done
                         % Enable save button
                         set(D.UI.btnSave, ...
                             'Enable', 'on', ...
                             'ForegroundColor' , D.UI.enabledBtnFrgCol, ...
                             'BackgroundColor', D.UI.activeCol);
-                        c2m_Y = 0;
                     end
                     
                     % Save sesion data
@@ -541,9 +540,9 @@ clear(Vars{:});
         
         
         
-        %% ========================= SETUP FUNCTIONS ==============================
+        %% ========================= SETUP FUNCTIONS ======================
         
-        % ------------------------------VAR SETUP----------------------------------
+        % ------------------------------VAR SETUP--------------------------
         
         function [] = Var_Setup()
             
@@ -644,9 +643,9 @@ clear(Vars{:});
             % TIMERS
             
             % last poll time
-            D.T.last_poll_tim = Elapsed_Seconds();
+            D.T.last_poll_tim = Elapsed_Seconds(now);
             % time session starts
-            D.T.ses_str_tim = Elapsed_Seconds();
+            D.T.ses_str_tim = Elapsed_Seconds(now);
             % total acq time
             D.T.acq_tot_tim = 0;
             % acq restart time
@@ -670,7 +669,7 @@ clear(Vars{:});
             % track manual reward sent time
             D.T.manual_rew_sent = 0;
             % track last reward time
-            D.T.rew_last = Elapsed_Seconds();
+            D.T.rew_last = Elapsed_Seconds(now);
             % track reward start
             D.T.rew_start = 0;
             % track reward end
@@ -681,8 +680,8 @@ clear(Vars{:});
             D.T.strqd_inbnd_t1 = 0;
             D.T.strqd_inbnd_t2 = 0;
             % track last pos update
-            D.T.Rat.last_pos_update = Elapsed_Seconds();
-            D.T.Rob.last_pos_update = Elapsed_Seconds();
+            D.T.Rat.last_pos_update = Elapsed_Seconds(now);
+            D.T.Rob.last_pos_update = Elapsed_Seconds(now);
             
             % DEBUG VARS
             % track reward duration [now, min, max, sum, count]
@@ -942,7 +941,7 @@ clear(Vars{:});
             
         end
         
-        % -------------------------------UI SETUP-----------------------------------
+        % -------------------------------UI SETUP--------------------------
         
         function[] = UI_Setup()
             
@@ -2209,7 +2208,7 @@ clear(Vars{:});
             
         end
         
-        % -------------------------------AC SETUP----------------------------------
+        % -------------------------------AC SETUP--------------------------
         
         function [] = AC_Setup()
             
@@ -2253,8 +2252,7 @@ clear(Vars{:});
             
         end
         
-        % ------------------------------NLX SETUP----------------------------------
-        
+        % ------------------------------NLX SETUP--------------------------
         function[] = NLX_Setup()
             
             %% DEFINE IO PARAMETERS
@@ -2359,24 +2357,34 @@ clear(Vars{:});
                 D.NLX.IP));
             
             % Wait for Cheetah to open
+            Console_Write('[NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
             is_running = false;
-            while ~is_running && c2m_E == 0
+            while ~is_running && ~doExit
                 [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
                 is_running = any(strfind(result, 'Cheetah.exe'));
             end
             % Log/print
-            Console_Write('[NLX_Setup] CONFIRM: Cheetah.exe Running');
+            if is_running
+                Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
+            else
+                Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
+            end
             
             % Load NetCom into Matlab, and connect to the NetCom server if we aren’t connected
+            Console_Write('[NLX_Setup] RUNNING: Connect to NLX...');
+            succeeded = 0;
             if NlxAreWeConnected() ~= 1
-                while NlxAreWeConnected() ~= 1 && c2m_E == 0
+                while NlxAreWeConnected() ~= 1 && ~doExit
                     succeeded = NlxConnectToServer(D.NLX.IP);
                     if succeeded == 1
-                        % Log/print
-                        Console_Write('[NLX_Setup] CONFIRM: Connect to NLX');
                         %Identify this program to the server.
                         NlxSetApplicationName('ICR_GUI');
                     end
+                end
+                if succeeded == 1
+                    Console_Write('[NLX_Setup] FINISHED: Connect to NLX');
+                else
+                    Console_Write('[NLX_Setup] ABORTED: Connect to NLX');
                 end
             else
                 % Log/print
@@ -2469,7 +2477,7 @@ clear(Vars{:});
             
         end
         
-        % -------------------------REWARD ZONE SETUP------------------------------
+        % -------------------------REWARD ZONE SETUP-----------------------
         
         function[] = Zone_Dist_Setup()
             
@@ -2655,7 +2663,7 @@ clear(Vars{:});
             
         end
         
-        % ----------------------------FINISH SETUP---------------------------------
+        % ----------------------------FINISH SETUP-------------------------
         
         function [] = Finish_Setup()
             
@@ -3266,7 +3274,7 @@ clear(Vars{:});
             
         end
         
-        % ----------------------------RAT IN CHECK---------------------------------
+        % ----------------------------RAT IN CHECK-------------------------
         
         function [] = Rat_In_Check()
             
@@ -3308,10 +3316,10 @@ clear(Vars{:});
             D.B.rat_in = true;
             
             % Save time
-            D.T.run_str = Elapsed_Seconds();
+            D.T.run_str = Elapsed_Seconds(now);
             
             % Start tracking lap times
-            D.T.lap_tim = Elapsed_Seconds();
+            D.T.lap_tim = Elapsed_Seconds(now);
             
             % Set patch to nonvisible
             set(D.UI.ptchStQ, ...
@@ -3333,10 +3341,10 @@ clear(Vars{:});
             
         end
         
-        % -----------------------------TEST SETUP---------------------------------
+        % -----------------------------TEST SETUP--------------------------
         
         function[] = Run_Test_Setup()
-           
+            
             if D.DB.isTestRun
                 
                 % Load rat 0000
@@ -3367,9 +3375,9 @@ clear(Vars{:});
                     D.SS_In_All{ratInd, var_ind}(col_ind) + 1;
                 % Get session total
                 ses_all_next = D.SS_In_All{ratInd, 'Session_Manual_Training'}(col_ind) + ...;
-                D.SS_In_All{ratInd, 'Session_Behavior_Training'}(col_ind) + ...
-                D.SS_In_All{ratInd, 'Session_Implant_Training'}(col_ind) + ...
-                D.SS_In_All{ratInd, 'Session_Rotation'} + 1;
+                    D.SS_In_All{ratInd, 'Session_Behavior_Training'}(col_ind) + ...
+                    D.SS_In_All{ratInd, 'Session_Implant_Training'}(col_ind) + ...
+                    D.SS_In_All{ratInd, 'Session_Rotation'} + 1;
                 
                 % Set start quad
                 D.SS_In_All.Start_Quadrant{ratInd}(ses_all_next) = D.DB.Start_Quadrant;
@@ -3379,8 +3387,8 @@ clear(Vars{:});
                 for i = 1:length(D.SS_In_All.Rotation_Positions{ratInd}(ses_next,:))
                     D.SS_In_All.Rotation_Positions{ratInd}(ses_next,i) = num2str(D.DB.Rotation_Positions(i));
                 end
-                 
-                % Run PopRat 
+                
+                % Run PopRat
                 val = find(cell2mat(cellfun(@(x) strcmp(x(1:4), D.DB.ratLab(2:end)), D.UI.ratList, 'uni', false)));
                 set(D.UI.popRat, 'Value', val);
                 PopRat();
@@ -3396,7 +3404,7 @@ clear(Vars{:});
                     D.DB.haltCnt = D.DB.stepSamp;
                     D.DB.haltDur = 5; % (sec)
                     D.DB.halt_error_str = '';
-                    D.DB.t_halt = Elapsed_Seconds();
+                    D.DB.t_halt = Elapsed_Seconds(now);
                     D.DB.nowStep = 0;
                     D.DB.nowVel = 0;
                     D.DB.isHalted = true;
@@ -3448,9 +3456,9 @@ clear(Vars{:});
         
         
         
-        %% ======================== ONGOING FUNCTIONS =============================
+        %% ======================== ONGOING FUNCTIONS =====================
         
-        % ------------------------------GET NLX VT---------------------------------
+        % ---------------------------GET NLX VT----------------------------
         
         function [] = VT_Get(fld)
             
@@ -3468,7 +3476,7 @@ clear(Vars{:});
             
         end
         
-        % ------------------------------PROCESS NLX VT---------------------------------
+        % -------------------------PROCESS NLX VT--------------------------
         
         function [] = VT_Proc(fld)
             
@@ -3517,13 +3525,13 @@ clear(Vars{:});
                     rad_diff_last < 0.9*(2 * pi);
                 
                 % Do not use exc_3/4 if more than reward duration of unused data
-                if Elapsed_Seconds() - D.T.(fld).last_pos_update > (D.PAR.rewDur+100)/1000
+                if Elapsed_Seconds(now) - D.T.(fld).last_pos_update > (D.PAR.rewDur+100)/1000
                     exc_3 = zeros(size(exc_3,1), 1);
                 end
                 
                 % Check that reward flag has not been set for too long
                 if D.T.rew_start > 0
-                    if Elapsed_Seconds() - D.T.rew_start > 5 && ...
+                    if Elapsed_Seconds(now) - D.T.rew_start > 5 && ...
                             D.B.is_rewarding == true
                         % reset flag
                         D.B.is_rewarding = false;
@@ -3566,7 +3574,7 @@ clear(Vars{:});
                     D.B.(fld).plot_pos = true;
                     
                     % Keep track of updates
-                    D.T.(fld).last_pos_update = Elapsed_Seconds();
+                    D.T.(fld).last_pos_update = Elapsed_Seconds(now);
                     
                     % Save last usable rad value
                     D.P.(fld).radLast = rad(end);
@@ -3708,10 +3716,10 @@ clear(Vars{:});
                     % Cap to vel min,max
                     velRoh = D.P.(fld).vel;
                     % Set >max to max
-                    if velRoh>D.P.velMax; 
+                    if velRoh>D.P.velMax;
                         velRoh = D.P.velMax;
-                      % Set <min to min  
-                    elseif velRoh<D.P.velMin; 
+                        % Set <min to min
+                    elseif velRoh<D.P.velMin;
                         velRoh = D.P.velMin;
                     end
                     % Adjust range
@@ -3770,7 +3778,7 @@ clear(Vars{:});
             
         end
         
-        % --------------------------PROCESS NLX EVENTS-----------------------------
+        % ------------------------PROCESS NLX EVENTS-----------------------
         
         function [] = Evt_Proc()
             
@@ -3787,7 +3795,7 @@ clear(Vars{:});
                 if any(ismember(evtStr, D.NLX.rew_on_str))
                     
                     % Save reward start time
-                    D.T.rew_start = Elapsed_Seconds();
+                    D.T.rew_start = Elapsed_Seconds(now);
                     
                     % Get time stamp
                     D.T.rew_nlx_ts(1) = evtTS(ismember(evtStr, D.NLX.rew_on_str));
@@ -3832,7 +3840,7 @@ clear(Vars{:});
                 if any(ismember(evtStr, D.NLX.rew_off_str))
                     
                     % Save reward end time
-                    D.T.rew_end = Elapsed_Seconds();
+                    D.T.rew_end = Elapsed_Seconds(now);
                     
                     % Get time stamp
                     D.T.rew_nlx_ts(2) = evtTS(ismember(evtStr, D.NLX.rew_off_str));
@@ -3924,7 +3932,7 @@ clear(Vars{:});
             
         end
         
-        % -----------------------ROTATION TRIGGER CHECK----------------------------
+        % ----------------------ROTATION TRIGGER CHECK---------------------
         
         function [] = Rotation_Trig_Check()
             
@@ -4023,7 +4031,7 @@ clear(Vars{:});
             
         end
         
-        % ------------------------REWARD SEND CHECK-------------------------------
+        % ------------------------REWARD SEND CHECK------------------------
         
         function [] = Reward_Send_Check()
             
@@ -4134,7 +4142,7 @@ clear(Vars{:});
             
         end
         
-        % -----------------------------REWARD CHECK-----------------------------
+        % ---------------------------REWARD CHECK--------------------------
         
         function [] = Reward_Check()
             
@@ -4147,11 +4155,11 @@ clear(Vars{:});
             
             % Check if reward has been reset
             if  D.B.check_rew_confirm && ...
-                    c2m_Z ~= 0 && ...
+                    c2m.('Z').dat1 ~= 0 && ...
                     ~D.B.flag_rew_confirmed
                 
                 % Get rewarded zone ind
-                D.I.zone = c2m_Z;
+                D.I.zone = c2m.('Z').dat1;
                 
                 % Post NLX event: cue off
                 if D.B.is_cued_rew
@@ -4223,10 +4231,10 @@ clear(Vars{:});
                     'Parent',D.UI.axH(2));
                 uistack(D.UI.zoneAvgH, 'bottom');
                 
-                % Set flags
+                % Set/reset flags
+                c2m.('Z').dat1 = 0;
                 D.B.flag_rew_confirmed = true;
                 D.B.check_rew_confirm = false;
-                c2m_Z = 0;
                 D.B.plot_rew = true;
                 
                 Console_Write(sprintf('[Reward_Check] Rewarded: Zone=%d Vel=%0.2fcm/sec', ...
@@ -4293,8 +4301,8 @@ clear(Vars{:});
                     'FaceAlpha', 0.5);
                 
                 % Update reward info list
-                rew_ellapsed = Elapsed_Seconds() - D.T.rew_last;
-                D.T.rew_last = Elapsed_Seconds();
+                rew_ellapsed = Elapsed_Seconds(now) - D.T.rew_last;
+                D.T.rew_last = Elapsed_Seconds(now);
                 D.UI.rewInfoList = [...
                     D.UI.rewInfoList; ...
                     {sprintf('%d: T:%0.2f Z:%d M:%d', ...
@@ -4316,12 +4324,12 @@ clear(Vars{:});
             
         end
         
-        % ----------------------------LAP CHECK------------------------------------
+        % ----------------------------LAP CHECK----------------------------
         
         function [] = Lap_Check()
             
             %% CHECK FOR BOUNDS CROSSING
-           
+            
             % Check if rat in lap quad bound
             track_quad = Check_Rad_Bnds(D.P.Rat.rad, D.UI.lapBnds(D.I.lap_hunt_ind, :));
             
@@ -4429,7 +4437,7 @@ clear(Vars{:});
                     roh_interp(roh_interp<D.P.velRohMin) = D.P.velRohMin;
                 end
                 
-                % Add to history 
+                % Add to history
                 D.P.(fld).vel_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
                 D.P.(fld).vel_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
                 
@@ -4485,7 +4493,7 @@ clear(Vars{:});
             %% PRINT LAP TIME INFO
             
             % Save time
-            lap_tim_ellapsed = Elapsed_Seconds() - D.T.lap_tim;
+            lap_tim_ellapsed = Elapsed_Seconds(now) - D.T.lap_tim;
             
             % Get average
             D.T.lap_tim_sum = D.T.lap_tim_sum + lap_tim_ellapsed;
@@ -4504,11 +4512,11 @@ clear(Vars{:});
             set(D.UI.popLapTim, 'String', infstr);
             
             % reset timer
-            D.T.lap_tim = Elapsed_Seconds();
+            D.T.lap_tim = Elapsed_Seconds(now);
             
         end
         
-        % --------------------------PLOT POSITION----------------------------------
+        % --------------------------PLOT POSITION--------------------------
         
         function [] = Pos_Plot()
             
@@ -4700,7 +4708,7 @@ clear(Vars{:});
             
         end
         
-        % -------------------------PRINT SES INFO----------------------------------
+        % -------------------------PRINT SES INFO--------------------------
         
         function [] = Inf_Print()
             
@@ -4756,8 +4764,8 @@ clear(Vars{:});
             
             % Bat volt
             % Turn red and flicker if bellow 12 V
-            if c2m_J ~= 0
-                volt_now = c2m_J/10;
+            if c2m.('J').dat1 ~= 0
+                volt_now = c2m.('J').dat1/10;
                 if volt_now <= D.PAR.batVoltWarning && volt_now > 0
                     set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
                     if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
@@ -4775,23 +4783,23 @@ clear(Vars{:});
             %% Print time info
             
             % Get session time
-            nowTim(1) =  Elapsed_Seconds() - D.T.ses_str_tim;
+            nowTim(1) =  Elapsed_Seconds(now) - D.T.ses_str_tim;
             
             % Get recording elapsed time plus saved time
             if  D.B.rec
-                nowTim(2) = (Elapsed_Seconds() - D.T.rec_tim)  + D.T.rec_tot_tim;
+                nowTim(2) = (Elapsed_Seconds(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
             else nowTim(2) = D.T.rec_tot_tim; % keep showing save time
             end
             
             % Get lap time
             if D.B.rat_in
-                nowTim(3) = Elapsed_Seconds() - D.T.lap_tim;
+                nowTim(3) = Elapsed_Seconds(now) - D.T.lap_tim;
             else nowTim(3) = 0;
             end
             
             % Run time
             if D.B.rat_in && ~D.B.rec_done
-                D.T.run_tim = Elapsed_Seconds() - D.T.run_str;
+                D.T.run_tim = Elapsed_Seconds(now) - D.T.run_str;
             end
             nowTim(4) = D.T.run_tim;
             
@@ -4833,7 +4841,7 @@ clear(Vars{:});
             
         end
         
-        % ------------------------------RUN TEST CODE---------------------------------
+        % ------------------------------RUN TEST CODE----------------------
         
         function [] = Run_Test()
             if D.DB.isTestRun
@@ -4841,7 +4849,7 @@ clear(Vars{:});
                 %% PID CALIBRATION
                 if D.DB.doPidCalibrationTest && ...
                         ~D.B.pidStarted && ...
-                        c2m_K ==1
+                        c2m.('K').dat1 == 1
                     % Start pid test
                     SendM2C('T', sysTest, 0);
                     % Set flag to start pid
@@ -4854,7 +4862,7 @@ clear(Vars{:});
                     % Check if robot should be restarted
                     if D.DB.isHalted && ...
                             ~D.B.is_haulted && ...
-                            Elapsed_Seconds() - D.DB.t_halt > D.DB.haltDur
+                            Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur
                         
                         % Save and print halt error
                         % Store halt error
@@ -4922,7 +4930,7 @@ clear(Vars{:});
                     
                     % Check if robot has passed 0 deg
                     if ~D.DB.isHalted && ...
-                            Elapsed_Seconds() - D.DB.t_halt > D.DB.haltDur+1 && ...
+                            Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur+1 && ...
                             any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
                         
                         % Incriment counter
@@ -4933,7 +4941,7 @@ clear(Vars{:});
                         
                         % Store robots current pos and time
                         D.DB.sendPos = D.P.Rob.radLast;
-                        D.DB.t_halt = Elapsed_Seconds();
+                        D.DB.t_halt = Elapsed_Seconds(now);
                         
                         % Set flag
                         D.DB.isHalted = true;
@@ -4951,7 +4959,7 @@ clear(Vars{:});
                     if D.B.rec
                         
                         % Wait for 5 sec after setup
-                        if Elapsed_Seconds() - D.T.rec_tim > 5
+                        if Elapsed_Seconds(now) - D.T.rec_tim > 5
                             
                             % Local vars
                             cm = 0;
@@ -4961,13 +4969,16 @@ clear(Vars{:});
                             if D.B.initVals
                                 D.B.simRadLast = mean(D.UI.strQuadBnds);
                                 D.B.simVelLast = 0;
-                                D.B.simTSStart = Elapsed_Seconds();
+                                D.B.simTSStart = Elapsed_Seconds(now);
                                 D.B.simTSLast = 0;
                                 D.B.initVals = false;
+                                
+                                % Send test info to robot once
+                                SendM2C('T', sysTest, 0);
                             end
                             
                             % Compute ts(us) from dt(s)
-                            ts_now = (Elapsed_Seconds() - D.B.simTSStart)*10^6;
+                            ts_now = (Elapsed_Seconds(now) - D.B.simTSStart)*10^6;
                             dt_sec = (ts_now - D.B.simTSLast) / 10^6;
                             D.B.simTSLast = ts_now;
                             
@@ -4979,26 +4990,26 @@ clear(Vars{:});
                             if ...
                                     D.B.rat_in && ...
                                     ~D.B.is_haulted && ...
-                                    Elapsed_Seconds() - D.T.run_str > 2
-                             
-                                    % Check vel
-                                    if D.B.simVelLast == sld_vel
-                                        % Hold velocity
-                                        vel_now = D.B.simVelLast;
-                                    elseif D.B.simVelLast < sld_vel
-                                        % Accelerate
-                                        vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
-                                    elseif D.B.simVelLast > sld_vel
-                                        % Deccelerate
-                                        vel_now = D.B.simVelLast - (D.DB.ratMaxDec*dt_sec);
-                                    end
-                                    
-                                    % Keep in bounds
-                                    if vel_now > D.B.UI.sld.Max
-                                        vel_now = D.B.UI.sld.Max;
-                                    elseif vel_now < D.B.UI.sld.Min
-                                        vel_now = D.B.UI.sld.Min;
-                                    end
+                                    Elapsed_Seconds(now) - D.T.run_str > 2
+                                
+                                % Check vel
+                                if D.B.simVelLast == sld_vel
+                                    % Hold velocity
+                                    vel_now = D.B.simVelLast;
+                                elseif D.B.simVelLast < sld_vel
+                                    % Accelerate
+                                    vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
+                                elseif D.B.simVelLast > sld_vel
+                                    % Deccelerate
+                                    vel_now = D.B.simVelLast - (D.DB.ratMaxDec*dt_sec);
+                                end
+                                
+                                % Keep in bounds
+                                if vel_now > D.B.UI.sld.Max
+                                    vel_now = D.B.UI.sld.Max;
+                                elseif vel_now < D.B.UI.sld.Min
+                                    vel_now = D.B.UI.sld.Min;
+                                end
                             else
                                 % Keep robot haulted
                                 vel_now = 0;
@@ -5058,7 +5069,7 @@ clear(Vars{:});
         
         
         
-        %% ======================== CALLBACK FUNCTIONS ============================
+        %% ======================== CALLBACK FUNCTIONS ====================
         
         % RAT SELECTION
         function [] = PopRat(~, ~, ~)
@@ -5108,7 +5119,7 @@ clear(Vars{:});
                 % run callback
                 PopCond();
                 
-                % Set Session Task 
+                % Set Session Task
                 D.PAR.sesTask = ...
                     D.SS_In_All.Session_Task(D.PAR.ratInd);
                 set(D.UI.popTask, 'Value', ...
@@ -5361,7 +5372,7 @@ clear(Vars{:});
                     'OK', [], [], 'OK', ...
                     D.UI.qstDlfPos, ...
                     'Warn');
-               
+                
                 % Bail out of function
                 switch choice
                     case 'OK'
@@ -5370,32 +5381,32 @@ clear(Vars{:});
                 
             end
             
-%                     % Confirm if all fields entered correctly with pop-up window
-%                     qststr = sprintf(['IS THIS CORRECT:\n\n'...
-%                         'Rat_Number:_______%d\n'...
-%                         'ICR_Condition:____%s\n', ...
-%                         'Feeder_Delay:_____%1.1f\n', ...
-%                         'Cue_Conditon:_____%s\n'...
-%                         'Sound_White:______%s\n'...
-%                         'Sound_Reward:_____%s\n'], ...
-%                         D.PAR.ratNum, ...
-%                         D.UI.condList{get(D.UI.popCond, 'Value')}, ...
-%                         D.PAR.rewDel, ...
-%                         char(D.PAR.cueFeed), ...
-%                         D.UI.sndState{get(D.UI.toggSnd(1),'Value')+1}, ...
-%                         D.UI.sndState{get(D.UI.toggSnd(2),'Value')+1});
-%                     choice = dlgAWL(qststr, ...
-%                         'CHECK SETTINGS', ...
-%                         'Yes', 'No', [], 'No', ...
-%                         D.UI.qstDlfPos, ...
-%                         'Ques');
-%             
-%                     % Handle response
-%                     switch choice
-%                         case 'Yes'
-%                         case 'No'
-%                             return
-%                     end
+            %                     % Confirm if all fields entered correctly with pop-up window
+            %                     qststr = sprintf(['IS THIS CORRECT:\n\n'...
+            %                         'Rat_Number:_______%d\n'...
+            %                         'ICR_Condition:____%s\n', ...
+            %                         'Feeder_Delay:_____%1.1f\n', ...
+            %                         'Cue_Conditon:_____%s\n'...
+            %                         'Sound_White:______%s\n'...
+            %                         'Sound_Reward:_____%s\n'], ...
+            %                         D.PAR.ratNum, ...
+            %                         D.UI.condList{get(D.UI.popCond, 'Value')}, ...
+            %                         D.PAR.rewDel, ...
+            %                         char(D.PAR.cueFeed), ...
+            %                         D.UI.sndState{get(D.UI.toggSnd(1),'Value')+1}, ...
+            %                         D.UI.sndState{get(D.UI.toggSnd(2),'Value')+1});
+            %                     choice = dlgAWL(qststr, ...
+            %                         'CHECK SETTINGS', ...
+            %                         'Yes', 'No', [], 'No', ...
+            %                         D.UI.qstDlfPos, ...
+            %                         'Ques');
+            %
+            %                     % Handle response
+            %                     switch choice
+            %                         case 'Yes'
+            %                         case 'No'
+            %                             return
+            %                     end
             
             % Signal to continue setup
             D.B.setup = true;
@@ -5422,14 +5433,14 @@ clear(Vars{:});
                 % Set time tracking variables
                 if D.B.acq
                     % save out time before stopping
-                    D.T.acq_tot_tim = (Elapsed_Seconds() - D.T.acq_tim) + D.T.acq_tot_tim;
+                    D.T.acq_tot_tim = (Elapsed_Seconds(now) - D.T.acq_tim) + D.T.acq_tot_tim;
                 end
                 
                 % Change aquiring status
                 D.B.acq = ~D.B.acq;
                 
                 % Reset temp now
-                D.T.acq_tim = Elapsed_Seconds();
+                D.T.acq_tim = Elapsed_Seconds(now);
                 
             end
             
@@ -5452,10 +5463,10 @@ clear(Vars{:});
             % Set time tracking variables
             if  D.B.rec
                 % save out time before stopping
-                D.T.rec_tot_tim = (Elapsed_Seconds() - D.T.rec_tim) + D.T.rec_tot_tim;
+                D.T.rec_tot_tim = (Elapsed_Seconds(now) - D.T.rec_tim) + D.T.rec_tot_tim;
             end
             D.B.rec = ~ D.B.rec;
-            D.T.rec_tim = Elapsed_Seconds();
+            D.T.rec_tim = Elapsed_Seconds(now);
             
             % Enable icr button
             if strcmp(get(D.UI.btnICR, 'Enable'), 'off')
@@ -5554,7 +5565,7 @@ clear(Vars{:});
             D.B.rec_done = true;
             
             % Save end time
-            D.T.ses_end_tim = Elapsed_Seconds();
+            D.T.ses_end_tim = Elapsed_Seconds(now);
             
             % Print end time
             infstr = datestr(D.T.ses_end_tim, 'HH:MM:SS');
@@ -5689,7 +5700,7 @@ clear(Vars{:});
             
             % Print session aborting
             if ~D.UI.save_done
-                Console_Write('!!ERROR!! [BtnQuit] ABORTING SESSION...');
+                Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
             end
             
             % Disable
@@ -5724,7 +5735,10 @@ clear(Vars{:});
             end
             
             % Check if battery should be replaced
-            if (c2m_J > 0 && c2m_J <= D.PAR.batVoltReplace)
+            if ...
+                    c2m.('J').dat1 > 0 && ...
+                    c2m.('J').dat1 <= D.PAR.batVoltReplace
+                
                 % Confirm that Cheetah is closed
                 dlgAWL('!!WARNING!! REPLACE BATTERY BEFORE NEXT RUN', ...
                     'BATTERY LOW', ...
@@ -5741,7 +5755,7 @@ clear(Vars{:});
             
             % Shut down if matlab run alone
             if isMatSolo
-                c2m_E = 1;
+                doExit = true;
             end
             
             % Log/print
@@ -5822,7 +5836,7 @@ clear(Vars{:});
             SendM2C('R', reward_pos_send, zone_ind_send, reward_delay_send);
             
             % Track round trip time
-            D.T.manual_rew_sent = Elapsed_Seconds();
+            D.T.manual_rew_sent = Elapsed_Seconds(now);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnReward', get(D.UI.btnReward,'Value')));
@@ -5944,14 +5958,14 @@ clear(Vars{:});
         
         
         
-        %% ========================== MINOR FUNCTIONS =============================
-    
-        % ---------------------------COMPUTE RAD DIFF------------------------------
+        %% ========================== MINOR FUNCTIONS =====================
+        
+        % ---------------------------COMPUTE RAD DIFF----------------------
         function [rad_diff] = Rad_Diff(rad1, rad2)
             rad_diff = min(2*pi - abs(rad1-rad2), abs(rad1-rad2));
         end
         
-        % ---------------------------GET TRACK BOUNDS------------------------------
+        % ---------------------------GET TRACK BOUNDS----------------------
         function [xbnd, ybnd] = Get_Rad_Bnds(polbnds)
             
             if (length(polbnds) == 2)
@@ -5973,7 +5987,7 @@ clear(Vars{:});
             
         end
         
-        % --------------------------CHECK TRACK BOUNDS-----------------------------
+        % --------------------------CHECK TRACK BOUNDS---------------------
         function [bool_arr] = Check_Rad_Bnds(rad_arr, polbnds)
             
             if all(isnan(rad_arr))
@@ -5988,7 +6002,7 @@ clear(Vars{:});
             
         end
         
-        % ---------------------------GET BUTTON COLLOR-----------------------------
+        % ---------------------------GET BUTTON COLLOR---------------------
         function [C] = Btn_Col()
             
             [X,Y] = meshgrid(linspace(-(2*pi),(2*pi),25));
@@ -6042,8 +6056,8 @@ clear(Vars{:});
             
             C = C';
         end
-      
-        % --------------------ENABLE DISABLE CUE BUTTONS---------------------------
+        
+        % --------------------ENABLE DISABLE CUE BUTTONS-------------------
         function [] = Set_Cue_Buttons(setting)
             
             if D.PAR.cueFeed == 'Half' || D.PAR.cueFeed == 'None'
@@ -6069,7 +6083,7 @@ clear(Vars{:});
         
         
         
-        %% ======================= SAVE SESSION DATA ==============================
+        %% ======================= SAVE SESSION DATA ======================
         function [] =  Save_Ses_Data()
             
             % Log/print
@@ -6210,7 +6224,7 @@ clear(Vars{:});
                 D.DIR.recFi, fiGigs));
             
             copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.nlxSaveRat, D.DIR.recFi))
-             
+            
             % Log/print end
             Console_Write(sprintf('[Save_Ses_Data] FINISHED: Copy Cheetah File: File=%s Size=%0.2fGB', ...
                 D.DIR.recFi, fiGigs));
@@ -6238,26 +6252,89 @@ clear(Vars{:});
         
     end
 
+% -----------------------------MAIN EXIT-----------------------------------
+    function[] = Exit()
+        % Start exiting
+        Console_Write('[ICR_GUI] RUNNING: Exit ICR_GUI...');
+        
+        % Check if GUI was forced close
+        if ~D.DB.isForceClose
+            
+            % Log/print
+            Console_Write('[ICR_GUI] RUNNING: Normal Exit Procedure...');
+            
+            % Pause then shut it all down
+            pause(1);
+            % Disconnect AC computer
+            Disconnect_AC();
+            % Disconnect from NetCom
+            Disconnect_NLX();
+            
+        end
+        
+        % Save log
+        Console_Write('[ICR_GUI] RUNNING: Save ICR_GUI Log...');
+        if size(who('global'),1) > 0
+            fi_path = D.DIR.logTemp;
+            fid = fopen(fi_path,'wt');
+            for z_l = 1:D.DB.logCount
+                fprintf(fid, D.DB.logStr{z_l});
+            end
+            fclose(fid);
+            Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
+        else
+            Console_Write('!!ERROR!! [ICR_GUI] FAILED: Save ICR_GUI Log');
+        end
+        
+        % Close figure
+        if ~D.DB.isForceClose
+            D.B.close = true;
+            close(FigH)
+            delete(FigH)
+        end
+        
+        % Confirm GUI closed
+        SendM2C('C');
+        
+        % Wait for recieved confirmation
+        Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
+        while c2m.('C').dat1 ~= 1;
+            drawnow;
+            pause(0.01);
+        end;
+        Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
+        
+        % Clear all variables
+        stop(timer_c2m);
+        delete(timer_c2m);
+        clearvars -global;
+        clearvars;
+        close all;
+        
+        % For added measure
+        Vars=whos;
+        Vars={Vars.name};
+        clear(Vars{:});
+        
+        % Return success status
+        status = 'succeeded';
+    end
 
 
 
 
 
-%% =======================TOP LEVEL FUNCTIONS==============================
+
+%% ===================TOP LEVEL SUPPORT FUNCTIONS==========================
 
 % --------------------------SEND CS COMMAND--------------------------------
-
     function[] = SendM2C(id, dat1, dat2, dat3, pack)
-        
-        % Local var
-        persistent pack_last;
-        if isempty(pack_last); pack_last = 0; end
         
         % Check if unset
         if isempty(m2c_pack)
-            m2c_pack = 0; 
+            m2c_pack = 0;
         end
-                            
+        
         % Set mesage data
         if nargin == 3
             dat3 = -1;
@@ -6273,36 +6350,39 @@ clear(Vars{:});
         end
         
         % Make sure last message recieved
-        t_start = Elapsed_Seconds();
+        t_start = Elapsed_Seconds(now);
         while m2c_pack ~= 0 && ...
                 ~isMatSolo && ...
-                c2m_C==0 && ....
-                Elapsed_Seconds() < t_start + 1
+                Elapsed_Seconds(now) < t_start + 1
             drawnow;
-            pause(0.1);
+            pause(0.01);
         end;
         if m2c_pack ~= 0
-            m2c_pack = 0; 
+            m2c_pack = 0;
             Console_Write(sprintf('WARNING [SendM2C] Reset m2c_pack: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
-            id, dat1, dat2, dat3, round((Elapsed_Seconds() - t_start)*1000)));
-        end 
+                id, dat1, dat2, dat3, round((Elapsed_Seconds(now) - t_start)*1000)));
+        end
         
         % Set mesage ID and dat
         m2c_id = id;
-        m2c_dat1 = dat1;
-        m2c_dat2 = dat2;
-        m2c_dat3 = dat3;
+        m2c_dat(1) = dat1;
+        m2c_dat(2) = dat2;
+        m2c_dat(3) = dat3;
         
         % Get new packet number
         if nargin < 5
-        m2c_pack = pack_last+1;
-        pack_last = pack_last+1;
+            m2c.cnt_pack = m2c.cnt_pack+1;
+            m2c.(id).packLast = m2c.(id).pack;
+            m2c.(id).pack = m2c.cnt_pack;
+            m2c_pack = m2c.cnt_pack;
         else
             m2c_pack = pack;
         end
         
-        % Store in history
-        m2c_hist(ismember(m2c_hist(:,1), id), 2:end) = {dat1, dat2, dat3, m2c_pack};
+        % Save dat to struct
+        m2c.(id).dat1 = dat1;
+        m2c.(id).dat2 = dat2;
+        m2c.(id).dat3 = dat3;
         
         % Log/print
         Console_Write(sprintf('   [SENT] m2c: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
@@ -6313,83 +6393,88 @@ clear(Vars{:});
 % ---------------------------CHECK FOR NEW C2M-----------------------------
     function [] = CheckC2M(~,~)
         
-        % Local vars
-        persistent id_list;
-        persistent id_last;
-        
-        % Bail if D deleted
-        if ~exist('D', 'var')
-            return;
-        end
-        
-        % Get list of c2m vars
-        if isempty(id_list) || isempty(id_last)
-            var_list = who;
-            c2m_ind = ...
-                cell2mat(cellfun(@(x) ~isempty(strfind(x, 'c2m_')), var_list, 'uni', false));
-            c2m_ind = find(c2m_ind == 1);
-            % Track c2m vals
-            id_last = zeros(1,length(c2m_ind));
-            id_list = cell(1,length(c2m_ind));
-            for z_v = 1:length(c2m_ind)
-                id_list{z_v} =  var_list{c2m_ind(z_v)};
-                % Set values if mat running alone
-                if isMatSolo
-                    eval(sprintf('%s = 0;', var_list{c2m_ind(z_v)}));
-                end
+        % Have to explicitely catch errors
+        try
+            
+            % Bail if D deleted
+            if ~exist('D', 'var')
+                return;
             end
-            % Bail on first run
-            return;
-        end
-        
-        % Loop through and check each var
-        now_val = [];
-        for i = 1:length(id_list)
-            eval(sprintf('now_val = %s;', id_list{i}));
-            if (now_val ~= id_last(i)) %#ok<BDSCI>
-                Console_Write(sprintf('   [RCVD] c2m: id=%s dat=%d', id_list{i}, now_val));
-                id_last(i) = now_val;
+            
+            % Check for new packet
+            c2m_mat = reshape(cell2mat(struct2cell(c2m)),1,[]);
+            new_ind = [c2m_mat.pack] ~= [c2m_mat.packLast];
+            
+            % Bail if no new packets
+            if ~any(new_ind)
+                return;
             end
-        end
-        
-        % Check for resend request
-        if ~ischar(request_m2c)
-            return
-        end
-        
-        if ~strcmp(request_m2c, ' ')
-            Console_Write(sprintf('   [RCVD] Send Request: id=%s', request_m2c));
-            id_ind = ismember(m2c_hist(:,1), request_m2c);
+            
+            % Store new id
+            id_new = c2m_mat([c2m_mat.pack] ~= [c2m_mat.packLast]).id;
+            
+            %Print new data
+            if ~ischar(c2m.(id_new).dat1)
+                str = '   [RCVD] c2m: id=%s dat1=%d pack=%d';
+            else
+                str = '   [RCVD] c2m: id=%s dat1=%s pack=%d';
+            end
+            Console_Write(sprintf(str, ...
+                c2m.(id_new).id, c2m.(id_new).dat1, c2m.(id_new).pack));
+            
+            % Update packet info
+            c2m.(id_new).packLast = c2m.(id_new).pack;
+            
+            % Check for exit flag
+            if strcmp(id_new, 'E') && c2m.(id_new).dat1 == 1
+                doExit = true;
+                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=%s dat=%d', id_new, c2m.(id_new).dat1));
+            end
+            
+            % Check for resend request
+            if ~strcmp('g', c2m.(id_new).id)
+                return
+            end
+            
+            % Get id to resend
+            id_send = c2m.(id_new).dat1;
+            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', id_new, id_send));
             
             % Send again if any history of this id
-            if m2c_hist{id_ind,5} > 0
-                SendM2C(m2c_hist{id_ind,1}, m2c_hist{id_ind,2}, m2c_hist{id_ind,3}, m2c_hist{id_ind,4}, m2c_hist{id_ind,5});
+            if m2c.(id_send).pack > 0
+                SendM2C( ...
+                    m2c.(id_send).id, ...
+                    m2c.(id_send).dat1, ...
+                    m2c.(id_send).dat2, ...
+                    m2c.(id_send).dat3, ...
+                    m2c.(id_send).pack);
             end
             
-            % Reset flag
-            request_m2c = ' ';
+        catch ME
+            Console_Write('!!ERROR!! [CheckC2M] FAILED');
+            doExit = true;
         end
         
     end
 
 % ---------------------------PRINT TO CONSOLE------------------------------
     function [] = Console_Write(str)
-
-        % Itterate log count
+        
+        % Bail if following conditions not met
         if ~exist('D','var'); return; end;
+        if ~isfield(D, 'DB'); return; end;
+        if ~isfield(D.DB, 'consoleStr'); return; end;
+        
+        % Itterate log count
         D.DB.logCount = D.DB.logCount+1;
         
         % Get time
-        t_s = Elapsed_Seconds();
+        t_s = Elapsed_Seconds(now);
         t_m = round(t_s*1000);
-
+        
         % Add to strings
-        p_msg = sprintf('\r%0.2fs %s', t_s, str);
+        p_msg = sprintf('\r%0.2f %s', t_s, str);
         l_msg = sprintf('[%d],%d,%s\r', D.DB.logCount, t_m, str);
-  
-        % Store string
-        if ~isfield(D, 'DB'); return; end;
-        if ~isfield(D.DB, 'consoleStr'); return; end;
         
         % Insert new print string into existing string
         if (D.DB.logCount>1)
@@ -6403,7 +6488,7 @@ clear(Vars{:});
         
         % Write to Matlab console
         disp(p_msg);
-  
+        
         % Update console window
         if ~isfield(D, 'UI'); return; end;
         if ~isfield(D.UI, 'listConsole'); return; end;
@@ -6411,7 +6496,7 @@ clear(Vars{:});
         % Print normal
         set(D.UI.listConsole, ...
             'String', D.DB.consoleStr);
-       
+        
         % Set to red bold for error
         if D.DB.isErrExit
             set(D.UI.listConsole, ...
@@ -6427,10 +6512,10 @@ clear(Vars{:});
     end
 
 % ---------------------------GET TIME NOW-------------------------------
-    function [t_sec] = Elapsed_Seconds()
+    function [t_sec] = Elapsed_Seconds(t_now)
         
         % Convert from days to seconds
-        t_sec = (now-D.DB.startTime)*24*60*60;
+        t_sec = (t_now-startTime)*24*60*60;
         
     end
 
@@ -6464,10 +6549,10 @@ clear(Vars{:});
                     end
                     
                     % Disconnect from the NLX server
-                    while NlxAreWeConnected() == 1 && c2m_E == 0
+                    NlxDisconnectFromServer();
+                    while NlxAreWeConnected() == 1 && ~doExit
                         NlxDisconnectFromServer();
                     end
-                    
                     % Show status disconnected
                     if NlxAreWeConnected() ~= 1
                         Console_Write(sprintf('[Disconnect_NLX] FINISHED: Disconnect from NLX IP=%s', ...
@@ -6476,6 +6561,7 @@ clear(Vars{:});
                         Console_Write(sprintf('!!ERROR!! [Disconnect_NLX] ABORTED: Disconnect from NLX IP=%s', ...
                             D.NLX.IP));
                     end
+                    
                 end
             end
             
@@ -6501,14 +6587,14 @@ clear(Vars{:});
                                 D.AC.data = zeros(1, length(D.AC.data));
                                 D.AC.data(1) = 1;
                                 fwrite(tcpIP,D.AC.data,'int8');
-                                pause(0.01);
+                                pause(0.1);
                                 
                                 % Send command to terminate run
                                 D.AC.data = zeros(1, length(D.AC.data));
-                                fwrite(tcpIP,D.AC.data,'int8'); 
+                                fwrite(tcpIP,D.AC.data,'int8');
                                 
                                 % Close AC computer connection
-                                fclose(tcpIP); 
+                                fclose(tcpIP);
                                 
                                 % Show status disconnected
                                 Console_Write(sprintf('[Disconnect_AC] FINISHED: Disconnect from AC Computer IP=%s', ...
@@ -6524,9 +6610,9 @@ clear(Vars{:});
                 end
             else Console_Write('**WARNING** [Disconnect_AC] \"AC\" Not a Field of \"D\"');
             end
-            %try fclose(tcpIP); catch; end;
-            %try delete(tcpIP); catch; end;
-            %try clear tcpIP; catch; end;
+            try fclose(tcpIP); catch; end;
+            try delete(tcpIP); catch; end;
+            try clear tcpIP; catch; end;
             
         end
     end
@@ -6553,7 +6639,7 @@ clear(Vars{:});
         Disconnect_NLX()
         
         % Set flags
-        c2m_E = 1;
+        doExit = true;
         D.DB.isForceClose = true;
         
         return;
