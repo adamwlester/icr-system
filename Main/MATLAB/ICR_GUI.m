@@ -30,12 +30,9 @@ global tcpIP; % tcp object
 global timer_c2m; % timer to check c2m
 
 % Matlab to CS communication
-global m2c; % data struct
-global m2c_id; % message out to CS
-global m2c_dat; % data out to CS
-global m2c_pack; % packet number out to CS
+global m2c; % local data struct
+global m2c_pack; % message out to CS
 global m2c_dir; % current cheetah directory
-global m2c_posSim; % array for sim data
 
 % CS to Matlab communication
 global c2m; % data struct
@@ -54,7 +51,7 @@ if nargin < 3
     isMatSolo = true;
 end
 if nargin < 2
-    doDebug = false;
+    doDebug = true;
 end
 if nargin < 1
     sysTest = 0;
@@ -69,6 +66,28 @@ else
     dbclear if caught error;
 end
 
+%---------------------SET DEBUG/TEST PARAMETERS----------------------------
+
+% Session conditions
+D.DB.ratLab = 'r9999';
+D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
+D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
+D.DB.Reward_Delay = '1.0';
+D.DB.Cue_Condition = 'None';
+D.DB.Sound_Conditions = [1,1];
+D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
+D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
+D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
+
+% Simulated rat test
+D.DB.ratVelStart = 20;
+D.DB.ratMaxAcc = 60; % (cm/sec/sec)
+D.DB.ratMaxDec = 100; % (cm/sec/sec)
+
+% Halt Error test
+D.DB.velSteps = 10:10:80; % (cm/sec)
+D.DB.stepSamp = 4;
+
 %---------------------Important variable formats---------------------------
 %...........................D.UI.snd....................................
 %   val 1 = White Noise [true, false]
@@ -78,10 +97,9 @@ end
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]
 
-% ------------------------- RUN MAIN FUNCTION -----------------------------
-
-% Run in debug mode
 if doDebug
+    
+    % ------------------------- RUN IN DEBUG MODE -------------------------
     
     % Log print error handeling
     Console_Write('[ICR_GUI] RUNNING ICR_GUI.m IN DEBUG MODE');
@@ -99,10 +117,12 @@ if doDebug
     % RUN MAIN EXIT
     Exit();
     
-end
-
-% Run in catch error mode
-if ~doDebug
+    % SET STATUS
+    status = 'succeeded';
+    
+else
+    
+    % ---------------------- RUN IN CATCH ERROR MODE ----------------------
     
     % Log print error handeling
     Console_Write(sprintf('[ICR_GUI] RUNNING ICR_GUI.m IN RELEASE MODE'));
@@ -132,7 +152,7 @@ if ~doDebug
         doExit = true;
     end
     
-    % Handle errors
+    % HANDLE ERRRORS
     if ~isempty(ME)
         D.DB.isErrExit = true;
         % Log/print error
@@ -159,12 +179,16 @@ if ~doDebug
         err_status = regexprep(err_status, '\s*', ' ');
         status = err_status;
     end
+    
+    % SET STATUS
+    if isempty(ME)
+        status = 'succeeded';
+    end
+    
 end
 
-% Set status and exit
-if isempty(ME)
-    status = 'succeeded';
-end
+% PRINT RUN ENDED
+fprintf('END OF RUN');
 
 
 
@@ -219,32 +243,12 @@ end
         D.DIR.logFi = 'ICR_GUI_Log.csv';
         D.DIR.logTemp = fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00', D.DIR.logFi);
         
-        % DEBUG/TESTING
-        
-        % Session conditions
-        D.DB.ratLab = 'r0000';
-        D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
-        D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
-        D.DB.Reward_Delay = '1.0';
-        D.DB.Cue_Condition = 'None';
-        D.DB.Sound_Conditions = [1,1];
-        D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-        D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
-        D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
-        
-        % Simulated rat test
-        D.DB.ratVelStart = 20;
-        D.DB.ratMaxAcc = 60; % (cm/sec/sec)
-        D.DB.ratMaxDec = 100; % (cm/sec/sec)
-        m2c_posSim(:) = 0;
-        
-        % Halt Error test
-        D.DB.velSteps = 10:10:80; % (cm/sec)
-        D.DB.stepSamp = 4;
+        % ------------------------- SETUP TOP LEVEL VARS ------------------
         
         % m2c struct
         id_list = [ ...
             'h', ... % setup handshake [NA]
+            'p', ... % simulation data [ts, x, y]
             'G', ... % matlab gui loaded [NA]
             'A', ... % connected to AC computer [NA]
             'N', ... % netcom setup [NA]
@@ -258,6 +262,7 @@ end
             'H', ... % halt movement [(byte)halt_state]
             'B', ... % bulldoze rat [(byte)bull_delay, (byte)bull_speed]
             'I' ... % rat in/out [(byte)in/out]
+            'O' ... % confirm rat out [NA]
             ];
         for z_id = 1:length(id_list)
             m2c.(id_list(z_id)) = cell2struct( ...
@@ -265,6 +270,9 @@ end
                 {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast'}, 2);
         end
         m2c.cnt_pack = 0;
+        
+        % m2c_pack array
+        m2c_pack(1:5) = 0;
         
         % c2m struct
         id_list = [ ...
@@ -384,72 +392,111 @@ end
             
             while ~doExit
                 
-                % -----------------------CHECK FOR UI SETUP---------------------------
+                % PLOT POSITION
+                update_ui = Pos_Plot();
                 
-                if ~D.B.setup
-                    drawnow;
+                % PRINT SES INFO
+                Inf_Print();
+                
+                % UPDATE GUI
+                if update_ui
+                    Update_UI(0);
+                else
+                    Update_UI(100);
+                end
+                
+                % CHECK FOR EXIT FLAG
+                if doExit
+                    continue;
+                end
+                
+                % -----------------------CHECK WHAT TO DO---------------------------
+                if ~D.B.data_loaded
+                    do_what = 'WAIT FOR UI SETUP';
+                elseif ~D.B.setup_done
+                    do_what = 'FINISH SETUP';
+                elseif D.B.poll_nlx && ~D.B.rec_done
+                    do_what = 'POLL NLX';
+                elseif D.B.rec_done && ~D.B.rat_out
+                    do_what = 'SEND RAT OUT CONFIRMATION';
+                elseif D.B.rec_done
+                    do_what = 'WAIT FOR SAVE';
+                end
+                switch do_what
                     
-                elseif ~D.B.poll_nlx && ~D.B.rec_done
                     
-                    % Run Zone setup code
-                    Zone_Dist_Setup();
-                    drawnow
-                    
-                    % Dump initial 1 sec of vt data
-                    rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
-                    while Elapsed_Seconds(now) - D.T.acq_tim < 1 || ...
-                            rat_vt_recs > 0 || ...
-                            rob_vt_recs > 0 || ...
-                            evt_recs > 0
-                        [~, ~, ~, ~, rat_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rat_ent);
-                        [~, ~, ~, ~, rob_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rob_ent);
-                        [~, ~, ~, ~ , ~, evt_recs, ~] = NlxGetNewEventData('Events');
-                    end
-                    % Set initial poll time
-                    D.T.last_poll_tim = Elapsed_Seconds(now);
-                    
-                    % Wait for robot streaming to start
-                    Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
-                    while ...
-                            c2m.('V').dat1 == 0 && ...
-                            ~doExit;
-                        drawnow;
-                    end;
-                    if ~doExit
-                        Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
-                    else
-                        Console_Write('**WARNING** [MainLoop] ABORTED: Wait for Robot Streaming');
-                        return
-                    end
-                    
-                    % Run Finish setup code
-                    Finish_Setup();
-                    drawnow;
-                    
-                    % Begin main loop
-                    Console_Write('[MainLoop] READY TO ROCK!');
-                    
-                    % ---------------------------POLL NETCOM------------------------------
-                    
-                elseif D.B.poll_nlx
-                    
-                    % GET ELLAPSED TIME
-                    D.T.loop = Elapsed_Seconds(now) - D.T.last_poll_tim;
-                    
-                    % PROCESS NLX EVENTS
-                    Evt_Proc();
-                    
-                    % HOLD FOR NETCOM BUFFERS
-                    if (D.T.loop >= D.PAR.polRate)
-                        D.T.last_poll_tim = Elapsed_Seconds(now);
+                    case 'WAIT FOR UI SETUP'
+                        %% ---------------WAIT FOR UI SETUP----------------
+                        continue;
+                        
+                        
+                    case 'FINISH SETUP'
+                        %% -----------------FINISH SETUP-------------------
+                        
+                        % Run Zone setup code
+                        Zone_Dist_Setup();
+                        
+                        % Dump initial vt recs
+                        rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
+                        while ...
+                                rat_vt_recs > 0 || ...
+                                rob_vt_recs > 0 || ...
+                                evt_recs > 0
+                            pause(0.01);
+                            [~, ~, ~, ~, rat_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rat_ent);
+                            [~, ~, ~, ~, rob_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rob_ent);
+                            [~, ~, ~, ~ , ~, evt_recs, ~] = NlxGetNewEventData('Events');
+                        end
+                        
+                        % Wait for robot streaming to start
+                        Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
+                        while ...
+                                c2m.('V').dat1 == 0 && ...
+                                ~doExit;
+                            pause(0.01);
+                            Update_UI(50);
+                        end;
+                        if ~doExit
+                            Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
+                        else
+                            Console_Write('**WARNING** [MainLoop] ABORTED: Wait for Robot Streaming');
+                            return
+                        end
+                        
+                        % Run Finish setup code
+                        Finish_Setup();
+                        Update_UI(0);
+                        
+                        % Set to start polling NLX
+                        D.B.poll_nlx = true;
+                        
+                        % Flag setup done
+                        D.B.setup_done = true;
+                        
+                        % Begin main loop
+                        Console_Write('[MainLoop] READY TO ROCK!');
+                        
+                        
+                    case 'POLL NLX'
+                        %% ------------------POLL NETCOM-------------------
+                        
+                        % GET ELLAPSED TIME
+                        D.T.dt_loop = Elapsed_Seconds(now) - D.T.loop_start;
+                        
+                        % WAIT FOR NETCOM BUFFERS
+                        if (D.T.dt_loop < D.PAR.polRate)
+                            continue
+                        end
+                        
+                        % PROCESS NLX EVENTS
+                        Evt_Proc();
+                        
+                        % STORE LOOP TIME
+                        D.T.loop_start = Elapsed_Seconds(now);
                         
                         % PROCESS NLX VT
-                        
-                        % Run VT processing code
-                        % Robot
                         VT_Get('Rob');
                         VT_Proc('Rob');
-                        % Rat
                         if ~D.DB.doSimRatTest
                             VT_Get('Rat');
                             VT_Proc('Rat');
@@ -459,8 +506,6 @@ end
                         Run_Test();
                         
                         % CHECK IF RAT IN
-                        
-                        % Run rat in check code
                         if ...
                                 c2m.('K').dat1 == 1 && ...
                                 ~D.B.rat_in && ...
@@ -476,60 +521,50 @@ end
                         if D.B.rat_in
                             
                             % ROTATION TRIGGER CHECK
-                            
-                            % Run rotation check code
                             Rotation_Trig_Check();
                             
                             % REWARD RESET CHECK
-                            
-                            % Run reward reset check code
                             Reward_Send_Check();
                             
                             % REWARD FEEDER CHECK
-                            
-                            % Run reward check code
                             Reward_Check();
                             
                             % LAP CHECK
-                            
-                            % Run lap check code
                             Lap_Check();
                             
                         end
                         
-                        % PLOT POSITION
+                    case 'SEND RAT OUT CONFIRMATION'
+                        %% -----------SEND RAT OUT CONFIRMATION------------
                         
-                        % Run plot position code
-                        Pos_Plot();
+                        % Tell CS rat out confirmation
+                        SendM2C('O');
+                        D.B.rat_out = true;
+                        Console_Write('[MainLoop] SENT RAT OUT CONFIRMATION');
                         
-                        % PRINT SES INFO
+                    case 'WAIT FOR SAVE'
+                        %% -----------------WAIT FOR SAVE------------------
                         
-                        % Run info print code
-                        Inf_Print();
+                        % Check if CS has enabled save
+                        if c2m.('Y').dat1 == 1
+                            
+                            % Enable save button
+                            set(D.UI.btnSave, ...
+                                'Enable', 'on', ...
+                                'ForegroundColor' , D.UI.enabledBtnFrgCol, ...
+                                'BackgroundColor', D.UI.activeCol);
+                            
+                            % Reset flag
+                            c2m.('Y').dat1 = 0;
+                        end
                         
-                    end
-                    
-                    % Check if CS has enabled save
-                    if c2m.('Y').dat1 == 1 && ...
-                            ~strcmp(get(D.UI.btnSave, 'Enable'), 'on') && ...
-                            D.B.rec_done
-                        % Enable save button
-                        set(D.UI.btnSave, ...
-                            'Enable', 'on', ...
-                            'ForegroundColor' , D.UI.enabledBtnFrgCol, ...
-                            'BackgroundColor', D.UI.activeCol);
-                    end
-                    
-                    % Save sesion data
-                    if D.B.do_save
-                        Save_Ses_Data();
-                        D.B.do_save = false;
-                    end
-                    
+                        % Save sesion data
+                        if D.B.do_save
+                            Save_Ses_Data();
+                            D.B.do_save = false;
+                        end
+                        
                 end
-                
-                % Update GUI
-                drawnow;
                 
             end
             
@@ -587,8 +622,10 @@ end
             
             % BOOLEANS
             
-            % setup
-            D.B.setup = false;
+            % rat data loaded
+            D.B.data_loaded = false;
+            % setup finished
+            D.B.setup_done = false;
             % polling nlx
             D.B.poll_nlx = false;
             % acquiring nlx
@@ -599,6 +636,8 @@ end
             D.B.rec_done = false;
             % track if rat is in arena
             D.B.rat_in = false;
+            % track if rat is out of arena
+            D.B.rat_out = false;
             % flag to do save
             D.B.do_save = false;
             % flag quit
@@ -629,8 +668,6 @@ end
             D.B.check_rew_confirm = false;
             % track lap bounds
             D.B.check_inbound_lap = false(4,1);
-            % track if reward point should be plotted
-            D.B.plot_rew = false;
             % track if pos should be plotted
             D.B.Rat.plot_pos = false;
             D.B.Rob.plot_pos = false;
@@ -643,7 +680,11 @@ end
             % TIMERS
             
             % last poll time
-            D.T.last_poll_tim = Elapsed_Seconds(now);
+            D.T.loop_start = Elapsed_Seconds(now);
+            % last ui redraw
+            D.T.ui_update = Elapsed_Seconds(now);
+            % last text info update
+            D.T.info_txt_update = Elapsed_Seconds(now);
             % time session starts
             D.T.ses_str_tim = Elapsed_Seconds(now);
             % total acq time
@@ -663,9 +704,9 @@ end
             % track lap times total
             D.T.lap_tim_sum = 0;
             % loop time
-            D.T.loop = 0;
-            D.T.loop_min = 1;
-            D.T.loop_max = NaN;
+            D.T.dt_loop = 0;
+            D.T.dt_loop_min = 1;
+            D.T.dt_loop_max = NaN;
             % track manual reward sent time
             D.T.manual_rew_sent = 0;
             % track last reward time
@@ -801,9 +842,12 @@ end
             
             % vt plot handle array
             D.UI.ratPltH = gobjects(1,60*120/D.PAR.polRate);
+            D.UI.cnt_ratPltH = 0;
             % vt plot handles of velocity
             D.UI.ratPltHvel = gobjects(1,60*120/D.PAR.polRate); % rat
             D.UI.robPltHvel = gobjects(1,60*120/D.PAR.polRate); % rob
+            D.UI.cnt_ratPltHvel = 0;
+            D.UI.cnt_robPltHvel = 0;
             % handles for average vel plots
             D.UI.Rat.pltHvelAvg = gobjects(1,1); % rat
             D.UI.Rob.pltHvelAvg = gobjects(1,1); % rob
@@ -1146,28 +1190,23 @@ end
             uistack(D.UI.axH(3), 'bottom');
             
             % Read in image
-            img = imread(D.DIR.ioWallImage, 'BackgroundColor', D.UI.figBckCol);
-            set(D.UI.axH(3), 'XLim', [0,size(img,2)], 'YLim', [0,size(img,1)]);
-            img = flip(img, 1);
-            % 0 deg
-            img0 = img;
+            img{1} = imread(D.DIR.ioWallImage, 'BackgroundColor', D.UI.figBckCol);
+            set(D.UI.axH(3), 'XLim', [0,size(img{1},2)], 'YLim', [0,size(img{1},1)]);
+            img{1} = flip(img{1}, 1);
+            mask = true(size(img{1}));
             % -40 deg
-            mask = true(size(img));
-            img = imrotate(img, -40, 'crop');
+            img{2} = imrotate(img{1}, -40, 'crop');
             maskR = ~imrotate(mask, -40, 'crop');
-            img(maskR) = 255;
-            imgCCW = img;
+            img{2}(maskR) = 255;
             % 40 deg
-            mask = true(size(img));
-            img = imrotate(img, 40, 'crop');
+            img{3} = imrotate(img{1}, 40, 'crop');
             maskR = ~imrotate(mask, 40, 'crop');
-            img(maskR) = 255;
-            imgCW = img;
+            img{3}(maskR) = 255;
             
             % Store for later
-            D.UI.wallImgH(1) = image(img0, 'Parent', D.UI.axH(3), 'Visible', 'on');
-            D.UI.wallImgH(2) = image(imgCCW, 'Parent', D.UI.axH(3), 'Visible', 'off');
-            D.UI.wallImgH(3) = image(imgCW, 'Parent', D.UI.axH(3), 'Visible', 'off');
+            D.UI.wallImgH(1) = image(img{1}, 'Parent', D.UI.axH(3), 'Visible', 'on');
+            D.UI.wallImgH(2) = image(img{2}, 'Parent', D.UI.axH(3), 'Visible', 'off');
+            D.UI.wallImgH(3) = image(img{3}, 'Parent', D.UI.axH(3), 'Visible', 'off');
             
             %% ========================= ADD UI OBJECTS ===============================
             
@@ -2201,7 +2240,6 @@ end
             uistack(FigH, 'top')
             % Make visible
             set(FigH, 'Visible', 'on');
-            drawnow;
             
             % Log/print
             Console_Write('[UI_Setup] FINISHED: UI Setup');
@@ -3255,9 +3293,6 @@ end
                 set(D.UI.ptchFdRstH(D.I.rot), 'Visible', 'on');
             end
             
-            % Set to start polling NLX
-            D.B.poll_nlx = true;
-            
             % Run BtnRec
             set(D.UI.btnRec,'Value', 1);
             BtnRec(D.UI.btnRec);
@@ -3458,6 +3493,27 @@ end
         
         %% ======================== ONGOING FUNCTIONS =====================
         
+        % ---------------------------UPDATE UI-----------------------------
+        
+        function [] = Update_UI(dt_min)
+            
+            % Default to 50 ms min delay
+            if nargin < 1
+                dt_min = 100;
+            end
+            
+            % Convert to seconds
+            dt_min = dt_min/1000;
+            
+            % Check if UI should be updated
+            t_now = Elapsed_Seconds(now);
+            if t_now-D.T.ui_update >= dt_min
+                drawnow;
+                D.T.ui_update = t_now;
+            end
+            
+        end
+        
         % ---------------------------GET NLX VT----------------------------
         
         function [] = VT_Get(fld)
@@ -3578,12 +3634,6 @@ end
                     
                     % Save last usable rad value
                     D.P.(fld).radLast = rad(end);
-                    
-                    %                     if strcmp(fld, 'Rob')
-                    %                         fprintf('\rRob rad: %0.2f', D.P.(fld).radLast)
-                    %                     else
-                    %                         fprintf('   Rat rad: %0.2f\r', D.P.(fld).radLast)
-                    %                     end
                 end
                 
                 % Store vars for later use
@@ -3782,152 +3832,153 @@ end
         
         function [] = Evt_Proc()
             
-            % Read in new event data
+            %% READ IN DATA AND BAIL IF NO NEW DATA
             %[evtPass, evtTS, evtID, evtTTL, evtStr, evtNRecs, evtDropped]
             [~, evtTS, ~, ~ , evtStr, evtNRecs, ~] = ...
                 NlxGetNewEventData('Events');
             
-            if evtNRecs > 0
+            % Bail if no new data
+            if evtNRecs == 0
+                return
+            end
+            
+            %% CHECK FOR REWARD
+            
+            % Reward Started
+            if any(ismember(evtStr, D.NLX.rew_on_str))
                 
-                %% CHECK FOR REWARD
+                % Save reward start time
+                D.T.rew_start = Elapsed_Seconds(now);
                 
-                % Reward Started
-                if any(ismember(evtStr, D.NLX.rew_on_str))
-                    
-                    % Save reward start time
-                    D.T.rew_start = Elapsed_Seconds(now);
-                    
-                    % Get time stamp
-                    D.T.rew_nlx_ts(1) = evtTS(ismember(evtStr, D.NLX.rew_on_str));
-                    
-                    % Store round trip time
-                    if datenum(D.T.manual_rew_sent) > 0 && ...
-                            datenum(D.T.manual_rew_sent) < datenum(D.T.rew_start)
-                        % Save reward mesage round trip time
-                        D.DB.rew_round_trip(1) = (D.T.rew_start - D.T.manual_rew_sent) * 1000;
-                        D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
-                        D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
-                        D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
-                        D.DB.rew_round_trip(5) = D.DB.rew_round_trip(5) + 1;
-                        % Reset time
-                        D.T.manual_rew_sent = 0;
-                    end
-                    
-                    % Change feeder dish plot color and marker size
-                    D.UI.feedPosCol = D.UI.activeCol;
-                    D.UI.feedPosMarkSize = 30;
-                    if isfield(D.UI, 'feedPltNow')
-                        set(D.UI.feedPltNow, ...
-                            'MarkerFaceColor', D.UI.feedPosCol, ...
-                            'MarkerSize', D.UI.feedPosMarkSize);
-                    end
-                    
-                    % Turn on reward button backround color
-                    set(D.UI.btnReward, ...
-                        'BackgroundColor', D.UI.activeCol);
-                    
-                    % Add to reward count for manual session
-                    if D.PAR.sesCond == 'Manual_Training'
-                        D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
-                    end
-                    
-                    % Set flags
-                    D.B.is_rewarding = true;
-                    
+                % Get time stamp
+                D.T.rew_nlx_ts(1) = evtTS(ismember(evtStr, D.NLX.rew_on_str));
+                
+                % Store round trip time
+                if datenum(D.T.manual_rew_sent) > 0 && ...
+                        datenum(D.T.manual_rew_sent) < datenum(D.T.rew_start)
+                    % Save reward mesage round trip time
+                    D.DB.rew_round_trip(1) = (D.T.rew_start - D.T.manual_rew_sent) * 1000;
+                    D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
+                    D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
+                    D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
+                    D.DB.rew_round_trip(5) = D.DB.rew_round_trip(5) + 1;
+                    % Reset time
+                    D.T.manual_rew_sent = 0;
                 end
                 
-                % Reward Ended
-                if any(ismember(evtStr, D.NLX.rew_off_str))
-                    
-                    % Save reward end time
-                    D.T.rew_end = Elapsed_Seconds(now);
-                    
-                    % Get time stamp
-                    D.T.rew_nlx_ts(2) = evtTS(ismember(evtStr, D.NLX.rew_off_str));
-                    
-                    % Store reward duration
-                    dt = [0,0];
-                    % matlab time
-                    if datenum(D.T.rew_start) > 0 && ...
-                            datenum(D.T.rew_start) < datenum(D.T.rew_end)
-                        dt(1) = (D.T.rew_end - D.T.rew_start) * 1000;
-                    end
-                    % nlx ts time
-                    if D.T.rew_nlx_ts(1) < D.T.rew_nlx_ts(2) && ...
-                            D.T.rew_nlx_ts(1) > 0
-                        dt(2) = (D.T.rew_nlx_ts(2) - D.T.rew_nlx_ts(1))/1000;
-                    end
-                    if dt(2) > 0
-                        % Save reward duration
-                        D.DB.rew_duration(1) = dt(2);
-                        D.DB.rew_duration(2) = min(D.DB.rew_duration(1), D.DB.rew_duration(2));
-                        D.DB.rew_duration(3) = max(D.DB.rew_duration(1), D.DB.rew_duration(3));
-                        D.DB.rew_duration(4) = D.DB.rew_duration(1) + D.DB.rew_duration(4);
-                        D.DB.rew_duration(5) = D.DB.rew_duration(5) + 1;
-                    end
-                    
-                    % Save halt error
-                    if ~isempty(D.I.zone)
-                        halt_err = D.UI.rewBnds(D.I.zone,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
-                        % Save reward duration
-                        D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
-                        D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
-                        D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
-                        D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
-                        D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
-                    end
-                    
-                    % Set flag
-                    D.B.is_rewarding = false;
-                    
-                    % Change feeder dish plot color and marker size
-                    D.UI.feedPosCol = D.UI.rotCol(D.I.rot,:);
-                    D.UI.feedPosMarkSize = 10;
-                    if isfield(D.UI, 'feedPltNow')
-                        set(D.UI.feedPltNow, ...
-                            'MarkerFaceColor', D.UI.feedPosCol, ...
-                            'MarkerSize', D.UI.feedPosMarkSize);
-                    end
-                    
-                    % Turn off reward button backround color
-                    set(D.UI.btnReward, ...
-                        'BackgroundColor', D.UI.enabledCol);
-                    
+                % Change feeder dish plot color and marker size
+                D.UI.feedPosCol = D.UI.activeCol;
+                D.UI.feedPosMarkSize = 30;
+                if isfield(D.UI, 'feedPltNow')
+                    set(D.UI.feedPltNow, ...
+                        'MarkerFaceColor', D.UI.feedPosCol, ...
+                        'MarkerSize', D.UI.feedPosMarkSize);
                 end
                 
-                %% CHECK FOR PID
+                % Turn on reward button backround color
+                set(D.UI.btnReward, ...
+                    'BackgroundColor', D.UI.activeCol);
                 
-                % Running
-                if any(ismember(evtStr, D.NLX.pid_run_str))
-                    % Change setpoint plot color and width
-                    D.UI.setPosCol = D.UI.activeCol;
-                    D.UI.setPosLineWidth = 4;
-                end
-                % Stopped
-                if any(ismember(evtStr, D.NLX.pid_stop_str))
-                    % Change setpoint plot color
-                    D.UI.setPosCol = D.UI.robNowCol;
-                    D.UI.setPosLineWidth = 2;
+                % Add to reward count for manual session
+                if D.PAR.sesCond == 'Manual_Training'
+                    D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
                 end
                 
-                %% CHECK FOR BULLDOZE
+                % Set flags
+                D.B.is_rewarding = true;
                 
-                % Running
-                if any(ismember(evtStr, D.NLX.bull_run_str))
-                    % Change guard plot color and width
-                    D.UI.guardPosCol = D.UI.activeCol;
-                    D.UI.guardPosLineWidth = 10;
-                    
-                    % Track count
-                    D.C.bull_cnt = D.C.bull_cnt + 1;
+            end
+            
+            % Reward Ended
+            if any(ismember(evtStr, D.NLX.rew_off_str))
+                
+                % Save reward end time
+                D.T.rew_end = Elapsed_Seconds(now);
+                
+                % Get time stamp
+                D.T.rew_nlx_ts(2) = evtTS(ismember(evtStr, D.NLX.rew_off_str));
+                
+                % Store reward duration
+                dt = [0,0];
+                % matlab time
+                if datenum(D.T.rew_start) > 0 && ...
+                        datenum(D.T.rew_start) < datenum(D.T.rew_end)
+                    dt(1) = (D.T.rew_end - D.T.rew_start) * 1000;
                 end
-                % Stopped
-                if any(ismember(evtStr, D.NLX.bull_stop_str))
-                    % Change guard plot color
-                    D.UI.guardPosCol = D.UI.robNowCol;
-                    D.UI.guardPosLineWidth = 5;
+                % nlx ts time
+                if D.T.rew_nlx_ts(1) < D.T.rew_nlx_ts(2) && ...
+                        D.T.rew_nlx_ts(1) > 0
+                    dt(2) = (D.T.rew_nlx_ts(2) - D.T.rew_nlx_ts(1))/1000;
+                end
+                if dt(2) > 0
+                    % Save reward duration
+                    D.DB.rew_duration(1) = dt(2);
+                    D.DB.rew_duration(2) = min(D.DB.rew_duration(1), D.DB.rew_duration(2));
+                    D.DB.rew_duration(3) = max(D.DB.rew_duration(1), D.DB.rew_duration(3));
+                    D.DB.rew_duration(4) = D.DB.rew_duration(1) + D.DB.rew_duration(4);
+                    D.DB.rew_duration(5) = D.DB.rew_duration(5) + 1;
                 end
                 
+                % Save halt error
+                if ~isempty(D.I.zone)
+                    halt_err = D.UI.rewBnds(D.I.zone,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
+                    % Save reward duration
+                    D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
+                    D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
+                    D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
+                    D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
+                    D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
+                end
+                
+                % Set flag
+                D.B.is_rewarding = false;
+                
+                % Change feeder dish plot color and marker size
+                D.UI.feedPosCol = D.UI.rotCol(D.I.rot,:);
+                D.UI.feedPosMarkSize = 10;
+                if isfield(D.UI, 'feedPltNow')
+                    set(D.UI.feedPltNow, ...
+                        'MarkerFaceColor', D.UI.feedPosCol, ...
+                        'MarkerSize', D.UI.feedPosMarkSize);
+                end
+                
+                % Turn off reward button backround color
+                set(D.UI.btnReward, ...
+                    'BackgroundColor', D.UI.enabledCol);
+                
+            end
+            
+            %% CHECK FOR PID
+            
+            % Running
+            if any(ismember(evtStr, D.NLX.pid_run_str))
+                % Change setpoint plot color and width
+                D.UI.setPosCol = D.UI.activeCol;
+                D.UI.setPosLineWidth = 4;
+            end
+            % Stopped
+            if any(ismember(evtStr, D.NLX.pid_stop_str))
+                % Change setpoint plot color
+                D.UI.setPosCol = D.UI.robNowCol;
+                D.UI.setPosLineWidth = 2;
+            end
+            
+            %% CHECK FOR BULLDOZE
+            
+            % Running
+            if any(ismember(evtStr, D.NLX.bull_run_str))
+                % Change guard plot color and width
+                D.UI.guardPosCol = D.UI.activeCol;
+                D.UI.guardPosLineWidth = 10;
+                
+                % Track count
+                D.C.bull_cnt = D.C.bull_cnt + 1;
+            end
+            % Stopped
+            if any(ismember(evtStr, D.NLX.bull_stop_str))
+                % Change guard plot color
+                D.UI.guardPosCol = D.UI.robNowCol;
+                D.UI.guardPosLineWidth = 5;
             end
             
         end
@@ -3936,7 +3987,7 @@ end
         
         function [] = Rotation_Trig_Check()
             
-            % Check if rotation trigger button has been pressed
+            % BAIL IF ROTATION TRIGGER NOT ACTIVE
             if ~get(D.UI.btnICR, 'UserData')
                 return
             end
@@ -4035,7 +4086,7 @@ end
         
         function [] = Reward_Send_Check()
             
-            % Bail for manual training, already reset or no new data
+            % BAIL IF MANUAL TRAINING OR BOUNDS PASSED
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.B.flag_rew_send_crossed || ...
                     all(isnan(D.P.Rat.rad))
@@ -4146,12 +4197,13 @@ end
         
         function [] = Reward_Check()
             
-            %% CHECK FOR REWARD CONFIRMATION
-            
-            % Bail for manual training
-            if D.PAR.sesCond == 'Manual_Training'
+            % BAIL IF MANUAL TRAINING OR REWARD BOUNDS PASSED
+            if D.PAR.sesCond == 'Manual_Training' || ...
+                    D.B.flag_rew_zone_crossed
                 return
             end
+            
+            %% CHECK FOR REWARD CONFIRMATION
             
             % Check if reward has been reset
             if  D.B.check_rew_confirm && ...
@@ -4235,7 +4287,6 @@ end
                 c2m.('Z').dat1 = 0;
                 D.B.flag_rew_confirmed = true;
                 D.B.check_rew_confirm = false;
-                D.B.plot_rew = true;
                 
                 Console_Write(sprintf('[Reward_Check] Rewarded: Zone=%d Vel=%0.2fcm/sec', ...
                     D.I.zoneHist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
@@ -4328,15 +4379,15 @@ end
         
         function [] = Lap_Check()
             
-            %% CHECK FOR BOUNDS CROSSING
-            
-            % Check if rat in lap quad bound
+            % CHECK BOUNDS AND/OR BAIL
             track_quad = Check_Rad_Bnds(D.P.Rat.rad, D.UI.lapBnds(D.I.lap_hunt_ind, :));
             
-            % If in quad bounds
+            % Bail if not in bounds
             if ~any(track_quad)
                 return
             end
+            
+            %% CHECK FOR BOUNDS CROSSING
             
             % Set specific bound bool to true
             D.B.check_inbound_lap(D.I.lap_hunt_ind) = true;
@@ -4379,9 +4430,12 @@ end
             %% PLOT CUMULATIVE VT DATA
             
             % Delete all tracker data from this lap
-            delete(D.UI.ratPltH(isgraphics(D.UI.ratPltH)))
-            delete(D.UI.ratPltHvel(isgraphics(D.UI.ratPltHvel)))
-            delete(D.UI.robPltHvel(isgraphics(D.UI.robPltHvel)))
+            delete(D.UI.ratPltH(1:D.UI.cnt_ratPltH))
+            delete(D.UI.ratPltHvel(1:D.UI.cnt_ratPltHvel))
+            delete(D.UI.robPltHvel(1:D.UI.cnt_robPltHvel))
+            D.UI.cnt_ratPltH = 0;
+            D.UI.cnt_ratPltHvel = 0;
+            D.UI.cnt_robPltHvel = 0;
             
             % Rat pos
             delete(D.UI.Rat.pltHposAll);
@@ -4518,7 +4572,13 @@ end
         
         % --------------------------PLOT POSITION--------------------------
         
-        function [] = Pos_Plot()
+        function [update_ui] = Pos_Plot()
+            
+            % BAIL IF SETUP NOT FINISHED
+            update_ui = false;
+            if ~D.B.setup_done
+                return;
+            end
             
             %% ROBOT POS
             
@@ -4602,8 +4662,8 @@ end
             if D.B.Rat.plot_pos
                 
                 % Plot all new VT data
-                Hind = find(~isgraphics(D.UI.ratPltH), 1, 'first');
-                D.UI.ratPltH(Hind) = ...
+                D.UI.cnt_ratPltH = D.UI.cnt_ratPltH+1;
+                D.UI.ratPltH(D.UI.cnt_ratPltH) = ...
                     plot(D.P.Rat.x, D.P.Rat.y, '.', ...
                     'MarkerFaceColor', D.UI.ratPosAllCol, ...
                     'MarkerEdgeColor', D.UI.ratPosAllCol, ...
@@ -4621,27 +4681,15 @@ end
                     'MarkerSize', 10, ...
                     'Parent', D.UI.axH(2));
                 
-                % Plot last reward point
-                if any(D.B.plot_rew)
-                    plot(D.P.Rat.x(end), D.P.Rat.y(end), 'o', ...
-                        'MarkerFaceColor', D.UI.rotCol(D.I.rot,:), ...
-                        'MarkerEdgeColor', [0, 0, 0], ...
-                        'MarkerSize', 8, ...
-                        'Parent', D.UI.axH(1));
-                    
-                    % Reset flag
-                    D.B.plot_rew = false;
-                    
-                end
-                
             end
             
             %% VELOCITY
             
             % ROB
-            Hind = find(~isgraphics(D.UI.robPltHvel), 1, 'first');
             if D.B.Rob.plot_vel
-                D.UI.robPltHvel(Hind) = ...
+                % Store handle and plot
+                D.UI.cnt_robPltHvel = D.UI.cnt_robPltHvel+1;
+                D.UI.robPltHvel(D.UI.cnt_robPltHvel) = ...
                     plot(D.P.Rob.vel_pol_arr(:,1), D.P.Rob.vel_pol_arr(:,2), '-', ...
                     'Color', D.UI.robNowCol, ...
                     'LineWidth', 2, ...
@@ -4649,9 +4697,10 @@ end
             end
             
             % RAT
-            Hind = find(~isgraphics(D.UI.ratPltHvel), 1, 'first');
             if D.B.Rat.plot_vel
-                D.UI.ratPltHvel(Hind) = ...
+                % Store handle and plot
+                D.UI.cnt_ratPltHvel = D.UI.cnt_ratPltHvel+1;
+                D.UI.ratPltHvel(D.UI.cnt_ratPltHvel) = ...
                     plot(D.P.Rat.vel_pol_arr(:,1), D.P.Rat.vel_pol_arr(:,2), '-', ...
                     'Color', D.UI.ratNowCol, ...
                     'LineWidth', 2, ...
@@ -4662,49 +4711,62 @@ end
             
             % Plot arrow
             if D.B.plot_hd && D.B.Rat.plot_pos
-                if any(~isnan(D.P.Rat.hd_rad))
-                    
-                    % Delete plot object
-                    if isfield(D.UI, 'vtPltHD');
-                        delete(D.UI.ratPltHD(:));
-                    end
-                    
-                    % Get current heading
-                    hd_deg = rad2deg(D.P.Rat.hd_rad(end));
-                    
-                    % Calculate coordinates for line
-                    % x start/end
-                    xs = D.P.Rat.x(1,end);
-                    xe = cos(deg2rad(hd_deg))*10 + D.P.Rat.x(1,end);
-                    x = [xs, xe, ...
-                        cos(deg2rad(hd_deg-90))*2 + xe, ...
-                        cos(deg2rad(hd_deg))*4 + xe, ...
-                        cos(deg2rad(hd_deg+90))*2 + xe, ...
-                        xe];
-                    % y start/end
-                    ys = D.P.Rat.y(end);
-                    ye = sin(deg2rad(hd_deg))*10 + D.P.Rat.y(end);
-                    y = [ys, ye, ...
-                        sin(deg2rad(hd_deg-90))*2 + ye, ...
-                        sin(deg2rad(hd_deg))*4 + ye, ...
-                        sin(deg2rad(hd_deg+90))*2 + ye, ...
-                        ye];
-                    
-                    % Plot thick backround line
-                    D.UI.ratPltHD(1) = ...
-                        plot(x, y, '-', ...
-                        'Color', [0.5, 0.5, 0.5], ...
-                        'LineWidth', 3, ...
-                        'Parent', D.UI.axH(2));
-                    
-                    % Plot thin foreground line
-                    D.UI.ratPltHD(2) = ...
-                        plot(D.UI.axH(2), x, y, '-', ...
-                        'Color', D.UI.ratPosAllCol, ....
-                        'LineWidth', 1, ...
-                        'Parent', D.UI.axH(2));
+                
+                % Delete plot object
+                if isfield(D.UI, 'vtPltHD');
+                    delete(D.UI.ratPltHD(:));
                 end
+                
+                % Get current heading
+                hd_deg = rad2deg(D.P.Rat.hd_rad(end));
+                
+                % Calculate coordinates for line
+                % x start/end
+                xs = D.P.Rat.x(1,end);
+                xe = cos(deg2rad(hd_deg))*10 + D.P.Rat.x(1,end);
+                x = [xs, xe, ...
+                    cos(deg2rad(hd_deg-90))*2 + xe, ...
+                    cos(deg2rad(hd_deg))*4 + xe, ...
+                    cos(deg2rad(hd_deg+90))*2 + xe, ...
+                    xe];
+                % y start/end
+                ys = D.P.Rat.y(end);
+                ye = sin(deg2rad(hd_deg))*10 + D.P.Rat.y(end);
+                y = [ys, ye, ...
+                    sin(deg2rad(hd_deg-90))*2 + ye, ...
+                    sin(deg2rad(hd_deg))*4 + ye, ...
+                    sin(deg2rad(hd_deg+90))*2 + ye, ...
+                    ye];
+                
+                % Plot thick backround line
+                D.UI.ratPltHD(1) = ...
+                    plot(x, y, '-', ...
+                    'Color', [0.5, 0.5, 0.5], ...
+                    'LineWidth', 3, ...
+                    'Parent', D.UI.axH(2));
+                
+                % Plot thin foreground line
+                D.UI.ratPltHD(2) = ...
+                    plot(D.UI.axH(2), x, y, '-', ...
+                    'Color', D.UI.ratPosAllCol, ....
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.axH(2));
             end
+            
+            % Check if ui updated
+            if ...
+                    D.B.Rob.plot_pos ||...
+                    D.B.Rat.plot_pos ||...
+                    D.B.Rob.plot_vel ||...
+                    D.B.Rat.plot_vel
+                update_ui = true;
+            end
+            
+            % Reset flags
+            D.B.Rob.plot_pos = false;
+            D.B.Rat.plot_pos = false;
+            D.B.Rob.plot_vel = false;
+            D.B.Rat.plot_vel = false;
             
         end
         
@@ -4712,7 +4774,14 @@ end
         
         function [] = Inf_Print()
             
-            %% Print performance info
+            %% BAIL IF SETUP NOT FINISHED OR DT NOT REACEHD
+            if ...
+                    ~D.B.setup_done || ...
+                    Elapsed_Seconds(now) - D.T.info_txt_update < 100
+                return;
+            end
+            
+            %% PRINT PERFORMANCE INFO
             
             % total
             infstr = sprintf([...
@@ -4780,7 +4849,7 @@ end
                 set(D.UI.txtPerfInf(7), 'String', infstr)
             end
             
-            %% Print time info
+            %% PRINT TIME INFO
             
             % Get session time
             nowTim(1) =  Elapsed_Seconds(now) - D.T.ses_str_tim;
@@ -4821,10 +4890,10 @@ end
             set(D.UI.txtTimElspInf, 'UserData', nowTim)
             
             % Loop and reward times
-            if D.T.loop > 0;
-                D.T.loop_min = min(D.T.loop, D.T.loop_min);
+            if D.T.dt_loop > 0;
+                D.T.dt_loop_min = min(D.T.dt_loop, D.T.dt_loop_min);
             end
-            D.T.loop_max = max(D.T.loop, D.T.loop_max);
+            D.T.dt_loop_max = max(D.T.dt_loop, D.T.dt_loop_max);
             infstr = sprintf( ...
                 [...
                 'RD: %4.0f  mn:%4.0f  mx:%4.0f av:%4.0f\n', ...
@@ -4835,7 +4904,7 @@ end
                 D.DB.rew_duration(1), D.DB.rew_duration(2), D.DB.rew_duration(3), D.DB.rew_duration(4)/D.DB.rew_duration(5), ...
                 D.DB.rew_round_trip(1), D.DB.rew_round_trip(2), D.DB.rew_round_trip(3), D.DB.rew_round_trip(4)/D.DB.rew_round_trip(5), ...
                 D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), ...
-                D.T.loop*1000, D.T.loop_min*1000, D.T.loop_max*1000 ...
+                D.T.dt_loop*1000, D.T.dt_loop_min*1000, D.T.dt_loop_max*1000 ...
                 );
             set(D.UI.txtTimDebug, 'String', infstr)
             
@@ -4844,224 +4913,225 @@ end
         % ------------------------------RUN TEST CODE----------------------
         
         function [] = Run_Test()
-            if D.DB.isTestRun
+            
+            % BAIL IF NOT TEST RUN
+            if ~D.DB.isTestRun
+                return
+            end
+            
+            %% PID CALIBRATION
+            if D.DB.doPidCalibrationTest && ...
+                    ~D.B.pidStarted && ...
+                    c2m.('K').dat1 == 1
+                % Start pid test
+                SendM2C('T', sysTest, 0);
+                % Set flag to start pid
+                D.B.pidStarted = true;
+            end
+            
+            %% HALT ERROR TEST
+            if D.DB.doHaultErrorTest
                 
-                %% PID CALIBRATION
-                if D.DB.doPidCalibrationTest && ...
-                        ~D.B.pidStarted && ...
-                        c2m.('K').dat1 == 1
-                    % Start pid test
-                    SendM2C('T', sysTest, 0);
-                    % Set flag to start pid
-                    D.B.pidStarted = true;
-                end
-                
-                %% HALT ERROR TEST
-                if D.DB.doHaultErrorTest
+                % Check if robot should be restarted
+                if D.DB.isHalted && ...
+                        ~D.B.is_haulted && ...
+                        Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur
                     
-                    % Check if robot should be restarted
-                    if D.DB.isHalted && ...
-                            ~D.B.is_haulted && ...
-                            Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur
+                    % Save and print halt error
+                    % Store halt error
+                    halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.sendPos) * ((140*pi)/(2*pi));
+                    D.DB.halt_error(1) = halt_err;
+                    D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
+                    D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
+                    D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
+                    D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
+                    % Print halt error
+                    D.DB.halt_error_str = [D.DB.halt_error_str, ...
+                        sprintf('\r%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
+                        D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), D.DB.nowVel)];
+                    % Log/print
+                    Console_Write(D.DB.halt_error_str);
+                    
+                    % Check if vel should be stepped
+                    if D.DB.haltCnt == D.DB.stepSamp
                         
-                        % Save and print halt error
-                        % Store halt error
-                        halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.sendPos) * ((140*pi)/(2*pi));
-                        D.DB.halt_error(1) = halt_err;
-                        D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
-                        D.DB.halt_error(3) = max(D.DB.halt_error(1), D.DB.halt_error(3));
-                        D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
-                        D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
-                        % Print halt error
-                        D.DB.halt_error_str = [D.DB.halt_error_str, ...
-                            sprintf('\r%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
-                            D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), D.DB.nowVel)];
-                        % Log/print
-                        Console_Write(D.DB.halt_error_str);
+                        % Reset counter
+                        D.DB.haltCnt = 0;
                         
-                        % Check if vel should be stepped
-                        if D.DB.haltCnt == D.DB.stepSamp
+                        % Incriment step
+                        D.DB.nowStep = D.DB.nowStep+1;
+                        
+                        % Incriment vel
+                        if D.DB.nowStep <= length(D.DB.velSteps);
+                            D.DB.nowVel = D.DB.velSteps(D.DB.nowStep);
+                        else
+                            % End test
+                            D.DB.nowVel = 0;
+                            D.DB.doHaultErrorTest = false;
                             
-                            % Reset counter
-                            D.DB.haltCnt = 0;
-                            
-                            % Incriment step
-                            D.DB.nowStep = D.DB.nowStep+1;
-                            
-                            % Incriment vel
-                            if D.DB.nowStep <= length(D.DB.velSteps);
-                                D.DB.nowVel = D.DB.velSteps(D.DB.nowStep);
-                            else
-                                % End test
-                                D.DB.nowVel = 0;
-                                D.DB.doHaultErrorTest = false;
-                                
-                                % Save data to csv file
-                                fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
-                                file_id = fopen(fi_out,'w');
-                                fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
-                                fprintf(file_id,D.DB.halt_error_str(3:end));
-                                fclose(file_id);
-                                % Log/print
-                                Console_Write(sprintf('[Run_Test] Saved Hault Error Test: %s', ...
-                                    fi_out));
-                            end
-                            
+                            % Save data to csv file
+                            fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
+                            file_id = fopen(fi_out,'w');
+                            fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
+                            fprintf(file_id,D.DB.halt_error_str(3:end));
+                            fclose(file_id);
                             % Log/print
-                            Console_Write(sprintf('[Run_Test] Hault Error Test: New Vel=%dcm/sec', ...
-                                D.DB.nowVel));
-                            
+                            Console_Write(sprintf('[Run_Test] Saved Hault Error Test: %s', ...
+                                fi_out));
                         end
                         
-                        % Tell CS to resume run
-                        SendM2C('T', sysTest, D.DB.nowVel);
-                        
-                        % Set flag
-                        D.DB.isHalted = false;
-                        
-                        % Check if robot has stopped
-                    elseif ~D.DB.isHalted && ...
-                            D.P.Rob.vel < 5
-                        
-                        % Tell CS to resume run
-                        SendM2C('T', sysTest, D.DB.nowVel);
+                        % Log/print
+                        Console_Write(sprintf('[Run_Test] Hault Error Test: New Vel=%dcm/sec', ...
+                            D.DB.nowVel));
                         
                     end
                     
-                    % Check if robot has passed 0 deg
-                    if ~D.DB.isHalted && ...
-                            Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur+1 && ...
-                            any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
-                        
-                        % Incriment counter
-                        D.DB.haltCnt = D.DB.haltCnt+1;
-                        
-                        % Tell CS to Halt Robot
-                        SendM2C('T', sysTest, 0);
-                        
-                        % Store robots current pos and time
-                        D.DB.sendPos = D.P.Rob.radLast;
-                        D.DB.t_halt = Elapsed_Seconds(now);
-                        
-                        % Set flag
-                        D.DB.isHalted = true;
-                        
-                        % Log/print
-                        Console_Write('[Run_Test] Hault Error Test: Halting Robot');
-                    end
+                    % Tell CS to resume run
+                    SendM2C('T', sysTest, D.DB.nowVel);
+                    
+                    % Set flag
+                    D.DB.isHalted = false;
+                    
+                    % Check if robot has stopped
+                elseif ~D.DB.isHalted && ...
+                        D.P.Rob.vel < 5
+                    
+                    % Tell CS to resume run
+                    SendM2C('T', sysTest, D.DB.nowVel);
                     
                 end
                 
-                %% SIMULATED RAT TEST
-                if D.DB.doSimRatTest
+                % Check if robot has passed 0 deg
+                if ~D.DB.isHalted && ...
+                        Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur+1 && ...
+                        any(Check_Rad_Bnds(D.P.Rob.rad, [deg2rad(355), deg2rad(360)]));
                     
-                    % Wait till recording
-                    if D.B.rec
+                    % Incriment counter
+                    D.DB.haltCnt = D.DB.haltCnt+1;
+                    
+                    % Tell CS to Halt Robot
+                    SendM2C('T', sysTest, 0);
+                    
+                    % Store robots current pos and time
+                    D.DB.sendPos = D.P.Rob.radLast;
+                    D.DB.t_halt = Elapsed_Seconds(now);
+                    
+                    % Set flag
+                    D.DB.isHalted = true;
+                    
+                    % Log/print
+                    Console_Write('[Run_Test] Hault Error Test: Halting Robot');
+                end
+                
+            end
+            
+            %% SIMULATED RAT TEST
+            if D.DB.doSimRatTest
+                
+                % Wait till recording
+                if D.B.rec
+                    
+                    % Wait for 5 sec after setup
+                    if Elapsed_Seconds(now) - D.T.rec_tim > 5
                         
-                        % Wait for 5 sec after setup
-                        if Elapsed_Seconds(now) - D.T.rec_tim > 5
+                        % Local vars
+                        cm = 0;
+                        vel_now = 0;
+                        
+                        % Start rat in start quad
+                        if D.B.initVals
+                            D.B.simRadLast = mean(D.UI.strQuadBnds);
+                            D.B.simVelLast = 0;
+                            D.B.simTSStart = Elapsed_Seconds(now);
+                            D.B.simTSLast = 0;
+                            D.B.initVals = false;
                             
-                            % Local vars
-                            cm = 0;
-                            vel_now = 0;
-                            
-                            % Start rat in start quad
-                            if D.B.initVals
-                                D.B.simRadLast = mean(D.UI.strQuadBnds);
-                                D.B.simVelLast = 0;
-                                D.B.simTSStart = Elapsed_Seconds(now);
-                                D.B.simTSLast = 0;
-                                D.B.initVals = false;
-                                
-                                % Send test info to robot once
-                                SendM2C('T', sysTest, 0);
-                            end
-                            
-                            % Compute ts(us) from dt(s)
-                            ts_now = (Elapsed_Seconds(now) - D.B.simTSStart)*10^6;
-                            dt_sec = (ts_now - D.B.simTSLast) / 10^6;
-                            D.B.simTSLast = ts_now;
-                            
-                            % Get slider val
-                            sld_vel = round(get(D.B.UI.sld, 'Value'));
-                            set(D.B.UI.txt, 'String', num2str(sld_vel));
-                            
-                            % Update vel if not halted or holding for 2 sec for setup
-                            if ...
-                                    D.B.rat_in && ...
-                                    ~D.B.is_haulted && ...
-                                    Elapsed_Seconds(now) - D.T.run_str > 2
-                                
-                                % Check vel
-                                if D.B.simVelLast == sld_vel
-                                    % Hold velocity
-                                    vel_now = D.B.simVelLast;
-                                elseif D.B.simVelLast < sld_vel
-                                    % Accelerate
-                                    vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
-                                elseif D.B.simVelLast > sld_vel
-                                    % Deccelerate
-                                    vel_now = D.B.simVelLast - (D.DB.ratMaxDec*dt_sec);
-                                end
-                                
-                                % Keep in bounds
-                                if vel_now > D.B.UI.sld.Max
-                                    vel_now = D.B.UI.sld.Max;
-                                elseif vel_now < D.B.UI.sld.Min
-                                    vel_now = D.B.UI.sld.Min;
-                                end
-                            else
-                                % Keep robot haulted
-                                vel_now = 0;
-                            end
-                            
-                            % Compute new pos
-                            if D.B.rat_in && ...
-                                    ~isnan(vel_now) && ~isnan(cm) && ~isnan(dt_sec)
-                                % Get delta pos
-                                cm = vel_now * dt_sec;
-                                rad_diff = cm / ((140 * pi)/(2 * pi));
-                            else
-                                % Use old pos
-                                rad_diff = 0;
-                            end
-                            rad_now = D.B.simRadLast - rad_diff;
-                            
-                            % Convert rad back to cart
-                            rad = wrapTo2Pi(rad_now);
-                            rad = abs(rad - 2*pi);
-                            rad = wrapToPi(rad);
-                            roh = ones(length(rad), 1) - (D.UI.trkWdt/2/D.UI.arnRad);
-                            [x_norm,y_norm] = pol2cart(rad, roh);
-                            x = (x_norm.*D.PAR.R) + D.PAR.XC;
-                            y = (y_norm.*D.PAR.R) + D.PAR.YC;
-                            y = y*(10/11);
-                            xy_pos(:,1) = x;
-                            xy_pos(:,2) = y;
-                            xy_pos = reshape(xy_pos', 1, []);
-                            
-                            % Update globals
-                            m2c_posSim(1) = ts_now;
-                            m2c_posSim(2) = x;
-                            m2c_posSim(3) = y;
-                            
-                            % Update simulated rat data
-                            D.B.simRadLast = rad_now;
-                            D.B.simVelLast = vel_now;
-                            D.P.Rat.vtTS = single(ts_now);
-                            D.P.Rat.vtPos = single(xy_pos);
-                            D.P.Rat.vtNRecs = single(1);
-                            
-                            % Run VT_Proc('Rat');
-                            VT_Proc('Rat');
-                            
+                            % Send test info to robot once
+                            SendM2C('T', sysTest, 0);
                         end
+                        
+                        % Compute ts(us) from dt(s)
+                        ts_now = ceil((Elapsed_Seconds(now) - D.B.simTSStart)*10^6);
+                        dt_sec = (ts_now - D.B.simTSLast) / 10^6;
+                        D.B.simTSLast = ts_now;
+                        
+                        % Get slider val
+                        sld_vel = round(get(D.B.UI.sld, 'Value'));
+                        set(D.B.UI.txt, 'String', num2str(sld_vel));
+                        
+                        % Update vel if not halted or holding for 2 sec for setup
+                        if ...
+                                D.B.rat_in && ...
+                                ~D.B.is_haulted && ...
+                                Elapsed_Seconds(now) - D.T.run_str > 2
+                            
+                            % Check vel
+                            if D.B.simVelLast == sld_vel
+                                % Hold velocity
+                                vel_now = D.B.simVelLast;
+                            elseif D.B.simVelLast < sld_vel
+                                % Accelerate
+                                vel_now = D.B.simVelLast + (D.DB.ratMaxAcc*dt_sec);
+                            elseif D.B.simVelLast > sld_vel
+                                % Deccelerate
+                                vel_now = D.B.simVelLast - (D.DB.ratMaxDec*dt_sec);
+                            end
+                            
+                            % Keep in bounds
+                            if vel_now > D.B.UI.sld.Max
+                                vel_now = D.B.UI.sld.Max;
+                            elseif vel_now < D.B.UI.sld.Min
+                                vel_now = D.B.UI.sld.Min;
+                            end
+                        else
+                            % Keep robot haulted
+                            vel_now = 0;
+                        end
+                        
+                        % Compute new pos
+                        if D.B.rat_in && ...
+                                ~isnan(vel_now) && ~isnan(cm) && ~isnan(dt_sec)
+                            % Get delta pos
+                            cm = vel_now * dt_sec;
+                            rad_diff = cm / ((140 * pi)/(2 * pi));
+                        else
+                            % Use old pos
+                            rad_diff = 0;
+                        end
+                        rad_now = D.B.simRadLast - rad_diff;
+                        
+                        % Convert rad back to cart
+                        rad = wrapTo2Pi(rad_now);
+                        rad = abs(rad - 2*pi);
+                        rad = wrapToPi(rad);
+                        roh = ones(length(rad), 1) - (D.UI.trkWdt/2/D.UI.arnRad);
+                        [x_norm,y_norm] = pol2cart(rad, roh);
+                        x = (x_norm.*D.PAR.R) + D.PAR.XC;
+                        y = (y_norm.*D.PAR.R) + D.PAR.YC;
+                        y = y*(10/11);
+                        xy_pos(:,1) = x;
+                        xy_pos(:,2) = y;
+                        xy_pos = reshape(xy_pos', 1, []);
+                        
+                        % Send Pos data to CS
+                        SendM2C('p', ts_now, x, y);
+                        
+                        % Update simulated rat data
+                        D.B.simRadLast = rad_now;
+                        D.B.simVelLast = vel_now;
+                        D.P.Rat.vtTS = single(ts_now);
+                        D.P.Rat.vtPos = single(xy_pos);
+                        D.P.Rat.vtNRecs = single(1);
+                        
+                        % Run VT_Proc('Rat');
+                        VT_Proc('Rat');
                         
                     end
                     
                 end
                 
             end
+            
         end
         
         
@@ -5153,7 +5223,7 @@ end
                 
                 % Log/print
                 Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRat', D.PAR.ratLab));
-                
+                Update_UI(10);
             end
             
         end
@@ -5217,7 +5287,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopCond', char(D.PAR.catCueCond)));
-            
+            Update_UI(10);
         end
         
         % SESSION TASK
@@ -5233,7 +5303,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopTask', char(D.PAR.sesTask)));
-            
+            Update_UI(10);
         end
         
         % REWARD DELAY
@@ -5251,7 +5321,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRewDel', num2str(D.PAR.rewDel)));
-            
+            Update_UI(10);
         end
         
         % CUE CONDITION
@@ -5309,7 +5379,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'ToggCue', char(D.PAR.cueFeed)));
-            
+            Update_UI(10);
         end
         
         % SOUND CONDITION
@@ -5348,7 +5418,7 @@ end
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\" \"%d\"', 'ToggSnd', ...
                 get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
-            
+            Update_UI(10);
         end
         
         % SETUP DONE
@@ -5409,11 +5479,11 @@ end
             %                     end
             
             % Signal to continue setup
-            D.B.setup = true;
+            D.B.data_loaded = true;
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnSetupDone', get(D.UI.btnSetupDone,'Value')));
-            
+            Update_UI(10);
         end
         
         % ACQ BUTTON
@@ -5446,7 +5516,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnAcq', get(D.UI.btnAcq,'Value')));
-            
+            Update_UI(10);
         end
         
         % REC BUTTON
@@ -5500,8 +5570,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRec', get(D.UI.btnRec,'Value')));
-            
-            
+            Update_UI(10);
         end
         
         % ROTATION BUTTON
@@ -5533,7 +5602,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnICR', get(D.UI.btnICR,'Value')));
-            
+            Update_UI(10);
         end
         
         % RECORDING DONE
@@ -5561,7 +5630,7 @@ end
                 'Enable', 'off', ...
                 'BackgroundColor', D.UI.disabledBckCol);
             
-            % Set bool
+            % Set flag
             D.B.rec_done = true;
             
             % Save end time
@@ -5590,17 +5659,27 @@ end
             % Post NLX event: rat out
             NlxSendCommand(D.NLX.rat_out_evt);
             
+            % Stop halt if still active
+            if (D.B.is_haulted)
+                set(D.UI.btnHaltRob, 'Value', 0);
+                BtnHaltRob();
+            end
+            
+            % Stop bulldoze if still active
+            if (get(D.UI.btnBulldoze, 'Value') == 1)
+                set(D.UI.btnBulldoze, 'Value', 0);
+                Bulldoze();
+            end
+            
             % Tell CS rat is out
             SendM2C('I', 0)
+            D.B.rat_in = false;
             
             % Stop recording
             if D.B.rec
                 set(D.UI.btnRec,'Value', 0)
                 BtnRec(D.UI.btnRec);
             end
-            
-            % Make sure main loop ends
-            D.B.rat_in = false;
             
             % Disable all recording buttons
             set(D.UI.panRec, ...
@@ -5644,21 +5723,9 @@ end
             set(D.UI.panPerfInf, 'HighlightColor', D.UI.disabledBckCol)
             set(D.UI.panTimInf, 'HighlightColor', D.UI.disabledBckCol)
             
-            % Stop halt if still active
-            if (D.B.is_haulted)
-                set(D.UI.btnHaltRob, 'Value', 0);
-                BtnHaltRob();
-            end
-            
-            % Stop bulldoze if still active
-            if (get(D.UI.btnBulldoze, 'Value') == 1)
-                set(D.UI.btnBulldoze, 'Value', 0);
-                Bulldoze();
-            end
-            
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRecDone', get(D.UI.btnRecDone,'Value')));
-            
+            Update_UI(10);
         end
         
         % SAVE SESSION DATA
@@ -5674,14 +5741,14 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnSave', get(D.UI.btnSave,'Value')));
-            
+            Update_UI(10);
         end
         
         % QUIT ALL
         function [] = BtnQuit(~, ~, ~)
             
             % Check for save unless quit before setup done
-            if ~D.UI.save_done && D.B.setup
+            if ~D.UI.save_done && D.B.data_loaded
                 
                 % Construct a questdlg with two options
                 choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
@@ -5696,6 +5763,17 @@ end
                     case 'No'
                         return
                 end
+                
+                % Make sure rat is out
+                if D.B.rat_in
+                    dlgAWL(...
+                        '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
+                        'RAT OUT', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.qstDlfPos, ...
+                        'Warn');
+                end
+                
             end
             
             % Print session aborting
@@ -5709,19 +5787,6 @@ end
                 'Enable', 'off', ...
                 'BackgroundColor', D.UI.disabledBckCol);
             
-            % Stop recording
-            if D.B.rec
-                set(D.UI.btnRec,'Value', 0)
-                BtnRec(D.UI.btnRec);
-            end
-            
-            % Make sure main loop ends
-            if D.B.rat_in
-                D.B.rat_in = false;
-                % Tell CS rat is out
-                SendM2C('I', 0)
-            end
-            
             % Stop halt if still active
             if (D.B.is_haulted)
                 set(D.UI.btnHaltRob, 'Value', 0);
@@ -5732,6 +5797,18 @@ end
             if (get(D.UI.btnBulldoze, 'Value') == 1)
                 set(D.UI.btnBulldoze, 'Value', 0);
                 Bulldoze();
+            end
+            
+            % Tell CS rat is out
+            if D.B.rat_in
+                SendM2C('I', 0)
+                D.B.rat_in = false;
+            end
+            
+            % Stop recording
+            if D.B.rec
+                set(D.UI.btnRec,'Value', 0)
+                BtnRec(D.UI.btnRec);
             end
             
             % Check if battery should be replaced
@@ -5750,6 +5827,9 @@ end
             % Tell C# to begin quit
             SendM2C('X');
             
+            % Make sure main polling loop ends
+            D.B.rec_done = true;
+            
             % Set flag
             D.B.quit = true;
             
@@ -5760,7 +5840,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnQuit', get(D.UI.btnQuit,'Value')));
-            
+            Update_UI(10);
         end
         
         % HALT ROBOT
@@ -5787,7 +5867,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnHaltRob', get(D.UI.btnHaltRob,'Value')));
-            
+            Update_UI(10);
         end
         
         % BULLDOZE RAT
@@ -5823,7 +5903,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\" \"%d\"', 'PopBulldoze', D.PAR.bullDel, D.PAR.bullSpeed));
-            
+            Update_UI(10);
         end
         
         % REWARD
@@ -5840,7 +5920,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnReward', get(D.UI.btnReward,'Value')));
-            
+            Update_UI(10);
         end
         
         % BLOCK CUE
@@ -5886,7 +5966,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnBlockCue', get(D.UI.btnBlockCue,'Value')));
-            
+            Update_UI(10);
         end
         
         % ALL CUE
@@ -5928,7 +6008,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnAllCue', get(D.UI.btnAllCue,'Value')));
-            
+            Update_UI(10);
         end
         
         % CLEAR VT BUTTON
@@ -5938,6 +6018,9 @@ end
             delete(D.UI.ratPltH(isgraphics(D.UI.ratPltH)))
             delete(D.UI.ratPltHvel(isgraphics(D.UI.ratPltHvel)))
             delete(D.UI.robPltHvel(isgraphics(D.UI.robPltHvel)))
+            D.UI.cnt_ratPltH = 0;
+            D.UI.cnt_ratPltHvel = 0;
+            D.UI.cnt_robPltHvel = 0;
             delete(D.UI.Rat.pltHposAll);
             delete(D.UI.Rat.pltHvelAll);
             delete(D.UI.Rob.pltHvelAll);
@@ -5950,7 +6033,7 @@ end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnClrVT', get(D.UI.btnClrVT,'Value')));
-            
+            Update_UI(10);
         end
         
         
@@ -6299,7 +6382,6 @@ end
         % Wait for recieved confirmation
         Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
         while c2m.('C').dat1 ~= 1;
-            drawnow;
             pause(0.01);
         end;
         Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
@@ -6325,15 +6407,10 @@ end
 
 
 
-%% ===================TOP LEVEL SUPPORT FUNCTIONS==========================
+%% =================== TOP LEVEL SUPPORT FUNCTIONS ========================
 
 % --------------------------SEND CS COMMAND--------------------------------
     function[] = SendM2C(id, dat1, dat2, dat3, pack)
-        
-        % Check if unset
-        if isempty(m2c_pack)
-            m2c_pack = 0;
-        end
         
         % Set mesage data
         if nargin == 3
@@ -6351,32 +6428,32 @@ end
         
         % Make sure last message recieved
         t_start = Elapsed_Seconds(now);
-        while m2c_pack ~= 0 && ...
+        while m2c_pack(5) ~= 0 && ...
                 ~isMatSolo && ...
                 Elapsed_Seconds(now) < t_start + 1
-            drawnow;
-            pause(0.01);
+            pause(0.001);
         end;
-        if m2c_pack ~= 0
-            m2c_pack = 0;
-            Console_Write(sprintf('WARNING [SendM2C] Reset m2c_pack: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
+        if m2c_pack(5) ~= 0
+            m2c_pack(5) = 0;
+            Console_Write(sprintf('**WARNING** [SendM2C] CS Failed to Reset m2c Packet: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
                 id, dat1, dat2, dat3, round((Elapsed_Seconds(now) - t_start)*1000)));
         end
         
         % Set mesage ID and dat
-        m2c_id = id;
-        m2c_dat(1) = dat1;
-        m2c_dat(2) = dat2;
-        m2c_dat(3) = dat3;
+        m2c_pack(1) = unicode2native(id,'UTF-8');
+        m2c_pack(2) = dat1;
+        m2c_pack(3) = dat2;
+        m2c_pack(4) = dat3;
         
         % Get new packet number
         if nargin < 5
             m2c.cnt_pack = m2c.cnt_pack+1;
             m2c.(id).packLast = m2c.(id).pack;
             m2c.(id).pack = m2c.cnt_pack;
-            m2c_pack = m2c.cnt_pack;
+            m2c_pack(5) = m2c.cnt_pack;
         else
-            m2c_pack = pack;
+            % Use packet input
+            m2c_pack(5) = pack;
         end
         
         % Save dat to struct
@@ -6386,7 +6463,7 @@ end
         
         % Log/print
         Console_Write(sprintf('   [SENT] m2c: id=%s dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
-            id, dat1 ,dat2, dat3, m2c_pack));
+            id, dat1 ,dat2, dat3, m2c_pack(5)));
         
     end
 
@@ -6420,7 +6497,7 @@ end
                 str = '   [RCVD] c2m: id=%s dat1=%s pack=%d';
             end
             Console_Write(sprintf(str, ...
-                c2m.(id_new).id, c2m.(id_new).dat1, c2m.(id_new).pack));
+                c2m.(id_new).id, c2m.(id_new).dat1, c2m.(id_new).pack), now);
             
             % Update packet info
             c2m.(id_new).packLast = c2m.(id_new).pack;
@@ -6428,7 +6505,8 @@ end
             % Check for exit flag
             if strcmp(id_new, 'E') && c2m.(id_new).dat1 == 1
                 doExit = true;
-                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=%s dat=%d', id_new, c2m.(id_new).dat1));
+                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=%s dat=%d', ...
+                    id_new, c2m.(id_new).dat1), now);
             end
             
             % Check for resend request
@@ -6438,7 +6516,8 @@ end
             
             % Get id to resend
             id_send = c2m.(id_new).dat1;
-            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', id_new, id_send));
+            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', ...
+                id_new, id_send), now);
             
             % Send again if any history of this id
             if m2c.(id_send).pack > 0
@@ -6451,25 +6530,30 @@ end
             end
             
         catch ME
-            Console_Write('!!ERROR!! [CheckC2M] FAILED');
+            Console_Write('!!ERROR!! [CheckC2M] FAILED', now);
             doExit = true;
         end
         
     end
 
 % ---------------------------PRINT TO CONSOLE------------------------------
-    function [] = Console_Write(str)
+    function [] = Console_Write(str, t_now)
         
         % Bail if following conditions not met
         if ~exist('D','var'); return; end;
         if ~isfield(D, 'DB'); return; end;
         if ~isfield(D.DB, 'consoleStr'); return; end;
         
+        % Get time
+        if nargin < 2
+            t_now = now;
+        end
+        
         % Itterate log count
         D.DB.logCount = D.DB.logCount+1;
         
         % Get time
-        t_s = Elapsed_Seconds(now);
+        t_s = Elapsed_Seconds(t_now);
         t_m = round(t_s*1000);
         
         % Add to strings
@@ -6505,7 +6589,7 @@ end
         end
         
         % Update GUI during setup
-        if ~D.B.setup
+        if ~D.B.data_loaded
             drawnow;
         end
         
@@ -6631,7 +6715,7 @@ end
         end
         
         % Log/print
-        Console_Write('WARNING [ForceClose] RUNNING: ForceClose Exit Procedure...');
+        Console_Write('**WARNING** [ForceClose] RUNNING: ForceClose Exit Procedure...');
         
         % Disconnect AC computer
         Disconnect_AC();

@@ -435,6 +435,10 @@ void SendLogData(char msg[], uint32_t t)
 	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 	int buff_rx = Serial1.available();
 
+	// Bail if session not started
+	if (!fc.isSesStarted)
+		return;
+
 	// Itterate log entry count
 	cnt_logSend++;
 
@@ -447,8 +451,6 @@ void SendLogData(char msg[], uint32_t t)
 	// Get message size
 	chksum = strlen(str);
 
-	// Load byte array
-
 	// head
 	msg_out[msg_lng++] = a2c.head;
 	// checksum
@@ -459,7 +461,7 @@ void SendLogData(char msg[], uint32_t t)
 	// foot
 	msg_out[msg_lng++] = a2c.foot;
 	// null
-	msg_out[msg_lng + 1] = '\0';
+	msg_out[msg_lng] = '\0';
 
 	// Send
 	Serial.write(msg_out, msg_lng);
@@ -470,8 +472,8 @@ void SendLogData(char msg[], uint32_t t)
 	if (db.print_log && db.Console)
 	{
 		// Store
-		sprintf(str, "   [LOG] a2c: message=\"%s\" bytes_sent=%d tx=%d rx=%d", 
-			msg_out, bytesSent, buff_tx, buff_rx);
+		sprintf(str, "   [LOG] a2c: message=\"%s\" chksum=%d bytes_sent=%d tx=%d rx=%d", 
+			msg_out, chksum, bytesSent, buff_tx, buff_rx);
 		PrintDebug(str, millis());
 	}
 }
@@ -797,28 +799,28 @@ void ResetTTL()
 		digitalWrite(pin.ttlNorthOn, LOW); // set back to LOW
 		isOnNorth = false;
 		// Print
-		if (db.print_flow) PrintDebug("[ResetTTL] NORTH OFF", millis());
+		if (db.print_flow) DebugFlow("[ResetTTL] NORTH OFF", millis());
 	}
 	// west
 	if (isOnWest && millis() - t_outLastWest > dt_ttlPulse) {
 		digitalWrite(pin.ttlWestOn, LOW); // set back to LOW
 		isOnWest = false;
 		// Print
-		if (db.print_flow) PrintDebug("[ResetTTL] WEST OFF", millis());
+		if (db.print_flow) DebugFlow("[ResetTTL] WEST OFF", millis());
 	}
 	// south
 	if (isOnSouth && millis() - t_outLastSouth > dt_ttlPulse) {
 		digitalWrite(pin.ttlSouthOn, LOW); // set back to LOW
 		isOnSouth = false;
 		// Print
-		if (db.print_flow) PrintDebug("[ResetTTL] SOUTH OFF", millis());
+		if (db.print_flow) DebugFlow("[ResetTTL] SOUTH OFF", millis());
 	}
 	// east
 	if (isOnEast && millis() - t_outLastEast > dt_ttlPulse) {
 		digitalWrite(pin.ttlEastOn, LOW); // set back to LOW
 		isOnEast = false;
 		// Print
-		if (db.print_flow) PrintDebug("[ResetTTL] EAST OFF", millis());
+		if (db.print_flow) DebugFlow("[ResetTTL] EAST OFF", millis());
 	}
 	isOnAny = isOnNorth || isOnWest || isOnSouth || isOnEast;
 }
@@ -839,7 +841,7 @@ void NorthFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDebug("[NorthFun] NORTH ON", t_outLastNorth);
+				DebugFlow("[NorthFun] NORTH ON", t_outLastNorth);
 		}
 		t_inLastNorth = millis();
 	}
@@ -861,7 +863,7 @@ void WestFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDebug("[WestFun] WEST ON", t_outLastWest);
+				DebugFlow("[WestFun] WEST ON", t_outLastWest);
 		}
 		t_inLastWest = millis();
 	}
@@ -883,7 +885,7 @@ void SouthFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDebug("[SouthFun] SOUTH ON", t_outLastSouth);
+				DebugFlow("[SouthFun] SOUTH ON", t_outLastSouth);
 		}
 		t_inLastSouth = millis();
 	}
@@ -905,7 +907,7 @@ void EastFun()
 			isOnAny = true;
 			// Print
 			if (db.print_flow)
-				PrintDebug("[EastFun] EAST ON", t_outLastEast);
+				DebugFlow("[EastFun] EAST ON", t_outLastEast);
 		}
 		t_inLastEast = millis();
 	}
@@ -1142,9 +1144,12 @@ void loop()
 	// Check if ready to quit
 	if (fc.doQuit && 
 		!fc.doPackSend &&
-		millis() > t_sent+1000) {
+		millis() > t_sent+1000 &&
+		millis() > t_rcvd+1000) {
+
 		// Run bleep bleep
 		QuitBleep();
+		
 		// Restart Arduino
 		REQUEST_EXTERNAL_RESET;
 	}
