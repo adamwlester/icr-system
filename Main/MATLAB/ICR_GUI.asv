@@ -410,7 +410,7 @@ fprintf('END OF RUN');
                     continue;
                 end
                 
-                % --------------------CHECK WHAT TO DO---------------------
+                % -----------------------CHECK WHAT TO DO---------------------------
                 
                 if ~D.B.data_loaded
                     do_what = 'WAIT FOR UI SETUP';
@@ -499,7 +499,6 @@ fprintf('END OF RUN');
                         % RUN TEST/DEBUG CODE
                         Run_Test();
                         
-                        % ---------------CHECK WHAT TO DO------------------
                         if ...
                                 c2m.('K').dat1 == 1 && ...
                                 ~D.B.rat_in && ...
