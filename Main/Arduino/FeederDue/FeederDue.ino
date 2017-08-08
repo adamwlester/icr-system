@@ -96,9 +96,9 @@ struct DB
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = false;
+	const bool print_c2r = true;
+	const bool print_r2c = true;
 	const bool print_a2r = false;
-	const bool print_r2c = false;
 	const bool print_r2a = false;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
@@ -112,7 +112,7 @@ struct DB
 	const bool print_runSpeed = false;
 
 	// Testing
-	const bool do_posDebug = false;
+	const bool do_posDebug = true;
 	bool do_pidCalibration = false;
 	bool do_simRatTest = false;
 
@@ -560,8 +560,8 @@ public:
 	double kI = 0;
 	double kD = 0;
 	float setPoint = 0;
-	uint32_t t_ekfStr = 0;
-	int dt_ekfSettle = 250; // (ms)
+	uint32_t t_ekfReady = 0;
+	const int dt_ekfSettle = 250; // (ms)
 	bool is_ekfNew = false;
 	float throttleAcc = 20;
 	float throttleSpeedStop = 40;
@@ -1477,7 +1477,7 @@ void PID::CheckEKF(uint32_t t)
 {
 	if (!fc.isEKFReady)
 	{
-		if ((t - t_ekfStr) > dt_ekfSettle)
+		if ((t - t_ekfReady) > dt_ekfSettle)
 		{
 			fc.isEKFReady = true;
 			// Log/print
@@ -1489,7 +1489,7 @@ void PID::CheckEKF(uint32_t t)
 void PID::ResetEKF(char called_from[])
 {
 	fc.isEKFReady = false;
-	t_ekfStr = millis();
+	t_ekfReady = millis();
 
 	// Log/print
 	char str[100] = { 0 };
@@ -1988,7 +1988,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	isTargSet = true;
 
 	// Log/print
-	sprintf(str, "[MOVETO::CompTarg] FINISHED: Set Target: start_abs=%0.2fcm start_rel=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm", posAbsStart, posRelStart, targPos, targDist);
+	sprintf(str, "[MOVETO::CompTarg] FINISHED: Set Target: start_abs=%0.2fcm start_rel=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'", posAbsStart, posRelStart, targPos, targDist, moveDir);
 	DebugFlow(str);
 
 	// Retern flag
@@ -2040,6 +2040,9 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 			t_updateNext = millis() + dt_update;
 		}
 
+		// TEMP
+		sprintf(str, "targDist=%0.2f distLeft=%0.2f", targDist, distLeft);
+		SerialUSB.println(str);
 	}
 
 	// Target reached
@@ -7022,7 +7025,7 @@ void loop() {
 					) {
 
 					// Print message
-					sprintf(horeStr, "[loop] RUNNING: MoveTo: targ_dist=%0.2fcm dir=\'%c\'...",
+					sprintf(horeStr, "[loop] RUNNING: MoveTo: targ_dist=%0.2fcm move_dir=\'%c\'...",
 						Move.targDist, Move.moveDir);
 					DebugFlow(horeStr);
 					// Set flag
@@ -7069,7 +7072,7 @@ void loop() {
 				QueuePacket('c', 'D', (byte)0, (byte)0, (byte)0, c2r.pack[CharInd('M', c2r.id, c2r.lng)]);
 
 				// Print success message
-				sprintf(horeStr, "[loop] FINISHED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm dir=\'%c\'",
+				sprintf(horeStr, "[loop] FINISHED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
 					Move.targDist, Move.GetError(ekf.RobPos), Move.moveDir);
 				DebugFlow(horeStr);
 			}
@@ -7077,7 +7080,7 @@ void loop() {
 			// Log/print error
 			else if (Move.doAbortMove) {
 				// Print failure message
-				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s targ_dist=%0.2fcm dist_error=%0.2fcm dir=\'%c\'",
+				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
 					Move.isTargSet ? "true" : "false", fc.isEKFReady ? "true" : "false", Move.isMoveStarted ? "true" : "false", Move.targDist, Move.GetError(ekf.RobPos), Move.moveDir);
 				DebugError(horeStr);
 			}
