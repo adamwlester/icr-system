@@ -93,8 +93,6 @@ namespace ICR_Run
         private static long t_sync = 0;
 
         // Create lock objects and thread lists for safe threading
-        private static IList<Thread> threadList = new List<Thread>();
-        static readonly object lock_threadList = new object();
         static readonly object lock_sendMCOM = new object();
         static readonly object lock_getMCOM = new object();
         static readonly object lock_sendPack = new object();
@@ -294,7 +292,7 @@ namespace ICR_Run
         private static int resendMax = 5;
         private static long timeoutLoadGUI = 15000; // (ms)
         private static long timeoutConnectAC = 15000; // (ms)
-        private static long timeoutConnectMatNLX = 15000; // (ms)
+        private static long timeoutConnectMatNLX = 30000; // (ms)
         private static long timeoutMatCloseConfirm = 10000; // (ms)
         private static long timeoutImportLog = 10000; // (ms)
 
@@ -388,12 +386,10 @@ namespace ICR_Run
             // Open serial port connection
             sp_cheetahDue.Open();
             // Start getting new data on seperate thread
-            lock (lock_threadList)
+            new Thread(delegate ()
             {
-                threadList.Add(new Thread(delegate ()
-                { GetArdLog(); }));
-                threadList[threadList.Count - 1].Start();
-            }
+                GetArdLog();
+            }).Start();
             LogEvent("[Setup] FINISHED: Setup CheetahDue Serial Coms and Logging");
 
             // Setup and start Xbee serial
@@ -768,14 +764,13 @@ namespace ICR_Run
 
             // Start importing log on seperate thread
             if (pass)
-            { 
+            {
                 // Start importing
-                lock (lock_threadList)
+                new Thread(delegate ()
                 {
-                    threadList.Add(new Thread(delegate ()
-                    { GetRobotLog(); }));
-                    threadList[threadList.Count - 1].Start();
-                }
+                    GetRobotLog();
+                }).Start();
+
                 // Tell robot to begin streaming log and wait for message to send
                 RepeatSendPack(id: 'L', dat1: 1, do_conf: false);
                 pass = WaitForSerial(id: 'L', timeout: 5000);
@@ -964,16 +959,11 @@ namespace ICR_Run
             c2r.SetCheckFor(id: id, do_check_sent_rcvd: true, do_check_conf: do_conf, do_check_done: do_check_done);
 
             // Run method on seperate thread
-            lock (lock_threadList)
+            new Thread(delegate ()
             {
-                threadList.Add(new Thread(delegate ()
-                {
-                    RepeatSendPack_Thread(send_max: send_max, id: id, dat: dat, pack: pack, do_conf: do_conf, do_check_done: do_check_done);
-                }));
+                RepeatSendPack_Thread(send_max: send_max, id: id, dat: dat, pack: pack, do_conf: do_conf, do_check_done: do_check_done);
+            }).Start();
 
-                // Start thread
-                threadList[threadList.Count - 1].Start();
-            }
         }
         public static void RepeatSendPack_Thread(int send_max, char id, double[] dat, ushort pack, bool do_conf, bool do_check_done)
         {
@@ -1346,10 +1336,10 @@ namespace ICR_Run
                     // Check if waiting on current id
                     if (first_loop)
                     {
-                        wait_str = String.Format("|%s%s%s", do_send_check ? "Sent|":"", !c2r.IsConfirmed(id) ? "Conf|": "", !c2r.IsDone(id) ? "Done|" : "");
+                        wait_str = String.Format("|{0}{1}{2}", do_send_check ? "Sent|" : "", !c2r.IsConfirmed(id) ? "Conf|" : "", !c2r.IsDone(id) ? "Done|" : "");
                         if (!(is_conf && is_done))
                             LogEvent(String.Format("[WaitForSerial] RUNNING: Wait for {0}: id=\'{1}\' do_send_check=%s do_abort=%s timeout=%d...",
-                                wait_str, id, do_send_check ? "true" : "false", do_abort ? "true" : "false", timeout == long.MaxValue? 0: timeout));
+                                wait_str, id, do_send_check ? "true" : "false", do_abort ? "true" : "false", timeout == long.MaxValue ? 0 : timeout));
                         else break;
                         first_loop = false;
                     }
@@ -1420,16 +1410,11 @@ namespace ICR_Run
                 return;
 
             // Run method on seperate thread
-            lock (lock_threadList)
+            new Thread(delegate ()
             {
-                threadList.Add(new Thread(delegate ()
-                {
-                    ParseR2C();
-                }));
+                ParseR2C();
+            }).Start();
 
-                // Start thread
-                threadList[threadList.Count - 1].Start();
-            }
         }
 
         // PARSE RECIEVED XBEE DATA 
@@ -2393,31 +2378,19 @@ namespace ICR_Run
                 m2c.SetCheckFor(id: dat_char, do_check_sent_rcvd: true);
 
             // Run method on seperate thread
-            lock (lock_threadList)
+            new Thread(delegate ()
             {
-                threadList.Add(new Thread(delegate ()
-                {
-                    SendMCOM_Thread(id: id, dat_num: dat_num, dat_char: dat_char, pack: pack);
-                }));
-
-                // Start thread
-                threadList[threadList.Count - 1].Start();
-            }
+                SendMCOM_Thread(id: id, dat_num: dat_num, dat_char: dat_char, pack: pack);
+            }).Start();
 
         }
         public static void SendMCOM(string msg, bool do_print = true)
         {
             // Run method on seperate thread
-            lock (lock_threadList)
+            new Thread(delegate ()
             {
-                threadList.Add(new Thread(delegate ()
-                {
-                    SendMCOM_Thread(msg: msg, do_print: do_print);
-                }));
-
-                // Start thread
-                threadList[threadList.Count - 1].Start();
-            }
+                SendMCOM_Thread(msg: msg, do_print: do_print);
+            }).Start();
         }
         public static void SendMCOM_Thread(string msg = " ", char id = ' ', byte dat_num = 0, char dat_char = ' ', ushort pack = 0, bool do_print = true)
         {
@@ -2538,7 +2511,7 @@ namespace ICR_Run
 
             // Print info
             wait_str = do_send_check ? "|Sent|" : "|Rcvd|";
-            LogEvent(String.Format("[WaitForMCOM] RUNNING: Wait for {0}: id=\'{1}\' do_send_check=%s do_send_request=%s do_abort=%s timeout=%d...", 
+            LogEvent(String.Format("[WaitForMCOM] RUNNING: Wait for {0}: id=\'{1}\' do_send_check=%s do_send_request=%s do_abort=%s timeout=%d...",
                 wait_str, id, do_send_check ? "true" : "false", do_send_request ? "true" : "false", do_abort ? "true" : "false", timeout == long.MaxValue ? 0 : timeout));
 
             // Send resend request
@@ -2674,8 +2647,8 @@ namespace ICR_Run
             }
             else if (db.do_printBlockedVt)
             {
-                LogEvent(String.Format("**WARNING** [NetComCallbackVT] VT Blocked: ent={0} cnt={1} dt_send={2}|{3}",
-                    ent, vtBlocker.cnt_block[ent], vtBlocker.GetSendDT(ent), vtBlocker.GetSendDT(ent, "avg")));
+                LogEvent(String.Format("**WARNING** [NetComCallbackVT] VT Blocked: ent={0} cnt={1} dt_send={2}|{3}|{4}",
+                    ent, vtBlocker.cnt_block[ent], vtBlocker.GetSendDT(ent), vtBlocker.GetSendDT(ent, "avg"), sw_main.ElapsedMilliseconds - vtBlocker.t_sent[ent]));
             }
         }
 
@@ -3349,7 +3322,7 @@ namespace ICR_Run
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
         private static long _blockFor = 60; // (ms) // TEMP
-        // Public vars
+                                            // Public vars
         public long[] t_sent = new long[2] { 0, 0 };
         public long[] t_sent_last = new long[2] { 0, 0 };
         public int[,] dt_hist = new int[2, 10];
