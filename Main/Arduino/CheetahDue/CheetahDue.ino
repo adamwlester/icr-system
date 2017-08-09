@@ -190,11 +190,12 @@ uint32_t word_rewOn;
 uint32_t word_rewOff;
 
 // IR time sync LED
-const uint32_t dt_syncPulse = 10; // (ms)
-uint32_t del_syncPulse = 60000; // (ms)
+const uint32_t dt_irSyncPulse = 10; // (ms)
+uint32_t del_irSyncPulse = 60000; // (ms)
 uint32_t t_sync = 0;
 bool is_irOn = false;
-uint32_t t_syncLast;
+int cnt_ir = 0;
+uint32_t t_irSyncLast;
 uint32_t word_irOn;
 
 //----------CLASS: union----------
@@ -232,7 +233,7 @@ bool AwaitStart()
 		while (!fc.isSesStarted)
 		{
 			// Check if IR should be pulsed 
-			PulseIR(1000, dt_syncPulse);
+			PulseIR(1000, dt_irSyncPulse);
 
 			// Get new data
 			if (Serial.available() > 0)
@@ -249,7 +250,7 @@ bool AwaitStart()
 					if (!is_irOn) {
 						PulseIR(); // turn on
 					}
-					delay(10 - (millis() - t_syncLast));
+					delay(10 - (millis() - t_irSyncLast));
 					PulseIR();  // turn off
 					delay(75);
 					PulseIR(); // turn on
@@ -757,19 +758,19 @@ bool PulseIR(int del_sync, int dt_sync)
 	// Set high
 	if (
 		!is_irOn &&
-		millis() > t_syncLast + del_sync
+		millis() > t_irSyncLast + del_sync
 		)
 	{
 		// Set ir pins on
 		SetPort(word_irOn, 0x0);
-		t_syncLast = millis();
+		t_irSyncLast = millis();
 		is_irOn = true;
 		is_changed = true;
 	}
 	// Set low
 	else if (
 		is_irOn &&
-		millis() > t_syncLast + dt_sync
+		millis() > t_irSyncLast + dt_sync
 		)
 	{
 		SetPort(0x0, word_irOn);
@@ -1151,14 +1152,14 @@ void loop()
 			{
 				digitalWrite(pin.ttlPidStop, HIGH);
 				digitalWrite(pin.ttlPidRun, LOW);
-				DebugFlow("[loop] PID STOPPED");
+				DebugFlow("[loop] PId Stopped");
 			}
 			// Signal PID running
 			else if (r2a.dat[0] == 1)
 			{
 				digitalWrite(pin.ttlPidRun, HIGH);
 				digitalWrite(pin.ttlPidStop, LOW);
-				DebugFlow("[loop] PID RUNNING");
+				DebugFlow("[loop] Pid Started");
 			}
 		}
 
@@ -1169,21 +1170,21 @@ void loop()
 			{
 				digitalWrite(pin.ttlBullStop, HIGH);
 				digitalWrite(pin.ttlBullRun, LOW);
-				DebugFlow("[loop] BULL STOPPED");
+				DebugFlow("[loop] Bull Stopped");
 			}
 			// Signal Bull running
 			else if (r2a.dat[0] == 1)
 			{
 				digitalWrite(pin.ttlBullRun, HIGH);
 				digitalWrite(pin.ttlBullStop, LOW);
-				DebugFlow("[loop] BULL RUNNING");
+				DebugFlow("[loop] Bull Started");
 			}
 		}
 
 		// Quite and reset
 		else if (r2a.idNow == 'q') {
 			fc.doQuit = true;
-			DebugFlow("[loop] QUITING");
+			DebugFlow("[loop] QUITING...");
 		}
 
 	}
@@ -1204,13 +1205,18 @@ void loop()
 	}
 
 	// Check if IR should be pulsed 
-	if (PulseIR(del_syncPulse, dt_syncPulse)) {
+	if (PulseIR(del_irSyncPulse, dt_irSyncPulse)) {
+		
+		// Itterate count
 		if (is_irOn) {
-			DebugFlow("[loop] IR SYNC ON");
+			cnt_ir++;
 		}
-		else {
-			DebugFlow("[loop] IR SYNC OFF");
-		}
+
+		// Log ir event
+		char str[200];
+		sprintf(str, "[loop] IR Sync %s: cnt=%d dt=%dms", 
+			is_irOn ? "Start":"End", cnt_ir, millis() - t_irSyncLast);
+		DebugFlow(str);
 	}
 
 	// Check if ready to quit

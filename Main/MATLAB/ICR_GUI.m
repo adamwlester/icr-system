@@ -4788,7 +4788,7 @@ fprintf('END OF RUN');
             %% BAIL IF SETUP NOT FINISHED OR DT NOT REACEHD
             if ...
                     ~D.B.setup_done || ...
-                    Elapsed_Seconds(now) - D.T.info_txt_update < 100
+                    Elapsed_Seconds(now) - D.T.info_txt_update < 0.1
                 return;
             end
             
@@ -6389,7 +6389,10 @@ fprintf('END OF RUN');
         
         % Wait for recieved confirmation
         Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
-        while c2m.('C').dat1 ~= 1;
+        while exist('c2m', 'var') ~= 0
+            if c2m.('C').dat1 == 1;
+                break;
+            end
             pause(0.01);
         end;
         Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');

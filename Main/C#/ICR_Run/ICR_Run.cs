@@ -77,7 +77,7 @@ namespace ICR_Run
             system_test: 0,
             do_debug_mat: true,
             break_line: 0, // 10000
-            do_print_blocked_vt: true,
+            do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
             do_print_sent_rob_vt: false,
             do_print_rob_log: false,
@@ -203,7 +203,7 @@ namespace ICR_Run
             _lock_check_conf: lock_checkConf,
             _lock_check_done: lock_checkDone,
             _id:
-            new char[15] {
+            new char[16] {
             'h', // setup handshake
             'T', // system test command
             'S', // start session
@@ -218,6 +218,7 @@ namespace ICR_Run
             'J', // battery voltage
             'Z', // reward zone
             'U', // log size
+            'D', // execution done
             'P', // position data
              },
             _head: (byte)'<',
@@ -245,8 +246,8 @@ namespace ICR_Run
             'J', // battery voltage
             'Z', // reward zone
             'U', // log size
-            'P', // position data
             'D', // execution done
+            'P', // position data
              },
             _head: (byte)'<',
             _foot: (byte)'>'
@@ -394,10 +395,6 @@ namespace ICR_Run
             sp_Xbee.ReadTimeout = 100;
             sp_Xbee.BaudRate = 57600;
             sp_Xbee.PortName = "COM92";
-            // Create event handeler for incoming data
-            //sp_Xbee.DataReceived += DataReceived_Xbee;
-            // Set byte threshold to max packet size
-            sp_Xbee.ReceivedBytesThreshold = 7;
             // Open serial port connection
             sp_Xbee.Open();
             // Spin up parser thread
@@ -1404,21 +1401,6 @@ namespace ICR_Run
             return true;
         }
 
-        //// EVENT HANDELER FOR RECIEVED XBEE DATA 
-        //public static void DataReceived_Xbee(object sender, SerialDataReceivedEventArgs e)
-        //{
-        //    // Bail if processing robot log
-        //    if (robLogger.isLogging)
-        //        return;
-
-        //    // Run method on seperate thread
-        //    new Thread(delegate ()
-        //    {
-        //        ParseR2C();
-        //    }).Start();
-
-        //}
-
         // PARSE RECIEVED XBEE DATA 
         public static void ParserR2C()
         {
@@ -1616,7 +1598,7 @@ namespace ICR_Run
                     // Check if data intended for CheetahDue
                     if (for_ard)
                     {
-                        // Dump till header found
+                        // Dump till CheetahDue footer found
                         while (
                             !foot_found && sp_Xbee.BytesToRead > 0 &&
                             fc.ContinueRobCom()
@@ -1636,7 +1618,7 @@ namespace ICR_Run
 
                         // Log/print ard message
                         LogEvent(String.Format("[ParseR2C] Received CheetaDue Packet: bytes_read={0} rx={1} tx={2} parse_dt={3}",
-                        id, dat, pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str));
+                            bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str));
                     }
                     else
                     {
@@ -1861,7 +1843,7 @@ namespace ICR_Run
             long t_timeout = t_stream_str + timeoutImportLog;
             long t_read_last = t_stream_str;
             ushort conf_pack = 0;
-            int msg_lng = 0;
+            int bytes_rcvd = 0;
             char[] c_arr = new char[3] { '\0', '\0', '\0' };
 
             // Prevent xBee event handeler from running
@@ -1875,8 +1857,9 @@ namespace ICR_Run
             char[] in_arr = new char[1000000];
             long dt_run = 0;
             long dt_read = 0;
+            bool is_timedout = false;
             while (
-                    !robLogger.isImportTimedout &&
+                    !is_timedout &&
                     fc.isRobComActive &&
                     conf_pack != r2c.pack[r2c.ID_Ind('D')])
             {
@@ -1887,7 +1870,7 @@ namespace ICR_Run
                     {
                         dt_run = sw_main.ElapsedMilliseconds - t_stream_str;
                         dt_read = t_read_last == 0 ? 0 : sw_main.ElapsedMilliseconds - t_read_last;
-                        robLogger.isImportTimedout = true;
+                        is_timedout = true;
                     }
                 }
 
@@ -1912,6 +1895,9 @@ namespace ICR_Run
                     in_arr[read_ind] = c_arr[2];
                     t_read_last = sw_main.ElapsedMilliseconds;
 
+                    // Itterate count
+                    read_ind++;
+
                     // Check for end
                     if (
                         c_arr[0] == '>' &&
@@ -1922,35 +1908,48 @@ namespace ICR_Run
                         break;
                     }
 
-                    // Itterate
-                    read_ind++;
                 }
             }
 
             // Reset logging flag
             robLogger.isLogging = false;
 
-            // Check if logging timed out
-            if (robLogger.isImportTimedout)
-            {
-                fc.errStr = LogEvent(String.Format("!!ERROR!! [GetRobotLog] FAILED: Robot Log Import: Read Timedout: dt_read={0}ms dt_run={1}", dt_read, dt_run));
-                fc.isRunError = true;
+            // Store bytes read
+            bytes_rcvd = read_ind;
 
-                // Bail
-                return;
+            // Store data string
+            string dat_str = String.Format("bytes_read={0} rx={1} tx={2} dt_stream={3}",
+                    bytes_rcvd, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, robLogger.logDT);
+
+            // Check if logging timed out
+            if (is_timedout)
+            {
+                // Bail if no bytes read
+                if (bytes_rcvd == 0)
+                {
+                    fc.errStr = LogEvent(String.Format("!!ERROR!! [GetRobotLog] FAILED: Robot Log Import: Read Timedout: dt_read_last={0}ms dt_run={1} {2}",
+                        dt_read, dt_run, dat_str));
+                    fc.isRunError = true;
+                    robLogger.isImportTimedout = true;
+
+                    // Bail
+                    return;
+                }
+                else
+                {
+                    LogEvent(String.Format("**WARNING** [GetRobotLog] ABORTED: Robot Log Import: Read Timedout: dt_read_last={0}ms dt_run={1} {2}",
+                        dt_read, dt_run, dat_str));
+                }
             }
             else
             {
                 // Print final status
-                LogEvent(String.Format("[GetRobotLog] Log Import {0}", robLogger.prcnt_str[robLogger.prcnt_str.Length - 1]));
+                LogEvent(String.Format("[GetRobotLog] Log Import {0}", 
+                    robLogger.prcnt_str[robLogger.prcnt_str.Length - 1]));
 
                 // Finished log import
-                LogEvent(String.Format("[GetRobotLog] FINISHED: Robot Log Import: bytes_read={0} rx={1} tx={2} dt_stream={3}",
-                    read_ind + 1, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, robLogger.logDT));
+                LogEvent(String.Format("[GetRobotLog] FINISHED: Robot Log Import: {0}", dat_str));
             }
-
-            // Store message length
-            msg_lng = read_ind + 1;
 
             // Start log store
             LogEvent("[GetRobotLog] RUNNING: Robot Log Store...");
@@ -1964,7 +1963,7 @@ namespace ICR_Run
             int int_cnt = 0;
             int rec_now = 0;
             int rec_last = 0;
-            for (int i = 0; i < msg_lng; i++)
+            for (int i = 0; i < bytes_rcvd; i++)
             {
 
                 // Get next char
@@ -2720,7 +2719,6 @@ namespace ICR_Run
             {
                 return true;
             }
-
         }
 
         // CALCULATE MOVE TO POS IN RAT
@@ -3312,8 +3310,8 @@ namespace ICR_Run
         private static readonly object _lockBlock = new object();
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
-        private static long _blockFor = 60; // (ms) // TEMP
-                                            // Public vars
+        private static long _blockFor = 60; // (ms) 
+        // Public vars
         public long[] t_sent = new long[2] { 0, 0 };
         public long[] t_sent_last = new long[2] { 0, 0 };
         public int[,] dt_hist = new int[2, 10];
