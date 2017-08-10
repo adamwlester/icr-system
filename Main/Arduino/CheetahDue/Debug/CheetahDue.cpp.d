@@ -136,4 +136,5 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\CheetahDue\arduino_due_x\Cheetah
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/USB/USBAPI.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Stream.h \
+ C:\Users\lester\MeDocuments\AppData\Arduino\libraries\Arduino-MemoryFree/MemoryFree.h \
  C:\Program\ Files\ (x86)\Microsoft\ Visual\ Studio\ 14.0\Common7\IDE\Extensions\nuze3zh3.ug2\Micro\ Platforms\default\debuggers/VM_DBG/VM_DBG.h

@@ -135,4 +135,5 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\CheetahDue\arduino_due_x\Cheetah
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/USB/USBCore.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/USB/USBAPI.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/RingBuffer.h \
- C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Stream.h
+ C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Stream.h \
+ C:\Users\lester\MeDocuments\AppData\Arduino\libraries\Arduino-MemoryFree/MemoryFree.h

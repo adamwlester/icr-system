@@ -3458,13 +3458,13 @@ fprintf('END OF RUN');
                 return
             end
             
-            %% SET LAST SAVED ENTRIES TO WHAT WE WANT
-                        
             % Load rat 0000
             
             % Change data table entries which will be loaded later
             ratInd = ...
                 find(ismember(D.SS_In_All.Properties.RowNames, D.DB.ratLab));
+            
+            % SET LAST SAVED ENTRIES TO WHAT WE WANT
             
             % Set condition
             D.SS_In_All.Session_Condition(ratInd) = D.DB.Session_Condition;
@@ -3504,9 +3504,7 @@ fprintf('END OF RUN');
             set(D.UI.popRat, 'Value', val);
             PopRat();
             
-            %% SETUP SPECIFIC TEST
-            
-            % PID CALIBRATION
+            % PID CALIBRATIONcross_cnt
             if D.DB.doPidCalibrationTest
                 % Set flag to start pid
                 D.F.pidStarted = false;
@@ -3555,7 +3553,7 @@ fprintf('END OF RUN');
                     'Position', pos);
             end
             
-            % TRIGGER SETUP DONE
+            % Run BtnSetupDone
             set(D.UI.btnSetupDone, 'Value', 1);
             BtnSetupDone();
             
