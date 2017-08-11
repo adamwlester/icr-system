@@ -94,7 +94,7 @@ struct DB
 	const bool log_rob_ekf = true;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -824,7 +824,7 @@ public:
 	char SendCommand(char msg[], bool do_conf = true, uint32_t timeout = 5000);
 	char GetReply(uint32_t timeout);
 	bool SetToLogMode(char log_file[]);
-	void QueueLog(char msg[], uint32_t t = millis());
+	char* QueueLog(char msg[], uint32_t t = millis());
 	bool StoreLog();
 	void StreamLogs();
 	void TestLoad(int n_entry, char log_file[] = '\0');
@@ -3060,7 +3060,7 @@ bool LOGGER::SetToLogMode(char log_file[])
 	return pass;
 }
 
-void LOGGER::QueueLog(char msg[], uint32_t t)
+char* LOGGER::QueueLog(char msg[], uint32_t t)
 {
 	/*
 	STORE LOG DATA FOR CS
@@ -3092,6 +3092,9 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 
 	// Store log
 	sprintf(logQueue[queueInd], "[%d],%lu,%d,%s\r\n", cnt_logStored, t_m, cnt_loop_short, msg);
+
+	// Return string
+	return logQueue[queueInd];
 }
 
 bool LOGGER::StoreLog()
@@ -3105,7 +3108,7 @@ bool LOGGER::StoreLog()
 
 	// Bail if not in write mode or no logs to store
 	if (mode != '<' ||
-		queueInd < 0) {
+		queueInd == -1) {
 		return false;
 	}
 
@@ -3123,10 +3126,10 @@ bool LOGGER::StoreLog()
 		return false;
 	}
 
-	// Add min delay
-	int del = 100 - (micros() - t_write);
-	if (del > 0) {
-		delayMicroseconds(del);
+	// Bail if less than 50ms sinse last write
+	if (micros() < t_write + 50000) {
+		// Indicate still logs to store
+		return true;
 	}
 
 	// Send it
@@ -3147,6 +3150,11 @@ bool LOGGER::StoreLog()
 	// Set entry to null
 	logQueue[queue_ind][0] = '\0';
 
+	// Reset queueInd if last entry sent
+	if (queue_ind == queueSize - 1) {
+		queueInd = -1;
+	}
+
 	// Return success
 	return true;
 }
@@ -3156,12 +3164,12 @@ void LOGGER::StreamLogs()
 	// Local vars
 	const int timeout = 1200000;
 	const int read_max = 5000;
-	static int cnt_err_read = 0;
-	static int cnt_err_set_mode = 0;
+	static int cnt_err_set_cmd_mode = 0;
+	static int cnt_err_read_cmd = 0;
+	static int cnt_err_read_timeout = 0;
 	uint32_t t_start = millis(); // (ms)
 	uint32_t t_last_read = micros(); // (us)
 	uint32_t t_last_write = micros(); // (us)
-	int read_start = 0;
 	int read_ind = 0;
 	char str[200] = { 0 };
 	bool head_passed = false;
@@ -3184,9 +3192,9 @@ void LOGGER::StreamLogs()
 
 	// Make sure in command mode
 	if (!SetToCmdMode()) {
-		cnt_err_set_mode++;
+		cnt_err_set_cmd_mode++;
 		// Leave function
-		if (cnt_err_set_mode < 3) {
+		if (cnt_err_set_cmd_mode < 3) {
 			return;
 		}
 		// Abort after 3 failures
@@ -3214,7 +3222,7 @@ void LOGGER::StreamLogs()
 		// Send/resend command to read
 		if (!send_done &&
 			!do_abort) {
-			sprintf(str, "read %s %d %d\r", logFile, read_start, read_max);
+			sprintf(str, "read %s %d %d\r", logFile, cnt_logBytesSent, read_max);
 			SendCommand(str, false, 5000);
 		}
 		// Finished
@@ -3243,11 +3251,21 @@ void LOGGER::StreamLogs()
 					continue;
 				}
 
-				// Abort if too much time ellapsed sinse last read
+				// Handle read timeout
 				else {
-					do_abort = true;
-					sprintf(err_str, "Serial3 Read Timedout After %dus", 
-						micros() - t_last_read);
+
+					// Try re-requesting data at least once
+					cnt_err_read_timeout++;
+					if (cnt_err_read_timeout > 1) {
+						do_abort = true;
+						sprintf(err_str, "Serial3 Read Timedout After %d Attamps and %dus",
+							cnt_err_read_timeout, micros() - t_last_read);
+					}
+					else {
+						sprintf(str, "**WARNING** [LOGGER::GetReply] Serial3 Read Timedout After %d Attamps and %dus",
+							cnt_err_read_timeout, micros() - t_last_read);
+						DebugError(str);
+					}
 					break;
 				}
 			}
@@ -3289,14 +3307,14 @@ void LOGGER::StreamLogs()
 				if ((c_arr[0] == '\r' && c_arr[1] == '\n') ||
 					read_ind < 3) {
 
-					// Retry only once
-					cnt_err_read++;
-					if (cnt_err_read > 1) {
+					// Retry "read" command only once
+					cnt_err_read_cmd++;
+					if (cnt_err_read_cmd > 1) {
 						do_abort = true;
-						sprintf(err_str, "Log \"read\" Failed");
+						sprintf(err_str, "Log \"read\" Failed %d Times", cnt_err_read_cmd);
 					}
 					else {
-						sprintf(str, "!!ERROR!! [LOGGER::GetReply] Log \"read\" Failure %d", cnt_err_read);
+						sprintf(str, "**WARNING** [LOGGER::GetReply] Log \"read\" Failed %d", cnt_err_read_cmd);
 						DebugError(str);
 					}
 
@@ -3311,9 +3329,6 @@ void LOGGER::StreamLogs()
 				c_arr[1] == '\n' &&
 				read_ind > read_max - 200
 				) {
-
-				// Set next read start
-				read_start = cnt_logBytesSent;
 
 				// Dump remaining
 				while (Serial3.read() != '>');
@@ -3364,6 +3379,45 @@ void LOGGER::StreamLogs()
 		}
 	}
 
+	// Get total data left in buffers
+	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	int buff_rx = Serial1.available();
+
+	// Create data string
+	float dt_s = (float)(millis() - t_start) / 1000.0f;
+	char dat_str[200];
+	sprintf(dat_str, " dt_run=%0.2fs bytes_stored=%d bytes_sent=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d tx=%d rx=%d",
+		dt_s, cnt_logBytesStored, cnt_logBytesSent, cnt_err_set_cmd_mode, cnt_err_read_cmd, cnt_err_read_timeout, buff_tx, buff_rx);
+
+	// Print final status then send as log
+	if (!do_abort) {
+		sprintf(str, "[LOGGER::StreamLogs] FINISHED: Send Logs: %s", dat_str);
+		DebugFlow(str);
+	}
+	else {
+		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: error=\"%s\" %s", err_str, dat_str);
+		DebugError(str);
+	}
+
+	// Send status as log
+	char* p_sts_str = QueueLog(str, millis());
+	Serial1.write(p_sts_str, strlen(p_sts_str));
+
+	// Print remaining run stats
+	/*
+	{dt_read_mu}{dt_read[2]}{dt_read[3]}{dt_write_mu}{dt_write[2]}{dt_write[3]}
+	*/
+	dt_read_mu = (float)dt_read[0] / (float)dt_read[1];
+	dt_write_mu = (float)dt_write[0] / (float)dt_write[1];
+	sprintf(str, "[LOGGER::StreamLogs] Run Stats: dt_run=%dms dt_read=|mu=%0.2fus|last=%dus|min=%dus|max=%dus dt_write=|mu=%0.2fus|last=%dus|min=%dus|max=%dus",
+		millis() - t_start, dt_read_mu, dt_read_now, dt_read[2], dt_read[3],
+		dt_write_mu, dt_write_now, dt_write_now, dt_write[2], dt_write[3]);
+	DebugFlow(str);
+
+	// Send stats as log
+	char* p_stt_str = QueueLog(str, millis());
+	Serial1.write(p_stt_str, strlen(p_stt_str));
+
 	// End reached send ">>>"
 	if (!do_abort) {
 		byte msg_end[3] = { '>','>','>' };
@@ -3377,41 +3431,10 @@ void LOGGER::StreamLogs()
 		delay(100);
 	}
 
-	// Get total data left in buffers
-	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	int buff_rx = Serial1.available();
-
-	// Create data string
-	float dt_s = (float)(millis() - t_start) / 1000.0f;
-	char dat_str[200];
-	sprintf(dat_str, " dt_run=%0.2fs bytes_stored=%d bytes_sent=%d tx=%d rx=%d",
-		dt_s, cnt_logBytesStored, cnt_logBytesSent, buff_tx, buff_rx);
-
-	// Print final status
-	if (!do_abort) {
-		sprintf(str, "[LOGGER::StreamLogs] FINISHED: Send Logs: %s", dat_str);
-		DebugFlow(str);
-	}
-	else {
-		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: error=\"%s\" %s", err_str, dat_str);
-		DebugError(str);
-	}
-
-	// Print remaining run stats
-	/*
-	{dt_read_mu}{dt_read[2]}{dt_read[3]}{dt_write_mu}{dt_write[2]}{dt_write[3]}
-	*/
-	dt_read_mu = (float)dt_read[0] / (float)dt_read[1];
-	dt_write_mu = (float)dt_write[0] / (float)dt_write[1];
-	sprintf(str, "[LOGGER::StreamLogs] Run Stats: dt_run=%dms dt_read=|mu=%0.2fus|last=%dus|min=%dus|max=%dus dt_write=|mu=%0.2fus|last=%dus|min=%dus|max=%dus",
-		millis() - t_start, dt_read_mu, dt_read_now, dt_read[2], dt_read[3], 
-		dt_write_mu, dt_write_now, dt_write_now, dt_write[2], dt_write[3]);
-	DebugFlow(str);
-
 	// Reset vars
 	cnt_logBytesSent = 0;
-	cnt_err_read = 0;
-	cnt_err_set_mode = 0;
+	cnt_err_read_cmd = 0;
+	cnt_err_set_cmd_mode = 0;
 
 	// Reset flag
 	fc.doLogSend = false;
@@ -3426,7 +3449,8 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 	// Load existing log file
 	if (log_file != '\0') {
 		sprintf(str, "[LOGGER::TestLoad] RUNNING: Load Log: file_name=%s...", log_file);
-		PrintLOGGER(str, true);
+		DebugFlow(str, millis());
+		while (PrintDebug());
 
 		if (SetToCmdMode()) {
 
@@ -3442,19 +3466,27 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 					pass = false;
 		}
 		if (pass) {
-			sprintf(str, "[LOGGER::TestLoad] FINISHED: Load Log: file_name=%s size=%dB", logFile, cnt_logBytesStored);
-			PrintLOGGER(str, true);
+			sprintf(str, "[LOGGER::TestLoad] FINISHED: Load Log: file_name=%s size=%dB",
+				logFile, cnt_logBytesStored);
+			DebugFlow(str, millis());
+			while (PrintDebug());
 		}
 		else {
 			DebugError("!!ERROR!! [LOGGER::TestLoad] ABORTED: Load Log File");
+			while (PrintDebug());
 		}
 	}
 
 	// Write n_entry entries to log
 	else if (n_entry != 0) {
 		sprintf(str, "[LOGGER::TestLoad] RUNNING: Write %d Logs...", n_entry);
-		PrintLOGGER(str, true);
+		DebugFlow(str, millis());
+		while (PrintDebug());
+		while (StoreLog());
+
+		// Add n new logs
 		randomSeed(analogRead(A0));
+		int milestone_incriment = n_entry / 10;
 		for (int i = 0; i < n_entry - 1; i++)
 		{
 			// Make random sized strings
@@ -3470,13 +3502,23 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 			//QueueLog(msg, millis());
 			//msg[0] = '\0';
 
+			// Print status
+			if (i%milestone_incriment == 0) {
+				sprintf(str, "[LOGGER::TestLoad] Log Write %d%% Complete", i / milestone_incriment * 10);
+				DebugFlow(str, millis());
+				while (PrintDebug());
+				while (StoreLog());
+			}
+
 			// Store a 120 charicter string
 			char msg[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLL";
 			QueueLog(msg, millis());
-			StoreLog();
+			while (StoreLog());
 		}
 		sprintf(str, "[LOGGER::TestLoad] FINISHED: Write %d Logs", n_entry);
-		PrintLOGGER(str, true);
+		DebugFlow(str, millis());
+		while (PrintDebug());
+		while (StoreLog());
 	}
 }
 
@@ -5992,14 +6034,14 @@ void QueueDebug(char msg[], uint32_t t)
 	sprintf(str_tim, "[%0.3f][%d]", t_s, cnt_loop_short);
 
 	// Add space after time
-	char spc[50] = { 0 };
+	char pad[50] = { 0 };
 	char arg[50] = { 0 };
 	sprintf(arg, "%%%ds", 20 - strlen(str_tim));
-	sprintf(spc, arg, '_');
+	sprintf(pad, arg, '_');
 
 	// Put it all together
 	char msg_send[200] = { 0 };
-	sprintf(msg_store, "%s%s%s\n", str_tim, spc, msg_in);
+	sprintf(msg_store, "%s%s%s\n", str_tim, pad, msg_in);
 
 	// Store current message
 	for (int c = 0; c < printQueueBytes; c++) {
@@ -6790,8 +6832,8 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	//Log.TestLoad(0, "LOG00074.CSV");
-	//Log.TestLoad(100);
+	Log.TestLoad(0, "LOG00003.CSV");
+	//Log.TestLoad(3000);
 
 }
 

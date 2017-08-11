@@ -753,9 +753,6 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 	int queue_ind = -1;
 	int id_ind = 0;
 
-	// Update logQueue ind
-	sendQueueInd++;
-
 	// Check if overlowed
 	if (sendQueueInd == sendQueueSize) {
 		
@@ -775,6 +772,10 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 
 		// Bail
 		return;
+	}
+	// Update sendQueue ind
+	else {
+		sendQueueInd++;
 	}
 
 	// Create byte packet
@@ -842,7 +843,10 @@ bool SendPacket()
 		Serial1.available() > 0 ||
 		millis() < t_sent + dt_sendSent ||
 		millis() < t_rcvd + dt_sendRcvd) {
-		return false;
+		
+		// Indicate still packs to send
+			return true;
+
 	}
 
 	// Send
@@ -878,6 +882,11 @@ bool SendPacket()
 
 	// Set entry to null
 	sendQueue[queue_ind][0] = '\0';
+
+	// Reset queueInd if last pack sent
+	if (queue_ind == sendQueueSize - 1) {
+		sendQueueInd = -1;
+	}
 
 	// Return success
 	return true;
@@ -994,7 +1003,9 @@ bool SendLog()
 	if (Serial.available() > 0 ||
 		millis() < t_sent + dt_sendSent ||
 		millis() < t_rcvd + dt_sendRcvd) {
-		return false;
+
+		// Indicate still logs to send
+		return true;
 	}
 
 	// Send
@@ -1018,6 +1029,11 @@ bool SendLog()
 
 	// Set entry to null
 	logQueue[queue_ind][0] = '\0';
+
+	// Reset queueInd if last log sent
+	if (queue_ind == logQueueSize - 1) {
+		logQueueInd = -1;
+	}
 
 	// Return success
 	return true;
@@ -1324,6 +1340,11 @@ bool PrintDebug()
 
 	// Set entry to null
 	printQueue[queue_ind][0] = '\0';
+
+	// Reset queueInd if last entry printed
+	if (queue_ind == printQueueSize - 1) {
+		printQueueInd = -1;
+	}
 
 	// Return success
 	return true;

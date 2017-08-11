@@ -94,12 +94,9 @@ namespace ICR_Run
 
         // Create lock objects and thread lists for safe threading
         static readonly object lock_sendMCOM = new object();
-        static readonly object lock_getMCOM = new object();
         static readonly object lock_sendPack = new object();
-        static readonly object lock_queue_getMCOM = new object();
         static readonly object lock_queue_sendMCOM = new object();
         static readonly object lock_queue_sendPack = new object();
-        private static int queue_getMCOM = 0;
         private static int queue_sendMCOM = 0;
         private static int queue_sendPack = 0;
         static readonly object lock_checkConf = new object();
@@ -1858,6 +1855,7 @@ namespace ICR_Run
         public static void GetRobotLog()
         {
             // Local vars
+            UnionHack U = new UnionHack(0, 0, 0, '0', 0);
             long t_stream_str = sw_main.ElapsedMilliseconds;
             long t_timeout = t_stream_str + timeoutImportLog;
             long t_read_last = t_stream_str;
@@ -1885,7 +1883,7 @@ namespace ICR_Run
                 // Check for timeout
                 if (sw_main.ElapsedMilliseconds > t_timeout)
                 {
-                    if (sw_main.ElapsedMilliseconds - t_read_last > 1000)
+                    if (sw_main.ElapsedMilliseconds - t_read_last > 5000)
                     {
                         dt_run = sw_main.ElapsedMilliseconds - t_stream_str;
                         dt_read = t_read_last == 0 ? 0 : sw_main.ElapsedMilliseconds - t_read_last;
@@ -1894,51 +1892,54 @@ namespace ICR_Run
                 }
 
                 // Get next byte
-                if (sp_Xbee.BytesToRead > 0)
+                if (sp_Xbee.BytesToRead < 1)
                 {
-                    // Check progress
-                    string status_str = robLogger.GetImportStatus(read_ind);
-                    if (status_str != " ")
+                    continue;
+                }
+
+                // Check progress
+                string status_str = robLogger.GetImportStatus(read_ind);
+                if (status_str != " ")
+                {
+                    // Print progress on seperate thread
+                    new Thread(delegate ()
                     {
-                        // Print progress on seperate thread
-                        new Thread(delegate ()
-                        {
-                            LogEvent(String.Format("[GetRobotLog] Log Import {0}", status_str));
-                        }).Start();
-                    }
+                        LogEvent(String.Format("[GetRobotLog] Log Import {0}", status_str));
+                    }).Start();
+                }
 
-                    // Get next char
-                    c_arr[0] = c_arr[1];
-                    c_arr[1] = c_arr[2];
-                    c_arr[2] = (char)sp_Xbee.ReadByte();
-                    in_arr[read_ind] = c_arr[2];
-                    t_read_last = sw_main.ElapsedMilliseconds;
+                // Get next char
+                c_arr[0] = c_arr[1];
+                c_arr[1] = c_arr[2];
+                U.b1 = sp_Xbee.ReadByte();
+                msg_id[0] = U.b1;
+                c_arr[2] = (char)sp_Xbee.ReadByte();
+                in_arr[read_ind] = c_arr[2];
+                t_read_last = sw_main.ElapsedMilliseconds;
 
-                    // Itterate count
-                    read_ind++;
+                // Itterate count
+                read_ind++;
 
-                    // Check for end
-                    if (
-                        c_arr[0] == '>' &&
-                        c_arr[1] == '>'
-                    )
+                // Check for end
+                if (
+                    c_arr[0] == '>' &&
+                    c_arr[1] == '>'
+                )
+                {
+                    if (c_arr[2] == '>')
                     {
-                        if (c_arr[2] == '>')
-                        {
-                            LogEvent(String.Format("[GetRobotLog] Received Send Success Termination String: \"{0}{1}{2}\"",
-                                c_arr[0], c_arr[1], c_arr[2]));
-                            send_complete = true;
-                            break;
-                        }
-                        else if (c_arr[2] == '!')
-                        {
-                            LogEvent(String.Format("**WARNING** [GetRobotLog] Received Abort Termination String: \"{0}{1}{2}\"",
-                                c_arr[0], c_arr[1], c_arr[2]));
-                            is_robot_abort = true;
-                            break;
-                        }
+                        LogEvent(String.Format("[GetRobotLog] Received Send Success Termination String: \"{0}{1}{2}\" rx={3} tx={4}",
+                            c_arr[0], c_arr[1], c_arr[2], sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite));
+                        send_complete = true;
+                        break;
                     }
-
+                    else if (c_arr[2] == '!')
+                    {
+                        LogEvent(String.Format("**WARNING** [GetRobotLog] Received Abort Termination String: \"{0}{1}{2}\" rx={3} tx={4}",
+                            c_arr[0], c_arr[1], c_arr[2], sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite));
+                        is_robot_abort = true;
+                        break;
+                    }
                 }
             }
 
@@ -2193,10 +2194,6 @@ namespace ICR_Run
                 // Pause thread
                 if (dt_check < 5)
                     Thread.Sleep((int)(5 - dt_check));
-
-                // Wait for queue to clear
-                if (queue_getMCOM > 1)
-                    continue;
 
                 // Store check time
                 dt_check = sw_main.ElapsedMilliseconds - t_check;
@@ -2489,29 +2486,11 @@ namespace ICR_Run
         {
             // Local vars
             dynamic mat_var = 0;
-            long t_queued = sw_main.ElapsedMilliseconds;
 
-            // Check if queue backed up
-            if (queue_getMCOM >= 3)
-                LogEvent(String.Format("**WARNING** [GetMCOM] m2c Queue Clogged: msg=\"{0}\" queued={1} queue_dt={2}",
-                                msg, queue_getMCOM, sw_main.ElapsedMilliseconds - t_queued));
-
-            // Add to queue
-            lock (lock_queue_getMCOM) queue_getMCOM++;
-            lock (lock_getMCOM)
-            {
-
-                // Check if queue hanging
-                if (sw_main.ElapsedMilliseconds > t_queued + 100)
-                    // Log/print error
-                    LogEvent(String.Format("**WARNING** [GetMCOM] m2c Queue Hanging: msg=\"{0}\" queued={1} queue_dt={2}",
-                                    msg, queue_getMCOM, sw_main.ElapsedMilliseconds - t_queued));
-
-                if (fc.ContinueMatCom())
-                    // Store value
-                    mat_var = com_Matlab.GetVariable(msg, "global");
-            }
-            lock (lock_queue_getMCOM) queue_getMCOM--;
+            // Get value
+            if (fc.ContinueMatCom())
+                // Store value
+                mat_var = com_Matlab.GetVariable(msg, "global");
 
             // Return value
             return mat_var;
