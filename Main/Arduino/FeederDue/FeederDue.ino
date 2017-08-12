@@ -94,7 +94,7 @@ struct DB
 	const bool log_rob_ekf = false;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -253,7 +253,7 @@ uint16_t cnt_loop_short = 0;
 
 // Print debugging
 const int printQueueRows = 15;
-const int printQueueBytes = 200;
+const int printQueueBytes = 300;
 char printQueue[printQueueRows][printQueueBytes] = { { 0 } };
 int printQueueInd = printQueueRows;
 
@@ -802,7 +802,7 @@ public:
 	uint32_t t_beginSend = 0;
 	int dt_beginSend = 1000;
 	static const int queueSize = 15;
-	char logQueue[queueSize][200] = { { 0 } };
+	char logQueue[queueSize][300] = { { 0 } };
 	int queueInd = -1;
 	int cnt_logStored = 0;
 	static const int maxBytesStore = 2500;
@@ -3176,7 +3176,7 @@ void LOGGER::StreamLogs()
 	bool send_done = false;
 	bool do_abort = false;
 	bool is_timedout = false;
-	char err_str[100] = { 0 };
+	char err_str[200] = "|";
 	char c_arr[3] = { '\0', '\0', '\0' };
 	float dt_read_mu = 0; // (us)
 	float dt_write_mu = 0; // (us)
@@ -3190,6 +3190,9 @@ void LOGGER::StreamLogs()
 		return;
 	}
 
+	// Print anything left in queue
+	while (PrintDebug());
+
 	// Make sure in command mode
 	if (!SetToCmdMode()) {
 		cnt_err_set_cmd_mode++;
@@ -3200,7 +3203,11 @@ void LOGGER::StreamLogs()
 		// Abort after 3 failures
 		else {
 			do_abort = true;
-			sprintf(err_str, "Log \"%c%c%c\" Failed", 26, 26, 26);
+			sprintf(str, "\"%c%c%c\" Failed: cnt=%d|", 
+				26, 26, 26, cnt_err_set_cmd_mode);
+			if (strlen(err_str) < 200) {
+				strcat(err_str, str);
+			}
 		}
 	}
 
@@ -3208,8 +3215,10 @@ void LOGGER::StreamLogs()
 	while (millis() < (t_start + timeout)) {
 
 		// Print current send ind
-		sprintf(str, "[LOGGER::StreamLogs] RUNNING: Send Logs: sent=%dB stored=%dB...", cnt_logBytesSent, cnt_logBytesStored);
+		sprintf(str, "[LOGGER::StreamLogs] RUNNING: Send Logs: bytes_sent=%d bytes_stored=%d...", 
+			cnt_logBytesSent, cnt_logBytesStored);
 		DebugFlow(str);
+		while (PrintDebug());
 
 		// Dump anything left
 		uint32_t t_out = millis() + 10;
@@ -3219,7 +3228,7 @@ void LOGGER::StreamLogs()
 			}
 		}
 
-		// Send/resend command to read
+		// Send new "read" command
 		if (!send_done &&
 			!do_abort) {
 			sprintf(str, "read %s %d %d\r", logFile, cnt_logBytesSent, read_max);
@@ -3239,14 +3248,14 @@ void LOGGER::StreamLogs()
 			t_last_write = micros();
 		}
 
-		// Read byte at a time
+		// Read one byte at a time
 		while (millis() < (t_start + timeout)) {
 
 			// Check for new data
 			if (Serial3.available() == 0)
 			{
-				// Wait for new data
-				if (micros() - t_last_read < 500000 ||
+				// Wait a max of 1 sec for new data
+				if (micros() - t_last_read < 1000000 ||
 					cnt_logBytesSent == 0) {
 					continue;
 				}
@@ -3258,13 +3267,17 @@ void LOGGER::StreamLogs()
 					cnt_err_read_timeout++;
 					if (cnt_err_read_timeout > 1) {
 						do_abort = true;
-						sprintf(err_str, "Serial3 Read Timedout After %d Attamps and %dus",
-							cnt_err_read_timeout, micros() - t_last_read);
+						sprintf(str, "Read Timedout: cnt=%d read_ind=%d dt_read=%dus|",
+							cnt_err_read_timeout, read_ind, micros() - t_last_read);
+						if (strlen(err_str) < 200) {
+							strcat(err_str, str);
+						}
 					}
 					else {
-						sprintf(str, "**WARNING** [LOGGER::GetReply] Serial3 Read Timedout After %d Attamps and %dus",
-							cnt_err_read_timeout, micros() - t_last_read);
+						sprintf(str, "**WARNING** [LOGGER::GetReply] Read Timedout: cnt=%d read_ind=%d dt_read=%dus",
+							cnt_err_read_timeout, read_ind, micros() - t_last_read);
 						DebugError(str);
+						while (PrintDebug());
 					}
 					break;
 				}
@@ -3311,11 +3324,15 @@ void LOGGER::StreamLogs()
 					cnt_err_read_cmd++;
 					if (cnt_err_read_cmd > 1) {
 						do_abort = true;
-						sprintf(err_str, "Log \"read\" Failed %d Times", cnt_err_read_cmd);
+						sprintf(str, "\"read\" Failed: cnt=%d|", cnt_err_read_cmd);
+						if (strlen(err_str) < 200) {
+							strcat(err_str, str);
+						}
 					}
 					else {
-						sprintf(str, "**WARNING** [LOGGER::GetReply] Log \"read\" Failed %d", cnt_err_read_cmd);
+						sprintf(str, "**WARNING** [LOGGER::GetReply] \"read\" Failed: cnt=%d", cnt_err_read_cmd);
 						DebugError(str);
+						while (PrintDebug());
 					}
 
 					// Break
@@ -3327,7 +3344,7 @@ void LOGGER::StreamLogs()
 			if (
 				c_arr[0] == '\r' &&
 				c_arr[1] == '\n' &&
-				read_ind > read_max - 200
+				read_ind > read_max - 300
 				) {
 
 				// Dump remaining
@@ -3374,34 +3391,42 @@ void LOGGER::StreamLogs()
 		millis() >= t_start + timeout) {
 
 		do_abort = true;
-		if (err_str[0] == '\0') {
-			sprintf(err_str, "Run Timedout");
+		sprintf(str, "Run Timedout|");
+		if (strlen(err_str) < 200) {
+			strcat(err_str, str);
 		}
 	}
 
 	// Get total data left in buffers
-	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	int buff_rx = Serial1.available();
-
-	// Create data string
-	float dt_s = (float)(millis() - t_start) / 1000.0f;
-	char dat_str[200];
-	sprintf(dat_str, " dt_run=%0.2fs bytes_stored=%d bytes_sent=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d tx=%d rx=%d",
-		dt_s, cnt_logBytesStored, cnt_logBytesSent, cnt_err_set_cmd_mode, cnt_err_read_cmd, cnt_err_read_timeout, buff_tx, buff_rx);
+	int xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	int xbee_buff_rx = Serial1.available();
+	int ol_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
+	int ol_buff_rx = Serial3.available();
 
 	// Print final status then send as log
 	if (!do_abort) {
-		sprintf(str, "[LOGGER::StreamLogs] FINISHED: Send Logs: %s", dat_str);
-		DebugFlow(str);
+		DebugFlow("[LOGGER::StreamLogs] FINISHED: Send Logs");
 	}
 	else {
-		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: error=\"%s\" %s", err_str, dat_str);
+		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: errors=%s", err_str);
 		DebugError(str);
 	}
+	while (PrintDebug());
 
 	// Send status as log
-	char* p_sts_str = QueueLog(str, millis());
-	Serial1.write(p_sts_str, strlen(p_sts_str));
+	char* p_msg1_str = QueueLog(str, millis());
+	Serial1.write(p_msg1_str, strlen(p_msg1_str));
+
+	// Print log time info
+	float dt_s = (float)(millis() - t_start) / 1000.0f;
+	sprintf(str, "[LOGGER::StreamLogs] Run Stats 1: dt_run=%0.2fs bytes_sent=%d bytes_stored=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d ol_tx=%d ol_rx=%d xbee_tx=%d xbee_rx=%d",
+		dt_s, cnt_logBytesSent, cnt_logBytesStored, cnt_err_set_cmd_mode, cnt_err_read_cmd, cnt_err_read_timeout, ol_buff_tx, ol_buff_rx, xbee_buff_tx, xbee_buff_rx);
+	DebugFlow(str);
+	while (PrintDebug());
+
+	// Send stat 1 as log
+	char* p_msg2_str = QueueLog(str, millis());
+	Serial1.write(p_msg2_str, strlen(p_msg2_str));
 
 	// Print remaining run stats
 	/*
@@ -3409,14 +3434,15 @@ void LOGGER::StreamLogs()
 	*/
 	dt_read_mu = (float)dt_read[0] / (float)dt_read[1];
 	dt_write_mu = (float)dt_write[0] / (float)dt_write[1];
-	sprintf(str, "[LOGGER::StreamLogs] Run Stats: dt_run=%dms dt_read=|mu=%0.2fus|last=%dus|min=%dus|max=%dus dt_write=|mu=%0.2fus|last=%dus|min=%dus|max=%dus",
+	sprintf(str, "[LOGGER::StreamLogs] Run Stats 2: dt_run=%dms dt_read=|mu=%0.2fus|last=%dus|min=%dus|max=%dus dt_write=|mu=%0.2fus|last=%dus|min=%dus|max=%dus",
 		millis() - t_start, dt_read_mu, dt_read_now, dt_read[2], dt_read[3],
 		dt_write_mu, dt_write_now, dt_write_now, dt_write[2], dt_write[3]);
 	DebugFlow(str);
+	while (PrintDebug());
 
-	// Send stats as log
-	char* p_stt_str = QueueLog(str, millis());
-	Serial1.write(p_stt_str, strlen(p_stt_str));
+	// Send stat 2 as log
+	char* p_msg3_str = QueueLog(str, millis());
+	Serial1.write(p_msg3_str, strlen(p_msg3_str));
 
 	// End reached send ">>>"
 	if (!do_abort) {
@@ -3445,6 +3471,9 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 	// Local vars
 	char str[200] = { 0 };
 	bool pass = false;
+
+	// Prevent any new info from logging
+	db.Log = false;
 
 	// Load existing log file
 	if (log_file != '\0') {
@@ -6832,7 +6861,7 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	//Log.TestLoad(0, "LOG00003.CSV");
+	Log.TestLoad(0, "LOG00023.CSV");
 	//Log.TestLoad(3000);
 
 }

@@ -125,13 +125,13 @@ uint16_t cnt_loop_short = 0;
 
 // Log debugging
 const int logQueueSize = 15;
-char logQueue[logQueueSize][200] = { { 0 } };
+char logQueue[logQueueSize][300] = { { 0 } };
 int logQueueInd = -1;
 int cnt_logStored = 0;
 
 // Print debugging
 const int printQueueSize = 15;
-char printQueue[printQueueSize][200] = { { 0 } };
+char printQueue[printQueueSize][300] = { { 0 } };
 int printQueueInd = -1;
 
 // Serial tracking
