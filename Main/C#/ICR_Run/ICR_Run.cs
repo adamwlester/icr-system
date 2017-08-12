@@ -1911,8 +1911,6 @@ namespace ICR_Run
                 // Get next char
                 c_arr[0] = c_arr[1];
                 c_arr[1] = c_arr[2];
-                U.b1 = sp_Xbee.ReadByte();
-                msg_id[0] = U.b1;
                 c_arr[2] = (char)sp_Xbee.ReadByte();
                 in_arr[read_ind] = c_arr[2];
                 t_read_last = sw_main.ElapsedMilliseconds;

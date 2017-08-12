@@ -88,13 +88,13 @@ struct DB
 	const bool log_bull = true;
 	const bool log_motorControl = true;
 	const bool log_runSpeed = false;
-	const bool log_rat_vt = true;
-	const bool log_rob_vt = true;
-	const bool log_rat_ekf = true;
-	const bool log_rob_ekf = true;
+	const bool log_rat_vt = false;
+	const bool log_rob_vt = false;
+	const bool log_rat_ekf = false;
+	const bool log_rob_ekf = false;
 
 	// Printing
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -6832,7 +6832,7 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	Log.TestLoad(0, "LOG00003.CSV");
+	//Log.TestLoad(0, "LOG00003.CSV");
 	//Log.TestLoad(3000);
 
 }

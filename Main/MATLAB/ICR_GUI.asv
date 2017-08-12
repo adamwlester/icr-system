@@ -5718,7 +5718,7 @@ fprintf('END OF RUN');
             D.T.ses_end_tim = Elapsed_Seconds(now);
             
             % Print end time
-            infstr = datestr(now, 'HH:MM:SS');
+            infstr = datestr(D.T.ses_end_tim, 'HH:MM:SS');
             set(D.UI.editTimEndInf, 'String', infstr)
             
             % Halt robot if not already halted
