@@ -93,11 +93,8 @@ namespace ICR_Run
         private static long t_sync = 0;
 
         // Create lock objects and thread lists for safe threading
-        static readonly object lock_sendMCOM = new object();
         static readonly object lock_sendPack = new object();
-        static readonly object lock_queue_sendMCOM = new object();
         static readonly object lock_queue_sendPack = new object();
-        private static int queue_sendMCOM = 0;
         private static int queue_sendPack = 0;
         static readonly object lock_checkConf = new object();
         static readonly object lock_checkDone = new object();
@@ -363,14 +360,9 @@ namespace ICR_Run
 
             // Initalize Matlab global vars
             LogEvent("[Setup] RUNNNING: Create mCOM Global Variables...");
-            lock (lock_queue_sendMCOM) queue_sendMCOM++;
-            lock (lock_sendMCOM)
-            {
-                System.Array _m2c_pack = new double[5] { 0, 0, 0, 0, 0 };
-                com_Matlab.PutWorkspaceData("m2c_pack", "global", _m2c_pack);
-                com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
-            }
-            lock (lock_queue_sendMCOM) queue_sendMCOM--;
+            System.Array _m2c_pack = new double[5] { 0, 0, 0, 0, 0 };
+            com_Matlab.PutWorkspaceData("m2c_pack", "global", _m2c_pack);
+            com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
             LogEvent("[Setup] FINISHED: Create mCOM Global Variables");
 
             // Setup and start CheetahDue serial
@@ -1927,7 +1919,7 @@ namespace ICR_Run
                 // Check for end
                 if (
                     c_arr[0] == '>' &&
-                    c_arr[1] == '>' 
+                    c_arr[1] == '>'
                 )
                 {
                     if (c_arr[2] == '>')
@@ -2112,10 +2104,6 @@ namespace ICR_Run
             LogEvent("[DoWork_RunGUI] RUNNING: startup.m...");
             com_Matlab.Feval("startup", 0, out startup_result);
             LogEvent("[DoWork_RunGUI] FINISHED: startup.m...");
-
-            // Wait for queue to clear
-            while (queue_sendMCOM > 0)
-                Thread.Sleep(10);
 
             // Run ICR_GUI.m
             LogEvent("[DoWork_RunGUI] RUNNING: ICR_GUI.m...");
@@ -2441,54 +2429,41 @@ namespace ICR_Run
                 }
             }
 
-            // Check if queue backed up
-            if (queue_sendMCOM >= 3)
-                LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} queue_dt={2}",
-                                msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
-
-            // Add to queue
-            lock (lock_queue_sendMCOM) queue_sendMCOM++;
-            lock (lock_sendMCOM)
+            if (fc.ContinueMatCom())
             {
-
-                // Check if queue hanging
-                if (sw_main.ElapsedMilliseconds > t_queued + 100)
-                    // Log/print error
-                    LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} queue_dt={2}",
-                                    msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
-
-
-                if (fc.ContinueMatCom())
+                // Sending packet data
+                if (id != ' ')
                 {
-                    // Sending packet data
-                    if (id != ' ')
-                    {
-                        // Execute matlab command
-                        com_Matlab.Execute(msg);
+                    // Execute matlab command
+                    com_Matlab.Execute(msg);
 
-                        // Update sent
-                        c2m.UpdateSentRcvd(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
+                    // Update sent
+                    c2m.UpdateSentRcvd(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
 
-                        // Log/print sent
-                        LogEvent(String.Format("   [SENT] c2m: {0} queued={1} queue_dt={2}",
-                                dat_str, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
-                    }
-
-                    // Sending simple command
-                    else
-                    {
-                        // Execute matlab command
-                        com_Matlab.Execute(msg);
-
-                        // Log/print message
-                        if (do_print)
-                            LogEvent(String.Format("   [mCOM] c2m: msg=\"{0}\" queued={1} queue_dt={2}",
-                                msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
-                    }
-
+                    // Log/print sent
+                    LogEvent(String.Format("   [SENT] c2m: {0} queue_dt={1}",
+                            dat_str, sw_main.ElapsedMilliseconds - t_queued));
                 }
+
+                // Sending simple command
+                else
+                {
+                    // Execute matlab command
+                    com_Matlab.Execute(msg);
+
+                    // Log/print message
+                    if (do_print)
+                        LogEvent(String.Format("   [mCOM] c2m: msg=\"{0}\" queue_dt={1}",
+                            msg, sw_main.ElapsedMilliseconds - t_queued));
+                }
+
             }
-            lock (lock_queue_sendMCOM) queue_sendMCOM--;
+
+            // Check if queue hanging
+            if (sw_main.ElapsedMilliseconds > t_queued + 100)
+                // Log/print error
+                LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queue_dt={1}",
+                                msg, sw_main.ElapsedMilliseconds - t_queued));
         }
 
         // SEND/STORE DATA FOR MATLAB
