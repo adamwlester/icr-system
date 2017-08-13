@@ -126,19 +126,22 @@ uint16_t cnt_loop_short = 0;
 // Log debugging
 const int logQueueSize = 15;
 char logQueue[logQueueSize][300] = { { 0 } };
-int logQueueInd = -1;
-int cnt_logStored = 0;
+int logQueueIndStore = 0;
+int logQueueIndRead = 0;
+int cnt_logsStored = 0;
 
 // Print debugging
 const int printQueueSize = 15;
 char printQueue[printQueueSize][300] = { { 0 } };
-int printQueueInd = -1;
+int printQueueIndStore = 0;
+int printQueueIndRead = 0;
 
 // Serial tracking
 const int sendQueueSize = 10;
 const int sendQueueBytes = 9;
 byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
-int sendQueueInd = -1;
+int sendQueueIndStore = 0;
+int sendQueueIndRead = 0;
 const int dt_sendSent = 1; // (ms) 
 const int dt_sendRcvd = 1; // (ms) 
 uint32_t t_sent = millis(); // (ms)
@@ -379,7 +382,6 @@ bool CheckForStart()
 
 	// Get new data
 	in_byte[0] = Serial.read();
-	millis();
 
 	// Bail if not a match
 	if (in_byte[0] != out_byte[0]) {
@@ -606,7 +608,7 @@ byte WaitBuffRead(char mtch)
 	while (
 		buff != mtch  &&
 		millis() < t_timeout &&
-		!is_overflowed && 
+		!is_overflowed &&
 		!is_r2c_pack) {
 
 		// Check new data
@@ -750,54 +752,66 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 
 	// Local vars
 	char str[200] = { 0 };
-	int queue_ind = -1;
 	int id_ind = 0;
 
-	// Check if overlowed
-	if (sendQueueInd == sendQueueSize) {
-		
+	// Update sendQueue ind
+	sendQueueIndStore++;
+
+	// Check if ind should roll over 
+	if (sendQueueIndStore == sendQueueSize) {
+
+		// Reset queueIndWrite
+		sendQueueIndStore = 0;
+	}
+
+	// Check if overfloweed
+	if (sendQueue[sendQueueIndStore][0] != '\0')
+	{
+
+		// Get list of empty entries
+		char queue_state[sendQueueSize + 1];
+		for (int i = 0; i < sendQueueSize; i++) {
+			queue_state[i] = sendQueue[i][0] == '\0' ? '0' : '1';
+		}
+
 		// Get buffers
 		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 		int buff_rx = Serial1.available();
 
 		// Store overflow error instead
-		sprintf(str, "!!ERROR!! [QueuePacket] SEND QUEUE OVERFLOWED: dt_sent=%d dt_rcvd=%d buff_tx=%d buff_rx=%d",
-			millis() - t_sent, millis() - t_rcvd, buff_tx, buff_rx);
-
-		// Set queue back so this will print
-		sendQueueInd = sendQueueSize - 1;
+		sprintf(str, "!!ERRROR!! [QueuePacket] SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_sent=%d dt_rcvd=%d buff_tx=%d buff_rx=%d",
+			sendQueueIndStore, sendQueueIndRead, queue_state, millis() - t_sent, millis() - t_rcvd, buff_tx, buff_rx);
 
 		// Log/print error
 		DebugError(str);
 
+		// Set queue back 
+		sendQueueIndStore = sendQueueIndStore - 1 >= 0 ? sendQueueIndStore - 1 : sendQueueSize - 1;
+
 		// Bail
 		return;
-	}
-	// Update sendQueue ind
-	else {
-		sendQueueInd++;
+
 	}
 
 	// Create byte packet
-	queue_ind = sendQueueInd;
 	int b_ind = 0;
 	// Store header
-	sendQueue[queue_ind][b_ind++] = a2r.head;
+	sendQueue[sendQueueIndStore][b_ind++] = a2r.head;
 	// Store mesage id
-	sendQueue[queue_ind][b_ind++] = id;
+	sendQueue[sendQueueIndStore][b_ind++] = id;
 	// Store mesage data 
-	sendQueue[queue_ind][b_ind++] = dat1;
-	sendQueue[queue_ind][b_ind++] = dat2;
-	sendQueue[queue_ind][b_ind++] = dat3;
+	sendQueue[sendQueueIndStore][b_ind++] = dat1;
+	sendQueue[sendQueueIndStore][b_ind++] = dat2;
+	sendQueue[sendQueueIndStore][b_ind++] = dat3;
 	// Store packet number
 	U.f = 0.0f;
 	U.i16[0] = pack;
-	sendQueue[queue_ind][b_ind++] = U.b[0];
-	sendQueue[queue_ind][b_ind++] = U.b[1];
+	sendQueue[sendQueueIndStore][b_ind++] = U.b[0];
+	sendQueue[sendQueueIndStore][b_ind++] = U.b[1];
 	// Store get_confirm request
-	sendQueue[queue_ind][b_ind++] = do_conf ? 1 : 0;
+	sendQueue[sendQueueIndStore][b_ind++] = do_conf ? 1 : 0;
 	// Store footer
-	sendQueue[queue_ind][b_ind++] = a2r.foot;
+	sendQueue[sendQueueIndStore][b_ind++] = a2r.foot;
 
 }
 
@@ -811,7 +825,6 @@ bool SendPacket()
 	// Local vars
 	const int msg_lng = sendQueueBytes;
 	byte msg[msg_lng];
-	int queue_ind = -1;
 	cnt_packBytesSent = 0;
 	bool is_repeat = false;
 	char id = '\0';
@@ -820,21 +833,8 @@ bool SendPacket()
 	uint16_t pack = 0;
 
 	// Bail if nothing in queue
-	if (sendQueueInd == -1) {
-		return false;
-	}
-
-	// Find next send to send
-	for (int i = 0; i < sendQueueSize; i++) {
-		if (sendQueue[i][0] != '\0') {
-			queue_ind = i;
-			break;
-		}
-	}
-
-	// Reset cnt and bail if everthing sent
-	if (queue_ind == -1) {
-		sendQueueInd = -1;
+	if (sendQueueIndRead == sendQueueIndStore &&
+		sendQueue[sendQueueIndStore][0] == '\0') {
 		return false;
 	}
 
@@ -843,14 +843,21 @@ bool SendPacket()
 		Serial1.available() > 0 ||
 		millis() < t_sent + dt_sendSent ||
 		millis() < t_rcvd + dt_sendRcvd) {
-		
-		// Indicate still packs to send
-			return true;
 
+		// Indicate still packs to send
+		return true;
+	}
+
+	// Itterate send ind
+	sendQueueIndRead++;
+
+	// Check if ind should roll over 
+	if (sendQueueIndRead == sendQueueSize) {
+		sendQueueIndRead = 0;
 	}
 
 	// Send
-	Serial1.write(sendQueue[queue_ind], msg_lng);
+	Serial1.write(sendQueue[sendQueueIndRead], msg_lng);
 	t_sent = millis();
 	cnt_packBytesSent = msg_lng;
 
@@ -861,18 +868,18 @@ bool SendPacket()
 	// pull out packet data
 	int b_ind = 1;
 	// id
-	id = sendQueue[queue_ind][b_ind++];
+	id = sendQueue[sendQueueIndRead][b_ind++];
 	// dat
-	dat[0] = sendQueue[queue_ind][b_ind++];
-	dat[1] = sendQueue[queue_ind][b_ind++];
-	dat[2] = sendQueue[queue_ind][b_ind++];
+	dat[0] = sendQueue[sendQueueIndRead][b_ind++];
+	dat[1] = sendQueue[sendQueueIndRead][b_ind++];
+	dat[2] = sendQueue[sendQueueIndRead][b_ind++];
 	// pack
 	U.f = 0.0f;
-	U.b[0] = sendQueue[queue_ind][b_ind++];
-	U.b[1] = sendQueue[queue_ind][b_ind++];
+	U.b[0] = sendQueue[sendQueueIndRead][b_ind++];
+	U.b[1] = sendQueue[sendQueueIndRead][b_ind++];
 	pack = U.i16[0];
 	// do_conf 
-	do_conf = sendQueue[queue_ind][b_ind++] == 1 ? true : false;
+	do_conf = sendQueue[sendQueueIndRead][b_ind++] == 1 ? true : false;
 
 	// Check if resending
 	is_repeat = pack == r2a.packLast[CharInd(id, r2a.id, r2a.lng)];
@@ -881,12 +888,7 @@ bool SendPacket()
 	DebugSent(id, dat, pack, do_conf, buff_tx, buff_rx, is_repeat);
 
 	// Set entry to null
-	sendQueue[queue_ind][0] = '\0';
-
-	// Reset queueInd if last pack sent
-	if (queue_ind == sendQueueSize - 1) {
-		sendQueueInd = -1;
-	}
+	sendQueue[sendQueueIndRead][0] = '\0';
 
 	// Return success
 	return true;
@@ -908,37 +910,48 @@ void QueueLog(char msg[], uint32_t t)
 	byte chksum = 0;
 
 	// Update logQueue ind
-	logQueueInd++;
+	logQueueIndStore++;
 
-	// Check if overlowed
-	if (logQueueInd == logQueueSize) {
+	// Check if ind should roll over 
+	if (logQueueIndStore == logQueueSize) {
 
-		// Get buffers
-		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
-		int buff_rx = Serial.available();
+		// Reset queueIndWrite
+		logQueueIndStore = 0;
+	}
+
+	// Check if overfloweed
+	if (logQueue[logQueueIndStore][0] != '\0')
+	{
+
+		// Get list of empty entries
+		char queue_state[logQueueSize + 1];
+		for (int i = 0; i < logQueueSize; i++) {
+			queue_state[i] = logQueue[i][0] == '\0' ? '0' : '1';
+		}
 
 		// Store overflow error instead
-		sprintf(msg, "!!ERROR!! [QueueLog] LOG QUEUE OVERFLOWED: dt_sent=%d dt_rcvd=%d log_buff_tx=%d log_buff_rx=%d", 
-			millis()-t_sent, millis() - t_rcvd, buff_tx, buff_rx);
+		sprintf(msg, "**WARNING** [QueueLog] LOG QUEUE OVERFLOWED: logQueueIndStore=%d logQueueIndRead=%d queue_state=|%s|",
+			logQueueIndStore, logQueueIndRead, queue_state);
 
-		// Set queue back so this will print
-		logQueueInd = logQueueSize - 1;
+		// Set queue back so overflow will write over last log
+		logQueueIndStore = logQueueIndStore - 1 >= 0 ? logQueueIndStore - 1 : logQueueSize - 1;
 
 		// Print error
 		if (db.print_errors && db.Console) {
 			QueueDebug(msg, t);
 		}
+
 	}
 	// Update log count
 	else {
-		cnt_logStored++;
+		cnt_logsStored++;
 	}
 
 	// Get sync correction
 	t_m = t - t_sync;
 
 	// Put it all together
-	sprintf(str, "[%d],%lu,%d,%s", cnt_logStored, t_m, cnt_loop_short, msg);
+	sprintf(str, "[%d],%lu,%d,%s", cnt_logsStored, t_m, cnt_loop_short, msg);
 
 	// Get message size
 	chksum = strlen(str);
@@ -959,7 +972,7 @@ void QueueLog(char msg[], uint32_t t)
 	msg_out[b_ind] = '\0';
 
 	// Store log
-	sprintf(logQueue[logQueueInd], "%s", msg_out);
+	sprintf(logQueue[logQueueIndStore], "%s", msg_out);
 
 }
 
@@ -972,35 +985,18 @@ bool SendLog()
 	*/
 	// Local vars
 	int msg_lng = 0;
-	int queue_ind = -1;
 	char str[200] = { 0 };
 	cnt_logBytesSent = 0;
 
 	// Bail if serial not established or no logs to store
 	if (!fc.isSesStarted ||
-		logQueueInd == -1) {
+		logQueueIndRead == logQueueIndStore &&
+		logQueue[logQueueIndStore][0] == '\0') {
 		return false;
 	}
-
-	// Find next log to send
-	for (int i = 0; i < logQueueSize; i++) {
-		if (logQueue[i][0] != '\0') {
-			queue_ind = i;
-			break;
-		}
-	}
-
-	// Reset cnt and bail if everthing sent
-	if (queue_ind == -1) {
-		logQueueInd = -1;
-		return false;
-	}
-
-	// Get message size
-	msg_lng = strlen(logQueue[queue_ind]);
 
 	// Bail if buffer or time inadequate
-	if (Serial.available() > 0 ||
+	if (Serial1.available() > 0 ||
 		millis() < t_sent + dt_sendSent ||
 		millis() < t_rcvd + dt_sendRcvd) {
 
@@ -1008,8 +1004,19 @@ bool SendLog()
 		return true;
 	}
 
+	// Itterate send ind
+	logQueueIndRead++;
+
+	// Check if ind should roll over 
+	if (logQueueIndRead == logQueueSize) {
+		logQueueIndRead = 0;
+	}
+
+	// Get message size
+	msg_lng = strlen(logQueue[logQueueIndRead]);
+
 	// Send
-	Serial.write(logQueue[queue_ind], msg_lng);
+	Serial.write(logQueue[logQueueIndRead], msg_lng);
 	t_sent = millis();
 	cnt_logBytesSent += msg_lng;
 
@@ -1023,17 +1030,12 @@ bool SendLog()
 		// Print stored log
 		char str[300];
 		sprintf(str, "   [LOG] a2c: log_cnt=%d bytes_sent=%d msg=\"%s\"",
-			cnt_logStored, cnt_logBytesSent, logQueue[queue_ind]);
+			cnt_logsStored, cnt_logBytesSent, logQueue[logQueueIndRead]);
 		QueueDebug(str, millis());
 	}
 
 	// Set entry to null
-	logQueue[queue_ind][0] = '\0';
-
-	// Reset queueInd if last log sent
-	if (queue_ind == logQueueSize - 1) {
-		logQueueInd = -1;
-	}
+	logQueue[logQueueIndRead][0] = '\0';
 
 	// Return success
 	return true;
@@ -1196,7 +1198,7 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 	// Local vars
 	bool do_print = db.Console && db.print_a2r;
 	bool do_log = db.Log && db.log_a2r;
-	int cnt_queued = sendQueueSize - sendQueueInd - 1;
+	int cnt_queued = sendQueueSize - sendQueueIndStore - 1;
 
 	// Print/Log
 	if (!(do_print || do_log)) {
@@ -1267,27 +1269,38 @@ void QueueDebug(char msg[], uint32_t t)
 	char str[200] = { 0 };
 	char str_tim[100] = { 0 };
 
-	// Update queue ind
-	printQueueInd++;
+	// Update printQueue ind
+	printQueueIndStore++;
 
-	// Check if overlowed
-	if (printQueueInd == printQueueSize) {
+	// Check if ind should roll over 
+	if (printQueueIndStore == printQueueSize) {
 
-		// Get buffers
-		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-		int buff_rx = Serial1.available();
+		// Reset queueIndWrite
+		printQueueIndStore = 0;
+	}
+
+	// Check if overfloweed
+	if (printQueue[printQueueIndStore][0] != '\0')
+	{
+
+		// Get list of empty entries
+		char queue_state[printQueueSize + 1];
+		for (int i = 0; i < printQueueSize; i++) {
+			queue_state[i] = printQueue[i][0] == '\0' ? '0' : '1';
+		}
 
 		// Store overflow error instead
-		sprintf(msg, "!!ERROR!! [QueueDebug] PRINT QUEUE OVERFLOWED: dt_sent=%d dt_rcvd=%d buff_tx=%d buff_rx=%d",
-			millis() - t_sent, millis() - t_rcvd, buff_tx, buff_rx);
+		sprintf(msg, "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED: printQueueIndStore=%d printQueueIndRead=%d queue_state=|%s|",
+			printQueueIndStore, printQueueIndRead, queue_state);
 
-		// Set queue back so this will print
-		printQueueInd = printQueueSize - 1;
+		// Set queue back so overflow will write over last print
+		printQueueIndStore = printQueueIndStore - 1 >= 0 ? printQueueIndStore - 1 : printQueueSize - 1;
 
 		// Log error
 		if (db.log_errors && db.Log) {
 			QueueLog(msg, t);
 		}
+
 	}
 
 	// Get sync correction
@@ -1306,45 +1319,33 @@ void QueueDebug(char msg[], uint32_t t)
 	sprintf(spc, arg, '_');
 
 	// Put it all together
-	sprintf(printQueue[printQueueInd], "%s%s%s\n", str_tim, spc, msg);
+	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str_tim, spc, msg);
 
 }
 
 // PRINT DB INFO
 bool PrintDebug()
 {
-	// Local vars
-	int queue_ind = -1;
 
 	// Bail if nothing in queue
-	if (printQueueInd == -1) {
+	if (printQueueIndRead == printQueueIndStore &&
+		printQueue[printQueueIndStore][0] == '\0') {
 		return false;
 	}
 
-	// Find next print to send
-	for (int i = 0; i < printQueueSize; i++) {
-		if (printQueue[i][0] != '\0') {
-			queue_ind = i;
-			break;
-		}
-	}
+	// Itterate send ind
+	printQueueIndRead++;
 
-	// Reset cnt and bail if everthing sent
-	if (queue_ind == -1) {
-		printQueueInd = -1;
-		return false;
+	// Check if ind should roll over 
+	if (printQueueIndRead == printQueueSize) {
+		printQueueIndRead = 0;
 	}
 
 	// Print
-	SerialUSB.print(printQueue[queue_ind]);
+	SerialUSB.print(printQueue[printQueueIndRead]);
 
 	// Set entry to null
-	printQueue[queue_ind][0] = '\0';
-
-	// Reset queueInd if last entry printed
-	if (queue_ind == printQueueSize - 1) {
-		printQueueInd = -1;
-	}
+	printQueue[printQueueIndRead][0] = '\0';
 
 	// Return success
 	return true;
@@ -1738,15 +1739,15 @@ void setup()
 	word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
 
 	// SETUP INTERUPTS
-	
+
 	// North
-	attachInterrupt(digitalPinToInterrupt(pin.ptNorthOn), NorthInterrupt, RISING); 
+	attachInterrupt(digitalPinToInterrupt(pin.ptNorthOn), NorthInterrupt, RISING);
 	// West
-	attachInterrupt(digitalPinToInterrupt(pin.ptWestOn), WestInterrupt, RISING); 
+	attachInterrupt(digitalPinToInterrupt(pin.ptWestOn), WestInterrupt, RISING);
 	// South
-	attachInterrupt(digitalPinToInterrupt(pin.ptSouthOn), SouthInterrupt, RISING); 
+	attachInterrupt(digitalPinToInterrupt(pin.ptSouthOn), SouthInterrupt, RISING);
 	// East
-	attachInterrupt(digitalPinToInterrupt(pin.ptEastOn), EastInterrupt, RISING); 
+	attachInterrupt(digitalPinToInterrupt(pin.ptEastOn), EastInterrupt, RISING);
 
 	// PRINT PIN MAPPING
 	/*
@@ -1927,9 +1928,9 @@ void loop()
 	if (fc.doQuit) {
 
 		// Make sure queues empty
-		if (sendQueueInd != -1 ||
-			printQueueInd != -1 || 
-			logQueueInd != -1) {
+		if (SendPacket() ||
+			SendLog() ||
+			PrintDebug()) {
 			return;
 		}
 

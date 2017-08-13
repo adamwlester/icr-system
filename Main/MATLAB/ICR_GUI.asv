@@ -292,7 +292,7 @@ fprintf('END OF RUN');
         D.DB.logCount = 0;
         D.DB.isTestRun = false;
         D.DB.doPidCalibrationTest = false;
-        D.DB.doHaltErrorTest = false;
+        D.DB.doHaultErrorTest = false;
         D.DB.doSimRatTest = false;
         D.DB.isErrExit = false;
         D.DB.isForceClose = false;
@@ -305,7 +305,7 @@ fprintf('END OF RUN');
                 
             case 2
                 D.DB.isTestRun = true;
-                D.DB.doHaltErrorTest = true;
+                D.DB.doHaultErrorTest = true;
                 
             case 3
                 D.DB.isTestRun = true;
@@ -314,7 +314,7 @@ fprintf('END OF RUN');
             otherwise
                 D.DB.isTestRun = false;
                 D.DB.doPidCalibrationTest = false;
-                D.DB.doHaltErrorTest = false;
+                D.DB.doHaultErrorTest = false;
                 D.DB.doSimRatTest = false;
         end
         
@@ -379,32 +379,31 @@ fprintf('END OF RUN');
             % ---------------------------SETUP & RUN----------------------------------
             
             % Run variable setup code
-            Console_Write('[MainLoop] RUNNING: "Var_Setup()..."');
+            Console_Write('[MainLoop] RUNNING: "Var_Setup()"');
             Var_Setup();
             Console_Write('[MainLoop] FINISHED: "Var_Setup()"');
             
             % Run UI setup code
-            Console_Write('[MainLoop] RUNNING: "UI_Setup()..."');
+            Console_Write('[MainLoop] RUNNING: "UI_Setup()"');
             UI_Setup();
             Console_Write('[MainLoop] FINISHED: "UI_Setup()"');
             SendM2C('G');
             
             % Run AC setup code
-            Console_Write('[MainLoop] RUNNING: "AC_Setup()..."');
+            Console_Write('[MainLoop] RUNNING: "AC_Setup()"');
             AC_Setup();
             Console_Write('[MainLoop] FINISHED: "AC_Setup()"');
             SendM2C('A');
             
             % Run NLX setup code
-            Console_Write('[MainLoop] RUNNING: "NLX_Setup()..."');
+            Console_Write('[MainLoop] RUNNING: "NLX_Setup()"');
             NLX_Setup();
             Console_Write('[MainLoop] FINISHED: "NLX_Setup()"');
             SendM2C('N');
             
             % Run testing setup
-            Console_Write('[MainLoop] RUNNING: "Run_Test_Setup()..."');
+            Console_Write('[MainLoop] RUNNING: "NLX_Setup()"');
             Run_Test_Setup();
-            Console_Write('[MainLoop] FINISHED: "Run_Test_Setup()"');
             
             while ~doExit
                 
@@ -462,12 +461,9 @@ fprintf('END OF RUN');
                         %% -----------------FINISH SETUP-------------------
                         
                         % Run Zone setup code
-                        Console_Write('[MainLoop] RUNNING: "Zone_Dist_Setup()"');
                         Zone_Dist_Setup();
-                        Console_Write('[MainLoop] FINISHED: "Zone_Dist_Setup()"');
                         
                         % Dump initial vt recs
-                        Console_Write('[MainLoop] RUNNING: Dump VT Recs...');
                         rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
                         while ...
                                 rat_vt_recs > 0 || ...
@@ -478,7 +474,6 @@ fprintf('END OF RUN');
                             [~, ~, ~, ~, rob_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rob_ent);
                             [~, ~, ~, ~ , ~, evt_recs, ~] = NlxGetNewEventData('Events');
                         end
-                        Console_Write('[MainLoop] FINISHED: Dump VT Recs...');
                         
                         % Wait for robot streaming to start
                         Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
@@ -496,9 +491,7 @@ fprintf('END OF RUN');
                         end
                         
                         % Run Finish setup code
-                        Console_Write('[MainLoop] RUNNING: "Finish_Setup()..."');
                         Finish_Setup();
-                        Console_Write('[MainLoop] FINISHED: "Finish_Setup()"');
                         Update_UI(0);
                         
                         % Set to start polling NLX
@@ -750,8 +743,8 @@ fprintf('END OF RUN');
             D.F.do_all_cue = false;
             % track if next lap should be cued for half cue cond
             D.F.is_cued_rew = false;
-            % flag if halted
-            D.F.is_halted = false;
+            % flag if haulted
+            D.F.is_haulted = false;
             % track reward reset
             D.F.flag_rew_confirmed = false;
             % track reset crossing
@@ -985,7 +978,7 @@ fprintf('END OF RUN');
             
             % UI objects
             D.UI.figBckCol = [1, 1, 1];
-            D.UI.enabledCol = [0.25, 0.25, 0.25];
+            D.UI.enabledCol = [0.5, 0.5, 0.5];
             D.UI.enabledBtnFrgCol = [0.95, 0.95, 0.95];
             D.UI.enabledPrintFrgCol = [0.1, 0.1, 0.1];
             D.UI.disabledBckCol = [0.75 0.75 0.75];
@@ -3544,7 +3537,7 @@ fprintf('END OF RUN');
             end
             
             % HALT ERROR TEST
-            if D.DB.doHaltErrorTest
+            if D.DB.doHaultErrorTest
                 D.DB.haltCnt = D.DB.stepSamp;
                 D.DB.haltDur = 5; % (sec)
                 D.DB.halt_error_str = '';
@@ -5042,11 +5035,11 @@ fprintf('END OF RUN');
             end
             
             %% HALT ERROR TEST
-            if D.DB.doHaltErrorTest
+            if D.DB.doHaultErrorTest
                 
                 % Check if robot should be restarted
                 if D.DB.isHalted && ...
-                        ~D.F.is_halted && ...
+                        ~D.F.is_haulted && ...
                         Elapsed_Seconds(now) - D.DB.t_halt > D.DB.haltDur
                     
                     % Save and print halt error
@@ -5079,7 +5072,7 @@ fprintf('END OF RUN');
                         else
                             % End test
                             D.DB.nowVel = 0;
-                            D.DB.doHaltErrorTest = false;
+                            D.DB.doHaultErrorTest = false;
                             
                             % Save data to csv file
                             fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
@@ -5088,12 +5081,12 @@ fprintf('END OF RUN');
                             fprintf(file_id,D.DB.halt_error_str(3:end));
                             fclose(file_id);
                             % Log/print
-                            Console_Write(sprintf('[Run_Test] Saved Halt Error Test: %s', ...
+                            Console_Write(sprintf('[Run_Test] Saved Hault Error Test: %s', ...
                                 fi_out));
                         end
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] Halt Error Test: New Vel=%dcm/sec', ...
+                        Console_Write(sprintf('[Run_Test] Hault Error Test: New Vel=%dcm/sec', ...
                             D.DB.nowVel));
                         
                     end
@@ -5132,7 +5125,7 @@ fprintf('END OF RUN');
                     D.DB.isHalted = true;
                     
                     % Log/print
-                    Console_Write('[Run_Test] Halt Error Test: Halting Robot');
+                    Console_Write('[Run_Test] Hault Error Test: Halting Robot');
                 end
                 
             end
@@ -5174,7 +5167,7 @@ fprintf('END OF RUN');
                         % Update vel if not halted or holding for 2 sec for setup
                         if ...
                                 D.F.rat_in && ...
-                                ~D.F.is_halted && ...
+                                ~D.F.is_haulted && ...
                                 Elapsed_Seconds(now) - D.T.run_str > 2
                             
                             % Check vel
@@ -5196,7 +5189,7 @@ fprintf('END OF RUN');
                                 vel_now = D.F.UI.sld.Min;
                             end
                         else
-                            % Keep robot halted
+                            % Keep robot haulted
                             vel_now = 0;
                         end
                         
@@ -5754,7 +5747,7 @@ fprintf('END OF RUN');
             
             % Halt robot if not already halted
             if strcmp(get(D.UI.btnHaltRob, 'Enable'), 'on')
-                if (~D.F.is_halted)
+                if (~D.F.is_haulted)
                     set(D.UI.btnHaltRob, 'Value', 1);
                     BtnHaltRob();
                 end
@@ -5772,7 +5765,7 @@ fprintf('END OF RUN');
             NlxSendCommand(D.NLX.rat_out_evt);
             
             % Stop halt if still active
-            if (D.F.is_halted)
+            if (D.F.is_haulted)
                 set(D.UI.btnHaltRob, 'Value', 0);
                 BtnHaltRob();
             end
@@ -5900,7 +5893,7 @@ fprintf('END OF RUN');
                 'BackgroundColor', D.UI.disabledBckCol);
             
             % Stop halt if still active
-            if (D.F.is_halted)
+            if (D.F.is_haulted)
                 set(D.UI.btnHaltRob, 'Value', 0);
                 BtnHaltRob();
             end
@@ -5962,7 +5955,7 @@ fprintf('END OF RUN');
                 % Tell CS to Halt Robot
                 SendM2C('H', 1);
                 % Set flag
-                D.F.is_halted = true;
+                D.F.is_haulted = true;
             else
                 % Change backround color and text
                 set(D.UI.btnHaltRob, ...
@@ -5971,7 +5964,7 @@ fprintf('END OF RUN');
                 % Tell CS to stop halting
                 SendM2C('H', 0);
                 % Set flag
-                D.F.is_halted = false;
+                D.F.is_haulted = false;
             end
             
             % Log/print
