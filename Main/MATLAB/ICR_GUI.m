@@ -1813,7 +1813,7 @@ fprintf('END OF RUN');
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName',D.UI.popFont, ...
-                'FontSize',text1_font_sz(1), ...
+                'FontSize',10, ...
                 'FontWeight','Bold', ...
                 'String',D.UI.bullList);
             % toggle
@@ -1834,7 +1834,7 @@ fprintf('END OF RUN');
             % secret speed field
             D.UI.editBulldoze = uicontrol(...
                 'Parent',FigH, ...
-                'Units','normalized',...
+                'Units','Normalized',...
                 'Position',[pos(1)+wdth, pos(2), wdth*0.5, pos(4)],...
                 'Style','edit',...
                 'HorizontalAlignment', 'Left', ...
@@ -2486,10 +2486,6 @@ fprintf('END OF RUN');
             
             %% CONNECT TO NETCOM
             
-            % Log/print
-            Console_Write(sprintf('[NLX_Setup] RUNNING: Connect to NLX... IP=%s', ...
-                D.NLX.IP));
-            
             % Wait for Cheetah to open
             Console_Write('[NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
             is_running = false;
@@ -2505,6 +2501,8 @@ fprintf('END OF RUN');
             end
             
             % Load NetCom into Matlab, and connect to the NetCom server if we aren’t connected
+            Console_Write(sprintf('[NLX_Setup] RUNNING: Connect to NLX... IP=%s', ...
+                D.NLX.IP));
             succeeded = 0;
             if NlxAreWeConnected() ~= 1
                 while NlxAreWeConnected() ~= 1 && ~doExit
@@ -6524,6 +6522,11 @@ fprintf('END OF RUN');
 % --------------------------SEND CS COMMAND--------------------------------
     function[] = SendM2C(id, dat1, dat2, dat3, pack)
         
+        % Bail if isMatSolo
+        if isMatSolo
+            return;
+        end
+        
         % Set mesage data
         if nargin == 3
             dat3 = -1;
@@ -6541,7 +6544,6 @@ fprintf('END OF RUN');
         % Make sure last message recieved
         t_start = Elapsed_Seconds(now);
         while m2c_pack(5) ~= 0 && ...
-                ~isMatSolo && ...
                 Elapsed_Seconds(now) < t_start + 1
             pause(0.001);
         end;

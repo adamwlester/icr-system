@@ -1759,7 +1759,11 @@ void setup()
 
 	// PRINT SETUP FINISHED
 	char str[200] = { 0 };
-	sprintf(str, "[setup] FINISHED: Setup: free_ram=%dKB", freeMemory());
+	DebugFlow("[setup] FINISHED: Setup");
+
+	// PRINT AVAILABLE MEMORY
+	sprintf(str, "[setup] AVAILABLE MEMORY: %0.2fKB",
+		(float)freeMemory() / 1000);
 	DebugFlow(str);
 	while (PrintDebug());
 

@@ -89,10 +89,10 @@ struct DB
 	const bool log_motorControl = true;
 	const bool log_runSpeed = false;
 	// tracking data
-	const bool log_pos_vel = true;
-	const bool log_pos_rat_vt = true;
-	const bool log_pos_rat_pixy = true;
-	const bool log_pos_rob_vt = true;
+	const bool log_pos_vel = false;
+	const bool log_pos_rat_vt = false;
+	const bool log_pos_rat_pixy = false;
+	const bool log_pos_rob_vt = false;
 	const bool log_pos_rat_ekf = false;
 	const bool log_pos_rob_ekf = false;
 	const bool log_vel_rat_vt = false;
@@ -108,19 +108,19 @@ struct DB
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = false;
-	const bool print_r2c = false;
+	const bool print_c2r = true;
+	const bool print_r2c = true;
 	const bool print_a2r = false;
 	const bool print_r2a = false;
 	const bool print_rcvdVT = false;
-	const bool print_pid = false;
-	const bool print_bull = false;
+	const bool print_pid = true;
+	const bool print_bull = true;
 	const bool print_logMode = false;
 	const bool print_logStore = false;
 	const bool print_a2o = false;
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
-	const bool print_motorControl = false;
+	const bool print_motorControl = true;
 	const bool print_runSpeed = false;
 
 	// Testing
@@ -232,14 +232,13 @@ struct FC
 	bool isManualSes = false;
 	bool isRatIn = false;
 	bool isTrackingEnabled = false;
-	bool isRewarding = false;
 	bool doMove = false;
 	bool doRew = false;
 	bool doHalt = false;
 	bool doBulldoze = false;
 	bool doLogSend = false;
+	bool doBlockVccSend = false;
 	bool isEKFReady = false;
-	bool doPrint = false;
 	bool doBlockLCDlog = false;
 	bool doPackSend = false;
 	bool doEtOHRun = true;
@@ -259,10 +258,10 @@ uint32_t cnt_loop_tot = 0;
 uint16_t cnt_loop_short = 0;
 
 // Print debugging
-const int printQueueRows = 15;
-const int printQueueBytes = 300;
-char printQueue[printQueueRows][printQueueBytes] = { { 0 } };
-int printQueueInd = printQueueRows;
+const int printQueueSize = 15;
+char printQueue[printQueueSize][300] = { { 0 } };
+int printQueueIndStore = 0;
+int printQueueIndRead = 0;
 
 // Serial com general
 const int sendQueueSize = 10;
@@ -742,7 +741,8 @@ public:
 	int zoneOccCnt[zoneLng] = { 0 };
 	uint32_t t_nowZoneCheck = 0;
 	uint32_t t_lastZoneCheck = 0;
-	String mode = "None"; // ["None" "Free" "Cue" "Now"]
+	char mode_str[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
+	String mode = mode_str;
 	int occThresh = 0; // (ms)
 	int duration = 0; // (ms) 
 	byte durationByte = 0; // (ms) 
@@ -750,12 +750,13 @@ public:
 	int zoneMax = 0;
 	double boundMin = 0;
 	double boundMax = 0;
+	uint32_t t_rew_str = 0;
+	uint32_t t_rew_end = 0;
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
 	uint32_t t_moveArmStr = 0;
 	double rewCenterRel = 0;
 	bool isRewarding = false;
-	bool isButtonReward = false;
 	bool isBoundsSet = false;
 	bool isZoneTriggered = false;
 	bool isAllZonePassed = false;
@@ -769,6 +770,7 @@ public:
 	bool doArmMove = false;
 	bool doExtendArm = false;
 	bool doRetractArm = false;
+	bool doTimedRetract = false;
 	bool doSwtchRelease = false;
 	bool isArmExtended = true;
 	const int armExtStps = 220;
@@ -781,10 +783,10 @@ public:
 	uint32_t t_init;
 	// METHODS
 	REWARD(uint32_t t);
-	void StartRew(bool is_button_reward = false);
+	void StartRew();
 	bool EndRew();
 	void SetRewDur(byte zone_ind);
-	void SetRewMode(String mode_str, byte arg2);
+	void SetRewMode(char mode_now[], int arg2);
 	bool CompZoneBounds(double now_pos, double rew_pos);
 	bool CheckZoneBounds(double now_pos);
 	void ExtendFeedArm();
@@ -806,7 +808,7 @@ public:
 	uint32_t t_write = 0; // (us)
 	uint32_t t_beginSend = 0;
 	int dt_beginSend = 1000;
-	static const int queueSize = 15;
+	static const int queueSize = 30;
 	char logQueue[queueSize][300] = { { 0 } };
 	int queueIndStore = 0;
 	int queueIndRead = 0;
@@ -830,7 +832,7 @@ public:
 	char SendCommand(char msg[], bool do_conf = true, uint32_t timeout = 5000);
 	char GetReply(uint32_t timeout);
 	bool SetToLogMode(char log_file[]);
-	char* QueueLog(char msg[], uint32_t t = millis());
+	void QueueLog(char msg[], uint32_t t = millis());
 	bool StoreLog();
 	void StreamLogs();
 	void TestLoad(int n_entry, char log_file[] = '\0');
@@ -1367,7 +1369,7 @@ void PID::Stop(char called_from[])
 	}
 
 	// Tell ard pid is stopped if not rewarding
-	if (!fc.isRewarding) {
+	if (!Reward.isRewarding) {
 		QueuePacket('a', 'p', 0);
 	}
 
@@ -2119,24 +2121,19 @@ REWARD::REWARD(uint32_t t)
 	this->t_init = t;
 	this->duration = 1420;
 	this->durationByte = (byte)(duration / 10);
-
-	// Reset reward stuff
 	Reset();
 }
 
-void REWARD::StartRew(bool is_button_reward)
+void REWARD::StartRew()
 {
 	// Local vars
 	char str[100] = { 0 };
 
 	// Bail if already rewarding
-	if (Reward.isRewarding) {
+	if (isRewarding) {
 		DebugError("**WARNING** [REWARD::StartRew] Reward Rriggered When Already Running Reward");
 		return;
 	}
-
-	// Set flag
-	isButtonReward = is_button_reward;
 
 	// Set to extend feeder arm 
 	ExtendFeedArm();
@@ -2147,12 +2144,11 @@ void REWARD::StartRew(bool is_button_reward)
 	// Set hold time
 	BlockMotorTill(dt_rewBlock, "REWARD::StartRew");
 
-	// Store and send packet imediately
-	QueuePacket('a', 'r', durationByte);
-	SendPacket();
-
-	// Compute reward end time
-	t_closeSol = millis() + duration;
+	// Store and send packet imediately if coms setup
+	if (fc.isSesStarted) {
+		QueuePacket('a', 'r', durationByte);
+		SendPacket();
+	}
 
 	// Turn on reward LED
 	analogWrite(pin.RewLED_R, round(rewLEDduty*0.75));
@@ -2161,15 +2157,30 @@ void REWARD::StartRew(bool is_button_reward)
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
 
+	// Compute reward end time
+	t_rew_str = millis();
+	t_closeSol = t_rew_str + duration;
+
+	// Compute retract arm time
+	if (mode != "Button") {
+		t_retractArm = t_rew_str + dt_rewBlock;
+		doTimedRetract = true;
+	}
+	else {
+		doTimedRetract = false;
+	}
+
+
 	// Print to LCD for manual rewards
-	if (isButtonReward) {
+	if (mode == "Button") {
 		PrintLCD("REWARDING...");
 		fc.doBlockLCDlog = true;
 	}
-	else {
-		sprintf(str, "[REWARD::StartRew] RUNNING: Reward for %dms...", duration);
-		DebugFlow(str);
-	}
+
+	// Log/print 
+	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew%dms dt_retract=%d...",
+		mode_str, duration, t_retractArm);
+	DebugFlow(str, t_rew_str);
 
 	// Set flags
 	isRewarding = true;
@@ -2178,33 +2189,44 @@ void REWARD::StartRew(bool is_button_reward)
 
 bool REWARD::EndRew()
 {
+	// Local vars
+	char str[100] = { 0 };
 
-	bool is_reward_ended = false;
-
-	if (millis() > t_closeSol)
-	{
-
-		// Close solenoid
-		digitalWrite(pin.Rel_Rew, LOW);
-
-		// Turn off reward LED
-		analogWrite(pin.RewLED_R, rewLEDmin);
-		analogWrite(pin.RewLED_C, rewLEDmin);
-
-		// Clear LCD
-		if (isButtonReward) {
-			ClearLCD();
-		}
-		else {
-			DebugFlow("[REWARD::EndRew] FINISHED: Reward");
-		}
-
-		// Set/reset flags
-		is_reward_ended = true;
-		Reset();
+	// Bail if not rewarding
+	if (!isRewarding) {
+		return false;
 	}
 
-	return is_reward_ended;
+	// Bail if time not up
+	if (millis() < t_closeSol) {
+		return false;
+	}
+
+	// Close solenoid
+	digitalWrite(pin.Rel_Rew, LOW);
+
+	// Turn off reward LED
+	analogWrite(pin.RewLED_R, rewLEDmin);
+	analogWrite(pin.RewLED_C, rewLEDmin);
+
+	// Store time
+	t_rew_end = millis();
+
+	// Clear LCD
+	if (mode == "Button") {
+		ClearLCD();
+	}
+
+	// Log/print
+	sprintf(str, "[REWARD::EndRew] FINISHED: \"%s\" Reward: dt_rew%dms dt_retract=%d",
+		mode_str, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
+	DebugFlow(str, t_rew_end);
+
+	// Reset flags etc
+	Reset();
+
+	// Return end reward status
+	return true;
 
 }
 
@@ -2216,12 +2238,21 @@ void REWARD::SetRewDur(byte zone_ind)
 
 	// Save zone ind
 	zoneIndByte = zone_ind;
+
+	// Log/print
+	char str[200];
+	sprintf(str, "[REWARD::SetRewDur] Set Reward Diration: zone_ind=%d, duration=%d",
+		zone_ind, duration);
+	DebugFlow(str);
 }
 
-void REWARD::SetRewMode(String mode_str, byte arg2)
+void REWARD::SetRewMode(char mode_now[], int arg2)
 {
+	// NOTE: arg2 = reward delay or zone ind or reward duration
+
 	// Store mode
-	mode = mode_str;
+	sprintf(mode_str, "%s", mode_now);
+	mode = mode_now;
 
 	// Store info
 	if (mode == "Free") {
@@ -2231,7 +2262,7 @@ void REWARD::SetRewMode(String mode_str, byte arg2)
 		zoneMax = zoneLng - 1;
 
 		// Store threshold
-		occThresh = (int)arg2 * 1000;
+		occThresh = arg2 * 1000;
 
 	}
 	else if (mode == "Cue") {
@@ -2250,6 +2281,18 @@ void REWARD::SetRewMode(String mode_str, byte arg2)
 		SetRewDur(arg2);
 
 	}
+	else if (mode == "Button") {
+
+		// Set duration
+		duration = arg2;
+
+	}
+
+	// Log/print
+	char str[200];
+	sprintf(str, "[REWARD::SetRewMode] Set Reward Mode: mode=\"%s\", arg2=%d",
+		mode_str, arg2);
+	DebugFlow(str);
 }
 
 bool REWARD::CompZoneBounds(double now_pos, double rew_pos)
@@ -2370,9 +2413,6 @@ void REWARD::ExtendFeedArm()
 		armTarg = armExtStps;
 		doExtendArm = true;
 
-		// Set retract time
-		t_retractArm = millis() + dt_rewBlock;
-
 		// Wake motor
 		digitalWrite(pin.ED_SLP, HIGH);
 
@@ -2383,6 +2423,9 @@ void REWARD::ExtendFeedArm()
 
 		// Set direction to extend
 		digitalWrite(pin.ED_DIR, LOW);
+
+		// Log/print
+		DebugFlow("[REWARD::ExtendFeedArm] Set Extend Feed Arm");
 	}
 }
 
@@ -2403,6 +2446,9 @@ void REWARD::RetractFeedArm()
 
 		// Set direction to retract
 		digitalWrite(pin.ED_DIR, HIGH);
+
+		// Log/print
+		DebugFlow("[REWARD::RetractFeedArm] Set Retract Feed Arm");
 	}
 }
 
@@ -2511,9 +2557,21 @@ void REWARD::CheckFeedArm()
 
 	// Check if its time to retract arm
 	else if (isArmExtended) {
-		// Do not retract if in Manual mode
-		if (millis() > t_retractArm && !fc.isManualSes) {
+
+		if (doTimedRetract &&
+			millis() > t_retractArm) {
+
+			// Log/print
+			char str[200];
+			sprintf(str, "[REWARD::CheckFeedArm] Time to Retract Feeder Arm: dt=%d",
+				millis() - t_retractArm);
+			DebugFlow(str);
+
+			// Set to retract
 			RetractFeedArm();
+
+			// Reset flag
+			doTimedRetract = false;
 		}
 	}
 
@@ -2581,7 +2639,7 @@ void REWARD::Reset()
 	}
 
 	// Reset flags etc
-	mode = "None";
+	sprintf(mode_str, "None");
 	isRewarding = false;
 	isBoundsSet = false;
 	isZoneTriggered = false;
@@ -3054,7 +3112,7 @@ bool LOGGER::SetToLogMode(char log_file[])
 	return pass;
 }
 
-char* LOGGER::QueueLog(char msg[], uint32_t t)
+void LOGGER::QueueLog(char msg[], uint32_t t)
 {
 	/*
 	STORE LOG DATA FOR CS
@@ -3089,7 +3147,7 @@ char* LOGGER::QueueLog(char msg[], uint32_t t)
 			queueIndStore, queueIndRead, queue_state);
 
 		// Set queue back so overflow will write over last log
-		queueIndStore = queueIndStore-1 >= 0 ? queueIndStore - 1 : queueSize-1;
+		queueIndStore = queueIndStore - 1 >= 0 ? queueIndStore - 1 : queueSize - 1;
 
 	}
 	// Update log count
@@ -3103,8 +3161,6 @@ char* LOGGER::QueueLog(char msg[], uint32_t t)
 	// Store log
 	sprintf(logQueue[queueIndStore], "[%d],%lu,%d,%s\r\n", cnt_logsStored, t_m, cnt_loop_short, msg);
 
-	// Return string
-	return logQueue[queueIndStore];
 }
 
 bool LOGGER::StoreLog()
@@ -3407,7 +3463,8 @@ void LOGGER::StreamLogs()
 	DebugFlow(str);
 
 	// Send stat 1 as log
-	Serial1.write(QueueLog(str, millis()));
+	QueueLog(str, millis());
+	Serial1.write(logQueue[queueIndStore]);
 
 	// Print remaining run stats
 	/*
@@ -3421,7 +3478,8 @@ void LOGGER::StreamLogs()
 	DebugFlow(str);
 
 	// Send stat 2 as log
-	Serial1.write(QueueLog(str, millis()));
+	QueueLog(str, millis());
+	Serial1.write(logQueue[queueIndStore]);
 
 	// Print final status then send as log
 	if (!do_abort) {
@@ -3434,7 +3492,8 @@ void LOGGER::StreamLogs()
 	}
 
 	// Send status as log
-	Serial1.write(QueueLog(str, millis()));
+	QueueLog(str, millis());
+	Serial1.write(logQueue[queueIndStore]);
 
 	// End reached send ">>>"
 	if (!do_abort) {
@@ -3459,6 +3518,7 @@ void LOGGER::StreamLogs()
 
 	// Reset flag
 	fc.doLogSend = false;
+	fc.doBlockVccSend = false;
 }
 
 void LOGGER::TestLoad(int n_entry, char log_file[])
@@ -4872,11 +4932,18 @@ void CheckBlockTimElapsed()
 		// Print blocking finished
 		DebugMotorBocking("Finished Blocking Motor at ", "CheckBlockTimElapsed");
 
-		// Retract feeder arm
-		Reward.RetractFeedArm();
-
 		// Set flag to stop checking
 		fc.isBlockingTill = false;
+
+		// Retract arm early if rat ahead
+		if (is_passed_feeder) {
+
+			// Log/print
+			DebugError("**WARNING** [CheckBlockTimElapsed] Unblocking Early because Rat Passed Feeder");
+
+			// Retract feeder arm
+			Reward.RetractFeedArm();
+		}
 
 		// Open up control
 		SetMotorControl("Open", "CheckBlockTimElapsed");
@@ -5607,7 +5674,9 @@ float GetBattVolt()
 		if (round(vccNow * 100) != round(vcc_last * 100)) {
 
 			// Send voltage once streaming established
-			if (fc.isStreaming) {
+			if (fc.isStreaming &&
+				!fc.doBlockVccSend) {
+
 				QueuePacket('c', 'J', vcc_byte, 0, 0, 0, false);
 			}
 
@@ -6014,38 +6083,43 @@ void DebugSent(char targ, char id, byte dat[], uint16_t pack, bool do_conf, int 
 void QueueDebug(char msg[], uint32_t t)
 {
 	// Local vars
-	char msg_in[200] = { 0 };
-	char msg_store[200] = { 0 };
-	char str_tim[200] = { 0 };
 	uint32_t t_m = 0;
 	float t_s = 0;
+	char str[200] = { 0 };
+	char str_tim[100] = { 0 };
 
-	// Copy message
-	strcpy(msg_in, msg);
+	// Update printQueue ind
+	printQueueIndStore++;
 
-	// Make sure data should be printed
-	if (!db.LCD && !db.Console) {
-		return;
+	// Check if ind should roll over 
+	if (printQueueIndStore == printQueueSize) {
+
+		// Reset queueIndWrite
+		printQueueIndStore = 0;
 	}
 
-	// Shift queue
-	for (int r = 0; r < printQueueRows - 1; r++) {
-		for (int c = 0; c < printQueueBytes; c++) {
-			printQueue[r][c] = printQueue[r + 1][c];
-		}
-	}
-
-	// Set queue ind and check for overflow
-	if (printQueueInd == 0)
+	// Check if overfloweed
+	if (printQueue[printQueueIndStore][0] != '\0')
 	{
-		// Store error so this is printed
-		char err_str[100] = "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED";
-		for (int c = 0; c < strlen(err_str) + 1; c++) {
-			msg_in[c] = err_str[c];
+
+		// Get list of empty entries
+		char queue_state[printQueueSize + 1];
+		for (int i = 0; i < printQueueSize; i++) {
+			queue_state[i] = printQueue[i][0] == '\0' ? '0' : '1';
 		}
-	}
-	else {
-		printQueueInd--;
+
+		// Store overflow error instead
+		sprintf(msg, "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED: printQueueIndStore=%d printQueueIndRead=%d queue_state=|%s|",
+			printQueueIndStore, printQueueIndRead, queue_state);
+
+		// Set queue back so overflow will write over last print
+		printQueueIndStore = printQueueIndStore - 1 >= 0 ? printQueueIndStore - 1 : printQueueSize - 1;
+
+		// Log error
+		if (db.log_errors && db.Log) {
+			Log.QueueLog(msg, t);
+		}
+
 	}
 
 	// Get sync correction
@@ -6058,111 +6132,42 @@ void QueueDebug(char msg[], uint32_t t)
 	sprintf(str_tim, "[%0.3f][%d]", t_s, cnt_loop_short);
 
 	// Add space after time
-	char pad[50] = { 0 };
+	char spc[50] = { 0 };
 	char arg[50] = { 0 };
 	sprintf(arg, "%%%ds", 20 - strlen(str_tim));
-	sprintf(pad, arg, '_');
+	sprintf(spc, arg, '_');
 
 	// Put it all together
-	char msg_send[200] = { 0 };
-	sprintf(msg_store, "%s%s%s\n", str_tim, pad, msg_in);
+	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str_tim, spc, msg);
 
-	// Store current message
-	for (int c = 0; c < printQueueBytes; c++) {
-
-		printQueue[printQueueRows - 1][c] = msg_store[c];
-
-		if (printQueue[printQueueRows - 1][c] == '\0') {
-			break;
-		}
-	}
-
-	// Set flag
-	fc.doPrint = true;
 }
 
-// PRINT DEBUG STRINGS TO CONSOLE/LCD
+// PRINT DB INFO
 bool PrintDebug()
 {
-	// Local vars 
-	static int scale_ind = 40 / printQueueRows;
-	int lcd_pos = 0;
-	char msg_print[200] = { 0 };
 
-	// Bail if nothing new to print
-	if (!fc.doPrint)
-		return fc.doPrint;
-
-	// Avoid overlap between sent or rcvd events
-	if (millis() < t_xBeeSent + dt_sendSent ||
-		millis() < t_xBeeRcvd + dt_sendRcvd)
-	{
-		return fc.doPrint;
+	// Bail if nothing in queue
+	if (printQueueIndRead == printQueueIndStore &&
+		printQueue[printQueueIndStore][0] == '\0') {
+		return false;
 	}
 
-	if ((db.LCD && !fc.doBlockLCDlog) ||
-		db.Console)
-	{
-		// Print to console
-		if (db.Console)
-		{
-			// Get current message
-			for (int c = 0; c < printQueueBytes; c++) {
+	// Itterate send ind
+	printQueueIndRead++;
 
-				msg_print[c] = printQueue[printQueueInd][c];
-				if (msg_print[c] == '\0')
-					break;
-			}
-
-			// Print
-			SerialUSB.print(msg_print);
-		}
-
-		// Print to LCD
-		if (db.LCD && !fc.doBlockLCDlog)
-		{
-			// Change settings
-			LCD.setFont(TinyFont);
-			LCD.invert(false);
-
-			// Clear
-			LCD.clrScr();
-			LCD.update();
-
-			// Print all entries
-			for (int r = printQueueRows - 1; r >= printQueueRows - 9; r--)
-			{
-				// Break for empty strings
-				if (printQueue[r][0] == '\0')
-					break;
-
-				// Get pos ind
-				lcd_pos += 6;
-
-				// Print next entry including '\0'
-				for (int c = 0; c < printQueueBytes; c++) {
-					msg_print[c] = printQueue[r][c];
-					if (msg_print[c] == '\0')
-						break;
-				}
-				LCD.print(msg_print, LEFT, lcd_pos);
-
-				// Update
-				LCD.update();
-			}
-		}
-
-		// Update queue index
-		printQueueInd++;
-
-		// Set to not print again if all printed
-		if (printQueueInd >= printQueueRows)
-			fc.doPrint = false;
-
+	// Check if ind should roll over 
+	if (printQueueIndRead == printQueueSize) {
+		printQueueIndRead = 0;
 	}
 
-	// Return print status
-	return fc.doPrint;
+	// Print
+	SerialUSB.print(printQueue[printQueueIndRead]);
+
+	// Set entry to null
+	printQueue[printQueueIndRead][0] = '\0';
+
+	// Return success
+	return true;
 }
 
 // FOR PRINTING TO LCD
@@ -6875,11 +6880,13 @@ void setup() {
 	fc.doAllowRevMove = true;
 
 	// PRINT SETUP FINISHED
-	sprintf(str, "[setup] FINISHED: Setup: free_ram=%dKB", freeMemory());
-	DebugFlow(str);
+	DebugFlow("[setup] FINISHED: Setup");
 	while (PrintDebug());
 
-	// PRINT ALL IN QUEUE
+	// PRINT AVAILABLE MEMORY
+	sprintf(str, "[setup] AVAILABLE MEMORY: %0.2fKB",
+		(float)freeMemory() / 1000);
+	DebugFlow(str);
 	while (PrintDebug());
 
 	// TEMP
@@ -6908,6 +6915,11 @@ void loop() {
 	if (fc.doLogSend) {
 		// Send log
 		Log.StreamLogs();
+
+		// Print
+		if (!fc.doLogSend) {
+			DebugFlow("[loop] FINISHED SENDING LOGS");
+		}
 	}
 	// Send packet
 	else if (fc.doPackSend) {
@@ -6921,9 +6933,7 @@ void loop() {
 	CheckResend('c');
 
 	// PRINT QUEUED DB
-	if (fc.doPrint) {
-		PrintDebug();
-	}
+	PrintDebug();
 
 	// STORE QUEUED LOGS
 	Log.StoreLog();
@@ -6934,7 +6944,9 @@ void loop() {
 
 		// Button triggered reward
 		if (fc.doBtnRew) {
-			Reward.StartRew(true);
+			// Set mode
+			Reward.SetRewMode("Button", 1000);
+			Reward.StartRew();
 			fc.doBtnRew = false;
 		}
 
@@ -6987,21 +6999,13 @@ void loop() {
 	}
 
 	// END ONGOING REWARD
-	if (fc.isRewarding)
-	{
-		if (Reward.EndRew())
-		{
-			fc.doRew = false;
-			fc.isRewarding = false;
+	if (Reward.EndRew()) {
 
-			// Tell CS what zone was rewarded and get confirmation
-			if (
-				Reward.mode != "Now" &&
-				!Reward.isButtonReward
-				) {
-				QueuePacket('c', 'Z', Reward.zoneIndByte + 1, 0, 0, 0, true);
-			}
+		// Tell CS what zone was rewarded and get confirmation
+		if (Reward.mode != "Now" &&
+			Reward.mode != "Button") {
 
+			QueuePacket('c', 'Z', Reward.zoneIndByte + 1, 0, 0, 0, true);
 		}
 	}
 
@@ -7473,6 +7477,10 @@ void loop() {
 
 					// Start reward
 					Reward.StartRew();
+
+					// Reset flag
+					fc.doRew = false;
+
 					// Print message
 					sprintf(horeStr, "[loop] REWARDED ZONE: occ=%dms zone=%d from=%0.2fcm to=%0.2fcm",
 						Reward.occRewarded, Reward.zoneRewarded, Reward.boundsRewarded[0], Reward.boundsRewarded[1]);
@@ -7481,10 +7489,8 @@ void loop() {
 			}
 
 			// Check if rat passed all bounds
-			if (
-				Reward.isAllZonePassed &&
-				!Reward.isZoneTriggered
-				) {
+			if (Reward.isAllZonePassed &&
+				!Reward.isZoneTriggered) {
 
 				// Print reward missed
 				sprintf(horeStr, "[loop] REWARD MISSED: rat=%0.2fcm bound_max=%0.2fcm",
@@ -7686,6 +7692,9 @@ void loop() {
 			U.l = (long)Log.cnt_logBytesStored;
 			byte dat[3] = { U.b[0], U.b[1], U.b[2] };
 			QueuePacket('c', 'U', dat[0], dat[1], dat[2], 0, true);
+
+			// Block sending vcc updates
+			fc.doBlockVccSend = true;
 
 			// Log/print
 			sprintf(horeStr, "[loop] SENDING LOG: logs_stored=~%d bytes_stored=~%d",

@@ -665,7 +665,11 @@ namespace ICR_Run
                 LogEvent("[Run] RUNNING: Wait for Last Confirmation Rat is Out...");
                 pass = WaitForMCOM(id: 'O', timeout: 10000);
                 if (pass)
+                {
+                    // Wait for all the other crap to be relayed from Matlab
+                    Thread.Sleep(1000);
                     LogEvent("[Exit] SUCCEEDED: Wait for Last Confirmation Rat is Out");
+                }
                 else
                     LogEvent("**WARNING** [Exit] ABORTED: Wait for Last Confirmation Rat is Out");
             }
@@ -776,6 +780,9 @@ namespace ICR_Run
             // Start importing log on seperate thread
             if (pass)
             {
+                // Flag logging started and block ParserR2C()
+                robLogger.isLogging = true;
+
                 // Start importing
                 new Thread(delegate ()
                 {
@@ -1858,14 +1865,10 @@ namespace ICR_Run
         public static void GetRobotLog()
         {
             // Local vars
-            UnionHack U = new UnionHack(0, 0, 0, '0', 0);
             long t_stream_str = sw_main.ElapsedMilliseconds;
             long t_timeout = t_stream_str + timeoutImportLog;
             long t_read_last = t_stream_str;
             char[] c_arr = new char[3] { '\0', '\0', '\0' };
-
-            // Prevent xBee event handeler from running
-            robLogger.isLogging = true;
 
             // Start log import
             LogEvent("[GetRobotLog] RUNNING: Robot Log Import...");
@@ -1924,21 +1927,31 @@ namespace ICR_Run
                 // Check for end
                 if (
                     c_arr[0] == '>' &&
-                    c_arr[1] == '>'
+                    c_arr[1] == '>' 
                 )
                 {
                     if (c_arr[2] == '>')
                     {
+                        // Print final status
+                        LogEvent(String.Format("[GetRobotLog] Log Import {0}",
+                            robLogger.prcnt_str[robLogger.prcnt_str.Length - 1]));
+
+                        // Print success termination string received
                         LogEvent(String.Format("[GetRobotLog] Received Send Success Termination String: \"{0}{1}{2}\" rx={3} tx={4}",
                             c_arr[0], c_arr[1], c_arr[2], sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite));
                         send_complete = true;
+
+                        // Break out of loop
                         break;
                     }
                     else if (c_arr[2] == '!')
                     {
+                        // Print abort termination string received
                         LogEvent(String.Format("**WARNING** [GetRobotLog] Received Abort Termination String: \"{0}{1}{2}\" rx={3} tx={4}",
                             c_arr[0], c_arr[1], c_arr[2], sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite));
                         is_robot_abort = true;
+
+                        // Break out of loop
                         break;
                     }
                 }
@@ -1976,10 +1989,6 @@ namespace ICR_Run
             }
             else
             {
-                // Print final status
-                LogEvent(String.Format("[GetRobotLog] Log Import {0}",
-                    robLogger.prcnt_str[robLogger.prcnt_str.Length - 1]));
-
                 // Finished log import
                 LogEvent(String.Format("[GetRobotLog] SUCCEEDED: Robot Log Import: {0}", dat_str));
             }
@@ -2766,10 +2775,6 @@ namespace ICR_Run
             }
             return false;
         }
-
-        #endregion
-
-        #region =============== DEBUGGING ===============
 
         // LOG EVEN STRING
         public static string LogEvent(string msg_in, long t_now = -1, long t_last = -1)
