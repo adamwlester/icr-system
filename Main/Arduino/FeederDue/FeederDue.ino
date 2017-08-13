@@ -102,7 +102,7 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -2178,8 +2178,8 @@ void REWARD::StartRew()
 	}
 
 	// Log/print 
-	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew%dms dt_retract=%d...",
-		mode_str, duration, t_retractArm);
+	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
+		mode_str, duration, t_retractArm- t_rew_str);
 	DebugFlow(str, t_rew_str);
 
 	// Set flags
@@ -2218,7 +2218,7 @@ bool REWARD::EndRew()
 	}
 
 	// Log/print
-	sprintf(str, "[REWARD::EndRew] FINISHED: \"%s\" Reward: dt_rew%dms dt_retract=%d",
+	sprintf(str, "[REWARD::EndRew] FINISHED: \"%s\" Reward: dt_rew=%dms dt_retract=%d",
 		mode_str, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(str, t_rew_end);
 
@@ -2563,8 +2563,8 @@ void REWARD::CheckFeedArm()
 
 			// Log/print
 			char str[200];
-			sprintf(str, "[REWARD::CheckFeedArm] Time to Retract Feeder Arm: dt=%d",
-				millis() - t_retractArm);
+			sprintf(str, "[REWARD::CheckFeedArm] Time to Retract Feeder Arm: dt_rew=%d",
+				millis() - t_rew_str);
 			DebugFlow(str);
 
 			// Set to retract
@@ -3483,11 +3483,11 @@ void LOGGER::StreamLogs()
 
 	// Print final status then send as log
 	if (!do_abort) {
-		sprintf(str, "[LOGGER::StreamLogs] SUCCEEDED: Sending %d Logs", cnt_logsStored);
+		sprintf(str, "[LOGGER::StreamLogs] SUCCEEDED: Sending %d Logs", cnt_logsStored+1);
 		DebugFlow(str);
 	}
 	else {
-		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: Sending %d Logs: errors=%s", cnt_logsStored, err_str);
+		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: Sending %d Logs: errors=%s", cnt_logsStored+1, err_str);
 		DebugError(str);
 	}
 

@@ -6331,7 +6331,7 @@ fprintf('END OF RUN');
             % Add entries
             D.SS_Out_ICR.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
             D.SS_Out_ICR.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
-            D.SS_Out_ICR.(D.PAR.ratLab).Start_Time{rowInd} = datestr(D.T.ses_str_tim, 'HH:MM:SS');
+            D.SS_Out_ICR.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
             D.SS_Out_ICR.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end_tim - D.T.ses_str_tim) / 60;
             D.SS_Out_ICR.(D.PAR.ratLab).Session_Condition(rowInd) = char(D.PAR.sesCond);
             D.SS_Out_ICR.(D.PAR.ratLab).Session_Task(rowInd) = char(D.PAR.sesTask);
