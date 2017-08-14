@@ -1451,10 +1451,12 @@ namespace ICR_Run
                 // Local vars
                 long t_parse_str = sw_main.ElapsedMilliseconds;
                 UnionHack U = new UnionHack(0, 0, 0, '0', 0);
-                bool head_found = false;
-                bool id_found = false;
-                bool foot_found = false;
-                bool for_ard = false;
+                bool r2c_head_found = false;
+                bool r2a_head_found = false;
+                bool r2c_id_found = false;
+                bool r2a_id_found = false;
+                bool r2c_foot_found = false;
+                bool r2a_foot_found = false;
                 byte[] head_bytes = new byte[1];
                 byte[] id_bytes = new byte[1];
                 byte[] conf_bytes = new byte[1];
@@ -1478,43 +1480,57 @@ namespace ICR_Run
                     U.b1 = head_bytes[0];
                     U.b2 = 0; // C# chars are 2 bytes
                     head = U.c1;
+
+                    // Check if for r2c head
                     if (head == r2c.head[0])
-                    {
-                        head_found = true;
-                    }
-                    else if (head == r2a.head[0])
-                    {
-                        for_ard = true;
-                    }
+                        r2c_head_found = true;
+
+                    // Check if for r2a head
+                    if (head == r2a.head[0])
+                        r2a_head_found = true;
+
                 }
 
                 // Find id and check message is intended for CS
-                if (head_found)
+                if (r2c_head_found || r2a_head_found)
                 {
+
                     if (XbeeBuffReady(1, t_parse_str))
                     {
-                        if (head_found)
+
+                        sp_Xbee.Read(id_bytes, 0, 1);
+                        bytes_read += 1;
+                        // Get id
+                        U.b1 = id_bytes[0];
+                        U.b2 = 0;
+                        id = U.c1;
+
+                        // Check for r2c id 
+                        for (int i = 0; i < r2c.id.Length; i++)
                         {
-                            sp_Xbee.Read(id_bytes, 0, 1);
-                            bytes_read += 1;
-                            // Get id
-                            U.b1 = id_bytes[0];
-                            U.b2 = 0;
-                            id = U.c1;
-                            // Check for match
-                            for (int i = 0; i < r2c.id.Length; i++)
+                            if (id == r2c.id[i])
                             {
-                                if (id == r2c.id[i])
-                                {
-                                    id_found = true;
-                                }
+                                r2c_id_found = true;
+                                break;
                             }
                         }
+
+                        // Check for r2a id 
+                        for (int i = 0; i < r2a.id.Length; i++)
+                        {
+                            if (id == r2a.id[i])
+                            {
+                                r2a_id_found = true;
+                                break;
+                            }
+                        }
+
                     }
                 }
 
-                // Check if this is a log packet
-                if (head_found && id_found)
+                // Get data, packet number and do_conf flag
+                if ((r2c_head_found && r2c_id_found) ||
+                    (r2a_head_found && r2a_id_found))
                 {
 
                     // Get data
@@ -1560,121 +1576,131 @@ namespace ICR_Run
                         U.b1 = foot_bytes[0];
                         U.b2 = 0;
                         foot = U.c1;
+
+                        // Check for r2c foot
                         if (foot == r2c.foot[0])
-                        {
-                            foot_found = true;
-                        }
-                    }
+                            r2c_foot_found = true;
 
-                    // Store packet data
-                    if (foot_found)
-                    {
-                        // Update flags
-                        r2c.UpdateSentRcvd(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
-
-                        // Check for repeat packet
-                        string msg_str;
-                        if (pack != r2c.packLast[r2c.ID_Ind(id)])
-                        {
-                            msg_str = String.Format("   [RCVD] r2c: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} parse_dt={9}",
-                            id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
-                        }
-                        else
-                        {
-                            r2c.cnt_repeat++;
-                            msg_str = String.Format("   [*RE-RCVD*] r2c: cnt={0} id=\'{1}\' dat=|{2}|{3}|{4}| pack={5} do_conf={6} bytes_read={7} rx={8} tx={9} parse_dt={10}",
-                            r2c.cnt_repeat, id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
-                        }
-
-                        // Log/print rcvd details
-                        LogEvent(msg_str, r2c.t_new, r2c.t_last);
-
-                        // Check if this is a recieve confirmation
-                        if (c2r.ID_Ind(id) != -1)
-                            c2r.ResetCheckFor(id: id, is_conf: true);
-
-                        // Check if this is a done confirmation
-                        if (id == 'D')
-                            c2r.ResetCheckFor(id: c2r.PackID(pack), is_done: true);
-
-                        // Send recieve confirmation
-                        if (do_conf)
-                            RepeatSendPack(send_max: 1, id: id, dat1: dat[0], dat2: dat[1], dat3: dat[2], pack: pack, do_conf: false);
-
-                        // Check if data should be relayed to Matlab
-                        if (c2m.ID_Ind(id) != -1)
-                            SendMCOM(id: id, dat_num: dat[0]);
-
-                        // Store data bytes to be sent for logging
-                        if (id == 'U')
-                            // Store data byte
-                            robLogger.UpdateBytesToRcv(dat);
+                        // Check for r2a foot
+                        if (foot == r2a.foot[0])
+                            r2a_foot_found = true;
 
                     }
                 }
 
-                // If no bytes read restart loop
-                if (bytes_read == 0)
-                    continue;
-
-                // Dump incomplete packets
-                if (!head_found || !id_found || !foot_found)
+                // Store r2c packet data
+                if (r2c_foot_found)
                 {
+                    // Update flags
+                    r2c.UpdateSentRcvd(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
 
-                    // Check if data intended for CheetahDue
-                    if (for_ard)
+                    // Check for repeat packet
+                    string msg_str;
+                    if (pack != r2c.packLast[r2c.ID_Ind(id)])
                     {
-                        // Dump till CheetahDue footer found
-                        while (
-                            !foot_found && sp_Xbee.BytesToRead > 0 &&
-                            fc.ContinueRobCom()
-                            )
-                        {
-                            sp_Xbee.Read(foot_bytes, 0, 1);
-                            bytes_read += 1;
-                            // Get footer
-                            U.b1 = foot_bytes[0];
-                            U.b2 = 0; // C# chars are 2 bytes
-                            foot = U.c1;
-                            if (foot == r2a.foot[0])
-                            {
-                                foot_found = true;
-                            }
-                        }
-
-                        // Log/print ard message
-                        LogEvent(String.Format("[ParseR2C] Received r2a Packet: bytes_read={0} rx={1} tx={2} parse_dt={3}",
-                            bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str));
+                        msg_str = String.Format("   [RCVD] r2c: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} parse_dt={9}",
+                        id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
                     }
                     else
                     {
-                        // Add to count
+                        r2c.cnt_repeat++;
+                        msg_str = String.Format("   [*RE-RCVD*] r2c: cnt={0} id=\'{1}\' dat=|{2}|{3}|{4}| pack={5} do_conf={6} bytes_read={7} rx={8} tx={9} parse_dt={10}",
+                        r2c.cnt_repeat, id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
+                    }
+
+                    // Log/print rcvd details
+                    LogEvent(msg_str, r2c.t_new, r2c.t_last);
+
+                    // Check if this is a recieve confirmation
+                    if (c2r.ID_Ind(id) != -1)
+                        c2r.ResetCheckFor(id: id, is_conf: true);
+
+                    // Check if this is a done confirmation
+                    if (id == 'D')
+                        c2r.ResetCheckFor(id: c2r.PackID(pack), is_done: true);
+
+                    // Send recieve confirmation
+                    if (do_conf)
+                        RepeatSendPack(send_max: 1, id: id, dat1: dat[0], dat2: dat[1], dat3: dat[2], pack: pack, do_conf: false);
+
+                    // Check if data should be relayed to Matlab
+                    if (c2m.ID_Ind(id) != -1)
+                        SendMCOM(id: id, dat_num: dat[0]);
+
+                    // Store data bytes to be sent for logging
+                    if (id == 'U')
+                        // Store data byte
+                        robLogger.UpdateBytesToRcv(dat);
+
+                }
+
+                // Handle r2a packet
+                else if (r2a_foot_found)
+                {
+                    // Update flags
+                    r2a.UpdateSentRcvd(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
+
+                    // Log/print ard message
+                    string msg_str = String.Format("   [RCVD] r2a: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} parse_dt={9}",
+                       id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
+
+                    // Log/print rcvd details
+                    LogEvent(msg_str, r2c.t_new, r2c.t_last);
+                }
+
+                // If all data found restart loop
+                if ((r2c_head_found && r2c_id_found && r2c_foot_found) ||
+                    (r2a_head_found && r2a_id_found && r2a_foot_found))
+                {
+                    // Change streaming status
+                    if (!fc.isRobComActive)
+                        fc.isRobComActive = true;
+
+                    continue;
+                }
+
+                // If no bytes read restart loop
+                else if (bytes_read == 0)
+                {
+                    continue;
+                }
+
+                // Otherwise handle dropped data
+                else
+                {
+                    // Add to dropped count
+                    if (r2c_head_found)
+                        r2c.AddDropped(1);
+                    else if (r2a_head_found)
+                        r2a.AddDropped(1);
+                    else
                         r2c.AddDropped(1);
 
-                        // Log/print available info
-                        LogEvent(String.Format("**WARNING** [ParseR2C] Dropped r2c Packet: dropped={0}|{1} head={2} id=\'{3}\' dat=|{4}|{5}|{6}| pack={7} do_conf={8} foot={9} bytes_read={10} rx={11} tx={12} parse_dt={13}",
-                            r2c.cnt_dropped[0], r2c.cnt_dropped[1], head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str));
+                    // Get from info
+                    char from = r2c_head_found ? 'c' : r2a_head_found ? 'a' : '?';
 
-                        // Dump buffer if > 1 consecutive drops and no bytes read
-                        if (r2c.cnt_dropped[0] > 1 && bytes_read == 0)
-                        {
-                            LogEvent("**WARNING** [ParseR2C] Dumping r2c Input Buffer");
-                            sp_Xbee.DiscardInBuffer();
-                        }
+                    // Get drop count info
+                    int[] cnt_dropped = new int[2] { r2c_head_found ? r2c.cnt_dropped[0] : r2a_head_found ? r2a.cnt_dropped[0] : r2c.cnt_dropped[0],
+                        r2c_head_found ? r2c.cnt_dropped[1] : r2a_head_found ? r2a.cnt_dropped[1] : r2c.cnt_dropped[1] };
 
-                        // Wait for buffer to refil
-                        //XbeeBuffReady(6, t_parse_str); TEMP
+                    // Get found flags info
+                    string found = String.Format("|{0}|{1}|{2}|",
+                        r2c_head_found ? "r2c_head" : r2a_head_found ? "r2a_head" : "no_head",
+                        r2c_id_found ? "r2c_id" : r2a_id_found ? "r2a_id" : "no_id",
+                        r2c_foot_found ? "r2c_foot" : r2a_foot_found ? "r2a_foot" : "no_foot");
+
+                    // Log/print available info
+                    LogEvent(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packet: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6}|{7}|{8}| pack={9} do_conf={10} foot={11} bytes_read={12} rx={13} tx={14} parse_dt={15}",
+                        from, cnt_dropped[0], cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str));
+
+                    // Dump buffer if > 1 consecutive drops and no bytes read
+                    if (cnt_dropped[0] > 1)
+                    {
+                        LogEvent("**WARNING** [ParseR2C] Dumping r2 Input Buffer");
+                        sp_Xbee.DiscardInBuffer();
                     }
-                    // dump input buffer
-                    //sp_Xbee.DiscardInBuffer();
-
                 }
 
-                // Change streaming status
-                else if (!fc.isRobComActive)
-                {
-                    fc.isRobComActive = true;
-                }
             }
 
         }
@@ -1927,7 +1953,7 @@ namespace ICR_Run
                 // Check for end
                 if (
                     c_arr[0] == '>' &&
-                    c_arr[1] == '>' 
+                    c_arr[1] == '>'
                 )
                 {
                     if (c_arr[2] == '>')
@@ -3330,7 +3356,7 @@ namespace ICR_Run
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
         private static long _blockFor = 60; // (ms) 
-        // Public vars
+                                            // Public vars
         public long[] t_sent = new long[2] { 0, 0 };
         public long[] t_sent_last = new long[2] { 0, 0 };
         public int[,] dt_hist = new int[2, 10];

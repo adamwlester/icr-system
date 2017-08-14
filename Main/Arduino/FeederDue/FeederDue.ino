@@ -102,7 +102,7 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -110,11 +110,11 @@ struct DB
 	const bool print_logging = false;
 	const bool print_c2r = true;
 	const bool print_r2c = true;
-	const bool print_a2r = false;
-	const bool print_r2a = false;
+	const bool print_a2r = true;
+	const bool print_r2a = true;
 	const bool print_rcvdVT = false;
-	const bool print_pid = true;
-	const bool print_bull = true;
+	const bool print_pid = false;
+	const bool print_bull = false;
 	const bool print_logMode = false;
 	const bool print_logStore = false;
 	const bool print_a2o = false;
@@ -467,7 +467,7 @@ const float feedDist = 66;
 float moveToSpeed = 80; // (cm/sec)
 
 // REWARD
-const int dt_rewBlock = 10000; // (ms)
+const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
 // Solonoids
@@ -3771,6 +3771,14 @@ void GetSerial()
 		// Update recive time
 		t_xBeeRcvd = millis();
 
+		// Get id ind
+		if (from == 'c') {
+			id_ind = CharInd(id, c2r.id, c2r.lng);
+		}
+		else if (from == 'a') {
+			id_ind = CharInd(id, a2r.id, a2r.lng);
+		}
+
 		// Send confirmation
 		if (do_conf) {
 			QueuePacket(from, id, dat[0], dat[1], dat[2], pack, false);
@@ -3803,10 +3811,12 @@ void GetSerial()
 
 	// Reset check
 	if (from == 'c') {
-		r2c.doRcvCheck[CharInd(id, r2c.id, r2c.lng)] = false;
+		r2c.doRcvCheck[id_ind] = false;
+		r2c.cnt_resend[id_ind] = 0;
 	}
 	else if (from == 'a') {
-		r2a.doRcvCheck[CharInd(id, r2a.id, r2a.lng)] = false;
+		r2a.doRcvCheck[id_ind] = false;
+		r2a.cnt_resend[id_ind] = 0;
 	}
 
 	// Check for missed packets
@@ -3847,14 +3857,12 @@ void GetSerial()
 	// Update packet history
 	uint16_t pack_last = 0;
 	if (from == 'c') {
-		id_ind = CharInd(id, c2r.id, c2r.lng);
 		c2r.packLast[id_ind] = c2r.pack[id_ind];
 		c2r.pack[id_ind] = pack;
 		c2r.packTot = pack > c2r.packTot ? pack : c2r.packTot;
 		pack_last = c2r.packLast[id_ind];
 	}
 	else if (from == 'a') {
-		id_ind = CharInd(id, a2r.id, a2r.lng);
 		a2r.packLast[id_ind] = a2r.pack[id_ind];
 		a2r.pack[id_ind] = pack;
 		a2r.packTot = pack > a2r.packTot ? pack : a2r.packTot;
@@ -4460,8 +4468,8 @@ bool CheckResend(char targ)
 
 				// Print resent packet
 				char str[200];
-				sprintf(str, "**WARNING** [CheckResend] Resending %s Packet: id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt=%dms resends=%d tx=%d rx=%d",
-					targ == 'c' ? "r2c" : "r2a", id_list[i], dat[0], dat[1], dat[2], pack_list[i], dt_sent, resend_cnt[i], buff_tx, buff_rx);
+				sprintf(str, "**WARNING** [CheckResend] Resending %s Packet: cnt=%d id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt=%dms tx=%d rx=%d",
+					targ == 'c' ? "r2c" : "r2a", resend_cnt[i], id_list[i], dat[0], dat[1], dat[2], pack_list[i], dt_sent, buff_tx, buff_rx);
 				DebugError(str);
 
 				// Set flags
@@ -4473,8 +4481,8 @@ bool CheckResend(char targ)
 			else {
 
 				char str[200];
-				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending %s Packet: id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt=%dms resends=%d tx=%d rx=%d",
-					targ == 'c' ? "r2c" : "r2a", id_list[i], dat[0], dat[1], dat[2], pack_list[i], dt_sent, resend_cnt[i], buff_tx, buff_rx);
+				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending %s Packet: cnt=%d id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt=%dms tx=%d rx=%d",
+					targ == 'c' ? "r2c" : "r2a", resend_cnt[i], id_list[i], dat[0], dat[1], dat[2], pack_list[i], dt_sent, buff_tx, buff_rx);
 				DebugError(str);
 
 				// Reset flag
@@ -6460,7 +6468,20 @@ void LogTrackingData()
 // SEND TEST PACKET
 void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf)
 {
-	// TestSendPack('a', 'r', 0, 0, 0, 1, true);
+	// EXAMPLE:
+	/*
+	static uint32_t t_s = 0;
+	static int send_cnt = 0;
+	static uint16_t pack = 0;
+	if (send_cnt <= 3 && millis()>t_s + 30) {
+		pack++;
+		TestSendPack('c', 'Z', 0, 0, 0, pack, true);
+		t_s = millis();
+		send_cnt++;
+	}
+	// Local vars
+	static char horeStr[200] = { 0 };
+	*/
 
 	//// Only send once
 	//if (cnt_loop_short > 0 || cnt_loop_tot > 0) {
@@ -6470,10 +6491,23 @@ void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t 
 	// Queue packet
 	QueuePacket(targ, id, dat1, dat2, dat3, pack, do_conf);
 
-	// Fuck with packet: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer, [9]targ
+	// Fuck with packet
+	/*
+	STORE DATA FOR CHEETAH DUE
+	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer, [9]targ
+	*/
+	sendQueue[sendQueueInd + 1][8] = 'i';
 
 	// Send packet
 	SendPacket();
+
+	// Block resend
+	if (targ == 'c') {
+		r2c.doRcvCheck[CharInd(id, c2r.id, c2r.lng)] = false;
+	}
+	else {
+		r2a.doRcvCheck[CharInd(id, a2r.id, a2r.lng)] = false;
+	}
 
 	// Print everything
 	while (PrintDebug());
@@ -6899,9 +6933,6 @@ void setup() {
 void loop() {
 
 #pragma region //--- ONGOING OPPERATIONS ---
-
-	// Local vars
-	static char horeStr[200] = { 0 };
 
 	// CHECK LOOP TIME AND MEMORY
 	CheckLoop();
