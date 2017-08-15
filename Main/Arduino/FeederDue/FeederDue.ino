@@ -102,7 +102,7 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -124,7 +124,8 @@ struct DB
 	const bool print_runSpeed = false;
 
 	// Testing
-	const bool do_posDebug = false;
+	const bool do_posDebug = true;
+	const bool do_posPlot = false;
 	bool do_pidCalibration = false;
 	bool do_simRatTest = false;
 
@@ -533,6 +534,7 @@ public:
 	int nLaps = 0;
 	int sampCnt = 0;
 	bool isNew = false;
+	bool is_streamStarted = false;
 	uint32_t t_init;
 	// METHODS
 	POSTRACK(uint32_t t, char obj_id[], int n_samp);
@@ -773,7 +775,7 @@ public:
 	bool doTimedRetract = false;
 	bool doSwtchRelease = false;
 	bool isArmExtended = true;
-	const int armExtStps = 220;
+	const int armExtStps = 140;
 	const int armSwtchReleaseStps = 20;
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
@@ -5160,7 +5162,13 @@ void CheckPixy() {
 	}
 
 	// Bail if rat not in or doing sym test
-	if (!fc.isRatIn || db.do_simRatTest) {
+	if ((!fc.isRatIn || db.do_simRatTest) &&
+		!db.do_posDebug) {
+		return;
+	}
+
+	// Bail if robot not streaming yet
+	if (!Pos[1].is_streamStarted) {
 		return;
 	}
 
@@ -5184,6 +5192,12 @@ void CheckPixy() {
 
 	// Update pixy pos and vel
 	Pos[2].UpdatePos(px_abs, t_px_ts);
+
+	// Log/print first sample
+	if (!Pos[2].is_streamStarted) {
+		DebugFlow("[NetComCallbackVT] FIRST RAT PIXY RECORD");
+		Pos[2].is_streamStarted = true;
+	}
 
 }
 
@@ -7206,10 +7220,12 @@ void loop() {
 			double setpoint_ekf = kal.RobPos + Pid.setPoint;
 
 			// Plot pos
-			/*
-			{@Plot.Pos.Pos[0].Blue Pos[0].posNow}{@Plot.Pos.Pos[2].Green Pos[2].posNow}{@Plot.Pos.Pos[1].Orange Pos[1].posNow}{@Plot.Pos.setpoint_vt.Orange setpoint_vt}{@Plot.Pos.ratEKF.Black kal.RatPos}{@Plot.Pos.robEKF.Red kal.RobPos}{@Plot.Pos.setpoint_ekf.Red kal.setpoint_ekf}
-			*/
-			millis();
+			if (db.do_posPlot) {
+				/*
+				{@Plot.Pos.Pos[0].Blue Pos[0].posNow}{@Plot.Pos.Pos[2].Green Pos[2].posNow}{@Plot.Pos.Pos[1].Orange Pos[1].posNow}{@Plot.Pos.setpoint_vt.Orange setpoint_vt}{@Plot.Pos.ratEKF.Black kal.RatPos}{@Plot.Pos.robEKF.Red kal.RobPos}{@Plot.Pos.setpoint_ekf.Red kal.setpoint_ekf}
+				*/
+				millis();
+			}
 
 			// Turn on rew led when near setpoint
 			if (Pid.error > -0.5 && Pid.error < 0.5 &&
@@ -7219,6 +7235,13 @@ void loop() {
 			else {
 				analogWrite(pin.RewLED_C, rewLEDmin);
 			}
+
+			// Print pos data
+			char str1[50];
+			char str2[50];
+			sprintf(str1, "Rat Dst = %0.2fcm", kal.RatPos - kal.RobPos);
+			sprintf(str2, "Pid Err = %0.2fcm", Pid.error);
+			PrintLCD(str1, str2, 't');
 
 		}
 	}
@@ -7691,21 +7714,37 @@ void loop() {
 			Pos[c2r.vtEnt].UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
 
 			// Set rat vt and pixy to setpoint if rat not in 
-			if (!fc.isRatIn) {
+			if (!fc.isRatIn && !db.do_posDebug) {
 				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
 				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
+			}
+
+			// Log/print first sample
+			if (!Pos[1].is_streamStarted) {
+				DebugFlow("[NetComCallbackVT] FIRST ROBOT VT RECORD");
+				Pos[1].is_streamStarted = true;
 			}
 		}
 
 		// Handle rat vt data
-		else if (c2r.vtEnt == 0 && fc.isRatIn) {
+		else if (c2r.vtEnt == 0){
 
-			// Update rat VT
-			Pos[c2r.vtEnt].UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
+			// Update only after rat in
+			if (fc.isRatIn || db.do_posDebug) {
 
-			// Use rat vt for pixy if running simulated rat test
-			if (c2r.vtEnt == 0 && db.do_simRatTest) {
-				Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+				// Update rat VT
+				Pos[c2r.vtEnt].UpdatePos(c2r.vtCM[c2r.vtEnt], c2r.vtTS[c2r.vtEnt]);
+
+				// Use rat vt for pixy if running simulated rat test
+				if (c2r.vtEnt == 0 && db.do_simRatTest) {
+					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+				}
+
+				// Log/print first sample
+				if (!Pos[0].is_streamStarted) {
+					DebugFlow("[NetComCallbackVT] FIRST RAT VT RECORD");
+					Pos[0].is_streamStarted = true;
+				}
 			}
 
 		}

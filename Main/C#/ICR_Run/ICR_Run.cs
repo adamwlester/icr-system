@@ -104,7 +104,7 @@ namespace ICR_Run
         static readonly object lock_printLog = new object();
 
         // Initialize vt blocking object
-        private static VT_Blocker vtBlocker = new VT_Blocker(_stop_watch: sw_main);
+        private static VT_Handler vtHandler = new VT_Handler(_stop_watch: sw_main);
 
         // Initialize FC to track program flow
         private static Flow_Control fc = new Flow_Control(_lock_print_log: lock_printLog);
@@ -1054,7 +1054,7 @@ namespace ICR_Run
             lock (lock_sendPack)
             {
                 // Block vt sending
-                vtBlocker.Block(id);
+                vtHandler.Block(id);
 
                 // Local vars
                 UnionHack U = new UnionHack(0, 0, 0, '0', 0);
@@ -1295,20 +1295,20 @@ namespace ICR_Run
                 else
                 {
                     // Track send rate
-                    vtBlocker.StoreSendTime((int)dat[0], sw_main.ElapsedMilliseconds);
+                    vtHandler.StoreSendTime((int)dat[0], sw_main.ElapsedMilliseconds);
 
                     // Log/print
                     if ((db.do_printSentRatVT && (int)dat[0] == 0) ||
                         (db.do_printSentRobVT && (int)dat[0] == 1))
                     {
                         dat_str = String.Format("id=\'{0}\' vtEnt={1} vtTS={2} vtCM={3:0.00} dt_send_mu={4}",
-                            id, (int)dat[0], vtTS[(int)dat[0], 1], vtCM[(int)dat[0]], vtBlocker.GetSendDT((int)dat[0], "avg"));
+                            id, (int)dat[0], vtTS[(int)dat[0], 1], vtCM[(int)dat[0]], vtHandler.GetSendDT((int)dat[0], "avg"));
                         LogEvent("   [SENT] c2r: " + dat_str + end_str, c2r.t_new, c2r.t_last);
                     }
                 }
 
                 // Unlock vt sending
-                vtBlocker.Unblock(id);
+                vtHandler.Unblock(id);
 
             }
             lock (lock_queue_sendPack) queue_sendPack--;
@@ -2671,20 +2671,29 @@ namespace ICR_Run
             double x = records.dnextracted_x;
             double y = records.dnextracted_y;
 
-            if (!vtBlocker.CheckBlock(ent))
+            if (!vtHandler.CheckBlock(ent))
             {
                 // Compute position
                 bool pass = CompPos(ent, ts, x, y);
 
                 // Send data
                 if (pass)
+                {
                     RepeatSendPack(send_max: 1, id: 'P', dat1: (double)ent, dat2: (double)vtTS[ent, 1], dat3: (double)vtCM[ent], do_conf: false);
+
+                    // Log/print first record received
+                    if (!vtHandler.is_streamStarted[ent])
+                    {
+                        LogEvent(String.Format("[NetComCallbackVT] FIRST {0} VT RECORD", ent == 0 ? "RAT" : "ROBOT"));
+                        vtHandler.is_streamStarted[ent] = true;
+                    }
+                }
 
             }
             else if (db.do_printBlockedVt)
             {
                 LogEvent(String.Format("**WARNING** [NetComCallbackVT] VT Blocked: ent={0} cnt={1} dt_send={2}|{3}|{4}",
-                    ent, vtBlocker.cnt_block[ent], vtBlocker.GetSendDT(ent), vtBlocker.GetSendDT(ent, "avg"), sw_main.ElapsedMilliseconds - vtBlocker.t_sent[ent]));
+                    ent, vtHandler.cnt_block[ent], vtHandler.GetSendDT(ent), vtHandler.GetSendDT(ent, "avg"), sw_main.ElapsedMilliseconds - vtHandler.t_sent[ent]));
             }
         }
 
@@ -3347,8 +3356,8 @@ namespace ICR_Run
 
     }
 
-    // CLASS TO BLOCK SENDIGN VT DATA
-    class VT_Blocker
+    // CLASS TO HANDLE VT DATA
+    class VT_Handler
     {
         // Private vars
         private static Stopwatch _sw = new Stopwatch();
@@ -3356,7 +3365,8 @@ namespace ICR_Run
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
         private static long _blockFor = 60; // (ms) 
-                                            // Public vars
+        // Public vars
+        public bool[] is_streamStarted = new bool[2] { false, false };
         public long[] t_sent = new long[2] { 0, 0 };
         public long[] t_sent_last = new long[2] { 0, 0 };
         public int[,] dt_hist = new int[2, 10];
@@ -3364,7 +3374,7 @@ namespace ICR_Run
         public int[] cnt_block = new int[2] { 0, 0 };
 
         // Constructor
-        public VT_Blocker(
+        public VT_Handler(
             Stopwatch _stop_watch
             )
         {

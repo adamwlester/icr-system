@@ -209,7 +209,7 @@ fprintf('END OF RUN');
         % Robot guard dist
         D.PAR.guardDist = 4.5 * ((2 * pi)/(140 * pi));
         % PID setPoint
-        D.PAR.setPoint = 42 * ((2 * pi)/(140 * pi));
+        D.PAR.setPoint = 50 * ((2 * pi)/(140 * pi));
         % Robot butt dist
         D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
         % Feeder dist from rob tracker
