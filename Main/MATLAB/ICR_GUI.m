@@ -552,7 +552,7 @@ fprintf('END OF RUN');
                             D.F.do_what_poll = 'RUN MAIN';
                             
                         elseif (D.F.rec_done || D.F.quit) && ~D.F.rat_out
-                            D.F.do_what_poll = 'SEND RAT OUT CONFIRMATION';
+                            D.F.do_what_poll = 'SEND RECORDING DONE CONFIRMATION';
                             
                         elseif D.F.rec_done && D.F.rat_out
                             D.F.do_what_poll = 'WAIT FOR SAVE';
@@ -610,13 +610,13 @@ fprintf('END OF RUN');
                                 Lap_Check();
                                 
                                 
-                            case 'SEND RAT OUT CONFIRMATION'
-                                % --------SEND RAT OUT CONFIRMATION--------
+                            case 'SEND RECORDING DONE CONFIRMATION'
+                                % --------SEND RECORDING DONE CONFIRMATION--------
                                 
-                                % Tell CS rat out confirmation
+                                % Tell CS recording is finished
                                 SendM2C('O');
                                 D.F.rat_out = true;
-                                Console_Write('[MainLoop] SENT RAT OUT CONFIRMATION');
+                                Console_Write('[MainLoop] SENT RECORDING DONE CONFIRMATION');
                                 
                                 
                             case 'WAIT FOR SAVE'

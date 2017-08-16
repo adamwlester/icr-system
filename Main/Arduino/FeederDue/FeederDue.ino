@@ -11,7 +11,8 @@
 
 * XBee DO (to UART rx) buffer = 202 bytes
 
-* DUE SERIAL_BUFFER_SIZE = 128
+* ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO 512
+	Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
 
 * SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 
@@ -102,7 +103,7 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -124,7 +125,7 @@ struct DB
 	const bool print_runSpeed = false;
 
 	// Testing
-	const bool do_posDebug = true;
+	const bool do_posDebug = false;
 	const bool do_posPlot = false;
 	bool do_pidCalibration = false;
 	bool do_simRatTest = false;
@@ -229,7 +230,7 @@ struct FC
 	bool doQuit = false;
 	bool isSesStarted = false;
 	bool doStreamCheck = false;
-	bool isStreaming = false;
+	bool isComsStarted = false;
 	bool isManualSes = false;
 	bool isRatIn = false;
 	bool isTrackingEnabled = false;
@@ -440,11 +441,12 @@ const byte kAcc = 60 * 2;
 const byte kDec = 60 * 2;
 const byte kRun = 60;
 const byte kHold = 60 / 2;
+double runSpeedNow = 0;
+char runDirNow = 'f';
 uint16_t adR_stat = 0x0;
 uint16_t adF_stat = 0x0;
 const int dt_checkAD = 10; // (ms)
-double runSpeedNow = 0;
-char runDirNow = 'f';
+uint32_t t_checkAD = millis() + dt_checkAD; // (ms)
 
 // Kalman model measures
 struct KAL
@@ -460,7 +462,7 @@ kal;
 
 // Pid Settings
 bool doIncludeTerm[2] = { true, true };
-const float pidSetPoint = 42; // (cm)
+const float pidSetPoint = 50; // (cm)
 const float guardDist = 4.5;
 const float feedDist = 66;
 
@@ -508,6 +510,10 @@ volatile int v_dt_ir = 0;
 volatile int v_cnt_ir = 0;
 volatile bool v_doIRhardStop = false;
 volatile bool v_doLogIR = false;
+volatile bool v_stepTimerState = false;
+volatile bool v_stepTimerActive = false;
+volatile int v_cnt_steps = 0;
+volatile int v_stepTarg = 0;
 
 #pragma endregion 
 
@@ -775,12 +781,10 @@ public:
 	bool doTimedRetract = false;
 	bool doSwtchRelease = false;
 	bool isArmExtended = true;
-	const int armExtStps = 140;
+	const int armExtStps = 120;
 	const int armSwtchReleaseStps = 20;
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
-	int armPos = 0;
-	int armTarg = 0;
 	bool isArmStpOn = false;
 	uint32_t t_init;
 	// METHODS
@@ -794,7 +798,6 @@ public:
 	void ExtendFeedArm();
 	void RetractFeedArm();
 	void CheckFeedArm();
-	void MoveFeedArm();
 	void Reset();
 };
 
@@ -951,12 +954,12 @@ void QueuePacket(char targ, char id, byte dat1 = 0, byte dat2 = 0, byte dat3 = 0
 void SendPacket();
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
 bool CheckResend(char targ);
-// CONFIGURE AUTODRIVER BOARDS
-void AD_Config();
 // RESET AUTODRIVER BOARDS
-void AD_Reset();
+void AD_Reset(float max_speed = maxSpeed, float max_acc = maxAcc, float max_dec = maxDec);
+// CONFIGURE AUTODRIVER BOARDS
+void AD_Config(float max_speed, float max_acc, float max_dec);
 // CHECK AUTODRIVER STATUS
-void AD_CheckOC();
+void AD_CheckOC(bool force_check = false);
 // HARD STOP
 void HardStop(char called_from[]);
 // IR TRIGGERED HARD STOP
@@ -1031,6 +1034,10 @@ void RunErrorHold(char msg[], uint32_t t_kill = 0);
 int CharInd(char id, const char id_arr[], int arr_size);
 // BLINK LEDS AT RESTART/UPLOAD
 void StatusBlink(int n_blinks, int dt_led = 0);
+// START TIMER
+void StartTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency);
+// TIMER INTERUPT/HANDLER
+void TC3_Handler();
 // HALT RUN ON IR TRIGGER
 void Interupt_IRprox_Halt();
 // DETECT IR SYNC EVENT
@@ -1419,10 +1426,7 @@ void PID::SetThrottle()
 		) {
 
 		// Change acc to rat pos
-		AD_Reset();
-		AD_R.setAcc(throttleAcc*cm2stp);
-		AD_F.setAcc(throttleAcc*cm2stp);
-		delayMicroseconds(100);
+		AD_Reset(maxSpeed, throttleAcc, maxDec);
 
 		// Set time to throttle till
 		t_throttleTill = millis() + dt_throttle;
@@ -1453,10 +1457,7 @@ void PID::CheckThrottle()
 			) {
 
 			// Set acc back to normal
-			AD_Reset();
-			AD_R.setAcc(maxAcc*cm2stp);
-			AD_F.setAcc(maxAcc*cm2stp);
-			delayMicroseconds(100);
+			AD_Reset(maxSpeed, maxAcc, maxDec);
 
 			// Store time
 			t_lastThrottle = millis();
@@ -2181,7 +2182,7 @@ void REWARD::StartRew()
 
 	// Log/print 
 	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
-		mode_str, duration, t_retractArm- t_rew_str);
+		mode_str, duration, t_retractArm - t_rew_str);
 	DebugFlow(str, t_rew_str);
 
 	// Set flags
@@ -2243,7 +2244,7 @@ void REWARD::SetRewDur(byte zone_ind)
 
 	// Log/print
 	char str[200];
-	sprintf(str, "[REWARD::SetRewDur] Set Reward Diration: zone_ind=%d, duration=%d",
+	sprintf(str, "[REWARD::SetRewDur] Set Reward Diration: zone_ind=%d duration=%d",
 		zone_ind, duration);
 	DebugFlow(str);
 }
@@ -2292,7 +2293,7 @@ void REWARD::SetRewMode(char mode_now[], int arg2)
 
 	// Log/print
 	char str[200];
-	sprintf(str, "[REWARD::SetRewMode] Set Reward Mode: mode=\"%s\", arg2=%d",
+	sprintf(str, "[REWARD::SetRewMode] Set Reward Mode: mode=\"%s\" arg2=%d",
 		mode_str, arg2);
 	DebugFlow(str);
 }
@@ -2409,49 +2410,100 @@ bool REWARD::CheckZoneBounds(double now_pos)
 
 void REWARD::ExtendFeedArm()
 {
-	if (!isArmExtended)
-	{
-		// Set targ and flag
-		armTarg = armExtStps;
-		doExtendArm = true;
+	// Step mode:
+	/*
+		MS1	MS2	MS3	Microstep Resolution	Excitation Mode
+		L	L	L	Full Step	2 Phase
+		H	L	L	Half Step	1 - 2 Phase
+		L	H	L	Quarter Step	W1 - 2 Phase
+		H	H	L	Eigth Step	2W1 - 2 Phase
+		H	H	H	Sixteenth Step	4W1 - 2 Phase
+	*/
 
-		// Wake motor
-		digitalWrite(pin.ED_SLP, HIGH);
-
-		// Set to half step
-		if (digitalRead(pin.ED_MS2) == HIGH) {
-			digitalWrite(pin.ED_MS2, LOW);
-		}
-
-		// Set direction to extend
-		digitalWrite(pin.ED_DIR, LOW);
-
-		// Log/print
-		DebugFlow("[REWARD::ExtendFeedArm] Set Extend Feed Arm");
+	// Bail if arm already extended
+	if (isArmExtended) {
+		return;
 	}
+
+	// Set targ and flag
+	v_stepTarg = armExtStps;
+	doExtendArm = true;
+
+	// Wake motor
+	digitalWrite(pin.ED_SLP, HIGH);
+
+	// Set to half step
+	digitalWrite(pin.ED_MS1, HIGH);
+	digitalWrite(pin.ED_MS2, LOW);
+	digitalWrite(pin.ED_MS3, LOW);
+
+	//// Set to full step
+	//digitalWrite(pin.ED_MS1, LOW);
+	//digitalWrite(pin.ED_MS2, LOW);
+	//digitalWrite(pin.ED_MS3, LOW);
+
+	// Set direction to extend
+	digitalWrite(pin.ED_DIR, LOW);
+
+	// Save start time
+	t_moveArmStr = millis();
+
+	// Set intterupt flag
+	delayMicroseconds(100);
+	v_stepTimerActive = true;
+
+	// Log/print
+	DebugFlow("[REWARD::ExtendFeedArm] Set Extend Feed Arm");
+
 }
 
 void REWARD::RetractFeedArm()
 {
-	if (isArmExtended)
-	{
-		// Set flag
-		doRetractArm = true;
+	// Step mode:
+	/*
+	MS1	MS2	MS3	Microstep Resolution	Excitation Mode
+	L	L	L	Full Step	2 Phase
+	H	L	L	Half Step	1 - 2 Phase
+	L	H	L	Quarter Step	W1 - 2 Phase
+	H	H	L	Eigth Step	2W1 - 2 Phase
+	H	H	H	Sixteenth Step	4W1 - 2 Phase
+	*/
 
-		// Wake motor
-		digitalWrite(pin.ED_SLP, HIGH);
-
-		// Set to quarter step
-		if (digitalRead(pin.ED_MS2) == LOW) {
-			digitalWrite(pin.ED_MS2, HIGH);
-		}
-
-		// Set direction to retract
-		digitalWrite(pin.ED_DIR, HIGH);
-
-		// Log/print
-		DebugFlow("[REWARD::RetractFeedArm] Set Retract Feed Arm");
+	// Bail if arm not extended
+	if (!isArmExtended) {
+		return;
 	}
+
+	// Set targ and flag
+	v_stepTarg = 4 * 200;
+	doRetractArm = true;
+
+	// Wake motor
+	digitalWrite(pin.ED_SLP, HIGH);
+
+	// Set to quarter step
+	digitalWrite(pin.ED_MS1, LOW);
+	digitalWrite(pin.ED_MS2, HIGH);
+	digitalWrite(pin.ED_MS3, LOW);
+
+	//// Set to half step
+	//digitalWrite(pin.ED_MS1, HIGH);
+	//digitalWrite(pin.ED_MS2, LOW);
+	//digitalWrite(pin.ED_MS3, LOW);
+
+	// Set direction to retract
+	digitalWrite(pin.ED_DIR, HIGH);
+
+	// Save start time
+	t_moveArmStr = millis();
+
+	// Set intterupt flag
+	delayMicroseconds(100);
+	v_stepTimerActive = true;
+
+	// Log/print
+	DebugFlow("[REWARD::RetractFeedArm] Set Retract Feed Arm");
+
 }
 
 void REWARD::CheckFeedArm()
@@ -2460,108 +2512,11 @@ void REWARD::CheckFeedArm()
 	bool is_move_done = false;
 	bool is_timedout = false;
 
-	if (doExtendArm || doRetractArm)
-	{
-		// Save start time
-		if (t_moveArmStr == 0) {
-			t_moveArmStr = millis();
-		}
+	// Do timed retract
+	if (doTimedRetract) {
 
-		// Check if still extending
-		if (doExtendArm) {
-			if (armPos >= armTarg) {
-				is_move_done = true;
-			}
-		}
-
-		// Check if still retracting
-		if (doRetractArm)
-		{
-			// Check if switch not triggered
-			if (digitalRead(pin.FeedSwitch) == HIGH &&
-				(doSwtchRelease && armPos >= armTarg)) {
-				is_move_done = true;
-			}
-
-			// Set to release tension on switch
-			else if (digitalRead(pin.FeedSwitch) == LOW &&
-				!doSwtchRelease) {
-
-				// Set direction to extend
-				digitalWrite(pin.ED_DIR, LOW);
-
-				// Set pos and target
-				armPos = 0;
-				armTarg = armSwtchReleaseStps;
-
-				// Set flags
-				doSwtchRelease = true;
-			}
-		}
-
-		// Check if timedout
-		if (millis() > t_moveArmStr + armMoveTimeout) {
-			is_move_done = true;
-			is_timedout = true;
-		}
-
-		// Move arm
-		if (!is_move_done) {
-			MoveFeedArm();
-		}
-
-		// Target reached
-		else {
-			// Unstep motor
-			if (digitalRead(pin.ED_STP) == HIGH) {
-				digitalWrite(pin.ED_STP, LOW);
-			}
-
-			// Sleep motor
-			digitalWrite(pin.ED_SLP, LOW);
-
-			// Set arm state flags
-			if (doExtendArm) {
-				isArmExtended = true;
-			}
-			else if (doRetractArm) {
-				isArmExtended = false;
-			}
-
-			// Log/print status
-			char str[200];
-			if (!is_timedout) {
-				sprintf(str, "[REWARD::CheckFeedArm] SUCCEEDED: Arm %s: arm_pos=%d dt_move=%d",
-					isArmExtended ? "Extend" : "Retract", armPos, millis() - t_moveArmStr);
-				DebugFlow(str);
-			}
-			else {
-				sprintf(str, "!!ERROR!! [REWARD::CheckFeedArm] TIMEDOUT: Arm %s: arm_pos=%d dt_move=%d",
-					isArmExtended ? "Extend" : "Retract", armPos, millis() - t_moveArmStr);
-				DebugError(str);
-			}
-
-			// Reset pos time and flags
-			armPos = isArmExtended ? armExtStps : 0;
-			t_moveArmStr = 0;
-			isArmStpOn = false;
-			doExtendArm = false;
-			doRetractArm = false;
-			doSwtchRelease = false;
-		}
-	}
-
-	// Make sure motor asleep
-	else if (digitalRead(pin.ED_SLP) == HIGH) {
-		// Sleep motor
-		digitalWrite(pin.ED_SLP, LOW);
-	}
-
-	// Check if its time to retract arm
-	else if (isArmExtended) {
-
-		if (doTimedRetract &&
-			millis() > t_retractArm) {
+		// Check if its time to retract arm
+		if (millis() > t_retractArm) {
 
 			// Log/print
 			char str[200];
@@ -2577,46 +2532,109 @@ void REWARD::CheckFeedArm()
 		}
 	}
 
-}
-
-void REWARD::MoveFeedArm()
-{
-	// Local vars
-	static uint32_t t_step_high = micros(); // (us)
-	static uint32_t t_step_low = micros(); // (us)
-
-	// Step motor
-	if (!isArmStpOn) {
-		// Add min delay
-		int del = dt_step_low - (micros() - t_step_low);
-		if (del > 0) {
-			delayMicroseconds(del);
+	// Bail if no moving to do
+	if (!doExtendArm &&
+		!doRetractArm)
+	{
+		// Make sure motor asleep
+		if (digitalRead(pin.ED_SLP) == HIGH) {
+			// Sleep motor
+			digitalWrite(pin.ED_SLP, LOW);
 		}
-
-		// Set step high
-		digitalWrite(pin.ED_STP, HIGH);
-		t_step_high = micros();
-
-		// Incriment step
-		armPos++;
-
-		// Set flag
-		isArmStpOn = true;
+		return;
 	}
-	// Unstep motor
-	else {
-		// Add min delay
-		int del = dt_step_high - (micros() - t_step_high);
-		if (del > 0) {
-			delayMicroseconds(del);
+
+	// Check if done extending
+	if (doExtendArm) {
+		if (v_cnt_steps >= v_stepTarg) {
+
+			is_move_done = true;
+		}
+	}
+
+	// Check if done retracting
+	if (doRetractArm)
+	{
+		// Check if switch released
+		if (digitalRead(pin.FeedSwitch) == HIGH &&
+			(doSwtchRelease && v_cnt_steps >= v_stepTarg)) {
+
+			is_move_done = true;
 		}
 
-		// Set step low
-		digitalWrite(pin.ED_STP, LOW);
-		t_step_low = micros();
+		// Set to release tension on switch
+		else if (digitalRead(pin.FeedSwitch) == LOW &&
+			!doSwtchRelease) {
 
-		// Set flag
+			// Block handler
+			v_stepTimerActive = false;
+			delayMicroseconds(100);
+
+			// Set direction to extend
+			digitalWrite(pin.ED_DIR, LOW);
+
+			// Set step count and target
+			v_cnt_steps = 0;
+			v_stepTarg = armSwtchReleaseStps;
+
+			// Reset intterupt flag
+			delayMicroseconds(100);
+			v_stepTimerActive = true;
+
+			// Set flags
+			doSwtchRelease = true;
+		}
+	}
+
+	// Check if timedout
+	if (millis() > t_moveArmStr + armMoveTimeout) {
+
+		is_timedout = true;
+	}
+
+	// Target reached
+	if (is_move_done || is_timedout) {
+
+		// Set intterupt flag
+		v_stepTimerActive = false;
+
+		// Unstep motor
+		if (digitalRead(pin.ED_STP) == HIGH) {
+			digitalWrite(pin.ED_STP, LOW);
+		}
+
+		// Sleep motor
+		digitalWrite(pin.ED_SLP, LOW);
+
+		// Set arm state flags
+		if (doExtendArm) {
+			isArmExtended = true;
+		}
+		else if (doRetractArm) {
+			isArmExtended = false;
+		}
+
+		// Log/print status
+		char str[200];
+		if (!is_timedout) {
+			sprintf(str, "[REWARD::CheckFeedArm] SUCCEEDED: Arm %s: cnt_steps=%d step_targ=%d dt_move=%d",
+				isArmExtended ? "Extend" : "Retract", v_cnt_steps, v_stepTarg, millis() - t_moveArmStr);
+			DebugFlow(str);
+		}
+		else {
+			sprintf(str, "!!ERROR!! [REWARD::CheckFeedArm] TIMEDOUT: Arm %s: cnt_steps=%d step_targ=%d dt_move=%d",
+				isArmExtended ? "Extend" : "Retract", v_cnt_steps, v_stepTarg, millis() - t_moveArmStr);
+			DebugError(str);
+		}
+
+		// Reset pos time and flags
+		v_cnt_steps = 0;
+		v_stepTarg = 0;
+		t_moveArmStr = 0;
 		isArmStpOn = false;
+		doExtendArm = false;
+		doRetractArm = false;
+		doSwtchRelease = false;
 	}
 }
 
@@ -3426,9 +3444,6 @@ void LOGGER::StreamLogs()
 			}
 
 			// Send new byte
-			/*
-			SerialUSB.write(PrintSpecialChars(c_arr[2]));
-			*/
 			Serial1.write(c_arr[2]);
 			t_last_write = micros();
 			cnt_logBytesSent++;
@@ -3485,11 +3500,11 @@ void LOGGER::StreamLogs()
 
 	// Print final status then send as log
 	if (!do_abort) {
-		sprintf(str, "[LOGGER::StreamLogs] SUCCEEDED: Sending %d Logs", cnt_logsStored+1);
+		sprintf(str, "[LOGGER::StreamLogs] SUCCEEDED: Sent %d Logs", cnt_logsStored + 1);
 		DebugFlow(str);
 	}
 	else {
-		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: Sending %d Logs: errors=%s", cnt_logsStored+1, err_str);
+		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: Sending %d Logs: errors=%s", cnt_logsStored + 1, err_str);
 		DebugError(str);
 	}
 
@@ -3786,9 +3801,9 @@ void GetSerial()
 			QueuePacket(from, id, dat[0], dat[1], dat[2], pack, false);
 		}
 
-		// Check for streaming started
-		if (from == 'c' && !fc.isStreaming) {
-			fc.isStreaming = true;
+		// Set coms started flag
+		if (from == 'c' && !fc.isComsStarted) {
+			fc.isComsStarted = true;
 		}
 	}
 
@@ -4312,8 +4327,7 @@ void SendPacket()
 	// Send sync time or rew tone immediately
 	if (
 		(id == 'r' || id == 'h') &&
-		Serial1.availableForWrite() > msg_lng + 10 &&
-		Serial1.available() < 100
+		Serial1.availableForWrite() > msg_lng + 10
 		) {
 
 		do_send = true;
@@ -4503,7 +4517,7 @@ bool CheckResend(char targ)
 #pragma region --------MOVEMENT AND TRACKING---------
 
 // CONFIGURE AUTODRIVER BOARDS
-void AD_Config()
+void AD_Config(float max_speed, float max_acc, float max_dec)
 {
 	// Set busy pin as BUSY_PIN or SYNC_PIN;
 	/*
@@ -4575,30 +4589,30 @@ void AD_Config()
 	// ---------SPEED SETTTINGS---------
 
 	// Steps/s max
-	AD_R.setMaxSpeed(maxSpeed * cm2stp);
-	AD_F.setMaxSpeed(maxSpeed * cm2stp);
+	AD_R.setMaxSpeed(max_speed * cm2stp);
+	AD_F.setMaxSpeed(max_speed * cm2stp);
 
 	// Minimum speed
 	AD_R.setMinSpeed(10 * cm2stp);
 	AD_F.setMinSpeed(10 * cm2stp);
 
 	// Full speed
-	AD_R.setFullSpeed(maxSpeed * cm2stp);
-	AD_F.setFullSpeed(maxSpeed * cm2stp);
+	AD_R.setFullSpeed(max_speed * cm2stp);
+	AD_F.setFullSpeed(max_speed * cm2stp);
 
 	// Acceleration
 	/*
 	Accelerate at maximum steps/s/s; 0xFFF = infinite
 	*/
-	AD_R.setAcc(maxAcc * cm2stp);
-	AD_F.setAcc(maxAcc * cm2stp);
+	AD_R.setAcc(max_acc * cm2stp);
+	AD_F.setAcc(max_acc * cm2stp);
 
 	// Deceleration
 	/*
 	Deccelerate at maximum steps/s/s; 0xFFF = infinite
 	*/
-	AD_R.setDec(maxDec * cm2stp);
-	AD_F.setDec(maxDec * cm2stp);
+	AD_R.setDec(max_dec * cm2stp);
+	AD_F.setDec(max_dec * cm2stp);
 
 	// ---------KVAL SETTTINGS---------
 	/*
@@ -4632,28 +4646,28 @@ void AD_Config()
 }
 
 // RESET AUTODRIVER BOARDS
-void AD_Reset()
+void AD_Reset(float max_speed, float max_acc, float max_dec)
 {
 	// Reset each axis
 	AD_R.resetDev();
-	delayMicroseconds(100);
 	AD_F.resetDev();
 	delayMicroseconds(100);
+
 	// Configure each axis
-	AD_Config();
+	AD_Config(max_speed, max_acc, max_dec);
 	delayMicroseconds(100);
-	AD_R.getStatus();
+	AD_CheckOC(true);
 	delayMicroseconds(100);
-	AD_F.getStatus();
-	delayMicroseconds(100);
+
+	// Run motor at last speed
+	RunMotor(runDirNow, runSpeedNow, "Override");
 }
 
 // CHECK AUTODRIVER STATUS
-void AD_CheckOC()
+void AD_CheckOC(bool force_check)
 {
 	// Local vars
 	char str[200] = { 0 };
-	static uint32_t t_checkAD = 0;
 	static bool dp_disable = false;
 	static int cnt_errors = 0;
 	static int ocd_last_r = 1;
@@ -4661,43 +4675,47 @@ void AD_CheckOC()
 	int ocd_r;
 	int ocd_f;
 
+	// Bail if check disabled
 	if (dp_disable) {
 		return;
 	}
 
-	if (
-		millis() > t_checkAD &&
-		cnt_errors < 5
-		) {
+	// Bail if not time for next check
+	if (!force_check &&
+		millis() < t_checkAD) {
 
-		adR_stat = AD_R.getStatus();
-		ocd_r = CheckAD_Status(adR_stat, "OCD");
-		adF_stat = AD_F.getStatus();
-		ocd_f = CheckAD_Status(adF_stat, "OCD");
-
-		// Check for overcurrent shut down
-		if (ocd_r == 0 || ocd_f == 0) {
-
-			// Track events
-			cnt_errors++;
-
-			// Reset motors
-			AD_Reset();
-
-			// Log/print
-			sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected & Motor Reset: now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d", ocd_r, ocd_f, ocd_last_r, ocd_last_f);
-			DebugError(str);
-		}
-
-		// Store status
-		ocd_last_r = ocd_r;
-		ocd_last_f = ocd_f;
-
-		// Set next check
-		t_checkAD = millis() + dt_checkAD;
+		return;
 	}
-	// Disable error checking after 5 hits
-	else if (cnt_errors >= 5) {
+
+	// Get/check 16 bit status flag
+	adR_stat = AD_R.getStatus();
+	ocd_r = CheckAD_Status(adR_stat, "OCD");
+	adF_stat = AD_F.getStatus();
+	ocd_f = CheckAD_Status(adF_stat, "OCD");
+
+	// Check for overcurrent shut down
+	if (ocd_r == 0 || ocd_f == 0) {
+
+		// Track events
+		cnt_errors++;
+
+		// Reset motors
+		AD_Reset();
+
+		// Log/print
+		sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected & Motor Reset: now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d", ocd_r, ocd_f, ocd_last_r, ocd_last_f);
+		DebugError(str);
+	}
+
+	// Store status
+	ocd_last_r = ocd_r;
+	ocd_last_f = ocd_f;
+
+	// Set next check
+	t_checkAD = millis() + dt_checkAD;
+
+	// Disable checking after 5 errors
+	if (cnt_errors >= 5) {
 		sprintf(str, "!!ERROR!! [AD_CheckOC] Disabled AD Check After %d Errors", cnt_errors);
 		DebugError(str);
 		dp_disable = true;
@@ -4949,7 +4967,7 @@ void CheckBlockTimElapsed()
 		if (is_passed_feeder) {
 
 			// Log/print
-			DebugError("**WARNING** [CheckBlockTimElapsed] Unblocking Early because Rat Passed Feeder");
+			DebugFlow("[CheckBlockTimElapsed] Unblocking Early because Rat Passed Feeder");
 
 			// Retract feeder arm
 			Reward.RetractFeedArm();
@@ -5432,7 +5450,7 @@ bool GetButtonInput()
 
 	}
 
-	// Check if more than one button triggered
+	// Check for multiple triggers
 	int btn_trg[2] = { 0 };
 	for (int i = 0; i < 3; i++) {
 
@@ -5449,6 +5467,12 @@ bool GetButtonInput()
 			btn_trg[0] = do_flag_fun[i][j] ? i : btn_trg[0];
 			btn_trg[1] = do_flag_fun[i][j] ? j : btn_trg[1];
 		}
+	}
+
+	// Turn on LCD if any fucntion flagged
+	for (int i = 0; i < 3; i++) {
+		if (do_flag_fun[i][0] || do_flag_fun[i][1])
+			ChangeLCDlight(25);
 	}
 
 	// Set button 1 function flag
@@ -5695,8 +5719,8 @@ float GetBattVolt()
 		// Send and print if voltage changed
 		if (round(vccNow * 100) != round(vcc_last * 100)) {
 
-			// Send voltage once streaming established
-			if (fc.isStreaming &&
+			// Send voltage once coms established
+			if (fc.isComsStarted &&
 				!fc.doBlockVccSend) {
 
 				QueuePacket('c', 'J', vcc_byte, 0, 0, 0, false);
@@ -6033,12 +6057,12 @@ void DebugRcvd(char from, char id, float dat[], uint16_t pack, bool do_conf, int
 	// Print specific pack contents
 	char str[200];
 	if (id != 'P') {
-		sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d",
-			id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx);
+		sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_sent=%d",
+			id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
 	}
 	else {
-		sprintf(str, "id=\'%c\' vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d",
-			id, c2r.vtEnt, c2r.vtTS[c2r.vtEnt], c2r.vtCM[c2r.vtEnt], millis() - Pos[c2r.vtEnt].t_msNow, pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx);
+		sprintf(str, "id=\'%c\' vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_sent=%d",
+			id, c2r.vtEnt, c2r.vtTS[c2r.vtEnt], c2r.vtCM[c2r.vtEnt], millis() - Pos[c2r.vtEnt].t_msNow, pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
 	}
 
 	// Concatinate strings
@@ -6084,8 +6108,8 @@ void DebugSent(char targ, char id, byte dat[], uint16_t pack, bool do_conf, int 
 
 	// Make string
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, cnt_queued);
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_rcvd=%d queued=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis()- t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
 	strcat(msg, str);
@@ -6635,6 +6659,73 @@ void StatusBlink(int n_blinks, int dt_led)
 
 #pragma region --------INTERUPTS---------
 
+// START TIMER
+void StartTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency) {
+
+	// Taken from: https://forum.arduino.cc/index.php?topic=130423.0
+
+	// Parameters:
+	/*
+		TC1 : timer counter. Can be TC0, TC1 or TC2
+		0   : channel. Can be 0, 1 or 2
+		TC3_IRQn: irq number. See table.
+		40  : frequency (in Hz)
+		The interrupt service routine is TC3_Handler. See table.
+	*/
+
+	// Paramters table:
+	/*
+		TC0, 0, TC0_IRQn  =>  TC0_Handler()
+		TC0, 1, TC1_IRQn  =>  TC1_Handler()
+		TC0, 2, TC2_IRQn  =>  TC2_Handler()
+		TC1, 0, TC3_IRQn  =>  TC3_Handler()
+		TC1, 1, TC4_IRQn  =>  TC4_Handler()
+		TC1, 2, TC5_IRQn  =>  TC5_Handler()
+		TC2, 0, TC6_IRQn  =>  TC6_Handler()
+		TC2, 1, TC7_IRQn  =>  TC7_Handler()
+		TC2, 2, TC8_IRQn  =>  TC8_Handler()
+	*/
+
+	// Black Magic
+	pmc_set_writeprotect(false);
+	pmc_enable_periph_clk((uint32_t)irq);
+	TC_Configure(tc, channel, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
+	uint32_t rc = VARIANT_MCK / 128 / frequency; //128 because we selected TIMER_CLOCK4 above
+	TC_SetRA(tc, channel, rc / 2); //50% high, 50% low
+	TC_SetRC(tc, channel, rc);
+	TC_Start(tc, channel);
+	tc->TC_CHANNEL[channel].TC_IER = TC_IER_CPCS;
+	tc->TC_CHANNEL[channel].TC_IDR = ~TC_IER_CPCS;
+	NVIC_EnableIRQ(irq);
+}
+
+// TIMER INTERUPT/HANDLER
+void TC3_Handler()
+{
+	// Needed to "accept" interrupt and uses first two parameters in startTimer()
+	TC_GetStatus(TC1, 0);
+
+	// Bail if not active now
+	if (!v_stepTimerActive) {
+		return;
+	}
+
+	// Bail when step off and  target reached
+	if (!v_stepTimerState &&
+		v_cnt_steps >= v_stepTarg) {
+		return;
+	}
+
+	// Itterate count
+	v_cnt_steps += v_stepTimerState ? 1 : 0;
+
+	// Set state
+	v_stepTimerState = !v_stepTimerState;
+
+	// Step motor
+	digitalWrite(pin.ED_STP, v_stepTimerState);
+}
+
 // HALT RUN ON IR TRIGGER
 void Interupt_IRprox_Halt() {
 
@@ -6734,6 +6825,15 @@ void setup() {
 	// Relays
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
+	// Big Easy Driver
+	digitalWrite(pin.ED_MS1, LOW);
+	digitalWrite(pin.ED_MS2, LOW);
+	digitalWrite(pin.ED_MS3, LOW);
+	digitalWrite(pin.ED_RST, LOW);
+	digitalWrite(pin.ED_SLP, LOW);
+	digitalWrite(pin.ED_DIR, LOW);
+	digitalWrite(pin.ED_STP, LOW);
+	digitalWrite(pin.ED_ENBL, LOW);
 	// OpenLog
 	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
@@ -6809,17 +6909,12 @@ void setup() {
 
 	// SETUP BIG EASY DRIVER
 
-	// Set to 1/2 step mode
-	digitalWrite(pin.ED_MS1, HIGH);
-	digitalWrite(pin.ED_MS2, LOW);
-	digitalWrite(pin.ED_MS3, LOW);
-
 	// Start BigEasyDriver in sleep
 	digitalWrite(pin.ED_RST, HIGH);
 	digitalWrite(pin.ED_SLP, LOW);
-	digitalWrite(pin.ED_DIR, LOW);
-	digitalWrite(pin.ED_STP, LOW);
-	digitalWrite(pin.ED_ENBL, LOW);
+
+	// Start direction retract
+	digitalWrite(pin.ED_DIR, HIGH);
 
 	// INITIALIZE PIXY
 	Pixy.init();
@@ -6894,10 +6989,12 @@ void setup() {
 	// DEFINE EXTERNAL INTERUPTS
 	uint32_t t_check_ir = millis() + 1000;
 	bool is_ir_low = false;
-	// IR detector
+
+	// Check if IR detector already high
 	while (!is_ir_low && millis() < t_check_ir) {
 		is_ir_low = digitalRead(pin.IRdetect) == LOW;
 	}
+
 	// Do not enable if ir detector pin already high
 	if (is_ir_low) {
 		// IR detector
@@ -6915,6 +7012,9 @@ void setup() {
 
 	// IR prox left
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+
+	// Start Feed Arm timer
+	StartTimer(TC1, 0, TC3_IRQn, 1000);
 
 	// CLEAR LCD
 	ChangeLCDlight(0);
@@ -7229,7 +7329,9 @@ void loop() {
 
 			// Turn on rew led when near setpoint
 			if (Pid.error > -0.5 && Pid.error < 0.5 &&
-				fc.isTrackingEnabled) {
+				Pos[0].is_streamStarted &&
+				Pos[1].is_streamStarted) {
+
 				analogWrite(pin.RewLED_C, 10);
 			}
 			else {
@@ -7696,7 +7798,7 @@ void loop() {
 	}
 
 	// Check for streaming
-	if (fc.doStreamCheck && fc.isStreaming)
+	if (fc.doStreamCheck && Pos[1].is_streamStarted)
 	{
 		QueuePacket('c', 'D', 0, 0, 0, c2r.pack[CharInd('V', c2r.id, c2r.lng)], true);
 		fc.doStreamCheck = false;
@@ -7727,7 +7829,7 @@ void loop() {
 		}
 
 		// Handle rat vt data
-		else if (c2r.vtEnt == 0){
+		else if (c2r.vtEnt == 0) {
 
 			// Update only after rat in
 			if (fc.isRatIn || db.do_posDebug) {

@@ -632,7 +632,7 @@ namespace ICR_Run
             // Stay in loop till rat is out or error
             while (
                 com_netComClient.AreWeConnected() &&
-                !fc.isRatOut &&
+                !fc.isRecDone &&
                 !fc.doAbort
                 ) ;
             if (!fc.doAbort)
@@ -659,8 +659,8 @@ namespace ICR_Run
             // Local vars
             bool pass;
 
-            // Check if we have confirmed rat is out of icr
-            if (fc.isRatIn && !fc.isRatOut)
+            // Check if we have confirmed rat is out and recording is done
+            if (fc.isRatIn && !fc.isRecDone)
             {
                 LogEvent("[Run] RUNNING: Wait for Last Confirmation Rat is Out...");
                 pass = WaitForMCOM(id: 'O', timeout: 10000);
@@ -737,7 +737,7 @@ namespace ICR_Run
             }
 
             // Enable ICR_GUI save button
-            if (!fc.doAbort)
+            if (fc.isRecDone && !fc.isGUIquit)
             {
                 SendMCOM(id: 'Y', dat_num: 1);
                 LogEvent("[Exit] SUCCEEDED: Save Enabled");
@@ -765,6 +765,8 @@ namespace ICR_Run
                 long t_byte_cnt_timeout = sw_main.ElapsedMilliseconds + 5000;
                 while (robLogger.bytesToRcv == 0 && sw_main.ElapsedMilliseconds < t_byte_cnt_timeout)
                     Thread.Sleep(1);
+
+                // Check if message received
                 pass = robLogger.bytesToRcv > 0;
                 if (pass)
                 {
@@ -801,7 +803,7 @@ namespace ICR_Run
             }
 
             // Wait for save complete
-            if (fc.isSaveEnabled)
+            if (fc.isSaveEnabled && !fc.isGUIquit)
             {
                 LogEvent("[Exit] RUNNING: Wait for ICR_GUI to Save...");
                 while (!fc.isSesSaved && !fc.doAbort) ;
@@ -1068,6 +1070,7 @@ namespace ICR_Run
                 bool buff_ready = false;
                 bool is_clogged = false;
                 bool is_hanging = false;
+                string dat_str = "";
 
                 // Wait for next safe send time
                 do
@@ -1076,7 +1079,7 @@ namespace ICR_Run
                     t_send = c2r.t_new > r2c.t_new ? c2r.t_new + dt_sendSent : r2c.t_new + dt_sendRcvd;
 
                     // Make sure outbut and input buffer have enough space
-                    buff_ready = sp_Xbee.BytesToWrite < 1 && sp_Xbee.BytesToRead < 1;
+                    buff_ready = sp_Xbee.BytesToWrite == 0 && sp_Xbee.BytesToRead == 0;
 
                     // Check if loop should continue
                     do_loop =
@@ -1090,13 +1093,15 @@ namespace ICR_Run
                     // Check if queue backed up or hanging
                     if (is_clogged || is_hanging)
                     {
+                        // Get data string
+                        dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| tx={4} rx={5} queued={6} queue_dt={7}", 
+                            id, dat[0], dat[1], dat[2], sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued);
+
                         // Log/print
                         if (is_clogged)
-                            LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Clogged: id=\'{0}\' tx={1} rx={2} queued={3} queue_dt={4}",
-                                id, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued));
+                            LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Clogged: {0}", dat_str));
                         if (is_hanging)
-                            LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Hanging: id=\'{0}\' tx={1} rx={2} queued={3} queue_dt={4}",
-                            id, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued));
+                            LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Hanging: {0}", dat_str));
 
                         // Bail if this is pos data
                         if (id == 'P')
@@ -1270,9 +1275,6 @@ namespace ICR_Run
                 c2r.UpdateSentRcvd(id: id, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                 // Print sent data
-                string dat_str;
-
-                // Print sent mesage packet
                 dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}|", id, dat[0], dat[1], dat[2]);
 
                 // Store common info
@@ -2332,11 +2334,11 @@ namespace ICR_Run
                 LogEvent("[ProgressChanged_MatCOM] ICR_GUI Confirmed Rat Taken Into ICR");
             }
 
-            // Check for rat out command
+            // Check for Recording done command
             else if (id == 'O')
             {
-                fc.isRatOut = true;
-                LogEvent("[ProgressChanged_MatCOM] ICR_GUI Confirmed Rat Taken Out of ICR");
+                fc.isRecDone = true;
+                LogEvent("[ProgressChanged_MatCOM] ICR_GUI Confirmed Recording Done and Rat Out");
             }
 
             // Check for quit
@@ -2894,7 +2896,7 @@ namespace ICR_Run
         public bool isArdComActive = false;
         public bool isMovedToStart = false;
         public bool isRatIn = false;
-        public bool isRatOut = false;
+        public bool isRecDone = false;
         public bool isSaveEnabled = false;
         public bool isSesSaved = false;
         public bool isGUIquit = false;

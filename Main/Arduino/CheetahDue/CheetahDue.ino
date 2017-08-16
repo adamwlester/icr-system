@@ -144,8 +144,8 @@ int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
 const int dt_sendSent = 1; // (ms) 
 const int dt_sendRcvd = 1; // (ms) 
-uint32_t t_sent = millis(); // (ms)
-uint32_t t_rcvd = millis(); // (ms)
+uint32_t t_xBeeSent = millis(); // (ms)
+uint32_t t_xBeeRcvd = millis(); // (ms)
 int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
@@ -515,7 +515,7 @@ void GetSerial()
 	else
 	{
 		// Update recive time
-		t_rcvd = millis();
+		t_xBeeRcvd = millis();
 
 		// Update last packet
 		int id_ind = CharInd(id, r2a.id, r2a.lng);
@@ -668,8 +668,7 @@ byte WaitBuffRead(char mtch)
 
 		// Dump data till footer found
 		while (millis() < t_timeout &&
-			buff != r2c.foot &&
-			buff != mtch) {
+			buff != r2c.foot) {
 
 			if (Serial1.available() > 0) {
 				buff = Serial1.read();
@@ -686,16 +685,23 @@ byte WaitBuffRead(char mtch)
 
 	// Received r2c packet
 	if (is_r2c_pack) {
-		// Log/print discarded data
-		sprintf(msg_str, "[WaitBuffRead] Received r2c Packet: %s", dat_str);
-		DebugFlow(msg_str);
+		
+		// Check that r2c foot found
+		if (buff == r2c.foot) {
+			sprintf(msg_str, "[WaitBuffRead] Received r2c Packet: %s", dat_str);
+			DebugFlow(msg_str);
+		}
+		else {
+			sprintf(msg_str, "**WARNING** [WaitBuffRead] Received r2c Packet But Did Not Find r2c Foot: %s", dat_str);
+			DebugError(msg_str);
+		}
 
-		// Check if match still found
+		// Set flag
 		is_fail_last = true;
-		if (buff == mtch)
-			return buff;
-		else
-			return 0;
+
+		// Bail
+		return 0;
+	
 	}
 
 	// Buffer flooded
@@ -780,7 +786,7 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 
 		// Store overflow error instead
 		sprintf(str, "!!ERRROR!! [QueuePacket] SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_sent=%d dt_rcvd=%d buff_tx=%d buff_rx=%d",
-			sendQueueIndStore, sendQueueIndRead, queue_state, millis() - t_sent, millis() - t_rcvd, buff_tx, buff_rx);
+			sendQueueIndStore, sendQueueIndRead, queue_state, millis() - t_xBeeSent, millis() - t_xBeeRcvd, buff_tx, buff_rx);
 
 		// Log/print error
 		DebugError(str);
@@ -841,8 +847,8 @@ bool SendPacket()
 	// Bail if buffer or time inadequate
 	if (Serial1.availableForWrite() < sendQueueBytes + 10 ||
 		Serial1.available() > 0 ||
-		millis() < t_sent + dt_sendSent ||
-		millis() < t_rcvd + dt_sendRcvd) {
+		millis() < t_xBeeSent + dt_sendSent ||
+		millis() < t_xBeeRcvd + dt_sendRcvd) {
 
 		// Indicate still packs to send
 		return true;
@@ -858,7 +864,7 @@ bool SendPacket()
 
 	// Send
 	Serial1.write(sendQueue[sendQueueIndRead], msg_lng);
-	t_sent = millis();
+	t_xBeeSent = millis();
 	cnt_packBytesSent = msg_lng;
 
 	// Get buffers
@@ -997,8 +1003,8 @@ bool SendLog()
 
 	// Bail if buffer or time inadequate
 	if (Serial1.available() > 0 ||
-		millis() < t_sent + dt_sendSent ||
-		millis() < t_rcvd + dt_sendRcvd) {
+		millis() < t_xBeeSent + dt_sendSent ||
+		millis() < t_xBeeRcvd + dt_sendRcvd) {
 
 		// Indicate still logs to send
 		return true;
@@ -1017,7 +1023,7 @@ bool SendLog()
 
 	// Send
 	Serial.write(logQueue[logQueueIndRead], msg_lng);
-	t_sent = millis();
+	t_xBeeSent = millis();
 	cnt_logBytesSent += msg_lng;
 
 	// Print
@@ -1176,18 +1182,18 @@ void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, in
 	}
 
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx);
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_sent=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
 
 	// Concatinate strings
 	strcat(msg, str);
 
 	if (do_print) {
-		QueueDebug(msg, t_rcvd);
+		QueueDebug(msg, t_xBeeRcvd);
 	}
 
 	if (do_log) {
-		QueueLog(msg, t_rcvd);
+		QueueLog(msg, t_xBeeRcvd);
 	}
 
 }
@@ -1216,18 +1222,18 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 
 	// Make string
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, cnt_queued);
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_rcvd=%d queued=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis() - t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
 	strcat(msg, str);
 
 	if (do_print) {
-		QueueDebug(msg, t_sent);
+		QueueDebug(msg, t_xBeeSent);
 	}
 
 	if (do_log) {
-		QueueLog(msg, t_sent);
+		QueueLog(msg, t_xBeeSent);
 	}
 
 }
@@ -1939,8 +1945,8 @@ void loop()
 		}
 
 		// Make sure minimum time ellapsed
-		if (millis() > t_sent + 100 &&
-			millis() > t_rcvd + 100 &&
+		if (millis() > t_xBeeSent + 100 &&
+			millis() > t_xBeeRcvd + 100 &&
 			millis() > t_quit) {
 
 			// Run bleep bleep
