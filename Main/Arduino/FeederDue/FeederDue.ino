@@ -103,14 +103,14 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = false;
-	const bool print_r2c = false;
+	const bool print_c2r = true;
+	const bool print_r2c = true;
 	const bool print_a2r = false;
 	const bool print_r2a = false;
 	const bool print_rcvdVT = false;
@@ -288,7 +288,7 @@ struct C2R
 	const char head = '<';
 	const char foot = '>';
 	const char id[16] = {
-		'h', // Setup handshake
+		'h', // setup handshake
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -339,7 +339,7 @@ struct R2C
 	const char head = '<';
 	const char foot = '>';
 	const char id[16] = {
-		'h', // Setup handshake
+		'h', // setup handshake
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -4327,7 +4327,8 @@ void SendPacket()
 	// Send sync time or rew tone immediately
 	if (
 		(id == 'r' || id == 'h') &&
-		Serial1.availableForWrite() > msg_lng + 10
+		Serial1.availableForWrite() > msg_lng + 10 &&
+		Serial1.available() == 0
 		) {
 
 		do_send = true;
@@ -6057,11 +6058,11 @@ void DebugRcvd(char from, char id, float dat[], uint16_t pack, bool do_conf, int
 	// Print specific pack contents
 	char str[200];
 	if (id != 'P') {
-		sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_sent=%d",
+		sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_last_send=%d",
 			id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
 	}
 	else {
-		sprintf(str, "id=\'%c\' vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_sent=%d",
+		sprintf(str, "id=\'%c\' vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_last_send=%d",
 			id, c2r.vtEnt, c2r.vtTS[c2r.vtEnt], c2r.vtCM[c2r.vtEnt], millis() - Pos[c2r.vtEnt].t_msNow, pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
 	}
 
@@ -6108,7 +6109,7 @@ void DebugSent(char targ, char id, byte dat[], uint16_t pack, bool do_conf, int 
 
 	// Make string
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_rcvd=%d queued=%d",
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_last_rcv=%d queued=%d",
 		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis()- t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
@@ -7205,8 +7206,8 @@ void loop() {
 				sprintf(horeStr, "SET SYNC TIME: %dms", t_sync);
 				DebugFlow(horeStr);
 
-				// Store and send CS handshake recieved
-				QueuePacket('c', 'D', 0, 0, 0, c2r.pack[CharInd('h', c2r.id, c2r.lng)], true);
+				// Send handshake 
+				QueuePacket('c', 'h', 1, 0, 0, 0, true);
 				SendPacket();
 			}
 			// Restart loop

@@ -6602,32 +6602,6 @@ fprintf('END OF RUN');
             % Store new id
             id_new = c2m_mat([c2m_mat.pack] ~= [c2m_mat.packLast]).id;
             
-            % Check for handshake flag
-            if ...
-                    strcmp(id_new, 'h') && ...
-                    c2m.(id_new).dat1 == 1
-                
-                % Set start time
-                startTime = now;
-                
-                % Log/print handshake received
-                Console_Write(sprintf('   [RCVD] CS HANDSHAKE COMMAND: id=''%s'' dat1=%d', ...
-                    id_new, c2m.(id_new).dat1), now);
-            end
-            
-            % Check for exit flag
-            if ...
-                    strcmp(id_new, 'E') && ...
-                    c2m.(id_new).dat1 == 1
-                
-                % Set exit flag
-                doExit = true;
-                
-                % Log/print exit received
-                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                    id_new, c2m.(id_new).dat1), now);
-            end
-            
             %Print new data
             if ~ischar(c2m.(id_new).dat1)
                 str = '   [RCVD] c2m: id=''%s'' dat1=%d pack=%d';
@@ -6639,6 +6613,13 @@ fprintf('END OF RUN');
             
             % Update packet info
             c2m.(id_new).packLast = c2m.(id_new).pack;
+            
+            % Check for exit flag
+            if strcmp(id_new, 'E') && c2m.(id_new).dat1 == 1
+                doExit = true;
+                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                    id_new, c2m.(id_new).dat1), now);
+            end
             
             % Check for resend request
             if ~strcmp('g', c2m.(id_new).id)
