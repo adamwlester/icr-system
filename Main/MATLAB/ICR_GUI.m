@@ -367,10 +367,10 @@ fprintf('END OF RUN');
 % ------------------------------MAIN RUN-----------------------------------
     function[] = Run()
         
-         %% =========================== MAIN LOOP ==========================
+        %% =========================== MAIN LOOP ==========================
         
-         MainLoop();
-         
+        MainLoop();
+        
         function[] = MainLoop()
             
             
@@ -572,7 +572,7 @@ fprintf('END OF RUN');
                                 % ----------CHECK IF MOVE READY------------
                                 
                                 % Wait till at least 2000 VT samples collected
-                                if D.P.Rob.cnt_vtRec > 2000 
+                                if D.P.Rob.cnt_vtRec > 2000
                                     continue;
                                 end
                                 
@@ -711,14 +711,14 @@ fprintf('END OF RUN');
             D.F.do_last_main = 'NULL';
             % switch case poll
             D.F.do_what_poll = 'NULL';
-            D.F.do_last_poll = 'NULL'; 
+            D.F.do_last_poll = 'NULL';
             % rat data loaded
             D.F.data_loaded = false;
             % setup finished
             D.F.setup_done = false;
             % polling nlx
             D.F.poll_nlx = false;
-             % polling nlx
+            % polling nlx
             D.F.is_first_move_sent = false;
             % acquiring nlx
             D.F.acq = false;
@@ -1844,7 +1844,22 @@ fprintf('END OF RUN');
                 'String',num2str(D.PAR.bullSpeed));
             
             % REWARD BUTTON
+            % popup
             pos = [pos(1), pos(2)-0.03-0.01, wdth, 0.03];
+            D.UI.popReward = uicontrol('Style','popupmenu', ...
+                'Parent',FigH, ...
+                'Units','Normalized', ...
+                'Enable', 'off', ...
+                'Position', pos, ...
+                'BackgroundColor',D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol, ...
+                'FontName',D.UI.popFont, ...
+                'FontSize',10, ...
+                'FontWeight','Bold', ...
+                'String',cellstr(num2str(D.PAR.zoneRewDur')), ...
+                'Value', D.I.zone);
+            % toggle
+            pos = [pos(1), pos(2), wdth-wdth*0.125, 0.03];
             D.UI.btnReward = uicontrol('Style','push', ...
                 'Parent',FigH, ...
                 'String','Reward', ...
@@ -2572,9 +2587,9 @@ fprintf('END OF RUN');
             
             % Log/print
             Console_Write('[NLX_Setup] FINISHED: Configure NLX');
-              
+            
             %% START STREAMING
-           
+            
             % Log/print
             Console_Write('[NLX_Setup] RUNNING: Open NLX Stream...');
             
@@ -2958,6 +2973,9 @@ fprintf('END OF RUN');
             end
             
             % Reward button
+            set(D.UI.popReward, ...
+                'Enable', 'on', ...
+                'BackgroundColor', D.UI.enabledCol);
             set(D.UI.btnReward, ...
                 'Enable', 'on', ...
                 'BackgroundColor', D.UI.enabledCol);
@@ -3237,7 +3255,7 @@ fprintf('END OF RUN');
                 'Start', ...
                 'FontSize', 12, ...
                 'FontWeight', 'Bold', ...
-                'Color', [0.3,0.3,0.3], ...
+                'Color', D.UI.enabledCol, ...
                 'HorizontalAlignment', 'Center', ...
                 'Parent',D.UI.axH(2));
             
@@ -3413,6 +3431,13 @@ fprintf('END OF RUN');
         
         function [] = Rat_In_Check()
             
+            % Signal ready for rat
+            if strcmp(get(D.UI.txtStQ,'String'), 'Start')
+                set(D.UI.txtStQ, ...
+                    'String','READY', ...
+                    'Color',  D.UI.activeCol);
+            end
+            
             % Bail if no new data
             if all(isnan(D.P.Rat.rad))
                 return
@@ -3464,6 +3489,11 @@ fprintf('END OF RUN');
             % Set lap patches to visible
             set(D.UI.ptchLapBnds, 'Visible', 'on');
             
+            % Reset start string
+            set(D.UI.txtStQ, ...
+                'String','Start', ...
+                'Color',  D.UI.enabledCol);
+            
             % Clear VT data
             BtnClrVT();
             
@@ -3486,7 +3516,7 @@ fprintf('END OF RUN');
             end
             
             %% SET LAST SAVED ENTRIES TO WHAT WE WANT
-                        
+            
             % Load rat 0000
             
             % Change data table entries which will be loaded later
@@ -5820,6 +5850,9 @@ fprintf('END OF RUN');
             set(D.UI.btnReward, ...
                 'Enable', 'off', ...
                 'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.popReward, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
             set(D.UI.btnClrVT, ...
                 'Enable', 'off', ...
                 'BackgroundColor', D.UI.disabledBckCol);
@@ -6014,9 +6047,11 @@ fprintf('END OF RUN');
         % REWARD
         function [] = BtnReward(~, ~, ~)
             
+            % Get reward zone/duration from dropdown handle
+            zone_ind_send = get(D.UI.popReward, 'Value');
+            
             % Tell CS to trigger reward
             reward_pos_send = 0;
-            zone_ind_send = find(D.PAR.zoneRewDur == max(D.PAR.zoneRewDur));
             reward_delay_send = 0;
             SendM2C('R', reward_pos_send, zone_ind_send, reward_delay_send);
             

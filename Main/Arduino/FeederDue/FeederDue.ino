@@ -4361,38 +4361,6 @@ void SendPacket()
 	// Update send time 
 	t_xBeeSent = millis();
 
-	// Set flags for recieve confirmation
-	if (do_conf) {
-
-		if (targ == 'a') {
-
-			id_ind = CharInd(id, r2a.id, r2a.lng);
-			r2a.t_sentList[id_ind] = t_xBeeSent;
-			r2a.doRcvCheck[id_ind] = true;
-
-			// Update last packet arrays
-			r2a.datList[id_ind][0] = dat[0];
-			r2a.datList[id_ind][1] = dat[1];
-			r2a.datList[id_ind][2] = dat[2];
-			r2a.packLast[id_ind] = r2a.pack[id_ind];
-			r2a.pack[id_ind] = pack;
-		}
-
-		else if (targ == 'c') {
-
-			id_ind = CharInd(id, r2c.id, r2c.lng);
-			r2c.t_sentList[id_ind] = t_xBeeSent;
-			r2c.doRcvCheck[id_ind] = true;
-
-			// Update last packet arrays
-			r2c.datList[id_ind][0] = dat[0];
-			r2c.datList[id_ind][1] = dat[1];
-			r2c.datList[id_ind][2] = dat[2];
-			r2c.packLast[id_ind] = r2c.pack[id_ind];
-			r2c.pack[id_ind] = pack;
-		}
-	}
-
 	// Update queue index
 	sendQueueInd++;
 
@@ -4415,6 +4383,40 @@ void SendPacket()
 		fc.doPackSend = false;
 	}
 
+	// Get struct ind
+	if (targ == 'a') {
+		id_ind = CharInd(id, r2a.id, r2a.lng);
+	}
+	else if (targ == 'c') {
+		id_ind = CharInd(id, r2c.id, r2c.lng);
+	}
+
+	// Set flags for recieve confirmation
+	if (do_conf && targ == 'a') {
+		r2a.doRcvCheck[id_ind] = true;
+	}
+	else if (do_conf && targ == 'c') {
+		r2c.doRcvCheck[id_ind] = true;
+	}
+
+	// Update struct info
+	if (targ == 'a') {
+		r2a.datList[id_ind][0] = dat[0];
+		r2a.datList[id_ind][1] = dat[1];
+		r2a.datList[id_ind][2] = dat[2];
+		r2a.packLast[id_ind] = r2a.pack[id_ind];
+		r2a.pack[id_ind] = pack;
+		r2a.t_sentList[id_ind] = t_xBeeSent;
+	}
+	else if (targ == 'c') {
+		r2c.datList[id_ind][0] = dat[0];
+		r2c.datList[id_ind][1] = dat[1];
+		r2c.datList[id_ind][2] = dat[2];
+		r2c.packLast[id_ind] = r2c.pack[id_ind];
+		r2c.pack[id_ind] = pack;
+		r2c.t_sentList[id_ind] = t_xBeeSent;
+	}
+
 	// Check if resending
 	if (targ == 'a') {
 		is_resend = pack == r2a.packLast[CharInd(id, r2a.id, r2a.lng)];
@@ -4423,10 +4425,12 @@ void SendPacket()
 		is_resend = pack == r2c.packLast[CharInd(id, r2c.id, r2c.lng)];
 	}
 
-	// Indicate if resend
+	// Is first send
 	if (!is_resend) {
 		DebugSent(targ, id, dat, pack, do_conf, buff_tx, buff_rx);
 	}
+
+	// Is resend
 	else {
 		// Add to counters
 		if (targ == 'a') {
@@ -6058,12 +6062,12 @@ void DebugRcvd(char from, char id, float dat[], uint16_t pack, bool do_conf, int
 	// Print specific pack contents
 	char str[200];
 	if (id != 'P') {
-		sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_last_send=%d",
-			id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
+		sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_send=%d dt_rcv=%d",
+			id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent, millis() - t_xBeeRcvd);
 	}
 	else {
-		sprintf(str, "id=\'%c\' vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_last_send=%d",
-			id, c2r.vtEnt, c2r.vtTS[c2r.vtEnt], c2r.vtCM[c2r.vtEnt], millis() - Pos[c2r.vtEnt].t_msNow, pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
+		sprintf(str, "id=\'%c\' vtEnt=%d vtTS=%lu vtCM=%0.2f dt_samp=%d pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_send=%d dt_rcv=%d",
+			id, c2r.vtEnt, c2r.vtTS[c2r.vtEnt], c2r.vtCM[c2r.vtEnt], millis() - Pos[c2r.vtEnt].t_msNow, pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent, millis() - t_xBeeRcvd);
 	}
 
 	// Concatinate strings
@@ -6109,8 +6113,8 @@ void DebugSent(char targ, char id, byte dat[], uint16_t pack, bool do_conf, int 
 
 	// Make string
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_last_rcv=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis()- t_xBeeRcvd, cnt_queued);
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d queued=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis() - t_xBeeSent, millis() - t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
 	strcat(msg, str);

@@ -317,7 +317,7 @@ namespace ICR_Run
             else if (!fc.isRunError)
                 LogEvent("**WARNING!! [MAIN] ABORTED: SETUP");
             else
-                fc.errStr = LogEvent("!!ERROR!! [MAIN] FAILED: SETUP");
+                LogEvent("!!ERROR!! [MAIN] FAILED: SETUP", is_error: true);
 
             // RUN 
             if (passed_setup)
@@ -329,7 +329,7 @@ namespace ICR_Run
                 else if (!fc.isRunError)
                     LogEvent("**WARNING!! [MAIN] ABORTED: RUN");
                 else
-                    fc.errStr = LogEvent("!!ERROR!! [MAIN] FAILED: RUN");
+                    LogEvent("!!ERROR!! [MAIN] FAILED: RUN", is_error: true);
             }
 
             // EXIT 
@@ -465,7 +465,7 @@ namespace ICR_Run
                 t_sync = r2c.t_sentRcvd[c2r.ID_Ind('h')];
 
                 // Log/print sync time
-                LogEvent(String.Format("SET SYNC TIME: {0}ms", t_sync), t_sync);
+                LogEvent(String.Format("SET SYNC TIME: {0}ms", t_sync), t: t_sync);
 
                 // Log/print success
                 LogEvent("[Setup] SUCCEEDED: Robot Handshake");
@@ -488,7 +488,7 @@ namespace ICR_Run
             {
                 if (!fc.doAbort)
                 {
-                    fc.errStr = LogEvent("!!ERROR!! [Setup] FAILED: Run Cheetah.exe");
+                    LogEvent("!!ERROR!! [Setup] FAILED: Run Cheetah.exe", is_error: true);
                     fc.isRunError = true;
                 }
                 else
@@ -545,7 +545,7 @@ namespace ICR_Run
                 LogEvent("[Setup] SUCCEEDED: Connect to NLX");
             else
             {
-                fc.errStr = LogEvent("!!ERROR!! [Setup] FAILED: Connect to NLX");
+                LogEvent("!!ERROR!! [Setup] FAILED: Connect to NLX", is_error: true);
                 fc.isRunError = true;
                 return false;
             }
@@ -608,7 +608,9 @@ namespace ICR_Run
 
             // Wait for initial move to command to complete
             LogEvent("[Run] RUNNING: MoveTo Start...");
+            // Wait for matlab
             pass = WaitForMCOM(id: 'M', do_abort: true);
+            // Wait for move done
             if (pass)
                 pass = WaitForSerial(id: 'M', do_abort: true);
             if (pass)
@@ -640,7 +642,7 @@ namespace ICR_Run
                     LogEvent("**WARNING** [Run] ABORTED: Main Session Loop");
                 else
                 {
-                    fc.errStr = LogEvent("!!ERROR!! [Run] FAILED: Main Session Loop Because NLX Disconnected");
+                    LogEvent("!!ERROR!! [Run] FAILED: Main Session Loop Because NLX Disconnected", is_error: true);
                     fc.isRunError = true;
                 }
                 return false;
@@ -728,7 +730,7 @@ namespace ICR_Run
                 }
                 else
                 {
-                    fc.errStr = LogEvent("!!ERROR!! [Exit] FAILED: NetCom Disconnect");
+                    LogEvent("!!ERROR!! [Exit] FAILED: NetCom Disconnect", is_error: true);
                     fc.isRunError = true;
                 }
             }
@@ -759,7 +761,7 @@ namespace ICR_Run
             {
                 // Wait for bytes to receive messages to be received
                 LogEvent("[Exit] RUNNING: Wait for Robot Log Bytes...");
-                pass = WaitForSerial(id: 'U', do_sent_check: false, do_rcvd_check: true, do_abort: true, timeout: 5000);
+                pass = WaitForSerial(id: 'U', do_sent_check: false, do_rcvd_check: true, timeout: 5000);
                 if (pass)
                 {
                     // Store data byte
@@ -782,13 +784,13 @@ namespace ICR_Run
                 }
                 else
                 {
-                    fc.errStr = LogEvent(String.Format("[Exit] !!ERROR!! ABORTED: Wait for Robot Log Bytes: bytes_expected={0}", robLogger.bytesToRcv));
+                    LogEvent(String.Format("[Exit] !!ERROR!! ABORTED: Wait for Robot Log Bytes: bytes_expected={0}", robLogger.bytesToRcv), is_error: true);
                     fc.isRunError = true;
                 }
             }
             else
             {
-                fc.errStr = LogEvent("!!ERROR!! [Exit] FAILED: Request Robot Log");
+                LogEvent("!!ERROR!! [Exit] FAILED: Request Robot Log", is_error: true);
                 fc.isRunError = true;
             }
 
@@ -841,8 +843,8 @@ namespace ICR_Run
                     robLogger.cnt_logged, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
             else
             {
-                fc.errStr = LogEvent(String.Format("!!ERROR!! [Exit] FAILED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
-                    robLogger.cnt_logged, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
+                LogEvent(String.Format("!!ERROR!! [Exit] FAILED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
+                    robLogger.cnt_logged, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_error: true);
                 fc.isRunError = true;
             }
 
@@ -911,8 +913,8 @@ namespace ICR_Run
                     dueLogger.cnt_logged, dueLogger.cnt_dropped[1]));
             else
             {
-                fc.errStr = LogEvent(String.Format("!!ERROR!! [Exit] FAILED: Save CheetahDue Log: logged={0} dropped={1}",
-                    dueLogger.cnt_logged, dueLogger.cnt_dropped[1]));
+                LogEvent(String.Format("!!ERROR!! [Exit] FAILED: Save CheetahDue Log: logged={0} dropped={1}",
+                    dueLogger.cnt_logged, dueLogger.cnt_dropped[1]), is_error: true);
                 fc.isRunError = true;
             }
 
@@ -1006,8 +1008,8 @@ namespace ICR_Run
                     else if (send_count >= resendMax)
                     {
                         // Log/print
-                        fc.errStr = LogEvent(String.Format("!!ERROR!! [RepeatSendPack_Thread] ABBORTED: Resending c2r: cnt={0} id=\'{1}\' dat=|{2:0.00}|{3:0.00}|{4:0.00}| pack={5} do_conf={6} do_check_done={7}",
-                            send_count, id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", do_check_done ? "true" : "false"));
+                        LogEvent(String.Format("!!ERROR!! [RepeatSendPack_Thread] ABBORTED: Resending c2r: cnt={0} id=\'{1}\' dat=|{2:0.00}|{3:0.00}|{4:0.00}| pack={5} do_conf={6} do_check_done={7}",
+                            send_count, id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", do_check_done ? "true" : "false"), is_error: true);
 
                         // Set error flags
                         fc.isRunError = true;
@@ -1085,7 +1087,7 @@ namespace ICR_Run
                     if (is_clogged || is_hanging)
                     {
                         // Get data string
-                        dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| tx={4} rx={5} queued={6} queue_dt={7}",
+                        dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| tx={4} rx={5} queued={6} dt_queue={7}",
                             id, dat[0], dat[1], dat[2], sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued);
 
                         // Log/print
@@ -1269,19 +1271,19 @@ namespace ICR_Run
                 dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}|", id, dat[0], dat[1], dat[2]);
 
                 // Store common info
-                string end_str = String.Format(" pack={0} do_conf={1} do_check_done={2} bytes_sent={3} tx={4} rx={5} queued={6} queue_dt={7}",
-                pack, do_conf ? "true" : "false", do_check_done ? "true" : "false", msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued);
+                string end_str = String.Format(" pack={0} do_conf={1} do_check_done={2} bytes_sent={3} tx={4} rx={5} queued={6} dt_queue={7} dt_send={8}",
+                pack, do_conf ? "true" : "false", do_check_done ? "true" : "false", msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued, c2r.t_new - c2r.t_last);
 
                 // Check if sending pos data
                 if (id != 'P')
                 {
                     // Check for resend
                     if (pack != c2r.packLast[c2r.ID_Ind(id)])
-                        LogEvent("   [SENT] c2r: " + dat_str + end_str, c2r.t_new, c2r.t_last);
+                        LogEvent("   [SENT] c2r: " + dat_str + end_str, t: c2r.t_new);
                     else
                     {
                         c2r.cnt_repeat++;
-                        LogEvent(String.Format("   [*RE-SENT*] c2r: cnt={0} ", c2r.cnt_repeat) + dat_str + end_str, c2r.t_new, c2r.t_last);
+                        LogEvent(String.Format("   [*RE-SENT*] c2r: cnt={0} ", c2r.cnt_repeat) + dat_str + end_str, t: c2r.t_new);
                     }
 
                 }
@@ -1296,7 +1298,7 @@ namespace ICR_Run
                     {
                         dat_str = String.Format("id=\'{0}\' vtEnt={1} vtTS={2} vtCM={3:0.00} dt_send_mu={4}",
                             id, (int)dat[0], vtTS[(int)dat[0], 1], vtCM[(int)dat[0]], vtHandler.GetSendDT((int)dat[0], "avg"));
-                        LogEvent("   [SENT] c2r: " + dat_str + end_str, c2r.t_new, c2r.t_last);
+                        LogEvent("   [SENT] c2r: " + dat_str + end_str, t: c2r.t_new);
                     }
                 }
 
@@ -1410,11 +1412,13 @@ namespace ICR_Run
                         {
                             // Coms failed
                             if (!fc.ContinueRobCom())
-                                fc.errStr = LogEvent(String.Format("!!ERROR!! [WaitForSerial] Lost Comms: Wait for {0}: {1}", wait_str, dat_str));
+                                LogEvent(String.Format("!!ERROR!! [WaitForSerial] Lost Comms: Wait for {0}: {1}",
+                                    wait_str, dat_str), is_error: true);
 
                             // Timedout
                             else if (sw_main.ElapsedMilliseconds > t_timeout)
-                                fc.errStr = LogEvent(String.Format("!!ERROR!! [WaitForSerial] Timedout: Wait for {0}: {1}", wait_str, dat_str));
+                                LogEvent(String.Format("!!ERROR!! [WaitForSerial] Timedout: Wait for {0}: {1}",
+                                    wait_str, dat_str), is_error: true);
 
                             // Set error flag
                             fc.isRunError = true;
@@ -1607,22 +1611,24 @@ namespace ICR_Run
                     // Update flags
                     r2c.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
+                    // Store common info
+                    string dat_str = String.Format("id =\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_rcvd{10}",
+                        id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str, r2c.t_new - r2c.t_last);
+
                     // Check for repeat packet
                     string msg_str;
                     if (pack != r2c.packLast[r2c.ID_Ind(id)])
                     {
-                        msg_str = String.Format("   [RCVD] r2c: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} parse_dt={9}",
-                        id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
+                        msg_str = "   [RCVD] r2c: ";
                     }
                     else
                     {
                         r2c.cnt_repeat++;
-                        msg_str = String.Format("   [*RE-RCVD*] r2c: cnt={0} id=\'{1}\' dat=|{2}|{3}|{4}| pack={5} do_conf={6} bytes_read={7} rx={8} tx={9} parse_dt={10}",
-                        r2c.cnt_repeat, id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
+                        msg_str = String.Format("   [*RE-RCVD*] r2c: cnt={0} ", r2c.cnt_repeat);
                     }
 
                     // Log/print rcvd details
-                    LogEvent(msg_str, r2c.t_new, r2c.t_last);
+                    LogEvent(msg_str + dat_str, t: r2c.t_new);
 
                     // Check if this is a recieve confirmation
                     if (c2r.ID_Ind(id) != -1)
@@ -1649,11 +1655,11 @@ namespace ICR_Run
                     r2a.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                     // Log/print ard message
-                    string msg_str = String.Format("   [RCVD] r2a: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} parse_dt={9}",
-                       id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str);
+                    string msg_str = String.Format("   [RCVD] r2a: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_rcvd={10}",
+                       id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str, r2a.t_new - r2a.t_last);
 
                     // Log/print rcvd details
-                    LogEvent(msg_str, r2c.t_new, r2c.t_last);
+                    LogEvent(msg_str, t: r2a.t_new);
                 }
 
                 // If all data found restart loop
@@ -1942,10 +1948,7 @@ namespace ICR_Run
                 if (status_str != " ")
                 {
                     // Print progress on seperate thread
-                    new Thread(delegate ()
-                    {
-                        LogEvent(String.Format("[GetRobotLog] Log Import {0}", status_str));
-                    }).Start();
+                    LogEvent(String.Format("[GetRobotLog] Log Import {0}", status_str));
                 }
 
                 // Get next char
@@ -2007,8 +2010,8 @@ namespace ICR_Run
                 // Bail if no bytes read
                 if (robLogger.bytesRead == 0)
                 {
-                    fc.errStr = LogEvent(String.Format("!!ERROR!! [GetRobotLog] FAILED: Robot Log Import: {0}: dt_read_last={1} dt_run={2} {3}",
-                        is_timedout ? "Read Timedout" : is_robot_abort ? "Robot Aborted" : "Reason Unknown", dt_read, dt_run, dat_str));
+                    LogEvent(String.Format("!!ERROR!! [GetRobotLog] FAILED: Robot Log Import: {0}: dt_read_last={1} dt_run={2} {3}",
+                        is_timedout ? "Read Timedout" : is_robot_abort ? "Robot Aborted" : "Reason Unknown", dt_read, dt_run, dat_str), is_error: true);
                     fc.isRunError = true;
                     robLogger.isImportTimedout = true;
 
@@ -2039,21 +2042,37 @@ namespace ICR_Run
             int int_cnt = 0;
             int rec_now = 0;
             int rec_last = 0;
+            string err_str = "";
             for (int i = 0; i < robLogger.bytesRead; i++)
             {
 
                 // Get next char
                 c = in_arr[i];
 
-                // Parse log number
+                // Check for count head
                 if (!do_rec_store && write_ind == 0 && c == '[')
                     do_rec_store = true;
+
+                // Check for count foot
                 else if (do_rec_store && c == ']')
                 {
-                    rec_now = int.Parse(new string(int_str, 0, int_cnt));
+                    // Try to parse record number
+                    try
+                    {
+                        rec_now = int.Parse(new string(int_str, 0, int_cnt));
+                    }
+                    catch
+                    {
+                        LogEvent(String.Format("**WARNING** [GetRobotLog] Failed to Parse r2c Log Number: rec_last={0}",
+                                rec_now));
+                    }
+
+                    // Reset flags
                     int_cnt = 0;
                     do_rec_store = false;
                 }
+
+                // Store new record
                 else if (do_rec_store)
                 {
                     if (int_cnt < 5)
@@ -2061,7 +2080,7 @@ namespace ICR_Run
                         int_str[int_cnt] = c;
                         int_cnt++;
                     }
-                    // Lost ']' byte
+                    // Lost foot byte
                     else
                     {
                         rec_now = 0;
@@ -2166,7 +2185,7 @@ namespace ICR_Run
                 LogEvent("[DoWork_RunGUI] SUCCEEDED: ICR_GUI.m");
             else if (status != " ")
             {
-                fc.errStr = LogEvent(String.Format("!!ERROR!! [DoWork_RunGUI] FAILED: ICR_GUI.m Error: {0}", status));
+                LogEvent(String.Format("!!ERROR!! [DoWork_RunGUI] FAILED: ICR_GUI.m Error: {0}", status), is_error: true);
                 fc.isRunError = true;
             }
 
@@ -2204,7 +2223,7 @@ namespace ICR_Run
             else
             {
                 // Run failed completely
-                fc.errStr = LogEvent("!!ERROR!! [RunWorkerCompleted_RunGUI] FAILED WITHOUT CATCHING ERRORS: RunGUI Worker");
+                LogEvent("!!ERROR!! [RunWorkerCompleted_RunGUI] FAILED WITHOUT CATCHING ERRORS: RunGUI Worker", is_error: true);
                 fc.isRunError = true;
             }
 
@@ -2304,22 +2323,24 @@ namespace ICR_Run
                 return;
             }
 
+            // Store commmon data
+            string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} dt_rcvd={5}",
+                    id, dat[0], dat[1], dat[2], pack, m2c.t_new - m2c.t_last);
+
             // Check for repeat packet
             string msg_str;
             if (pack != m2c.packLast[m2c.ID_Ind(id)])
             {
                 // Print received data
-                msg_str = String.Format("   [RCVD] m2c: id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4}",
-                    id, dat[0], dat[1], dat[2], pack);
-                LogEvent(msg_str, m2c.t_new, m2c.t_last);
+                msg_str = "   [RCVD] m2c: ";
+                LogEvent(msg_str + dat_str, t: m2c.t_new);
             }
             else
             {
                 m2c.cnt_repeat++;
                 // Print received data
-                msg_str = String.Format("   [*RE-RCVD*] m2c: cnt={0} id=\'{1}\' dat=|{2:0.00}|{3:0.00}|{4:0.00}| pack={5}",
-                    m2c.cnt_repeat, id, dat[0], dat[1], dat[2], pack);
-                LogEvent(msg_str, m2c.t_new, m2c.t_last);
+                msg_str = String.Format("   [*RE-RCVD*] m2c: cnt={0} ", m2c.cnt_repeat);
+                LogEvent(msg_str + dat_str, t: m2c.t_new);
                 // Bail without processing
                 return;
             }
@@ -2369,7 +2390,7 @@ namespace ICR_Run
                 {
                     // Will print once
                     if (!fc.isGUIfinished)
-                        fc.errStr = LogEvent("!!ERROR!! [DoWork_MatCOM] ICR_GUI FORCED CLOSE");
+                        LogEvent("!!ERROR!! [DoWork_MatCOM] ICR_GUI FORCED CLOSE", is_error: true);
                     // Start exiting early
                     fc.isRunError = true;
                 }
@@ -2470,7 +2491,7 @@ namespace ICR_Run
 
             // Check if queue backed up
             if (queue_sendMCOM >= 3)
-                LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} queue_dt={2}",
+                LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} dt_queue={2}",
                                 msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
 
             // Add to queue
@@ -2481,7 +2502,7 @@ namespace ICR_Run
                 // Check if queue hanging
                 if (sw_main.ElapsedMilliseconds > t_queued + 100)
                     // Log/print error
-                    LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} queue_dt={2}",
+                    LogEvent(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} dt_queue={2}",
                                     msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
 
 
@@ -2498,7 +2519,7 @@ namespace ICR_Run
                         c2m.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                         // Log/print sent
-                        LogEvent(String.Format("   [SENT] c2m: {0} queued={1} queue_dt={2}",
+                        LogEvent(String.Format("   [SENT] c2m: {0} queued={1} dt_queue={2}",
                                 dat_str, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
                     }
 
@@ -2510,7 +2531,7 @@ namespace ICR_Run
 
                         // Log/print message
                         if (do_print)
-                            LogEvent(String.Format("   [mCOM] c2m: msg=\"{0}\" queued={1} queue_dt={2}",
+                            LogEvent(String.Format("   [mCOM] c2m: msg=\"{0}\" queued={1} dt_queue={2}",
                                 msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
                     }
 
@@ -2587,13 +2608,13 @@ namespace ICR_Run
                     {
                         // Coms failed
                         if (!fc.ContinueMatCom())
-                            fc.errStr = LogEvent(String.Format("!!ERROR!! [WaitForMCOM] Lost Comms: Wait for {0}: id=\'{1}\' dt_wait={2}",
-                                wait_str, id, sw_main.ElapsedMilliseconds - t_start));
+                            LogEvent(String.Format("!!ERROR!! [WaitForMCOM] Lost Comms: Wait for {0}: id=\'{1}\' dt_wait={2}",
+                                wait_str, id, sw_main.ElapsedMilliseconds - t_start), is_error: true);
 
                         // Timedout
                         else if (sw_main.ElapsedMilliseconds > t_timeout)
-                            fc.errStr = LogEvent(String.Format("!!ERROR!! [WaitForMCOM] Timedout: Wait for {0}: id=\'{1}\' dt_wait={2}",
-                                wait_str, id, sw_main.ElapsedMilliseconds - t_start));
+                            LogEvent(String.Format("!!ERROR!! [WaitForMCOM] Timedout: Wait for {0}: id=\'{1}\' dt_wait={2}",
+                                wait_str, id, sw_main.ElapsedMilliseconds - t_start), is_error: true);
 
                         // Check if this is first packet
                         if (m2c.packTot == 0)
@@ -2811,7 +2832,15 @@ namespace ICR_Run
         }
 
         // LOG EVEN STRING
-        public static string LogEvent(string msg_in, long t_now = -1, long t_last = -1)
+        public static void LogEvent(string msg_in, bool is_error = false, long t = -1)
+        {
+            // Print event on seperate thread
+            new Thread(delegate ()
+            {
+                LogEvent_Thread(msg_in: msg_in, is_error: is_error, t: t);
+            }).Start();
+        }
+        public static void LogEvent_Thread(string msg_in, bool is_error, long t)
         {
             // Local vars
             long t_m = 0;
@@ -2822,16 +2851,15 @@ namespace ICR_Run
             string msg_print = " ";
             string msg_log = " ";
             string ts_str = " ";
-            string dt_str = " ";
 
             // Get time from start of Main()
-            t_now = t_now > 0 ? t_now : sw_main.ElapsedMilliseconds;
+            t = t > 0 ? t : sw_main.ElapsedMilliseconds;
 
             lock (lock_printLog)
             {
                 // Get sync correction
-                t_m = t_now;
-                t_m_sync = t_now - t_sync;
+                t_m = t;
+                t_m_sync = t - t_sync;
 
                 // Convert to seconds
                 t_s = t_m > 0 ? (float)(t_m) / 1000.0f : 0;
@@ -2840,33 +2868,25 @@ namespace ICR_Run
                 // Convert to string
                 ts_str = String.Format("[{0:0.000}][{1:0.000}]", t_s_sync, t_s);
 
-                // No input time
-                if (t_last >= 0)
-                {
-                    dt = t_now - t_last;
-                    dt_str = String.Format(" [dt={0}]", dt);
-                }
-                else
-                    dt_str = "";
-
                 // Pad ts string
                 ts_str = ts_str.PadRight(20, ' ');
 
                 // Cat strings
-                msg_print = "\n" + ts_str + msg_in + dt_str + "\n";
+                msg_print = "\n" + ts_str + msg_in + "\n";
 
                 // Print message
                 Console.Write(msg_print);
 
                 // Remove cammas from message
-                msg_log = msg_in.Replace(",", string.Empty) + dt_str;
+                msg_log = msg_in.Replace(",", string.Empty);
 
                 // Store in logger 
                 csLogger.UpdateList(msg_log, t_m_sync);
             }
 
-            // Return printed message
-            return msg_print;
+            // Store error string
+            if (is_error)
+                fc.errStr = msg_print;
         }
 
         #endregion

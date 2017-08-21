@@ -785,7 +785,7 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 		int buff_rx = Serial1.available();
 
 		// Store overflow error instead
-		sprintf(str, "!!ERRROR!! [QueuePacket] SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_last_send=%d dt_last_rcv=%d buff_tx=%d buff_rx=%d",
+		sprintf(str, "!!ERRROR!! [QueuePacket] SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_send=%d dt_rcv=%d buff_tx=%d buff_rx=%d",
 			sendQueueIndStore, sendQueueIndRead, queue_state, millis() - t_xBeeSent, millis() - t_xBeeRcvd, buff_tx, buff_rx);
 
 		// Log/print error
@@ -1182,8 +1182,8 @@ void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, in
 	}
 
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_last_send=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent);
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_send=%d dt_rcv=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent, millis() - t_xBeeRcvd);
 
 	// Concatinate strings
 	strcat(msg, str);
@@ -1222,8 +1222,8 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 
 	// Make string
 	char str[200];
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_last_rcv=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis() - t_xBeeRcvd, cnt_queued);
+	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d queued=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis() - t_xBeeSent, millis() - t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
 	strcat(msg, str);
