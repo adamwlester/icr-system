@@ -181,9 +181,10 @@ namespace ICR_Run
             _lock_check_conf: new object(),
             _lock_check_done: new object(),
             _id:
-            new char[9] {
+            new char[10] {
             'g', // request m2c data
-            'h', // setup handshake [NA]
+            'h', // setup handshake
+            'a', // run ac setup
             'J', // battery voltage
             'Z', // reward zone
             'V', // robot streaming
@@ -512,6 +513,11 @@ namespace ICR_Run
                 LogEvent("**WARNING** [Setup] ABORTED: Wait for ICR_GUI to Load");
                 return false;
             }
+
+            // Tell Matlab ready for AC setup
+            LogEvent("[Exit] RUNNING: Tell ICR_GUI to Connect to AC Computer...");
+            SendMCOM(id: 'a', dat_num: 1);
+            LogEvent("[Exit] FINISHED: Tell ICR_GUI to Connect to AC Computer");
 
             // Wait for ICR_GUI to connect to AC computer
             LogEvent("[Setup] RUNNING: Wait for AC Connect...");

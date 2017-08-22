@@ -231,6 +231,7 @@ struct FC
 	bool isSesStarted = false;
 	bool doStreamCheck = false;
 	bool isComsStarted = false;
+	bool doSendVCC = false;
 	bool isManualSes = false;
 	bool isRatIn = false;
 	bool isTrackingEnabled = false;
@@ -272,8 +273,8 @@ byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueInd = sendQueueSize - 1;
 const int resendMax = 3;
 const int dt_resend = 100; // (ms)
-const int dt_sendSent = 1; // (ms) 
-const int dt_sendRcvd = 1; // (ms) 
+const int dt_sendSent = 15; // (ms) 
+const int dt_sendRcvd = 10; // (ms) 
 const int dt_logSent = 1; // (ms)
 const int dt_logRcvd = 1; // (ms)
 uint32_t t_xBeeSent = 0; // (ms)
@@ -5757,7 +5758,7 @@ float GetBattVolt()
 		if (round(vccNow * 100) != round(vcc_last * 100)) {
 
 			// Send voltage once coms established
-			if (fc.isComsStarted &&
+			if (fc.doSendVCC &&
 				!fc.doBlockVccSend) {
 
 				QueuePacket('c', 'J', vcc_byte, 0, 0, 0, false);
@@ -7864,9 +7865,13 @@ void loop() {
 	// Check for streaming
 	if (fc.doStreamCheck && Pos[1].is_streamStarted)
 	{
+		// Send streaming confirmation
 		QueuePacket('c', 'D', 0, 0, 0, c2r.pack[CharInd('V', c2r.id, c2r.lng)], true);
 		fc.doStreamCheck = false;
 		DebugFlow("[loop] STREAMING CONFIRMED");
+
+		// Set flag to begin sending vcc
+		fc.doSendVCC = true;
 	}
 #pragma endregion
 

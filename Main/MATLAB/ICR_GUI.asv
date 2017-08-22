@@ -272,7 +272,6 @@ fprintf('END OF RUN');
         id_list = [ ...
             'g', ... % request m2c data
             'h', ... % setup handshake
-            'a', ... % run ac setup
             'J', ... % battery voltage
             'Z', ... % reward zone
             'V', ... % robot streaming exit
@@ -378,39 +377,30 @@ fprintf('END OF RUN');
             % ---------------------------SETUP & RUN----------------------------------
             
             % Run variable setup code
-            Console_Write('[MainLoop] RUNNING: "Var_Setup()"...');
+            Console_Write('[MainLoop] RUNNING: "Var_Setup()..."');
             Var_Setup();
             Console_Write('[MainLoop] FINISHED: "Var_Setup()"');
             
             % Run UI setup code
-            Console_Write('[MainLoop] RUNNING: "UI_Setup()"...');
+            Console_Write('[MainLoop] RUNNING: "UI_Setup()..."');
             UI_Setup();
             Console_Write('[MainLoop] FINISHED: "UI_Setup()"');
             SendM2C('G');
             
-            % Wait to run AC setup
-            Console_Write('[MainLoop] RUNNING: Wait to Run "AC_Setup()"...');
-            while ...
-                    c2m.('a').dat1 == 0 && ...
-                    ~doExit;
-                pause(0.01);
-            end
-            Console_Write('[MainLoop] FINISHED: Wait to Run "AC_Setup()"...');
-            
             % Run AC setup code
-            Console_Write('[MainLoop] RUNNING: "AC_Setup()"...');
+            Console_Write('[MainLoop] RUNNING: "AC_Setup()..."');
             AC_Setup();
             Console_Write('[MainLoop] FINISHED: "AC_Setup()"');
             SendM2C('A');
             
             % Run NLX setup code
-            Console_Write('[MainLoop] RUNNING: "NLX_Setup()"...');
+            Console_Write('[MainLoop] RUNNING: "NLX_Setup()..."');
             NLX_Setup();
             Console_Write('[MainLoop] FINISHED: "NLX_Setup()"');
             SendM2C('N');
             
             % Run testing setup
-            Console_Write('[MainLoop] RUNNING: "Run_Test_Setup()"...');
+            Console_Write('[MainLoop] RUNNING: "Run_Test_Setup()..."');
             Run_Test_Setup();
             Console_Write('[MainLoop] FINISHED: "Run_Test_Setup()"');
             
@@ -418,11 +408,11 @@ fprintf('END OF RUN');
                 
                 % TRACK LOOP TIME
                 if (D.T.loop > 0)
-                    D.DB.loop(1) = (Elapsed_Seconds(now) - D.T.loop) * 1000;
-                    D.DB.loop(2) = min(D.DB.loop(1), D.DB.loop(2));
-                    D.DB.loop(3) = max(D.DB.loop(1), D.DB.loop(3));
-                    D.DB.loop(4) = D.DB.loop(1) + D.DB.loop(4);
-                    D.DB.loop(5) = D.DB.loop(5) + 1;
+                D.DB.loop(1) = (Elapsed_Seconds(now) - D.T.loop) * 1000;
+                D.DB.loop(2) = min(D.DB.loop(1), D.DB.loop(2));
+                D.DB.loop(3) = max(D.DB.loop(1), D.DB.loop(3));
+                D.DB.loop(4) = D.DB.loop(1) + D.DB.loop(4);
+                D.DB.loop(5) = D.DB.loop(5) + 1;
                 end
                 D.T.loop = Elapsed_Seconds(now);
                 
@@ -514,7 +504,7 @@ fprintf('END OF RUN');
                         end
                         
                         % Run Finish setup code
-                        Console_Write('[MainLoop] RUNNING: "Finish_Setup()"...');
+                        Console_Write('[MainLoop] RUNNING: "Finish_Setup()..."');
                         Finish_Setup();
                         Console_Write('[MainLoop] FINISHED: "Finish_Setup()"');
                         Update_UI(0);
@@ -536,6 +526,7 @@ fprintf('END OF RUN');
                         %% ------------------POLL NETCOM-------------------
                         
                         % STORE POLL TIME
+                        D.DB.loop(1) = Elapsed_Seconds(now) - D.T.poll_last;
                         D.T.poll_last = Elapsed_Seconds(now);
                         
                         % PROCESS NLX EVENTS
@@ -840,8 +831,6 @@ fprintf('END OF RUN');
             D.DB.rew_round_trip = [0, inf, 0, 0, 0];
             % track loop dt [now, min, max, sum, count]
             D.DB.loop = [0, inf, 0, 0, 0];
-            % draw now dt [now, min, max, sum, count]
-            D.DB.draw = [0, inf, 0, 0, 0];
             % halt error [now, min, max, sum, count]
             D.DB.halt_error = [0, inf, 0, 0, 0];
             
@@ -2401,9 +2390,6 @@ fprintf('END OF RUN');
             D.AC.data = data;
             clear data
             
-            % Stop timer
-            stop(timer_c2m);
-            
             % Create tcpip object
             tcpIP = tcpip('0.0.0.0',55000,'NetworkRole','Server');
             
@@ -2417,9 +2403,6 @@ fprintf('END OF RUN');
             % Establish connection
             % will loop here until connection established
             fopen(tcpIP);
-            
-            % Restart timer
-            start(timer_c2m);
             
             % Print that AC computer is connected
             Console_Write('[AC_Setup] FINISHED: Connect to AC Computer');
@@ -3672,13 +3655,6 @@ fprintf('END OF RUN');
             if t_now-D.T.ui_update >= dt_min
                 drawnow;
                 D.T.ui_update = t_now;
-                
-                % Track redraw time
-                D.DB.draw(1) = (Elapsed_Seconds(now) - t_now) * 1000;
-                D.DB.draw(2) = min(D.DB.draw(1), D.DB.draw(2));
-                D.DB.draw(3) = max(D.DB.draw(1), D.DB.draw(3));
-                D.DB.draw(4) = D.DB.draw(1) + D.DB.draw(4);
-                D.DB.draw(5) = D.DB.draw(5) + 1;
             end
             
         end
@@ -5071,7 +5047,7 @@ fprintf('END OF RUN');
                 ], ...
                 D.DB.rew_duration(1), D.DB.rew_duration(2), D.DB.rew_duration(3), D.DB.rew_duration(4)/D.DB.rew_duration(5), ...
                 D.DB.rew_round_trip(1), D.DB.rew_round_trip(2), D.DB.rew_round_trip(3), D.DB.rew_round_trip(4)/D.DB.rew_round_trip(5), ...
-                D.DB.draw(1), D.DB.draw(2), D.DB.draw(3), D.DB.draw(4)/D.DB.draw(5), ...
+                D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), ...
                 D.DB.loop(1), D.DB.loop(2), D.DB.loop(3), D.DB.loop(4)/D.DB.loop(5) ...
                 );
             set(D.UI.txtTimDebug, 'String', infstr)
@@ -6085,10 +6061,10 @@ fprintf('END OF RUN');
             reward_delay_send = 0;
             SendM2C('R', reward_pos_send, zone_ind_send, reward_delay_send);
             
-            % TEMP
-            set(D.UI.btnBulldoze, ...
-                'Value', ~get(D.UI.btnBulldoze, 'Value'));
-            Bulldoze();
+%             % TEMP
+%             set(D.UI.btnBulldoze, ...
+%                 'Value', ~get(D.UI.btnBulldoze, 'Value'));
+%             Bulldoze();
             
             % Track round trip time
             D.T.manual_rew_sent = Elapsed_Seconds(now);
