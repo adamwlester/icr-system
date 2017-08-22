@@ -1083,28 +1083,32 @@ namespace ICR_Run
                     is_clogged = queue_sendPack >= 3;
                     is_hanging = sw_main.ElapsedMilliseconds > t_queued + 100;
 
-                    // Check if queue backed up or hanging
-                    if (is_clogged || is_hanging)
-                    {
-                        // Get data string
-                        dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| tx={4} rx={5} queued={6} dt_queue={7}",
-                            id, dat[0], dat[1], dat[2], sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued);
-
-                        // Log/print
-                        if (is_clogged)
-                            LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Clogged: {0}", dat_str));
-                        if (is_hanging)
-                            LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Hanging: {0}", dat_str));
-
-                        // Bail if this is pos data
-                        if (id == 'P')
-                        {
-                            lock (lock_queue_sendPack) queue_sendPack--;
-                            return pack;
-                        }
-                    }
+                    // Abort if sending pos data
+                    if (is_clogged || is_hanging && id == 'P')
+                        break;
 
                 } while (do_loop);
+
+                // Check if queue backed up or hanging
+                if (is_clogged || is_hanging)
+                {
+                    // Get data string
+                    dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| tx={4} rx={5} queued={6} dt_queue={7}",
+                        id, dat[0], dat[1], dat[2], sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued);
+
+                    // Log/print
+                    if (is_clogged)
+                        LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Clogged: {0}", dat_str));
+                    if (is_hanging)
+                        LogEvent(String.Format("**WARNING** [SendPack] c2r Queue Hanging: {0}", dat_str));
+
+                    // Bail if this is pos data
+                    if (id == 'P')
+                    {
+                        lock (lock_queue_sendPack) queue_sendPack--;
+                        return pack;
+                    }
+                }
 
                 // Get new packet number
                 if (pack == 0)
@@ -1271,8 +1275,9 @@ namespace ICR_Run
                 dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}|", id, dat[0], dat[1], dat[2]);
 
                 // Store common info
-                string end_str = String.Format(" pack={0} do_conf={1} do_check_done={2} bytes_sent={3} tx={4} rx={5} queued={6} dt_queue={7} dt_send={8}",
-                pack, do_conf ? "true" : "false", do_check_done ? "true" : "false", msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued, c2r.t_new - c2r.t_last);
+                long dt_rcvd = Math.Max(r2c.dt_sentRcvd, r2a.dt_sentRcvd);
+                string end_str = String.Format(" pack={0} do_conf={1} do_check_done={2} bytes_sent={3} tx={4} rx={5} queued={6} dt_queue={7} dt_send={8} dt_rcvd={9}",
+                pack, do_conf ? "true" : "false", do_check_done ? "true" : "false", msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_sendPack, sw_main.ElapsedMilliseconds - t_queued, c2r.dt_sentRcvd, dt_rcvd);
 
                 // Check if sending pos data
                 if (id != 'P')
@@ -1458,7 +1463,6 @@ namespace ICR_Run
 
                 // Bail if no new data or processing robot log
                 if (sp_Xbee.BytesToRead < 1 ||
-                    !fc.ContinueRobCom() ||
                     robLogger.isLogging)
                 {
                     Thread.Sleep(1);
@@ -1612,8 +1616,8 @@ namespace ICR_Run
                     r2c.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                     // Store common info
-                    string dat_str = String.Format("id =\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_rcvd{10}",
-                        id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str, r2c.t_new - r2c.t_last);
+                    string dat_str = String.Format("id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
+                        id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str, c2r.dt_sentRcvd, r2c.dt_sentRcvd);
 
                     // Check for repeat packet
                     string msg_str;
@@ -1655,8 +1659,8 @@ namespace ICR_Run
                     r2a.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                     // Log/print ard message
-                    string msg_str = String.Format("   [RCVD] r2a: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_rcvd={10}",
-                       id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str, r2a.t_new - r2a.t_last);
+                    string msg_str = String.Format("   [RCVD] r2a: id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
+                       id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str, c2r.dt_sentRcvd, r2a.dt_sentRcvd);
 
                     // Log/print rcvd details
                     LogEvent(msg_str, t: r2a.t_new);
@@ -1735,7 +1739,7 @@ namespace ICR_Run
 
             // Check if timedout
             if (sw_main.ElapsedMilliseconds > t_timeout)
-                LogEvent(String.Format("**WARNING** [XbeeBuffReady] r2c Hanging: min_byte={0} dt_check={1} dt_queue={2} rx={3} tx={4}",
+                LogEvent(String.Format("**WARNING** [XbeeBuffReady] TIMEDOUT: min_byte={0} dt_check={1} dt_queue={2} rx={3} tx={4}",
                      min_byte, (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sw_main.ElapsedMilliseconds - t_str, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite));
 
             // Check if buff filled
@@ -2325,7 +2329,7 @@ namespace ICR_Run
 
             // Store commmon data
             string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} dt_rcvd={5}",
-                    id, dat[0], dat[1], dat[2], pack, m2c.t_new - m2c.t_last);
+                    id, dat[0], dat[1], dat[2], pack, m2c.dt_sentRcvd);
 
             // Check for repeat packet
             string msg_str;
@@ -3042,7 +3046,7 @@ namespace ICR_Run
         public int[] cnt_dropped = new int[2] { 0, 0 };
         public int cnt_repeat = 0;
         public long t_new = 0;
-        public long t_last = 0;
+        public long dt_sentRcvd = 0;
         public long[] t_sentRcvd;
 
         // Constructor
@@ -3139,7 +3143,7 @@ namespace ICR_Run
                 _doCheckSentRcvd[id_ind] = false;
 
                 // Update timers
-                t_last = t_new;
+                dt_sentRcvd = t - t_new;
                 t_new = t;
                 t_sentRcvd[id_ind] = t;
 

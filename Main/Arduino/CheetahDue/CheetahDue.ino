@@ -144,8 +144,10 @@ int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
 const int dt_sendSent = 1; // (ms) 
 const int dt_sendRcvd = 1; // (ms) 
-uint32_t t_xBeeSent = millis(); // (ms)
-uint32_t t_xBeeRcvd = millis(); // (ms)
+uint32_t t_xBeeSent = 0; // (ms)
+uint32_t t_xBeeRcvd = 0; // (ms)
+int dt_xBeeSent = 0; // (ms)
+int dt_xBeeRcvd = 0; // (ms)
 int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
@@ -362,8 +364,8 @@ void EastFun();
 bool CheckForStart()
 {
 	// Local vars
+	char str[300] = { 0 };
 	bool is_rcvd = false;
-	char str[200] = { 0 };
 	byte in_byte[1] = { 0 };
 	byte hand_shake_byte[1] = { 'i' };
 
@@ -436,9 +438,9 @@ void GetSerial()
 	*/
 
 	// Local vars
+	char str[300] = { 0 };
 	uint32_t t_str = millis();
-	char str[200] = { 0 };
-	char dat_str[200] = { 0 };
+	char dat_str[300] = { 0 };
 	int buff_tx = 0;
 	int buff_rx = 0;
 	byte buff = 0;
@@ -515,6 +517,7 @@ void GetSerial()
 	else
 	{
 		// Update recive time
+		dt_xBeeRcvd = t_xBeeRcvd > 0 ? millis() - t_xBeeRcvd : 0;
 		t_xBeeRcvd = millis();
 
 		// Update last packet
@@ -685,7 +688,7 @@ byte WaitBuffRead(char mtch)
 
 	// Received r2c packet
 	if (is_r2c_pack) {
-		
+
 		// Check that r2c foot found
 		if (buff == r2c.foot) {
 			sprintf(msg_str, "[WaitBuffRead] Received r2c Packet: %s", dat_str);
@@ -701,7 +704,7 @@ byte WaitBuffRead(char mtch)
 
 		// Bail
 		return 0;
-	
+
 	}
 
 	// Buffer flooded
@@ -757,7 +760,7 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 	*/
 
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	int id_ind = 0;
 
 	// Update sendQueue ind
@@ -779,6 +782,7 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 		for (int i = 0; i < sendQueueSize; i++) {
 			queue_state[i] = sendQueue[i][0] == '\0' ? '0' : '1';
 		}
+		queue_state[sendQueueSize] = '\0';
 
 		// Get buffers
 		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
@@ -864,6 +868,7 @@ bool SendPacket()
 
 	// Send
 	Serial1.write(sendQueue[sendQueueIndRead], msg_lng);
+	dt_xBeeSent = t_xBeeSent > 0 ? millis() - t_xBeeSent : 0;
 	t_xBeeSent = millis();
 	cnt_packBytesSent = msg_lng;
 
@@ -911,8 +916,9 @@ void QueueLog(char msg[], uint32_t t)
 
 	// Local vars
 	uint32_t t_m = 0;
-	char str[200] = { 0 };
-	char msg_out[200] = { 0 };
+	char msg_temp[300] = { 0 };
+	char msg_copy[300] = { 0 };
+	char msg_out[300] = { 0 };
 	byte chksum = 0;
 
 	// Update logQueue ind
@@ -934,9 +940,10 @@ void QueueLog(char msg[], uint32_t t)
 		for (int i = 0; i < logQueueSize; i++) {
 			queue_state[i] = logQueue[i][0] == '\0' ? '0' : '1';
 		}
+		queue_state[logQueueSize] = '\0';
 
 		// Store overflow error instead
-		sprintf(msg, "**WARNING** [QueueLog] LOG QUEUE OVERFLOWED: logQueueIndStore=%d logQueueIndRead=%d queue_state=|%s|",
+		sprintf(msg_copy, "**WARNING** [QueueLog] LOG QUEUE OVERFLOWED: logQueueIndStore=%d logQueueIndRead=%d queue_state=|%s|",
 			logQueueIndStore, logQueueIndRead, queue_state);
 
 		// Set queue back so overflow will write over last log
@@ -944,12 +951,13 @@ void QueueLog(char msg[], uint32_t t)
 
 		// Print error
 		if (db.print_errors && db.Console) {
-			QueueDebug(msg, t);
+			QueueDebug(msg_copy, t);
 		}
 
 	}
 	// Update log count
 	else {
+		sprintf(msg_copy, "%s", msg);
 		cnt_logsStored++;
 	}
 
@@ -957,10 +965,10 @@ void QueueLog(char msg[], uint32_t t)
 	t_m = t - t_sync;
 
 	// Put it all together
-	sprintf(str, "[%d],%lu,%d,%s", cnt_logsStored, t_m, cnt_loop_short, msg);
+	sprintf(msg_temp, "[%d],%lu,%d,%s", cnt_logsStored, t_m, cnt_loop_short, msg_copy);
 
 	// Get message size
-	chksum = strlen(str);
+	chksum = strlen(msg_temp);
 
 	// Add header, chksum and footer
 	int b_ind = 0;
@@ -970,7 +978,7 @@ void QueueLog(char msg[], uint32_t t)
 	msg_out[b_ind++] = chksum;
 	// msg
 	for (int i = 0; i < chksum; i++) {
-		msg_out[b_ind++] = str[i];
+		msg_out[b_ind++] = msg_temp[i];
 	}
 	// foot
 	msg_out[b_ind++] = a2c.foot;
@@ -990,8 +998,8 @@ bool SendLog()
 	FORMAT: head,chksum,"[log_cnt],loop,ts_ms,message",foot
 	*/
 	// Local vars
+	char str[300] = { 0 };
 	int msg_lng = 0;
-	char str[200] = { 0 };
 	cnt_logBytesSent = 0;
 
 	// Bail if serial not established or no logs to store
@@ -1034,7 +1042,6 @@ bool SendLog()
 		int buff_rx = Serial.available();
 
 		// Print stored log
-		char str[300];
 		sprintf(str, "   [LOG] a2c: log_cnt=%d bytes_sent=%d msg=\"%s\"",
 			cnt_logsStored, cnt_logBytesSent, logQueue[logQueueIndRead]);
 		QueueDebug(str, millis());
@@ -1054,6 +1061,9 @@ bool SendLog()
 // START REWARD
 void StartRew()
 {
+	// Local vars
+	char str[300] = { 0 };
+
 	// Set rew on pins
 	SetPort(word_rewOn, word_rewOff);
 
@@ -1069,7 +1079,6 @@ void StartRew()
 	fc.isRewarding = true;
 
 	// Print
-	char str[200];
 	sprintf(str, "[StartRew] REWARDING(%dms)...", rewDur);
 	DebugFlow(str);
 }
@@ -1164,6 +1173,7 @@ void DebugError(char msg[], uint32_t t)
 void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, int buff_tx, bool is_repeat)
 {
 	// Local vars
+	char str[300] = { 0 };
 	bool do_print = db.Console && db.print_r2a;
 	bool do_log = db.Log && db.log_r2a;
 
@@ -1181,9 +1191,9 @@ void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, in
 		sprintf(msg, "   [*RE-RCVD*] r2a: cnt=%d ", r2a.cnt_repeat);
 	}
 
-	char str[200];
+	// Log/print
 	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_send=%d dt_rcv=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent, millis() - t_xBeeRcvd);
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent, dt_xBeeRcvd);
 
 	// Concatinate strings
 	strcat(msg, str);
@@ -1202,6 +1212,7 @@ void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, in
 void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, int buff_rx, bool is_repeat)
 {
 	// Local vars
+	char str[300] = { 0 };
 	bool do_print = db.Console && db.print_a2r;
 	bool do_log = db.Log && db.log_a2r;
 	int cnt_queued = sendQueueSize - sendQueueIndStore - 1;
@@ -1221,9 +1232,8 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 	}
 
 	// Make string
-	char str[200];
 	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, millis() - t_xBeeSent, millis() - t_xBeeRcvd, cnt_queued);
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, dt_xBeeSent, millis() - t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
 	strcat(msg, str);
@@ -1242,6 +1252,7 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 void DebugResent(char id, byte dat[], uint16_t pack)
 {
 	// Local vars
+	char str[300] = { 0 };
 	bool do_print = db.Console && db.print_resent;
 	bool do_log = db.Log && db.log_resent;
 	static int cnt_repeat = 0;
@@ -1254,7 +1265,7 @@ void DebugResent(char id, byte dat[], uint16_t pack)
 	// Itterate count
 	cnt_repeat++;
 
-	char str[200];
+	// Log/print
 	sprintf(str, "   [*RE-RCVD*] r2a: tot=%d id=\'%c\' dat=|%d|%d|%d| pack=%d!!", cnt_repeat, id, dat[0], dat[1], dat[2], pack);
 
 	if (do_print) {
@@ -1272,8 +1283,8 @@ void QueueDebug(char msg[], uint32_t t)
 	// Local vars
 	uint32_t t_m = 0;
 	float t_s = 0;
-	char str[200] = { 0 };
-	char str_tim[100] = { 0 };
+	char msg_copy[300] = { 0 };
+	char str_time[100] = { 0 };
 
 	// Update printQueue ind
 	printQueueIndStore++;
@@ -1294,9 +1305,10 @@ void QueueDebug(char msg[], uint32_t t)
 		for (int i = 0; i < printQueueSize; i++) {
 			queue_state[i] = printQueue[i][0] == '\0' ? '0' : '1';
 		}
+		queue_state[printQueueSize] = '\0';
 
 		// Store overflow error instead
-		sprintf(msg, "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED: printQueueIndStore=%d printQueueIndRead=%d queue_state=|%s|",
+		sprintf(msg_copy, "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED: printQueueIndStore=%d printQueueIndRead=%d queue_state=|%s|",
 			printQueueIndStore, printQueueIndRead, queue_state);
 
 		// Set queue back so overflow will write over last print
@@ -1304,9 +1316,12 @@ void QueueDebug(char msg[], uint32_t t)
 
 		// Log error
 		if (db.log_errors && db.Log) {
-			QueueLog(msg, t);
+			QueueLog(msg_copy, t);
 		}
 
+	}
+	else {
+		sprintf(msg_copy, "%s", msg);
 	}
 
 	// Get sync correction
@@ -1316,16 +1331,16 @@ void QueueDebug(char msg[], uint32_t t)
 	t_s = (float)(t_m) / 1000.0f;
 
 	// Make time string
-	sprintf(str_tim, "[%0.3f][%d]", t_s, cnt_loop_short);
+	sprintf(str_time, "[%0.3f][%d]", t_s, cnt_loop_short);
 
 	// Add space after time
 	char spc[50] = { 0 };
 	char arg[50] = { 0 };
-	sprintf(arg, "%%%ds", 20 - strlen(str_tim));
+	sprintf(arg, "%%%ds", 20 - strlen(str_time));
 	sprintf(spc, arg, '_');
 
 	// Put it all together
-	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str_tim, spc, msg);
+	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str_time, spc, msg_copy);
 
 }
 
@@ -1459,6 +1474,8 @@ bool PulseIR(int del_sync, int dt_sync)
 // GET ID INDEX
 int CharInd(char id, const char id_arr[], int arr_size)
 {
+	// Local vars
+	char str[300] = { 0 };
 
 	// Return -1 if not found
 	int ind = -1;
@@ -1472,7 +1489,6 @@ int CharInd(char id, const char id_arr[], int arr_size)
 	// Print error if not found
 	if (ind == -1) {
 
-		char str[200];
 		sprintf(str, "!!ERROR!! [CharInd] ID \'%c\' Not Found", id);
 		DebugError(str);
 	}
@@ -1670,6 +1686,9 @@ void EastFun()
 
 void setup()
 {
+	// Local varss
+	char str[300] = { 0 };
+
 	// SETUP PINS
 
 	// Set PT pin direction
@@ -1764,7 +1783,6 @@ void setup()
 	}
 
 	// PRINT SETUP FINISHED
-	char str[200] = { 0 };
 	DebugFlow("[setup] FINISHED: Setup");
 
 	// PRINT AVAILABLE MEMORY
@@ -1782,6 +1800,9 @@ void setup()
 
 void loop()
 {
+	// Local vars
+	char str[300];
+
 	// TRACK LOOPS
 	cnt_loop_tot = 0;
 	cnt_loop_short = cnt_loop_short < 999 ? cnt_loop_short + 1 : 1;
@@ -1928,7 +1949,6 @@ void loop()
 		}
 
 		// Log ir event
-		char str[200];
 		sprintf(str, "[loop] IR Sync %s: cnt=%d dt=%dms",
 			is_irOn ? "Start" : "End", cnt_ir, millis() - t_irSyncLast);
 		DebugFlow(str);

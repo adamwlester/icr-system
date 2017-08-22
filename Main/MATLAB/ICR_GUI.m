@@ -6055,6 +6055,11 @@ fprintf('END OF RUN');
             reward_delay_send = 0;
             SendM2C('R', reward_pos_send, zone_ind_send, reward_delay_send);
             
+%             % TEMP
+%             set(D.UI.btnBulldoze, ...
+%                 'Value', ~get(D.UI.btnBulldoze, 'Value'));
+%             Bulldoze();
+            
             % Track round trip time
             D.T.manual_rew_sent = Elapsed_Seconds(now);
             
