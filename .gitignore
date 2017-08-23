@@ -11,7 +11,7 @@ git rm z_Obs-Arc --cache
 
 # AWL 
 # session data tables
-/IOfiles/SessionData/*
+#/IOfiles/SessionData/
 # netcom log file
 MatlabNetComLogfile.txt
 
