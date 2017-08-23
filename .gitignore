@@ -9,12 +9,6 @@ git rm z_Obs-Arc --cache
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-# AWL 
-# session data tables
-#/IOfiles/SessionData/
-# netcom log file
-MatlabNetComLogfile.txt
-
 # User-specific files
 *.suo
 *.user
