@@ -43,7 +43,7 @@ startTime = now;
 % ------------------------- SETUP ERROR HANDELING -------------------------
 
 % Preset status abort flag
-status = 'failed';
+status = 'failed'; %#ok<NASGU>
 doExit = false;
 
 % Handle input args
@@ -120,7 +120,6 @@ if doDebug
 else
     
     % ---------------------- RUN IN CATCH ERROR MODE ----------------------
-    
     % RUN MAIN SETUP
     try
         if ~doExit
@@ -148,7 +147,11 @@ else
     
     % HANDLE ERRRORS
     if ~isempty(ME)
-        D.DB.isErrExit = true;
+        if exist('D', 'var')
+            if(isfield(D,'DB'))
+                D.DB.isErrExit = true;
+            end
+        end
         % Log/print error
         err = sprintf([ ...
             'Time: %0.2f\r\n', ...
@@ -161,7 +164,7 @@ else
             ME.message, ...
             ME.stack(1).name);
         for z_line = 1:length(ME.stack)
-            err = [err, sprintf('%d/', ME.stack(z_line).line)]; %#ok<AGROW>
+            err = [err, sprintf('%d|', ME.stack(z_line).line)]; %#ok<AGROW>
         end
         err = err(1:end-1);
         err_print = [sprintf('!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!\r\n'), err, ...
@@ -172,17 +175,26 @@ else
         err_status = regexprep(err, '\r\n', ' ');
         err_status = regexprep(err_status, '\s*', ' ');
         status = err_status;
-    end
-    
-    % SET STATUS
-    if isempty(ME)
+        
+        % SET STATUS
+    else
         status = 'succeeded';
     end
     
 end
 
+% Clear all variables
+clearvars -global;
+close all;
+
+% For added measure
+Vars=whos;
+Vars={Vars.name};
+Vars(ismember(Vars,'status')) = [];
+clear(Vars{:});
+
 % PRINT RUN ENDED
-fprintf('END OF RUN');
+fprintf('END OF RUN\n');
 
 
 
@@ -252,7 +264,7 @@ fprintf('END OF RUN');
             'T', ... % system test command [(byte)test]
             'S', ... % setup session [(byte)ses_cond, (byte)sound_cond]
             'M', ... % move to position [(float)targ_pos]
-            'R', ... % run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
+            'R', ... % run reward [(float)rew_pos, (byte)rew_cond (byte)zone_ind/rew_delay]
             'H', ... % halt movement [(byte)halt_state]
             'B', ... % bulldoze rat [(byte)bull_delay, (byte)bull_speed]
             'I' ... % rat in/out [(byte)in/out]
@@ -265,8 +277,8 @@ fprintf('END OF RUN');
         end
         m2c.cnt_pack = 0;
         
-        % m2c_pack array
-        m2c_pack(1:5) = 0;
+        % m2c_pack array [id, dat1, dat2, dat3, pack, flag]
+        m2c_pack(1:6) = 0;
         
         % c2m struct
         id_list = [ ...
@@ -321,6 +333,7 @@ fprintf('END OF RUN');
         
         % Bypass some things if running solo
         if isMatSolo
+            c2m.('a').dat1 = 1;
             c2m.('V').dat1 = 1;
             c2m.('K').dat1 = 1;
             c2m.('Y').dat1 = 1;
@@ -328,7 +341,7 @@ fprintf('END OF RUN');
         end
         
         % Log print run conditions
-        Console_Write(sprintf('[ICR_GUI] RUNNING ICR_GUI.m: sysTest=%d doDebug=%d isMatSolo=%d', ...
+        Console_Write(sprintf('[Setup] RUNNING ICR_GUI.m: sysTest=%d doDebug=%d isMatSolo=%d', ...
             sysTest, doDebug, isMatSolo));
         
         % Start c2m com check timer
@@ -339,12 +352,13 @@ fprintf('END OF RUN');
         start(timer_c2m);
         
         % Wait for sync time
+        Console_Write('[Setup] RUNNING: Wait for Handshake...');
         if ~isMatSolo
             
             % Tell CS ready for handshake
             SendM2C('i');
             
-            % Wait for sync time
+            % Wait for setup handshake
             while ...
                     c2m.('h').dat1 == 0 && ...
                     ~doExit;
@@ -354,14 +368,16 @@ fprintf('END OF RUN');
         
         % Set sync time
         if (c2m.('h').dat1 ~= 0)
+            Console_Write('[Setup] FINISHED: Wait for Handshake');
             Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
+        elseif (~isMatSolo)
+            Console_Write('!!ERROR!! ABORTED: Wait for Handshake');
+            return;
         end
         
         % Open figure
-        if (~doExit)
-            FigH = figure('Visible', 'Off', ...
-                'DeleteFcn', {@ForceClose});
-        end
+        FigH = figure('Visible', 'Off', ...
+            'DeleteFcn', {@ForceClose});
         
     end
 
@@ -655,9 +671,9 @@ fprintf('END OF RUN');
                                 
                                 % Save sesion data
                                 if D.F.do_save
+                                    Console_Write('[MainLoop] SAVE INITIATED');
                                     Save_Ses_Data();
                                     D.F.do_save = false;
-                                    Console_Write('[MainLoop] SAVE INITIATED');
                                 end
                                 
                             otherwise
@@ -2365,7 +2381,7 @@ fprintf('END OF RUN');
             %% MAKE FIGURE VISIBLE
             
             % Set position
-            movegui(FigH,'center')
+            movegui(FigH, 'center')
             % Bring UI to top
             uistack(FigH, 'top')
             % Make visible
@@ -4318,9 +4334,12 @@ fprintf('END OF RUN');
             if D.F.is_cued_rew
                 
                 % Will send CS command with pos and zone
-                reward_pos_send = D.UI.rewRatHead(D.I.rot);
-                zone_ind_send = D.I.zone;
-                rew_delay_send = 0;
+                r_pos = D.UI.rewRatHead(D.I.rot);
+                z_ind = D.I.zone;
+                r_cond = 2;
+                
+                % Send free reward command
+                SendM2C('R', r_pos, r_cond, z_ind);
                 
                 % Show new reward taget patch
                 set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
@@ -4334,17 +4353,17 @@ fprintf('END OF RUN');
             else
                 
                 % Send reward center and no zone ind
-                reward_pos_send = D.UI.rewRatHead(D.I.rot);
-                zone_ind_send = 0;
-                rew_delay_send = D.PAR.rewDel;
+                r_pos = D.UI.rewRatHead(D.I.rot);
+                r_del = D.PAR.rewDel;
+                r_cond = 3;
+                
+                % Send free reward command
+                SendM2C('R', r_pos, r_cond, r_del);
                 
                 % Darken all zone patches
                 set(D.UI.ptchFdH(:, D.I.rot), ...
                     'FaceAlpha', 0.75)
             end
-            
-            % Send reward command
-            SendM2C('R', reward_pos_send, zone_ind_send, rew_delay_send);
             
             % Set flags
             D.F.flag_rew_send_crossed = true;
@@ -5917,98 +5936,99 @@ fprintf('END OF RUN');
         
         % QUIT ALL
         function [] = BtnQuit(~, ~, ~)
-            
-            % Check for save unless quit before setup done
-            if ~D.UI.save_done && D.F.data_loaded
                 
-                % Construct a questdlg with two options
-                choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
-                    'ABBORT RUN', ...
-                    'Yes', 'No', [], 'No', ...
-                    D.UI.qstDlfPos, ...
-                    'Warn');
-                
-                % Handle response
-                switch choice
-                    case 'Yes'
-                    case 'No'
-                        return
+                % Check for save unless quit before setup done
+                if ~D.UI.save_done && D.F.data_loaded
+                    
+                    % Construct a questdlg with two options
+                    choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
+                        'ABBORT RUN', ...
+                        'Yes', 'No', [], 'No', ...
+                        D.UI.qstDlfPos, ...
+                        'Warn');
+                    
+                    % Handle response
+                    switch choice
+                        case 'Yes'
+                        case 'No'
+                            return
+                    end
+                    
+                    % Make sure rat is out
+                    if D.F.rat_in
+                        dlgAWL(...
+                            '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
+                            'RAT OUT', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.qstDlfPos, ...
+                            'Warn');
+                    end
+                    
                 end
                 
-                % Make sure rat is out
+                % Print session aborting
+                if ~D.UI.save_done
+                    Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
+                end
+                
+                % Disable
+                % quit button
+                set(D.UI.btnQuit, ...
+                    'Enable', 'off', ...
+                    'BackgroundColor', D.UI.disabledBckCol);
+                
+                % Stop halt if still active
+                if (D.F.is_halted)
+                    set(D.UI.btnHaltRob, 'Value', 0);
+                    BtnHaltRob();
+                end
+                
+                % Stop bulldoze if still active
+                if (get(D.UI.btnBulldoze, 'Value') == 1)
+                    set(D.UI.btnBulldoze, 'Value', 0);
+                    Bulldoze();
+                end
+                
+                % Tell CS rat is out
                 if D.F.rat_in
-                    dlgAWL(...
-                        '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
-                        'RAT OUT', ...
+                    SendM2C('I', 0)
+                    D.F.rat_in = false;
+                end
+                
+                % Stop recording
+                if D.F.rec
+                    set(D.UI.btnRec,'Value', 0)
+                    BtnRec(D.UI.btnRec);
+                end
+                
+                % Check if battery should be replaced
+                if ...
+                        c2m.('J').dat1 > 0 && ...
+                        c2m.('J').dat1 <= D.PAR.batVoltReplace
+                    
+                    % Confirm that Cheetah is closed
+                    dlgAWL('!!WARNING!! REPLACE BATTERY BEFORE NEXT RUN', ...
+                        'BATTERY LOW', ...
                         'OK', [], [], 'OK', ...
                         D.UI.qstDlfPos, ...
                         'Warn');
                 end
                 
-            end
-            
-            % Print session aborting
-            if ~D.UI.save_done
-                Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
-            end
-            
-            % Disable
-            % quit button
-            set(D.UI.btnQuit, ...
-                'Enable', 'off', ...
-                'BackgroundColor', D.UI.disabledBckCol);
-            
-            % Stop halt if still active
-            if (D.F.is_halted)
-                set(D.UI.btnHaltRob, 'Value', 0);
-                BtnHaltRob();
-            end
-            
-            % Stop bulldoze if still active
-            if (get(D.UI.btnBulldoze, 'Value') == 1)
-                set(D.UI.btnBulldoze, 'Value', 0);
-                Bulldoze();
-            end
-            
-            % Tell CS rat is out
-            if D.F.rat_in
-                SendM2C('I', 0)
-                D.F.rat_in = false;
-            end
-            
-            % Stop recording
-            if D.F.rec
-                set(D.UI.btnRec,'Value', 0)
-                BtnRec(D.UI.btnRec);
-            end
-            
-            % Check if battery should be replaced
-            if ...
-                    c2m.('J').dat1 > 0 && ...
-                    c2m.('J').dat1 <= D.PAR.batVoltReplace
+                % Tell C# to begin quit
+                SendM2C('X');
                 
-                % Confirm that Cheetah is closed
-                dlgAWL('!!WARNING!! REPLACE BATTERY BEFORE NEXT RUN', ...
-                    'BATTERY LOW', ...
-                    'OK', [], [], 'OK', ...
-                    D.UI.qstDlfPos, ...
-                    'Warn');
-            end
+                % Set flag
+                D.F.quit = true;
+                
+                % Shut down if matlab run alone
+                if isMatSolo
+                    doExit = true;
+                end
+                
+                % Log/print
+                Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnQuit', get(D.UI.btnQuit,'Value')));
+                Update_UI(10);
             
-            % Tell C# to begin quit
-            SendM2C('X');
-            
-            % Set flag
-            D.F.quit = true;
-            
-            % Shut down if matlab run alone
-            if isMatSolo
-                doExit = true;
-            end
-            
-            % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnQuit', get(D.UI.btnQuit,'Value')));
-            Update_UI(10);
         end
         
         % HALT ROBOT
@@ -6077,18 +6097,20 @@ fprintf('END OF RUN');
         % REWARD
         function [] = BtnReward(~, ~, ~)
             
+            % Set reward pos and cond
+            r_pos = 0;
+            r_cond = 1;
+            
             % Get reward zone/duration from dropdown handle
-            zone_ind_send = get(D.UI.popReward, 'Value');
+            z_ind = get(D.UI.popReward, 'Value');
             
             % Tell CS to trigger reward
-            reward_pos_send = 0;
-            reward_delay_send = 0;
-            SendM2C('R', reward_pos_send, zone_ind_send, reward_delay_send);
+            SendM2C('R', r_pos, r_cond, z_ind);
             
-            % TEMP
-            set(D.UI.btnBulldoze, ...
-                'Value', ~get(D.UI.btnBulldoze, 'Value'));
-            Bulldoze();
+            %             % TEMP
+            %             set(D.UI.btnBulldoze, ...
+            %                 'Value', ~get(D.UI.btnBulldoze, 'Value'));
+            %             Bulldoze();
             
             % Track round trip time
             D.T.manual_rew_sent = Elapsed_Seconds(now);
@@ -6564,20 +6586,9 @@ fprintf('END OF RUN');
         end;
         Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
         
-        % Clear all variables
+        % Stop and delete timer
         stop(timer_c2m);
         delete(timer_c2m);
-        clearvars -global;
-        clearvars;
-        close all;
-        
-        % For added measure
-        Vars=whos;
-        Vars={Vars.name};
-        clear(Vars{:});
-        
-        % Return success status
-        status = 'succeeded';
     end
 
 
@@ -6609,14 +6620,14 @@ fprintf('END OF RUN');
             dat3 = -1;
         end
         
-        % Make sure last message recieved
+        % Wait a max of 1 sec for last message to clear
         t_start = Elapsed_Seconds(now);
-        while m2c_pack(5) ~= 0 && ...
+        while m2c_pack(6) ~= 0 && ...
                 Elapsed_Seconds(now) < t_start + 1
             pause(0.001);
         end;
-        if m2c_pack(5) ~= 0
-            m2c_pack(5) = 0;
+        if m2c_pack(6) ~= 0
+            m2c_pack(6) = 0;
             Console_Write(sprintf('**WARNING** [SendM2C] CS Failed to Reset m2c Packet: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
                 id, dat1, dat2, dat3, round((Elapsed_Seconds(now) - t_start)*1000)));
         end
@@ -6642,6 +6653,9 @@ fprintf('END OF RUN');
         m2c.(id).dat1 = dat1;
         m2c.(id).dat2 = dat2;
         m2c.(id).dat3 = dat3;
+        
+        % Flag new data
+        m2c_pack(6) = 1;
         
         % Log/print
         Console_Write(sprintf('   [SENT] m2c: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
@@ -6670,7 +6684,7 @@ fprintf('END OF RUN');
             end
             
             % Store new id
-            id_new = c2m_mat([c2m_mat.pack] ~= [c2m_mat.packLast]).id;
+            id_new = c2m_mat(new_ind).id;
             
             % Check for handshake flag
             if ...
