@@ -5,11 +5,7 @@ using System.IO.Ports;
 using System.Threading;
 using System.Diagnostics;
 using System.IO;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using Microsoft.VisualBasic.FileIO;
-using System.Collections;
-using MLApp;
 
 namespace ICR_Run
 {
@@ -141,7 +137,7 @@ namespace ICR_Run
         private static UnionHack logBytes = new UnionHack(0, 0, 0, '0', 0);
 
         // Directories
-        private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLABMO\Startup";
+        private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLAB\Startup";
         private static string nlxRecDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00"; // cheetah dir
         private static string logDir = @"C:\CheetahData\Temp\0000-00-00_00-00-00"; // log temp dir
         private static string robLogFi = @"FeederDue_Log.csv"; // log file for FeederDue
@@ -431,7 +427,7 @@ namespace ICR_Run
                     db.systemTest, db.do_debugMat));
             }
             else
-                com_Matlab.Visible = 1;
+                com_Matlab.Visible = 0;
          
 
             // Setup ICR_GUI background worker
@@ -2206,7 +2202,7 @@ namespace ICR_Run
 
             // Set Matlab paths
             LogEvent_Thread("[DoWork_RunGUI] RUNNING: Setup Matlab paths...");
-            SendMCOM_Thread(msg: @"addpath(genpath('" + matStartDir + "'));");
+            SendMCOM(msg: @"addpath(genpath('" + matStartDir + "'));");
             LogEvent_Thread("[DoWork_RunGUI] FINISHED: Setup Matlab paths");
 
             // Run startup.m

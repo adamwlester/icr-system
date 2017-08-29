@@ -1,6 +1,6 @@
-C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDue.cpp.o: \
- C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDue.cpp \
- C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/arduino.h \
+C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o: \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp \
+ C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Arduino.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/avr/pgmspace.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/avr/interrupt.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/binary.h \
@@ -118,7 +118,6 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDu
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Printable.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/wiring_pulse.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x/variant.h \
- C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Arduino.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/UARTClass.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/USARTClass.h \
@@ -136,7 +135,7 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDu
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/USB/USBAPI.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino/Stream.h \
- C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDueTopVars.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDueTopVars.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\Arduino-MemoryFree/MemoryFree.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\SPI\src/SPI.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\AutoDriver_Due/AutoDriver_Due.h \
@@ -149,4 +148,4 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDu
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\LCD5110_Graph/hardware/arm/HW_ARM_defines.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\TinyEKF/TinyEKF.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\TinyEKF/tiny_ekf_struct.h \
- C:\Program\ Files\ (x86)\Microsoft\ Visual\ Studio\ 14.0\Common7\IDE\Extensions\nuze3zh3.ug2\Micro\ Platforms\default\debuggers/VM_DBG/VM_DBG.h
+ C:\Program\ Files\ (x86)\Microsoft\ Visual\ Studio\2017\Community\Common7\IDE\Extensions\iznu5qi1.uuf\Micro\ Platforms\default\debuggers\VM_DBG/VM_DBG.h
