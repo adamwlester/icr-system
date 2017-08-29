@@ -242,7 +242,7 @@ fprintf('END OF RUN\n');
         
         % Cheetah dirs
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
-        D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
+        D.DIR.nlxSaveTop = 'G:\BehaviorPilot';
         D.DIR.recFi = '0000-00-00_00-00-00';
         
         % Log dirs
