@@ -384,7 +384,7 @@ namespace ICR_Run
             LogEvent_Thread("[Setup] RUNNING: Setup CheetahDue Serial Coms and Logging...");
             sp_cheetahDue.ReadTimeout = 100;
             sp_cheetahDue.BaudRate = 57600;
-            sp_cheetahDue.PortName = "COM14";
+            sp_cheetahDue.PortName = "COM5";
             // Open serial port connection
             sp_cheetahDue.Open();
             // Start getting new data on seperate thread
@@ -398,7 +398,7 @@ namespace ICR_Run
             LogEvent_Thread("[Setup] RUNNING: Setup Xbee Serial Coms");
             sp_Xbee.ReadTimeout = 100;
             sp_Xbee.BaudRate = 57600;
-            sp_Xbee.PortName = "COM92";
+            sp_Xbee.PortName = "COM4";
             // Create event handeler for incoming data
             sp_Xbee.DataReceived += DataReceived_Xbee;
             // Set byte threshold to max packet size

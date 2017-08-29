@@ -11,7 +11,7 @@ function[] = AC_NETMON()
     %   Img1 & Img2: N, S, E, W
     % image directory
     imgDir = ...
-        '\\ICR_CHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages';
+        '\\ICRCHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages';
     % subdirectories
     subDir{1} = 'Main';
     subDir{2} = 'Trigger';

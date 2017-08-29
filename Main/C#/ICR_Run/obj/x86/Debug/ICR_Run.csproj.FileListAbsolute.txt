@@ -39,3 +39,4 @@ C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Ma
 C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\C#\ICR_Run\bin\x86\Debug\ICR_Run.pdb
 C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\C#\ICR_Run\bin\x86\Debug\MNetComClient3.dll
 C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\C#\ICR_Run\obj\x86\Debug\ICR_Run.csprojResolveAssemblyReference.cache
+C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\C#\ICR_Run\obj\x86\Debug\ICR_Run.csproj.CoreCompileInputs.cache
