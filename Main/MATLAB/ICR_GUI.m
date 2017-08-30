@@ -2421,10 +2421,9 @@ fprintf('END OF RUN\n');
             stop(timer_c2m);
             
             % Create tcpip object
-            tcpIP = tcpip('0.0.0.0',55000,'NetworkRole','Server');
-            
-            % Set bitesize
-            set(tcpIP,'OutputBufferSize',s.bytes);
+            tcpIP = tcpip('0.0.0.0',55000, ...
+                'OutputBufferSize', s.bytes, ...
+                'NetworkRole','Server');
             
             % Print that AC computer is connected
             Console_Write(sprintf('[AC_Setup] RUNNING: Connect to AC Computer... IP=%s', ...
@@ -2552,6 +2551,8 @@ fprintf('END OF RUN\n');
             % Log/print
             if is_running
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
+                % Pause before connecting
+                pause(15);
             else
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
             end

@@ -551,7 +551,7 @@ namespace ICR_Run
                 LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI NLX Setup");
                 return false;
             }
-
+      
             // Setup and begin NetCom streaming
             LogEvent_Thread("[Setup] RUNNING: Connect to NLX...");
             if (!(com_netComClient.AreWeConnected()))
@@ -2079,7 +2079,7 @@ namespace ICR_Run
             LogEvent_Thread("[GetRobotLog] RUNNING: Robot Log Store...");
 
             // Parse string and store logs
-            char[] out_arr = new char[300];
+            char[] out_arr = new char[1000];
             int write_ind = 0;
             char c = '\0';
             bool do_rec_store = false;

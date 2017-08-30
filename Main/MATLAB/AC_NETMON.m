@@ -1,20 +1,20 @@
 function[] = AC_NETMON()
 
 % NOTE: packet contains [1,4] numiric data
-%   val 1 = conection [0, 1], [no, yes] 
+%   val 1 = conection [0, 1], [no, yes]
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]
 
 %% Wall image paramiters
-    
-    % NOTE: fiIn trigger images will trigger the follwing phototransducers:
-    %   Img1 & Img2: N, S, E, W
-    % image directory
-    imgDir = ...
-        '\\ICRCHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages';
-    % subdirectories
-    subDir{1} = 'Main';
-    subDir{2} = 'Trigger';
+
+% NOTE: imgRunFiles trigger images will trigger the follwing phototransducers:
+%   Img1 & Img2: N, S, E, W
+% image directory
+imgDir = ...
+    '\\ICRCHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages';
+% subdirectories
+subDir{1} = 'Main';
+subDir{2} = 'Trigger';
 
 %% Set tcip then run indefinaitely
 
@@ -22,8 +22,6 @@ function[] = AC_NETMON()
 DgLynxIP = '172.17.0.2';
 % number of data packets
 NDat = 3;
-% buffer size based on recieved packets
-tcpipBuff = NDat;
 
 % Turn warnings off
 warning('off','all');
@@ -54,7 +52,7 @@ soundH = audioplayer([reward_lft,noise_rt], nsfs);
 
 % Start sound
 %
- 
+
 %stop(soundH);
 
 %% Loop indefinitely
@@ -62,18 +60,14 @@ while true
     
     %% Set/reinitialize paramiters
     
-    % Setup network connection object
-    tcpIP = tcpip(DgLynxIP,55000,'NetworkRole','Client'); %#ok<TNMLP>
-    % sets buffer size
-    set(tcpIP,'InputBufferSize',tcpipBuff);
-    % sets data transfer to zero
-    set(tcpIP,'Timeout',0.1);
-    
-    % delay between trigger and image (sec)
+    % Delay between trigger and image (sec)
     trgDel = 0.1;
     
-    % Image files
-    fiIn = [{'Img1.bmp'}, {'Img2.bmp'}, {'Img3.bmp'}];
+    % Backround image files
+    imgBackFiles = [{'back_light.bmp'}, {'back_dark.bmp'}];
+    
+    % Main image files
+    imgRunFiles = [{'Img1.bmp'}, {'Img2.bmp'}, {'Img3.bmp'}];
     
     % Initialize main vars
     % var to save sent data
@@ -83,19 +77,41 @@ while true
     % timer for adioplayer
     t_sound = clock;
     
+    % Put up light backround
+    frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{1}));
+    
+    % Print status message
+    fprintf('\r\tchange image to \"%s\": %s\r', ...
+        imgBackFiles{1}, datestr(now, 'HH:MM:SS AM'))
+    
+    % Bring java window back to front
+    frame_java.setState(frame_java.NORMAL)
+    
     % Wait for other comp to open connection
-    while (strcmp(tcpIP.Status, 'closed'))
-        % Print attempt message
-        fprintf('\r\n.........CHECKING CONNECTION: %s\r\n', ...
-            datestr(now, 'HH:MM:SS AM'))
+    while (true)
         try
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              fopen(tcpIP);
+            tcpIP = tcpclient( ...
+                DgLynxIP, 55000, ...
+                'ConnectTimeout', 1, ...
+                'Timeout', 1);
+            break;
         catch
+            % Print attempt message
+            fprintf('\r\n.........WAITING FOR CONNECTION: %s\r\n', ...
+                datestr(now, 'HH:MM:SS AM'))
         end
     end
+    
     % Print status message
     fprintf('\r\nCONNECTED: %s\r\n', ...
         datestr(now, 'HH:MM:SS AM'))
+    
+    % Put up dark backround
+    frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{2}));
+    
+    % Print status message
+    fprintf('\r\tchange image to \"%s\": %s\r', ...
+        imgBackFiles{2}, datestr(now, 'HH:MM:SS AM'))
     
     % Wait for first data packet
     while (tcpIP.BytesAvailable == 0)
@@ -107,7 +123,7 @@ while true
         
         % Check for new incoming data
         if tcpIP.BytesAvailable > 0
-            data = fread(tcpIP,NDat,'int8');
+            data = read(tcpIP,NDat,'int8');
         end
         
         % Check if connection should be closed
@@ -125,7 +141,7 @@ while true
             end
             
             % Close connection
-            fclose(tcpIP);
+            %fclose(tcpIP);
             delete(tcpIP);
             clear tcpIP;
             
@@ -145,17 +161,17 @@ while true
             img_ind = data(2);
             
             % Show image trigger
-            frame_java = fullscreenAWL(fullfile(imgDir,subDir{2},fiIn{1,img_ind})); %#ok<NASGU>
+            frame_java = fullscreenAWL(fullfile(imgDir,subDir{2},imgRunFiles{img_ind})); %#ok<NASGU>
             
             % Pause to allow trigger to register
             pause(trgDel);
             
             % Show main image
-            frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},fiIn{1,img_ind}));
+            frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgRunFiles{img_ind}));
             
             % Print status message
             fprintf('\r\tchange image to \"%s\": %s\r', ...
-                fiIn{1,img_ind}, datestr(now, 'HH:MM:SS AM'))
+                imgRunFiles{img_ind}, datestr(now, 'HH:MM:SS AM'))
             
         end
         
