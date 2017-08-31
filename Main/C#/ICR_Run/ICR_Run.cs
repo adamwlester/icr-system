@@ -179,10 +179,9 @@ namespace ICR_Run
             _lock_check_done: new object(),
             _flag_send_rcv: false,
             _id:
-            new char[10] {
+            new char[9] {
             'g', // request m2c data
             'h', // setup handshake
-            'a', // run ac setup
             'J', // battery voltage
             'Z', // reward zone
             'V', // robot streaming
@@ -448,6 +447,19 @@ namespace ICR_Run
             bw_MatCOM.RunWorkerAsync(bw_args);
             LogEvent_Thread("[Setup] FINISHED: Start MatCOM Worker...");
 
+            // Wait for ICR_GUI to connect to AC computer
+            LogEvent_Thread("[Setup] RUNNING: Wait for AC Connect...");
+            pass = WaitForMCOM(id: 'A', do_abort: true, timeout: timeoutConnectAC);
+            if (pass)
+                LogEvent_Thread("[Setup] SUCCEEDED: Wait for AC Connect");
+            else
+            {
+                // Program timed out because matlab was hanging on connect
+                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for AC Connect");
+                fc.isMAThanging = true;
+                return false;
+            }
+
             // Wait for matlab handshake request
             LogEvent_Thread("[Setup] RUNNING: Wait for ICR_GUI Handshake...");
             pass = WaitForMCOM(id: 'i', do_abort: true, timeout: 15000);
@@ -520,24 +532,6 @@ namespace ICR_Run
             else
             {
                 LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI to Load");
-                return false;
-            }
-
-            // Tell Matlab ready for AC setup
-            LogEvent_Thread("[Exit] RUNNING: Tell ICR_GUI to Connect to AC Computer...");
-            SendMCOM_Thread(id: 'a', dat_num: 1);
-            LogEvent_Thread("[Exit] FINISHED: Tell ICR_GUI to Connect to AC Computer");
-
-            // Wait for ICR_GUI to connect to AC computer
-            LogEvent_Thread("[Setup] RUNNING: Wait for AC Connect...");
-            pass = WaitForMCOM(id: 'A', do_abort: true, timeout: timeoutConnectAC);
-            if (pass)
-                LogEvent_Thread("[Setup] SUCCEEDED: Wait for AC Connect");
-            else
-            {
-                // Program timed out because matlab was hanging on connect
-                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for AC Connect");
-                fc.isMAThanging = true;
                 return false;
             }
 

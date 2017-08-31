@@ -350,7 +350,9 @@ fprintf('END OF RUN\n');
         start(timer_c2m);
         
         % ------------------------ SETUP AC CONNECTION --------------------
-        Console_Write('[Setup] FINISHED: Connect to AC Computer');
+        
+        Console_Write(sprintf('[Setup] RUNNING: Connect to AC Computer... IP=%s', ...
+            D.AC.IP));
         
         % Setup communication with ARENACONTROLLER
         D.AC.IP = '172.17.0.3';
@@ -383,7 +385,8 @@ fprintf('END OF RUN\n');
         start(timer_c2m);
         
         % Print that AC computer is connected
-        Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer... IP=%s', ...
+        Console_Write('[Setup] FINISHED: Connect to AC Computer');
+                Console_Write(sprintf('[Setup] RUNNING: Connect to AC Computer... IP=%s', ...
             D.AC.IP));
         
         % Send to CS
