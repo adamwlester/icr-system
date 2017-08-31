@@ -361,7 +361,7 @@ fprintf('END OF RUN\n');
             % Wait for setup handshake
             while ...
                     c2m.('h').dat1 == 0 && ...
-                    ~doExit;
+                    ~doExit
                 pause(0.01);
             end
         end
@@ -408,7 +408,7 @@ fprintf('END OF RUN\n');
             Console_Write('[MainLoop] RUNNING: Wait to Run "AC_Setup()"...');
             while ...
                     c2m.('a').dat1 == 0 && ...
-                    ~doExit;
+                    ~doExit
                 pause(0.01);
             end
             Console_Write('[MainLoop] FINISHED: Wait to Run "AC_Setup()"...');
@@ -4375,13 +4375,13 @@ fprintf('END OF RUN\n');
             % Hide reset patch
             set(D.UI.ptchFdRstH(D.I.rot), ...
                 'FaceAlpha', 0.05);
-            
-            % Stop bulldozer if active
-            D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
-            if D.UI.bullLastVal == 1
-                set(D.UI.btnBulldoze, 'Value', 0);
-                Bulldoze();
-            end
+            %TEMP
+            %             % Stop bulldozer if active
+            %             D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
+            %             if D.UI.bullLastVal == 1
+            %                 set(D.UI.btnBulldoze, 'Value', 0);
+            %                 Bulldoze();
+            %             end
             
         end
         
@@ -4508,11 +4508,12 @@ fprintf('END OF RUN\n');
                 % Enable cue buttons
                 Set_Cue_Buttons('Enable');
                 
-                % Restart bulldozer if was active
-                if D.UI.bullLastVal == 1
-                    set(D.UI.btnBulldoze, 'Value', 1);
-                    Bulldoze();
-                end
+                %TEMP
+                %                 % Restart bulldozer if was active
+                %                 if D.UI.bullLastVal == 1
+                %                     set(D.UI.btnBulldoze, 'Value', 1);
+                %                     Bulldoze();
+                %                 end
                 
                 % Check for missed rewards
                 if ~D.F.flag_rew_confirmed
@@ -5937,98 +5938,98 @@ fprintf('END OF RUN\n');
         
         % QUIT ALL
         function [] = BtnQuit(~, ~, ~)
+            
+            % Check for save unless quit before setup done
+            if ~D.UI.save_done && D.F.data_loaded
                 
-                % Check for save unless quit before setup done
-                if ~D.UI.save_done && D.F.data_loaded
-                    
-                    % Construct a questdlg with two options
-                    choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
-                        'ABBORT RUN', ...
-                        'Yes', 'No', [], 'No', ...
-                        D.UI.qstDlfPos, ...
-                        'Warn');
-                    
-                    % Handle response
-                    switch choice
-                        case 'Yes'
-                        case 'No'
-                            return
-                    end
-                    
-                    % Make sure rat is out
-                    if D.F.rat_in
-                        dlgAWL(...
-                            '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
-                            'RAT OUT', ...
-                            'OK', [], [], 'OK', ...
-                            D.UI.qstDlfPos, ...
-                            'Warn');
-                    end
-                    
+                % Construct a questdlg with two options
+                choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
+                    'ABBORT RUN', ...
+                    'Yes', 'No', [], 'No', ...
+                    D.UI.qstDlfPos, ...
+                    'Warn');
+                
+                % Handle response
+                switch choice
+                    case 'Yes'
+                    case 'No'
+                        return
                 end
                 
-                % Print session aborting
-                if ~D.UI.save_done
-                    Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
-                end
-                
-                % Disable
-                % quit button
-                set(D.UI.btnQuit, ...
-                    'Enable', 'off', ...
-                    'BackgroundColor', D.UI.disabledBckCol);
-                
-                % Stop halt if still active
-                if (D.F.is_halted)
-                    set(D.UI.btnHaltRob, 'Value', 0);
-                    BtnHaltRob();
-                end
-                
-                % Stop bulldoze if still active
-                if (get(D.UI.btnBulldoze, 'Value') == 1)
-                    set(D.UI.btnBulldoze, 'Value', 0);
-                    Bulldoze();
-                end
-                
-                % Tell CS rat is out
+                % Make sure rat is out
                 if D.F.rat_in
-                    SendM2C('I', 0)
-                    D.F.rat_in = false;
-                end
-                
-                % Stop recording
-                if D.F.rec
-                    set(D.UI.btnRec,'Value', 0)
-                    BtnRec(D.UI.btnRec);
-                end
-                
-                % Check if battery should be replaced
-                if ...
-                        c2m.('J').dat1 > 0 && ...
-                        c2m.('J').dat1 <= D.PAR.batVoltReplace
-                    
-                    % Confirm that Cheetah is closed
-                    dlgAWL('!!WARNING!! REPLACE BATTERY BEFORE NEXT RUN', ...
-                        'BATTERY LOW', ...
+                    dlgAWL(...
+                        '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
+                        'RAT OUT', ...
                         'OK', [], [], 'OK', ...
                         D.UI.qstDlfPos, ...
                         'Warn');
                 end
                 
-                % Tell C# to begin quit
-                SendM2C('X');
+            end
+            
+            % Print session aborting
+            if ~D.UI.save_done
+                Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
+            end
+            
+            % Disable
+            % quit button
+            set(D.UI.btnQuit, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            
+            % Stop halt if still active
+            if (D.F.is_halted)
+                set(D.UI.btnHaltRob, 'Value', 0);
+                BtnHaltRob();
+            end
+            
+            % Stop bulldoze if still active
+            if (get(D.UI.btnBulldoze, 'Value') == 1)
+                set(D.UI.btnBulldoze, 'Value', 0);
+                Bulldoze();
+            end
+            
+            % Tell CS rat is out
+            if D.F.rat_in
+                SendM2C('I', 0)
+                D.F.rat_in = false;
+            end
+            
+            % Stop recording
+            if D.F.rec
+                set(D.UI.btnRec,'Value', 0)
+                BtnRec(D.UI.btnRec);
+            end
+            
+            % Check if battery should be replaced
+            if ...
+                    c2m.('J').dat1 > 0 && ...
+                    c2m.('J').dat1 <= D.PAR.batVoltReplace
                 
-                % Set flag
-                D.F.quit = true;
-                
-                % Shut down if matlab run alone
-                if isMatSolo
-                    doExit = true;
-                end
-                
-                % Log/print
-                Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnQuit', get(D.UI.btnQuit,'Value')));
-                Update_UI(10);
+                % Confirm that Cheetah is closed
+                dlgAWL('!!WARNING!! REPLACE BATTERY BEFORE NEXT RUN', ...
+                    'BATTERY LOW', ...
+                    'OK', [], [], 'OK', ...
+                    D.UI.qstDlfPos, ...
+                    'Warn');
+            end
+            
+            % Tell C# to begin quit
+            SendM2C('X');
+            
+            % Set flag
+            D.F.quit = true;
+            
+            % Shut down if matlab run alone
+            if isMatSolo
+                doExit = true;
+            end
+            
+            % Log/print
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnQuit', get(D.UI.btnQuit,'Value')));
+            Update_UI(10);
             
         end
         
@@ -6900,19 +6901,27 @@ fprintf('END OF RUN\n');
                                 Console_Write(sprintf('[Disconnect_AC] FINISHED: Disconnect from AC Computer IP=%s', ...
                                     D.AC.IP));
                                 
-                            else Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" Does Not Exist');
+                            else
+                                Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" Does Not Exist');
                             end
-                        else Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" is Not a tcpIP Object');
+                        else
+                            Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" is Not a tcpIP Object');
                         end
-                    else Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" Does Not Exist');
+                    else
+                        Console_Write('**WARNING** [Disconnect_AC] \"tcpIP\" Does Not Exist');
                     end
-                else Console_Write('**WARNING** [Disconnect_AC] \"D.AC\" is Empty');
+                else
+                    Console_Write('**WARNING** [Disconnect_AC] \"D.AC\" is Empty');
                 end
-            else Console_Write('**WARNING** [Disconnect_AC] \"AC\" Not a Field of \"D\"');
+            else
+                Console_Write('**WARNING** [Disconnect_AC] \"AC\" Not a Field of \"D\"');
             end
-            try fclose(tcpIP); catch; end;
-            try delete(tcpIP); catch; end;
-            try clear tcpIP; catch; end;
+            try fclose(tcpIP); 
+            catch; end
+            try delete(tcpIP); 
+            catch; end
+            try clear tcpIP; 
+            catch; end
             
         end
     end
