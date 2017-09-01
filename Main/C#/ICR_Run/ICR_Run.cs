@@ -3473,7 +3473,7 @@ namespace ICR_Run
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
         private static long _blockFor = 60; // (ms) 
-                                            // Public vars
+        // Public vars
         public bool[] is_streamStarted = new bool[2] { false, false };
         public long[] t_sent = new long[2] { 0, 0 };
         public long[] t_sent_last = new long[2] { 0, 0 };

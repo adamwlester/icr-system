@@ -14,85 +14,46 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="src">
-      <UniqueIdentifier>{47ec8e40-ceb1-4c85-affa-5ec81709a993}</UniqueIdentifier>
+      <UniqueIdentifier>{42910ec3-73c9-4495-b4df-65fb1bbc4d65}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly">
-      <UniqueIdentifier>{f36e733e-39d0-4f70-8b6d-23f790939df5}</UniqueIdentifier>
+      <UniqueIdentifier>{8a1a3300-923a-4087-a214-e03e2e54be23}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core">
-      <UniqueIdentifier>{d4996b52-b924-4c11-b096-09b41a227797}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\variants">
-      <UniqueIdentifier>{12460642-f4b5-4cd6-876c-2ac7d3081583}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\variants\arduino_due_x">
-      <UniqueIdentifier>{19718c4a-0b9f-43f9-94e7-d1a1f709c2b5}</UniqueIdentifier>
+      <UniqueIdentifier>{610b894d-fe36-4bba-8c81-2b33cef42785}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\avr">
-      <UniqueIdentifier>{3cfb8499-fc48-4ede-bc6b-9e1b4d5aafc6}</UniqueIdentifier>
+      <UniqueIdentifier>{36b85d8a-c92a-432f-8029-37b736af04f8}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\USB">
-      <UniqueIdentifier>{4530d879-dd9e-44bb-a512-47e9fdcbb4ee}</UniqueIdentifier>
+      <UniqueIdentifier>{6600097f-c90f-4b04-b11a-ffffb4672a4d}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries">
-      <UniqueIdentifier>{f060098e-99fe-4645-99e2-d821fec0fc1d}</UniqueIdentifier>
+      <UniqueIdentifier>{d3cfe967-944d-44b5-bdeb-f0135b94b418}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Arduino-MemoryFree">
-      <UniqueIdentifier>{48f0b022-d81a-4def-a3ce-aec993cb427c}</UniqueIdentifier>
+      <UniqueIdentifier>{94420620-4006-467a-a848-90bb6dfa2d7f}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\AutoDriver_Due">
-      <UniqueIdentifier>{e7268b1c-bae7-4a07-b0eb-b57d83d8fd78}</UniqueIdentifier>
+      <UniqueIdentifier>{7e9bdac0-9638-40d4-9224-ef1fb8c51755}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\LCD5110_Graph">
-      <UniqueIdentifier>{4af8e575-8d4f-49a8-b86f-6301488fa4a2}</UniqueIdentifier>
+      <UniqueIdentifier>{df9f75f9-0630-4590-b55f-47f44346166c}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Pixy">
-      <UniqueIdentifier>{41c86d6d-9ab3-40f1-a2ce-4f2b1dd4e8fd}</UniqueIdentifier>
+      <UniqueIdentifier>{1320fa8e-cc2c-4a86-8fc3-e916e91fee04}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI">
-      <UniqueIdentifier>{c6855cc1-2df4-4472-b911-98a46657bd88}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\SPI\examples">
-      <UniqueIdentifier>{b2c8f90b-4d2e-4bca-9e04-cce24c0b7ab1}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\SPI\examples\BarometricPressureSensor">
-      <UniqueIdentifier>{041b000e-3cef-4594-8486-2d5a7ac2b6b5}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\SPI\examples\DigitalPotControl">
-      <UniqueIdentifier>{fed13bdc-f304-45ca-ae00-59066683c28f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\SPI\src">
-      <UniqueIdentifier>{5427071d-2bb4-4fd6-881f-e5e1e0bab018}</UniqueIdentifier>
+      <UniqueIdentifier>{adf8c1b1-38b3-4875-bf3b-af4105bbd26e}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\TinyEKF">
-      <UniqueIdentifier>{de53bc2b-db3b-499b-be26-e6358f37c1f3}</UniqueIdentifier>
+      <UniqueIdentifier>{549e44a3-7da5-4047-a118-13ec8bb314c3}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire">
-      <UniqueIdentifier>{6d629597-d158-4765-985b-93c9e011d583}</UniqueIdentifier>
+      <UniqueIdentifier>{832c420b-7ceb-4f99-ba09-a94290315bbb}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples">
-      <UniqueIdentifier>{714bf64b-61c8-4ebc-827a-73c40fbeed55}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\digital_potentiometer">
-      <UniqueIdentifier>{87fc0e61-04d2-40e4-9c1c-bace9382186c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\master_reader">
-      <UniqueIdentifier>{2a82b534-1920-47ec-b75c-0e21260942bd}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\master_writer">
-      <UniqueIdentifier>{182425da-e970-4c55-a1ed-32cb8018cf82}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\SFRRanger_reader">
-      <UniqueIdentifier>{c61a9978-6a39-4840-b35a-fd14ec3f3daf}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\slave_receiver">
-      <UniqueIdentifier>{bab50012-37ac-4fa6-9a69-ac9136b04f5d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\examples\slave_sender">
-      <UniqueIdentifier>{79358e0d-0f49-4d84-a488-7fee9f6e9e87}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Wire\src">
-      <UniqueIdentifier>{56f7834f-bfa9-4df1-a9d7-eb53d192e90f}</UniqueIdentifier>
+    <Filter Include="src\_micro-api-readonly\libraries\DueTimer">
+      <UniqueIdentifier>{6525125d-c2b4-4c46-9641-b432ef1a6eb4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -100,9 +61,24 @@
     <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_pulse_asm.S">
       <Filter>src\_micro-api-readonly\core</Filter>
     </None>
+    <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\SPI\library.properties">
+      <Filter>src\_micro-api-readonly\libraries\SPI</Filter>
+    </None>
+    <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\Wire\library.properties">
+      <Filter>src\_micro-api-readonly\libraries\Wire</Filter>
+    </None>
+    <None Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\library.json">
+      <Filter>src\_micro-api-readonly\libraries\DueTimer</Filter>
+    </None>
+    <None Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\library.properties">
+      <Filter>src\_micro-api-readonly\libraries\DueTimer</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.FeederDue.vsarduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FeederDue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\Arduino.h">
@@ -214,10 +190,10 @@
       <Filter>src\_micro-api-readonly\core\USB</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\pins_arduino.h">
-      <Filter>src\_micro-api-readonly\variants\arduino_due_x</Filter>
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\variant.h">
-      <Filter>src\_micro-api-readonly\variants\arduino_due_x</Filter>
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.h">
       <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
@@ -250,7 +226,7 @@
       <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\SPI\src\SPI.h">
-      <Filter>src\_micro-api-readonly\libraries\SPI\src</Filter>
+      <Filter>src\_micro-api-readonly\libraries\SPI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\TinyEKF.h">
       <Filter>src\_micro-api-readonly\libraries\TinyEKF</Filter>
@@ -262,29 +238,17 @@
       <Filter>src\_micro-api-readonly\libraries\TinyEKF</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\Wire\src\Wire.h">
-      <Filter>src\_micro-api-readonly\libraries\Wire\src</Filter>
+      <Filter>src\_micro-api-readonly\libraries\Wire</Filter>
     </ClInclude>
-    <ClInclude Include="FeederDueTopVars.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\DueTimer.h">
+      <Filter>src\_micro-api-readonly\libraries\DueTimer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\abi.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\cortex_handlers.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\hooks.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\iar_calls_sam3.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\IPAddress.cpp">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\itoa.c">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\main.cpp">
@@ -305,9 +269,6 @@
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\Stream.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\syscalls_sam3.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\UARTClass.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
@@ -317,22 +278,7 @@
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\watchdog.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\WInterrupts.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_analog.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_digital.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_pulse.cpp">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_shift.c">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\WMath.cpp">
@@ -340,9 +286,6 @@
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\WString.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\avr\dtostrf.c">
-      <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\USB\CDC.cpp">
       <Filter>src\_micro-api-readonly\core\USB</Filter>
@@ -352,6 +295,9 @@
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\USB\USBCore.cpp">
       <Filter>src\_micro-api-readonly\core\USB</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\variant.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.cpp">
       <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
@@ -378,13 +324,39 @@
       <Filter>src\_micro-api-readonly\libraries\LCD5110_Graph</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\SPI\src\SPI.cpp">
-      <Filter>src\_micro-api-readonly\libraries\SPI\src</Filter>
+      <Filter>src\_micro-api-readonly\libraries\SPI</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\tiny_ekf.c">
       <Filter>src\_micro-api-readonly\libraries\TinyEKF</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\Wire\src\Wire.cpp">
-      <Filter>src\_micro-api-readonly\libraries\Wire\src</Filter>
+      <Filter>src\_micro-api-readonly\libraries\Wire</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\DueTimer.cpp">
+      <Filter>src\_micro-api-readonly\libraries\DueTimer</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\Readme.txt">
+      <Filter>src\_micro-api-readonly\libraries\AutoDriver_Due</Filter>
+    </Text>
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Graph\keywords.txt">
+      <Filter>src\_micro-api-readonly\libraries\LCD5110_Graph</Filter>
+    </Text>
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\keywords.txt">
+      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
+    </Text>
+    <Text Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\SPI\keywords.txt">
+      <Filter>src\_micro-api-readonly\libraries\SPI</Filter>
+    </Text>
+    <Text Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\libraries\Wire\keywords.txt">
+      <Filter>src\_micro-api-readonly\libraries\Wire</Filter>
+    </Text>
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\keywords.txt">
+      <Filter>src\_micro-api-readonly\libraries\DueTimer</Filter>
+    </Text>
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\LICENSE.txt">
+      <Filter>src\_micro-api-readonly\libraries\DueTimer</Filter>
+    </Text>
   </ItemGroup>
 </Project>

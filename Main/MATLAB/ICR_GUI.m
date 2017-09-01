@@ -2528,7 +2528,7 @@ fprintf('END OF RUN\n');
             if is_running
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
-                pause(15);
+                pause(20);
             else
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
             end
@@ -4351,13 +4351,13 @@ fprintf('END OF RUN\n');
             % Hide reset patch
             set(D.UI.ptchFdRstH(D.I.rot), ...
                 'FaceAlpha', 0.05);
-            %TEMP
-            %             % Stop bulldozer if active
-            %             D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
-            %             if D.UI.bullLastVal == 1
-            %                 set(D.UI.btnBulldoze, 'Value', 0);
-            %                 Bulldoze();
-            %             end
+            
+            % Stop bulldozer if active
+            D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
+            if D.UI.bullLastVal == 1
+                set(D.UI.btnBulldoze, 'Value', 0);
+                Bulldoze();
+            end
             
         end
         
@@ -4483,13 +4483,12 @@ fprintf('END OF RUN\n');
                 
                 % Enable cue buttons
                 Set_Cue_Buttons('Enable');
-                
-                %TEMP
-                %                 % Restart bulldozer if was active
-                %                 if D.UI.bullLastVal == 1
-                %                     set(D.UI.btnBulldoze, 'Value', 1);
-                %                     Bulldoze();
-                %                 end
+
+                % Restart bulldozer if was active
+                if D.UI.bullLastVal == 1
+                    set(D.UI.btnBulldoze, 'Value', 1);
+                    Bulldoze();
+                end
                 
                 % Check for missed rewards
                 if ~D.F.flag_rew_confirmed
