@@ -146,8 +146,10 @@ const int dt_sendSent = 11; // (ms)
 const int dt_sendRcvd = 11; // (ms) 
 uint32_t t_xBeeSent = 0; // (ms)
 uint32_t t_xBeeRcvd = 0; // (ms)
+uint32_t t_csSent = 0; // (ms)
 int dt_xBeeSent = 0; // (ms)
 int dt_xBeeRcvd = 0; // (ms)
+int dt_csSent = 0; // (ms)
 int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
@@ -841,6 +843,8 @@ bool SendPacket()
 	byte dat[3] = { 0 };
 	bool do_conf = 0;
 	uint16_t pack = 0;
+	int buff_tx;
+	int buff_rx;
 
 	// Bail if nothing in queue
 	if (sendQueueIndRead == sendQueueIndStore &&
@@ -848,11 +852,15 @@ bool SendPacket()
 		return false;
 	}
 
+	// Get buffer 
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = Serial1.available();
+
 	// Bail if buffer or time inadequate
-	if (Serial1.availableForWrite() < sendQueueBytes + 10 ||
-		Serial1.available() > 0 ||
-		millis() < t_xBeeSent + dt_sendSent ||
-		millis() < t_xBeeRcvd + dt_sendRcvd) {
+	if (!(buff_tx == 0 &&
+		buff_rx == 0 &&
+		millis() > t_xBeeSent + dt_sendSent &&
+		millis() > t_xBeeRcvd + dt_sendRcvd)) {
 
 		// Indicate still packs to send
 		return true;
@@ -873,8 +881,8 @@ bool SendPacket()
 	cnt_packBytesSent = msg_lng;
 
 	// Get buffers
-	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	int buff_rx = Serial1.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = Serial1.available();
 
 	// pull out packet data
 	int b_ind = 1;
@@ -1001,6 +1009,10 @@ bool SendLog()
 	char str[300] = { 0 };
 	int msg_lng = 0;
 	cnt_logBytesSent = 0;
+	int xbee_buff_tx;
+	int xbee_buff_rx;
+	int cs_buff_tx;
+	int cs_buff_rx;
 
 	// Bail if serial not established or no logs to store
 	if (!fc.isSesStarted ||
@@ -1009,10 +1021,20 @@ bool SendLog()
 		return false;
 	}
 
+	// Get buffers 
+	xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	xbee_buff_rx = Serial1.available();
+	cs_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
+	cs_buff_rx = Serial.available();
+
 	// Bail if buffer or time inadequate
-	if (Serial1.available() > 0 ||
-		millis() < t_xBeeSent + dt_sendSent ||
-		millis() < t_xBeeRcvd + dt_sendRcvd) {
+	if (!(xbee_buff_tx == 0 &&
+		xbee_buff_rx == 0 &&
+		cs_buff_tx == 0 &&
+		cs_buff_rx == 0 &&
+		millis() > dt_csSent + dt_sendSent &&
+		millis() > t_xBeeSent + dt_sendSent &&
+		millis() > t_xBeeRcvd + dt_sendRcvd)) {
 
 		// Indicate still logs to send
 		return true;
@@ -1031,7 +1053,8 @@ bool SendLog()
 
 	// Send
 	Serial.write(logQueue[logQueueIndRead], msg_lng);
-	t_xBeeSent = millis();
+	dt_csSent = t_csSent > 0 ? millis() - t_csSent : 0;
+	t_csSent = millis();
 	cnt_logBytesSent += msg_lng;
 
 	// Print
@@ -1041,10 +1064,16 @@ bool SendLog()
 		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
 		int buff_rx = Serial.available();
 
+		// Get buffers 
+		xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+		xbee_buff_rx = Serial1.available();
+		cs_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
+		cs_buff_rx = Serial.available();
+
 		// Print stored log
-		sprintf(str, "   [LOG] a2c: log_cnt=%d bytes_sent=%d msg=\"%s\"",
-			cnt_logsStored, cnt_logBytesSent, logQueue[logQueueIndRead]);
-		QueueDebug(str, millis());
+		sprintf(str, "   [LOG] a2c: log_cnt=%d bytes_sent=%d xbee_rx=%d xbee_tx=%d cs_rx=%d cs_tx=%d dt_send=%d msg=\"%s\"",
+			cnt_logsStored, cnt_logBytesSent, xbee_buff_tx, xbee_buff_rx, cs_buff_tx, cs_buff_rx, dt_csSent, logQueue[logQueueIndRead]);
+		QueueDebug(str, t_csSent);
 	}
 
 	// Set entry to null

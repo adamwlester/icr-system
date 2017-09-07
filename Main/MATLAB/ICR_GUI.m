@@ -2528,7 +2528,15 @@ fprintf('END OF RUN\n');
             if is_running
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
-                pause(20);
+                Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
+                tic;
+                while (toc<20 && ~doExit)
+                end
+                if ~doExit
+                    Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
+                else
+                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Load');
+                end
             else
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
             end
@@ -2553,6 +2561,11 @@ fprintf('END OF RUN\n');
             else
                 % Log/print
                 Console_Write('[NLX_Setup] CONFIRM: Already Connected to NLX');
+            end
+            
+            % Bail if exit initiated
+            if doExit
+                return
             end
             
             %% CONFIGURE DIGITAL IO
@@ -2605,8 +2618,12 @@ fprintf('END OF RUN\n');
             % IR time sync LED
             NlxSendCommand(['-SetNamedTTLEvent ', D.NLX.DevName, ' ', D.NLX.ir_ts_bit{1}, ' ', D.NLX.ir_ts_bit{2}, ' ', D.NLX.ir_ts_str]);
             
-            % Log/print
-            Console_Write('[NLX_Setup] FINISHED: Configure NLX');
+            % Bail if exit initiated
+            if doExit
+                return
+            else
+                Console_Write('[NLX_Setup] FINISHED: Configure NLX');
+            end
             
             %% START STREAMING
             
@@ -2623,9 +2640,13 @@ fprintf('END OF RUN\n');
             set(D.UI.btnAcq, 'Value', 1)
             BtnAcq(D.UI.btnAcq);
             
-            % Log/print
-            Console_Write(sprintf('[NLX_Setup] RUNNING: Open NLX Stream: Status vt1=%d vt2=%d evt=%d', s1, s2, s3));
-            clear s1 s2 s3;
+            % Bail if exit initiated
+            if doExit
+                return
+            else
+                Console_Write(sprintf('[NLX_Setup] RUNNING: Open NLX Stream: Status vt1=%d vt2=%d evt=%d', s1, s2, s3));
+                clear s1 s2 s3;
+            end
             
             %% ENABLE SETUP PANEL ONCE CONNECTED
             

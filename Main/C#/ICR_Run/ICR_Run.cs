@@ -781,10 +781,12 @@ namespace ICR_Run
                     robLogger.isLogging = true;
 
                     // Start importing
-                    new Thread(delegate ()
+                    Thread get_log_thread = new Thread(delegate ()
                     {
                         GetRobotLog();
-                    }).Start();
+                    });
+                    get_log_thread.Priority = ThreadPriority.Highest;
+                    get_log_thread.Start();
 
                     // Tell robot to begin streaming log and wait for message to send
                     RepeatSendPack_Thread(id: 'L', dat1: 1, do_conf: false);

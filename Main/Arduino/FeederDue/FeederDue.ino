@@ -24,6 +24,10 @@
 	float = 4 byte
 	double = 8 byte
 
+* Step down resistor for vcc monitoring:
+	To ground = 2.2k Ohm
+	To vcc = 8.2k Ohm
+
 * config.txt settings:
 	57600,26,3,2,0,0,0
 	baud,escape,esc#,mode,verb,echo,ignoreRX
@@ -76,6 +80,536 @@
 #define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
 
 #pragma endregion 
+
+
+#pragma region ========== CLASS DECLARATIONS ===========
+
+#pragma region ----------CLASS: POSTRACK----------
+class POSTRACK
+{
+public:
+	// VARS
+	char objID[20] = { 0 };
+	int nSamp = 0;
+	double posArr[6] = { 0,0,0,0,0,0 }; // (cm)
+	uint32_t t_tsArr[6] = { 0,0,0,0,0,0 }; // (ms)
+	int dt_skip = 0;
+	double velNow = 0.0f; // (cm/sec)
+	double velLast = 0.0f; // (cm/sec)
+	double posNow = 0.0f; // (cm)
+	double posAbs = 0.0f; // (cm)
+	int cnt_error = 0;
+	uint32_t t_tsNow = 0;
+	uint32_t t_msNow = millis();
+	int nLaps = 0;
+	int sampCnt = 0;
+	bool isNew = false;
+	bool is_streamStarted = false;
+	uint32_t t_init;
+	// METHODS
+	POSTRACK(uint32_t t, char obj_id[], int n_samp);
+	void UpdatePos(double pos_new, uint32_t ts_new);
+	double GetPos();
+	double GetVel();
+	void SwapPos(double set_pos, uint32_t t);
+	void Reset();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: PID----------
+class PID
+{
+
+public:
+	// VARS
+	uint32_t t_updateLast = 0;
+	double dt_update = 0;
+	bool isPidUpdated = false;
+	double p_term = 0;
+	double i_term = 0;
+	double d_term = 0;
+	bool isFirstRun = true;
+	String mode = "Manual"; // ["Manual" "Automatic" "Halted"]
+	bool isHolding4cross = false;
+	bool doThrottle = false;
+	bool isThrottled = false;
+	double error = 0;
+	double errorLast = 0;
+	double errorFeeder = 0;
+	double integral = 0;
+	double derivative = 0;
+	double velUpdate = 0;
+	double runSpeed = 0;
+	int speedMax = maxSpeed;
+	double dT = 0;
+	double kP = 0;
+	double kI = 0;
+	double kD = 0;
+	float setPoint = 0;
+	uint32_t t_ekfReady = 0;
+	const int dt_ekfSettle = 250; // (ms)
+	bool is_ekfNew = false;
+	float throttleAcc = 20;
+	float throttleSpeedStop = 40;
+	const int dt_throttle = 4000;
+	uint32_t t_throttleTill = 0;
+	uint32_t t_lastThrottle = millis();
+	int cal_dt_min = 40; // (ms)
+	int cal_cntPcArr[4] = { 0, 0, 0, 0 };
+	int cal_stepNow = 0;
+	float cal_PcCnt = 0; // oscillation count
+	float cal_PcSum = 0; // oscillation period sum
+	uint32_t cal_t_PcNow = 0;
+	uint32_t cal_t_PcLast = 0;
+	float cal_PcArr[4] = { 0, 0, 0, 0 };
+	float cal_PcAvg = 0;
+	float cal_PcNow = 0;
+	float cal_PcAll = 0;
+	float cal_errNow = 0;
+	float cal_errLast = 0;
+	float cal_errAvg = 0;
+	float cal_errArr[4] = { 0, 0, 0, 0 };
+	float cal_dt_update = 0;
+	float cal_errCnt = 0;
+	float cal_errSum = 0;
+	float cal_errMax = 0;
+	float cal_errMin = 0;
+	double cal_ratPos = 0;
+	double cal_ratVel = 0;
+	bool cal_isPidUpdated = false;
+	bool cal_isCalFinished = false;
+	uint32_t t_init;
+	// METHODS
+	PID(uint32_t t, const float kC, const float pC, const float set_point);
+	double UpdatePID();
+	void Run(char called_from[]);
+	void Stop(char called_from[]);
+	void Hold(char called_from[]);
+	void Reset();
+	void SetThrottle();
+	void CheckThrottle();
+	void CheckMotorControl();
+	void CheckSetpointCrossing();
+	void CheckEKF(uint32_t t);
+	void ResetEKF(char called_from[]);
+	void SetUpdateTime(uint32_t t);
+	void PrintPID(char msg[]);
+	double RunPidCalibration();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: BULLDOZE----------
+class BULLDOZE
+{
+public:
+	// VARS
+	uint32_t t_updateNext = 0;
+	int dt_update = 50; // (ms)
+	float moveMin = 5; // (cm)
+	String mode = "Inactive"; // ["Active" "Inactive"]
+	String state = "Off"; // ["off", "On", "Hold"]
+	uint32_t t_bullNext = 0; // (ms)
+	int bSpeed = 0;
+	int bDelay = 0; // (ms)
+	double posCheck = 0;
+	double posNow = 0;
+	double distMoved = 0;
+	double guardPos = 0;
+	bool isMoved = false;
+	bool isTimeUp = false;
+	bool isPassedReset = false;
+	uint32_t t_init;
+	// METHODS
+	BULLDOZE(uint32_t t);
+	void UpdateBull();
+	void Reinitialize(byte del, byte spd, char called_from[]);
+	void Run(char called_from[]);
+	void Stop(char called_from[]);
+	void TurnOn(char called_from[]);
+	void TurnOff(char called_from[]);
+	void Hold(char called_from[]);
+	void Resume(char called_from[]);
+	void Reset();
+	void CheckMotorControl();
+	void PrintBull(char msg[]);
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: MOVETO----------
+class MOVETO
+{
+public:
+	// VARS
+	int targSetTimeout = 1000;
+	int moveTimeout = 10000;
+	uint32_t t_tryTargSetTill = 0;
+	uint32_t t_tryMoveTill = 0;
+	bool doAbortMove = false;
+	double posAbs = 0;
+	float minSpeed = 0;
+	const int dt_update = 10;
+	uint32_t t_updateNext = 0;
+	double distLeft = 0;
+	double posCumStart = 0;
+	double posAbsStart = 0;
+	double targPos = 0;
+	double targDist = 0;
+	char moveDir = 'f';
+	double baseSpeed = 0;
+	bool isTargSet = false;
+	bool isMoveStarted = false;
+	bool isTargReached = false;
+	double haltError = 0;
+	const double velCoeff[3] = {
+		0.001830357142857,
+		0.131160714285714,
+		-2.425892857142854,
+	};
+	uint32_t t_init;
+	// METHODS
+	MOVETO(uint32_t t);
+	bool CompTarg(double now_pos, double targ_pos);
+	double DecelToTarg(double now_pos, double now_vel, double dist_decelerate, double speed_min);
+	double GetError(double now_pos);
+	void Reset();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: REWARD----------
+class REWARD
+{
+public:
+	// VARS
+	const int zoneRewDurs[9] = { // (ms)
+		500,
+		910,
+		1420,
+		1840,
+		2000,
+		1840,
+		1420,
+		910,
+		500
+	};
+	const int zoneLocs[9] = { // (deg)
+		20,
+		15,
+		10,
+		5,
+		0,
+		-5,
+		-10,
+		-15,
+		-20,
+	};
+	static const int zoneLng =
+		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
+	double zoneBounds[zoneLng][2] = { { 0 } };
+	int zoneOccTim[zoneLng] = { 0 };
+	int zoneOccCnt[zoneLng] = { 0 };
+	uint32_t t_nowZoneCheck = 0;
+	uint32_t t_lastZoneCheck = 0;
+	char mode_str[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
+	String mode = mode_str;
+	int occThresh = 0; // (ms)
+	int durationDefault = 1420; // (ms) 
+	int duration = 0; // (ms) 
+	byte durationByte = 0; // (ms) 
+	int zoneMin = 0;
+	int zoneMax = 0;
+	double boundMin = 0;
+	double boundMax = 0;
+	uint32_t t_rew_str = 0;
+	uint32_t t_rew_end = 0;
+	uint32_t t_closeSol = 0;
+	uint32_t t_retractArm = 0;
+	uint32_t t_moveArmStr = 0;
+	double rewCenterRel = 0;
+	bool isRewarding = false;
+	bool isBoundsSet = false;
+	bool isZoneTriggered = false;
+	bool isAllZonePassed = false;
+	bool is_ekfNew = false;
+	byte zoneIndByte = 255;
+	int zoneRewarded = 0;
+	double boundsRewarded[2] = { 0 };
+	int occRewarded = 0;
+	int lapN = 0;
+	String extend_state = "LOW";
+	uint32_t armMoveTimeout = 5000;
+	bool doArmMove = false;
+	bool doExtendArm = false;
+	bool doRetractArm = false;
+	bool doTimedRetract = false;
+	bool doSwtchRelease = false;
+	bool isArmExtended = true;
+	const int armExtStps = 150;
+	const int armSwtchReleaseStps = 20;
+	const int dt_step_high = 500; // (us)
+	const int dt_step_low = 500; // (us)
+	bool isArmStpOn = false;
+	uint32_t t_init;
+	// METHODS
+	REWARD(uint32_t t);
+	void StartRew();
+	bool EndRew();
+	void SetRewDur(byte zone_ind);
+	void SetRewMode(char mode_now[], int arg2 = 0);
+	bool CompZoneBounds(double now_pos, double rew_pos);
+	bool CheckZoneBounds(double now_pos);
+	void SetArmDir(String dir, char called_from[]);
+	void ExtendFeedArm();
+	void RetractFeedArm();
+	void CheckFeedArm();
+	void Reset();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: LOGGER----------
+class LOGGER
+{
+public:
+	// VARS
+	uint32_t t_sent = 0; // (ms)
+	uint32_t t_rcvd = 0; // (ms)
+	uint32_t t_write = 0; // (us)
+	int dt_write = 50000; // (us)
+	uint32_t t_beginSend = 0;
+	int dt_beginSend = 1000;
+	static const int logQueueSize = 30;
+	char logQueue[logQueueSize][300] = { { 0 } };
+	int queueIndStore = 0;
+	int queueIndRead = 0;
+	int cnt_logsStored = 0;
+	static const int maxBytesStore = 2500;
+	char rcvdArr[maxBytesStore] = { 0 };
+	char mode = ' '; // ['<', '>']
+	char openLgSettings[100] = { 0 };
+	char logFile[50] = { 0 };
+	int logNum = 0;
+	char logCntStr[10] = { 0 };
+	int cnt_logBytesStored = 0;
+	int cnt_logBytesSent = 0;
+	uint32_t t_init;
+	// METHODS
+	LOGGER(uint32_t t);
+	bool Setup();
+	int OpenNewLog();
+	bool SetToCmdMode();
+	void GetCommand();
+	char SendCommand(char msg[], bool do_conf = true, uint32_t timeout = 5000);
+	char GetReply(uint32_t timeout);
+	bool SetToLogMode(char log_file[]);
+	void QueueLog(char msg[], uint32_t t = millis());
+	bool StoreLog();
+	void StreamLogs();
+	void TestLoad(int n_entry, char log_file[] = '\0');
+	int GetFileSize(char log_file[]);
+	void PrintLOGGER(char msg[], bool start_entry = false);
+
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: FUSER----------
+class FUSER : public TinyEKF
+{
+public:
+	FUSER()
+	{
+		// We approximate the process noise using a small constant
+		this->setQ(0, 0, .0001); // Rat pos
+		this->setQ(1, 1, .0001); // Rob pos
+		this->setQ(2, 2, .0001); // Rat vel
+		this->setQ(3, 3, .0001); // Rob vel
+
+								 // Same for measurement noise
+		this->setR(0, 0, .001); // Rat pos vt
+		this->setR(1, 1, .001); // Rat pos pixy
+		this->setR(2, 2, .0001); // Rob pos vt
+		this->setR(3, 3, .01); // Rat vel vt
+		this->setR(4, 4, .01); // Rat vel pixy
+		this->setR(5, 5, .001); // Rob vel vt
+	}
+protected:
+	void model(double fx[N], double F[N][N], double hx[M], double H[M][N])
+	{
+		// Process model is f(x) = x
+		fx[0] = this->x[0];
+		fx[1] = this->x[1];
+		fx[2] = this->x[2];
+		fx[3] = this->x[3];
+
+		// So process model Jacobian is identity matrix
+		F[0][0] = 1;
+		F[1][1] = 1;
+		F[2][2] = 1;
+		F[3][3] = 1;
+
+		// Measurement function
+		hx[0] = this->x[0]; // Rat pos vt from previous state
+		hx[1] = this->x[0]; // Rat pos pixy from previous state
+		hx[2] = this->x[1]; // Rob pos vt from previous state
+		hx[3] = this->x[2]; // Rat vel vt from previous state
+		hx[4] = this->x[2]; // Rat vel pixy from previous state
+		hx[5] = this->x[3]; // Rob vel vt from previous state
+
+							// Jacobian of measurement function
+		H[0][0] = 1; // Rat pos vt from previous state
+		H[1][0] = 1; // Rat pos pixy from previous state
+		H[2][1] = 1; // Rob pos vt from previous state
+		H[3][2] = 1; // Rat vel vt from previous state
+		H[4][2] = 1; // Rat vel pixy from previous state
+		H[5][3] = 1; // Rob vel vt from previous state
+	}
+};
+
+#pragma endregion 
+
+#pragma region ----------UNION----------
+union UTAG {
+	byte b[4]; // (byte) 1 byte
+	char c[4]; // (char) 1 byte
+	uint16_t i16[2]; // (int16) 2 byte
+	uint32_t i32; // (int32) 4 byte
+	int i; // (int) 4 byte
+	long l; // (long) 4 byte
+	float f; // (float) 4 byte
+};
+
+#pragma endregion 
+
+#pragma region ----------INITILIZE OBJECTS----------
+
+FUSER ekf;
+UTAG U;
+AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
+AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
+PixyI2C Pixy(0x54);
+LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
+POSTRACK Pos[3] = {
+	POSTRACK(millis(), "RatVT", 4),
+	POSTRACK(millis(), "RobVT", 4),
+	POSTRACK(millis(), "RatPixy", 6)
+};
+PID Pid(millis(), kC, pC, pidSetPoint);
+BULLDOZE Bull(millis());
+MOVETO Move(millis());
+REWARD Reward(millis());
+LOGGER Log(millis());
+
+#pragma endregion 
+
+#pragma endregion 
+
+
+#pragma region ========= FUNCTION DECLARATIONS =========
+
+// PARSE SERIAL INPUT
+void GetSerial();
+// PARSE SERIAL DATA
+void ParseSerial(char from, char id, float dat[]);
+// WAIT FOR BUFFER TO FILL
+byte WaitBuffRead(char mtch1 = '\0', char mtch2 = '\0');
+// STORE PACKET DATA TO BE SENT
+void QueuePacket(char targ, char id, byte dat1 = 0, byte dat2 = 0, byte dat3 = 0, uint16_t pack = 0, bool do_conf = true);
+// SEND SERIAL PACKET DATA
+void SendPacket();
+// CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
+bool CheckResend(char targ);
+// RESET AUTODRIVER BOARDS
+void AD_Reset(float max_speed = maxSpeed, float max_acc = maxAcc, float max_dec = maxDec);
+// CONFIGURE AUTODRIVER BOARDS
+void AD_Config(float max_speed, float max_acc, float max_dec);
+// CHECK AUTODRIVER STATUS
+void AD_CheckOC(bool force_check = false);
+// HARD STOP
+void HardStop(char called_from[]);
+// IR TRIGGERED HARD STOP
+void IRprox_Halt();
+// RUN AUTODRIVER
+bool RunMotor(char dir, double new_speed, String agent);
+// RUN MOTOR MANUALLY
+bool ManualRun(char dir);
+// SET WHATS CONTROLLING THE MOTOR
+bool SetMotorControl(char set_to[], char called_from[]);
+// BLOCK MOTOR TILL TIME ELLAPESED
+void BlockMotorTill(int dt, char called_from[]);
+// CHECK IF TIME ELLAPESED
+void CheckBlockTimElapsed();
+// DO SETUP TO BEGIN TRACKING
+void InitializeTracking();
+// CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
+void CheckSampDT();
+// PROCESS PIXY STREAM
+void CheckPixy();
+// UPDATE EKF
+void UpdateEKF();
+// LOG TRACKING
+void LogTrackingData();
+// CHECK FOR BUTTON INPUT
+bool GetButtonInput();
+// OPEN/CLOSE REWARD SOLENOID
+void OpenCloseRewSolenoid();
+// OPEN/CLOSE EtOH SOLENOID
+void OpenCloseEtOHSolenoid();
+// CHECK FOR ETOH UPDATE
+void CheckEtOH();
+// CHECK BATTERY VALUES
+float CheckBattery(bool force_check = false);
+// TURN LCD LIGHT ON/OFF
+void ChangeLCDlight(uint32_t duty = 256);
+// QUIT AND RESTART ARDUINO
+void QuitSession();
+// CHECK LOOP TIME AND MEMORY
+void CheckLoop();
+// LOG/PRINT MAIN EVENT
+void DebugFlow(char msg[], uint32_t t = millis());
+// LOG/PRINT ERRORS
+void DebugError(char msg[], uint32_t t = millis());
+// LOG/PRINT MOTOR CONTROL DEBUG STRING
+void DebugMotorControl(bool pass, char set_to[], char called_from[]);
+// LOG/PRINT MOTOR BLOCKING DEBUG STRING
+void DebugMotorBocking(char msg[], char called_from[], uint32_t t = millis());
+// LOG/PRINT MOTOR SPEED CHANGE
+void DebugRunSpeed(String agent, double speed_last, double speed_now);
+// LOG/PRINT RECIEVED PACKET DEBUG STRING
+void DebugRcvd(char from, char msg[], bool is_repeat = false);
+// LOG/PRINT SENT PACKET DEBUG STRING
+void DebugSent(char targ, char msg[], bool is_repeat = false);
+// STORE STRING FOR PRINTING
+void QueueDebug(char msg[], uint32_t t);
+// PRINT DEBUG STRINGS TO CONSOLE/LCD
+bool PrintDebug();
+// FOR PRINTING TO LCD
+void PrintLCD(bool do_block, char msg_1[], char msg_2[] = { 0 }, char f_siz = 's');
+// CLEAR LCD
+void ClearLCD();
+// PRINT SPECIAL CHARICTERS
+char* PrintSpecialChars(char chr, bool do_show_byte = false);
+// CHECK AUTODRIVER BOARD STATUS
+int CheckAD_Status(uint16_t stat_reg, String stat_str);
+// SEND TEST PACKET
+void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf);
+// HOLD FOR CRITICAL ERRORS
+void RunErrorHold(char msg[], uint32_t t_kill = 0);
+// GET ID INDEX
+int CharInd(char id, const char id_arr[], int arr_size);
+// BLINK LEDS AT RESTART/UPLOAD
+void StatusBlink(int n_blinks, int dt_led = 0);
+// TIMER INTERUPT/HANDLER
+void Interupt_TimerHandler();
+// HALT RUN ON IR TRIGGER
+void Interupt_IRprox_Halt();
+// DETECT IR SYNC EVENT
+void Interupt_IR_Detect();
+
+#pragma endregion
 
 
 #pragma region =========== CLASS DEFINITIONS ===========
@@ -1230,8 +1764,7 @@ void REWARD::StartRew()
 
 	// Print to LCD for manual rewards
 	if (mode == "Button") {
-		PrintLCD("REWARDING...");
-		fc.doBlockLCDlog = true;
+		PrintLCD(true, "REWARDING...");
 	}
 
 	// Log/print 
@@ -1481,7 +2014,7 @@ void REWARD::SetArmDir(String dir, char called_from[])
 	if (dir == "Extend" && extend_state == "LOW") {
 		digitalWrite(pin.ED_DIR, LOW);
 	}
-	else if (dir == "Extend" && extend_state == "HIGH"){
+	else if (dir == "Extend" && extend_state == "HIGH") {
 		digitalWrite(pin.ED_DIR, HIGH);
 	}
 	// Set direction to retract
@@ -2815,7 +3348,6 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 void GetSerial()
 {
 	// Local vars
-	char str[200] = { 0 };
 	uint32_t t_str = millis();
 	char dat_str[200] = { 0 };
 	int buff_tx = 0;
@@ -2923,6 +3455,7 @@ void GetSerial()
 		r4->cnt_dropped++;
 
 		// Log/print dropped packet info
+		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Dropped %c2r Packet: cnt=%d",
 			from, r4->cnt_dropped);
 		strcat(str, dat_str);
@@ -2952,9 +3485,10 @@ void GetSerial()
 		pack_tot_last = r4->packTot;
 
 		// Log/print skipped packet info
+		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Missed %c2r Packets: cnt=%d|%d pack_tot_last=%d",
 			from, cnt_dropped, cnt_dropped_tot, pack_tot_last);
-		strcat(str, dat_str);
+		//strcat(str, dat_str); TEMP
 		DebugError(str);
 	}
 
@@ -2993,12 +3527,14 @@ void GetSerial()
 	if (cnt_packBytesDiscarded > 0) {
 
 		// Log/print discarded data
+		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Discarded Bytes:%s", dat_str);
 		DebugError(str);
 	}
 
 	// Check if parsing took unusually long
 	if (millis() - t_str > 30) {
+		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Parser Hanging:%s", dat_str);
 		DebugError(str);
 	}
@@ -3352,7 +3888,6 @@ void SendPacket()
 	char dat_str[200] = { 0 };
 	uint32_t t_queue = millis();
 	char targ = '\0';
-	bool do_send = false;
 	bool is_resend = false;
 	char id = '\0';
 	byte dat[3] = { 0 };
@@ -3361,10 +3896,8 @@ void SendPacket()
 	int id_ind = 0;
 	cnt_packBytesSent = 0;
 	struct R2 *r2;
-
-	// Get buffer 
-	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	int buff_rx = Serial1.available();
+	int buff_tx;
+	int buff_rx;
 
 	// Move next in queue to temp msg array
 	for (int j = 0; j < msg_lng; j++) {
@@ -3398,29 +3931,28 @@ void SendPacket()
 	// do_conf 
 	do_conf = msg[b_ind++] == 1 ? true : false;
 
+	// Get buffer 
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = Serial1.available();
+
 	// Send sync time or rew tone immediately
 	if (
 		(id == 'r' || id == 'h') &&
-		Serial1.availableForWrite() > msg_lng + 10 &&
-		Serial1.available() == 0
+		!(
+			buff_tx == 0 &&
+			buff_rx == 0)
 		) {
-
-		do_send = true;
+		// Bail
+		return;
 	}
 
 	// Avoid overlap between sent or rcvd events
 	else if (
-		Serial1.availableForWrite() > msg_lng + 10 &&
-		Serial1.available() == 0 &&
-		millis() > t_xBeeSent + dt_sendSent &&
-		millis() > t_xBeeRcvd + dt_sendRcvd
-		)
-	{
-		do_send = true;
-	}
-
-	// Send if conditions met
-	if (!do_send) {
+		!(buff_tx == 0 &&
+			buff_rx == 0 &&
+			millis() > t_xBeeSent + dt_sendSent &&
+			millis() > t_xBeeRcvd + dt_sendRcvd)) {
+		// Bail
 		return;
 	}
 
@@ -3789,6 +4321,9 @@ void HardStop(char called_from[])
 	// Local vars
 	char str[200] = { 0 };
 
+	// Make sure motor enabled
+	digitalWrite(pin.AD_24V_ENBLE, HIGH);
+
 	// Normal hard stop
 	AD_R.hardStop();
 	AD_F.hardStop();
@@ -3829,6 +4364,9 @@ bool RunMotor(char dir, double new_speed, String agent)
 	// Check that caller has control
 	if (agent == fc.motorControl ||
 		agent == "Override") {
+
+		// Make sure motor enabled
+		digitalWrite(pin.AD_24V_ENBLE, HIGH);
 
 		// Run forward
 		if (dir == 'f') {
@@ -3885,7 +4423,7 @@ bool ManualRun(char dir)
 	// Print voltage and speed to LCD
 	sprintf(vcc_str, "VCC=%0.2fV", vccNow);
 	sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
-	PrintLCD(vcc_str, speed_str);
+	PrintLCD(false, vcc_str, speed_str);
 }
 
 // SET WHATS CONTROLLING THE MOTOR
@@ -4592,7 +5130,7 @@ void OpenCloseRewSolenoid()
 	fc.doBlockLCDlog = false;
 	sprintf(rew_str, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
 	sprintf(etoh_str, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
-	PrintLCD(rew_str, etoh_str, 's');
+	PrintLCD(false, rew_str, etoh_str, 's');
 	if (is_sol_open) {
 		fc.doBlockLCDlog = true;
 	}
@@ -4627,7 +5165,7 @@ void OpenCloseEtOHSolenoid()
 	fc.doBlockLCDlog = false;
 	sprintf(rew_str, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
 	sprintf(etoh_str, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
-	PrintLCD(rew_str, etoh_str, 's');
+	PrintLCD(false, rew_str, etoh_str, 's');
 	if (is_sol_open) {
 		fc.doBlockLCDlog = true;
 	}
@@ -4656,17 +5194,16 @@ void CheckEtOH()
 	if (!is_sol_open) {
 
 		// Open if dt run has ellapsed and robot has moved
-		do_open = millis() > (t_solOpen + dt_delEtOH[fc.isSesStarted ? 0 : 1]);// &&
-																			   //etoh_dist_diff > 1;
+		do_open = millis() > (t_solOpen + dt_delEtOH[fc.isSesStarted ? 0 : 1]);
 
-																			   // Open if robot has covered half the trak
+		// Open if robot has covered half the trak
 		do_open = do_open ||
 			etoh_dist_diff > (140 * PI) / 2;
 
-		// Open if vcc has not been updated recently
+		// Open only if motor not running
 		do_open =
-			do_open || (millis() > t_vccUpdate + 120000 &&
-				CheckAD_Status(adR_stat, "MOT_STATUS") == 0 &&
+			do_open && 
+			(CheckAD_Status(adR_stat, "MOT_STATUS") == 0 &&
 				CheckAD_Status(adF_stat, "MOT_STATUS") == 0);
 	}
 
@@ -4700,8 +5237,8 @@ void CheckEtOH()
 	}
 }
 
-// CHECK BATTERY VOLTAGE
-float GetBattVolt()
+// CHECK BATTERY VALUES
+float CheckBattery(bool force_check)
 {
 	// Local vars
 	char str[200] = { 0 };
@@ -4710,21 +5247,34 @@ float GetBattVolt()
 	static float vcc_avg = 0;
 	static float vcc_last = 0;
 	static int n_samples = 0;
-	float bit_in = 0;
+	uint32_t vcc_bit_in = 0;
+	uint32_t ic_bit_in = 0;
 	float vcc_in = 0;
 	float vcc_sum = 0;
 	byte vcc_byte = 0;
 	byte do_shutdown = false;
 
-	// Only run if relay open and motor stopped
-	if (
-		digitalRead(pin.Rel_EtOH) == HIGH &&
-		CheckAD_Status(adR_stat, "MOT_STATUS") == 0 &&
-		CheckAD_Status(adF_stat, "MOT_STATUS") == 0
-		) {
+	// Check if should stop sampling
+	if (millis() > t_vccUpdate + dt_vccCheck && 
+		!force_check) {
 
-		bit_in = analogRead(pin.BatVolt);
-		vcc_in = bit_in * bit2volt;
+		// Bail
+		return vccNow;
+	}
+
+	else if (millis() > t_vccUpdate + dt_vccCheck + dt_vccUpdate ||
+			force_check) {
+
+		// Turn on relay
+		digitalWrite(pin.Rel_Vcc, HIGH);
+
+		// Calculate current
+		ic_bit_in = analogRead(pin.BatIC);
+		icNow = 36.7*(((float)ic_bit_in * (3.3 / 1023)) / 3.3) - 18.3;
+
+		// Calculate voltage
+		vcc_bit_in = analogRead(pin.BatVcc);
+		vcc_in = (float)vcc_bit_in * bit2volt;
 		vcc_sum = 0;
 		// Shift array and compute average
 		for (int i = 99; i > 0; i--) {
@@ -4734,7 +5284,10 @@ float GetBattVolt()
 		batVoltArr[0] = vcc_in;
 		vcc_avg = vcc_sum / 99;
 
-		// Set flag to send update if array full
+		// Turn off relay
+		digitalWrite(pin.Rel_Vcc, LOW);
+
+		// Set flag to print/send update if array full
 		n_samples = n_samples < 100 ? n_samples + 1 : n_samples;
 		if (n_samples >= 100) {
 			do_vcc_update = true;
@@ -4748,7 +5301,7 @@ float GetBattVolt()
 	}
 
 	// Send updated voltage
-	else if (do_vcc_update) {
+	if (do_vcc_update) {
 
 		// Store new voltage level
 		vcc_last = vccNow;
@@ -4766,8 +5319,9 @@ float GetBattVolt()
 		// Convert float to byte
 		vcc_byte = byte(round(vcc_avg * 10));
 
-		// Send and print if voltage changed
-		if (round(vccNow * 100) != round(vcc_last * 100)) {
+		// Send and print if voltage changed and min dt ellapsed
+		if (millis() > t_vccSend + dt_vccSend){
+			//round(vccNow * 100) != round(vcc_last * 100)) {
 
 			// Send voltage once coms established
 			if (fc.doSendVCC &&
@@ -4776,9 +5330,13 @@ float GetBattVolt()
 				QueuePacket('c', 'J', vcc_byte, 0, 0, 0, false);
 			}
 
-			// Log/print voltage
-			sprintf(str, "[GetBattVolt] VCC=%0.2fV", vcc_avg);
+			// Log/print voltage and current
+			sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA", 
+				vccNow, icNow);
 			DebugFlow(str);
+
+			// Store time
+			t_vccSend = millis();
 		}
 
 		// Print voltage and speed to LCD
@@ -4786,8 +5344,8 @@ float GetBattVolt()
 			char vcc_str[100];
 			char speed_str[100];
 			sprintf(vcc_str, "VCC=%0.2fV", vccNow);
-			sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
-			PrintLCD(vcc_str, speed_str);
+			sprintf(speed_str, "IC=%0.2fA", icNow);
+			PrintLCD(false, vcc_str, speed_str);
 		}
 
 		// Check if voltage critically low
@@ -5287,7 +5845,7 @@ bool PrintDebug()
 }
 
 // FOR PRINTING TO LCD
-void PrintLCD(char msg_1[], char msg_2[], char f_siz)
+void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 {
 	// Local vars
 	char msg_1_copy[100];
@@ -5298,7 +5856,10 @@ void PrintLCD(char msg_1[], char msg_2[], char f_siz)
 	sprintf(msg_2_copy, "%s", msg_2);
 
 	// Check if printing blocked
-	if (fc.doBlockLCDlog) {
+	if (do_block) {
+		fc.doBlockLCDlog = false;
+	}
+	else if (fc.doBlockLCDlog) {
 		return;
 	}
 
@@ -5349,6 +5910,11 @@ void PrintLCD(char msg_1[], char msg_2[], char f_siz)
 
 	// Update
 	LCD.update();
+
+	// Prevent overwrite till cleared
+	if (do_block) {
+		fc.doBlockLCDlog = true;
+	}
 }
 
 // CLEAR LCD
@@ -5650,7 +6216,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 
 	// Print error
 	sprintf(str, "ERROR %0.2fs", t_s);
-	PrintLCD(msg, str, 't');
+	PrintLCD(true, msg, str, 't');
 
 	// Loop indefinaitely
 	while (true)
@@ -5809,12 +6375,27 @@ void setup() {
 	// Local vars
 	char str[200] = { 0 };
 
+	// SET UP SERIAL STUFF
+
+	// XBee
+	Serial1.begin(57600);
+
+	// Serial monitor
+	SerialUSB.begin(0);
+
+	// Wait for SerialUSB if debugging
+	uint32_t t_check = millis() + 100;
+	if (db.Console) {
+		while (!SerialUSB && millis() < t_check);
+	}
+
 	// SETUP OUTPUT PINS
 
 	// Autodriver
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
+	pinMode(pin.AD_24V_ENBLE, OUTPUT);
 	// Display
 	pinMode(pin.Disp_SCK, OUTPUT);
 	pinMode(pin.Disp_MOSI, OUTPUT);
@@ -5829,6 +6410,7 @@ void setup() {
 	// Relays
 	pinMode(pin.Rel_Rew, OUTPUT);
 	pinMode(pin.Rel_EtOH, OUTPUT);
+	pinMode(pin.Rel_Vcc, OUTPUT);
 	// BigEasyDriver
 	pinMode(pin.ED_RST, OUTPUT);
 	pinMode(pin.ED_SLP, OUTPUT);
@@ -5850,6 +6432,7 @@ void setup() {
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
+	digitalWrite(pin.AD_24V_ENBLE, LOW);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);
@@ -5864,6 +6447,7 @@ void setup() {
 	// Relays
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
+	digitalWrite(pin.Rel_Vcc, LOW);
 	// Big Easy Driver
 	digitalWrite(pin.ED_MS1, LOW);
 	digitalWrite(pin.ED_MS2, LOW);
@@ -5883,8 +6467,9 @@ void setup() {
 
 	// SET INPUT PINS
 
-	// Voltage monitor
-	pinMode(pin.BatVolt, INPUT);
+	// Battery monitor
+	pinMode(pin.BatVcc, INPUT);
+	pinMode(pin.BatIC, INPUT);
 	// IR proximity sensors
 	pinMode(pin.IRprox_Rt, INPUT);
 	pinMode(pin.IRprox_Lft, INPUT);
@@ -5902,20 +6487,6 @@ void setup() {
 	delayMicroseconds(100);
 	StatusBlink(1, 0);
 
-	// SET UP SERIAL STUFF
-
-	// XBee
-	Serial1.begin(57600);
-
-	// Serial monitor
-	SerialUSB.begin(0);
-
-	// Wait for SerialUSB if debugging
-	uint32_t t_check = millis() + 100;
-	if (db.Console) {
-		while (!SerialUSB && millis() < t_check);
-	}
-
 	// INITIALIZE LCD
 	LCD.InitLCD();
 	LCD.setFont(SmallFont);
@@ -5925,7 +6496,7 @@ void setup() {
 
 	// Print to LCD
 	ChangeLCDlight(50);
-	PrintLCD("RUNNING", "SETUP");
+	PrintLCD(true, "SETUP", "MAIN");
 
 	// Log and print to console
 	DebugFlow("[setup] RUNNING: Setup...");
@@ -5934,6 +6505,7 @@ void setup() {
 	// SETUP AUTODRIVER
 
 	// Configure SPI
+	PrintLCD(true, "SETUP", "AutoDriver");
 	AD_R.SPIConfig();
 	delayMicroseconds(100);
 	AD_F.SPIConfig();
@@ -5948,14 +6520,17 @@ void setup() {
 	// SETUP BIG EASY DRIVER
 
 	// Start BigEasyDriver in sleep
+	PrintLCD(true, "SETUP", "Big Easy");
 	digitalWrite(pin.ED_RST, HIGH);
 	digitalWrite(pin.ED_SLP, LOW);
 
 	// INITIALIZE PIXY
+	PrintLCD(true, "SETUP", "Pixy");
 	Pixy.init();
 	Wire.begin();
 
 	// DUMP BUFFER
+	PrintLCD(true, "SETUP", "Dump Serial");
 	while (Serial1.available() > 0) {
 		Serial1.read();
 	}
@@ -5973,23 +6548,23 @@ void setup() {
 	digitalWrite(pin.Rel_EtOH, LOW);
 
 	// CHECK THAT POWER ON
-	digitalWrite(pin.Rel_EtOH, HIGH);
 	uint32_t t_check_vcc = millis() + 1000;
 
 	// Loop till vcc or timeout
-	while (GetBattVolt() == 0 && millis() < t_check_vcc);
+	PrintLCD(true, "SETUP", "Battery Check");
+	while (CheckBattery(true) == 0 && millis() < t_check_vcc);
 
 	// Exit with error if power not on
-	if (GetBattVolt() == 0) {
+	if (CheckBattery(true) == 0) {
 		// Hold for error
 		DebugError("!!ERROR!! [setup] ABORTED: Power Off");
 		while (PrintDebug());
 		digitalWrite(pin.Rel_EtOH, LOW);
 		RunErrorHold("POWER OFF");
 	}
-	digitalWrite(pin.Rel_EtOH, LOW);
 
 	// SETUP OPENLOG
+	PrintLCD(true, "SETUP", "OpenLog");
 	DebugFlow("[setup] RUNNING: OpenLog Setup...");
 	while (PrintDebug());
 
@@ -6008,6 +6583,7 @@ void setup() {
 	}
 
 	// Create new log file
+	PrintLCD(true, "SETUP", "Log File");
 	DebugFlow("[setup] RUNNING: Make New Log...");
 	if (Log.OpenNewLog() == 0) {
 		// Hold for error
@@ -6022,6 +6598,7 @@ void setup() {
 	}
 
 	// DEFINE EXTERNAL INTERUPTS
+	PrintLCD(true, "SETUP", "Interrupts");
 	uint32_t t_check_ir = millis() + 1000;
 	bool is_ir_low = false;
 
@@ -6090,6 +6667,32 @@ void loop() {
 	CheckLoop();
 	db.wasErrLoop = db.isErrLoop;
 	db.isErrLoop = false;
+
+	////TEMP
+	//static double speed_max = 40;
+	//static double speed_inc = 10;
+	//static int dt_change = 1000;
+	//static uint32_t t_last = millis() - 100;
+	//static double speed_now = 0;
+	//if (speed_now == 0) {
+	//	delay(5000);
+	//}
+	//if (millis() - t_last > dt_change)
+	//{
+	//	if (speed_now >= speed_max) {
+	//		speed_now = 0;
+	//	}
+	//	else {
+	//		speed_now += speed_inc;
+	//	}
+	//	RunMotor('f', speed_now, "Override");
+	//	t_last = millis();
+	//}
+	////while (true) {
+	////	AD_CheckOC(true);
+	////	while (PrintDebug());
+	////	delay(10);
+	////}
 
 	// PARSE SERIAL INPUT
 	GetSerial();
@@ -6211,7 +6814,7 @@ void loop() {
 	CheckEtOH();
 
 	// GET VCC
-	GetBattVolt();
+	CheckBattery();
 
 #pragma endregion
 
@@ -6384,7 +6987,7 @@ void loop() {
 			char str2[50];
 			sprintf(str1, "Rat Dst = %0.2fcm", kal.RatPos - kal.RobPos);
 			sprintf(str2, "Pid Err = %0.2fcm", Pid.error);
-			PrintLCD(str1, str2, 't');
+			PrintLCD(false, str1, str2, 't');
 
 		}
 	}
@@ -6393,16 +6996,12 @@ void loop() {
 	if (db.do_pidCalibration)
 	{
 		double new_speed = Pid.RunPidCalibration();
-		double speed_steps;
 
 		// Run motors
 		if (Pid.cal_isPidUpdated)
 		{
-			if (new_speed >= 0)
-			{
-				speed_steps = new_speed*cm2stp;
-				AD_R.run(FWD, speed_steps);
-				AD_F.run(FWD, speed_steps*scaleFrontAD);
+			if (new_speed >= 0){
+				RunMotor('f', new_speed, "Override");
 			}
 			// Print values
 			/*

@@ -56,12 +56,13 @@ soundH = audioplayer([reward_lft,noise_rt], nsfs);
 %stop(soundH);
 
 %% Loop indefinitely
+tic;
 while true
     
     %% Set/reinitialize paramiters
     
     % Delay between trigger and image (sec)
-    trgDel = 0.1;
+    trgDel = 0.1; %#ok<*NASGU>
     
     % Backround image files
     imgBackFiles = [{'back_light.bmp'}, {'back_dark.bmp'}];
@@ -78,43 +79,50 @@ while true
     t_sound = clock;
     
     % Put up light backround
-    frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{1}));
-    
-    % Print status message
-    fprintf('\r\tchange image to \"%s\": %s\r', ...
-        imgBackFiles{1}, datestr(now, 'HH:MM:SS AM'))
+    if ~exist('frame_java', 'var')
+        frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{1}));
+        % Print status message
+        fprintf('\r\tchange image to \"%s\": %s\r', ...
+            imgBackFiles{1}, datestr(now, 'HH:MM:SS AM'))
+    end
     
     % Bring java window back to front
-    frame_java.setState(frame_java.NORMAL)
+    if exist('frame_java', 'var') && toc > 10
+        frame_java.setState(frame_java.NORMAL)
+        tic;
+    end
     
     % Wait for other comp to open connection
-    while (true)
+    if ~exist('tcpIP', 'var')
         try
             tcpIP = tcpclient( ...
                 DgLynxIP, 55000, ...
                 'ConnectTimeout', 1, ...
                 'Timeout', 1);
-            break;
         catch
             % Print attempt message
             fprintf('\r\n.........WAITING FOR CONNECTION: %s\r\n', ...
                 datestr(now, 'HH:MM:SS AM'))
+            % Return to top
+            continue;
         end
+        
+        % Print status message
+        fprintf('\r\nCONNECTED: %s\r\n', ...
+            datestr(now, 'HH:MM:SS AM'))
+        
+        % Put up dark backround
+        frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{2}));
+        
+        % Print status message
+        fprintf('\r\tchange image to \"%s\": %s\r', ...
+            imgBackFiles{2}, datestr(now, 'HH:MM:SS AM'))
     end
     
-    % Print status message
-    fprintf('\r\nCONNECTED: %s\r\n', ...
-        datestr(now, 'HH:MM:SS AM'))
-    
-    % Put up dark backround
-    frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{2}));
-    
-    % Print status message
-    fprintf('\r\tchange image to \"%s\": %s\r', ...
-        imgBackFiles{2}, datestr(now, 'HH:MM:SS AM'))
-    
     % Wait for first data packet
-    while (tcpIP.BytesAvailable == 0)
+    if (tcpIP.BytesAvailable == 0) %#ok<*NODEF>
+        % Return to top
+        continue;
     end
     
     
@@ -134,6 +142,7 @@ while true
             
             % Close image
             closescreenAWL
+            clear frame_java;
             
             % Stop noise
             if isplaying(soundH)
@@ -141,7 +150,6 @@ while true
             end
             
             % Close connection
-            %fclose(tcpIP);
             delete(tcpIP);
             clear tcpIP;
             

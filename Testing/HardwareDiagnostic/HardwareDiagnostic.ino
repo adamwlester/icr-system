@@ -50,34 +50,34 @@ const uint32_t t_LED_Dur = 250; // (ms)
 #pragma region ---------LIBRARIES & PACKAGES---------
 
 
-//-------SOFTWARE RESET----------
+								//-------SOFTWARE RESET----------
 #define SYSRESETREQ    (1<<2)
 #define VECTKEY        (0x05fa0000UL)
 #define VECTKEY_MASK   (0x0000ffffUL)
 #define AIRCR          (*(uint32_t*)0xe000ed0cUL) // fixed arch-defined address
 #define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
 
-//----------LIBRARIES------------
+								//----------LIBRARIES------------
 
-// General
+								// General
 #include <string.h>
 
-// AutoDriver
+								// AutoDriver
 
 #include <SPI.h>
 
 #include "AutoDriver_Due.h"
 
-// Pixy
+								// Pixy
 
 #include <Wire.h>
 
 #include <PixyI2C.h>
 
-// LCD
+								// LCD
 #include <LCD5110_Graph.h>
 
-// TinyEKF
+								// TinyEKF
 #define N 4     // States
 #define M 6     // Measurements
 #include <TinyEKF.h>
@@ -86,13 +86,14 @@ const uint32_t t_LED_Dur = 250; // (ms)
 
 
 #pragma region ---------PIN DECLARATION---------
-// Pin mapping
+								// Pin mapping
 struct PIN
 {
 	// Autodriver
 	const int AD_CSP_R = 5;
 	const int AD_CSP_F = 6;
 	const int AD_RST = 7;
+	const int AD_24V_ENBLE = 33;
 
 	// Display
 	const int Disp_SCK = 8;
@@ -110,6 +111,7 @@ struct PIN
 	// Relays
 	const int Rel_EtOH = 22;
 	const int Rel_Rew = 23;
+	const int Rel_Vcc = A5;
 
 	// BigEasyDriver
 	const int ED_RST = 47;
@@ -129,14 +131,15 @@ struct PIN
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch_Gnd = 24;
-	const int FeedSwitch = 25;
+	const int FeedSwitch_Gnd = 30;
+	const int FeedSwitch = 31;
 
 	// Power off
 	const int PwrOff = 45;
 
-	// Voltage monitor
-	const int BatVolt = A11;
+	// Battery monitor
+	const int BatVcc = A6;
+	const int BatIC = A7;
 
 	// Buttons
 	const int Btn[3] = { A3, A2, A1 };
@@ -177,9 +180,10 @@ pin;
 // AutoDriver
 const float cm2stp = 200 / (9 * PI);
 const float stp2cm = (9 * PI) / 200;
-const float maxSpeed = 100; // (cm)
-const float maxAcc = 80; // (cm)
+const float maxSpeed = 100; // (cm) // TEMP
+const float maxAcc = 80; // (cm) // TEMP
 const float maxDec = 80; // (cm)
+const double scaleFrontAD = 1.031;//1.0375;
 const byte kAcc = 60 * 2;
 const byte kDec = 60 * 2;
 const byte kRun = 60;
@@ -190,7 +194,7 @@ const int trackLEDduty = 75; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-// POT Variables
+						 // POT Variables
 const float Pi = 3.141593;
 int rewLEDDuty = 50; // value between 0 and 255
 int trackLEDDuty = 75; // value between 0 and 255
@@ -211,7 +215,8 @@ uint16_t ad_f_stat;
 volatile uint32_t t_debounce[3] = { millis(), millis(), millis() };
 
 // Voltage test variables
-float bit2volt = 0.0164;
+float bit2volt = 0.01545; // 0.0164
+float bit2ic = 0.00479;
 float bitVolt;
 float batVoltArr[100];
 float batVoltNow;
@@ -236,11 +241,11 @@ volatile bool is_Pls_Rcvd = false;
 //----------INITILIZE OBJECTS----------
 
 // AutoDriver
-AutoDriver_Due ad_R(pin.AD_CSP_R, pin.AD_RST);
-AutoDriver_Due ad_F(pin.AD_CSP_F, pin.AD_RST);
+AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
+AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 
 // LCD
-LCD5110 myGLCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
+LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
 extern unsigned char SmallFont[];
 
 #pragma endregion
@@ -266,7 +271,6 @@ u;
 #pragma region ---------FUNCTION DECLARATION---------
 
 int CheckAD_Status(uint16_t stat_reg, String stat_id);
-void AD_Reset();
 
 #pragma endregion
 
@@ -290,6 +294,7 @@ void setup()
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
+	pinMode(pin.AD_24V_ENBLE, OUTPUT);
 	// Display
 	pinMode(pin.Disp_SCK, OUTPUT);
 	pinMode(pin.Disp_MOSI, OUTPUT);
@@ -304,6 +309,7 @@ void setup()
 	// Relays
 	pinMode(pin.Rel_Rew, OUTPUT);
 	pinMode(pin.Rel_EtOH, OUTPUT);
+	pinMode(pin.Rel_Vcc, OUTPUT);
 	// BigEasyDriver
 	pinMode(pin.ED_RST, OUTPUT);
 	pinMode(pin.ED_SLP, OUTPUT);
@@ -325,6 +331,7 @@ void setup()
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
+	digitalWrite(pin.AD_24V_ENBLE, LOW);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);
@@ -339,6 +346,7 @@ void setup()
 	// Relays
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
+	digitalWrite(pin.Rel_Vcc, LOW);
 	// OpenLog
 	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
@@ -349,8 +357,9 @@ void setup()
 
 	// SET INPUT PINS
 
-	// Voltage monitor
-	pinMode(pin.BatVolt, INPUT);
+	// Battery monitor
+	pinMode(pin.BatVcc, INPUT);
+	pinMode(pin.BatIC, INPUT);
 	// IR proximity sensors
 	pinMode(pin.IRprox_Rt, INPUT);
 	pinMode(pin.IRprox_Lft, INPUT);
@@ -364,26 +373,31 @@ void setup()
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
 
+	// INITIALIZE LCD
+	LCD.InitLCD();
+	LCD.setFont(SmallFont);
+	LCD.invert(true);
+
 	// SETUP AUTODRIVER
 
 	// Configure SPI
-	ad_R.SPIConfig();
+	AD_R.SPIConfig();
 	delayMicroseconds(100);
-	ad_F.SPIConfig();
+	AD_F.SPIConfig();
 	delayMicroseconds(100);
 	// Reset 
-	AD_Reset();
+	AD_Reset(maxSpeed, maxAcc, maxDec);
 
 	// Make sure motor is stopped and in high impedance
-	ad_R.hardHiZ();
-	ad_F.hardHiZ();
+	AD_R.hardHiZ();
+	AD_F.hardHiZ();
 
 	// Print ad board status
 	SerialUSB.println(' ');
 	SerialUSB.print("BOARD R STATUS: ");
-	SerialUSB.println(ad_R.getStatus(), HEX);
+	SerialUSB.println(AD_R.getStatus(), HEX);
 	SerialUSB.print("BOARD F STATUS: ");
-	SerialUSB.println(ad_F.getStatus(), HEX);
+	SerialUSB.println(AD_F.getStatus(), HEX);
 
 	// SETUP BIG EASY DRIVER
 
@@ -405,11 +419,6 @@ void setup()
 		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), InteruptIRproxHalt, FALLING);
 		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), InteruptIRproxHalt, FALLING);
 	}
-
-	// INITIALIZE LCD
-	myGLCD.InitLCD();
-	myGLCD.setFont(SmallFont);
-	myGLCD.invert(true);
 
 	// TEST STUFF SETUP
 
@@ -458,6 +467,15 @@ void setup()
 
 void loop()
 {
+	//// TEMP
+	//delay(5000);
+	//AD_F.run(FWD, 60*cm2stp);
+	//AD_R.run(FWD, 60 * cm2stp);
+	//delay(10000);
+	//AD_F.hardStop();
+	//AD_R.hardStop();
+	//delay(600000);
+
 	static bool first_pass = true;
 	if (first_pass)
 	{
@@ -477,11 +495,11 @@ void loop()
 		{
 			char msg[50];
 			// Get rear board status
-			ad_r_stat = ad_R.getStatus();
+			ad_r_stat = AD_R.getStatus();
 			int ocd_r = CheckAD_Status(ad_r_stat, "OCD");
 			int mot_r = CheckAD_Status(ad_r_stat, "MOT_STATUS");
 			// Get front board status
-			ad_f_stat = ad_F.getStatus();
+			ad_f_stat = AD_F.getStatus();
 			int ocd_f = CheckAD_Status(ad_f_stat, "OCD");
 			int mot_f = CheckAD_Status(ad_f_stat, "MOT_STATUS");
 			// Print OCD vals
@@ -493,7 +511,8 @@ void loop()
 			// Check for errors
 			if (ocd_r == 0 || ocd_f == 0)
 			{
-				SerialUSB.println("!!ERROR!!");
+				sprintf(msg, "!!ERROR!! AD: R_MOT=%d F_MOT=%d R_OCD=%d F_OCD=%d", mot_r, mot_f, ocd_r, ocd_f);
+				SerialUSB.println(msg);
 				pastSpeed = 0;
 				//AD_Reset();
 			}
@@ -549,16 +568,20 @@ bool POT_Run() {
 		pastSpeed = runSpeed;
 		switched = false;
 		is_speed_changed = true;
+
+		// Make sure motor enabled
+		digitalWrite(pin.AD_24V_ENBLE, HIGH);
+
 		if (velNow <= 1)
 		{
-			ad_R.hardStop();
-			ad_F.hardStop();
+			AD_R.hardStop();
+			AD_F.hardStop();
 			analogWrite(13, 0);
 		}
 		else
 		{
-			ad_R.run(FWD, runSpeed);
-			ad_F.run(FWD, runSpeed*1.0375);
+			AD_R.run(FWD, runSpeed);
+			AD_F.run(FWD, runSpeed*scaleFrontAD);
 			analogWrite(13, 120);
 		}
 	}
@@ -650,23 +673,52 @@ void CheckBattery()
 {
 	// Local vars
 	static uint32_t t_lastUpdate = millis();
-	static uint32_t t_delUpdate = 500;
-	float bit_in;
+	static int dt_update = 500;
+	static uint32_t t_relOpen = 0;
+	static int dt_relOpen = 5000;
+	uint32_t vcc_bit_in;
+	uint32_t ic_bit_in;
 	float volt_in;
+	float ic_in;
 	float volt_sum;
 	float volt_avg;
-	byte bit_out;
+	byte vcc_bit_out;
+	byte ic_bit_out;
 
 	// Make sure relay is open
-	if (digitalRead(pin.Rel_EtOH) == LOW)
+	//if (digitalRead(pin.Rel_Vcc) == LOW) {
+	//	digitalWrite(pin.Rel_Vcc, HIGH);
+	//}
+
+	if (digitalRead(pin.Rel_Vcc) == LOW &&
+		millis() > t_relOpen + dt_relOpen * 2)
 	{
-		digitalWrite(pin.Rel_EtOH, HIGH);
+		digitalWrite(pin.Rel_Vcc, HIGH);
+		t_relOpen = millis();
+		char str[200];
+		sprintf(str, "\r\nVOLTAGE RELAY OPEN", volt_avg, vcc_bit_out);
+		SerialUSB.print(str);
+	}
+	else if (digitalRead(pin.Rel_Vcc) == HIGH &&
+		millis() > t_relOpen + dt_relOpen)
+	{
+		digitalWrite(pin.Rel_Vcc, LOW);
+		char str[200];
+		sprintf(str, "\r\nVOLTAGE RELAY CLOSED", volt_avg, vcc_bit_out);
+		SerialUSB.print(str);
 	}
 
-	bit_in = analogRead(pin.BatVolt);
-	volt_in = bit_in * bit2volt;
-	volt_sum = 0;
+	// Calculate current
+	ic_bit_in = analogRead(pin.BatIC);
+	//ic_in = (float)ic_bit_in*bit2ic;
+	ic_in = 36.7*(((float)ic_bit_in * (3.3 / 1023)) / 3.3) - 18.3;
+
+	// Calculate voltage
+	vcc_bit_in = analogRead(pin.BatVcc);
+	volt_in = (float)vcc_bit_in * bit2volt;
+
 	// Shift array and compute average
+	volt_sum = 0;
 	for (int i = 99; i > 0; i--) {
 		batVoltArr[i] = batVoltArr[i - 1];
 		volt_sum += batVoltArr[i];
@@ -675,12 +727,14 @@ void CheckBattery()
 	volt_avg = volt_sum / 99;
 
 	// Convert float to byte
-	bit_out = byte(round(volt_avg * 10));
+	vcc_bit_out = byte(round(volt_avg * 10));
+	ic_bit_out = byte(round(ic_in * 10));
 
-	if (millis() > t_lastUpdate + t_delUpdate)
+	if (millis() > t_lastUpdate + dt_update)
 	{
-		char str[50];
-		sprintf(str, "\r\nVOLTAGE: Float = %0.2fV Byte = %d", volt_avg, bit_out);
+		char str[200];
+		sprintf(str, "\r\nVOLTAGE & CURRENT: Vcc=%0.2fV Vcc_Bit_In=%d Vcc_Bit_Out=%d IC=%0.2fA IC_Bit_In=%d IC_Bit_Out=%d",
+			volt_avg, vcc_bit_in, vcc_bit_out, ic_in, ic_bit_in, ic_bit_out);
 		SerialUSB.print(str);
 
 		t_lastUpdate = millis();
@@ -703,6 +757,7 @@ void ConsoleRead()
 	byte buff_b;
 	while (SerialUSB.available() > 0) {
 		buff_b = SerialUSB.read();
+		SerialUSB.write(buff_b);
 		Serial1.write(buff_b);
 	}
 }
@@ -746,7 +801,7 @@ void Interupt_IR_Detect()
 		cnt_IR_Rcvd++;
 		is_IR_On = true;
 		is_IR_Rcvd = true;
-		//char str[50];
+		//char str[200];
 		//sprintf(str, "__IR Detected:    %d (ms)", t_IR_Rcvd);
 		//SerialUSB.println(str);
 	}
@@ -762,7 +817,7 @@ void Interupt_Pulse_Detect()
 		t_Pls_Rcvd = micros();
 		cnt_Pls_Rcvd++;
 		is_Pls_Rcvd = true;
-		//char str[50];
+		//char str[200];
 		//sprintf(str, "__Pulse Detected: %d (ms)", t_Pls_Rcvd);
 		//SerialUSB.println(str);
 	}
@@ -780,7 +835,7 @@ void IR_LatComp()
 			// Compute delay between pulse and IR
 			t_IR_Lat = t_IR_Rcvd - t_Pls_Rcvd;
 			// Print info
-			char str[50];
+			char str[200];
 			sprintf(str, "IR Lat: %d (us) [Cnt:%d|%d]", t_IR_Lat, cnt_Pls_Rcvd, cnt_IR_Rcvd);
 			SerialUSB.println(str);
 			// Print to LCD
@@ -890,8 +945,8 @@ void CheckButtons()
 }
 
 void InteruptIRproxHalt() {
-	ad_R.hardStop();
-	ad_F.hardStop();
+	AD_R.hardStop();
+	AD_F.hardStop();
 	SerialUSB.println("Run Halted");
 }
 
@@ -1004,18 +1059,146 @@ void PrintBits(uint16_t stat_reg)
 	SerialUSB.println("\r");
 }
 
-void AD_Reset()
+// CONFIGURE AUTODRIVER BOARDS
+void AD_Config(float max_speed, float max_acc, float max_dec)
+{
+	// Set busy pin as BUSY_PIN or SYNC_PIN;
+	/*
+	SYNC_FS_2 - two pulses on sync pin per full step of motor
+	SYNC_FS - one pulse per full step
+	SYNC_XFS - where X can be 2, 4, 8, 16, 32, or 64, and X indicates the number of full steps between pulses on the sync pin
+	*/
+	AD_R.configSyncPin(BUSY_PIN, 0);
+	AD_F.configSyncPin(BUSY_PIN, 0);
+
+	// Microsteps per step
+	/*
+	STEP_FS - Full-step mode; microstepping disabled
+	STEP_FS_X - Enable microstepping with X microsteps per full step. X can be 2, 4, 8, 16, 32, 64, or 128.
+	*/
+	AD_R.setParam(STEP_MODE, STEP_FS_128);
+	AD_F.setParam(STEP_MODE, STEP_FS_128);
+
+	// PWM freq
+	/*
+	PWM_DIV_X, where X can be any value 1-7.
+	PWM_MUL_X, where X can be 0_625 (for 0.625), 0_75 (for 0.75), 0_875, 1, 1_25, 1_5, 1_75, or 2.
+	*/
+	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
+	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
+
+												// Overcurent enable
+	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
+	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
+
+												// Motor V compensation
+												/*
+												VS_COMP_ENABLE, VS_COMP_DISABLE
+												*/
+	AD_R.setVoltageComp(VS_COMP_ENABLE);
+	AD_F.setVoltageComp(VS_COMP_ENABLE);
+
+	// Switch pin mode
+	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
+	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
+
+												// Slew rate
+												/*
+												Upping the edge speed increases torque
+												SR_180V_us, SR_290V_us, SR_530V_us
+												*/
+	AD_R.setSlewRate(SR_530V_us);
+	AD_F.setSlewRate(SR_530V_us);
+
+
+	// Overcurrent threshold
+	/*
+	375, 750, 1125, 1500, 1875, 2250, 2625, 3000,
+	3375, 3750, 4125, 4500, 4875, 5250, 5625, or 6000
+	Peak Amp for 1.2 A stepper = 1.2*1.41 = 1690 mA
+	Peak Amp for 1.7 A stepper = 1.7*1.41 = 2397 mA
+	Peak Amp for 2.82 A stepper = 2.82*1.41 = 3.97 mA
+	*/
+	AD_R.setOCThreshold(OC_4875mA);
+	AD_F.setOCThreshold(OC_3750mA);
+
+	// Low speed compensation
+	/*
+	Enabled low speed compensation. If enabled, MinSpeed is upper threshold at which this compensation is employed.
+	*/
+	AD_R.setLoSpdOpt(true);
+	AD_F.setLoSpdOpt(true);
+
+	// ---------SPEED SETTTINGS---------
+
+	// Steps/s max
+	AD_R.setMaxSpeed(max_speed * cm2stp);
+	AD_F.setMaxSpeed(max_speed * cm2stp);
+
+	// Minimum speed
+	AD_R.setMinSpeed(10 * cm2stp);
+	AD_F.setMinSpeed(10 * cm2stp);
+
+	// Full speed
+	AD_R.setFullSpeed(max_speed * cm2stp);
+	AD_F.setFullSpeed(max_speed * cm2stp);
+
+	// Acceleration
+	/*
+	Accelerate at maximum steps/s/s; 0xFFF = infinite
+	*/
+	AD_R.setAcc(max_acc * cm2stp);
+	AD_F.setAcc(max_acc * cm2stp);
+
+	// Deceleration
+	/*
+	Deccelerate at maximum steps/s/s; 0xFFF = infinite
+	*/
+	AD_R.setDec(max_dec * cm2stp);
+	AD_F.setDec(max_dec * cm2stp);
+
+	// ---------KVAL SETTTINGS---------
+	/*
+	K Val settings
+	KVAL = [(KVAL_X + BEMF_COMP) * VSCOMP * K_THERM] * microstep
+	KVAL = Rm * Iph / Vs = %
+	Pololu item #: 1200: 1.2A, 4V, 3.3Ohm, 2.8mH = 84.15
+	Pololu item #: 2267: 1.68A, 2.8V, 1.65Ohm, 3.2mH = 58.9
+	AA item #: 23Y108D-LW8: 2.82A, 2.82V, 1.65Ohm, 3.2mH = 58.9
+	*/
+
+	// NIMA 23 24V MIN KVALS
+	AD_R.setAccKVAL(50);				        // This controls the acceleration current
+	AD_R.setDecKVAL(50);				        // This controls the deceleration current
+	AD_R.setRunKVAL(50);					    // This controls the run current
+	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
+
+												// NIMA 17 24V
+	AD_F.setAccKVAL(50);				        // This controls the acceleration current
+	AD_F.setDecKVAL(50);				        // This controls the deceleration current
+	AD_F.setRunKVAL(50);					    // This controls the run current
+	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
+
+												/*
+												// NIMA 17 12V
+												AD_F.setAccKVAL(100);				        // This controls the acceleration current
+												AD_F.setDecKVAL(100);				        // This controls the deceleration current
+												AD_F.setRunKVAL(120);					    // This controls the run current
+												AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
+												*/
+}
+
+void AD_Reset(float max_speed, float max_acc, float max_dec)
 {
 	// Reset each axis
-	ad_R.resetDev();
+	AD_R.resetDev();
+	AD_F.resetDev();
 	delayMicroseconds(100);
-	ad_F.resetDev();
-	delayMicroseconds(100);
+
 	// Configure each axis
-	dSPINConfig_board();
+	AD_Config(max_speed, max_acc, max_dec);
 	delayMicroseconds(100);
-	ad_R.getStatus();
-	delayMicroseconds(100);
-	ad_F.getStatus();
+	AD_R.getStatus();
+	AD_F.getStatus();
 	delayMicroseconds(100);
 }
