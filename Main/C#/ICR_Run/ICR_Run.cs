@@ -2063,7 +2063,7 @@ namespace ICR_Run
                         int cnt_dropped = rec_last - rec_now - 1;
                         robLogger.AddDropped(cnt_dropped);
                         LogEvent_Thread(String.Format("**WARNING** [GetRobotLog] Dropped r2c Log: logged_expected={0} logs_stored={1} dropped={2}|{3}",
-                            rec_now, robLogger.cnt_logged, r2c.cnt_dropped[0], r2c.cnt_dropped[1]));
+                            rec_now, robLogger.cnt_logged, robLogger.cnt_dropped[0], robLogger.cnt_dropped[1]));
                     }
 
                     // Update list

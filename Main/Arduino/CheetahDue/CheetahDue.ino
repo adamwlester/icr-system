@@ -38,7 +38,7 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool Console = true;
+	bool Console = false;
 	// What to print
 	bool print_flow = true;
 	bool print_errors = true;

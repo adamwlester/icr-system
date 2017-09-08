@@ -2531,10 +2531,9 @@ fprintf('END OF RUN\n');
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
                 Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
-                %TEMP
-%                 tic;
-%                 while (toc<20 && ~doExit)
-%                 end
+                tic;
+                while (toc<20 && ~doExit)
+                end
                 if ~doExit
                     Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
                 else
