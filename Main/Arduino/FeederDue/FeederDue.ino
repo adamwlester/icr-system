@@ -2876,7 +2876,6 @@ void LOGGER::StreamLogs()
 	// Local vars
 	char str[200] = { 0 };
 	const int timeout = 1200000;
-	const int read_max = 5000;
 	static int cnt_err_set_cmd_mode = 0;
 	static int cnt_err_read_cmd = 0;
 	static int cnt_err_read_timeout = 0;
@@ -2929,8 +2928,8 @@ void LOGGER::StreamLogs()
 	while (millis() < (t_start + timeout)) {
 
 		// Print current send ind
-		sprintf(str, "[LOGGER::StreamLogs] RUNNING: Send Logs: bytes_sent=%d bytes_stored=%d...",
-			cnt_logBytesSent, cnt_logBytesStored);
+		sprintf(str, "[LOGGER::StreamLogs] RUNNING: Send %d Bytes...",
+			cnt_logBytesStored);
 		DebugFlow(str);
 		while (PrintDebug());
 
@@ -2945,7 +2944,7 @@ void LOGGER::StreamLogs()
 		// Send new "read" command
 		if (!send_done &&
 			!do_abort) {
-			sprintf(str, "read %s %d %d\r", logFile, cnt_logBytesSent, read_max);
+			sprintf(str, "read %s %d %d\r", logFile, 0, (uint32_t)-1);
 			SendCommand(str, false, 5000);
 		}
 
@@ -3043,18 +3042,6 @@ void LOGGER::StreamLogs()
 					// Break
 					break;
 				}
-			}
-
-			// Break for first \n before range passed
-			if (
-				c_arr[0] == '\r' &&
-				c_arr[1] == '\n' &&
-				read_ind > read_max - 300
-				) {
-
-				// Dump remaining
-				while (Serial3.read() != '>');
-				break;
 			}
 
 			// Send byte
@@ -6624,7 +6611,7 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	//Log.TestLoad(0, "LOG00021.CSV");
+	Log.TestLoad(0, "LOG00027.CSV");
 	//Log.TestLoad(2500);
 
 	// RESET FEEDER ARM
