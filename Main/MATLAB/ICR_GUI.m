@@ -69,14 +69,14 @@ end
 %---------------------SET DEBUG/TEST PARAMETERS----------------------------
 
 % Session conditions
-D.DB.ratLab = 'r9999';
+D.DB.ratLab = 'r0000';
 D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
 D.DB.Reward_Delay = '1.0';
-D.DB.Cue_Condition = 'None';
+D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
+D.DB.Start_Quadrant = 'NW'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
@@ -261,13 +261,13 @@ fprintf('END OF RUN\n');
             'F', ... % data saved [NA]
             'X', ... % confirm quit
             'C', ... % confirm close
-            'T', ... % system test command [(byte)test]
-            'S', ... % setup session [(byte)ses_cond, (byte)sound_cond]
+            'T', ... % system test command [(uint)test]
+            'S', ... % setup session [(uint)ses_cond, (byte)sound_cond]
             'M', ... % move to position [(float)targ_pos]
-            'R', ... % run reward [(float)rew_pos, (byte)rew_cond (byte)zone_ind/rew_delay]
-            'H', ... % halt movement [(byte)halt_state]
-            'B', ... % bulldoze rat [(byte)bull_delay, (byte)bull_speed]
-            'I' ... % rat in/out [(byte)in/out]
+            'R', ... % run reward [(float)rew_pos, (uint)rew_cond (uint)zone_ind/rew_delay]
+            'H', ... % halt movement [(uint)halt_state]
+            'B', ... % bulldoze rat [(uint)bull_delay, (float)bull_speed]
+            'I' ... % rat in/out [(uint)in/out]
             'O' ... % confirm rat out [NA]
             ];
         for z_id = 1:length(id_list)
@@ -543,10 +543,10 @@ fprintf('END OF RUN\n');
                         Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
                         while ...
                                 c2m.('V').dat1 == 0 && ...
-                                ~doExit;
+                                ~doExit
                             pause(0.01);
                             Update_UI(50);
-                        end;
+                        end
                         if ~doExit
                             Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
                         else
@@ -662,7 +662,7 @@ fprintf('END OF RUN\n');
                                 Reward_Send_Check();
                                 
                                 % REWARD FEEDER CHECK
-                                Reward_Check();
+                                Reward_Zone_Check();
                                 
                                 % LAP CHECK
                                 Lap_Check();
@@ -1950,6 +1950,7 @@ fprintf('END OF RUN\n');
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
                 'FontSize', 10, ...
+                'UserData', 1, ...
                 'Value', 0);
             
             % ALL CUE
@@ -1966,6 +1967,7 @@ fprintf('END OF RUN\n');
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
                 'FontSize', 10, ...
+                'UserData', 1, ...
                 'Value', 0);
             
             % CLEAR VT BUTTON
@@ -2529,9 +2531,10 @@ fprintf('END OF RUN\n');
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
                 Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
-                tic;
-                while (toc<20 && ~doExit)
-                end
+                %TEMP
+%                 tic;
+%                 while (toc<20 && ~doExit)
+%                 end
                 if ~doExit
                     Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
                 else
@@ -4384,11 +4387,14 @@ fprintf('END OF RUN\n');
         
         % ---------------------------REWARD CHECK--------------------------
         
-        function [] = Reward_Check()
+        function [] = Reward_Zone_Check()
             
-            % BAIL IF MANUAL TRAINING OR REWARD BOUNDS PASSED
+            % BAIL IF MANUAL TRAINING OR REWARD BOUNDS PASSED OR REWARD
+            % INFO NOT SENT
             if D.PAR.sesCond == 'Manual_Training' || ...
-                    D.F.flag_rew_zone_crossed
+                    D.F.flag_rew_zone_crossed || ...
+                    ~D.F.flag_rew_send_crossed
+                
                 return
             end
             
@@ -4477,7 +4483,7 @@ fprintf('END OF RUN\n');
                 D.F.flag_rew_confirmed = true;
                 D.F.check_rew_confirm = false;
                 
-                Console_Write(sprintf('[Reward_Check] Rewarded: Zone=%d Vel=%0.2fcm/sec', ...
+                Console_Write(sprintf('[Reward_Zone_Check] Rewarded: Zone=%d Vel=%0.2fcm/sec', ...
                     D.I.zoneHist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
                 
             end
@@ -4531,7 +4537,7 @@ fprintf('END OF RUN\n');
                         'Visible', 'off');
                     
                     % Print missed reward
-                    Console_Write(sprintf('[Reward_Check] Detected Missed Reward: cross_cnt=%d miss_cnt=%d|%d', ...
+                    Console_Write(sprintf('[Reward_Zone_Check] Detected Missed Reward: cross_cnt=%d miss_cnt=%d|%d', ...
                         D.C.rew_cross_cnt, D.C.missed_rew_cnt(1), D.C.missed_rew_cnt(2)));
                     
                 end
@@ -4559,7 +4565,7 @@ fprintf('END OF RUN\n');
                 set(D.UI.popRewInfo, 'String', infstr);
                 
                 % Print reset bounds crossed
-                Console_Write('[Reward_Check] Crossed Reward Bounds');
+                Console_Write('[Reward_Zone_Check] Crossed Reward Bounds');
             end
             
         end
@@ -5023,7 +5029,7 @@ fprintf('END OF RUN\n');
             % Bat volt
             % Turn red and flicker if bellow 12 V
             if c2m.('J').dat1 ~= 0
-                volt_now = c2m.('J').dat1/10;
+                volt_now = c2m.('J').dat1;
                 if volt_now <= D.PAR.batVoltWarning && volt_now > 0
                     set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
                     if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
@@ -6122,7 +6128,7 @@ fprintf('END OF RUN\n');
         function [] = BlockCue(~, ~, ~)
             
             % Dont run if reward sent
-            if ~D.F.flag_rew_send_crossed
+            if get(D.UI.btnBlockCue, 'UserData') == 1
                 
                 if (get(D.UI.btnBlockCue, 'Value') == 1)
                     
@@ -6168,7 +6174,7 @@ fprintf('END OF RUN\n');
         function [] = AllCue(~, ~, ~)
             
             % Dont run if reward sent
-            if ~D.F.flag_rew_send_crossed
+            if get(D.UI.btnAllCue, 'UserData') == 1
                 
                 if (get(D.UI.btnAllCue, 'Value') == 1)
                     % Change backround color and text
@@ -6339,16 +6345,37 @@ fprintf('END OF RUN\n');
         function [] = Set_Cue_Buttons(setting)
             
             if D.PAR.cueFeed == 'Half' || D.PAR.cueFeed == 'None'
+                
+                % Set to enabled color and change user data
                 if strcmp(setting, 'Enable')
-                    set(D.UI.btnBlockCue, ...
-                        'BackgroundColor', D.UI.enabledCol, ...
-                        'ForegroundColor' , D.UI.enabledBtnFrgCol);
-                    set(D.UI.btnAllCue, ...
-                        'BackgroundColor', D.UI.enabledCol, ...
-                        'ForegroundColor' , D.UI.enabledBtnFrgCol);
+                    
+                    % Set user data
+                    set(D.UI.btnBlockCue, 'UserData', 1);
+                    set(D.UI.btnAllCue,  'UserData', 1);
+                    
+                    % Set button color
+                    if get(D.UI.btnBlockCue, 'Value') == 1
+                        set(D.UI.btnBlockCue,  'BackgroundColor', D.UI.activeCol);
+                    else
+                        set(D.UI.btnBlockCue, 'BackgroundColor', D.UI.enabledCol);
+                    end
+                    if get(D.UI.btnAllCue, 'Value') == 1
+                        set(D.UI.btnAllCue,  'BackgroundColor', D.UI.activeCol);
+                    else
+                        set(D.UI.btnAllCue, 'BackgroundColor', D.UI.enabledCol);
+                    end
+                    
+                    % Set to disabled color
                 elseif strcmp(setting, 'Disable')
-                    set(D.UI.btnBlockCue, 'BackgroundColor', D.UI.disabledBckCol);
-                    set(D.UI.btnAllCue, 'BackgroundColor', D.UI.disabledBckCol);
+                    
+                    % Set user data
+                    set(D.UI.btnBlockCue, 'UserData', 0);
+                    set(D.UI.btnAllCue,  'UserData', 0);
+                    
+                    % Set button color
+                    set(D.UI.btnBlockCue, 'BackgroundColor',  D.UI.disabledBckCol);
+                    set(D.UI.btnAllCue, 'BackgroundColor',  D.UI.disabledBckCol);
+                    
                 end
                 
                 % Log/print
@@ -6577,11 +6604,11 @@ fprintf('END OF RUN\n');
         % Wait for recieved confirmation
         Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
         while exist('c2m', 'var') ~= 0
-            if c2m.('C').dat1 == 1;
+            if c2m.('C').dat1 == 1
                 break;
             end
             pause(0.01);
-        end;
+        end
         Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
         
         % Stop and delete timer
@@ -6623,7 +6650,7 @@ fprintf('END OF RUN\n');
         while m2c_pack(6) ~= 0 && ...
                 Elapsed_Seconds(now) < t_start + 1
             pause(0.001);
-        end;
+        end
         if m2c_pack(6) ~= 0
             m2c_pack(6) = 0;
             Console_Write(sprintf('**WARNING** [SendM2C] CS Failed to Reset m2c Packet: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
@@ -6753,9 +6780,9 @@ fprintf('END OF RUN\n');
     function [] = Console_Write(str, t_now)
         
         % Bail if following conditions not met
-        if ~exist('D','var'); return; end;
-        if ~isfield(D, 'DB'); return; end;
-        if ~isfield(D.DB, 'consoleStr'); return; end;
+        if ~exist('D','var'); return; end
+        if ~isfield(D, 'DB'); return; end
+        if ~isfield(D.DB, 'consoleStr'); return; end
         
         % Get time
         if nargin < 2
@@ -6787,9 +6814,9 @@ fprintf('END OF RUN\n');
         disp(p_msg);
         
         % Update console window
-        if ~isfield(D, 'UI'); return; end;
-        if ~isfield(D.UI, 'listConsole'); return; end;
-        if ~isvalid(D.UI.listConsole); return; end;
+        if ~isfield(D, 'UI'); return; end
+        if ~isfield(D.UI, 'listConsole'); return; end
+        if ~isvalid(D.UI.listConsole); return; end
         % Print normal
         set(D.UI.listConsole, ...
             'String', D.DB.consoleStr);

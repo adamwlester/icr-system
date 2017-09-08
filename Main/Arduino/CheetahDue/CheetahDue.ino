@@ -38,7 +38,7 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool Console = false;
+	bool Console = true;
 	// What to print
 	bool print_flow = true;
 	bool print_errors = true;
@@ -138,7 +138,7 @@ int printQueueIndRead = 0;
 
 // Serial tracking
 const int sendQueueSize = 10;
-const int sendQueueBytes = 9;
+const int sendQueueBytes = 18;
 byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
@@ -169,7 +169,7 @@ struct R2A
 	const char foot = '}';
 	char idNow = ' ';
 	bool isNew = false;
-	byte dat[3] = { 0 };
+	float dat[3] = { 0 };
 	const static int lng = sizeof(id) / sizeof(id[0]);
 	uint16_t pack[lng] = { 0 };
 	uint16_t packLast[lng] = { 0 };
@@ -218,7 +218,7 @@ struct A2R
 	};
 	const char head = '{';
 	const char foot = '}';
-	byte dat[3] = { 0 };
+	float dat[3] = { 0 };
 	const static int lng = sizeof(id) / sizeof(id[0]);
 	uint16_t pack[lng] = { 0 };
 	uint16_t packLast[lng] = { 0 };
@@ -299,7 +299,7 @@ void GetSerial();
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(char mtch = '\0');
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf);
+void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
 // SEND SERIAL PACKET DATA
 bool SendPacket();
 // STORE LOG STRING
@@ -317,17 +317,17 @@ void DebugFlow(char msg[], uint32_t t = millis());
 // LOG/PRINT ERRORS
 void DebugError(char msg[], uint32_t t = millis());
 // PRINT RECIEVED PACKET
-void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, int buff_tx, bool is_repeat = false);
+void DebugRcvd(char id, float dat[], uint16_t pack, bool do_conf, int buff_rx, int buff_tx, bool is_repeat = false);
 // LOG/PRING SENT PACKET DEBUG STRING
-void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, int buff_rx, bool is_repeat = false);
+void DebugSent(char id, float dat[], uint16_t pack, bool do_conf, int buff_tx, int buff_rx, bool is_repeat = false);
 // PRINT RESENT PACKET
-void DebugResent(char id, byte dat[], uint16_t pack);
+void DebugResent(char id, float dat[], uint16_t pack);
 // STORE STRING FOR PRINTING
 void QueueDebug(char msg[], uint32_t t);
 // PRINT DB INFO
 bool PrintDebug();
 // SEND TEST PACKET
-void TestSendPack(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf);
+void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
 // BLINK LEDS AT RESTART/UPLOAD
 void StatusBlink();
 // PLAY SOUND WHEN QUITING
@@ -448,7 +448,7 @@ void GetSerial()
 	byte buff = 0;
 	char head = ' ';
 	char id = ' ';
-	byte dat[3] = { 0 };
+	float dat[3] = { 0 };
 	char foot = ' ';
 	bool do_conf = false;
 	uint16_t pack = 0;
@@ -477,9 +477,15 @@ void GetSerial()
 	id = WaitBuffRead();
 
 	// Get data
-	dat[0] = WaitBuffRead();
-	dat[1] = WaitBuffRead();
-	dat[2] = WaitBuffRead();
+	for (int i = 0; i < 3; i++)
+	{
+		U.f = 0.0f;
+		U.b[0] = WaitBuffRead();
+		U.b[1] = WaitBuffRead();
+		U.b[2] = WaitBuffRead();
+		U.b[3] = WaitBuffRead();
+		dat[i] = U.f;
+	}
 
 	// Get packet num
 	U.f = 0.0f;
@@ -500,7 +506,7 @@ void GetSerial()
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 
 	// Store data string
-	sprintf(dat_str, "head=%c id=\'%c\' dat=|%d|%d|%d pack=%d foot=%c bytes_read=%d bytes_discarded=%d rx=%d tx=%d dt_parse=%d",
+	sprintf(dat_str, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c bytes_read=%d bytes_discarded=%d rx=%d tx=%d dt_parse=%d",
 		head, id, dat[0], dat[1], dat[2], pack, foot, cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx, buff_tx, millis() - t_str);
 
 	// Check for missing footer
@@ -754,7 +760,7 @@ byte WaitBuffRead(char mtch)
 }
 
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf)
+void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -764,6 +770,7 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 	// Local vars
 	char str[300] = { 0 };
 	int id_ind = 0;
+	float dat[3] = { dat1 , dat2 , dat3 };
 
 	// Update sendQueue ind
 	sendQueueIndStore++;
@@ -812,9 +819,14 @@ void QueuePacket(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool d
 	// Store mesage id
 	sendQueue[sendQueueIndStore][b_ind++] = id;
 	// Store mesage data 
-	sendQueue[sendQueueIndStore][b_ind++] = dat1;
-	sendQueue[sendQueueIndStore][b_ind++] = dat2;
-	sendQueue[sendQueueIndStore][b_ind++] = dat3;
+	for (int i = 0; i < 3; i++)
+	{
+		U.f = dat[i];
+		sendQueue[sendQueueIndStore][b_ind++] = U.b[0];
+		sendQueue[sendQueueIndStore][b_ind++] = U.b[1];
+		sendQueue[sendQueueIndStore][b_ind++] = U.b[2];
+		sendQueue[sendQueueIndStore][b_ind++] = U.b[3];
+	}
 	// Store packet number
 	U.f = 0.0f;
 	U.i16[0] = pack;
@@ -840,7 +852,7 @@ bool SendPacket()
 	cnt_packBytesSent = 0;
 	bool is_repeat = false;
 	char id = '\0';
-	byte dat[3] = { 0 };
+	float dat[3] = { 0 };
 	bool do_conf = 0;
 	uint16_t pack = 0;
 	int buff_tx;
@@ -889,9 +901,15 @@ bool SendPacket()
 	// id
 	id = sendQueue[sendQueueIndRead][b_ind++];
 	// dat
-	dat[0] = sendQueue[sendQueueIndRead][b_ind++];
-	dat[1] = sendQueue[sendQueueIndRead][b_ind++];
-	dat[2] = sendQueue[sendQueueIndRead][b_ind++];
+	for (int i = 0; i < 3; i++)
+	{
+		U.f = 0;
+		U.b[0] = sendQueue[sendQueueIndRead][b_ind++];
+		U.b[1] = sendQueue[sendQueueIndRead][b_ind++];
+		U.b[2] = sendQueue[sendQueueIndRead][b_ind++];
+		U.b[3] = sendQueue[sendQueueIndRead][b_ind++];
+		dat[i] = U.f;
+	}
 	// pack
 	U.f = 0.0f;
 	U.b[0] = sendQueue[sendQueueIndRead][b_ind++];
@@ -1199,7 +1217,7 @@ void DebugError(char msg[], uint32_t t)
 }
 
 // PRINT RECIEVED PACKET
-void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, int buff_tx, bool is_repeat)
+void DebugRcvd(char id, float dat[], uint16_t pack, bool do_conf, int buff_rx, int buff_tx, bool is_repeat)
 {
 	// Local vars
 	char str[300] = { 0 };
@@ -1221,7 +1239,7 @@ void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, in
 	}
 
 	// Log/print
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_send=%d dt_rcv=%d",
+	sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_read=%d rx=%d tx=%d dt_send=%d dt_rcv=%d",
 		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesRead, buff_rx, buff_tx, millis() - t_xBeeSent, dt_xBeeRcvd);
 
 	// Concatinate strings
@@ -1238,7 +1256,7 @@ void DebugRcvd(char id, byte dat[], uint16_t pack, bool do_conf, int buff_rx, in
 }
 
 // LOG/PRING SENT PACKET DEBUG STRING
-void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, int buff_rx, bool is_repeat)
+void DebugSent(char id, float dat[], uint16_t pack, bool do_conf, int buff_tx, int buff_rx, bool is_repeat)
 {
 	// Local vars
 	char str[300] = { 0 };
@@ -1261,7 +1279,7 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 	}
 
 	// Make string
-	sprintf(str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d queued=%d",
+	sprintf(str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d queued=%d",
 		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, dt_xBeeSent, millis() - t_xBeeRcvd, cnt_queued);
 
 	// Concatinate strings
@@ -1278,7 +1296,7 @@ void DebugSent(char id, byte dat[], uint16_t pack, bool do_conf, int buff_tx, in
 }
 
 // PRINT RESENT PACKET
-void DebugResent(char id, byte dat[], uint16_t pack)
+void DebugResent(char id, float dat[], uint16_t pack)
 {
 	// Local vars
 	char str[300] = { 0 };
@@ -1295,7 +1313,7 @@ void DebugResent(char id, byte dat[], uint16_t pack)
 	cnt_repeat++;
 
 	// Log/print
-	sprintf(str, "   [*RE-RCVD*] r2a: tot=%d id=\'%c\' dat=|%d|%d|%d| pack=%d!!", cnt_repeat, id, dat[0], dat[1], dat[2], pack);
+	sprintf(str, "   [*RE-RCVD*] r2a: tot=%d id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d!!", cnt_repeat, id, dat[0], dat[1], dat[2], pack);
 
 	if (do_print) {
 		QueueDebug(str, millis());
@@ -1402,7 +1420,7 @@ bool PrintDebug()
 }
 
 // SEND TEST PACKET
-void TestSendPack(char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf)
+void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	// TestSendPack('r', 0, 0, 0, 1, true);
 
@@ -1864,7 +1882,7 @@ void loop()
 		if (r2a.idNow == 'r') {
 
 			// Get reward duration and convert to ms
-			rewDur = (uint32_t)r2a.dat[0] * 10;
+			rewDur = (uint32_t)r2a.dat[0];
 
 			// Run tone
 			StartRew();

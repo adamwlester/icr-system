@@ -39,10 +39,10 @@ struct DB
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = false;
-	const bool print_r2c = false;
-	const bool print_a2r = false;
-	const bool print_r2a = false;
+	const bool print_c2r = true;
+	const bool print_r2c = true;
+	const bool print_a2r = true;
+	const bool print_r2a = true;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
@@ -201,7 +201,7 @@ int printQueueIndRead = 0;
 
 // Serial com general
 const int sendQueueSize = 10;
-const int sendQueueBytes = 10;
+const int sendQueueBytes = 19;
 byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueInd = sendQueueSize - 1;
 const int resendMax = 3;
@@ -457,7 +457,7 @@ struct R2
 	uint16_t packLast[20];
 	uint16_t cnt_pack;
 	int cnt_repeat;
-	byte datList[20][3];
+	float datList[20][3];
 	uint32_t t_sentList[20];
 	bool doRcvCheck[20];
 	int cnt_resend[20];

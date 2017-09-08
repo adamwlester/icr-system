@@ -334,7 +334,7 @@ public:
 	bool isZoneTriggered = false;
 	bool isAllZonePassed = false;
 	bool is_ekfNew = false;
-	byte zoneIndByte = 255;
+	int zoneInd = 255;
 	int zoneRewarded = 0;
 	double boundsRewarded[2] = { 0 };
 	int occRewarded = 0;
@@ -357,7 +357,7 @@ public:
 	REWARD(uint32_t t);
 	void StartRew();
 	bool EndRew();
-	void SetRewDur(byte zone_ind);
+	void SetRewDur(int zone_ind);
 	void SetRewMode(char mode_now[], int arg2 = 0);
 	bool CompZoneBounds(double now_pos, double rew_pos);
 	bool CheckZoneBounds(double now_pos);
@@ -475,10 +475,8 @@ protected:
 union UTAG {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
-	uint16_t i16[2]; // (int16) 2 byte
-	uint32_t i32; // (int32) 4 byte
-	int i; // (int) 4 byte
-	long l; // (long) 4 byte
+	uint16_t i16[2]; // (uint16_t) 2 byte
+	uint32_t i32; // (uint32_t) 4 byte
 	float f; // (float) 4 byte
 };
 
@@ -517,7 +515,7 @@ void ParseSerial(char from, char id, float dat[]);
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(char mtch1 = '\0', char mtch2 = '\0');
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char targ, char id, byte dat1 = 0, byte dat2 = 0, byte dat3 = 0, uint16_t pack = 0, bool do_conf = true);
+void QueuePacket(char targ, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true);
 // SEND SERIAL PACKET DATA
 void SendPacket();
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
@@ -595,7 +593,7 @@ char* PrintSpecialChars(char chr, bool do_show_byte = false);
 // CHECK AUTODRIVER BOARD STATUS
 int CheckAD_Status(uint16_t stat_reg, String stat_str);
 // SEND TEST PACKET
-void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf);
+void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
 // HOLD FOR CRITICAL ERRORS
 void RunErrorHold(char msg[], uint32_t t_kill = 0);
 // GET ID INDEX
@@ -1737,7 +1735,7 @@ void REWARD::StartRew()
 
 	// Store and send packet imediately if coms setup
 	if (fc.isSesStarted) {
-		QueuePacket('a', 'r', durationByte);
+		QueuePacket('a', 'r', duration);
 		SendPacket();
 	}
 
@@ -1820,17 +1818,16 @@ bool REWARD::EndRew()
 
 }
 
-void REWARD::SetRewDur(byte zone_ind)
+void REWARD::SetRewDur(int zone_ind)
 {
 	// Local vars
 	char str[200] = { 0 };
 
 	// Set duration
 	duration = zoneRewDurs[zone_ind];
-	durationByte = (byte)(duration / 10);
 
 	// Save zone ind
-	zoneIndByte = zone_ind;
+	zoneInd = zone_ind;
 
 	// Log/print
 	sprintf(str, "[REWARD::SetRewDur] Set Reward Diration: zone_ind=%d duration=%d",
@@ -2880,19 +2877,22 @@ void LOGGER::StreamLogs()
 	char str[200] = { 0 };
 	const int timeout = 1200000;
 	const int read_max = 5000;
+	static int cnt_log_bytes_read = 0;
 	static int cnt_err_set_cmd_mode = 0;
 	static int cnt_err_read_cmd = 0;
 	static int cnt_err_read_timeout = 0;
+	static char msg_out[19] = { 0 };
 	uint32_t t_start = millis(); // (ms)
 	uint32_t t_last_read = micros(); // (us)
 	uint32_t t_last_write = micros(); // (us)
 	int read_ind = 0;
+	int store_ind = 0;
 	bool head_passed = false;
 	bool send_done = false;
 	bool do_abort = false;
 	bool is_timedout = false;
 	char err_str[200] = "|";
-	char c_arr[3] = { '\0', '\0', '\0' };
+	char c_arr[3] = { 0 };
 	float dt_read_mu = 0; // (us)
 	float dt_write_mu = 0; // (us)
 	int dt_read[4] = { 0, 0, 10000, 0 }; // {sum, cnt, min, max}
@@ -2970,7 +2970,7 @@ void LOGGER::StreamLogs()
 			if (Serial3.available() == 0)
 			{
 				// Wait a max of 1 sec for new data
-				if (micros() - t_last_read < 1000000 ||
+				if (micros() - t_last_read < 1000 * 1000 ||
 					cnt_logBytesSent == 0) {
 					continue;
 				}
@@ -3083,13 +3083,39 @@ void LOGGER::StreamLogs()
 				dt_write[3] = dt_write_now > dt_write[3] ? dt_write_now : dt_write[3];
 			}
 
-			// Send new byte
-			Serial1.write(c_arr[2]);
-			t_last_write = micros();
-			cnt_logBytesSent++;
+			// Add to outgoing message
+			msg_out[store_ind] = c_arr[2];
+			cnt_log_bytes_read++;
+			store_ind++;
 
-			// Check if all bytes sent
-			if (cnt_logBytesSent == cnt_logBytesStored) {
+			// Send packet
+			if (store_ind == 18) {
+				msg_out[store_ind] = '\0';
+				Serial1.write(msg_out, 18);
+				t_last_write = micros();
+				cnt_logBytesSent += store_ind;
+				store_ind = 0;
+			}
+
+			// Check if all bytes read
+			if (cnt_log_bytes_read == cnt_logBytesStored) {
+
+				// Create termination string
+				char term_str[37];
+				for (int i = 0; i < 37; i++)
+				{
+					if (i < store_ind) {
+						term_str[i] = msg_out[i];
+					}
+					else {
+						term_str[i] = '>';
+					}
+					cnt_logBytesSent += store_ind;
+				}
+
+				// Send termination string 
+				Serial1.write(term_str, 36);
+
 				send_done = true;
 				break;
 			}
@@ -3115,7 +3141,7 @@ void LOGGER::StreamLogs()
 
 	// Print log time info
 	float dt_s = (float)(millis() - t_start) / 1000.0f;
-	sprintf(str, "[LOGGER::StreamLogs] Run Stats 1: dt_run=%0.2fs bytes_sent=%d bytes_stored=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d ol_tx=%d ol_rx=%d xbee_tx=%d xbee_rx=%d",
+	sprintf(str, "[LOGGER::StreamLogs] Run Stats 1: dt_run=%0.2fs bytes_sent=%d bytes_stored=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d openlog_tx=%d openlog_rx=%d xbee_tx=%d xbee_rx=%d",
 		dt_s, cnt_logBytesSent, cnt_logBytesStored, cnt_err_set_cmd_mode, cnt_err_read_cmd, cnt_err_read_timeout, ol_buff_tx, ol_buff_rx, xbee_buff_tx, xbee_buff_rx);
 	DebugFlow(str);
 
@@ -3347,6 +3373,11 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 // PARSE SERIAL INPUT
 void GetSerial()
 {
+	/*
+	PARSE DATA FROM CS
+	FORMAT: [0]head, [1]id, [2:5]dat[0], [6:9]dat[1], [10:13]dat[1], [14:15]pack, [16]do_conf, [17]footer, [18]targ
+	*/
+
 	// Local vars
 	uint32_t t_str = millis();
 	char dat_str[200] = { 0 };
@@ -3403,7 +3434,15 @@ void GetSerial()
 	}
 
 	// Parse data
-	ParseSerial(from, id, dat);
+	for (int i = 0; i < 3; i++)
+	{
+		U.f = 0.0f;
+		U.b[0] = WaitBuffRead();
+		U.b[1] = WaitBuffRead();
+		U.b[2] = WaitBuffRead();
+		U.b[3] = WaitBuffRead();
+		dat[i] = U.f;
+	}
 
 	// Get packet num
 	U.f = 0.0f;
@@ -3654,7 +3693,7 @@ void ParseSerial(char from, char id, float dat[])
 			U.b[1] = WaitBuffRead();
 			U.b[2] = WaitBuffRead();
 			U.b[3] = WaitBuffRead();
-			cmd.vtTS[cmd.vtEnt] = U.l;
+			cmd.vtTS[cmd.vtEnt] = U.i32;
 			// Get pos cm
 			U.f = 0.0f;
 			U.b[0] = WaitBuffRead();
@@ -3792,7 +3831,7 @@ byte WaitBuffRead(char mtch1, char mtch2)
 }
 
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf)
+void QueuePacket(char targ, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -3803,6 +3842,7 @@ void QueuePacket(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t p
 	int queue_ind = 0;
 	char head = '\0';
 	char foot = '\0';
+	float dat[3] = { dat1 , dat2 , dat3 };
 	int id_ind = 0;
 	struct R2 *r2;
 
@@ -3852,9 +3892,14 @@ void QueuePacket(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t p
 	// Store mesage id
 	sendQueue[queue_ind][b_ind++] = id;
 	// Store mesage data 
-	sendQueue[queue_ind][b_ind++] = dat1;
-	sendQueue[queue_ind][b_ind++] = dat2;
-	sendQueue[queue_ind][b_ind++] = dat3;
+	for (int i = 0; i < 3; i++)
+	{
+		U.f = dat[i];
+		sendQueue[queue_ind][b_ind++] = U.b[0];
+		sendQueue[queue_ind][b_ind++] = U.b[1];
+		sendQueue[queue_ind][b_ind++] = U.b[2];
+		sendQueue[queue_ind][b_ind++] = U.b[3];
+	}
 	// Store packet number
 	U.f = 0.0f;
 	U.i16[0] = pack;
@@ -3890,7 +3935,7 @@ void SendPacket()
 	char targ = '\0';
 	bool is_resend = false;
 	char id = '\0';
-	byte dat[3] = { 0 };
+	float dat[3] = { 0 };
 	bool do_conf = 0;
 	uint16_t pack = 0;
 	int id_ind = 0;
@@ -3920,9 +3965,15 @@ void SendPacket()
 	// id
 	id = msg[b_ind++];
 	// dat
-	dat[0] = msg[b_ind++];
-	dat[1] = msg[b_ind++];
-	dat[2] = msg[b_ind++];
+	for (int i = 0; i < 3; i++)
+	{
+		U.f = 0;
+		U.b[0] = msg[b_ind++];
+		U.b[1] = msg[b_ind++];
+		U.b[2] = msg[b_ind++];
+		U.b[3] = msg[b_ind++];
+		dat[i] = U.f;
+	}
 	// pack
 	U.f = 0.0f;
 	U.b[0] = msg[b_ind++];
@@ -4013,7 +4064,7 @@ void SendPacket()
 	int cnt_queued = sendQueueSize - sendQueueInd - 1;
 
 	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%d|%d|%d| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d dt_queue=%d queued=%d",
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d dt_queue=%d queued=%d",
 		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, dt_xBeeSent, millis() - t_xBeeRcvd, millis() - t_queue, cnt_queued);
 
 	// Is first send
@@ -4066,7 +4117,7 @@ bool CheckResend(char targ)
 			int buff_rx = Serial1.available();
 
 			// Get dat string
-			sprintf(dat_str, "id=\'%c\' dat=|%d|%d|%d| pack=%d dt_sent=%dms tx=%d rx=%d",
+			sprintf(dat_str, "r2%c Packet: cnt=%d id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt_sent=%dms tx=%d rx=%d",
 				targ, r2->cnt_resend[i], r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
 
 			if (r2->cnt_resend[i] < resendMax) {
@@ -4078,7 +4129,7 @@ bool CheckResend(char targ)
 				r2->cnt_resend[i]++;
 
 				// Print resent packet
-				sprintf(str, "**WARNING** [CheckResend] Resending r2%c Packet: cnt=%d %s", targ, r2->cnt_resend[i], dat_str);
+				sprintf(str, "**WARNING** [CheckResend] Resending %s", dat_str);
 				DebugError(str);
 
 				// Set flags
@@ -4090,7 +4141,7 @@ bool CheckResend(char targ)
 			else {
 
 				// Log/print error
-				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending r2%c Packet: cnt=%d %s", targ, r2->cnt_resend[i], dat_str);
+				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending %s", dat_str);
 				DebugError(str);
 
 				// Reset flag
@@ -5202,7 +5253,7 @@ void CheckEtOH()
 
 		// Open only if motor not running
 		do_open =
-			do_open && 
+			do_open &&
 			(CheckAD_Status(adR_stat, "MOT_STATUS") == 0 &&
 				CheckAD_Status(adF_stat, "MOT_STATUS") == 0);
 	}
@@ -5251,11 +5302,10 @@ float CheckBattery(bool force_check)
 	uint32_t ic_bit_in = 0;
 	float vcc_in = 0;
 	float vcc_sum = 0;
-	byte vcc_byte = 0;
 	byte do_shutdown = false;
 
 	// Check if should stop sampling
-	if (millis() > t_vccUpdate + dt_vccCheck && 
+	if (millis() > t_vccUpdate + dt_vccCheck &&
 		!force_check) {
 
 		// Bail
@@ -5263,7 +5313,7 @@ float CheckBattery(bool force_check)
 	}
 
 	else if (millis() > t_vccUpdate + dt_vccCheck + dt_vccUpdate ||
-			force_check) {
+		force_check) {
 
 		// Turn on relay
 		digitalWrite(pin.Rel_Vcc, HIGH);
@@ -5316,22 +5366,19 @@ float CheckBattery(bool force_check)
 		}
 		vcc_arr[9] = vccNow;
 
-		// Convert float to byte
-		vcc_byte = byte(round(vcc_avg * 10));
-
 		// Send and print if voltage changed and min dt ellapsed
-		if (millis() > t_vccSend + dt_vccSend){
+		if (millis() > t_vccSend + dt_vccSend) {
 			//round(vccNow * 100) != round(vcc_last * 100)) {
 
 			// Send voltage once coms established
 			if (fc.doSendVCC &&
 				!fc.doBlockVccSend) {
 
-				QueuePacket('c', 'J', vcc_byte, 0, 0, 0, false);
+				QueuePacket('c', 'J', vccNow, 0, 0, 0, false);
 			}
 
 			// Log/print voltage and current
-			sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA", 
+			sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA",
 				vccNow, icNow);
 			DebugFlow(str);
 
@@ -5681,7 +5728,9 @@ void DebugRcvd(char from, char msg[], bool is_repeat)
 
 	// Add samp dt for pos data
 	if (r4->idNow == 'P') {
-		sprintf(str, " dt_samp=%d", millis() - Pos[cmd.vtEnt].t_msNow);
+		U.f = r4->dat[2];
+		sprintf(str, " ts_int=%d dt_samp=%d",
+			U.i32, millis() - Pos[cmd.vtEnt].t_msNow);
 		strcat(msg_out, str);
 	}
 
@@ -6147,7 +6196,7 @@ void LogTrackingData()
 }
 
 // SEND TEST PACKET
-void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t pack, bool do_conf)
+void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	// EXAMPLE:
 	/*
@@ -6160,8 +6209,6 @@ void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t 
 	t_s = millis();
 	send_cnt++;
 	}
-	// Local vars
-	static char horeStr[200] = { 0 };
 	*/
 
 	//// Only send once
@@ -6177,7 +6224,7 @@ void TestSendPack(char targ, char id, byte dat1, byte dat2, byte dat3, uint16_t 
 	STORE DATA FOR CHEETAH DUE
 	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer, [9]targ
 	*/
-	sendQueue[sendQueueInd + 1][8] = 'i';
+	//sendQueue[sendQueueInd + 1][8] = 'i';
 
 	// Send packet
 	SendPacket();
@@ -6647,8 +6694,8 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	//Log.TestLoad(5, "LOG00017.CSV");
-	//Log.TestLoad(3000);
+	Log.TestLoad(5, "LOG0007.CSV");
+	//Log.TestLoad(1000);
 
 	// RESET FEEDER ARM
 	Reward.RetractFeedArm();
@@ -6659,6 +6706,17 @@ void setup() {
 void loop() {
 
 #pragma region //--- ONGOING OPPERATIONS ---
+
+	//// TEMP
+	//static uint32_t t_s = 0;
+	//static int send_cnt = 0;
+	//static uint16_t pack = 0;
+	//if (send_cnt == 0 && millis()>t_s + 30) {
+	//	pack++;
+	//	TestSendPack('c', 'Z', 0, 0, 0, 1, true);
+	//	t_s = millis();
+	//	send_cnt++;
+	//}
 
 	// Local vars
 	static char horeStr[200] = { 0 };
@@ -6797,7 +6855,7 @@ void loop() {
 		if (Reward.mode != "Now" &&
 			Reward.mode != "Button") {
 
-			QueuePacket('c', 'Z', Reward.zoneIndByte + 1, 0, 0, 0, true);
+			QueuePacket('c', 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
 		}
 	}
 
@@ -7000,7 +7058,7 @@ void loop() {
 		// Run motors
 		if (Pid.cal_isPidUpdated)
 		{
-			if (new_speed >= 0){
+			if (new_speed >= 0) {
 				RunMotor('f', new_speed, "Override");
 			}
 			// Print values
@@ -7457,6 +7515,12 @@ void loop() {
 #pragma region //--- (P) VT DATA RECIEVED ---
 	if (c2r.idNow == 'P' && c2r.isNew)
 	{
+		// Store message data
+		cmd.vtEnt = (byte)c2r.dat[0];
+		cmd.vtCM[cmd.vtEnt] = c2r.dat[1];
+		U.f = c2r.dat[2];
+		cmd.vtTS[cmd.vtEnt] = U.i32;
+
 		// Handle rob vt data
 		if (cmd.vtEnt == 1) {
 
@@ -7512,9 +7576,7 @@ void loop() {
 		if (!fc.doLogSend) {
 
 			// Send number of log bytes being sent
-			U.l = (long)Log.cnt_logBytesStored;
-			byte dat[3] = { U.b[0], U.b[1], U.b[2] };
-			QueuePacket('c', 'U', dat[0], dat[1], dat[2], 0, true);
+			QueuePacket('c', 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
 
 			// Block sending vcc updates
 			fc.doBlockVccSend = true;

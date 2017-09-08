@@ -134,7 +134,7 @@ namespace ICR_Run
         private static DB_Logger robLogger = new DB_Logger(_stop_watch: sw_main);
         private static DB_Logger dueLogger = new DB_Logger(_stop_watch: sw_main);
         private static DB_Logger csLogger = new DB_Logger(_stop_watch: sw_main);
-        private static UnionHack logBytes = new UnionHack(0, 0, 0, '0', 0);
+        private static UnionHack logBytes = new UnionHack(0, '0', 0, 0, 0);
 
         // Directories
         private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLAB\Startup";
@@ -161,13 +161,13 @@ namespace ICR_Run
             'F', // data saved [NA]
             'X', // confirm quit
             'C', // confirm close
-            'T', // system test command [(byte)test]
-            'S', // setup session [(byte)ses_cond, (byte)sound_cond]
-            'M', // move to position [(float)targ_pos]
-            'R', // run reward [(float)rew_pos, (byte)zone_ind, (byte)rew_delay]
-            'H', // halt movement [(byte)halt_state]
-            'B', // bulldoze rat [(byte)bull_delay, (byte)bull_speed]
-            'I', // rat in/out [(byte)in/out]
+            'T', // system test command [test]
+            'S', // setup session [ses_cond, sound_cond]
+            'M', // move to position [targ_pos]
+            'R', // run reward [rew_pos, zone_ind, rew_delay]
+            'H', // halt movement [halt_state]
+            'B', // bulldoze rat [bull_delay, bull_speed]
+            'I', // rat in/out [in/out]
             'O'  // confirm rat out [NA]
              }
             );
@@ -298,10 +298,10 @@ namespace ICR_Run
         private static double Y_CENT = 260.2418;
         private static double RADIUS = 179.4922;
         private static double feedDist = 66 * ((2 * Math.PI) / (140 * Math.PI));
-        private static ulong vtStr = 0;
-        private static float[,] vtRad = new float[2, 2];
-        private static float[] vtCM = new float[2];
-        private static int[,] vtTS = new int[2, 2];
+        private static UInt64 vtStr = 0;
+        private static double[,] vtRad = new double[2, 2];
+        private static double[] vtCM = new double[2];
+        private static UInt32[,] vtTS = new UInt32[2, 2];
 
         #endregion
 
@@ -351,7 +351,7 @@ namespace ICR_Run
             bool pass;
             char id = ' ';
             double[] dat = new double[3] { 0, 0, 0 };
-            ushort pack = 0;
+            UInt16 pack = 0;
 
             // Start timer
             sw_main.Start();
@@ -420,14 +420,14 @@ namespace ICR_Run
                     SendMCOM_Thread(msg: String.Format("dbstop in ICR_GUI at {0};", db.breakLine));
 
                 LogEvent_Thread("[Setup] FINISHED: Setup Debugging");
-                
+
                 // Log/print db settings
                 LogEvent_Thread(String.Format("[Setup] RUNNING IN DEBUG MODE: systemTest={0} do_debugMat={1}",
                     db.systemTest, db.do_debugMat));
             }
             else
                 com_Matlab.Visible = 0;
-         
+
 
             // Setup ICR_GUI background worker
             LogEvent_Thread("[Setup] RUNNING: Start RunGUI Worker...");
@@ -446,6 +446,11 @@ namespace ICR_Run
             var bw_args = Tuple.Create(id, dat[0], dat[1], dat[2], pack);
             bw_MatCOM.RunWorkerAsync(bw_args);
             LogEvent_Thread("[Setup] FINISHED: Start MatCOM Worker...");
+
+            //// TEMP
+            //double[] d = new double[3] { 2.3, 3.2, 4.3 };
+            //RepeatSendPack(send_max: 1, id: 'V', dat: d, pack: 1, do_conf: false, do_check_done: false);
+            //KillMatlab();
 
             // Wait for ICR_GUI to connect to AC computer
             LogEvent_Thread("[Setup] RUNNING: Wait for AC Connect...");
@@ -545,7 +550,7 @@ namespace ICR_Run
                 LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI NLX Setup");
                 return false;
             }
-      
+
             // Setup and begin NetCom streaming
             LogEvent_Thread("[Setup] RUNNING: Connect to NLX...");
             if (!(com_netComClient.AreWeConnected()))
@@ -810,7 +815,7 @@ namespace ICR_Run
             if (fc.isSaveEnabled && !fc.isGUIquit)
             {
                 LogEvent_Thread("[Exit] RUNNING: Wait for ICR_GUI to Save...");
-                pass = WaitForMCOM(id: 'F', do_abort:true);
+                pass = WaitForMCOM(id: 'F', do_abort: true);
                 if (pass)
                 {
                     LogEvent_Thread("[Exit] SUCCEEDED: Wait for ICR_GUI to Save");
@@ -974,7 +979,7 @@ namespace ICR_Run
         #region ========= SERIAL COMMUNICATION ==========
 
         // SEND PACK DATA REPEATEDLY TILL RECIEVED CONFIRMED
-        public static void RepeatSendPack_Thread(int send_max = 0, char id = ' ', double dat1 = double.NaN, double dat2 = double.NaN, double dat3 = double.NaN, ushort pack = 0, bool do_conf = true, bool do_check_done = false)
+        public static void RepeatSendPack_Thread(int send_max = 0, char id = ' ', double dat1 = double.NaN, double dat2 = double.NaN, double dat3 = double.NaN, UInt16 pack = 0, bool do_conf = true, bool do_check_done = false)
         {
             // Local vars
             double[] dat = new double[3] { dat1, dat2, dat3 };
@@ -989,7 +994,7 @@ namespace ICR_Run
             }).Start();
 
         }
-        public static void RepeatSendPack(int send_max, char id, double[] dat, ushort pack, bool do_conf, bool do_check_done)
+        public static void RepeatSendPack(int send_max, char id, double[] dat, UInt16 pack, bool do_conf, bool do_check_done)
         {
             long t_resend = sw_main.ElapsedMilliseconds + dt_resend;
             int send_count = 1;
@@ -1044,12 +1049,12 @@ namespace ICR_Run
         }
 
         // SEND PACK DATA
-        public static ushort SendPack(char id, double[] dat, ushort pack, bool do_conf, bool do_check_done)
+        public static UInt16 SendPack(char id, double[] dat, UInt16 pack, bool do_conf, bool do_check_done)
         {
             /* 
             SEND DATA TO ROBOT 
-            FORMAT: head, id, data, packet_number, do_confirm, footer
-            EXAMPLE: ASCII {'<','L','r','ÿ','ÿ','\0','>'} DEC {60,76,1,255,255,0,60}
+            FORMAT: [0]head, [1]id, [2:5]dat1, [6:9]dat2, [10:13]dat2, [14:15]pack, [16]do_conf, [17]footer
+            EXAMPLE: ASCII {'<','L','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','\0','>','c'} DEC {60,76,1,255,255,0,60}
             */
 
             // Track when data queued
@@ -1062,12 +1067,11 @@ namespace ICR_Run
                 vtHandler.Block(id);
 
                 // Local vars
-                UnionHack U = new UnionHack(0, 0, 0, '0', 0);
+                UnionHack U = new UnionHack(0, '0', 0, 0, 0);
                 byte[] msg_id = new byte[1];
-                byte[] msg_data = null;
+                byte[] msg_data = new byte[12];
                 byte[] msg_pack = new byte[2];
                 byte[] msg_conf = new byte[1];
-                int n_dat_bytes = 0;
                 long t_send = 0;
                 bool do_loop = true;
                 bool buff_ready = false;
@@ -1136,123 +1140,23 @@ namespace ICR_Run
                 }
 
                 // Store pack number
-                U.s1 = pack;
-                msg_pack[0] = U.b1;
-                msg_pack[1] = U.b2;
+                U.i16_0 = pack;
+                msg_pack[0] = U.b_0;
+                msg_pack[1] = U.b_1;
 
                 // Store ID
-                U.c1 = id;
-                msg_id[0] = U.b1;
+                U.c_0 = id;
+                msg_id[0] = U.b_0;
 
-                // Send system test command
-                if (id == 'T')
+                // Store data
+                int b_ind = 0;
+                for (int i = 0; i < 3; i++)
                 {
-                    n_dat_bytes = 2;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add test id
-                    msg_data[0] = (byte)dat[0];
-                    // Add test parameter
-                    msg_data[1] = (byte)dat[1];
-                }
-
-                // Send setup data
-                if (id == 'S')
-                {
-                    n_dat_bytes = 2;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add session cond
-                    msg_data[0] = (byte)dat[0];
-                    // Add sound cond
-                    msg_data[1] = (byte)dat[1];
-                }
-
-                // Send MoveTo data
-                else if (id == 'M')
-                {
-                    n_dat_bytes = 4;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add move pos
-                    U.f = (float)dat[0];
-                    msg_data[0] = U.b1;
-                    msg_data[1] = U.b2;
-                    msg_data[2] = U.b3;
-                    msg_data[3] = U.b4;
-                }
-
-                // Send Reward data
-                else if (id == 'R')
-                {
-                    n_dat_bytes = 6;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add rew pos
-                    U.f = (float)dat[0];
-                    msg_data[0] = U.b1;
-                    msg_data[1] = U.b2;
-                    msg_data[2] = U.b3;
-                    msg_data[3] = U.b4;
-                    // Add reward cond
-                    msg_data[4] = (byte)dat[1];
-                    // Add zone ind or delay
-                    msg_data[5] = (byte)dat[2];
-                }
-
-                // Send halt motor data
-                if (id == 'H')
-                {
-                    n_dat_bytes = 1;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add halt state
-                    msg_data[0] = (byte)dat[0];
-                }
-
-                // Send bulldoze rat data
-                if (id == 'B')
-                {
-                    n_dat_bytes = 2;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add bull del
-                    msg_data[0] = (byte)dat[0];
-                    // Add bull speed
-                    msg_data[1] = (byte)dat[1];
-                }
-
-                // Send rat in/out
-                if (id == 'I')
-                {
-                    n_dat_bytes = 1;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add session cond
-                    msg_data[0] = (byte)dat[0];
-                }
-
-                // Send log request
-                if (id == 'L')
-                {
-                    n_dat_bytes = 1;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add conf/send request
-                    msg_data[0] = (byte)dat[0];
-                }
-
-                // Send pos data
-                else if (id == 'P')
-                {
-                    n_dat_bytes = 9;
-                    msg_data = new byte[n_dat_bytes];
-                    // Add vtEnt byte
-                    msg_data[0] = (byte)dat[0];
-                    // Add vtTS int 
-                    U.i = (int)dat[1];
-                    msg_data[1] = U.b1;
-                    msg_data[2] = U.b2;
-                    msg_data[3] = U.b3;
-                    msg_data[4] = U.b4;
-                    // Add vtCM float 
-                    U.f = (float)dat[2];
-                    msg_data[5] = U.b1;
-                    msg_data[6] = U.b2;
-                    msg_data[7] = U.b3;
-                    msg_data[8] = U.b4;
+                    U.f = (float)dat[i];
+                    msg_data[b_ind++] = U.b_0;
+                    msg_data[b_ind++] = U.b_1;
+                    msg_data[b_ind++] = U.b_2;
+                    msg_data[b_ind++] = U.b_3;
                 }
 
                 // Store do do_conf 
@@ -1262,7 +1166,7 @@ namespace ICR_Run
                 byte[] msgByteArr = new byte[
                     c2r.head.Length +    // header
                     msg_id.Length +          // id
-                    n_dat_bytes +             // data
+                    msg_data.Length +             // data
                     msg_pack.Length + // packet num
                     msg_conf.Length + // do_conf
                     c2r.foot.Length      // footer
@@ -1272,16 +1176,13 @@ namespace ICR_Run
                 // add id
                 msg_id.CopyTo(msgByteArr, c2r.head.Length);
                 // add data
-                if (n_dat_bytes > 0)
-                {
-                    msg_data.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length);
-                }
+                msg_data.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length);
                 // add packet number
-                msg_pack.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + n_dat_bytes);
+                msg_pack.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + msg_data.Length);
                 // add do_conf
-                msg_conf.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + n_dat_bytes + msg_pack.Length);
+                msg_conf.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + msg_data.Length + msg_pack.Length);
                 // add footer
-                c2r.foot.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + n_dat_bytes + msg_pack.Length + msg_conf.Length);
+                c2r.foot.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + msg_data.Length + msg_pack.Length + msg_conf.Length);
 
                 // Send to arduino
                 while (fc.isXbeeBusy) ;
@@ -1317,7 +1218,9 @@ namespace ICR_Run
                     if ((db.do_printSentRatVT && (int)dat[0] == 0) ||
                         (db.do_printSentRobVT && (int)dat[0] == 1))
                     {
-                        string dt_vt = String.Format(" dt_send_mu={0}", vtHandler.GetSendDT((int)dat[0], "avg"));
+                        U.f = (float)dat[2];
+                        string dt_vt = String.Format(" ts_int={0} dt_send_mu={1}", 
+                            U.i32, vtHandler.GetSendDT((int)dat[0], "avg"));
                         LogEvent_Thread("   [SENT] c2r: " + dat_str + buff_str + dt_vt, t: c2r.t_new);
                     }
                 }
@@ -1465,10 +1368,10 @@ namespace ICR_Run
             // Prevent multiple intances running
             if (fc.isXbeeBusy)
                 return;
-
+            
             // Block any xbee writing till complete packet received
             fc.isXbeeBusy = true;
-            while (sp_Xbee.BytesToRead>0)
+            while (sp_Xbee.BytesToRead > 0)
             {
                 Thread.Sleep(15);
             }
@@ -1480,7 +1383,7 @@ namespace ICR_Run
         {
             /* 
             RECIEVE DATA FROM FEEDERDUE 
-            FORMAT: head, id, return_confirm, data, packet_number, footer
+            FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
             */
 
             // Loop till all data read out
@@ -1497,7 +1400,7 @@ namespace ICR_Run
 
                 // Local vars
                 long t_parse_str = sw_main.ElapsedMilliseconds;
-                UnionHack U = new UnionHack(0, 0, 0, '0', 0);
+                UnionHack U = new UnionHack(0, '0', 0, 0, 0);
                 bool r2c_head_found = false;
                 bool r2a_head_found = false;
                 bool r2c_id_found = false;
@@ -1507,14 +1410,14 @@ namespace ICR_Run
                 byte[] head_bytes = new byte[1];
                 byte[] id_bytes = new byte[1];
                 byte[] conf_bytes = new byte[1];
-                byte[] dat_bytes = new byte[3];
+                byte[] dat_bytes = new byte[4];
                 byte[] pack_bytes = new byte[2];
                 byte[] foot_bytes = new byte[1];
                 int bytes_read = 0;
                 char head = ' ';
                 char id = ' ';
-                byte[] dat = new byte[3];
-                ushort pack = 0;
+                double[] dat = new double[3];
+                UInt16 pack = 0;
                 bool do_conf = false;
                 char foot = ' ';
 
@@ -1524,9 +1427,9 @@ namespace ICR_Run
                     sp_Xbee.Read(head_bytes, 0, 1);
                     bytes_read += 1;
                     // Get header
-                    U.b1 = head_bytes[0];
-                    U.b2 = 0; // C# chars are 2 bytes
-                    head = U.c1;
+                    U.b_0 = head_bytes[0];
+                    U.b_1 = 0; // C# chars are 2 bytes
+                    head = U.c_0;
 
                     // Check if for r2c head
                     if (head == r2c.head[0])
@@ -1548,9 +1451,9 @@ namespace ICR_Run
                         sp_Xbee.Read(id_bytes, 0, 1);
                         bytes_read += 1;
                         // Get id
-                        U.b1 = id_bytes[0];
-                        U.b2 = 0;
-                        id = U.c1;
+                        U.b_0 = id_bytes[0];
+                        U.b_1 = 0;
+                        id = U.c_0;
 
                         // Check for r2c id 
                         for (int i = 0; i < r2c.id.Length; i++)
@@ -1581,14 +1484,18 @@ namespace ICR_Run
                 {
 
                     // Get data
-                    if (XbeeBuffReady(3, t_parse_str, "dat"))
+                    for (int i = 0; i < 3; i++)
                     {
-                        // Read in data
-                        sp_Xbee.Read(dat_bytes, 0, 3);
-                        bytes_read += 3;
-                        dat[0] = dat_bytes[0];
-                        dat[1] = dat_bytes[1];
-                        dat[2] = dat_bytes[2];
+                        if (XbeeBuffReady(4, t_parse_str, String.Format("dat{0}", i + 1)))
+                        {
+                            sp_Xbee.Read(dat_bytes, 0, 4);
+                            U.b_0 = dat_bytes[0];
+                            U.b_1 = dat_bytes[1];
+                            U.b_2 = dat_bytes[2];
+                            U.b_3 = dat_bytes[3];
+                            dat[i] = (double)U.f;
+                        }
+                        bytes_read += 4;
                     }
 
                     // Get packet number
@@ -1598,9 +1505,9 @@ namespace ICR_Run
                         // Read in data
                         sp_Xbee.Read(pack_bytes, 0, 2);
                         bytes_read += 2;
-                        U.b1 = pack_bytes[0];
-                        U.b2 = pack_bytes[1];
-                        pack = U.s1;
+                        U.b_0 = pack_bytes[0];
+                        U.b_1 = pack_bytes[1];
+                        pack = U.i16_0;
                     }
 
                     // Get do confirm byte
@@ -1620,9 +1527,9 @@ namespace ICR_Run
                         bytes_read += 1;
 
                         // Check footer
-                        U.b1 = foot_bytes[0];
-                        U.b2 = 0;
-                        foot = U.c1;
+                        U.b_0 = foot_bytes[0];
+                        U.b_1 = 0;
+                        foot = U.c_0;
 
                         // Check for r2c foot
                         if (foot == r2c.foot[0])
@@ -1768,7 +1675,7 @@ namespace ICR_Run
                      getting, min_byte, sw_main.ElapsedMilliseconds - t_str, sw_main.ElapsedMilliseconds - t_parse_str, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite);
 
             // Check if hanging
-            if (sw_main.ElapsedMilliseconds > t_str + 10)
+            if (sw_main.ElapsedMilliseconds > t_str + 25)
             {
                 LogEvent_Thread("**WARNING** [XbeeBuffReady] XBee Read Hanging: " + dat_str);
             }
@@ -1792,7 +1699,7 @@ namespace ICR_Run
             while (fc.ContinueArdCom())
             {
                 // Local vars
-                UnionHack U = new UnionHack(0, 0, 0, '0', 0);
+                UnionHack U = new UnionHack(0, '0', 0, 0, 0);
                 bool head_found = false;
                 bool foot_found = false;
                 byte[] head_bytes = new byte[1];
@@ -1800,7 +1707,7 @@ namespace ICR_Run
                 byte[] chksum_bytes = new byte[1];
                 int bytes_read = 0;
                 char head = ' ';
-                ushort chksum = 0;
+                UInt16 chksum = 0;
                 char foot = ' ';
                 string log_str = " ";
 
@@ -1814,9 +1721,9 @@ namespace ICR_Run
                     sp_cheetahDue.Read(head_bytes, 0, 1);
                     bytes_read += 1;
                     // Get header
-                    U.b1 = head_bytes[0];
-                    U.b2 = 0; // C# chars are 2 bytes
-                    head = U.c1;
+                    U.b_0 = head_bytes[0];
+                    U.b_1 = 0; // C# chars are 2 bytes
+                    head = U.c_0;
                     if (head == a2c.head[0])
                     {
                         head_found = true;
@@ -1855,9 +1762,9 @@ namespace ICR_Run
                         bytes_read += 1;
 
                         // Check footer
-                        U.b1 = foot_bytes[0];
-                        U.b2 = 0;
-                        foot = U.c1;
+                        U.b_0 = foot_bytes[0];
+                        U.b_1 = 0;
+                        foot = U.c_0;
                         if (foot == a2c.foot[0])
                         {
                             foot_found = true;
@@ -2034,6 +1941,9 @@ namespace ICR_Run
                     }
                 }
             }
+
+            // Dump whatever is left in buffer
+            sp_Xbee.DiscardInBuffer();
 
             // Reset logging flag
             robLogger.isLogging = false;
@@ -2280,16 +2190,16 @@ namespace ICR_Run
 
             LogEvent_Thread("[DoWork_MatCOM] RUNNING: MatCOM Worker...");
             BackgroundWorker worker = (BackgroundWorker)sender;
-
+            
             // Create tuple to pass args
-            Tuple<char, double, double, double, ushort> bw_args = (Tuple<char, double, double, double, ushort>)e.Argument;
+            Tuple<char, double, double, double, UInt16> bw_args = (Tuple<char, double, double, double, UInt16>)e.Argument;
 
             //Put the arguments into nicely named variables:
             char id = bw_args.Item1;
             double dat1 = bw_args.Item2;
             double dat2 = bw_args.Item3;
             double dat3 = bw_args.Item4;
-            ushort pack = bw_args.Item5;
+            UInt16 pack = bw_args.Item5;
 
             // Check for matlab input till quit or abort
             while (fc.ContinueMatCom())
@@ -2307,7 +2217,7 @@ namespace ICR_Run
                 dat1 = _m2c_pack.GetValue(0, 1) != -1 ? (double)_m2c_pack.GetValue(0, 1) : Double.NaN;
                 dat2 = _m2c_pack.GetValue(0, 2) != -1 ? (double)_m2c_pack.GetValue(0, 2) : Double.NaN;
                 dat3 = _m2c_pack.GetValue(0, 3) != -1 ? (double)_m2c_pack.GetValue(0, 3) : Double.NaN;
-                pack = (ushort)_m2c_pack.GetValue(0, 4);
+                pack = (UInt16)_m2c_pack.GetValue(0, 4);
                 flag = (double)_m2c_pack.GetValue(0, 5);
 
                 // Check for new data
@@ -2315,7 +2225,7 @@ namespace ICR_Run
                 {
 
                     // Trigger progress change event
-                    worker.ReportProgress(0, new System.Tuple<char, double, double, double, ushort>(id, dat1, dat2, dat3, pack));
+                    worker.ReportProgress(0, new System.Tuple<char, double, double, double, UInt16>(id, dat1, dat2, dat3, pack));
 
                     // Set flag back to zero
                     SendMCOM(msg: "m2c_pack(6) = 0;");
@@ -2331,12 +2241,12 @@ namespace ICR_Run
         public static void ProgressChanged_MatCOM(object sender, ProgressChangedEventArgs e)
         {
             // Pull out tuble vals
-            Tuple<char, double, double, double, ushort> bw_args = (Tuple<char, double, double, double, ushort>)e.UserState;
+            Tuple<char, double, double, double, UInt16> bw_args = (Tuple<char, double, double, double, UInt16>)e.UserState;
 
             // Store id in top level vars
             char id = bw_args.Item1;
             double[] dat = new double[3] { bw_args.Item2, bw_args.Item3, bw_args.Item4 };
-            ushort pack = bw_args.Item5;
+            UInt16 pack = bw_args.Item5;
 
             // Update com info
             m2c.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
@@ -2345,16 +2255,23 @@ namespace ICR_Run
             if (id == 'p' && db.systemTest == 3)
             {
                 // Store matlab position data
-                ulong ts = (ulong)(dat[0]) + vtStr;
+                UnionHack U = new UnionHack(0, '0', 0, 0, 0);
+                UInt64 ts = (UInt64)(dat[0]) + vtStr;
                 double x = dat[1];
                 double y = dat[2];
-
+     
                 // Run compute pos
                 bool pass = CompPos(0, ts, x, y);
 
+                // Convert pos data to double
+                double dat1 = 0;
+                double dat2 = vtCM[0];
+                U.i32 = vtTS[0, 1];
+                double dat3 = (double)U.f;
+
                 // Send data
                 if (pass)
-                    RepeatSendPack_Thread(send_max: 1, id: 'P', dat1: 0, dat2: (double)vtTS[0, 1], dat3: (double)vtCM[0], do_conf: false);
+                    RepeatSendPack_Thread(send_max: 1, id: 'P', dat1: dat1, dat2: dat2, dat3: dat3, do_conf: false);
 
                 // Bail to avoid printing
                 return;
@@ -2475,10 +2392,10 @@ namespace ICR_Run
         /// <param name="id"></param>
         /// <param name="dat_num"></param>
         /// <param name="dat_char"></param>
-        public static void SendMCOM_Thread(char id, byte dat_num = 0, char dat_char = ' ')
+        public static void SendMCOM_Thread(char id, double dat_num = 0, char dat_char = ' ')
         {
             // Local vars
-            ushort pack = 0;
+            UInt16 pack = 0;
 
             // Itterate packet
             pack = ++c2m.cnt_pack;
@@ -2505,7 +2422,7 @@ namespace ICR_Run
                 SendMCOM(msg: msg, do_print: do_print);
             }).Start();
         }
-        public static void SendMCOM(string msg = " ", char id = ' ', byte dat_num = 0, char dat_char = ' ', ushort pack = 0, bool do_print = true)
+        public static void SendMCOM(string msg = " ", char id = ' ', double dat_num = 0, char dat_char = ' ', UInt16 pack = 0, bool do_print = true)
         {
             // Local vars
             long t_queued = sw_main.ElapsedMilliseconds;
@@ -2552,7 +2469,7 @@ namespace ICR_Run
                         com_Matlab.Execute(msg);
 
                         // Update sent
-                        double[] dat = new double[3] { (byte)dat_num, 0, 0 };
+                        double[] dat = new double[3] { dat_num, 0, 0 };
                         c2m.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                         // Log/print sent
@@ -2741,10 +2658,11 @@ namespace ICR_Run
         public static void NetComCallbackVT(object sender, MNetCom.MVideoRec records, int numRecords, string objectName)
         {
             // Local vars
-            ushort ent = records.swid;
-            ulong ts = records.qwTimeStamp;
+            UnionHack U = new UnionHack(0, '0', 0, 0, 0);
+            UInt16 ent = records.swid;
             double x = records.dnextracted_x;
             double y = records.dnextracted_y;
+            UInt64 ts = records.qwTimeStamp;
 
             if (!vtHandler.CheckBlock(ent))
             {
@@ -2754,7 +2672,13 @@ namespace ICR_Run
                 // Send data
                 if (pass)
                 {
-                    RepeatSendPack_Thread(send_max: 1, id: 'P', dat1: (double)ent, dat2: (double)vtTS[ent, 1], dat3: (double)vtCM[ent], do_conf: false);
+                    // Convert pos data to double
+                    double dat1 = ent;
+                    double dat2 = vtCM[ent];
+                    U.i32 = vtTS[ent, 1];
+                    double dat3 = (double)U.f;
+
+                    RepeatSendPack_Thread(send_max: 1, id: 'P', dat1: dat1, dat2: dat2, dat3: dat3, do_conf: false);
 
                     // Log/print first record received
                     if (!vtHandler.is_streamStarted[ent])
@@ -2777,7 +2701,7 @@ namespace ICR_Run
         #region ========= MOVEMENT AND TRACKING =========
 
         // COMPUTE POS IN RAD FOR VT DATA
-        public static bool CompPos(ushort ent, ulong ts, double x, double y)
+        public static bool CompPos(UInt16 ent, UInt64 ts, double x, double y)
         {
 
             // Get first vtTS once
@@ -2789,8 +2713,8 @@ namespace ICR_Run
             }
 
             // Convert ts from us to ms and subtract firts record ts
-            int ts_last = vtTS[ent, 1];
-            int ts_now = (int)Math.Round((double)((ts - vtStr) / 1000));
+            UInt64 ts_last = vtTS[ent, 1];
+            UInt32 ts_now = (UInt32)Math.Round((double)((ts - vtStr) / 1000));
 
             // Rescale y as VT data is compressed in y axis
             y = y * 1.0976;
@@ -2823,6 +2747,13 @@ namespace ICR_Run
             x = Math.Round(x * RADIUS) + RADIUS;
             y = Math.Round(y * RADIUS) + RADIUS;
 
+            // Check for negative dt
+            if (dt<0)
+            {
+                LogEvent_Thread(String.Format("**WARNING** [CompPos] Strange TS Values: ent={0} ts_now={1} ts_last={2} dt={3}", 
+                    ent, ts_now, ts_last, dt));
+            }
+
             // Convert cart to cm
             x = x * (140 / (RADIUS * 2));
             y = y * (140 / (RADIUS * 2));
@@ -2833,12 +2764,12 @@ namespace ICR_Run
 
             // Update vars
             // Save old vals
-            vtTS[ent, 0] = ts_last;
-            vtRad[ent, 0] = (float)rad_last;
+            vtTS[ent, 0] = vtTS[ent, 1];
+            vtRad[ent, 0] = rad_last;
             // New vals
             vtTS[ent, 1] = ts_now;
-            vtRad[ent, 1] = (float)rad_now;
-            vtCM[ent] = (float)cm;
+            vtRad[ent, 1] = rad_now;
+            vtCM[ent] = cm;
 
             // Determine if data should be used
             if (roh < 0.7857 || roh > 1.1 || vel > 300)
@@ -3100,10 +3031,10 @@ namespace ICR_Run
         public byte[] head = new byte[1] { 0 };
         public byte[] foot = new byte[1] { 0 };
         public double[][] dat;
-        public ushort[] pack;
-        public ushort[] packLast;
-        public ushort packTot = 0;
-        public ushort cnt_pack = 0;
+        public UInt16[] pack;
+        public UInt16[] packLast;
+        public UInt16 packTot = 0;
+        public UInt16 cnt_pack = 0;
         public int[] cnt_dropped = new int[2] { 0, 0 };
         public int cnt_repeat = 0;
         public long t_new = 0;
@@ -3128,8 +3059,8 @@ namespace ICR_Run
             head[0] = _head;
             foot[0] = _foot;
             dat = new double[_id.Length][];
-            pack = new ushort[_id.Length];
-            packLast = new ushort[_id.Length];
+            pack = new UInt16[_id.Length];
+            packLast = new UInt16[_id.Length];
             t_sentRcvd = new long[_id.Length];
             _doCheckSendRcv = new bool[_id.Length];
             _doCheckConf = new bool[_id.Length];
@@ -3179,12 +3110,7 @@ namespace ICR_Run
         }
 
         // Update packet info
-        public void UpdateSentRcvd(char id, byte[] dat, ushort pack = 0, long t = 0)
-        {
-            double[] dbl_dat = new double[3] { (double)dat[0], (double)dat[1], (double)dat[2] };
-            UpdateSentRcvd(id: id, dat: dbl_dat, pack: pack, t: t);
-        }
-        public void UpdateSentRcvd(char id, double[] dat, ushort pack = 0, long t = 0)
+        public void UpdateSentRcvd(char id, double[] dat, UInt16 pack = 0, long t = 0)
         {
             lock (_lock_checkSentRcvd)
             {
@@ -3263,7 +3189,7 @@ namespace ICR_Run
         }
 
         // Find packet index
-        public char PackID(ushort pack)
+        public char PackID(UInt16 pack)
         {
             int ind = -1;
             for (int i = 0; i < this.pack.Length; i++)
@@ -3289,7 +3215,6 @@ namespace ICR_Run
         private bool _isStarted = false;
         private bool _isLogging = false;
         private bool _isSaved = false;
-        public UnionHack _u_bytesToRcv;
         private int _bytesToRcv = 0;
         private int next_milestone = 0;
         private const int _n_updates = 10;
@@ -3405,13 +3330,7 @@ namespace ICR_Run
             string str;
 
             // Add bytes to UnionHack var
-            _u_bytesToRcv.i = 0;
-            _u_bytesToRcv.b1 = (byte)dat[0];
-            _u_bytesToRcv.b2 = (byte)dat[1];
-            _u_bytesToRcv.b3 = (byte)dat[2];
-
-            // Get total bytes
-            _bytesToRcv = _u_bytesToRcv.i;
+            _bytesToRcv = (int)dat[0];
 
             // Compute print update milestones
             for (int i = 0; i <= _n_updates; i++)
@@ -3517,7 +3436,7 @@ namespace ICR_Run
         }
 
         // Check if currently blocking
-        public bool CheckBlock(ushort ent)
+        public bool CheckBlock(UInt16 ent)
         {
             if (_sw.ElapsedMilliseconds > _t_blockTim && _cntThread <= 0)
                 return false;
@@ -3575,39 +3494,39 @@ namespace ICR_Run
     struct UnionHack
     {
         [FieldOffset(0)]
-        public int i; // (int) 4 byte
-        [FieldOffset(0)]
-        public float f; // (float) 4 byte
-        [FieldOffset(0)]
-        public ushort s1; // (ushort) 2 byte
-        [FieldOffset(2)]
-        public ushort s2;
-        [FieldOffset(0)]
-        public char c1; // (char) 2 byte
-        [FieldOffset(2)]
-        public char c2;
-        [FieldOffset(0)]
-        public byte b1; // (byte) 1 byte
+        public byte b_0; // (byte) 1 byte
         [FieldOffset(1)]
-        public byte b2;
+        public byte b_1;
         [FieldOffset(2)]
-        public byte b3;
+        public byte b_2;
         [FieldOffset(3)]
-        public byte b4;
+        public byte b_3;
+        [FieldOffset(0)]
+        public char c_0; // (char) 2 byte
+        [FieldOffset(2)]
+        public char c_1;
+        [FieldOffset(0)]
+        public UInt16 i16_0; // (UInt16) 2 byte
+        [FieldOffset(2)]
+        public UInt16 i16_1;
+        [FieldOffset(0)]
+        public UInt32 i32; // (UInt32) 4 byte
+        [FieldOffset(0)]
+        public float f; // (float) 4 byt
 
         // Constructor:
-        public UnionHack(int i, float f, ushort s, char c, byte b)
+        public UnionHack(byte b, char c, UInt16 i16, UInt32 i32, float f)
         {
-            this.i = i;
+            this.b_0 = b;
+            this.b_1 = b;
+            this.b_2 = b;
+            this.b_3 = b;
+            this.c_0 = c;
+            this.c_1 = c;
+            this.i16_0 = i16;
+            this.i16_1 = i16;
+            this.i32 = i32;
             this.f = f;
-            this.s1 = s;
-            this.s2 = s;
-            this.c1 = c;
-            this.c2 = c;
-            this.b1 = b;
-            this.b2 = b;
-            this.b3 = b;
-            this.b4 = b;
         }
     }
 
