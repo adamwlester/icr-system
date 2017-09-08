@@ -6117,14 +6117,15 @@ void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16
 {
 	// EXAMPLE:
 	/*
+	// TEMP
 	static uint32_t t_s = 0;
 	static int send_cnt = 0;
 	static uint16_t pack = 0;
-	if (send_cnt <= 3 && millis()>t_s + 30) {
-	pack++;
-	TestSendPack('c', 'Z', 0, 0, 0, pack, true);
-	t_s = millis();
-	send_cnt++;
+	if (send_cnt == 0 && millis()>t_s + 30) {
+		pack++;
+		TestSendPack('c', 'Z', 0, 0, 0, 1, true);
+		t_s = millis();
+		send_cnt++;
 	}
 	*/
 
@@ -6611,7 +6612,7 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	Log.TestLoad(0, "LOG00027.CSV");
+	//Log.TestLoad(0, "LOG00027.CSV");
 	//Log.TestLoad(2500);
 
 	// RESET FEEDER ARM
@@ -6623,17 +6624,6 @@ void setup() {
 void loop() {
 
 #pragma region //--- ONGOING OPPERATIONS ---
-
-	//// TEMP
-	//static uint32_t t_s = 0;
-	//static int send_cnt = 0;
-	//static uint16_t pack = 0;
-	//if (send_cnt == 0 && millis()>t_s + 30) {
-	//	pack++;
-	//	TestSendPack('c', 'Z', 0, 0, 0, 1, true);
-	//	t_s = millis();
-	//	send_cnt++;
-	//}
 
 	// Local vars
 	static char horeStr[200] = { 0 };
