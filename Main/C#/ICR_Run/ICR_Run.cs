@@ -289,7 +289,7 @@ namespace ICR_Run
         private static int resendMax = 5;
         private static long timeoutLoadGUI = 15000; // (ms)
         private static long timeoutConnectAC = 15000; // (ms)
-        private static long timeoutConnectMatNLX = 30000; // (ms)
+        private static long timeoutConnectMatNLX = 60000; // (ms) TEMP
         private static long timeoutMatCloseConfirm = 10000; // (ms)
         private static long timeoutImportLog = 10000; // (ms)
 
@@ -362,6 +362,26 @@ namespace ICR_Run
             // Create temp directory
             System.IO.Directory.CreateDirectory(logDir);
             LogEvent_Thread(String.Format("[Setup] FINISHED: Create Temporary Log Directory: \"{0}\"", logDir));
+
+            // Start Cheetah if it is not already running
+            LogEvent_Thread("[Setup] RUNNING: Run Cheetah.exe...");
+            while (!IsProcessOpen("Cheetah") && !fc.doAbort)
+            {
+                OpenCheetah("Cheetah.cfg");
+            }
+            if (IsProcessOpen("Cheetah"))
+                LogEvent_Thread("[Setup] SUCCEEDED: Run Cheetah.exe");
+            else
+            {
+                if (!fc.doAbort)
+                {
+                    LogEvent_Thread("!!ERROR!! [Setup] FAILED: Run Cheetah.exe", is_error: true);
+                    fc.isRunError = true;
+                }
+                else
+                    LogEvent_Thread("**WARNING** [Setup] ABORTED: Run Cheetah.exe");
+                return false;
+            }
 
             // Initalize Matlab global vars
             LogEvent_Thread("[Setup] RUNNNING: Create mCOM Global Variables...");
@@ -500,26 +520,6 @@ namespace ICR_Run
             else
             {
                 LogEvent_Thread("!!ERROR!! [Setup] ABORTED: Robot Handshake", is_error: true);
-                return false;
-            }
-
-            // Start Cheetah if it is not already running
-            LogEvent_Thread("[Setup] RUNNING: Run Cheetah.exe...");
-            while (!IsProcessOpen("Cheetah") && !fc.doAbort)
-            {
-                OpenCheetah("Cheetah.cfg");
-            }
-            if (IsProcessOpen("Cheetah"))
-                LogEvent_Thread("[Setup] SUCCEEDED: Run Cheetah.exe");
-            else
-            {
-                if (!fc.doAbort)
-                {
-                    LogEvent_Thread("!!ERROR!! [Setup] FAILED: Run Cheetah.exe", is_error: true);
-                    fc.isRunError = true;
-                }
-                else
-                    LogEvent_Thread("**WARNING** [Setup] ABORTED: Run Cheetah.exe");
                 return false;
             }
 
