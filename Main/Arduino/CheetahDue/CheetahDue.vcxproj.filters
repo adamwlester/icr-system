@@ -14,28 +14,25 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="src">
-      <UniqueIdentifier>{7b29755a-0b31-4b0c-87a6-2d41fbd42de1}</UniqueIdentifier>
+      <UniqueIdentifier>{9ca8042e-f9cb-4915-b16f-5dc3746e65d8}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly">
-      <UniqueIdentifier>{917cf453-1518-4a4a-8bbf-3251406a2e30}</UniqueIdentifier>
+      <UniqueIdentifier>{98834aa8-9c81-4488-894c-3180ce50cbb3}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core">
-      <UniqueIdentifier>{cde2ca79-0e05-4d93-ac2f-e5996e40ddf8}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\variants">
-      <UniqueIdentifier>{5ce2322e-4d01-4625-824b-17b191ee7931}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\variants\arduino_due_x">
-      <UniqueIdentifier>{8b70ccf6-29a3-4ec4-9d3d-f4cb93f63514}</UniqueIdentifier>
+      <UniqueIdentifier>{2c2645ef-b5ff-4048-a8a3-6956d76b1261}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\avr">
-      <UniqueIdentifier>{1069d726-0601-4fb5-bb8c-e06c96e3e74b}</UniqueIdentifier>
+      <UniqueIdentifier>{17b9bce4-8b28-4fce-9e64-8abc346ec376}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\USB">
-      <UniqueIdentifier>{b3bdc2bf-5fd0-4b3f-b353-652dda5c810c}</UniqueIdentifier>
+      <UniqueIdentifier>{e3aeb073-9436-4320-9794-27e6bf1e3980}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries">
-      <UniqueIdentifier>{f99e48ef-78f9-4bb6-a947-e71039ee8255}</UniqueIdentifier>
+      <UniqueIdentifier>{03d8abfd-2e04-4a39-b5a5-386e35a0aac1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\_micro-api-readonly\libraries\Arduino-MemoryFree">
+      <UniqueIdentifier>{9790d1f0-7622-41ca-b50e-0a1c5c7aea4d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -157,29 +154,23 @@
       <Filter>src\_micro-api-readonly\core\USB</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\pins_arduino.h">
-      <Filter>src\_micro-api-readonly\variants\arduino_due_x</Filter>
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\variant.h">
-      <Filter>src\_micro-api-readonly\variants\arduino_due_x</Filter>
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.h">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.h">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\abi.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\cortex_handlers.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\hooks.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\iar_calls_sam3.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\IPAddress.cpp">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\itoa.c">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\main.cpp">
@@ -200,9 +191,6 @@
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\Stream.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\syscalls_sam3.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\UARTClass.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
@@ -212,22 +200,7 @@
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\watchdog.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\WInterrupts.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_analog.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_digital.c">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_pulse.cpp">
-      <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\wiring_shift.c">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\WMath.cpp">
@@ -235,9 +208,6 @@
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\WString.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\avr\dtostrf.c">
-      <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\USB\CDC.cpp">
       <Filter>src\_micro-api-readonly\core\USB</Filter>
@@ -247,6 +217,15 @@
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\USB\USBCore.cpp">
       <Filter>src\_micro-api-readonly\core\USB</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x\variant.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.cpp">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.cpp">
+      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

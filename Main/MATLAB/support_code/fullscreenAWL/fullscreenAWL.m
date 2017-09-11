@@ -21,6 +21,9 @@ function [frame_java] = fullscreenAWL(fipath)
 %   - Implemeted a fix by Alejandro Camara Iglesias to solve issue with
 %   non-exclusive-fullscreen-capable screens.
 
+% Close whatever is open
+%closescreenAWL();
+
 % Set up variabls
 % JFrame object
 global frame_java;

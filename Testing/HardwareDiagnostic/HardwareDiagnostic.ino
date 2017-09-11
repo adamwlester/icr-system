@@ -50,34 +50,34 @@ const uint32_t t_LED_Dur = 250; // (ms)
 #pragma region ---------LIBRARIES & PACKAGES---------
 
 
-								//-------SOFTWARE RESET----------
+//-------SOFTWARE RESET----------
 #define SYSRESETREQ    (1<<2)
 #define VECTKEY        (0x05fa0000UL)
 #define VECTKEY_MASK   (0x0000ffffUL)
 #define AIRCR          (*(uint32_t*)0xe000ed0cUL) // fixed arch-defined address
 #define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
 
-								//----------LIBRARIES------------
+//----------LIBRARIES------------
 
-								// General
+// General
 #include <string.h>
 
-								// AutoDriver
+// AutoDriver
 
 #include <SPI.h>
 
 #include "AutoDriver_Due.h"
 
-								// Pixy
+// Pixy
 
 #include <Wire.h>
 
 #include <PixyI2C.h>
 
-								// LCD
+// LCD
 #include <LCD5110_Graph.h>
 
-								// TinyEKF
+// TinyEKF
 #define N 4     // States
 #define M 6     // Measurements
 #include <TinyEKF.h>
@@ -86,14 +86,20 @@ const uint32_t t_LED_Dur = 250; // (ms)
 
 
 #pragma region ---------PIN DECLARATION---------
-								// Pin mapping
+// Pin mapping
 struct PIN
 {
 	// Autodriver
 	const int AD_CSP_R = 5;
 	const int AD_CSP_F = 6;
 	const int AD_RST = 7;
-	const int AD_24V_ENBLE = 33;
+	const int AD_24V_ENBLE = 34;
+
+	// XBees
+	const int X1a_CTS = 29;
+	const int X1b_CTS = 27;
+	const int X1a_UNDEF = 28;
+	const int X1b_UNDEF = 26;
 
 	// Display
 	const int Disp_SCK = 8;
@@ -124,20 +130,20 @@ struct PIN
 	const int ED_MS3 = 41;
 
 	// OpenLog
-	const int OL_RST = 16;
+	const int OL_RST = 30;
 
 	// Feeder switch
 	/*
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch_Gnd = 30;
-	const int FeedSwitch = 31;
+	const int FeedSwitch_Gnd = 24;
+	const int FeedSwitch = 25;
 
 	// Power off
-	const int PwrOff = 45;
+	const int KillSwitch = 45;
 
-	// Battery monitor
+	// Voltage monitor
 	const int BatVcc = A6;
 	const int BatIC = A7;
 
@@ -154,7 +160,7 @@ struct PIN
 	const int IRprox_Lft = 43;
 
 	// IR detector
-	const int IRdetect = 17;
+	const int IRdetect = 31;
 
 	// POT switch test
 	int POT_Gnd = A10;
@@ -285,8 +291,11 @@ void setup()
 	// Serial monitor
 	SerialUSB.begin(0);
 
-	// XBee
-	Serial1.begin(57600);
+	// XBee 1a (to/from CS)
+	Serial3.begin(57600);
+
+	// XBee 1b (to/from CheetahDue)
+	Serial2.begin(57600);
 
 	// SETUP OUTPUT PINS
 
@@ -324,7 +333,7 @@ void setup()
 	// Feeder switch
 	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
 	// Power off
-	pinMode(pin.PwrOff, OUTPUT);
+	pinMode(pin.KillSwitch, OUTPUT);
 	delayMicroseconds(100);
 
 	// Autodriver
@@ -352,7 +361,7 @@ void setup()
 	// Feeder switch
 	digitalWrite(pin.FeedSwitch_Gnd, LOW);
 	// Power off
-	digitalWrite(pin.PwrOff, LOW);
+	digitalWrite(pin.KillSwitch, LOW);
 	delayMicroseconds(100);
 
 	// SET INPUT PINS
@@ -745,8 +754,13 @@ void XBeeRead()
 {
 	byte buff_b;
 	char buff_c;
-	while (Serial1.available() > 0) {
-		buff_b = Serial1.read();
+	while (Serial3.available() > 0) {
+		buff_b = Serial3.read();
+		buff_c = buff_b;
+		SerialUSB.print(buff_c);
+	}
+	while (Serial2.available() > 0) {
+		buff_b = Serial2.read();
 		buff_c = buff_b;
 		SerialUSB.print(buff_c);
 	}
@@ -758,7 +772,8 @@ void ConsoleRead()
 	while (SerialUSB.available() > 0) {
 		buff_b = SerialUSB.read();
 		SerialUSB.write(buff_b);
-		Serial1.write(buff_b);
+		Serial3.write(buff_b);
+		Serial2.write(buff_b);
 	}
 }
 
@@ -1087,11 +1102,11 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-												// Overcurent enable
+				// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-												// Motor V compensation
+				// Motor V compensation
 												/*
 												VS_COMP_ENABLE, VS_COMP_DISABLE
 												*/
@@ -1102,7 +1117,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-												// Slew rate
+				// Slew rate
 												/*
 												Upping the edge speed increases torque
 												SR_180V_us, SR_290V_us, SR_530V_us
@@ -1173,14 +1188,14 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setRunKVAL(50);					    // This controls the run current
 	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-												// NIMA 17 24V
+				// NIMA 17 24V
 	AD_F.setAccKVAL(50);				        // This controls the acceleration current
 	AD_F.setDecKVAL(50);				        // This controls the deceleration current
 	AD_F.setRunKVAL(50);					    // This controls the run current
 	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
 
 												/*
-												// NIMA 17 12V
+				// NIMA 17 12V
 												AD_F.setAccKVAL(100);				        // This controls the acceleration current
 												AD_F.setDecKVAL(100);				        // This controls the deceleration current
 												AD_F.setRunKVAL(120);					    // This controls the run current

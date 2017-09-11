@@ -141,7 +141,7 @@ while true
                 datestr(now, 'HH:MM:SS AM'))
             
             % Close image
-            closescreenAWL
+            closescreenAWL;
             clear frame_java;
             
             % Stop noise

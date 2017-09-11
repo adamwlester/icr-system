@@ -115,6 +115,7 @@ struct FC
 	bool doWhiteNoise = false;
 	bool doRewTone = false;
 	bool isRewarding = false;
+	bool isRobLogging = false;
 }
 // Initialize
 fc;
@@ -122,6 +123,10 @@ fc;
 // Debugging general
 uint32_t cnt_loop_tot = 0;
 uint16_t cnt_loop_short = 0;
+uint16_t cnt_warn = 0;
+uint16_t cnt_err = 0;
+uint16_t warn_line[100] = { 0 };
+uint16_t err_line[100] = { 0 };
 
 // Log debugging
 const int logQueueSize = 15;
@@ -143,7 +148,7 @@ byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
 const int dt_sendSent = 11; // (ms) 
-const int dt_sendRcvd = 11; // (ms) 
+const int dt_sendRcvd = 1; // (ms) 
 uint32_t t_xBeeSent = 0; // (ms)
 uint32_t t_xBeeRcvd = 0; // (ms)
 uint32_t t_csSent = 0; // (ms)
@@ -294,6 +299,8 @@ union u_tag {
 
 // CHECK FOR START COMMAND
 bool CheckForStart();
+// WAIT FOR LOG STREAMING TO END
+bool WaitForStreamEnd();
 // PARSE SERIAL INPUT
 void GetSerial();
 // WAIT FOR BUFFER TO FILL
@@ -315,7 +322,7 @@ void DebugPinMap();
 // LOG/PRING MAIN EVENT
 void DebugFlow(char msg[], uint32_t t = millis());
 // LOG/PRINT ERRORS
-void DebugError(char msg[], uint32_t t = millis());
+void DebugError(char msg[], bool is_error = false, uint32_t t = millis());
 // PRINT RECIEVED PACKET
 void DebugRcvd(char id, float dat[], uint16_t pack, bool do_conf, int buff_rx, int buff_tx, bool is_repeat = false);
 // LOG/PRING SENT PACKET DEBUG STRING
@@ -430,6 +437,56 @@ bool CheckForStart()
 
 	// Return success
 	return true;
+}
+
+// WAIT FOR LOG STREAMING TO END
+bool WaitForStreamEnd()
+{
+	// Local vars
+	static char log_term_string[4] = { 0 };
+	byte in_byte[1] = { 0 };
+	byte log_start_byte[1] = { 'l' };
+
+	// Check flag
+	if (!fc.isRobLogging)
+	{
+		// Bail if no new data
+		if (Serial.available() < 1) {
+			return false;
+		}
+
+		// Get new data
+		in_byte[0] = Serial.read();
+
+		// Check for a match
+		if (in_byte[0] == log_start_byte[0]) {
+			DebugFlow("[GetSerial] RUNNING: Wait for Robot Log Streaming...");
+			fc.isRobLogging = true;
+		}
+	}
+
+	// Handle robot log data
+	else {
+
+		// Store data till termination string found
+		while (Serial1.available()) {
+
+			// Get next byte
+			log_term_string[0] = log_term_string[1];
+			log_term_string[1] = log_term_string[2];
+			log_term_string[2] = Serial1.read();
+
+			// Check array for ">>>"
+			if (strcmp(">>>", log_term_string) == 0){
+				fc.isRobLogging = false;
+				DebugFlow("[GetSerial] FINISHED: Wait for Robot Log Streaming");
+				break;
+			}
+		}
+	}
+
+	// Return flag
+	return fc.isRobLogging;
 }
 
 // PARSE SERIAL INPUT
@@ -586,7 +643,6 @@ byte WaitBuffRead(char mtch)
 	uint32_t t_timeout = millis() + timeout;
 	static int cnt_overflow = 0;
 	static int cnt_timeout = 0;
-	static bool is_fail_last = false;
 	bool is_bytes_discarded = false;
 	bool is_overflowed = false;
 	bool is_r2c_pack = false;
@@ -610,7 +666,6 @@ byte WaitBuffRead(char mtch)
 
 			buff = Serial1.read();
 			cnt_packBytesRead++;
-			is_fail_last = false;
 			return buff;
 		}
 	}
@@ -630,7 +685,6 @@ byte WaitBuffRead(char mtch)
 
 			// check match was found
 			if (buff == mtch) {
-				is_fail_last = false;
 				return buff;
 			}
 
@@ -707,9 +761,6 @@ byte WaitBuffRead(char mtch)
 			DebugError(msg_str);
 		}
 
-		// Set flag
-		is_fail_last = true;
-
 		// Bail
 		return 0;
 
@@ -726,21 +777,8 @@ byte WaitBuffRead(char mtch)
 		sprintf(msg_str, "**WARNING** [WaitBuffRead] Timedout: cnt=%d", cnt_timeout);
 	}
 	// Byte not found
-	else if (mtch != '\0' && !is_fail_last) {
+	else if (mtch != '\0') {
 		sprintf(msg_str, "**WARNING** [WaitBuffRead] Char %c Not Found:", mtch);
-	}
-	// Getting r2c log data
-	else if (mtch != '\0' && is_fail_last) {
-		// Only print once
-		static bool is_print_once = false;
-		if (!is_print_once) {
-			sprintf(msg_str, "[WaitBuffRead] Likely Dumping Robot Log Data:");
-			is_print_once = true;
-		}
-		else {
-			is_fail_last = true;
-			return 0;
-		}
 	}
 	// Failed for unknown reason
 	else {
@@ -754,7 +792,6 @@ byte WaitBuffRead(char mtch)
 	DebugError(msg_str);
 
 	// Set buff to '\0' ((byte)-1) if !pass
-	is_fail_last = true;
 	return 0;
 
 }
@@ -802,7 +839,7 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 			sendQueueIndStore, sendQueueIndRead, queue_state, millis() - t_xBeeSent, millis() - t_xBeeRcvd, buff_tx, buff_rx);
 
 		// Log/print error
-		DebugError(str);
+		DebugError(str, true);
 
 		// Set queue back 
 		sendQueueIndStore = sendQueueIndStore - 1 >= 0 ? sendQueueIndStore - 1 : sendQueueSize - 1;
@@ -1193,7 +1230,7 @@ void DebugFlow(char msg[], uint32_t t)
 }
 
 // LOG/PRINT ERRORS
-void DebugError(char msg[], uint32_t t)
+void DebugError(char msg[], bool is_error, uint32_t t)
 {
 	// Local vars
 	bool do_print = db.print_errors && db.Console;
@@ -1214,6 +1251,15 @@ void DebugError(char msg[], uint32_t t)
 		QueueLog(msg, t);
 	}
 
+	// Store error info
+	if (is_error) {
+		err_line[cnt_err < 100 ? cnt_err : 99] = cnt_logsStored;
+		cnt_err++;
+	}
+	else {
+		warn_line[cnt_warn < 100 ? cnt_warn : 99] = cnt_logsStored;
+		cnt_warn++;
+	}
 }
 
 // PRINT RECIEVED PACKET
@@ -1871,6 +1917,11 @@ void loop()
 		return;
 	}
 
+	// WAIT FOR LOG STREAMING TO END
+	if (WaitForStreamEnd()) {
+		return;
+	}
+
 	// GET SERIAL INPUT
 	GetSerial();
 
@@ -1975,6 +2026,28 @@ void loop()
 
 		// Quite and reset
 		else if (r2a.idNow == 'q') {
+
+			// Log warnings summary
+			char warn_lines[200] = "|";
+			for (int i = 0; i < cnt_warn; i++) {
+				char str_lin[10];
+				sprintf(str_lin, "%d|", warn_line[i]);
+				strcat(warn_lines, str_lin);
+			}
+			sprintf(str, "TOTAL **WARNINGS**  %d ON LINES %s", cnt_warn, warn_lines);
+			DebugFlow(str);
+
+			// Log errors summary
+			char err_lines[200] = "|";
+			for (int i = 0; i < cnt_err; i++) {
+				char str_lin[10];
+				sprintf(str_lin, "%d|", err_line[i]);
+				strcat(err_lines, str_lin);
+			}
+			sprintf(str, "TOTAL !!ERRORS!!  %d ON LINES %s", cnt_err, err_lines);
+			DebugFlow(str);
+
+			// Set flags
 			fc.doQuit = true;
 			t_quit = millis() + 1000;
 			DebugFlow("[loop] QUITING...");

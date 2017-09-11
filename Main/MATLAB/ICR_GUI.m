@@ -2529,17 +2529,6 @@ fprintf('END OF RUN\n');
             % Log/print
             if is_running
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
-                % Pause before connecting
-                Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
-                % TEMP
-%                 tic;
-%                 while (toc<20 && ~doExit)
-%                 end
-                if ~doExit
-                    Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
-                else
-                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Load');
-                end
             else
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
             end
@@ -5040,7 +5029,7 @@ fprintf('END OF RUN\n');
                 else
                     set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledPrintFrgCol);
                 end
-                infstr = sprintf('Battery:_%0.1fV', volt_now);
+                infstr = sprintf('Battery:_%0.2fV', volt_now);
                 set(D.UI.txtPerfInf(7), 'String', infstr)
             end
             

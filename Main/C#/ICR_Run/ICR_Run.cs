@@ -282,14 +282,14 @@ namespace ICR_Run
             _foot: (byte)'>'
         );
 
-        // General communication
+        // Communication general
         private static long dt_sendSent = 5; // (ms)
-        private static long dt_sendRcvd = 5; // (ms)
+        private static long dt_sendRcvd = 1; // (ms)
         private static long dt_resend = 500; // (ms)
         private static int resendMax = 5;
         private static long timeoutLoadGUI = 15000; // (ms)
         private static long timeoutConnectAC = 15000; // (ms)
-        private static long timeoutConnectMatNLX = 60000; // (ms) TEMP
+        private static long timeoutConnectMatNLX = 60000; // (ms) 
         private static long timeoutMatCloseConfirm = 10000; // (ms)
         private static long timeoutImportLog = 10000; // (ms)
 
@@ -317,7 +317,7 @@ namespace ICR_Run
             if (passed_setup)
                 LogEvent_Thread("[MAIN] SUCCEEDED: SETUP");
             else if (!fc.isRunError)
-                LogEvent_Thread("**WARNING!! [MAIN] ABORTED: SETUP");
+                LogEvent_Thread("**WARNING!! [MAIN] ABORTED: SETUP", is_warning:true);
             else
                 LogEvent_Thread("!!ERROR!! [MAIN] FAILED: SETUP", is_error: true);
 
@@ -329,7 +329,7 @@ namespace ICR_Run
                 if (passed_run)
                     LogEvent_Thread("[MAIN] SUCCEEDED: RUN");
                 else if (!fc.isRunError)
-                    LogEvent_Thread("**WARNING!! [MAIN] ABORTED: RUN");
+                    LogEvent_Thread("**WARNING!! [MAIN] ABORTED: RUN", is_warning: true);
                 else
                     LogEvent_Thread("!!ERROR!! [MAIN] FAILED: RUN", is_error: true);
             }
@@ -379,7 +379,7 @@ namespace ICR_Run
                     fc.isRunError = true;
                 }
                 else
-                    LogEvent_Thread("**WARNING** [Setup] ABORTED: Run Cheetah.exe");
+                    LogEvent_Thread("**WARNING** [Setup] ABORTED: Run Cheetah.exe", is_warning: true);
                 return false;
             }
 
@@ -480,7 +480,7 @@ namespace ICR_Run
             else
             {
                 // Program timed out because matlab was hanging on connect
-                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for AC Connect");
+                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for AC Connect", is_warning: true);
                 fc.isMAThanging = true;
                 return false;
             }
@@ -495,7 +495,7 @@ namespace ICR_Run
             }
             else
             {
-                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI Handshake...");
+                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI Handshake...", is_warning: true);
                 return false;
             }
 
@@ -536,7 +536,7 @@ namespace ICR_Run
             }
             else
             {
-                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI to Load");
+                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI to Load", is_warning: true);
                 return false;
             }
 
@@ -547,7 +547,7 @@ namespace ICR_Run
                 LogEvent_Thread("[Setup] SUCCEEDED: Wait for ICR_GUI NLX Setup");
             else
             {
-                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI NLX Setup");
+                LogEvent_Thread("**WARNING** [Setup] ABORTED: Wait for ICR_GUI NLX Setup", is_warning: true);
                 return false;
             }
 
@@ -592,7 +592,7 @@ namespace ICR_Run
             }
             else
             {
-                LogEvent_Thread("**WARNING** [Run] ABORTED: Confirm Robot Streaming");
+                LogEvent_Thread("**WARNING** [Run] ABORTED: Confirm Robot Streaming", is_warning: true);
                 return false;
             }
 
@@ -616,7 +616,7 @@ namespace ICR_Run
                 LogEvent_Thread("[Run] SUCCEEDED: Confirm Setup");
             else
             {
-                LogEvent_Thread("**WARNING** [Run] ABORTED: Confirm Setup");
+                LogEvent_Thread("**WARNING** [Run] ABORTED: Confirm Setup", is_warning: true);
                 return false;
             }
 
@@ -636,7 +636,7 @@ namespace ICR_Run
             }
             else
             {
-                LogEvent_Thread("**WARNING** [Run] ABORTED: MoveTo Start");
+                LogEvent_Thread("**WARNING** [Run] ABORTED: MoveTo Start", is_warning: true);
                 return false;
             }
 
@@ -653,7 +653,7 @@ namespace ICR_Run
             else
             {
                 if (com_netComClient.AreWeConnected())
-                    LogEvent_Thread("**WARNING** [Run] ABORTED: Main Session Loop");
+                    LogEvent_Thread("**WARNING** [Run] ABORTED: Main Session Loop", is_warning: true);
                 else
                 {
                     LogEvent_Thread("!!ERROR!! [Run] FAILED: Main Session Loop Because NLX Disconnected", is_error: true);
@@ -684,7 +684,7 @@ namespace ICR_Run
                     LogEvent_Thread("[Exit] SUCCEEDED: Wait for Last Confirmation Rat is Out");
                 }
                 else
-                    LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for Last Confirmation Rat is Out");
+                    LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for Last Confirmation Rat is Out", is_warning: true);
             }
 
             // Wait for reply on any remaining sent packets
@@ -694,7 +694,7 @@ namespace ICR_Run
                 LogEvent_Thread("[Run] SUCCEEDED: Wait for Last Packets");
             else
             {
-                LogEvent_Thread("**WARNING** [Run] ABORTED: Wait for Last Packets");
+                LogEvent_Thread("**WARNING** [Run] ABORTED: Wait for Last Packets", is_warning: true);
             }
 
             // MoveTo defualt pos
@@ -712,7 +712,7 @@ namespace ICR_Run
                     LogEvent_Thread("[Exit] SUCCEEDED: MoveTo South");
                 else
                 {
-                    LogEvent_Thread("**WARNING** [Exit] ABORTED: MoveTo South");
+                    LogEvent_Thread("**WARNING** [Exit] ABORTED: MoveTo South", is_warning: true);
                 }
             }
 
@@ -757,7 +757,7 @@ namespace ICR_Run
                 fc.isSaveEnabled = true;
             }
             else
-                LogEvent_Thread("**WARNING** [Exit] ABORTED: Save Enabled");
+                LogEvent_Thread("**WARNING** [Exit] ABORTED: Save Enabled", is_warning: true);
 
             // Wait for last packet
             LogEvent_Thread("[Exit] RUNNING: Wait for Last Pack...");
@@ -765,7 +765,7 @@ namespace ICR_Run
             if (pass)
                 LogEvent_Thread("[Exit] SUCCEEDED: Wait for Last Pack");
             else
-                LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for Last Pack");
+                LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for Last Pack", is_warning: true);
 
             // Send initial robot log request
             LogEvent_Thread("[Exit] RUNNING: Request Robot Log...");
@@ -773,6 +773,10 @@ namespace ICR_Run
             pass = WaitForSerial(id: 'L', timeout: 5000);
             if (pass)
             {
+                // Tell CheetahDue logging beggining
+                byte[] out_byte = new byte[1] { (byte)'l' };
+                sp_cheetahDue.Write(out_byte, 0, 1);
+
                 // Wait for bytes to receive messages to be received
                 LogEvent_Thread("[Exit] RUNNING: Wait for Robot Log Bytes...");
                 pass = WaitForSerial(id: 'U', check_for: "rcv", timeout: 5000);
@@ -830,7 +834,7 @@ namespace ICR_Run
                 }
                 else
                 {
-                    LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for ICR_GUI to Save");
+                    LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for ICR_GUI to Save", is_warning: true);
                 }
             }
 
@@ -843,7 +847,7 @@ namespace ICR_Run
             if (pass)
                 LogEvent_Thread("[Exit] SUCCEEDED: Wait for ICR_GUI Quit command");
             else
-                LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for ICR_GUI Quit command");
+                LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for ICR_GUI Quit command", is_warning: true);
 
             // Wait for robot log save to complete
             LogEvent_Thread("[Exit] RUNNING: Wait for Robot Log Save...");
@@ -853,14 +857,14 @@ namespace ICR_Run
             // Check if complete log was imported
             if (robLogger.isLogComplete)
                 LogEvent_Thread(String.Format("[Exit] SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
-                    robLogger.cnt_logged, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
-            else if (robLogger.cnt_logged > 0)
+                    robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
+            else if (robLogger.cnt_logsStored > 0)
                 LogEvent_Thread(String.Format("**WARNING** [Exit] PARTIALLY SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
-                    robLogger.cnt_logged, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
+                    robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_warning: true);
             else
             {
                 LogEvent_Thread(String.Format("!!ERROR!! [Exit] FAILED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
-                    robLogger.cnt_logged, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_error: true);
+                    robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_error: true);
                 fc.isRunError = true;
             }
 
@@ -872,7 +876,7 @@ namespace ICR_Run
             if (pass)
                 LogEvent_Thread("[Exit] SUCCEEDED: Confirm Robot Quit");
             else
-                LogEvent_Thread("**WARNING** [Exit] ABORTED: Confirm Robot Quit");
+                LogEvent_Thread("**WARNING** [Exit] ABORTED: Confirm Robot Quit", is_warning: true);
             // Set flags
             fc.isRobComActive = false;
             fc.isArdComActive = false;
@@ -887,7 +891,7 @@ namespace ICR_Run
             if (pass)
                 LogEvent_Thread("[Exit] SUCCEEDED: Confirm ICR_GUI Closed");
             else
-                LogEvent_Thread("**WARNING** [Exit] ABORTED: Confirm ICR_GUI Closed");
+                LogEvent_Thread("**WARNING** [Exit] ABORTED: Confirm ICR_GUI Closed", is_warning: true);
 
             // Tell Matlab close confirmation received
             LogEvent_Thread("[Exit] RUNNING: Send ICR_GUI Close Confirmation Received...");
@@ -896,7 +900,7 @@ namespace ICR_Run
             if (pass)
                 LogEvent_Thread("[Exit] SUCCEEDED: Send ICR_GUI Close Confirmation Received");
             else
-                LogEvent_Thread("**WARNING** [Exit] ABORTED: Send ICR_GUI Close Confirmation Received");
+                LogEvent_Thread("**WARNING** [Exit] ABORTED: Send ICR_GUI Close Confirmation Received", is_warning: true);
 
             // Set exit flag to exit all threads
             fc.doExit = true;
@@ -917,14 +921,14 @@ namespace ICR_Run
             dueLogger.SaveLog(logDir, dueLogFi);
             if (dueLogger.isLogComplete)
                 LogEvent_Thread(String.Format("[Exit] SUCCEEDED: Save CheetahDue Log: logged={0} dropped={1}",
-                    dueLogger.cnt_logged, dueLogger.cnt_dropped[1]));
-            else if (dueLogger.cnt_logged > 0)
+                    dueLogger.cnt_logsStored, dueLogger.cnt_dropped[1]));
+            else if (dueLogger.cnt_logsStored > 0)
                 LogEvent_Thread(String.Format("**WARNING** [Exit] PARTIALLY SUCCEEDED: Save CheetahDue Log: logged={0} dropped={1}",
-                    dueLogger.cnt_logged, dueLogger.cnt_dropped[1]));
+                    dueLogger.cnt_logsStored, dueLogger.cnt_dropped[1]), is_warning: true);
             else
             {
                 LogEvent_Thread(String.Format("!!ERROR!! [Exit] FAILED: Save CheetahDue Log: logged={0} dropped={1}",
-                    dueLogger.cnt_logged, dueLogger.cnt_dropped[1]), is_error: true);
+                    dueLogger.cnt_logsStored, dueLogger.cnt_dropped[1]), is_error: true);
                 fc.isRunError = true;
             }
 
@@ -951,13 +955,17 @@ namespace ICR_Run
             else
             {
                 KillMatlab();
-                LogEvent_Thread("**WARNING** [Exit] HAD TO KILL MATLAB");
+                LogEvent_Thread("**WARNING** [Exit] HAD TO KILL MATLAB", is_warning: true);
             }
+
+            // Log/print run summary
+            LogEvent(msg_in: csLogger.GetSummary("warnings"));
+            LogEvent(msg_in: csLogger.GetSummary("errors"));
 
             // Save CS log file
             LogEvent_Thread("[Exit] RUNNING: Save CS Log...");
             csLogger.SaveLog(logDir, csLogFi);
-            LogEvent_Thread(String.Format("[Exit] FINISHED: Save CS Log: logged={0}", csLogger.cnt_logged));
+            LogEvent_Thread(String.Format("[Exit] FINISHED: Save CS Log: logged={0}", csLogger.cnt_logsStored));
 
             // Copy log files to rat specific dir
             if (nlxRecDir != logDir)
@@ -1037,7 +1045,7 @@ namespace ICR_Run
                     {
                         // Log/print
                         LogEvent_Thread(String.Format("**WARNING** [RepeatSendPack_Thread] Resending c2r: cnt={0} id=\'{1}\' dat=|{2:0.00}|{3:0.00}|{4:0.00}| pack={5} do_conf={6} do_check_done={7}",
-                            send_count, id, dat[0], dat[1], dat[2], pack, do_conf, do_check_done));
+                            send_count, id, dat[0], dat[1], dat[2], pack, do_conf, do_check_done), is_warning: true);
 
                         // Resend
                         SendPack(id: id, dat: dat, pack: pack, do_conf: do_conf, do_check_done: do_check_done);
@@ -1075,6 +1083,7 @@ namespace ICR_Run
                 long t_send = 0;
                 bool do_loop = true;
                 bool buff_ready = false;
+                bool is_recieving = false;
                 bool is_clogged = false;
                 bool is_hanging = false;
                 string dat_str = "";
@@ -1096,11 +1105,13 @@ namespace ICR_Run
                         fc.ContinueRobCom();
 
                     // Get status
+                    is_recieving = fc.isXbeeBusy;
                     is_clogged = queue_SendXBee >= 3;
                     is_hanging = sw_main.ElapsedMilliseconds > t_queued + 100;
 
                     // Abort if sending pos data
-                    if (is_clogged || is_hanging && id == 'P')
+                    if ((is_clogged || is_hanging || is_recieving) &&
+                        id == 'P')
                         break;
 
                 }
@@ -1117,7 +1128,7 @@ namespace ICR_Run
                     id, dat[0], dat[1], dat[2], pack, do_conf, do_check_done);
 
                 // Check if queue backed up or hanging
-                if (is_clogged || is_hanging)
+                if (is_clogged || is_hanging || is_recieving)
                 {
                     // Get status info
                     dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
@@ -1125,10 +1136,8 @@ namespace ICR_Run
                    sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
                     // Log/print
-                    if (is_clogged)
-                        LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue Clogged: {0}", dat_str + buff_str));
-                    if (is_hanging)
-                        LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue Hanging: {0}", dat_str + buff_str));
+                    LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue |{0}{1}{2}: {3}",
+                        is_recieving? "Holding for RX|" : "", is_hanging? "Hanging|" : "", is_clogged ? "Clogged|" : "", dat_str + buff_str), is_warning: true);
 
                     // Bail if this is pos data
                     if (id == 'P')
@@ -1219,7 +1228,7 @@ namespace ICR_Run
                         (db.do_printSentRobVT && (int)dat[0] == 1))
                     {
                         U.f = (float)dat[2];
-                        string dt_vt = String.Format(" ts_int={0} dt_send_mu={1}", 
+                        string dt_vt = String.Format(" ts_int={0} dt_send_mu={1}",
                             U.i32, vtHandler.GetSendDT((int)dat[0], "avg"));
                         LogEvent_Thread("   [SENT] c2r: " + dat_str + buff_str + dt_vt, t: c2r.t_new);
                     }
@@ -1327,7 +1336,7 @@ namespace ICR_Run
 
                         // External forced abort
                         if (do_abort && fc.doAbort)
-                            LogEvent_Thread(String.Format("**WARNING** [WaitForSerial] Forced Abort: {0}", dat_str));
+                            LogEvent_Thread(String.Format("**WARNING** [WaitForSerial] Forced Abort: {0}", dat_str), is_warning: true);
                         else
                         {
                             // Coms failed
@@ -1366,15 +1375,16 @@ namespace ICR_Run
         public static void DataReceived_Xbee(object sender, SerialDataReceivedEventArgs e)
         {
             // Prevent multiple intances running
-            if (fc.isXbeeBusy)
+            if (fc.isXbeeBusy ||
+                robLogger.isLogging)
                 return;
-            
+
             // Block any xbee writing till complete packet received
             fc.isXbeeBusy = true;
-            while (sp_Xbee.BytesToRead > 0)
-            {
-                Thread.Sleep(15);
-            }
+            while (sp_Xbee.BytesToRead < 0)
+                Thread.Sleep(1);
+
+            // Flag xbee free
             fc.isXbeeBusy = false;
         }
 
@@ -1545,7 +1555,7 @@ namespace ICR_Run
                 // Format data string
                 long dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
                 long dt_parse = sw_main.ElapsedMilliseconds - t_parse_str;
-                string dat_str = String.Format("id=\'{0}\' dat=|{1}|{2}|{3}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
+                string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
                         id, dat[0], dat[1], dat[2], pack, do_conf, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, dt_parse, c2r.DT_SentRcvd(), dt_rcvd);
 
                 // Store r2c packet data
@@ -1639,13 +1649,13 @@ namespace ICR_Run
                         r2c_foot_found ? "r2c_foot" : r2a_foot_found ? "r2a_foot" : "no_foot");
 
                     // Log/print available info
-                    LogEvent_Thread(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packet: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6}|{7}|{8}| pack={9} do_conf={10} foot={11} bytes_read={12} rx={13} tx={14} parse_dt={15}",
-                        from, cnt_dropped[0], cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str));
+                    LogEvent_Thread(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packet: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6:0.00}|{7:0.00}|{8:0.00}| pack={9} do_conf={10} foot={11} bytes_read={12} rx={13} tx={14} parse_dt={15}",
+                        from, cnt_dropped[0], cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str), is_warning: true);
 
                     // Dump buffer if > 1 consecutive drops and no bytes read
                     if (cnt_dropped[0] > 1)
                     {
-                        LogEvent_Thread("**WARNING** [ParseR2C] Dumping r2 Input Buffer");
+                        LogEvent_Thread("**WARNING** [ParseR2C] Dumping r2 Input Buffer", is_warning: true);
                         sp_Xbee.DiscardInBuffer();
                     }
                 }
@@ -1677,13 +1687,13 @@ namespace ICR_Run
             // Check if hanging
             if (sw_main.ElapsedMilliseconds > t_str + 25)
             {
-                LogEvent_Thread("**WARNING** [XbeeBuffReady] XBee Read Hanging: " + dat_str);
+                LogEvent_Thread("**WARNING** [XbeeBuffReady] XBee Read Hanging: " + dat_str, is_warning: true);
             }
 
             // Check if timedout
             if (sw_main.ElapsedMilliseconds > t_timeout)
             {
-                LogEvent_Thread("**WARNING** [XbeeBuffReady] TIMEDOUT: " + dat_str);
+                LogEvent_Thread("**WARNING** [XbeeBuffReady] TIMEDOUT: " + dat_str, is_warning: true);
             }
 
             // Check if buff filled
@@ -1786,7 +1796,7 @@ namespace ICR_Run
                         // Print
                         if (db.do_printDueLog)
                             LogEvent_Thread(String.Format("   [LOG] a2c[{0}]: message=\"{1}\" chksum={2} bytes_read={3} rx={4} tx={5}",
-                                dueLogger.cnt_logged, log_str, chksum, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite));
+                                dueLogger.cnt_logsStored, log_str, chksum, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite));
                     }
 
                     // Change streaming status
@@ -1804,12 +1814,12 @@ namespace ICR_Run
 
                     // Print
                     LogEvent_Thread(String.Format("**WARNING** [GetArdLog] Dropped a2c Log: logged={0} dropped={1}|{2} head={3} message=\"{4}\" chksum={5} foot={6} bytes_read={7} rx={8} tx={9}",
-                       dueLogger.cnt_logged, dueLogger.cnt_dropped[0], dueLogger.cnt_dropped[1], head, log_str, chksum, foot, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite));
+                       dueLogger.cnt_logsStored, dueLogger.cnt_dropped[0], dueLogger.cnt_dropped[1], head, log_str, chksum, foot, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
 
                     // Dump buffer if > 1 consecutive drops and no bytes read
                     if (dueLogger.cnt_dropped[0] > 1 && bytes_read == 0)
                     {
-                        LogEvent_Thread("**WARNING** [GetArdLog] Dumping a2c Input Buffer");
+                        LogEvent_Thread("**WARNING** [GetArdLog] Dumping a2c Input Buffer", is_warning: true);
                         sp_cheetahDue.DiscardInBuffer();
                     }
                 }
@@ -1840,10 +1850,10 @@ namespace ICR_Run
                 // Timedout
                 if (sw_main.ElapsedMilliseconds > t_timeout)
                     LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] a2c Hanging: dt_check={0} rx={1} tx={2}",
-                      (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite));
+                      (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
                 else
                     LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] ABORTED: dt_check={0} rx={1} tx={2}",
-                   (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite));
+                   (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
             }
 
             return pass;
@@ -1933,7 +1943,7 @@ namespace ICR_Run
                     {
                         // Print abort termination string received
                         LogEvent_Thread(String.Format("**WARNING** [GetRobotLog] Received Abort Termination String: \"{0}{1}{2}\" rx={3} tx={4}",
-                            c_arr[0], c_arr[1], c_arr[2], sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite));
+                            c_arr[0], c_arr[1], c_arr[2], sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite), is_warning: true);
                         is_robot_abort = true;
 
                         // Break out of loop
@@ -1972,7 +1982,7 @@ namespace ICR_Run
                 else
                 {
                     LogEvent_Thread(String.Format("**WARNING** [GetRobotLog] ABORTED: Robot Log Import: {0}: dt_read_last={1} dt_run={2} {3}",
-                        is_timedout ? "Read Timedout" : is_robot_abort ? "Robot Aborted" : "Reason Unknown", dt_read, dt_run, dat_str));
+                        is_timedout ? "Read Timedout" : is_robot_abort ? "Robot Aborted" : "Reason Unknown", dt_read, dt_run, dat_str), is_warning: true);
                 }
             }
             else
@@ -2014,7 +2024,7 @@ namespace ICR_Run
                     catch
                     {
                         LogEvent_Thread(String.Format("**WARNING** [GetRobotLog] Failed to Parse r2c Log Number: rec_last={0}",
-                                rec_now));
+                                rec_now), is_warning: true);
                     }
 
                     // Reset flags
@@ -2063,7 +2073,7 @@ namespace ICR_Run
                         int cnt_dropped = rec_last - rec_now - 1;
                         robLogger.AddDropped(cnt_dropped);
                         LogEvent_Thread(String.Format("**WARNING** [GetRobotLog] Dropped r2c Log: logged_expected={0} logs_stored={1} dropped={2}|{3}",
-                            rec_now, robLogger.cnt_logged, robLogger.cnt_dropped[0], robLogger.cnt_dropped[1]));
+                            rec_now, robLogger.cnt_logsStored, robLogger.cnt_dropped[0], robLogger.cnt_dropped[1]), is_warning: true);
                     }
 
                     // Update list
@@ -2085,7 +2095,7 @@ namespace ICR_Run
 
             // Finished log store
             LogEvent_Thread(String.Format("[GetRobotLog] FINISHED: Robot Log Store: logs_stored={0} dt_run={1}",
-                robLogger.cnt_logged, robLogger.logDT));
+                robLogger.cnt_logsStored, robLogger.logDT));
 
             // Save robot log file
             LogEvent_Thread("[GetRobotLog] RUNNING: Robot Log Save...");
@@ -2168,7 +2178,7 @@ namespace ICR_Run
             else if (status != " ")
             {
                 // Run failed but errors were caught
-                LogEvent_Thread("**WARNING** [RunWorkerCompleted_RunGUI] ABORTED: RunGUI Worker");
+                LogEvent_Thread("**WARNING** [RunWorkerCompleted_RunGUI] ABORTED: RunGUI Worker", is_warning: true);
             }
             else
             {
@@ -2190,7 +2200,7 @@ namespace ICR_Run
 
             LogEvent_Thread("[DoWork_MatCOM] RUNNING: MatCOM Worker...");
             BackgroundWorker worker = (BackgroundWorker)sender;
-            
+
             // Create tuple to pass args
             Tuple<char, double, double, double, UInt16> bw_args = (Tuple<char, double, double, double, UInt16>)e.Argument;
 
@@ -2259,7 +2269,7 @@ namespace ICR_Run
                 UInt64 ts = (UInt64)(dat[0]) + vtStr;
                 double x = dat[1];
                 double y = dat[2];
-     
+
                 // Run compute pos
                 bool pass = CompPos(0, ts, x, y);
 
@@ -2330,7 +2340,7 @@ namespace ICR_Run
                     fc.doAbort = true;
                     // Will print once
                     if (!fc.isGUIquit)
-                        LogEvent_Thread("**WARNING** [DoWork_MatCOM] ICR_GUI FORCED QUIT");
+                        LogEvent_Thread("**WARNING** [DoWork_MatCOM] ICR_GUI FORCED QUIT", is_warning: true);
                 }
                 // Set flag that GUI has quit
                 fc.isGUIquit = true;
@@ -2434,7 +2444,7 @@ namespace ICR_Run
                 if (dat_char == ' ')
                 {
                     msg = String.Format("[c2m.{0}.dat1, c2m.{0}.pack] =  deal({1}, {2});", id, dat_num, pack);
-                    dat_str = String.Format("id=\'{0}\' dat={1} pack={2}", id, dat_num, pack);
+                    dat_str = String.Format("id=\'{0}\' dat={1:0.00} pack={2}", id, dat_num, pack);
                 }
                 else
                 {
@@ -2446,7 +2456,7 @@ namespace ICR_Run
             // Check if queue backed up
             if (queue_sendMCOM >= 3)
                 LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} dt_queue={2}",
-                                msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
+                                msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued), is_warning: true);
 
             // Add to queue
             lock (lock_queue_sendMCOM) queue_sendMCOM++;
@@ -2457,7 +2467,7 @@ namespace ICR_Run
                 if (sw_main.ElapsedMilliseconds > t_queued + 100)
                     // Log/print error
                     LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} dt_queue={2}",
-                                    msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
+                                    msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued), is_warning: true);
 
 
                 if (fc.ContinueMatCom())
@@ -2577,7 +2587,7 @@ namespace ICR_Run
 
                     // External forced abort
                     if (do_abort && fc.doAbort)
-                        LogEvent_Thread(String.Format("**WARNING** [WaitForMCOM] Forced Abort: {0}", dat_str));
+                        LogEvent_Thread(String.Format("**WARNING** [WaitForMCOM] Forced Abort: {0}", dat_str), is_warning: true);
                     else
                     {
                         // Coms failed
@@ -2692,7 +2702,7 @@ namespace ICR_Run
             else if (db.do_printBlockedVt)
             {
                 LogEvent_Thread(String.Format("**WARNING** [NetComCallbackVT] VT Blocked: ent={0} cnt={1} dt_send={2}|{3}|{4}",
-                    ent, vtHandler.cnt_block[ent], vtHandler.GetSendDT(ent), vtHandler.GetSendDT(ent, "avg"), sw_main.ElapsedMilliseconds - vtHandler.t_sent[ent]));
+                    ent, vtHandler.cnt_block[ent], vtHandler.GetSendDT(ent), vtHandler.GetSendDT(ent, "avg"), sw_main.ElapsedMilliseconds - vtHandler.t_sent[ent]), is_warning: true);
             }
         }
 
@@ -2748,10 +2758,10 @@ namespace ICR_Run
             y = Math.Round(y * RADIUS) + RADIUS;
 
             // Check for negative dt
-            if (dt<0)
+            if (dt < 0)
             {
-                LogEvent_Thread(String.Format("**WARNING** [CompPos] Strange TS Values: ent={0} ts_now={1} ts_last={2} dt={3}", 
-                    ent, ts_now, ts_last, dt));
+                LogEvent_Thread(String.Format("**WARNING** [CompPos] Strange TS Values: ent={0} ts_now={1} ts_last={2} dt={3}",
+                    ent, ts_now, ts_last, dt), is_warning: true);
             }
 
             // Convert cart to cm
@@ -2818,15 +2828,15 @@ namespace ICR_Run
         }
 
         // LOG EVEN STRING
-        public static void LogEvent_Thread(string msg_in, bool is_error = false, long t = -1)
+        public static void LogEvent_Thread(string msg_in, bool is_warning = false, bool is_error = false, long t = -1)
         {
             // Print event on seperate thread
             new Thread(delegate ()
             {
-                LogEvent(msg_in: msg_in, is_error: is_error, t: t);
+                LogEvent(msg_in: msg_in, is_warning: is_warning, is_error: is_error, t: t);
             }).Start();
         }
-        public static void LogEvent(string msg_in, bool is_error, long t)
+        public static void LogEvent(string msg_in, bool is_warning = false, bool is_error = false, long t = -1)
         {
             // Local vars
             long t_m = 0;
@@ -2866,7 +2876,7 @@ namespace ICR_Run
                 msg_log = msg_in.Replace(",", string.Empty);
 
                 // Store in logger 
-                csLogger.UpdateList(msg_log, t_m_sync);
+                csLogger.UpdateList(msg: msg_log, is_warning: is_warning, is_error: is_error, t: t_m_sync);
             }
 
             // Store error string
@@ -3219,10 +3229,14 @@ namespace ICR_Run
         private int next_milestone = 0;
         private const int _n_updates = 10;
         private int[] _import_update_bytes = new int[_n_updates];
+        private long _cnt_warn = 0;
+        private long _cnt_err = 0;
+        private long[] _warn_line = new long[100];
+        private long[] _err_line = new long[100];
         // Public vars
         public bool isImportTimedout = false;
         public string[] prcnt_str = new string[_n_updates + 1];
-        public int cnt_logged = 0;
+        public int cnt_logsStored = 0;
         public int[] cnt_dropped = new int[2] { 0, 0 };
         public int bytesRead = 0;
         public bool isLogging
@@ -3246,7 +3260,7 @@ namespace ICR_Run
         {
             get
             {
-                if (cnt_logged > 0 &&
+                if (cnt_logsStored > 0 &&
                     cnt_dropped[1] == 0 &&
                     (_bytesToRcv == 0 || bytesRead > _bytesToRcv))
                     return true;
@@ -3281,37 +3295,46 @@ namespace ICR_Run
         }
 
         // Add new log entry
-        public void UpdateList(string log_str, long ts = -1)
+        public void UpdateList(string msg, bool is_warning = false, bool is_error = false, long t = -1)
         {
             lock (_lock_updateList)
             {
                 // Check for repeat
-                if (log_str != _lastLogStr)
+                if (msg != _lastLogStr)
                 {
                     // Save log string
-                    _lastLogStr = log_str;
+                    _lastLogStr = msg;
 
                     // Itterate count
-                    cnt_logged++;
+                    cnt_logsStored++;
 
                     // Reset consecutive dropped logs
                     cnt_dropped[0] = 0;
 
                     // Add count and time
                     string str;
-                    if (ts < 0)
+                    if (t < 0)
                         // Add count but skip time
-                        str = String.Format("[{0}],{1}", cnt_logged, log_str);
+                        str = String.Format("{0},{1}", cnt_logsStored, msg);
                     else
                         // Add count and time
-                        str = String.Format("[{0}],{1},{2}", cnt_logged, ts, log_str);
+                        str = String.Format("{0},{1},{2}", cnt_logsStored, t, msg);
 
                     // Add to list
-                    if (cnt_logged - 1 < 50000)
-                        _logList[cnt_logged - 1] = str;
-                    else if (cnt_logged - 1 == 50000)
-                        _logList[cnt_logged - 1] = String.Format("**WARNING** Log Maxed out at {0} entries", 50000);
+                    if (cnt_logsStored - 1 < 50000)
+                        _logList[cnt_logsStored - 1] = str;
+                    else if (cnt_logsStored - 1 == 50000)
+                        _logList[cnt_logsStored - 1] = String.Format("**WARNING** Log Maxed out at {0} entries", 50000);
 
+                    // Store error info
+                    if (is_error)
+                    {
+                        _err_line[_cnt_err++] = cnt_logsStored;
+                    }
+                    else if (is_warning)
+                    {
+                        _warn_line[_cnt_warn++] = cnt_logsStored;
+                    }
                 }
             }
         }
@@ -3365,16 +3388,49 @@ namespace ICR_Run
             return msg;
         }
 
+        // Get summary
+        public string GetSummary(string get_what)
+        {
+            // Local vars
+            string summary_str = "";
+
+            // Warnings
+            if (get_what == "warnings")
+            {
+                string warn_lines = "|";
+                for (int i = 0; i < _cnt_warn; i++)
+                {
+                    string.Concat(warn_lines, String.Format("{0}|", _warn_line[i]));
+                }
+                summary_str =  String.Format("TOTAL **WARNINGS** {0} ON LINES {1}", _cnt_warn, warn_lines);
+            }
+
+            // Errors
+            else if (get_what == "errors")
+            {
+                string err_lines = "|";
+                for (int i = 0; i < _cnt_err; i++)
+                {
+                    string.Concat(err_lines, String.Format("{0}|", _err_line[i]));
+                }
+                summary_str = String.Format("TOTAL !!ERRORS!! {0} ON LINES {1}", _cnt_err, err_lines);
+            }
+
+            // Return string
+            return summary_str;
+        }
+
         // Save log data to csv
         public void SaveLog(string log_dir, string log_fi)
         {
+            // Write log to file
             string fi_path = @log_dir + @"\" + @log_fi;
             using (System.IO.StreamWriter file_out = new System.IO.StreamWriter(fi_path))
             {
                 int count = 0;
                 foreach (string line in _logList)
                 {
-                    if (count++ == cnt_logged)
+                    if (count++ == cnt_logsStored)
                         break;
                     file_out.WriteLine(line);
                 }
