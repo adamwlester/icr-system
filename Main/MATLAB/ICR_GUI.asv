@@ -5049,11 +5049,7 @@ fprintf('END OF RUN\n');
                 else
                     
                     % Check if this is new
-                    if D.PAR.vcc_now ~= D.PAR.vcc_last
-                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.activeCol);
-                    else
-                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledPrintFrgCol);
-                    end
+                    set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledPrintFrgCol);
                 end
                 infstr = sprintf('Battery:_%0.2fV', D.PAR.vcc_now);
                 set(D.UI.txtPerfInf(7), 'String', infstr)

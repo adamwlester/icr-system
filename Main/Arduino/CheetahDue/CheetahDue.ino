@@ -1468,7 +1468,19 @@ bool PrintDebug()
 // SEND TEST PACKET
 void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
-	// TestSendPack('r', 0, 0, 0, 1, true);
+	// EXAMPLE:
+	/*
+	// TEMP
+	static uint32_t t_s = 0;
+	static int send_cnt = 0;
+	static uint16_t pack = 0;
+	if (send_cnt == 0 && millis()>t_s + 30) {
+	pack++;
+	TestSendPack('r', 0, 0, 0, 1, true);
+	t_s = millis();
+	send_cnt++;
+	}
+	*/
 
 	//// Only send once
 	//if (cnt_loop_short > 0 || cnt_loop_tot > 0) {
@@ -1912,6 +1924,9 @@ void loop()
 	// RESET TTL PINS
 	ResetTTL();
 
+	// GET SERIAL INPUT
+	GetSerial();
+
 	// WAIT FOR HANDSHAKE
 	if (!CheckForStart()) {
 		return;
@@ -1921,9 +1936,6 @@ void loop()
 	if (WaitForStreamEnd()) {
 		return;
 	}
-
-	// GET SERIAL INPUT
-	GetSerial();
 
 	// HANDLE SERIAL INPUT
 	if (r2a.isNew)

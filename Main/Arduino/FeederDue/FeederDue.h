@@ -296,7 +296,7 @@ uint32_t t_solClose = 0;
 /*
 Updated when EtOH relay opened
 */
-const float bit2volt = 0.0164;
+const float bit2volt = 0.01545; // was 0.0164;
 uint32_t t_vccSend = 0;
 uint32_t t_vccUpdate = 0;
 const int dt_vccSend = 30000;
@@ -358,6 +358,8 @@ cmd;
 // Serial to robot
 struct R4
 {
+	USARTClass &port;
+	char instID;
 	int lng;
 	char head;
 	char foot;
@@ -375,6 +377,10 @@ struct R4
 // Initialize C2R
 R4 c2r
 {
+	// serial
+	Serial3,
+	// instID
+	'c',
 	// lng
 	16,		
 	// head
@@ -422,6 +428,10 @@ R4 c2r
 // Serial from other ard
 R4 a2r
 {
+	// serial
+	Serial2,
+	// instID
+	'a',
 	// lng
 	5,
 	// head
@@ -460,6 +470,8 @@ R4 a2r
 // Serial from Robot
 struct R2
 {
+	USARTClass &port;
+	char instID;
 	int lng;
 	char head;
 	char foot;
@@ -472,11 +484,17 @@ struct R2
 	uint32_t t_sentList[20];
 	bool doRcvCheck[20];
 	int cnt_resend[20];
+	int pinCTS;
+	bool stateCTS;
 };
 
 // Serial to CS
 R2 r2c
 {
+	// serial
+	Serial3,
+	// instID
+	'c',
 	// lng
 	16,
 	// head
@@ -518,12 +536,20 @@ R2 r2c
 	// doRcvCheck
 	{ false },
 	// cnt_resend
-	{ 0 }
+	{ 0 },
+	// pinCTS
+	pin.X1a_CTS,
+	// stateCTS
+	false,
 };
 
 // Serial to other ard
 R2 r2a
 {
+	// serial
+	Serial2,
+	// instID
+	'a',
 	// lng
 	5,
 	// head
@@ -556,7 +582,11 @@ R2 r2a
 	// doRcvCheck
 	{ false },
 	// cnt_resend
-	{ 0 }
+	{ 0 },
+	// pinCTS
+	pin.X1b_CTS,
+	// stateCTS
+	false,
 };
 
 #pragma endregion 
@@ -569,7 +599,7 @@ class POSTRACK
 {
 public:
 	// VARS
-	char objID[20] = { 0 };
+	char instID[20] = { 0 };
 	int nSamp = 0;
 	double posArr[6] = { 0,0,0,0,0,0 }; // (cm)
 	uint32_t t_tsArr[6] = { 0,0,0,0,0,0 }; // (ms)
@@ -855,6 +885,7 @@ class LOGGER
 {
 public:
 	// VARS
+	USARTClass &port = Serial1;
 	uint32_t t_sent = 0; // (ms)
 	uint32_t t_rcvd = 0; // (ms)
 	uint32_t t_write = 0; // (us)
@@ -989,17 +1020,15 @@ LOGGER Log(millis());
 #pragma region ========= FUNCTION DECLARATIONS =========
 
 // PARSE SERIAL INPUT
-void GetSerial();
-// PARSE SERIAL DATA
-void ParseSerial(char from, char id, float dat[]);
+void GetSerial(R4 *r4, R2 *r2);
 // WAIT FOR BUFFER TO FILL
-byte WaitBuffRead(char mtch1 = '\0', char mtch2 = '\0');
+byte WaitBuffRead(R4 *r4, char mtch = '\0');
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char targ, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true);
+void QueuePacket(R2 *r2, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true);
 // SEND SERIAL PACKET DATA
 void SendPacket();
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
-bool CheckResend(char targ);
+bool CheckResend(R2 *r2);
 // RESET AUTODRIVER BOARDS
 void AD_Reset(float max_speed = maxSpeed, float max_acc = maxAcc, float max_dec = maxDec);
 // CONFIGURE AUTODRIVER BOARDS
@@ -1057,9 +1086,9 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t = millis());
 // LOG/PRINT MOTOR SPEED CHANGE
 void DebugRunSpeed(String agent, double speed_last, double speed_now);
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
-void DebugRcvd(char from, char msg[], bool is_repeat = false);
+void DebugRcvd(R4 *r4, char msg[], bool is_repeat = false);
 // LOG/PRINT SENT PACKET DEBUG STRING
-void DebugSent(char targ, char msg[], bool is_repeat = false);
+void DebugSent(R2 *r2, char msg[], bool is_repeat = false);
 // STORE STRING FOR PRINTING
 void QueueDebug(char msg[], uint32_t t);
 // PRINT DEBUG STRINGS TO CONSOLE/LCD
@@ -1073,7 +1102,7 @@ char* PrintSpecialChars(char chr, bool do_show_byte = false);
 // CHECK AUTODRIVER BOARD STATUS
 int CheckAD_Status(uint16_t stat_reg, String stat_str);
 // SEND TEST PACKET
-void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
+void TestSendPack(R2 *r2, R4 *r4, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
 // HOLD FOR CRITICAL ERRORS
 void RunErrorHold(char msg[], uint32_t t_kill = 0);
 // GET ID INDEX

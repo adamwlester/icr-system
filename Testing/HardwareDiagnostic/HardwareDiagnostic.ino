@@ -769,11 +769,19 @@ void XBeeRead()
 void ConsoleRead()
 {
 	byte buff_b;
+	char targ = ' ';
 	while (SerialUSB.available() > 0) {
 		buff_b = SerialUSB.read();
+		if (targ == ' ') {
+			targ = buff_b;
+		}
 		SerialUSB.write(buff_b);
-		Serial3.write(buff_b);
-		Serial2.write(buff_b);
+		if (targ == 'c') {
+			Serial3.write(buff_b);
+		}
+		else {
+			Serial2.write(buff_b);
+		}
 	}
 }
 

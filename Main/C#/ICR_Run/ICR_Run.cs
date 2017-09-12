@@ -774,8 +774,8 @@ namespace ICR_Run
             if (pass)
             {
                 // Tell CheetahDue logging beggining
-                byte[] out_byte = new byte[1] { (byte)'l' };
-                sp_cheetahDue.Write(out_byte, 0, 1);
+                //byte[] out_byte = new byte[1] { (byte)'l' };
+                //sp_cheetahDue.Write(out_byte, 0, 1);
 
                 // Wait for bytes to receive messages to be received
                 LogEvent_Thread("[Exit] RUNNING: Wait for Robot Log Bytes...");

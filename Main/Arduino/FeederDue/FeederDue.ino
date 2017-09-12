@@ -89,7 +89,7 @@
 POSTRACK::POSTRACK(uint32_t t, char obj_id[], int n_samp)
 {
 	this->t_init = t;
-	strcpy(this->objID, obj_id);
+	strcpy(this->instID, obj_id);
 	this->nSamp = n_samp;
 
 	for (int i = 0; i < n_samp; i++) {
@@ -226,7 +226,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 
 			// Log/print error
 			sprintf(str, "**WARNING** [POSTRACK::UpdatePos] Bad Values |%s%s: obj=\"%s\" cnt_err=%d pos_new=%0.2f pos_last=%0.2f dist_sum=%0.2f dt_sec=%0.2f vel_new=%0.2f vel_last=%0.2f",
-				vel_diff > 300 ? "Vel|" : "", dt_sec == 0 ? "DT|" : "", this->objID, this->cnt_error, pos_new, this->posArr[this->nSamp - 2], dist_sum, dt_sec, vel, this->velLast);
+				vel_diff > 300 ? "Vel|" : "", dt_sec == 0 ? "DT|" : "", this->instID, this->cnt_error, pos_new, this->posArr[this->nSamp - 2], dist_sum, dt_sec, vel, this->velLast);
 			DebugError(str);
 		}
 	}
@@ -394,7 +394,7 @@ void PID::Run(char called_from[])
 	mode = "Automatic";
 
 	// Tell ard pid is running
-	QueuePacket('a', 'p', 1);
+	QueuePacket(&r2a, 'p', 1);
 
 	// Log/print event
 	sprintf(str, "[PID::Run] Run [%s]", called_from);
@@ -420,7 +420,7 @@ void PID::Stop(char called_from[])
 
 	// Tell ard pid is stopped if not rewarding
 	if (!Reward.isRewarding) {
-		QueuePacket('a', 'p', 0);
+		QueuePacket(&r2a, 'p', 0);
 	}
 
 	// Set mode
@@ -840,7 +840,7 @@ void BULLDOZE::Run(char called_from[])
 	RunMotor('f', bSpeed, "Bull");
 
 	// Tell ard bull is running
-	QueuePacket('a', 'b', 1);
+	QueuePacket(&r2a, 'b', 1);
 
 	// Set mode
 	mode = "Active";
@@ -872,7 +872,7 @@ void BULLDOZE::Stop(char called_from[])
 	t_bullNext = millis() + bDelay;
 
 	// Tell ard bull is stopped
-	QueuePacket('a', 'b', 0);
+	QueuePacket(&r2a, 'b', 0);
 
 	// Set mode
 	mode = "Inactive";
@@ -1207,7 +1207,7 @@ void REWARD::StartRew()
 
 	// Store and send packet imediately if coms setup
 	if (fc.isSesStarted) {
-		QueuePacket('a', 'r', duration);
+		QueuePacket(&r2a, 'r', duration);
 		SendPacket();
 	}
 
@@ -1796,7 +1796,7 @@ bool LOGGER::Setup()
 	byte match = '\0';
 
 	// Start serial
-	Serial1.begin(57600);
+	port.begin(57600);
 
 	// Reset OpenLog
 	t_sent = millis();
@@ -2028,7 +2028,7 @@ char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 	sprintf(msg_copy, msg);
 
 	// Send
-	Serial1.write(msg_copy);
+	port.write(msg_copy);
 	t_sent = millis();
 
 	// Print sent
@@ -2073,7 +2073,7 @@ char LOGGER::GetReply(uint32_t timeout)
 
 	// Wait for new data
 	while (
-		Serial1.available() == 0 &&
+		port.available() == 0 &&
 		millis() < t_timeout
 		);
 	t_rcvd = millis();
@@ -2088,10 +2088,10 @@ char LOGGER::GetReply(uint32_t timeout)
 		)
 	{
 		// Get new data
-		if (Serial1.available() > 0)
+		if (port.available() > 0)
 		{
 			// Get next byte
-			char c = Serial1.read();
+			char c = port.read();
 
 			// Print new byte
 			if (db.print_o2a) {
@@ -2334,12 +2334,12 @@ bool LOGGER::WriteLog(bool do_send)
 	}
 
 	// Write to SD
-	Serial1.write(logQueue[queueIndRead]);
+	port.write(logQueue[queueIndRead]);
 	t_write = micros();
 
 	// Send now
 	if (do_send) {
-		Serial3.write(logQueue[queueIndRead]);
+		r2c.port.write(logQueue[queueIndRead]);
 		cnt_logBytesSent++;
 		delay(10);
 	}
@@ -2426,9 +2426,9 @@ void LOGGER::StreamLogs()
 
 		// Dump anything in openlog buffer
 		uint32_t t_out = millis() + 10;
-		while (millis() < t_out || Serial1.available() > 0) {
-			if (Serial1.available() > 0) {
-				Serial1.read();
+		while (millis() < t_out || port.available() > 0) {
+			if (port.available() > 0) {
+				port.read();
 			}
 		}
 
@@ -2456,7 +2456,7 @@ void LOGGER::StreamLogs()
 		while (millis() < (t_start + timeout)) {
 
 			// Check for new data
-			if (Serial1.available() == 0)
+			if (port.available() == 0)
 			{
 				// Wait a max of 1 sec for new data
 				if (millis() - t_last_read < 1000 ||
@@ -2490,7 +2490,7 @@ void LOGGER::StreamLogs()
 			// Get next bytes
 			c_arr[0] = c_arr[1];
 			c_arr[1] = c_arr[2];
-			c_arr[2] = Serial1.read();
+			c_arr[2] = port.read();
 			t_last_read = millis();
 			read_ind++;
 
@@ -2536,7 +2536,7 @@ void LOGGER::StreamLogs()
 			}
 
 			// Send byte
-			Serial3.write(c_arr[2]);
+			r2c.port.write(c_arr[2]);
 			cnt_logBytesSent++;
 
 			// Check if all bytes sent
@@ -2588,10 +2588,10 @@ void LOGGER::StreamLogs()
 	while (WriteLog(true));
 
 	// Get total data left in buffers
-	int xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
-	int xbee_buff_rx = Serial3.available();
-	int ol_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	int ol_buff_rx = Serial1.available();
+	int xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - r2c.port.availableForWrite();
+	int xbee_buff_rx = r2c.port.available();
+	int ol_buff_tx = SERIAL_BUFFER_SIZE - 1 - port.availableForWrite();
+	int ol_buff_rx = port.available();
 
 	// Print log time info
 	float dt_s = (float)(millis() - t_start) / 1000.0f;
@@ -2616,13 +2616,13 @@ void LOGGER::StreamLogs()
 	// End reached send ">>>"
 	if (!do_abort) {
 		byte msg_end[3] = { '>','>','>' };
-		Serial3.write(msg_end, 3);
+		r2c.port.write(msg_end, 3);
 		delay(100);
 	}
 	// Aborted send ">>!"
 	else {
 		byte msg_end[3] = { '>','>','!' };
-		Serial3.write(msg_end, 3);
+		r2c.port.write(msg_end, 3);
 		delay(100);
 	}
 
@@ -2802,7 +2802,7 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 #pragma region --------COMMUNICATION---------
 
 // PARSE SERIAL INPUT
-void GetSerial()
+void GetSerial(R4 *r4, R2 *r2)
 {
 	/*
 	PARSE DATA FROM CS
@@ -2822,23 +2822,20 @@ void GetSerial()
 	uint16_t pack = 0;
 	char foot = ' ';
 	bool do_conf;
-	char from = ' ';
-	struct R4 *r4;
-	struct R2 *r2;
 
 	// Reset vars
 	cnt_packBytesRead = 0;
 	cnt_packBytesDiscarded = 0;
-	c2r.isNew = false;
-	c2r.idNow = ' ';
+	r4->isNew = false;
+	r4->idNow = ' ';
 
 	// Bail if no new input
-	if (Serial3.available() == 0) {
+	if (r4->port.available() == 0) {
 		return;
 	}
 
 	// Dump data till msg header byte is reached
-	buff = WaitBuffRead(c2r.head, a2r.head);
+	buff = WaitBuffRead(r4, r4->head);
 	if (buff == 0) {
 		return;
 	}
@@ -2847,51 +2844,36 @@ void GetSerial()
 	head = buff;
 
 	// Get id
-	id = WaitBuffRead();
-
-	// Identify source
-	if (head == c2r.head) {
-		from = 'c';
-		r4 = &c2r;
-		r2 = &r2c;
-	}
-	else if (head == a2r.head) {
-		from = 'a';
-		r4 = &a2r;
-		r2 = &r2a;
-	}
-	else {
-		from = '?';
-	}
+	id = WaitBuffRead(r4);
 
 	// Parse data
 	for (int i = 0; i < 3; i++)
 	{
 		U.f = 0.0f;
-		U.b[0] = WaitBuffRead();
-		U.b[1] = WaitBuffRead();
-		U.b[2] = WaitBuffRead();
-		U.b[3] = WaitBuffRead();
+		U.b[0] = WaitBuffRead(r4);
+		U.b[1] = WaitBuffRead(r4);
+		U.b[2] = WaitBuffRead(r4);
+		U.b[3] = WaitBuffRead(r4);
 		dat[i] = U.f;
 	}
 
 	// Get packet num
 	U.f = 0.0f;
-	U.b[0] = WaitBuffRead();
-	U.b[1] = WaitBuffRead();
+	U.b[0] = WaitBuffRead(r4);
+	U.b[1] = WaitBuffRead(r4);
 	pack = U.i16[0];
 
 	// Get recieved confirmation
 	U.f = 0.0f;
-	U.b[0] = WaitBuffRead();
+	U.b[0] = WaitBuffRead(r4);
 	do_conf = U.b[0] != 0 ? true : false;
 
 	// Get footer
-	foot = WaitBuffRead();
+	foot = WaitBuffRead(r4);
 
 	// Get total data in buffers
-	buff_rx = Serial3.available();
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
+	buff_rx = r4->port.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - r4->port.availableForWrite();
 
 	// Store data string
 	sprintf(dat_str, " head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s bytes_read=%d bytes_dumped=%d rx=%d tx=%d dt_parse=%d dt_send=%d dt_rcv=%d",
@@ -2909,11 +2891,11 @@ void GetSerial()
 
 		// Send confirmation
 		if (do_conf) {
-			QueuePacket(from, id, dat[0], dat[1], dat[2], pack, false);
+			QueuePacket(r2, id, dat[0], dat[1], dat[2], pack, false);
 		}
 
 		// Set coms started flag
-		if (from == 'c' && !fc.isComsStarted) {
+		if (r4->instID == 'c' && !fc.isComsStarted) {
 			fc.isComsStarted = true;
 		}
 	}
@@ -2927,7 +2909,7 @@ void GetSerial()
 		// Log/print dropped packet info
 		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Dropped %c2r Packet: cnt=%d",
-			from, r4->cnt_dropped);
+			r4->instID, r4->cnt_dropped);
 		strcat(str, dat_str);
 		DebugError(str);
 		return;
@@ -2957,7 +2939,7 @@ void GetSerial()
 		// Log/print skipped packet info
 		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Missed %c2r Packets: cnt=%d|%d pack_tot_last=%d",
-			from, cnt_dropped, cnt_dropped_tot, pack_tot_last);
+			r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last);
 		//strcat(str, dat_str); TEMP
 		DebugError(str);
 	}
@@ -2975,7 +2957,7 @@ void GetSerial()
 	if (pack != pack_last)
 	{
 		// Log/print received
-		DebugRcvd(from, dat_str);
+		DebugRcvd(r4, dat_str);
 
 		// Store data and flag
 		r4->isNew = true;
@@ -2990,7 +2972,7 @@ void GetSerial()
 		r4->cnt_repeat++;
 
 		// Log/print received
-		DebugRcvd(from, dat_str, true);
+		DebugRcvd(r4, dat_str, true);
 	}
 
 	// Check if data was discarded
@@ -3011,140 +2993,8 @@ void GetSerial()
 
 }
 
-// PARSE SERIAL DATA
-void ParseSerial(char from, char id, float dat[])
-{
-	// Reset data values
-	dat[0] = 0;
-	dat[1] = 0;
-	dat[2] = 0;
-
-	// Parse data based on sender
-	switch (from) {
-
-		// GET CHEETAH DUE DATA
-	case 'a':
-		dat[0] = (float)WaitBuffRead();
-		dat[1] = (float)WaitBuffRead();
-		dat[2] = (float)WaitBuffRead();
-		break;
-
-		// GET GET CS DATA DATA
-	case 'c':
-
-		// Get system test data
-		if (id == 'T')
-		{
-			// Get test id
-			dat[0] = (float)WaitBuffRead();
-
-			// Get test argument
-			dat[1] = (float)WaitBuffRead();
-		}
-
-		// Get setup data
-		if (id == 'S')
-		{
-			// Get session comand
-			dat[0] = (float)WaitBuffRead();
-
-			// Get tone condition
-			dat[1] = (float)WaitBuffRead();
-		}
-
-		// Get MoveTo data
-		if (id == 'M')
-		{
-			// Get move pos
-			U.f = 0.0f;
-			U.b[0] = WaitBuffRead();
-			U.b[1] = WaitBuffRead();
-			U.b[2] = WaitBuffRead();
-			U.b[3] = WaitBuffRead();
-			dat[0] = U.f;
-		}
-
-		// Get REWARD data
-		if (id == 'R')
-		{
-			// Get stop pos
-			U.f = 0.0f;
-			U.b[0] = WaitBuffRead();
-			U.b[1] = WaitBuffRead();
-			U.b[2] = WaitBuffRead();
-			U.b[3] = WaitBuffRead();
-			dat[0] = U.f;
-
-			// Get reward condition 
-			dat[1] = (float)WaitBuffRead();
-
-			// Get reward diration or zone ind 
-			dat[2] = (float)WaitBuffRead();
-		}
-
-		// Get halt robot data
-		if (id == 'H')
-		{
-			// Get halt bool
-			dat[0] = (float)WaitBuffRead();
-		}
-
-		// Get bulldoze rat data
-		if (id == 'B')
-		{
-			// Get delay in sec
-			dat[0] = (float)WaitBuffRead();
-
-			// Get speed
-			dat[1] = (float)WaitBuffRead();
-		}
-
-		// Get rat in/out
-		if (id == 'I')
-		{
-			// Get session comand
-			dat[0] = (float)WaitBuffRead();
-		}
-
-		// Get log request data
-		if (id == 'L')
-		{
-			// Get conf/send request
-			dat[0] = (float)WaitBuffRead();
-		}
-
-		// Get VT data
-		else if (id == 'P')
-		{
-			// Get Ent
-			cmd.vtEnt = WaitBuffRead();
-			// Get TS
-			U.f = 0.0f;
-			U.b[0] = WaitBuffRead();
-			U.b[1] = WaitBuffRead();
-			U.b[2] = WaitBuffRead();
-			U.b[3] = WaitBuffRead();
-			cmd.vtTS[cmd.vtEnt] = U.i32;
-			// Get pos cm
-			U.f = 0.0f;
-			U.b[0] = WaitBuffRead();
-			U.b[1] = WaitBuffRead();
-			U.b[2] = WaitBuffRead();
-			U.b[3] = WaitBuffRead();
-			cmd.vtCM[cmd.vtEnt] = U.f;
-
-			// Copy to data array used for debugging
-			dat[0] = (float)cmd.vtEnt;
-			dat[1] = (float)cmd.vtTS[cmd.vtEnt];
-			dat[2] = (float)cmd.vtCM[cmd.vtEnt];
-		}
-
-		break;
-	}
-}
-
 // WAIT FOR BUFFER TO FILL
-byte WaitBuffRead(char mtch1, char mtch2)
+byte WaitBuffRead(R4 *r4, char mtch)
 {
 	// Local vars
 	static int timeout = 100;
@@ -3155,22 +3005,22 @@ byte WaitBuffRead(char mtch1, char mtch2)
 	byte buff = 0;
 
 	// Get total data in buffers now
-	int buff_rx_start = Serial3.available();
+	int buff_rx_start = r4->port.available();
 
 	// Check for overflow
 	is_overflowed = buff_rx_start >= SERIAL_BUFFER_SIZE - 1;
 
 	// Wait for at least 1 byte
-	while (Serial3.available() < 1 &&
+	while (r4->port.available() < 1 &&
 		millis() < t_timeout);
 
 	// Get any byte
 	if (!is_overflowed &&
-		mtch1 == '\0') {
+		mtch == '\0') {
 
-		if (Serial3.available() > 0) {
+		if (r4->port.available() > 0) {
 
-			buff = Serial3.read();
+			buff = r4->port.read();
 			cnt_packBytesRead++;
 			return buff;
 		}
@@ -3178,19 +3028,18 @@ byte WaitBuffRead(char mtch1, char mtch2)
 
 	// Find specific byte
 	while (
-		buff != mtch1  &&
-		buff != mtch2  &&
+		buff != mtch  &&
 		millis() < t_timeout &&
 		!is_overflowed) {
 
 		// Check new data
-		if (Serial3.available() > 0) {
+		if (r4->port.available() > 0) {
 
-			buff = Serial3.read();
+			buff = r4->port.read();
 			cnt_packBytesRead++;
 
 			// check match was found
-			if (buff == mtch1 || buff == mtch2) {
+			if (buff == mtch) {
 				return buff;
 			}
 
@@ -3201,7 +3050,7 @@ byte WaitBuffRead(char mtch1, char mtch2)
 
 			// Check for overflow
 			is_overflowed =
-				!is_overflowed ? Serial3.available() >= SERIAL_BUFFER_SIZE - 1 : is_overflowed;
+				!is_overflowed ? r4->port.available() >= SERIAL_BUFFER_SIZE - 1 : is_overflowed;
 		}
 
 	}
@@ -3214,17 +3063,17 @@ byte WaitBuffRead(char mtch1, char mtch2)
 	if (is_overflowed) {
 
 		// DUMP IT ALL
-		while (Serial3.available() > 0) {
-			if (Serial3.available() > 0) {
-				Serial3.read();
+		while (r4->port.available() > 0) {
+			if (r4->port.available() > 0) {
+				r4->port.read();
 				cnt_packBytesRead++;
 			}
 		}
 	}
 
 	// Get buffer 
-	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
-	int buff_rx = Serial3.available();
+	int buff_tx = SERIAL_BUFFER_SIZE - 1 - r4->port.availableForWrite();
+	int buff_rx = r4->port.available();
 
 	// Store current info
 	sprintf(dat_str, " buff=\'%s\' bytes_read=%d bytes_dumped=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
@@ -3241,9 +3090,9 @@ byte WaitBuffRead(char mtch1, char mtch2)
 		sprintf(msg_str, "**WARNING** [WaitBuffRead] Timedout: cnt=%d", cnt_timeout);
 	}
 	// Byte not found
-	else if (mtch1 != '\0' || mtch2 != '\0') {
-		sprintf(msg_str, "**WARNING** [WaitBuffRead] Char %c and %c Not Found:",
-			mtch1, mtch2);
+	else if (mtch != '\0') {
+		sprintf(msg_str, "**WARNING** [WaitBuffRead] Char %c Not Found:",
+			mtch);
 	}
 	// Failed for unknown reason
 	else {
@@ -3262,7 +3111,7 @@ byte WaitBuffRead(char mtch1, char mtch2)
 }
 
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char targ, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
+void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
@@ -3275,18 +3124,9 @@ void QueuePacket(char targ, char id, float dat1, float dat2, float dat3, uint16_
 	char foot = '\0';
 	float dat[3] = { dat1 , dat2 , dat3 };
 	int id_ind = 0;
-	struct R2 *r2;
-
-	// Set pointer to struct
-	if (targ == 'c') {
-		r2 = &r2c;
-	}
-	else if (targ == 'a') {
-		r2 = &r2a;
-	}
 
 	// Store r2a data in front
-	if (targ == 'a')
+	if (r2->instID == 'a')
 	{
 		// Set queue ind to front
 		queue_ind = sendQueueSize - 1;
@@ -3302,7 +3142,7 @@ void QueuePacket(char targ, char id, float dat1, float dat2, float dat3, uint16_
 	}
 
 	// Store r2c data in back
-	else if (targ == 'c') {
+	else if (r2->instID == 'c') {
 
 		// Set queue ind to back
 		queue_ind = sendQueueInd;
@@ -3342,7 +3182,7 @@ void QueuePacket(char targ, char id, float dat1, float dat2, float dat3, uint16_
 	sendQueue[queue_ind][b_ind++] = r2->foot;
 
 	// Store reciever id in last col
-	sendQueue[queue_ind][b_ind++] = targ;
+	sendQueue[queue_ind][b_ind++] = r2->instID;
 
 	// Set to send
 	fc.doPackSend = true;
@@ -3363,8 +3203,8 @@ void SendPacket()
 	static byte msg[msg_lng] = { 0 };
 	char dat_str[200] = { 0 };
 	uint32_t t_queue = millis();
-	char targ = '\0';
 	bool is_resend = false;
+	char targ = ' ';
 	char id = '\0';
 	float dat[3] = { 0 };
 	bool do_conf = 0;
@@ -3414,8 +3254,8 @@ void SendPacket()
 	do_conf = msg[b_ind++] == 1 ? true : false;
 
 	// Get buffer 
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
-	buff_rx = Serial3.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
+	buff_rx = r2->port.available();
 
 	// Send sync time or rew tone immediately
 	if (
@@ -3439,12 +3279,13 @@ void SendPacket()
 	}
 
 	// Send
-	Serial3.write(msg, msg_lng);
+	r2->port.write(msg, msg_lng);
+	r2->stateCTS = digitalRead(r2->pinCTS);
 	cnt_packBytesSent = msg_lng;
 
 	// Get total data in buffers
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
-	buff_rx = Serial3.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
+	buff_rx = r2->port.available();
 
 	// Update send time 
 	dt_xBeeSent = t_xBeeSent > 0 ? millis() - t_xBeeSent : 0;
@@ -3495,12 +3336,12 @@ void SendPacket()
 	int cnt_queued = sendQueueSize - sendQueueInd - 1;
 
 	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d dt_send=%d dt_rcv=%d dt_queue=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, dt_xBeeSent, millis() - t_xBeeRcvd, millis() - t_queue, cnt_queued);
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d cts=%s dt_send=%d dt_rcv=%d dt_queue=%d queued=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "high" : "low", dt_xBeeSent, millis() - t_xBeeRcvd, millis() - t_queue, cnt_queued);
 
 	// Is first send
 	if (!is_resend) {
-		DebugSent(targ, dat_str);
+		DebugSent(r2, dat_str);
 	}
 
 	// Is resend
@@ -3509,27 +3350,18 @@ void SendPacket()
 		r2->cnt_repeat++;
 
 		// Log/print resend and count
-		DebugSent(targ, dat_str, true);
+		DebugSent(r2, dat_str, true);
 	}
 }
 
 // CHECK IF ROB TO ARD PACKET SHOULD BE RESENT
-bool CheckResend(char targ)
+bool CheckResend(R2 *r2)
 {
 	// Local vars
 	char str[200] = { 0 };
 	char dat_str[200] = { 0 };
 	bool do_pack_resend = false;
 	int dt_sent = 0;
-	struct R2 *r2;
-
-	// Set pointer to struct
-	if (targ == 'c') {
-		r2 = &r2c;
-	}
-	else if (targ == 'a') {
-		r2 = &r2a;
-	}
 
 	// Loop and check ard flags
 	for (int i = 0; i < r2->lng; i++)
@@ -3544,17 +3376,17 @@ bool CheckResend(char targ)
 			) {
 
 			// Get total data left in buffers
-			int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
-			int buff_rx = Serial3.available();
+			int buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
+			int buff_rx = r2->port.available();
 
 			// Get dat string
 			sprintf(dat_str, "r2%c Packet: cnt=%d id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt_sent=%dms tx=%d rx=%d",
-				targ, r2->cnt_resend[i], r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
+				r2->instID, r2->cnt_resend[i], r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
 
 			if (r2->cnt_resend[i] < resendMax) {
 
 				// Resend data
-				QueuePacket(targ, r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], true);
+				QueuePacket(r2, r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], true);
 
 				// Update count
 				r2->cnt_resend[i]++;
@@ -4726,7 +4558,17 @@ float CheckBattery(bool force_check)
 	uint32_t ic_bit_in = 0;
 	float vcc_in = 0;
 	float vcc_sum = 0;
+	bool is_mot_off = false;
 	byte do_shutdown = false;
+
+	// Only sample if motor off
+	if ((CheckAD_Status(adR_stat, "MOT_STATUS") != 0 ||
+		CheckAD_Status(adF_stat, "MOT_STATUS") != 0) &&
+		!force_check) {
+
+		//Bail
+		return vccNow;
+	}
 
 	// Not time to check
 	if (millis() < t_startCheck &&
@@ -4738,7 +4580,7 @@ float CheckBattery(bool force_check)
 
 	// Done checking
 	else if (millis() > t_endCheck &&
-		!force_check){
+		!force_check) {
 
 		// Reset timers
 		t_startCheck = millis() + dt_vccUpdate;
@@ -4802,7 +4644,7 @@ float CheckBattery(bool force_check)
 		if (fc.doSendVCC &&
 			!fc.doBlockVccSend) {
 
-			QueuePacket('c', 'J', vccNow, 0, 0, 0, false);
+			QueuePacket(&r2c, 'J', vccNow, 0, 0, 0, false);
 		}
 
 		// Log/print voltage and current
@@ -4891,13 +4733,17 @@ void CheckLoop()
 	static uint32_t t_loop_last = millis();
 	static int dt_loop = 0;
 	static int dt_loop_last = 0;
-	static int buff_rx_last = 0;
-	static int buff_tx_last = 0;
+	static int c_buff_rx_last = 0;
+	static int c_buff_tx_last = 0;
+	static int a_buff_rx_last = 0;
+	static int a_buff_tx_last = 0;
 	bool is_dt_change = false;
 	bool is_loop_error = false;
 	bool is_buff_flooding = false;
-	int buff_rx = 0;
-	int buff_tx = 0;
+	int c_buff_rx = 0;
+	int c_buff_tx = 0;
+	int a_buff_rx = 0;
+	int a_buff_tx = 0;
 
 	// Keep short count of loops
 	cnt_loop_short = cnt_loop_short < 999 ? cnt_loop_short + 1 : 1;
@@ -4908,8 +4754,10 @@ void CheckLoop()
 	}
 
 	// Get total data left in buffers
-	buff_rx = Serial3.available();
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial3.availableForWrite();
+	c_buff_rx = c2r.port.available();
+	c_buff_tx = SERIAL_BUFFER_SIZE - 1 - c2r.port.availableForWrite();
+	a_buff_rx = a2r.port.available();
+	a_buff_tx = SERIAL_BUFFER_SIZE - 1 - a2r.port.availableForWrite();
 
 	// Track total loops
 	cnt_loop_tot++;
@@ -4927,8 +4775,10 @@ void CheckLoop()
 
 	// Check if either buffer more than half full
 	is_buff_flooding =
-		buff_rx >= 96 ||
-		buff_tx >= 96;
+		c_buff_rx >= 96 ||
+		c_buff_tx >= 96 ||
+		a_buff_rx >= 96 ||
+		a_buff_tx >= 96;
 
 
 	if (
@@ -4956,8 +4806,8 @@ void CheckLoop()
 			}
 
 			// Log/print message
-			sprintf(str, "%s cnt_loop:%d|%d dt_loop=%d|%d rx=%d|%d tx=%d|%d",
-				msg, cnt_loop_short, cnt_loop_tot, dt_loop, dt_loop_last, buff_rx, buff_rx_last, buff_tx, buff_tx_last);
+			sprintf(str, "%s cnt_loop:%d|%d dt_loop=%d|%d c_rx=%d|%d c_tx=%d|%d a_rx=%d|%d a_tx=%d|%d",
+				msg, cnt_loop_short, cnt_loop_tot, dt_loop, dt_loop_last, c_buff_rx, c_buff_rx_last, c_buff_tx, c_buff_tx_last, a_buff_rx, a_buff_rx_last, a_buff_tx, a_buff_tx_last);
 			DebugFlow(str);
 
 			// Set flag
@@ -4967,8 +4817,10 @@ void CheckLoop()
 
 	// Store vars
 	dt_loop_last = dt_loop;
-	buff_rx_last = buff_rx;
-	buff_tx_last = buff_tx;
+	c_buff_rx_last = c_buff_rx;
+	c_buff_tx_last = c_buff_tx;
+	a_buff_rx_last = a_buff_rx;
+	a_buff_tx_last = a_buff_tx;
 }
 
 // LOG/PRINT MAIN EVENT
@@ -5119,31 +4971,22 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 }
 
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
-void DebugRcvd(char from, char msg[], bool is_repeat)
+void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 {
 	// Local vars
 	char msg_out[300] = { 0 };
 	char str[200] = { 0 };
 	bool do_print = false;
 	bool do_log = false;
-	struct R4 *r4;
-
-	// Set pointer to struct
-	if (from == 'c') {
-		r4 = &c2r;
-	}
-	else if (from == 'a') {
-		r4 = &a2r;
-	}
 
 	// Get print status
 	do_print =
-		((from == 'c' && ((db.print_c2r && r4->idNow != 'P') || (db.print_rcvdVT && r4->idNow == 'P'))) ||
-		(from == 'a' && db.print_a2r)) &&
+		((r4->instID == 'c' && ((db.print_c2r && r4->idNow != 'P') || (db.print_rcvdVT && r4->idNow == 'P'))) ||
+		(r4->instID == 'a' && db.print_a2r)) &&
 			(db.Console || db.LCD);
 	do_log =
-		((from == 'c' && db.log_c2r && r4->idNow != 'P') ||
-		(from == 'a' && db.log_a2r)) &&
+		((r4->instID == 'c' && db.log_c2r && r4->idNow != 'P') ||
+		(r4->instID == 'a' && db.log_a2r)) &&
 		db.Log;
 
 	// Bail if neither set
@@ -5153,10 +4996,10 @@ void DebugRcvd(char from, char msg[], bool is_repeat)
 
 	// Check if this is a repeat
 	if (!is_repeat) {
-		sprintf(msg_out, "   [RCVD] %c2r: %s", from, msg);
+		sprintf(msg_out, "   [RCVD] %c2r: %s", r4->instID, msg);
 	}
 	else {
-		sprintf(msg_out, "   [*RE-RCVD*] %c2r: cnt=%d %s", from, r4->cnt_repeat, msg);
+		sprintf(msg_out, "   [*RE-RCVD*] %c2r: cnt=%d %s", r4->instID, r4->cnt_repeat, msg);
 	}
 
 	// Add samp dt for pos data
@@ -5180,7 +5023,7 @@ void DebugRcvd(char from, char msg[], bool is_repeat)
 }
 
 // LOG/PRINT SENT PACKET DEBUG STRING
-void DebugSent(char targ, char msg[], bool is_repeat)
+void DebugSent(R2 *r2, char msg[], bool is_repeat)
 {
 	// Local vars
 	char msg_out[300] = { 0 };
@@ -5188,20 +5031,19 @@ void DebugSent(char targ, char msg[], bool is_repeat)
 	bool is_resend = false;
 	bool do_print = false;
 	bool do_log = false;
-	struct R2 *r2;
 
 	// Set pointer to struct
-	if (targ == 'c') {
+	if (r2->instID == 'c') {
 		r2 = &r2c;
 	}
-	else if (targ == 'a') {
+	else if (r2->instID == 'a') {
 		r2 = &r2a;
 	}
 
 	// Get print status
-	do_print = ((db.print_r2c && targ == 'c') || (db.print_r2a && targ == 'a')) &&
+	do_print = ((db.print_r2c && r2->instID == 'c') || (db.print_r2a && r2->instID == 'a')) &&
 		(db.Console || db.LCD);
-	do_log = ((db.log_r2c && targ == 'c') || (db.log_r2a && targ == 'a')) &&
+	do_log = ((db.log_r2c && r2->instID == 'c') || (db.log_r2a && r2->instID == 'a')) &&
 		db.Log;
 
 	// Bail if neither set
@@ -5211,10 +5053,10 @@ void DebugSent(char targ, char msg[], bool is_repeat)
 
 	// Check if this is a repeat
 	if (!is_repeat) {
-		sprintf(msg_out, "   [SENT] r2%c: %s", targ, msg);
+		sprintf(msg_out, "   [SENT] r2%c: %s", r2->instID, msg);
 	}
 	else {
-		sprintf(msg_out, "   [*RE-SENT*] r2%c: cnt=%d %s", targ, r2->cnt_repeat, msg);
+		sprintf(msg_out, "   [*RE-SENT*] r2%c: cnt=%d %s", r2->instID, r2->cnt_repeat, msg);
 	}
 
 	// Concatinate strings
@@ -5629,7 +5471,7 @@ void LogTrackingData()
 }
 
 // SEND TEST PACKET
-void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
+void TestSendPack(R2 *r2, R4 *r4, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	// EXAMPLE:
 	/*
@@ -5639,7 +5481,7 @@ void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16
 	static uint16_t pack = 0;
 	if (send_cnt == 0 && millis()>t_s + 30) {
 		pack++;
-		TestSendPack('c', 'Z', 0, 0, 0, 1, true);
+		TestSendPack(&r2c, &c2r, 'Z', 0, 0, 0, 1, true);
 		t_s = millis();
 		send_cnt++;
 	}
@@ -5651,7 +5493,7 @@ void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16
 	//}
 
 	// Queue packet
-	QueuePacket(targ, id, dat1, dat2, dat3, pack, do_conf);
+	QueuePacket(r2, id, dat1, dat2, dat3, pack, do_conf);
 
 	// Fuck with packet
 	/*
@@ -5664,12 +5506,7 @@ void TestSendPack(char targ, char id, float dat1, float dat2, float dat3, uint16
 	SendPacket();
 
 	// Block resend
-	if (targ == 'c') {
-		r2c.doRcvCheck[CharInd(id, c2r.id, c2r.lng)] = false;
-	}
-	else {
-		r2a.doRcvCheck[CharInd(id, a2r.id, a2r.lng)] = false;
-	}
+	r2c.doRcvCheck[CharInd(id, r4->id, r4->lng)] = false;
 
 	// Print everything
 	while (PrintDebug());
@@ -5858,14 +5695,14 @@ void setup() {
 
 	// SET UP SERIAL STUFF
 
-	// XBee 1a (to/from CS)
-	Serial3.begin(57600);
-
-	// XBee 1b (to/from CheetahDue)
-	Serial2.begin(57600);
-
 	// Serial monitor
 	SerialUSB.begin(0);
+
+	// XBee 1a (to/from CS)
+	r2c.port.begin(57600);
+
+	// XBee 1b (to/from CheetahDue)
+	r2a.port.begin(57600);
 
 	// Wait for SerialUSB if debugging
 	uint32_t t_check = millis() + 100;
@@ -6015,8 +5852,11 @@ void setup() {
 
 	// DUMP BUFFER
 	PrintLCD(true, "SETUP", "Dump Serial");
-	while (Serial3.available() > 0) {
-		Serial3.read();
+	while (c2r.port.available() > 0) {
+		c2r.port.read();
+	}
+	while (a2r.port.available() > 0) {
+		a2r.port.read();
 	}
 
 	// RESET VOLITILES AND RELAYS
@@ -6094,7 +5934,7 @@ void setup() {
 	// Do not enable if ir detector pin already high
 	if (is_ir_low) {
 		// IR detector
-		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, HIGH); 
+		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, HIGH);
 	}
 	else {
 		// Skip ir sync setup
@@ -6104,10 +5944,10 @@ void setup() {
 	}
 
 	// IR prox right
-	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), Interupt_IRprox_Halt, FALLING); 
+	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), Interupt_IRprox_Halt, FALLING);
 
 	// IR prox left
-	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING); 
+	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 
 	// Start Feed Arm timer
 	Timer1.attachInterrupt(Interupt_TimerHandler).start(1000);
@@ -6153,6 +5993,36 @@ void loop() {
 	db.isErrLoop = false;
 
 	////TEMP
+	//delay(1000);
+	//char targ = 'a';
+	//char str[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLL";
+	//int bytes_sent = 0;
+	//char msg[5000];
+	//for (int i = 1; i < 120; i++)
+	//{
+	//	bytes_sent += i;
+	//	char s[25];
+	//	if (targ == 'c') {
+	//		r2c.port.write(str, i);
+	//		sprintf(s, "XB1a(%d): %s\r\n", i, digitalRead(r2c.pinCTS) ? "high" : "low");
+	//		strcat(msg, s);
+	//	}
+	//	else {
+	//		r2a.port.write(str, i);
+	//		sprintf(s, "XB1b(%d): %s\r\n", i, digitalRead(r2a.pinCTS) ? "high" : "low");
+	//		strcat(msg, s);
+	//	}
+	//	if (i == 1) {
+	//		SerialUSB.println("START");
+	//		delay(100);
+	//	}
+	//}
+	//SerialUSB.write(msg);
+	//sprintf(str, "Bytes Sent = %d", bytes_sent);
+	//SerialUSB.println(str);
+	//while (true);
+
+	////TEMP
 	//static double speed_max = 40;
 	//static double speed_inc = 10;
 	//static int dt_change = 1000;
@@ -6178,8 +6048,11 @@ void loop() {
 	////	delay(10);
 	////}
 
-	// PARSE SERIAL INPUT
-	GetSerial();
+	// PARSE CS SERIAL INPUT
+	GetSerial(&c2r, &r2c);
+
+	// PARSE CHEETAHDUE SERIAL INPUT
+	GetSerial(&a2r, &r2a);
 
 	// SEND SERIAL DATA
 	if (fc.doLogSend) {
@@ -6196,11 +6069,11 @@ void loop() {
 		SendPacket();
 	}
 
-	// RESEND ARD DATA
-	CheckResend('a');
+	// RESEND CHEETAHDUE DATA
+	CheckResend(&r2a);
 
 	// RESEND CS DATA
-	CheckResend('c');
+	CheckResend(&r2c);
 
 	// PRINT QUEUED DB
 	PrintDebug();
@@ -6281,7 +6154,7 @@ void loop() {
 		if (Reward.mode != "Now" &&
 			Reward.mode != "Button") {
 
-			QueuePacket('c', 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
+			QueuePacket(&r2c, 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
 		}
 	}
 
@@ -6334,7 +6207,7 @@ void loop() {
 				DebugFlow(horeStr);
 
 				// Send handshake 
-				QueuePacket('c', 'h', 1, 0, 0, 0, true);
+				QueuePacket(&r2c, 'h', 1, 0, 0, 0, true);
 				SendPacket();
 			}
 			// Restart loop
@@ -6524,17 +6397,17 @@ void loop() {
 		// Set reward tone
 		if (cmd.soundCond == 0) {
 			// No sound
-			QueuePacket('a', 's', 0);
+			QueuePacket(&r2a, 's', 0);
 			DebugFlow("[loop] NO SOUND");
 		}
 		else if (cmd.soundCond == 1) {
 			// Use white noise only
-			QueuePacket('a', 's', 0);
+			QueuePacket(&r2a, 's', 0);
 			DebugFlow("[loop] DONT DO TONE");
 		}
 		else {
 			// Use white and reward noise
-			QueuePacket('a', 's', 2);
+			QueuePacket(&r2a, 's', 2);
 			DebugFlow("[loop] DO TONE");
 		}
 
@@ -6550,7 +6423,7 @@ void loop() {
 		DebugFlow("[loop] DO QUIT");
 
 		// Tell CheetahDue to quit 
-		QueuePacket('a', 'q', 0, 0, 0, 0, true);
+		QueuePacket(&r2a, 'q', 0, 0, 0, 0, true);
 
 		// Block all motor control
 		SetMotorControl("Halt", "Quit");
@@ -6560,8 +6433,8 @@ void loop() {
 	// Wait for queue buffer to empty and quit delay to pass 
 	if (
 		fc.doQuit && millis() > t_quit &&
-		!CheckResend('a') &&
-		!CheckResend('c') &&
+		!CheckResend(&r2a) &&
+		!CheckResend(&r2c) &&
 		!fc.doPackSend) {
 
 		// Quit session
@@ -6657,7 +6530,7 @@ void loop() {
 			if (Move.isTargReached) {
 
 				// Tell CS movement is done
-				QueuePacket('c', 'D', 0, 0, 0, c2r.pack[CharInd('M', c2r.id, c2r.lng)], true);
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd('M', c2r.id, c2r.lng)], true);
 
 				// Print success message
 				sprintf(horeStr, "[loop] SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
@@ -6929,7 +6802,7 @@ void loop() {
 	if (fc.doStreamCheck && Pos[1].is_streamStarted)
 	{
 		// Send streaming confirmation
-		QueuePacket('c', 'D', 0, 0, 0, c2r.pack[CharInd('V', c2r.id, c2r.lng)], true);
+		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd('V', c2r.id, c2r.lng)], true);
 		fc.doStreamCheck = false;
 		DebugFlow("[loop] STREAMING CONFIRMED");
 
@@ -7002,7 +6875,7 @@ void loop() {
 		if (!fc.doLogSend) {
 
 			// Send number of log bytes being sent
-			QueuePacket('c', 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
+			QueuePacket(&r2c, 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
 
 			// Block sending vcc updates
 			fc.doBlockVccSend = true;
