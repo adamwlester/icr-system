@@ -2536,9 +2536,10 @@ fprintf('END OF RUN\n');
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
                 Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
-                tic;
-                while (toc < 10 && ~doExit)
-                end
+                %                 %TEMP
+                %                 tic;
+                %                 while (toc < 10 && ~doExit)
+                %                 end
                 if ~doExit
                     Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
                 else
@@ -4514,7 +4515,7 @@ fprintf('END OF RUN\n');
                 
                 % Enable cue buttons
                 Set_Cue_Buttons('Enable');
-
+                
                 % Restart bulldozer if was active
                 if D.UI.bullLastVal == 1
                     set(D.UI.btnBulldoze, 'Value', 1);
@@ -6954,11 +6955,11 @@ fprintf('END OF RUN\n');
             else
                 Console_Write('**WARNING** [Disconnect_AC] \"AC\" Not a Field of \"D\"');
             end
-            try fclose(tcpIP); 
+            try fclose(tcpIP);
             catch; end
-            try delete(tcpIP); 
+            try delete(tcpIP);
             catch; end
-            try clear tcpIP; 
+            try clear tcpIP;
             catch; end
             
         end

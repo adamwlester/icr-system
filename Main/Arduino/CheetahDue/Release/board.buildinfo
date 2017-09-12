@@ -218,7 +218,7 @@ vm.build_use_temp=1
 runtime.vm.ide.platforms.path=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\Extensions\iznu5qi1.uuf\Micro Platforms
 build.variant.path=C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\variants\arduino_due_x
 archive_file=core.a
-extra.time.local=4361503
+extra.time.local=6852327
 tools.ctags.path={runtime.tools.ctags.path}
 tools.ctags.cmd.path={path}/ctags
 tools.ctags.pattern="{cmd.path}" -u --language-force=c++ -f - --c++-kinds=svpf --fields=KSTtzns --line-directives "{source_file}"
