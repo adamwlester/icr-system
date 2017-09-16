@@ -36,22 +36,22 @@ struct DB
 	bool Console = true;
 	bool LCD = false;
 	// What to print
-	const bool print_errors = true;
-	const bool print_flow = true;
+	const bool print_errors = false;
+	const bool print_flow = false;
 	const bool print_logging = false;
-	const bool print_c2r = true;
-	const bool print_r2c = true;
-	const bool print_a2r = true;
-	const bool print_r2a = true;
+	const bool print_c2r = false;
+	const bool print_r2c = false;
+	const bool print_a2r = false;
+	const bool print_r2a = false;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
 	const bool print_logMode = false;
-	const bool print_logStore = false;
+	const bool print_logStore = true;
 	const bool print_a2o = false;
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
-	const bool print_motorControl = true;
+	const bool print_motorControl = false;
 	const bool print_runSpeed = false;
 
 	// Testing
@@ -79,7 +79,7 @@ int cal_nMeasPerSteps = 10;
 #pragma endregion
 
 
-#pragma region ============= VARIABLE SETUP ============
+#pragma region ============== PIN MAPPING ==============
 
 // Pin mapping
 struct PIN
@@ -88,7 +88,6 @@ struct PIN
 	const int AD_CSP_R = 5;
 	const int AD_CSP_F = 6;
 	const int AD_RST = 7;
-	const int AD_24V_ENBLE = 34;
 
 	// XBees
 	const int X1a_CTS = 29;
@@ -110,9 +109,14 @@ struct PIN
 	const int TrackLED = 2;
 
 	// Relays
-	const int Rel_EtOH = 22;
-	const int Rel_Rew = 23;
+	const int Rel_EtOH = 23;
+	const int Rel_Rew = 22;
 	const int Rel_Vcc = A5;
+
+	// Voltage Regulators
+	const int REG_24V_ENBLE = 34;
+	const int REG_12V_ENBLE = 46;
+	const int REG_5V_ENBLE = 48;
 
 	// BigEasyDriver
 	const int ED_RST = 47;
@@ -143,7 +147,7 @@ struct PIN
 	const int BatIC = A7;
 
 	// Buttons
-	const int Btn[3] = { A3, A2, A1 };
+	const int Btn[3] = { A2, A1, A0 };
 
 	/*
 	Note: pins bellow are all used for external interupts
@@ -159,6 +163,11 @@ struct PIN
 }
 // Initialize
 pin;
+
+#pragma endregion
+
+
+#pragma region ============= VARIABLE SETUP ============
 
 // Flow/state control
 struct FC
@@ -325,10 +334,11 @@ volatile int v_dt_ir = 0;
 volatile int v_cnt_ir = 0;
 volatile bool v_doIRhardStop = false;
 volatile bool v_doLogIR = false;
-volatile bool v_stepTimerState = false;
+volatile bool v_stepState = false;
 volatile bool v_stepTimerActive = false;
 volatile int v_cnt_steps = 0;
 volatile int v_stepTarg = 0;
+volatile char v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 
 
@@ -849,7 +859,7 @@ public:
 	double boundsRewarded[2] = { 0 };
 	int occRewarded = 0;
 	int lapN = 0;
-	String extend_state = "LOW";
+	String extendState = "LOW";
 	uint32_t armMoveTimeout = 5000;
 	bool doArmMove = false;
 	bool doExtendArm = false;
@@ -889,7 +899,7 @@ public:
 	uint32_t t_sent = 0; // (ms)
 	uint32_t t_rcvd = 0; // (ms)
 	uint32_t t_write = 0; // (us)
-	int dt_write = 50000; // (us)
+	int dt_write = 50 * 1000; // (us)
 	uint32_t t_beginSend = 0;
 	int dt_beginSend = 1000;
 	static const int logQueueSize = 30;

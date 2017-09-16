@@ -1381,7 +1381,7 @@ namespace ICR_Run
 
             // Block any xbee writing till complete packet received
             fc.isXbeeBusy = true;
-            while (sp_Xbee.BytesToRead < 0)
+            while (sp_Xbee.BytesToRead > 0)
                 Thread.Sleep(1);
 
             // Flag xbee free

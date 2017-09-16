@@ -1479,18 +1479,21 @@ void REWARD::SetArmDir(String dir, char called_from[])
 	// Make sure step low
 	digitalWrite(pin.ED_STP, LOW);
 
+	// Store dir in volitile
+	v_stepDir = dir == "Extend" ? 'e' : 'r';
+
 	// Set direction to extend
-	if (dir == "Extend" && extend_state == "LOW") {
+	if (dir == "Extend" && extendState == "LOW") {
 		digitalWrite(pin.ED_DIR, LOW);
 	}
-	else if (dir == "Extend" && extend_state == "HIGH") {
+	else if (dir == "Extend" && extendState == "HIGH") {
 		digitalWrite(pin.ED_DIR, HIGH);
 	}
 	// Set direction to retract
-	if (dir == "Retract" && extend_state == "LOW") {
+	if (dir == "Retract" && extendState == "LOW") {
 		digitalWrite(pin.ED_DIR, HIGH);
 	}
-	else if (dir == "Retract" && extend_state == "HIGH") {
+	else if (dir == "Retract" && extendState == "HIGH") {
 		digitalWrite(pin.ED_DIR, LOW);
 	}
 
@@ -1519,6 +1522,10 @@ void REWARD::ExtendFeedArm()
 		return;
 	}
 
+	// Block handler
+	v_stepTimerActive = false;
+	delayMicroseconds(500);
+
 	// Set targ and flag
 	v_stepTarg = armExtStps;
 	doExtendArm = true;
@@ -1541,9 +1548,6 @@ void REWARD::ExtendFeedArm()
 
 	// Set direction to extend
 	SetArmDir("Extend", "REWARD::ExtendFeedArm");
-
-	// Save start time
-	t_moveArmStr = millis();
 
 	// Set intterupt flag
 	delayMicroseconds(500);
@@ -1571,6 +1575,10 @@ void REWARD::RetractFeedArm()
 		return;
 	}
 
+	// Block handler
+	v_stepTimerActive = false;
+	delayMicroseconds(500);
+
 	// Set targ and flag
 	v_stepTarg = 4 * 200;
 	doRetractArm = true;
@@ -1594,9 +1602,6 @@ void REWARD::RetractFeedArm()
 	// Set direction to retract
 	SetArmDir("Retract", "REWARD::RetractFeedArm");
 
-	// Save start time
-	t_moveArmStr = millis();
-
 	// Set intterupt flag
 	delayMicroseconds(500);
 	v_stepTimerActive = true;
@@ -1612,6 +1617,11 @@ void REWARD::CheckFeedArm()
 	char str[200] = { 0 };
 	bool is_move_done = false;
 	bool is_timedout = false;
+
+	// Store start time
+	if (t_moveArmStr == 0) {
+		t_moveArmStr = millis();
+	}
 
 	// Do timed retract
 	if (doTimedRetract) {
@@ -1632,7 +1642,7 @@ void REWARD::CheckFeedArm()
 		}
 	}
 
-	// Bail if no moving to do
+	// Bail if nothing to do
 	if (!doExtendArm &&
 		!doRetractArm)
 	{
@@ -2349,8 +2359,8 @@ bool LOGGER::WriteLog(bool do_send)
 
 	// Print stored log
 	if (db.print_logStore) {
-		sprintf(str, "   [LOG] r2c: log_cnt=%d bytes_sent=%d/%d msg=\"%s\"",
-			cnt_logsStored, strlen(logQueue[queueIndRead]), cnt_logBytesStored, logQueue[queueIndRead]);
+		sprintf(str, "   [LOG] r2c: log_cnt=%d bytes_sent=%d/%d queueIndStore=%d, queueIndRead=%d, msg=\"%s\"",
+			cnt_logsStored, strlen(logQueue[queueIndRead]), cnt_logBytesStored, queueIndStore, queueIndRead, logQueue[queueIndRead]);
 		QueueDebug(str, millis());
 	}
 
@@ -3635,9 +3645,6 @@ void HardStop(char called_from[])
 	// Local vars
 	char str[200] = { 0 };
 
-	// Make sure motor enabled
-	digitalWrite(pin.AD_24V_ENBLE, HIGH);
-
 	// Normal hard stop
 	AD_R.hardStop();
 	AD_F.hardStop();
@@ -3678,9 +3685,6 @@ bool RunMotor(char dir, double new_speed, String agent)
 	// Check that caller has control
 	if (agent == fc.motorControl ||
 		agent == "Override") {
-
-		// Make sure motor enabled
-		digitalWrite(pin.AD_24V_ENBLE, HIGH);
 
 		// Run forward
 		if (dir == 'f') {
@@ -4676,7 +4680,7 @@ float CheckBattery(bool force_check)
 	if (do_shutdown) {
 		// Run error hold then shutdown after 5 min
 		sprintf(str, "BATT LOW %0.2fV", vccNow);
-		RunErrorHold(str, 60000 * 5);
+		RunErrorHold(str, 60000);
 	}
 
 	// Return battery voltage
@@ -5630,20 +5634,44 @@ void Interupt_TimerHandler()
 		return;
 	}
 
-	// Bail when step off and  target reached
-	if (!v_stepTimerState &&
-		v_cnt_steps >= v_stepTarg) {
+	// Bail when target reached
+	else if (v_cnt_steps >= v_stepTarg) {
+
+		// Make sure step off
+			v_stepState = false;
+			digitalWrite(pin.ED_STP, v_stepState);
+
+		// Block handler
+		v_stepTimerActive = false;
+
+		// Bail
 		return;
 	}
 
+	// Bail when switch triggered on retract
+	else if (v_stepDir == 'r' &&
+		digitalRead(pin.FeedSwitch) == LOW) {
+
+		// Make sure step off
+		v_stepState = false;
+		digitalWrite(pin.ED_STP, v_stepState);
+
+		// Block handler
+		v_stepTimerActive = false;
+
+		// Bail
+		return;
+
+	}
+
 	// Itterate count
-	v_cnt_steps += v_stepTimerState ? 1 : 0;
+	v_cnt_steps += v_stepState ? 1 : 0;
 
 	// Set state
-	v_stepTimerState = !v_stepTimerState;
+	v_stepState = !v_stepState;
 
 	// Step motor
-	digitalWrite(pin.ED_STP, v_stepTimerState);
+	digitalWrite(pin.ED_STP, v_stepState);
 }
 
 // HALT RUN ON IR TRIGGER
@@ -5716,7 +5744,6 @@ void setup() {
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
-	pinMode(pin.AD_24V_ENBLE, OUTPUT);
 	// Display
 	pinMode(pin.Disp_SCK, OUTPUT);
 	pinMode(pin.Disp_MOSI, OUTPUT);
@@ -5732,6 +5759,10 @@ void setup() {
 	pinMode(pin.Rel_Rew, OUTPUT);
 	pinMode(pin.Rel_EtOH, OUTPUT);
 	pinMode(pin.Rel_Vcc, OUTPUT);
+	// Voltage Regulators
+	pinMode(pin.REG_24V_ENBLE, OUTPUT);
+	pinMode(pin.REG_12V_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V_ENBLE, OUTPUT);
 	// BigEasyDriver
 	pinMode(pin.ED_RST, OUTPUT);
 	pinMode(pin.ED_SLP, OUTPUT);
@@ -5753,7 +5784,6 @@ void setup() {
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
-	digitalWrite(pin.AD_24V_ENBLE, LOW);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);
@@ -5769,6 +5799,10 @@ void setup() {
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
 	digitalWrite(pin.Rel_Vcc, LOW);
+	// Voltage Regulators
+	digitalWrite(pin.REG_24V_ENBLE, LOW);
+	digitalWrite(pin.REG_12V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V_ENBLE, LOW);
 	// Big Easy Driver
 	digitalWrite(pin.ED_MS1, LOW);
 	digitalWrite(pin.ED_MS2, LOW);
@@ -5788,6 +5822,9 @@ void setup() {
 
 	// SET INPUT PINS
 
+	// XBees
+	pinMode(pin.X1a_CTS, INPUT);
+	pinMode(pin.X1b_CTS, INPUT);
 	// Battery monitor
 	pinMode(pin.BatVcc, INPUT);
 	pinMode(pin.BatIC, INPUT);
@@ -5803,6 +5840,12 @@ void setup() {
 	}
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
+
+	// ENABLE VOLTGAGE REGULATORS
+	delay(250);
+	digitalWrite(pin.REG_24V_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V_ENBLE, HIGH);
 
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);
@@ -5992,13 +6035,25 @@ void loop() {
 	db.wasErrLoop = db.isErrLoop;
 	db.isErrLoop = false;
 
+	//// TEMP
+	//static uint32_t t_s = 0;
+	//static int send_cnt = 0;
+	//static uint16_t pack = 0;
+	//if (send_cnt == 0 && millis()>t_s + 30) {
+	//	pack++;
+	//	TestSendPack(&r2c, &c2r, 'Z', 0, 0, 0, 1, true);
+	//	t_s = millis();
+	//	send_cnt++;
+	//}
+
 	////TEMP
 	//delay(1000);
-	//char targ = 'a';
+	//int nSend = 120;
+	//char targ = 'c';
 	//char str[200] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLL";
 	//int bytes_sent = 0;
-	//char msg[5000];
-	//for (int i = 1; i < 120; i++)
+	//char msg[5000] = {0};
+	//for (int i = 1; i <= nSend; i++)
 	//{
 	//	bytes_sent += i;
 	//	char s[25];
@@ -6021,6 +6076,21 @@ void loop() {
 	//sprintf(str, "Bytes Sent = %d", bytes_sent);
 	//SerialUSB.println(str);
 	//while (true);
+
+	//// TEMP
+	//while (true) {
+	//	int cnt = 0;
+	//	byte b_arr[100] = {0};
+	//	while (c2r.port.available() > 0) {
+	//		b_arr[cnt] = c2r.port.read();
+	//		cnt++;
+	//		delay(1);
+	//	}
+	//	if (cnt > 0) {
+	//		SerialUSB.write(b_arr, cnt);
+	//		r2c.port.write(b_arr, cnt);
+	//	}
+	//}
 
 	////TEMP
 	//static double speed_max = 40;

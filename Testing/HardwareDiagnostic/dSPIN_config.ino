@@ -92,15 +92,15 @@ void dSPINConfig_board()
 	// AA item #: 23Y108D-LW8: 2.82A, 2.82V, 1.65Ohm, 3.2mH = 58.9
 
 	// NIMA 23 24V MIN KVALS
-	AD_R.setAccKVAL(50);				        // This controls the acceleration current
-	AD_R.setDecKVAL(50);				        // This controls the deceleration current
-	AD_R.setRunKVAL(50);					    // This controls the run current
+	AD_R.setAccKVAL(75);				        // This controls the acceleration current
+	AD_R.setDecKVAL(75);				        // This controls the deceleration current
+	AD_R.setRunKVAL(75);					    // This controls the run current
 	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
 
 												// NIMA 17 24V
-	AD_F.setAccKVAL(50);				        // This controls the acceleration current
-	AD_F.setDecKVAL(50);				        // This controls the deceleration current
-	AD_F.setRunKVAL(50);					    // This controls the run current
+	AD_F.setAccKVAL(75);				        // This controls the acceleration current
+	AD_F.setDecKVAL(75);				        // This controls the deceleration current
+	AD_F.setRunKVAL(75);					    // This controls the run current
 	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
 
 												/*

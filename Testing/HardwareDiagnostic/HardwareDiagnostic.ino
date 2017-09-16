@@ -93,7 +93,6 @@ struct PIN
 	const int AD_CSP_R = 5;
 	const int AD_CSP_F = 6;
 	const int AD_RST = 7;
-	const int AD_24V_ENBLE = 34;
 
 	// XBees
 	const int X1a_CTS = 29;
@@ -115,9 +114,14 @@ struct PIN
 	const int TrackLED = 2;
 
 	// Relays
-	const int Rel_EtOH = 22;
-	const int Rel_Rew = 23;
+	const int Rel_EtOH = 23;
+	const int Rel_Rew = 22;
 	const int Rel_Vcc = A5;
+
+	// Voltage Regulators
+	const int REG_24V_ENBLE = 34;
+	const int REG_12V_ENBLE = 46;
+	const int REG_5V_ENBLE = 48;
 
 	// BigEasyDriver
 	const int ED_RST = 47;
@@ -148,7 +152,7 @@ struct PIN
 	const int BatIC = A7;
 
 	// Buttons
-	const int Btn[3] = { A3, A2, A1 };
+	const int Btn[3] = { A2, A1, A0 };
 
 	/*
 	Note: pins bellow are all used for external interupts
@@ -189,7 +193,7 @@ const float stp2cm = (9 * PI) / 200;
 const float maxSpeed = 100; // (cm) // TEMP
 const float maxAcc = 80; // (cm) // TEMP
 const float maxDec = 80; // (cm)
-const double scaleFrontAD = 1.031;//1.0375;
+const double scaleFrontAD = 1.0375;
 const byte kAcc = 60 * 2;
 const byte kDec = 60 * 2;
 const byte kRun = 60;
@@ -200,7 +204,7 @@ const int trackLEDduty = 75; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-						 // POT Variables
+// POT Variables
 const float Pi = 3.141593;
 int rewLEDDuty = 50; // value between 0 and 255
 int trackLEDDuty = 75; // value between 0 and 255
@@ -303,7 +307,6 @@ void setup()
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
-	pinMode(pin.AD_24V_ENBLE, OUTPUT);
 	// Display
 	pinMode(pin.Disp_SCK, OUTPUT);
 	pinMode(pin.Disp_MOSI, OUTPUT);
@@ -319,6 +322,10 @@ void setup()
 	pinMode(pin.Rel_Rew, OUTPUT);
 	pinMode(pin.Rel_EtOH, OUTPUT);
 	pinMode(pin.Rel_Vcc, OUTPUT);
+	// Voltage Regulators
+	pinMode(pin.REG_24V_ENBLE, OUTPUT);
+	pinMode(pin.REG_12V_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V_ENBLE, OUTPUT);
 	// BigEasyDriver
 	pinMode(pin.ED_RST, OUTPUT);
 	pinMode(pin.ED_SLP, OUTPUT);
@@ -340,7 +347,6 @@ void setup()
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
-	digitalWrite(pin.AD_24V_ENBLE, LOW);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);
@@ -356,6 +362,10 @@ void setup()
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
 	digitalWrite(pin.Rel_Vcc, LOW);
+	// Voltage Regulators
+	digitalWrite(pin.REG_24V_ENBLE, LOW);
+	digitalWrite(pin.REG_12V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V_ENBLE, LOW);
 	// OpenLog
 	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
@@ -381,6 +391,11 @@ void setup()
 	}
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
+
+	// ENABLE VOLTGAGE REGULATORS
+	digitalWrite(pin.REG_24V_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V_ENBLE, HIGH);
 
 	// INITIALIZE LCD
 	LCD.InitLCD();
@@ -577,9 +592,6 @@ bool POT_Run() {
 		pastSpeed = runSpeed;
 		switched = false;
 		is_speed_changed = true;
-
-		// Make sure motor enabled
-		digitalWrite(pin.AD_24V_ENBLE, HIGH);
 
 		if (velNow <= 1)
 		{
@@ -779,7 +791,7 @@ void ConsoleRead()
 		if (targ == 'c') {
 			Serial3.write(buff_b);
 		}
-		else {
+		else if (targ == 'a') {
 			Serial2.write(buff_b);
 		}
 	}
@@ -1112,7 +1124,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 
 				// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
-	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
+	AD_F.setOCShutdown(OC_SD_DISABLE);			// shutdown on OC
 
 				// Motor V compensation
 												/*
@@ -1143,7 +1155,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	Peak Amp for 2.82 A stepper = 2.82*1.41 = 3.97 mA
 	*/
 	AD_R.setOCThreshold(OC_4875mA);
-	AD_F.setOCThreshold(OC_3750mA);
+	AD_F.setOCThreshold(OC_4875mA);
 
 	// Low speed compensation
 	/*
@@ -1196,7 +1208,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setRunKVAL(50);					    // This controls the run current
 	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
 
-				// NIMA 17 24V
+	// NIMA 17 24V
 	AD_F.setAccKVAL(50);				        // This controls the acceleration current
 	AD_F.setDecKVAL(50);				        // This controls the deceleration current
 	AD_F.setRunKVAL(50);					    // This controls the run current
