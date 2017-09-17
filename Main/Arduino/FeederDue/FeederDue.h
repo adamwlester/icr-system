@@ -36,18 +36,18 @@ struct DB
 	bool Console = true;
 	bool LCD = false;
 	// What to print
-	const bool print_errors = false;
-	const bool print_flow = false;
+	const bool print_errors = true;
+	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = false;
-	const bool print_r2c = false;
-	const bool print_a2r = false;
-	const bool print_r2a = false;
+	const bool print_c2r = true;
+	const bool print_r2c = true;
+	const bool print_a2r = true;
+	const bool print_r2a = true;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
 	const bool print_logMode = false;
-	const bool print_logStore = true;
+	const bool print_logStore = false;
 	const bool print_a2o = false;
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
@@ -336,6 +336,7 @@ volatile bool v_doIRhardStop = false;
 volatile bool v_doLogIR = false;
 volatile bool v_stepState = false;
 volatile bool v_stepTimerActive = false;
+volatile bool v_isArmMoveDone = false;
 volatile int v_cnt_steps = 0;
 volatile int v_stepTarg = 0;
 volatile char v_stepDir = 'e'; // ['e','r']
@@ -859,16 +860,13 @@ public:
 	double boundsRewarded[2] = { 0 };
 	int occRewarded = 0;
 	int lapN = 0;
-	String extendState = "LOW";
 	uint32_t armMoveTimeout = 5000;
 	bool doArmMove = false;
 	bool doExtendArm = false;
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
-	bool doSwtchRelease = false;
 	bool isArmExtended = true;
 	const int armExtStps = 150;
-	const int armSwtchReleaseStps = 20;
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -881,7 +879,6 @@ public:
 	void SetRewMode(char mode_now[], int arg2 = 0);
 	bool CompZoneBounds(double now_pos, double rew_pos);
 	bool CheckZoneBounds(double now_pos);
-	void SetArmDir(String dir, char called_from[]);
 	void ExtendFeedArm();
 	void RetractFeedArm();
 	void CheckFeedArm();

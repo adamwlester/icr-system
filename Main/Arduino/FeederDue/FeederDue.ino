@@ -1239,7 +1239,7 @@ void REWARD::StartRew()
 
 	// Log/print 
 	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
-		mode_str, duration, t_retractArm - t_rew_str);
+		mode_str, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(str, t_rew_str);
 
 	// Set flags
@@ -1471,40 +1471,6 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	return isZoneTriggered;
 }
 
-void REWARD::SetArmDir(String dir, char called_from[])
-{
-	// Local vars
-	char str[200] = { 0 };
-
-	// Make sure step low
-	digitalWrite(pin.ED_STP, LOW);
-
-	// Store dir in volitile
-	v_stepDir = dir == "Extend" ? 'e' : 'r';
-
-	// Set direction to extend
-	if (dir == "Extend" && extendState == "LOW") {
-		digitalWrite(pin.ED_DIR, LOW);
-	}
-	else if (dir == "Extend" && extendState == "HIGH") {
-		digitalWrite(pin.ED_DIR, HIGH);
-	}
-	// Set direction to retract
-	if (dir == "Retract" && extendState == "LOW") {
-		digitalWrite(pin.ED_DIR, HIGH);
-	}
-	else if (dir == "Retract" && extendState == "HIGH") {
-		digitalWrite(pin.ED_DIR, LOW);
-	}
-
-	// Log/print
-	char dir_str[20];
-	dir.toCharArray(dir_str, 20);
-	sprintf(str, "[REWARD::SetArmDir] Set Arm Direction: dir=%s dir_pin=%s [%s]",
-		dir_str, digitalRead(pin.ED_DIR) ? "HIGH" : "LOW", called_from);
-	DebugFlow(str);
-}
-
 void REWARD::ExtendFeedArm()
 {
 	// Step mode:
@@ -1529,6 +1495,7 @@ void REWARD::ExtendFeedArm()
 	// Set targ and flag
 	v_stepTarg = armExtStps;
 	doExtendArm = true;
+	v_isArmMoveDone = false;
 
 	// Wake motor
 	digitalWrite(pin.ED_SLP, HIGH);
@@ -1541,13 +1508,12 @@ void REWARD::ExtendFeedArm()
 	digitalWrite(pin.ED_MS2, LOW);
 	digitalWrite(pin.ED_MS3, LOW);
 
-	//// Set to full step
-	//digitalWrite(pin.ED_MS1, LOW);
-	//digitalWrite(pin.ED_MS2, LOW);
-	//digitalWrite(pin.ED_MS3, LOW);
-
 	// Set direction to extend
-	SetArmDir("Extend", "REWARD::ExtendFeedArm");
+	digitalWrite(pin.ED_DIR, LOW);
+	v_stepDir = 'e';
+
+	// Store start time
+	t_moveArmStr = millis();
 
 	// Set intterupt flag
 	delayMicroseconds(500);
@@ -1580,8 +1546,9 @@ void REWARD::RetractFeedArm()
 	delayMicroseconds(500);
 
 	// Set targ and flag
-	v_stepTarg = 4 * 200;
+	v_stepTarg = 0;
 	doRetractArm = true;
+	v_isArmMoveDone = false;
 
 	// Wake motor
 	digitalWrite(pin.ED_SLP, HIGH);
@@ -1594,13 +1561,12 @@ void REWARD::RetractFeedArm()
 	digitalWrite(pin.ED_MS2, HIGH);
 	digitalWrite(pin.ED_MS3, LOW);
 
-	//// Set to half step
-	//digitalWrite(pin.ED_MS1, HIGH);
-	//digitalWrite(pin.ED_MS2, LOW);
-	//digitalWrite(pin.ED_MS3, LOW);
-
 	// Set direction to retract
-	SetArmDir("Retract", "REWARD::RetractFeedArm");
+	digitalWrite(pin.ED_DIR, HIGH);
+	v_stepDir = 'r';
+
+	// Store start time
+	t_moveArmStr = millis();
 
 	// Set intterupt flag
 	delayMicroseconds(500);
@@ -1617,11 +1583,6 @@ void REWARD::CheckFeedArm()
 	char str[200] = { 0 };
 	bool is_move_done = false;
 	bool is_timedout = false;
-
-	// Store start time
-	if (t_moveArmStr == 0) {
-		t_moveArmStr = millis();
-	}
 
 	// Do timed retract
 	if (doTimedRetract) {
@@ -1654,50 +1615,15 @@ void REWARD::CheckFeedArm()
 		return;
 	}
 
-	// Check if done extending
-	if (doExtendArm) {
-		if (v_cnt_steps >= v_stepTarg) {
+	// Check if done extending/retracting
+	if ((doExtendArm || doRetractArm) &&
+		v_isArmMoveDone) {
 
 			is_move_done = true;
-		}
-	}
-
-	// Check if done retracting
-	if (doRetractArm)
-	{
-		// Check if switch released
-		if (digitalRead(pin.FeedSwitch) == HIGH &&
-			(doSwtchRelease && v_cnt_steps >= v_stepTarg)) {
-
-			is_move_done = true;
-		}
-
-		// Set to release tension on switch
-		else if (digitalRead(pin.FeedSwitch) == LOW &&
-			!doSwtchRelease) {
-
-			// Block handler
-			v_stepTimerActive = false;
-			delayMicroseconds(500);
-
-			// Set direction to extend
-			SetArmDir("Extend", "REWARD::CheckFeedArm");
-
-			// Set step count and target
-			v_cnt_steps = 0;
-			v_stepTarg = armSwtchReleaseStps;
-
-			// Reset intterupt flag
-			delayMicroseconds(500);
-			v_stepTimerActive = true;
-
-			// Set flags
-			doSwtchRelease = true;
-		}
 	}
 
 	// Check if timedout
-	if (millis() > t_moveArmStr + armMoveTimeout) {
+	else if (millis() > t_moveArmStr + armMoveTimeout) {
 
 		is_timedout = true;
 	}
@@ -1743,7 +1669,7 @@ void REWARD::CheckFeedArm()
 		isArmStpOn = false;
 		doExtendArm = false;
 		doRetractArm = false;
-		doSwtchRelease = false;
+		v_isArmMoveDone = true;
 	}
 }
 
@@ -3086,8 +3012,8 @@ byte WaitBuffRead(R4 *r4, char mtch)
 	int buff_rx = r4->port.available();
 
 	// Store current info
-	sprintf(dat_str, " buff=\'%s\' bytes_read=%d bytes_dumped=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
-		PrintSpecialChars(buff), cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
+	sprintf(dat_str, " from=%c buff=\'%s\' bytes_read=%d bytes_dumped=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
+		r4->instID, PrintSpecialChars(buff), cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
 
 	// Buffer flooded
 	if (is_overflowed) {
@@ -3101,7 +3027,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 	}
 	// Byte not found
 	else if (mtch != '\0') {
-		sprintf(msg_str, "**WARNING** [WaitBuffRead] Char %c Not Found:",
+		sprintf(msg_str, "**WARNING** [WaitBuffRead] Char \'%c\' Not Found:",
 			mtch);
 	}
 	// Failed for unknown reason
@@ -5634,23 +5560,9 @@ void Interupt_TimerHandler()
 		return;
 	}
 
-	// Bail when target reached
-	else if (v_cnt_steps >= v_stepTarg) {
-
-		// Make sure step off
-			v_stepState = false;
-			digitalWrite(pin.ED_STP, v_stepState);
-
-		// Block handler
-		v_stepTimerActive = false;
-
-		// Bail
-		return;
-	}
-
-	// Bail when switch triggered on retract
-	else if (v_stepDir == 'r' &&
-		digitalRead(pin.FeedSwitch) == LOW) {
+	// Bail when extend target reached
+	else if (v_stepDir == 'e' &&
+		v_cnt_steps >= v_stepTarg) {
 
 		// Make sure step off
 		v_stepState = false;
@@ -5658,6 +5570,40 @@ void Interupt_TimerHandler()
 
 		// Block handler
 		v_stepTimerActive = false;
+
+		// Set done flag
+		v_isArmMoveDone = true;
+
+		// Bail
+		return;
+	}
+
+	// Release swtich when switch triggered on retract
+	else if (v_stepDir == 'r' &&
+		digitalRead(pin.FeedSwitch) == LOW) {
+
+		// Make sure step off
+		v_stepState = false;
+		digitalWrite(pin.ED_STP, v_stepState);
+
+		// Set direction to extend
+		digitalWrite(pin.ED_DIR, LOW);
+
+		// Move arm x steps
+		for (int i = 0; i < 20; i++)
+		{
+			digitalWrite(pin.ED_STP, HIGH);
+			delayMicroseconds(500);
+			digitalWrite(pin.ED_STP, LOW);
+			delayMicroseconds(500);
+			v_cnt_steps--;
+		}
+
+		// Block handler
+		v_stepTimerActive = false;
+
+		// Set done flag
+		v_isArmMoveDone = true;
 
 		// Bail
 		return;
