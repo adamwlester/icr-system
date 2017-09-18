@@ -300,11 +300,12 @@ Updated when EtOH relay opened
 const float bit2volt = 0.01545; // was 0.0164;
 const int dt_vccUpdate = 1000;
 const int dt_vccCheck = 500;
-const int dt_vccSend = 30000;
+const int dt_vccSend = 15000;
 const int dt_vccPrint = 60000;
 float vccNow = 0;
 float vccCutoff = 11.6;
 float batVoltArr[100] = { 0 };
+const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs

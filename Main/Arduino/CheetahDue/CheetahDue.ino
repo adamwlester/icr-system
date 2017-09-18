@@ -58,9 +58,8 @@ const bool doTestPinMapping = false;
 #pragma endregion 
 
 
-#pragma region ============ VARIABLE SETUP =============
+#pragma region ============== PIN MAPPING ==============
 
-// Pin mapping
 struct PIN
 {
 	// Relays
@@ -106,6 +105,11 @@ struct PIN
 }
 // Initialize
 pin;
+
+#pragma endregion
+
+
+#pragma region ============ VARIABLE SETUP =============
 
 // Flow/state control
 struct FC

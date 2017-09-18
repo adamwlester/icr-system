@@ -62,7 +62,7 @@
 #include <PixyI2C.h>
 
 // LCD
-#include <LCD5110_Graph.h>
+#include <LCD5110_Basic.h>
 
 // TinyEKF
 #define N 4     // States
@@ -3323,8 +3323,8 @@ bool CheckResend(R2 *r2)
 			int buff_rx = r2->port.available();
 
 			// Get dat string
-			sprintf(dat_str, "r2%c Packet: cnt=%d id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt_sent=%dms tx=%d rx=%d",
-				r2->instID, r2->cnt_resend[i], r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
+			sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt_sent=%dms tx=%d rx=%d",
+				 r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
 
 			if (r2->cnt_resend[i] < resendMax) {
 
@@ -3335,7 +3335,8 @@ bool CheckResend(R2 *r2)
 				r2->cnt_resend[i]++;
 
 				// Print resent packet
-				sprintf(str, "**WARNING** [CheckResend] Resending %s", dat_str);
+				sprintf(str, "**WARNING** [CheckResend] Resending r2%c Packet: cnt=%d %s", 
+					r2->instID, r2->cnt_resend[i], dat_str);
 				DebugError(str);
 
 				// Set flags
@@ -3347,7 +3348,8 @@ bool CheckResend(R2 *r2)
 			else {
 
 				// Log/print error
-				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending %s", dat_str);
+				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending r2%c Packet: cnt=%d %s", 
+					r2->instID, r2->cnt_resend[i], dat_str);
 				DebugError(str, true);
 
 				// Reset flag
@@ -4491,6 +4493,7 @@ float CheckBattery(bool force_check)
 	static uint32_t t_vcc_print = 0;
 	static uint32_t t_check_str = millis();
 	static uint32_t t_check_end = millis() + dt_vccCheck;
+	static uint32_t t_ic_update = 0;
 	static float vcc_arr[10] = { 0 };
 	static float vcc_avg = 0;
 	static float vcc_last = 0;
@@ -4502,21 +4505,19 @@ float CheckBattery(bool force_check)
 	bool is_mot_off = false;
 	byte do_shutdown = false;
 
-	// Only sample if motor off
-	if ((CheckAD_Status(adR_stat, "MOT_STATUS") != 0 ||
-		CheckAD_Status(adF_stat, "MOT_STATUS") != 0) &&
-		!force_check) {
-
-		//Bail
-		return vccNow;
+	// Calculate current
+	if (millis() > t_ic_update + dt_icUpdate) {
+		ic_bit_in = analogRead(pin.BatIC);
+		icNow = 36.7*(((float)ic_bit_in * (3.3 / 1024)) / 3.3) - 18.3;
+		t_ic_update = millis();
 	}
 
 	// Not time to check
 	if (millis() < t_check_str &&
 		!force_check) {
 
-		// Bail
-		return vccNow;
+		// Turn off relay
+		digitalWrite(pin.Rel_Vcc, LOW);
 	}
 
 	// Done checking
@@ -4529,20 +4530,28 @@ float CheckBattery(bool force_check)
 
 		// Turn off relay
 		digitalWrite(pin.Rel_Vcc, LOW);
+	}
 
-		// Bail
-		return vccNow;
+	// Only sample if motor off
+	else if ((CheckAD_Status(adR_stat, "MOT_STATUS") != 0 ||
+		CheckAD_Status(adF_stat, "MOT_STATUS") != 0)) {
+
+		// Turn off relay
+		digitalWrite(pin.Rel_Vcc, LOW);
 	}
 
 	// Time to check
 	else {
 
-		// Turn on relay
-		digitalWrite(pin.Rel_Vcc, HIGH);
+		// Turn on relay and skip this run to alow switch to open
+		if (digitalRead(pin.Rel_Vcc) == LOW) {
 
-		// Calculate current
-		ic_bit_in = analogRead(pin.BatIC);
-		icNow = 36.7*(((float)ic_bit_in * (3.3 / 1023)) / 3.3) - 18.3;
+			// Turn on switch
+			digitalWrite(pin.Rel_Vcc, HIGH);
+			
+			// Bail
+			return vccNow;
+		}
 
 		// Calculate voltage
 		vcc_bit_in = analogRead(pin.BatVcc);
@@ -4562,20 +4571,20 @@ float CheckBattery(bool force_check)
 			return 0;
 		}
 
+		// Store new voltage level
+		vcc_last = vccNow;
+		vccNow = vcc_avg;
+
+		// Store time
+		t_vcc_update = millis();
+
+		// Add to array
+		for (int i = 0; i < 10 - 1; i++) {
+			vcc_arr[i] = vcc_arr[i + 1];
+		}
+		vcc_arr[9] = vccNow;
+
 	}
-
-	// Store new voltage level
-	vcc_last = vccNow;
-	vccNow = vcc_avg;
-
-	// Store time
-	t_vcc_update = millis();
-
-	// Add to array
-	for (int i = 0; i < 10 - 1; i++) {
-		vcc_arr[i] = vcc_arr[i + 1];
-	}
-	vcc_arr[9] = vccNow;
 
 	// Send and print if min dt ellapsed
 	if (fc.doSendVCC &&
@@ -4593,16 +4602,16 @@ float CheckBattery(bool force_check)
 	if (millis() > t_vcc_print + dt_vccPrint) {
 
 		// Log/print voltage and current
-		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA",
-			vccNow, icNow);
+		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA dt_check=%d",
+			vccNow, icNow, millis()- t_vcc_update);
 		DebugFlow(str);
 
 		// Store time
 		t_vcc_print = millis();
 	}
 
-	// Print voltage and current to LCD
-	if (millis() > t_solClose + 100) {
+	// Print voltage and current to LCD if voltage changed
+	if (round(vccNow * 100) != round(vcc_last * 100)) {
 		char vcc_str[100];
 		char speed_str[100];
 		sprintf(vcc_str, "VCC=%0.2fV", vccNow);
@@ -4625,7 +4634,7 @@ float CheckBattery(bool force_check)
 	}
 
 	// Return battery voltage
-	return vcc_avg;
+	return vccNow;
 }
 
 // TURN LCD LIGHT ON/OFF
@@ -5120,13 +5129,6 @@ bool PrintDebug()
 // FOR PRINTING TO LCD
 void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 {
-	// Local vars
-	char msg_1_copy[100];
-	char msg_2_copy[100];
-
-	// Copy strings
-	sprintf(msg_1_copy, "%s", msg_1);
-	sprintf(msg_2_copy, "%s", msg_2);
 
 	// Check if printing blocked
 	if (do_block) {
@@ -5136,53 +5138,21 @@ void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 		return;
 	}
 
-	// Change settings
-	if (f_siz == 's') {
-		LCD.setFont(SmallFont);
-	}
-	else if (f_siz == 't') {
-		LCD.setFont(TinyFont);
-	}
-
-	// Invert pixels
-	LCD.invert(true);
-
-	// Clear
+	// Reset
 	LCD.clrScr();
-
-	// Make both strings same length
-	if (msg_2_copy[0] != '\0' &&
-		strlen(msg_1_copy) != strlen(msg_2_copy))
-	{
-		bool is_m1_shorter = strlen(msg_1_copy) < strlen(msg_2_copy);
-		int len_max = !is_m1_shorter ? strlen(msg_1_copy) : strlen(msg_2_copy);
-		int len_min = is_m1_shorter ? strlen(msg_1_copy) : strlen(msg_2_copy);
-		for (int i = len_min; i < len_max; i++) {
-
-			if (is_m1_shorter) {
-				msg_1_copy[i] = ' ';
-			}
-			else {
-				msg_2_copy[i] = ' ';
-			}
-
-		}
-		msg_1_copy[len_max] = '\0';
-		msg_2_copy[len_max] = '\0';
-	}
+	LCD.invert(true);
+	LCD.setFont(SmallFont);
 
 	// Print
-	if (msg_2_copy[0] != '\0')
+	if (msg_2[0] != '\0')
 	{
-		LCD.print(msg_1_copy, CENTER, 15);
-		LCD.print(msg_2_copy, CENTER, 25);
+		LCD.print(msg_1, 5, 24-4);
+		LCD.print(msg_2, 5, 24+4);
 	}
 	else {
-		LCD.print(msg_1_copy, CENTER, 20);
+		LCD.print(msg_1, 5, 24);
 	}
 
-	// Update
-	LCD.update();
 
 	// Prevent overwrite till cleared
 	if (do_block) {
@@ -5195,9 +5165,6 @@ void ClearLCD()
 {
 	// Clear
 	LCD.clrScr();
-
-	// Update
-	LCD.update();
 
 	// Stop blocking LCD log
 	fc.doBlockWriteLCD = false;
@@ -5825,8 +5792,6 @@ void setup() {
 
 	// INITIALIZE LCD
 	LCD.InitLCD();
-	LCD.setFont(SmallFont);
-	LCD.invert(true);
 
 	// LOG/PRINT SETUP RUNNING
 
