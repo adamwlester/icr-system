@@ -800,7 +800,7 @@ byte WaitBuffRead(char mtch)
 void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	/*
-	STORE DATA FOR CHEETAH DUE
+	STORE DATA FOR ROBOT
 	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
 	*/
 
@@ -887,7 +887,7 @@ bool SendPacket()
 	const int msg_lng = sendQueueBytes;
 	byte msg[msg_lng];
 	cnt_packBytesSent = 0;
-	bool is_repeat = false;
+	bool is_resend = false;
 	char id = '\0';
 	float dat[3] = { 0 };
 	bool do_conf = 0;
@@ -956,10 +956,10 @@ bool SendPacket()
 	do_conf = sendQueue[sendQueueIndRead][b_ind++] == 1 ? true : false;
 
 	// Check if resending
-	is_repeat = pack == r2a.packLast[CharInd(id, r2a.id, r2a.lng)];
+	is_resend = pack == r2a.packLast[CharInd(id, r2a.id, r2a.lng)];
 
 	// Print sent
-	DebugSent(id, dat, pack, do_conf, buff_tx, buff_rx, is_repeat);
+	DebugSent(id, dat, pack, do_conf, buff_tx, buff_rx, is_resend);
 
 	// Set entry to null
 	sendQueue[sendQueueIndRead][0] = '\0';
@@ -2040,23 +2040,23 @@ void loop()
 		else if (r2a.idNow == 'q') {
 
 			// Log warnings summary
-			char warn_lines[200] = "|";
+			char warn_lines[200] = "ON LINES |";
 			for (int i = 0; i < cnt_warn; i++) {
 				char str_lin[10];
 				sprintf(str_lin, "%d|", warn_line[i]);
 				strcat(warn_lines, str_lin);
 			}
-			sprintf(str, "TOTAL **WARNINGS**  %d ON LINES %s", cnt_warn, warn_lines);
+			sprintf(str, "TOTAL WARNINGS: %d %s", cnt_warn, cnt_warn > 0 ? warn_lines : "");
 			DebugFlow(str);
 
 			// Log errors summary
-			char err_lines[200] = "|";
+			char err_lines[200] = "ON LINES |";
 			for (int i = 0; i < cnt_err; i++) {
 				char str_lin[10];
 				sprintf(str_lin, "%d|", err_line[i]);
 				strcat(err_lines, str_lin);
 			}
-			sprintf(str, "TOTAL !!ERRORS!!  %d ON LINES %s", cnt_err, err_lines);
+			sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? warn_lines : "");
 			DebugFlow(str);
 
 			// Set flags

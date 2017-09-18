@@ -272,8 +272,8 @@ fprintf('END OF RUN\n');
             ];
         for z_id = 1:length(id_list)
             m2c.(id_list(z_id)) = cell2struct( ...
-                {id_list(z_id), 0, 0, 0, 0, 0}, ...
-                {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast'}, 2);
+                {id_list(z_id), 0, 0, 0, 0, 0, 0}, ...
+                {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast', 't_sent'}, 2);
         end
         m2c.cnt_pack = 0;
         
@@ -294,8 +294,8 @@ fprintf('END OF RUN\n');
             ];
         for z_id = 1:length(id_list)
             c2m.(id_list(z_id)) = cell2struct( ...
-                {id_list(z_id), 0, 0, 0}, ...
-                {'id', 'dat1', 'pack', 'packLast'}, 2);
+                {id_list(z_id), 0, 0, 0, 0}, ...
+                {'id', 'dat1', 'pack', 'packLast', 't_rcvd'}, 2);
         end
         
         % Set top level vars
@@ -5032,7 +5032,6 @@ fprintf('END OF RUN\n');
             set(D.UI.txtPerfInf(6), 'String', infstr)
             
             % Bat volt
-            % Turn red and flicker if bellow 12 V
             if c2m.('J').dat1 ~= 0
                 D.PAR.vcc_last = D.PAR.vcc_now;
                 D.PAR.vcc_now = c2m.('J').dat1;
@@ -5041,7 +5040,7 @@ fprintf('END OF RUN\n');
                 if D.PAR.vcc_now <= D.PAR.batVoltWarning && D.PAR.vcc_now > 0
                     set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
                     
-                    % Voltage too low
+                    % Turn red and flicker if bellow 12 V
                     if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
                         set(D.UI.txtPerfInf(7), 'Visible', 'off')
                     else
@@ -5049,8 +5048,8 @@ fprintf('END OF RUN\n');
                     end
                 else
                     
-                    % Check if this is new
-                    if D.PAR.vcc_now ~= D.PAR.vcc_last
+                    % Check if printing a new value is new
+                    if Elapsed_Seconds(now) - c2m.('J').t_rcvd < 5
                         set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.activeCol);
                     else
                         set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledPrintFrgCol);
@@ -6694,6 +6693,7 @@ fprintf('END OF RUN\n');
         m2c.(id).dat1 = dat1;
         m2c.(id).dat2 = dat2;
         m2c.(id).dat3 = dat3;
+        m2c.(id).t_send = Elapsed_Seconds(now);
         
         % Flag new data
         m2c_pack(6) = 1;
@@ -6725,55 +6725,58 @@ fprintf('END OF RUN\n');
             end
             
             % Store new id
-            id_new = c2m_mat(new_ind).id;
+            id = c2m_mat(new_ind).id;
             
             % Check for handshake flag
             if ...
-                    strcmp(id_new, 'h') && ...
-                    c2m.(id_new).dat1 == 1
+                    strcmp(id, 'h') && ...
+                    c2m.(id).dat1 == 1
                 
                 % Set start time
                 startTime = now;
                 
                 % Log/print handshake received
                 Console_Write(sprintf('   [RCVD] CS HANDSHAKE COMMAND: id=''%s'' dat1=%d', ...
-                    id_new, c2m.(id_new).dat1), now);
+                    id, c2m.(id).dat1), now);
             end
             
             % Check for exit flag
             if ...
-                    strcmp(id_new, 'E') && ...
-                    c2m.(id_new).dat1 == 1
+                    strcmp(id, 'E') && ...
+                    c2m.(id).dat1 == 1
                 
                 % Set exit flag
                 doExit = true;
                 
                 % Log/print exit received
                 Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                    id_new, c2m.(id_new).dat1), now);
+                    id, c2m.(id).dat1), now);
             end
             
             %Print new data
-            if ~ischar(c2m.(id_new).dat1)
+            if ~ischar(c2m.(id).dat1)
                 str = '   [RCVD] c2m: id=''%s'' dat1=%d pack=%d';
             else
                 str = '   [RCVD] c2m: id=''%s'' dat1=''%s'' pack=%d';
             end
             Console_Write(sprintf(str, ...
-                c2m.(id_new).id, c2m.(id_new).dat1, c2m.(id_new).pack), now);
+                c2m.(id).id, c2m.(id).dat1, c2m.(id).pack), now);
             
             % Update packet info
-            c2m.(id_new).packLast = c2m.(id_new).pack;
+            c2m.(id).packLast = c2m.(id).pack;
+            
+            % Update recieve time
+            c2m.(id).t_rcvd = Elapsed_Seconds(now);
             
             % Check for resend request
-            if ~strcmp('g', c2m.(id_new).id)
+            if ~strcmp('g', c2m.(id).id)
                 return
             end
             
             % Get id to resend
-            id_send = c2m.(id_new).dat1;
+            id_send = c2m.(id).dat1;
             Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', ...
-                id_new, id_send), now);
+                id, id_send), now);
             
             % Send again if any history of this id
             if m2c.(id_send).pack > 0

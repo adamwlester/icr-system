@@ -62,7 +62,6 @@ struct DB
 
 	// Other
 	bool isErrLoop = false;
-	bool wasErrLoop = false;
 }
 // Initialize
 db;
@@ -192,7 +191,6 @@ struct FC
 	bool doBlockLogWrite = false;
 	bool doBlockWriteLCD = false;
 	bool isEKFReady = false;
-	bool doPackSend = false;
 	bool doEtOHRun = true;
 	bool isLitLCD = false;
 	bool doBtnRew = false;
@@ -214,24 +212,18 @@ uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
 
 // Print debugging
-const int printQueueSize = 15;
+const int printQueueSize = 30;
 char printQueue[printQueueSize][300] = { { 0 } };
 int printQueueIndStore = 0;
 int printQueueIndRead = 0;
 
 // Serial com general
 const int sendQueueSize = 10;
-const int sendQueueBytes = 19;
-byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
-int sendQueueInd = sendQueueSize - 1;
+const int sendQueueBytes = 18;
 const int resendMax = 5;
 const int dt_resend = 100; // (ms)
 const int dt_sendSent = 7; // (ms) 
 const int dt_sendRcvd = 1; // (ms) 
-uint32_t t_xBeeSent = 0; // (ms)
-uint32_t t_xBeeRcvd = 0; // (ms)
-int dt_xBeeSent = 0; // (ms)
-int dt_xBeeRcvd = 0; // (ms)
 int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
@@ -306,11 +298,10 @@ uint32_t t_solClose = 0;
 Updated when EtOH relay opened
 */
 const float bit2volt = 0.01545; // was 0.0164;
-uint32_t t_vccSend = 0;
-uint32_t t_vccUpdate = 0;
-const int dt_vccSend = 30000;
 const int dt_vccUpdate = 1000;
 const int dt_vccCheck = 500;
+const int dt_vccSend = 30000;
+const int dt_vccPrint = 60000;
 float vccNow = 0;
 float vccCutoff = 11.6;
 float batVoltArr[100] = { 0 };
@@ -383,6 +374,8 @@ struct R4
 	char idNow;
 	bool isNew;
 	float dat[3];
+	uint32_t t_rcvd; // (ms)
+	int dt_rcvd; // (ms)
 };
 
 // Initialize C2R
@@ -434,6 +427,10 @@ R4 c2r
 	false,	
 	// dat
 	{ 0, 0, 0 }, 
+	// t_rcvd
+	0,
+	// dt_rcvd
+	0,
 };
 
 // Serial from other ard
@@ -476,6 +473,10 @@ R4 a2r
 	false,
 	// dat
 	{ 0, 0, 0 },
+	// t_rcvd
+	0,
+	// dt_rcvd
+	0,
 };
 
 // Serial from Robot
@@ -497,6 +498,11 @@ struct R2
 	int cnt_resend[20];
 	int pinCTS;
 	bool stateCTS;
+	byte sendQueue[sendQueueSize][sendQueueBytes];
+	int sendQueueIndStore;
+	int sendQueueIndRead;
+	uint32_t t_sent; // (ms)
+	int dt_sent; // (ms)
 };
 
 // Serial to CS
@@ -552,6 +558,16 @@ R2 r2c
 	pin.X1a_CTS,
 	// stateCTS
 	false,
+	// sendQueue
+	{ { 0 } },
+	// sendQueueIndStore
+	0,
+	// sendQueueIndRead
+	0,
+	// t_sent
+	0,
+	// dt_sent
+	0,
 };
 
 // Serial to other ard
@@ -598,6 +614,16 @@ R2 r2a
 	pin.X1b_CTS,
 	// stateCTS
 	false,
+	// sendQueue
+	{ { 0 } },
+	// sendQueueIndStore
+	0,
+	// sendQueueIndRead
+	0,
+	// t_sent
+	0,
+	// dt_sent
+	0,
 };
 
 #pragma endregion 
@@ -1027,13 +1053,13 @@ LOGGER Log(millis());
 #pragma region ========= FUNCTION DECLARATIONS =========
 
 // PARSE SERIAL INPUT
-void GetSerial(R4 *r4, R2 *r2);
+void GetSerial(R4 *r4);
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4 *r4, char mtch = '\0');
 // STORE PACKET DATA TO BE SENT
 void QueuePacket(R2 *r2, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true);
 // SEND SERIAL PACKET DATA
-void SendPacket();
+bool SendPacket(R2 *r2);
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
 bool CheckResend(R2 *r2);
 // RESET AUTODRIVER BOARDS
@@ -1109,7 +1135,7 @@ char* PrintSpecialChars(char chr, bool do_show_byte = false);
 // CHECK AUTODRIVER BOARD STATUS
 int CheckAD_Status(uint16_t stat_reg, String stat_str);
 // SEND TEST PACKET
-void TestSendPack(R2 *r2, R4 *r4, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
+void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
 // HOLD FOR CRITICAL ERRORS
 void RunErrorHold(char msg[], uint32_t t_kill = 0);
 // GET ID INDEX

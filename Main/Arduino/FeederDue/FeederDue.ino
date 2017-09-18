@@ -100,7 +100,7 @@ POSTRACK::POSTRACK(uint32_t t, char obj_id[], int n_samp)
 void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	double pos_diff = 0;
 	double dist = 0;
 	double dist_sum = 0;
@@ -1013,7 +1013,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	}
 
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	double move_diff = 0;
 	int circ = 0;
 	int pos = 0;
@@ -1091,7 +1091,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerate, double speed_min)
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	double new_speed = 0;
 
 	// Run if targ not reached
@@ -1208,7 +1208,7 @@ void REWARD::StartRew()
 	// Store and send packet imediately if coms setup
 	if (fc.isSesStarted) {
 		QueuePacket(&r2a, 'r', duration);
-		SendPacket();
+		SendPacket(&r2a);
 	}
 
 	// Turn on reward LED
@@ -1619,7 +1619,7 @@ void REWARD::CheckFeedArm()
 	if ((doExtendArm || doRetractArm) &&
 		v_isArmMoveDone) {
 
-			is_move_done = true;
+		is_move_done = true;
 	}
 
 	// Check if timedout
@@ -1926,7 +1926,7 @@ bool LOGGER::SetToCmdMode()
 void LOGGER::GetCommand()
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	static int byte_ind_out = 0;
 
 	// Get terminal command
@@ -1961,7 +1961,11 @@ char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 	}
 
 	// Copy message
-	sprintf(msg_copy, msg);
+	for (int i = 0; i < strlen(msg); i++)
+	{
+		msg_copy[i] = msg[i];
+	}
+	msg_copy[strlen(msg)] = '\0';
 
 	// Send
 	port.write(msg_copy);
@@ -1999,7 +2003,7 @@ char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 char LOGGER::GetReply(uint32_t timeout)
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	uint32_t t_start = millis();
 	uint32_t t_timeout = millis() + timeout;
 	int dat_ind[2] = { 0,0 };
@@ -2218,7 +2222,14 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	}
 	// Update log count
 	else {
-		sprintf(msg_copy, "%s", msg);
+		// Copy message
+		for (int i = 0; i < strlen(msg); i++)
+		{
+			msg_copy[i] = msg[i];
+		}
+		msg_copy[strlen(msg)] = '\0';
+
+		// Itterate count
 		cnt_logsStored++;
 	}
 
@@ -2300,7 +2311,7 @@ bool LOGGER::WriteLog(bool do_send)
 void LOGGER::StreamLogs()
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	const int timeout = 1200000;
 	static int cnt_err_set_cmd_mode = 0;
 	static int cnt_err_read_cmd = 0;
@@ -2501,23 +2512,23 @@ void LOGGER::StreamLogs()
 	SetToWriteMode(logFile);
 
 	// Log warnings summary
-	char warn_lines[200] = "|";
+	char warn_lines[200] = "ON LINES |";
 	for (int i = 0; i < cnt_warn; i++) {
 		char str_lin[10];
 		sprintf(str_lin, "%d|", warn_line[i]);
 		strcat(warn_lines, str_lin);
 	}
-	sprintf(str, "TOTAL **WARNINGS**  %d ON LINES %s", cnt_warn, warn_lines);
+	sprintf(str, "TOTAL WARNINGS: %d %s", cnt_warn, cnt_warn > 0 ? warn_lines : "");
 	DebugFlow(str);
 
 	// Log errors summary
-	char err_lines[200] = "|";
+	char err_lines[200] = "ON LINES |";
 	for (int i = 0; i < cnt_err; i++) {
 		char str_lin[10];
 		sprintf(str_lin, "%d|", err_line[i]);
 		strcat(err_lines, str_lin);
 	}
-	sprintf(str, "TOTAL !!ERRORS!!  %d ON LINES %s", cnt_err, err_lines);
+	sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? warn_lines : "");
 	DebugFlow(str);
 
 	// Send any new logs
@@ -2738,7 +2749,7 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 #pragma region --------COMMUNICATION---------
 
 // PARSE SERIAL INPUT
-void GetSerial(R4 *r4, R2 *r2)
+void GetSerial(R4 *r4)
 {
 	/*
 	PARSE DATA FROM CS
@@ -2746,6 +2757,7 @@ void GetSerial(R4 *r4, R2 *r2)
 	*/
 
 	// Local vars
+	char str[300] = { 0 };
 	uint32_t t_str = millis();
 	char dat_str[200] = { 0 };
 	int buff_tx = 0;
@@ -2758,6 +2770,15 @@ void GetSerial(R4 *r4, R2 *r2)
 	uint16_t pack = 0;
 	char foot = ' ';
 	bool do_conf;
+	R2 *r2;
+
+	// Set pointer to R2 struct
+	if (r4->instID == 'c') {
+		r2 = &r2c;
+	}
+	else if (r4->instID == 'a') {
+		r2 = &r2a;
+	}
 
 	// Reset vars
 	cnt_packBytesRead = 0;
@@ -2813,14 +2834,14 @@ void GetSerial(R4 *r4, R2 *r2)
 
 	// Store data string
 	sprintf(dat_str, " head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s bytes_read=%d bytes_dumped=%d rx=%d tx=%d dt_parse=%d dt_send=%d dt_rcv=%d",
-		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "true" : "false", cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx, buff_tx, millis() - t_str, millis() - t_xBeeSent, dt_xBeeRcvd);
+		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "true" : "false", cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx, buff_tx, millis() - t_str, millis() - r2->t_sent, r4->dt_rcvd);
 
 	// Check for matching footer
 	if (foot == r4->foot) {
 
 		// Update recive time
-		dt_xBeeRcvd = t_xBeeRcvd > 0 ? millis() - t_xBeeRcvd : 0;
-		t_xBeeRcvd = millis();
+		r4->dt_rcvd = r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0;
+		r4->t_rcvd = millis();
 
 		// Get id ind
 		id_ind = CharInd(id, r4->id, r4->lng);
@@ -2843,7 +2864,6 @@ void GetSerial(R4 *r4, R2 *r2)
 		r4->cnt_dropped++;
 
 		// Log/print dropped packet info
-		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Dropped %c2r Packet: cnt=%d",
 			r4->instID, r4->cnt_dropped);
 		strcat(str, dat_str);
@@ -2873,10 +2893,9 @@ void GetSerial(R4 *r4, R2 *r2)
 		pack_tot_last = r4->packTot;
 
 		// Log/print skipped packet info
-		char str[200] = { 0 };
-		sprintf(str, "**WARNING** [GetSerial] Missed %c2r Packets: cnt=%d|%d pack_tot_last=%d",
+		sprintf(str, "**WARNING** [GetSerial] Missed %c2r Packets: cnt=%d|%d pack_last=%d",
 			r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last);
-		//strcat(str, dat_str); TEMP
+		strcat(str, dat_str);
 		DebugError(str);
 	}
 
@@ -2915,14 +2934,12 @@ void GetSerial(R4 *r4, R2 *r2)
 	if (cnt_packBytesDiscarded > 0) {
 
 		// Log/print discarded data
-		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Discarded Bytes:%s", dat_str);
 		DebugError(str);
 	}
 
 	// Check if parsing took unusually long
 	if (millis() - t_str > 30) {
-		char str[200] = { 0 };
 		sprintf(str, "**WARNING** [GetSerial] Parser Hanging:%s", dat_str);
 		DebugError(str);
 	}
@@ -3051,37 +3068,61 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 {
 	/*
 	STORE DATA FOR CHEETAH DUE
-	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer, [9]targ
+	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
 	*/
 
 	// Local vars
-	int queue_ind = 0;
-	char head = '\0';
-	char foot = '\0';
-	float dat[3] = { dat1 , dat2 , dat3 };
+	char str[300] = { 0 };
 	int id_ind = 0;
+	float dat[3] = { dat1 , dat2 , dat3 };
+	R4 *r4;
 
-	// Store r2a data in front
-	if (r2->instID == 'a')
-	{
-		// Set queue ind to front
-		queue_ind = sendQueueSize - 1;
-
-		// Shift data back so ard msg is first in queue
-		for (int i = 0; i < sendQueueSize - 1; i++)
-		{
-			for (int j = 0; j < sendQueueBytes; j++)
-			{
-				sendQueue[i][j] = sendQueue[i + 1][j];
-			}
-		}
+	// Set pointer to R4 struct
+	if (r2->instID == 'c') {
+		r4 = &c2r;
+	}
+	else if (r2->instID == 'a') {
+		r4 = &a2r;
 	}
 
-	// Store r2c data in back
-	else if (r2->instID == 'c') {
+	// Update sendQueue ind
+	r2->sendQueueIndStore++;
 
-		// Set queue ind to back
-		queue_ind = sendQueueInd;
+	// Check if ind should roll over 
+	if (r2->sendQueueIndStore == sendQueueSize) {
+
+		// Reset queueIndWrite
+		r2->sendQueueIndStore = 0;
+	}
+
+	// Check if overfloweed
+	if (r2->sendQueue[r2->sendQueueIndStore][0] != '\0')
+	{
+
+		// Get list of empty entries
+		char queue_state[sendQueueSize + 1];
+		for (int i = 0; i < sendQueueSize; i++) {
+			queue_state[i] = r2->sendQueue[i][0] == '\0' ? '0' : '1';
+		}
+		queue_state[sendQueueSize] = '\0';
+
+		// Get buffers
+		int buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
+		int buff_rx = r2->port.available();
+
+		// Store overflow error instead
+		sprintf(str, "!!ERRROR!! [QueuePacket] r2%c SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_send=%d dt_rcv=%d tx=%d rx=%d",
+			r2->instID, r2->sendQueueIndStore, r2->sendQueueIndRead, queue_state, millis() - r2->t_sent, millis() - r4->t_rcvd, buff_tx, buff_rx);
+
+		// Log/print error
+		DebugError(str, true);
+
+		// Set queue back 
+		r2->sendQueueIndStore = r2->sendQueueIndStore - 1 >= 0 ? r2->sendQueueIndStore - 1 : sendQueueSize - 1;
+
+		// Bail
+		return;
+
 	}
 
 	// Itterate packet number
@@ -3089,44 +3130,35 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 		pack = ++r2->cnt_pack;
 	}
 
-	// Update queue index
-	sendQueueInd--;
-
 	// Create byte packet
 	int b_ind = 0;
 	// Store header
-	sendQueue[queue_ind][b_ind++] = r2->head;
+	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = r2->head;
 	// Store mesage id
-	sendQueue[queue_ind][b_ind++] = id;
+	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = id;
 	// Store mesage data 
 	for (int i = 0; i < 3; i++)
 	{
 		U.f = dat[i];
-		sendQueue[queue_ind][b_ind++] = U.b[0];
-		sendQueue[queue_ind][b_ind++] = U.b[1];
-		sendQueue[queue_ind][b_ind++] = U.b[2];
-		sendQueue[queue_ind][b_ind++] = U.b[3];
+		r2->sendQueue[r2->sendQueueIndStore][b_ind++] = U.b[0];
+		r2->sendQueue[r2->sendQueueIndStore][b_ind++] = U.b[1];
+		r2->sendQueue[r2->sendQueueIndStore][b_ind++] = U.b[2];
+		r2->sendQueue[r2->sendQueueIndStore][b_ind++] = U.b[3];
 	}
 	// Store packet number
 	U.f = 0.0f;
 	U.i16[0] = pack;
-	sendQueue[queue_ind][b_ind++] = U.b[0];
-	sendQueue[queue_ind][b_ind++] = U.b[1];
+	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = U.b[0];
+	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = U.b[1];
 	// Store get_confirm request
-	sendQueue[queue_ind][b_ind++] = do_conf ? 1 : 0;
+	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = do_conf ? 1 : 0;
 	// Store footer
-	sendQueue[queue_ind][b_ind++] = r2->foot;
-
-	// Store reciever id in last col
-	sendQueue[queue_ind][b_ind++] = r2->instID;
-
-	// Set to send
-	fc.doPackSend = true;
+	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = r2->foot;
 
 }
 
 // SEND SERIAL PACKET DATA
-void SendPacket()
+bool SendPacket(R2 *r2)
 {
 	/*
 	STORE DATA TO SEND
@@ -3135,122 +3167,97 @@ void SendPacket()
 	*/
 
 	// Local vars
-	const int msg_lng = sendQueueBytes - 1;
-	static byte msg[msg_lng] = { 0 };
-	char dat_str[200] = { 0 };
-	uint32_t t_queue = millis();
+	const int msg_lng = sendQueueBytes;
+	byte msg[msg_lng];
+	cnt_packBytesSent = 0;
 	bool is_resend = false;
-	char targ = ' ';
 	char id = '\0';
 	float dat[3] = { 0 };
 	bool do_conf = 0;
 	uint16_t pack = 0;
-	int id_ind = 0;
-	cnt_packBytesSent = 0;
-	struct R2 *r2;
 	int buff_tx;
 	int buff_rx;
+	int id_ind = 0;
+	char dat_str[200] = { 0 };
+	uint32_t t_queue = millis();
+	R4 *r4;
 
-	// Move next in queue to temp msg array
-	for (int j = 0; j < msg_lng; j++) {
-		msg[j] = sendQueue[sendQueueSize - 1][j];
+	// Set pointer to R4 struct
+	if (r2->instID == 'c') {
+		r4 = &c2r;
+	}
+	else if (r2->instID == 'a') {
+		r4 = &a2r;
 	}
 
-	// Copy target from last row
-	targ = sendQueue[sendQueueSize - 1][sendQueueBytes - 1];
-
-	// Set pointer to struct
-	if (targ == 'c') {
-		r2 = &r2c;
+	// Bail if nothing in queue
+	if (r2->sendQueueIndRead == r2->sendQueueIndStore &&
+		r2->sendQueue[r2->sendQueueIndStore][0] == '\0') {
+		return false;
 	}
-	else if (targ == 'a') {
-		r2 = &r2a;
-	}
-
-	// pull out msg data
-	int b_ind = 1;
-	// id
-	id = msg[b_ind++];
-	// dat
-	for (int i = 0; i < 3; i++)
-	{
-		U.f = 0;
-		U.b[0] = msg[b_ind++];
-		U.b[1] = msg[b_ind++];
-		U.b[2] = msg[b_ind++];
-		U.b[3] = msg[b_ind++];
-		dat[i] = U.f;
-	}
-	// pack
-	U.f = 0.0f;
-	U.b[0] = msg[b_ind++];
-	U.b[1] = msg[b_ind++];
-	pack = U.i16[0];
-	// do_conf 
-	do_conf = msg[b_ind++] == 1 ? true : false;
 
 	// Get buffer 
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
 	buff_rx = r2->port.available();
 
-	// Send sync time or rew tone immediately
-	if (
-		(id == 'r' || id == 'h') &&
-		!(
-			buff_tx == 0 &&
-			buff_rx == 0)
-		) {
-		// Bail
-		return;
+	// Bail if buffer or time inadequate
+	if (!(buff_tx == 0 &&
+		buff_rx == 0 &&
+		millis() > r2->t_sent + dt_sendSent &&
+		millis() > r4->t_rcvd + dt_sendRcvd)) {
+
+		// Indicate still packs to send
+		return true;
 	}
 
-	// Avoid overlap between sent or rcvd events
-	else if (
-		!(buff_tx == 0 &&
-			buff_rx == 0 &&
-			millis() > t_xBeeSent + dt_sendSent &&
-			millis() > t_xBeeRcvd + dt_sendRcvd)) {
-		// Bail
-		return;
+	// Itterate send ind
+	r2->sendQueueIndRead++;
+
+	// Check if ind should roll over 
+	if (r2->sendQueueIndRead == sendQueueSize) {
+		r2->sendQueueIndRead = 0;
 	}
 
 	// Send
-	r2->port.write(msg, msg_lng);
-	r2->stateCTS = digitalRead(r2->pinCTS);
+	r2->port.write(r2->sendQueue[r2->sendQueueIndRead], msg_lng);
+	r2->dt_sent = r2->t_sent > 0 ? millis() - r2->t_sent : 0;
+	r2->t_sent = millis();
 	cnt_packBytesSent = msg_lng;
 
-	// Get total data in buffers
+	// Get buffers
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
 	buff_rx = r2->port.available();
 
-	// Update send time 
-	dt_xBeeSent = t_xBeeSent > 0 ? millis() - t_xBeeSent : 0;
-	t_xBeeSent = millis();
-
-	// Update queue index
-	sendQueueInd++;
-
-	// Remove sent msg from front of queue
-	for (int i = sendQueueSize - 1; i >= 1; i--)
+	// pull out packet data
+	int b_ind = 1;
+	// id
+	id = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+	// dat
+	for (int i = 0; i < 3; i++)
 	{
-		for (int j = 0; j < sendQueueBytes; j++)
-		{
-			sendQueue[i][j] = sendQueue[i - 1][j];
-		}
+		U.f = 0;
+		U.b[0] = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+		U.b[1] = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+		U.b[2] = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+		U.b[3] = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+		dat[i] = U.f;
 	}
-	// Set first entry to all zeros
-	for (int j = 0; j < sendQueueBytes; j++)
-	{
-		sendQueue[0][j] = 0;
-	}
+	// pack
+	U.f = 0.0f;
+	U.b[0] = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+	U.b[1] = r2->sendQueue[r2->sendQueueIndRead][b_ind++];
+	pack = U.i16[0];
+	// do_conf 
+	do_conf = r2->sendQueue[r2->sendQueueIndRead][b_ind++] == 1 ? true : false;
 
-	// Set to not send again if all sent
-	if (sendQueueInd == sendQueueSize - 1) {
-		fc.doPackSend = false;
-	}
+	// Set entry to null
+	r2->sendQueue[r2->sendQueueIndRead][0] = '\0';
 
-	// Get struct ind
+	// Get id ind
 	id_ind = CharInd(id, r2->id, r2->lng);
+
+	// Check if resending
+	is_resend = pack == r2a.packLast[id_ind];
 
 	// Set flags for recieve confirmation
 	if (do_conf) {
@@ -3263,17 +3270,14 @@ void SendPacket()
 	r2->datList[id_ind][2] = dat[2];
 	r2->packLast[id_ind] = r2->pack[id_ind];
 	r2->pack[id_ind] = pack;
-	r2->t_sentList[id_ind] = t_xBeeSent;
+	r2->t_sentList[id_ind] = r2->t_sent;
 
 	// Check if resending
 	is_resend = pack == r2->packLast[id_ind];
 
-	// Get current queue count
-	int cnt_queued = sendQueueSize - sendQueueInd - 1;
-
 	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d cts=%s dt_send=%d dt_rcv=%d dt_queue=%d queued=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "high" : "low", dt_xBeeSent, millis() - t_xBeeRcvd, millis() - t_queue, cnt_queued);
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d cts=%s dt_send=%d dt_rcv=%d dt_queue=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "high" : "low", r2->dt_sent, millis() - r4->t_rcvd, millis() - t_queue);
 
 	// Is first send
 	if (!is_resend) {
@@ -3288,13 +3292,16 @@ void SendPacket()
 		// Log/print resend and count
 		DebugSent(r2, dat_str, true);
 	}
+
+	// Return success
+	return true;
 }
 
 // CHECK IF ROB TO ARD PACKET SHOULD BE RESENT
 bool CheckResend(R2 *r2)
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	char dat_str[200] = { 0 };
 	bool do_pack_resend = false;
 	int dt_sent = 0;
@@ -3509,7 +3516,7 @@ void AD_Reset(float max_speed, float max_acc, float max_dec)
 void AD_CheckOC(bool force_check)
 {
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	static bool dp_disable = false;
 	static int cnt_errors = 0;
 	static int ocd_last_r = 1;
@@ -3852,7 +3859,8 @@ void InitializeTracking()
 		DebugFlow("[InitializeTracking] RUNNING: Initialize Rat Tracking...");
 
 		// Log/print rat and robot starting pos
-		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f", Pos[0].posNow, Pos[2].posNow, Pos[1].posNow);
+		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f",
+			Pos[0].posNow, Pos[2].posNow, Pos[1].posNow);
 		DebugFlow(str);
 
 		// Check that pos values make sense
@@ -4478,8 +4486,11 @@ float CheckBattery(bool force_check)
 {
 	// Local vars
 	char str[200] = { 0 };
-	static uint32_t t_startCheck = millis();
-	static uint32_t t_endCheck = millis() + dt_vccCheck;
+	static uint32_t t_vcc_update = 0;
+	static uint32_t t_vcc_send = 0;
+	static uint32_t t_vcc_print = 0;
+	static uint32_t t_check_str = millis();
+	static uint32_t t_check_end = millis() + dt_vccCheck;
 	static float vcc_arr[10] = { 0 };
 	static float vcc_avg = 0;
 	static float vcc_last = 0;
@@ -4501,7 +4512,7 @@ float CheckBattery(bool force_check)
 	}
 
 	// Not time to check
-	if (millis() < t_startCheck &&
+	if (millis() < t_check_str &&
 		!force_check) {
 
 		// Bail
@@ -4509,12 +4520,12 @@ float CheckBattery(bool force_check)
 	}
 
 	// Done checking
-	else if (millis() > t_endCheck &&
+	else if (millis() > t_check_end &&
 		!force_check) {
 
 		// Reset timers
-		t_startCheck = millis() + dt_vccUpdate;
-		t_endCheck = t_startCheck + dt_vccCheck;
+		t_check_str = millis() + dt_vccUpdate;
+		t_check_end = t_check_str + dt_vccCheck;
 
 		// Turn off relay
 		digitalWrite(pin.Rel_Vcc, LOW);
@@ -4558,7 +4569,7 @@ float CheckBattery(bool force_check)
 	vccNow = vcc_avg;
 
 	// Store time
-	t_vccUpdate = millis();
+	t_vcc_update = millis();
 
 	// Add to array
 	for (int i = 0; i < 10 - 1; i++) {
@@ -4566,16 +4577,20 @@ float CheckBattery(bool force_check)
 	}
 	vcc_arr[9] = vccNow;
 
-	// Send and print if voltage changed and min dt ellapsed
-	if (millis() > t_vccSend + dt_vccSend) {
-		//round(vccNow * 100) != round(vcc_last * 100)) {
+	// Send and print if min dt ellapsed
+	if (fc.doSendVCC &&
+		!fc.doBlockVccSend &&
+		millis() > t_vcc_send + dt_vccSend) {
 
-		// Send voltage once coms established
-		if (fc.doSendVCC &&
-			!fc.doBlockVccSend) {
+		// Send
+		QueuePacket(&r2c, 'J', vccNow, 0, 0, 0, false);
 
-			QueuePacket(&r2c, 'J', vccNow, 0, 0, 0, false);
-		}
+		// Store time
+		t_vcc_send = millis();
+	}
+
+	// Log/print voltage and current
+	if (millis() > t_vcc_print + dt_vccPrint) {
 
 		// Log/print voltage and current
 		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA",
@@ -4583,10 +4598,10 @@ float CheckBattery(bool force_check)
 		DebugFlow(str);
 
 		// Store time
-		t_vccSend = millis();
+		t_vcc_print = millis();
 	}
 
-	// Print voltage and speed to LCD
+	// Print voltage and current to LCD
 	if (millis() > t_solClose + 100) {
 		char vcc_str[100];
 		char speed_str[100];
@@ -4658,7 +4673,7 @@ void QuitSession()
 void CheckLoop()
 {
 	// Local static vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	static bool first_log = true;
 	static uint32_t t_loop_last = millis();
 	static int dt_loop = 0;
@@ -4696,9 +4711,9 @@ void CheckLoop()
 	dt_loop = millis() - t_loop_last;
 	t_loop_last = millis();
 
-	//// TEMP
-	//// Check for errors durring this or last loop
-	//is_loop_error = db.isErrLoop || db.wasErrLoop;
+	// Check for errors durring this or last loop
+	is_loop_error = db.isErrLoop;
+	db.isErrLoop = false;
 
 	// Check long loop time
 	is_dt_change = dt_loop > 60;
@@ -4728,10 +4743,9 @@ void CheckLoop()
 				sprintf(msg, "[CheckLoop] BASELINE:");
 			}
 			else {
-				sprintf(msg, "**CHANGE DETECTED** [CheckLoop] |%s%s%s%s:",
+				sprintf(msg, "**CHANGE DETECTED** [CheckLoop] |%s%s%s:",
 					is_dt_change ? "Loop DT Change|" : "",
-					db.isErrLoop ? "Error This Loop|" : "",
-					db.wasErrLoop ? "Error Last Loop|" : "",
+					is_loop_error ? "Error Loop|" : "",
 					is_buff_flooding ? "Buffer Flooding|" : "");
 			}
 
@@ -4905,7 +4919,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 {
 	// Local vars
 	char msg_out[300] = { 0 };
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	bool do_print = false;
 	bool do_log = false;
 
@@ -4942,12 +4956,12 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 
 	// Add to print queue
 	if (do_print) {
-		QueueDebug(msg_out, t_xBeeRcvd);
+		QueueDebug(msg_out, r4->t_rcvd);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(msg_out, t_xBeeRcvd);
+		Log.QueueLog(msg_out, r4->t_rcvd);
 	}
 
 }
@@ -4957,7 +4971,7 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 {
 	// Local vars
 	char msg_out[300] = { 0 };
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	bool is_resend = false;
 	bool do_print = false;
 	bool do_log = false;
@@ -4994,11 +5008,11 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 
 	// Store
 	if (do_print) {
-		QueueDebug(msg_out, t_xBeeSent);
+		QueueDebug(msg_out, r2->t_sent);
 	}
 
 	if (do_log) {
-		Log.QueueLog(msg_out, t_xBeeSent);
+		Log.QueueLog(msg_out, r2->t_sent);
 	}
 
 }
@@ -5047,7 +5061,12 @@ void QueueDebug(char msg[], uint32_t t)
 
 	}
 	else {
-		sprintf(msg_copy, "%s", msg);
+		// Copy message
+		for (int i = 0; i < strlen(msg); i++)
+		{
+			msg_copy[i] = msg[i];
+		}
+		msg_copy[strlen(msg)] = '\0';
 	}
 
 	// Get sync correction
@@ -5313,7 +5332,7 @@ void LogTrackingData()
 	}
 
 	// Local vars
-	char str[200] = { 0 };
+	char str[300] = { 0 };
 	static int cnt_last = 0;
 	static int16_t pos_hist[10][40] = { { 0 } };
 	static int hist_ind = 0;
@@ -5401,7 +5420,7 @@ void LogTrackingData()
 }
 
 // SEND TEST PACKET
-void TestSendPack(R2 *r2, R4 *r4, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
+void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
 	// EXAMPLE:
 	/*
@@ -5411,7 +5430,7 @@ void TestSendPack(R2 *r2, R4 *r4, char id, float dat1, float dat2, float dat3, u
 	static uint16_t pack = 0;
 	if (send_cnt == 0 && millis()>t_s + 30) {
 		pack++;
-		TestSendPack(&r2c, &c2r, 'Z', 0, 0, 0, 1, true);
+		TestSendPack(&r2c, 'Z', 0, 0, 0, 1, true);
 		t_s = millis();
 		send_cnt++;
 	}
@@ -5430,12 +5449,19 @@ void TestSendPack(R2 *r2, R4 *r4, char id, float dat1, float dat2, float dat3, u
 	STORE DATA FOR CHEETAH DUE
 	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer, [9]targ
 	*/
-	//sendQueue[sendQueueInd + 1][8] = 'i';
+	//r2->sendQueue[sendQueueInd + 1][8] = 'i';
 
 	// Send packet
-	SendPacket();
+	SendPacket(r2);
 
 	// Block resend
+	R4 *r4;
+	if (r2->instID == 'c') {
+		r4 = &c2r;
+	}
+	else if (r2->instID == 'a') {
+		r4 = &a2r;
+	}
 	r2c.doRcvCheck[CharInd(id, r4->id, r4->lng)] = false;
 
 	// Print everything
@@ -5978,8 +6004,6 @@ void loop() {
 
 	// CHECK LOOP TIME AND MEMORY
 	CheckLoop();
-	db.wasErrLoop = db.isErrLoop;
-	db.isErrLoop = false;
 
 	//// TEMP
 	//static uint32_t t_s = 0;
@@ -6065,25 +6089,16 @@ void loop() {
 	////}
 
 	// PARSE CS SERIAL INPUT
-	GetSerial(&c2r, &r2c);
+	GetSerial(&c2r);
 
 	// PARSE CHEETAHDUE SERIAL INPUT
-	GetSerial(&a2r, &r2a);
+	GetSerial(&a2r);
 
-	// SEND SERIAL DATA
-	if (fc.doLogSend) {
-		// Send log
-		Log.StreamLogs();
+	// SEND CHEETAHDUE DATA
+	SendPacket(&r2a);
 
-		// Print
-		if (!fc.doLogSend) {
-			DebugFlow("[loop] FINISHED SENDING LOGS");
-		}
-	}
-	// Send packet
-	else if (fc.doPackSend) {
-		SendPacket();
-	}
+	// SEND CS DATA
+	SendPacket(&r2c);
 
 	// RESEND CHEETAHDUE DATA
 	CheckResend(&r2a);
@@ -6096,6 +6111,17 @@ void loop() {
 
 	// STORE QUEUED LOGS
 	Log.WriteLog();
+
+	// SEND SERIAL DATA
+	if (fc.doLogSend) {
+		// Send log
+		Log.StreamLogs();
+
+		// Print
+		if (!fc.doLogSend) {
+			DebugFlow("[loop] FINISHED SENDING LOGS");
+		}
+	}
 
 	// GET BUTTON INPUT
 	if (GetButtonInput())
@@ -6224,7 +6250,7 @@ void loop() {
 
 				// Send handshake 
 				QueuePacket(&r2c, 'h', 1, 0, 0, 0, true);
-				SendPacket();
+				SendPacket(&r2c);
 			}
 			// Restart loop
 			else {
@@ -6451,7 +6477,8 @@ void loop() {
 		fc.doQuit && millis() > t_quit &&
 		!CheckResend(&r2a) &&
 		!CheckResend(&r2c) &&
-		!fc.doPackSend) {
+		!SendPacket(&r2a) &&
+		!SendPacket(&r2c)) {
 
 		// Quit session
 		DebugFlow("[loop] QUITING...");
@@ -6912,7 +6939,9 @@ void loop() {
 			DebugFlow("[loop] DO SEND LOG");
 
 			// Store remaining logs
-			while (Log.WriteLog());
+			while (Log.WriteLog()) {
+				delay(100);
+			}
 		}
 
 	}

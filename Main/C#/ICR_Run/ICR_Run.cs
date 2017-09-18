@@ -317,7 +317,7 @@ namespace ICR_Run
             if (passed_setup)
                 LogEvent_Thread("[MAIN] SUCCEEDED: SETUP");
             else if (!fc.isRunError)
-                LogEvent_Thread("**WARNING!! [MAIN] ABORTED: SETUP", is_warning:true);
+                LogEvent_Thread("**WARNING!! [MAIN] ABORTED: SETUP", is_warning: true);
             else
                 LogEvent_Thread("!!ERROR!! [MAIN] FAILED: SETUP", is_error: true);
 
@@ -1137,7 +1137,7 @@ namespace ICR_Run
 
                     // Log/print
                     LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue |{0}{1}{2}: {3}",
-                        is_recieving? "Holding for RX|" : "", is_hanging? "Hanging|" : "", is_clogged ? "Clogged|" : "", dat_str + buff_str), is_warning: true);
+                        is_recieving ? "Holding for RX|" : "", is_hanging ? "Hanging|" : "", is_clogged ? "Clogged|" : "", dat_str + buff_str), is_warning: true);
 
                     // Bail if this is pos data
                     if (id == 'P')
@@ -3397,23 +3397,23 @@ namespace ICR_Run
             // Warnings
             if (get_what == "warnings")
             {
-                string warn_lines = "|";
+                string warn_lines = "ON LINES |";
                 for (int i = 0; i < _cnt_warn; i++)
                 {
-                    string.Concat(warn_lines, String.Format("{0}|", _warn_line[i]));
+                    warn_lines = String.Format("{0}{1}|", warn_lines, _warn_line[i]);
                 }
-                summary_str =  String.Format("TOTAL **WARNINGS** {0} ON LINES {1}", _cnt_warn, warn_lines);
+                summary_str = String.Format("TOTAL WARNINGS: {0} {1}", _cnt_warn, _cnt_warn > 0 ? warn_lines : "");
             }
 
             // Errors
             else if (get_what == "errors")
             {
-                string err_lines = "|";
+                string err_lines = "ON LINES |";
                 for (int i = 0; i < _cnt_err; i++)
                 {
-                    string.Concat(err_lines, String.Format("{0}|", _err_line[i]));
+                    err_lines = String.Format("{0}{1}|", err_lines, _err_line[i]);
                 }
-                summary_str = String.Format("TOTAL !!ERRORS!! {0} ON LINES {1}", _cnt_err, err_lines);
+                summary_str = String.Format("TOTAL ERRORS: {0} {1}", _cnt_err, _cnt_err > 0 ? err_lines : "");
             }
 
             // Return string
