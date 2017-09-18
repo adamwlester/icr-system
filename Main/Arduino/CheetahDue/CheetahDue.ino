@@ -299,8 +299,6 @@ union u_tag {
 
 // CHECK FOR START COMMAND
 bool CheckForStart();
-// WAIT FOR LOG STREAMING TO END
-bool WaitForStreamEnd();
 // PARSE SERIAL INPUT
 void GetSerial();
 // WAIT FOR BUFFER TO FILL
@@ -437,56 +435,6 @@ bool CheckForStart()
 
 	// Return success
 	return true;
-}
-
-// WAIT FOR LOG STREAMING TO END
-bool WaitForStreamEnd()
-{
-	// Local vars
-	static char log_term_string[4] = { 0 };
-	byte in_byte[1] = { 0 };
-	byte log_start_byte[1] = { 'l' };
-
-	// Check flag
-	if (!fc.isRobLogging)
-	{
-		// Bail if no new data
-		if (Serial.available() < 1) {
-			return false;
-		}
-
-		// Get new data
-		in_byte[0] = Serial.read();
-
-		// Check for a match
-		if (in_byte[0] == log_start_byte[0]) {
-			DebugFlow("[GetSerial] RUNNING: Wait for Robot Log Streaming...");
-			fc.isRobLogging = true;
-		}
-	}
-
-	// Handle robot log data
-	else {
-
-		// Store data till termination string found
-		while (Serial1.available()) {
-
-			// Get next byte
-			log_term_string[0] = log_term_string[1];
-			log_term_string[1] = log_term_string[2];
-			log_term_string[2] = Serial1.read();
-
-			// Check array for ">>>"
-			if (strcmp(">>>", log_term_string) == 0){
-				fc.isRobLogging = false;
-				DebugFlow("[GetSerial] FINISHED: Wait for Robot Log Streaming");
-				break;
-			}
-		}
-	}
-
-	// Return flag
-	return fc.isRobLogging;
 }
 
 // PARSE SERIAL INPUT
@@ -1929,11 +1877,6 @@ void loop()
 
 	// WAIT FOR HANDSHAKE
 	if (!CheckForStart()) {
-		return;
-	}
-
-	// WAIT FOR LOG STREAMING TO END
-	if (WaitForStreamEnd()) {
 		return;
 	}
 

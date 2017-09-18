@@ -467,11 +467,6 @@ namespace ICR_Run
             bw_MatCOM.RunWorkerAsync(bw_args);
             LogEvent_Thread("[Setup] FINISHED: Start MatCOM Worker...");
 
-            //// TEMP
-            //double[] d = new double[3] { 2.3, 3.2, 4.3 };
-            //RepeatSendPack(send_max: 1, id: 'V', dat: d, pack: 1, do_conf: false, do_check_done: false);
-            //KillMatlab();
-
             // Wait for ICR_GUI to connect to AC computer
             LogEvent_Thread("[Setup] RUNNING: Wait for AC Connect...");
             pass = WaitForMCOM(id: 'A', do_abort: true, timeout: timeoutConnectAC);
@@ -773,10 +768,6 @@ namespace ICR_Run
             pass = WaitForSerial(id: 'L', timeout: 5000);
             if (pass)
             {
-                // Tell CheetahDue logging beggining
-                //byte[] out_byte = new byte[1] { (byte)'l' };
-                //sp_cheetahDue.Write(out_byte, 0, 1);
-
                 // Wait for bytes to receive messages to be received
                 LogEvent_Thread("[Exit] RUNNING: Wait for Robot Log Bytes...");
                 pass = WaitForSerial(id: 'U', check_for: "rcv", timeout: 5000);

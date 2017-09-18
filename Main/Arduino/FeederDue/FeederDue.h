@@ -33,7 +33,7 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = true;
+	bool Console = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
