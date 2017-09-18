@@ -1422,7 +1422,6 @@ void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bo
 {
 	// EXAMPLE:
 	/*
-	// TEMP
 	static uint32_t t_s = 0;
 	static int send_cnt = 0;
 	static uint16_t pack = 0;
