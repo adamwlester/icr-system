@@ -1208,12 +1208,10 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 
 	// Store error info
 	if (is_error) {
-		err_line[cnt_err < 100 ? cnt_err : 99] = cnt_logsStored;
-		cnt_err++;
+		err_line[cnt_err < 100 ? cnt_err++ : 99] = cnt_logsStored;
 	}
 	else {
-		warn_line[cnt_warn < 100 ? cnt_warn : 99] = cnt_logsStored;
-		cnt_warn++;
+		warn_line[cnt_warn < 100 ? cnt_warn++ : 99] = cnt_logsStored;
 	}
 }
 

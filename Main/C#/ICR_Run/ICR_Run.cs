@@ -3256,8 +3256,8 @@ namespace ICR_Run
         private int[] _import_update_bytes = new int[_n_updates];
         private long _cnt_warn = 0;
         private long _cnt_err = 0;
-        private long[] _warn_line = new long[100];
-        private long[] _err_line = new long[100];
+        private long[] _warn_line = new long[1000];
+        private long[] _err_line = new long[1000];
         // Public vars
         public bool isImportTimedout = false;
         public string[] prcnt_str = new string[_n_updates + 1];
@@ -3354,11 +3354,11 @@ namespace ICR_Run
                     // Store error info
                     if (is_error)
                     {
-                        _err_line[_cnt_err++] = cnt_logsStored;
+                        _err_line[_cnt_err<1000? _cnt_err++: 999] = cnt_logsStored;
                     }
                     else if (is_warning)
                     {
-                        _warn_line[_cnt_warn++] = cnt_logsStored;
+                        _warn_line[_cnt_warn < 1000 ? _cnt_warn++ : 999] = cnt_logsStored;
                     }
                 }
             }

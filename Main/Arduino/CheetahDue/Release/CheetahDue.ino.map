@@ -1234,7 +1234,7 @@ END GROUP
 LOAD c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtend.o
 LOAD c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtn.o
 
-.text           0x00080000     0xbcd0
+.text           0x00080000     0xbcd8
                 0x00080000                . = ALIGN (0x4)
                 0x00080000                _sfixed = .
  *(.vectors .vectors.*)
@@ -1252,996 +1252,997 @@ LOAD c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eab
                 0x000803cc       0x3c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
                 0x000803cc                DebugFlow(char*, unsigned long)
  .text._Z10DebugErrorPcbm
-                0x00080408       0x80 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080408       0x84 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
                 0x00080408                DebugError(char*, bool, unsigned long)
  .text._Z9DebugRcvdcPftbiib
-                0x00080488      0x124 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080488                DebugRcvd(char, float*, unsigned short, bool, int, int, bool)
+                0x0008048c      0x124 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x0008048c                DebugRcvd(char, float*, unsigned short, bool, int, int, bool)
  .text._Z9DebugSentcPftbiib
-                0x000805ac      0x128 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x000805ac                DebugSent(char, float*, unsigned short, bool, int, int, bool)
+                0x000805b0      0x128 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x000805b0                DebugSent(char, float*, unsigned short, bool, int, int, bool)
  .text._Z10PrintDebugv
-                0x000806d4       0x50 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x000806d4                PrintDebug()
+                0x000806d8       0x50 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x000806d8                PrintDebug()
  .text._Z11StatusBlinkv
-                0x00080724       0x30 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080724                StatusBlink()
+                0x00080728       0x30 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080728                StatusBlink()
  .text._Z8QuitBeepv
-                0x00080754       0x5c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080754                QuitBeep()
+                0x00080758       0x5c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080758                QuitBeep()
  .text._Z7CharIndcPKci
-                0x000807b0       0x54 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x000807b0                CharInd(char, char const*, int)
+                0x000807b4       0x54 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x000807b4                CharInd(char, char const*, int)
  .text._Z11GetPortWordmPii
-                0x00080804       0x1a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080804                GetPortWord(unsigned long, int*, int)
- *fill*         0x0008081e        0x2 
+                0x00080808       0x1a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080808                GetPortWord(unsigned long, int*, int)
+ *fill*         0x00080822        0x2 
  .text._Z7SetPortmm
-                0x00080820       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080820                SetPort(unsigned long, unsigned long)
+                0x00080824       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080824                SetPort(unsigned long, unsigned long)
  .text._Z8StartRewv
-                0x00080834       0x88 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080834                StartRew()
+                0x00080838       0x88 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080838                StartRew()
  .text._Z6EndRewv
-                0x000808bc       0x48 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x000808bc                EndRew()
+                0x000808c0       0x48 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x000808c0                EndRew()
  .text._Z7PulseIRii
-                0x00080904       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080904                PulseIR(int, int)
+                0x00080908       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080908                PulseIR(int, int)
  .text._Z8ResetTTLv
-                0x00080978      0x150 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080978                ResetTTL()
+                0x0008097c      0x150 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x0008097c                ResetTTL()
  .text._Z8NorthFunv
-                0x00080ac8       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080ac8                NorthFun()
+                0x00080acc       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080acc                NorthFun()
  .text._Z14NorthInterruptv
-                0x00080b3c        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080b3c                NorthInterrupt()
+                0x00080b40        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080b40                NorthInterrupt()
  .text._Z7WestFunv
-                0x00080b40       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080b40                WestFun()
+                0x00080b44       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080b44                WestFun()
  .text._Z13WestInterruptv
-                0x00080bb4        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080bb4                WestInterrupt()
+                0x00080bb8        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080bb8                WestInterrupt()
  .text._Z8SouthFunv
-                0x00080bb8       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080bb8                SouthFun()
+                0x00080bbc       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080bbc                SouthFun()
  .text._Z14SouthInterruptv
-                0x00080c2c        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080c2c                SouthInterrupt()
+                0x00080c30        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080c30                SouthInterrupt()
  .text._Z7EastFunv
-                0x00080c30       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080c30                EastFun()
+                0x00080c34       0x74 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080c34                EastFun()
  .text._Z13EastInterruptv
-                0x00080ca4        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080ca4                EastInterrupt()
+                0x00080ca8        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080ca8                EastInterrupt()
  .text.startup._GLOBAL__sub_I_db
-                0x00080ca8       0x64 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080cac       0x64 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
  .text._Z11QueuePacketcffftb
-                0x00080d0c      0x14c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080d0c                QueuePacket(char, float, float, float, unsigned short, bool)
+                0x00080d10      0x14c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080d10                QueuePacket(char, float, float, float, unsigned short, bool)
  .text._Z10SendPacketv
-                0x00080e58      0x168 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080e58                SendPacket()
+                0x00080e5c      0x168 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080e5c                SendPacket()
  .text._Z7SendLogv
-                0x00080fc0      0x1bc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00080fc0                SendLog()
+                0x00080fc4      0x1bc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00080fc4                SendLog()
  .text._Z13CheckForStartv
-                0x0008117c      0x100 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x0008117c                CheckForStart()
+                0x00081180      0x100 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00081180                CheckForStart()
  .text._Z12WaitBuffReadc
-                0x0008127c      0x240 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x0008127c                WaitBuffRead(char)
+                0x00081280      0x240 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00081280                WaitBuffRead(char)
  .text._Z9GetSerialv
-                0x000814bc      0x294 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x000814bc                GetSerial()
- .text.loop     0x00081750      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00081750                loop
- .text.setup    0x00081b3c      0x244 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
-                0x00081b3c                setup
+                0x000814c0      0x294 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x000814c0                GetSerial()
+ .text.loop     0x00081754      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00081754                loop
+ .text.setup    0x00081b40      0x244 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x00081b40                setup
  .text._Z10freeMemoryv
-                0x00081d80       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
-                0x00081d80                freeMemory()
+                0x00081d84       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
+                0x00081d84                freeMemory()
  .text._Z11serialEventv
-                0x00081d94        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081d94                serialEvent()
- *fill*         0x00081d96        0x2 
+                0x00081d98        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081d98                serialEvent()
+ *fill*         0x00081d9a        0x2 
  .text.UART_Handler
-                0x00081d98        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081d98                UART_Handler
+                0x00081d9c        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081d9c                UART_Handler
  .text._Z12serialEvent1v
-                0x00081da4        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081da4                serialEvent1()
- .text._Z12serialEvent2v
-                0x00081da6        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081da6                serialEvent2()
- .text._Z12serialEvent3v
                 0x00081da8        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081da8                serialEvent3()
- *fill*         0x00081daa        0x2 
+                0x00081da8                serialEvent1()
+ .text._Z12serialEvent2v
+                0x00081daa        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081daa                serialEvent2()
+ .text._Z12serialEvent3v
+                0x00081dac        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081dac                serialEvent3()
+ *fill*         0x00081dae        0x2 
  .text.USART0_Handler
-                0x00081dac        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081dac                USART0_Handler
+                0x00081db0        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081db0                USART0_Handler
  .text.USART1_Handler
-                0x00081db8        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081db8                USART1_Handler
+                0x00081dbc        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081dbc                USART1_Handler
  .text.USART3_Handler
-                0x00081dc4        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081dc4                USART3_Handler
- .text.init     0x00081dd0      0x128 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081dd0                init
+                0x00081dc8        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081dc8                USART3_Handler
+ .text.init     0x00081dd4      0x128 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081dd4                init
  .text.startup._GLOBAL__sub_I_g_APinDescription
-                0x00081ef8       0xd4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081efc       0xd4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
  .text._Z14serialEventRunv
-                0x00081fcc       0x44 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x00081fcc                serialEventRun()
+                0x00081fd0       0x44 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x00081fd0                serialEventRun()
  .text.PIO_PullUp
-                0x00082010        0xa C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
-                0x00082010                PIO_PullUp
+                0x00082014        0xa C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
+                0x00082014                PIO_PullUp
  .text.PIO_SetPeripheral
-                0x0008201a       0x26 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
-                0x0008201a                PIO_SetPeripheral
+                0x0008201e       0x26 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
+                0x0008201e                PIO_SetPeripheral
  .text.PIO_SetInput
-                0x00082040       0x26 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
-                0x00082040                PIO_SetInput
+                0x00082044       0x26 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
+                0x00082044                PIO_SetInput
  .text.PIO_SetOutput
-                0x00082066       0x24 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
-                0x00082066                PIO_SetOutput
- *fill*         0x0008208a        0x2 
+                0x0008206a       0x24 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
+                0x0008206a                PIO_SetOutput
+ *fill*         0x0008208e        0x2 
  .text.PIO_Configure
-                0x0008208c       0x64 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
-                0x0008208c                PIO_Configure
+                0x00082090       0x64 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
+                0x00082090                PIO_Configure
  .text.PIO_GetOutputDataStatus
-                0x000820f0       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
-                0x000820f0                PIO_GetOutputDataStatus
+                0x000820f4       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pio.o)
+                0x000820f4                PIO_GetOutputDataStatus
  .text.pmc_enable_upll_clock
-                0x00082104       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
-                0x00082104                pmc_enable_upll_clock
+                0x00082108       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
+                0x00082108                pmc_enable_upll_clock
  .text.pmc_enable_periph_clk
-                0x00082118       0x44 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
-                0x00082118                pmc_enable_periph_clk
+                0x0008211c       0x44 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
+                0x0008211c                pmc_enable_periph_clk
  .text.pmc_disable_periph_clk
-                0x0008215c       0x40 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
-                0x0008215c                pmc_disable_periph_clk
+                0x00082160       0x40 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
+                0x00082160                pmc_disable_periph_clk
  .text.pmc_switch_udpck_to_upllck
-                0x0008219c       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
-                0x0008219c                pmc_switch_udpck_to_upllck
+                0x000821a0       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
+                0x000821a0                pmc_switch_udpck_to_upllck
  .text.pmc_enable_udpck
-                0x000821b0        0xc C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
-                0x000821b0                pmc_enable_udpck
+                0x000821b4        0xc C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(pmc.o)
+                0x000821b4                pmc_enable_udpck
  .text.SystemInit
-                0x000821bc       0x88 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(system_sam3xa.o)
-                0x000821bc                SystemInit
+                0x000821c0       0x88 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(system_sam3xa.o)
+                0x000821c0                SystemInit
  .text.Reset_Handler
-                0x00082244       0x78 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(startup_sam3xa.o)
-                0x00082244                Reset_Handler
+                0x00082248       0x78 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(startup_sam3xa.o)
+                0x00082248                Reset_Handler
  .text.adc_init
-                0x000822bc       0x98 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
-                0x000822bc                adc_init
+                0x000822c0       0x98 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x000822c0                adc_init
  .text.adc_configure_trigger
-                0x00082354        0xe C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
-                0x00082354                adc_configure_trigger
+                0x00082358        0xe C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x00082358                adc_configure_trigger
  .text.adc_configure_timing
-                0x00082362       0x1a C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
-                0x00082362                adc_configure_timing
+                0x00082366       0x1a C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x00082366                adc_configure_timing
  .text.adc_disable_channel
-                0x0008237c        0xa C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
-                0x0008237c                adc_disable_channel
+                0x00082380        0xa C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x00082380                adc_disable_channel
  .text.adc_disable_all_channel
-                0x00082386        0x8 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
-                0x00082386                adc_disable_all_channel
+                0x0008238a        0x8 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x0008238a                adc_disable_all_channel
  .text.adc_disable_interrupt
-                0x0008238e        0x4 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
-                0x0008238e                adc_disable_interrupt
- *fill*         0x00082392        0x2 
+                0x00082392        0x4 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x00082392                adc_disable_interrupt
+ *fill*         0x00082396        0x2 
  .text.UOTGHS_Handler
-                0x00082394       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs.o)
-                0x00082394                UOTGHS_Handler
- .text.__halt   0x000823a4        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
-                0x000823a4                DACC_Handler
-                0x000823a4                DebugMon_Handler
-                0x000823a4                DMAC_Handler
-                0x000823a4                TRNG_Handler
-                0x000823a4                HardFault_Handler
-                0x000823a4                TC2_Handler
-                0x000823a4                TWI1_Handler
-                0x000823a4                NMI_Handler
-                0x000823a4                TC7_Handler
-                0x000823a4                ADC_Handler
-                0x000823a4                SMC_Handler
-                0x000823a4                RTT_Handler
-                0x000823a4                EFC1_Handler
-                0x000823a4                RTC_Handler
-                0x000823a4                UsageFault_Handler
-                0x000823a4                TC6_Handler
-                0x000823a4                WDT_Handler
-                0x000823a4                CAN0_Handler
-                0x000823a4                TC4_Handler
-                0x000823a4                TC1_Handler
-                0x000823a4                HSMCI_Handler
-                0x000823a4                TC3_Handler
-                0x000823a4                TWI0_Handler
-                0x000823a4                SSC_Handler
-                0x000823a4                EFC0_Handler
-                0x000823a4                PMC_Handler
-                0x000823a4                PWM_Handler
-                0x000823a4                CAN1_Handler
-                0x000823a4                MemManage_Handler
-                0x000823a4                SUPC_Handler
-                0x000823a4                TC8_Handler
-                0x000823a4                USART2_Handler
-                0x000823a4                EMAC_Handler
-                0x000823a4                BusFault_Handler
-                0x000823a4                RSTC_Handler
-                0x000823a4                TC0_Handler
-                0x000823a4                TC5_Handler
-                0x000823a4                SPI0_Handler
+                0x00082398       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs.o)
+                0x00082398                UOTGHS_Handler
+ .text.__halt   0x000823a8        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
+                0x000823a8                DACC_Handler
+                0x000823a8                DebugMon_Handler
+                0x000823a8                DMAC_Handler
+                0x000823a8                TRNG_Handler
+                0x000823a8                HardFault_Handler
+                0x000823a8                TC2_Handler
+                0x000823a8                TWI1_Handler
+                0x000823a8                NMI_Handler
+                0x000823a8                TC7_Handler
+                0x000823a8                ADC_Handler
+                0x000823a8                SMC_Handler
+                0x000823a8                RTT_Handler
+                0x000823a8                EFC1_Handler
+                0x000823a8                RTC_Handler
+                0x000823a8                UsageFault_Handler
+                0x000823a8                TC6_Handler
+                0x000823a8                WDT_Handler
+                0x000823a8                CAN0_Handler
+                0x000823a8                TC4_Handler
+                0x000823a8                TC1_Handler
+                0x000823a8                HSMCI_Handler
+                0x000823a8                TC3_Handler
+                0x000823a8                TWI0_Handler
+                0x000823a8                SSC_Handler
+                0x000823a8                EFC0_Handler
+                0x000823a8                PMC_Handler
+                0x000823a8                PWM_Handler
+                0x000823a8                CAN1_Handler
+                0x000823a8                MemManage_Handler
+                0x000823a8                SUPC_Handler
+                0x000823a8                TC8_Handler
+                0x000823a8                USART2_Handler
+                0x000823a8                EMAC_Handler
+                0x000823a8                BusFault_Handler
+                0x000823a8                RSTC_Handler
+                0x000823a8                TC0_Handler
+                0x000823a8                TC5_Handler
+                0x000823a8                SPI0_Handler
  .text.SVC_Handler
-                0x000823a6        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
-                0x000823a6                SVC_Handler
- .text.PendSV_Handler
                 0x000823aa        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
-                0x000823aa                PendSV_Handler
+                0x000823aa                SVC_Handler
+ .text.PendSV_Handler
+                0x000823ae        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
+                0x000823ae                PendSV_Handler
  .text.SysTick_Handler
-                0x000823ae       0x16 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
-                0x000823ae                SysTick_Handler
- .text.__empty  0x000823c4        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
-                0x000823c4                yield
- .text.__false  0x000823c6        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
-                0x000823c6                sysTickHook
- .text.__halt   0x000823ca        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
-                0x000823ca                svcHook
-                0x000823ca                pendSVHook
- .text._sbrk    0x000823cc       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x000823cc                _sbrk
- .text.link     0x000823e8        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x000823e8                link
- .text._close   0x000823ee        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x000823ee                _close
- .text._fstat   0x000823f4        0xa C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x000823f4                _fstat
- .text._isatty  0x000823fe        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x000823fe                _isatty
- .text._lseek   0x00082402        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x00082402                _lseek
- .text._read    0x00082406        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x00082406                _read
- *fill*         0x0008240a        0x2 
- .text._write   0x0008240c       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x0008240c                _write
- .text._exit    0x00082430       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x00082430                _exit
- .text._kill    0x00082440        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x00082440                _kill
- .text._getpid  0x00082442        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
-                0x00082442                _getpid
+                0x000823b2       0x16 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
+                0x000823b2                SysTick_Handler
+ .text.__empty  0x000823c8        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
+                0x000823c8                yield
+ .text.__false  0x000823ca        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
+                0x000823ca                sysTickHook
+ .text.__halt   0x000823ce        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
+                0x000823ce                svcHook
+                0x000823ce                pendSVHook
+ .text._sbrk    0x000823d0       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x000823d0                _sbrk
+ .text.link     0x000823ec        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x000823ec                link
+ .text._close   0x000823f2        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x000823f2                _close
+ .text._fstat   0x000823f8        0xa C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x000823f8                _fstat
+ .text._isatty  0x00082402        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x00082402                _isatty
+ .text._lseek   0x00082406        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x00082406                _lseek
+ .text._read    0x0008240a        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x0008240a                _read
+ *fill*         0x0008240e        0x2 
+ .text._write   0x00082410       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x00082410                _write
+ .text._exit    0x00082434       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x00082434                _exit
+ .text._kill    0x00082444        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x00082444                _kill
+ .text._getpid  0x00082446        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+                0x00082446                _getpid
  .text.attachInterrupt
-                0x00082448      0x148 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
-                0x00082448                attachInterrupt
+                0x0008244c      0x148 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+                0x0008244c                attachInterrupt
  .text.PIOA_Handler
-                0x00082590       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
-                0x00082590                PIOA_Handler
+                0x00082594       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+                0x00082594                PIOA_Handler
  .text.PIOB_Handler
-                0x000825c8       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
-                0x000825c8                PIOB_Handler
+                0x000825cc       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+                0x000825cc                PIOB_Handler
  .text.PIOC_Handler
-                0x00082600       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
-                0x00082600                PIOC_Handler
+                0x00082604       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+                0x00082604                PIOC_Handler
  .text.PIOD_Handler
-                0x00082638       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
-                0x00082638                PIOD_Handler
- .text.millis   0x00082670        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
-                0x00082670                millis
- .text.delay    0x00082674       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
-                0x00082674                delay
+                0x0008263c       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+                0x0008263c                PIOD_Handler
+ .text.millis   0x00082674        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
+                0x00082674                millis
+ .text.delay    0x00082678       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
+                0x00082678                delay
  .text.analogOutputInit
-                0x00082690        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
-                0x00082690                analogOutputInit
- *fill*         0x00082692        0x2 
- .text.pinMode  0x00082694      0x108 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
-                0x00082694                pinMode
+                0x00082694        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
+                0x00082694                analogOutputInit
+ *fill*         0x00082696        0x2 
+ .text.pinMode  0x00082698      0x108 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
+                0x00082698                pinMode
  .text.digitalWrite
-                0x0008279c       0x70 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
-                0x0008279c                digitalWrite
+                0x000827a0       0x70 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
+                0x000827a0                digitalWrite
  .text.initVariant
-                0x0008280c        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
-                0x0008280c                initVariant
- *fill*         0x0008280e        0x2 
+                0x00082810        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
+                0x00082810                initVariant
+ *fill*         0x00082812        0x2 
  .text.startup.main
-                0x00082810       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
-                0x00082810                main
+                0x00082814       0x38 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
+                0x00082814                main
  .text._ZN5Print5writeEPKhj
-                0x00082848       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
-                0x00082848                Print::write(unsigned char const*, unsigned int)
+                0x0008284c       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
+                0x0008284c                Print::write(unsigned char const*, unsigned int)
  .text._ZN5Print5writeEPKc
-                0x0008286a       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
-                0x0008286a                Print::write(char const*)
+                0x0008286e       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
+                0x0008286e                Print::write(char const*)
  .text._ZN5Print5printEPKc
-                0x00082888        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
-                0x00082888                Print::print(char const*)
+                0x0008288c        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
+                0x0008288c                Print::print(char const*)
  .text.initiateReset
-                0x00082890        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
-                0x00082890                initiateReset
+                0x00082894        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
+                0x00082894                initiateReset
  .text.cancelReset
-                0x0008289c       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
-                0x0008289c                cancelReset
+                0x000828a0       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
+                0x000828a0                cancelReset
  .text.tickReset
-                0x000828ac       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
-                0x000828ac                tickReset
+                0x000828b0       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
+                0x000828b0                tickReset
  .text._ZN10RingBufferC2Ev
-                0x000828cc       0x1a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
-                0x000828cc                RingBuffer::RingBuffer()
-                0x000828cc                RingBuffer::RingBuffer()
+                0x000828d0       0x1a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
+                0x000828d0                RingBuffer::RingBuffer()
+                0x000828d0                RingBuffer::RingBuffer()
  .text._ZN10RingBuffer10store_charEh
-                0x000828e6       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
-                0x000828e6                RingBuffer::store_char(unsigned char)
+                0x000828ea       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
+                0x000828ea                RingBuffer::store_char(unsigned char)
  .text._ZN9UARTClasscvbEv
-                0x00082904        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082904                UARTClass::operator bool()
+                0x00082908        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082908                UARTClass::operator bool()
  .text._ZN9UARTClass9availableEv
-                0x00082908       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082908                UARTClass::available()
+                0x0008290c       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x0008290c                UARTClass::available()
  .text._ZN9UARTClass4peekEv
-                0x0008291a       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x0008291a                UARTClass::peek()
+                0x0008291e       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x0008291e                UARTClass::peek()
  .text._ZN9UARTClass4readEv
-                0x00082936       0x2a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082936                UARTClass::read()
+                0x0008293a       0x2a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x0008293a                UARTClass::read()
  .text._ZN9UARTClass5flushEv
-                0x00082960       0x18 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082960                UARTClass::flush()
+                0x00082964       0x18 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082964                UARTClass::flush()
  .text._ZN9UARTClass5writeEh
-                0x00082978       0x54 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082978                UARTClass::write(unsigned char)
+                0x0008297c       0x54 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x0008297c                UARTClass::write(unsigned char)
  .text._ZN9UARTClass3endEv
-                0x000829cc       0x3c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x000829cc                UARTClass::end()
+                0x000829d0       0x3c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x000829d0                UARTClass::end()
  .text._ZN9UARTClassC2EP4Uart4IRQnmP10RingBufferS4_
-                0x00082a08       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082a08                UARTClass::UARTClass(Uart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
-                0x00082a08                UARTClass::UARTClass(Uart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
+                0x00082a0c       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082a0c                UARTClass::UARTClass(Uart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
+                0x00082a0c                UARTClass::UARTClass(Uart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
  .text._ZN9UARTClass4initEmm
-                0x00082a2c       0x70 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082a2c                UARTClass::init(unsigned long, unsigned long)
+                0x00082a30       0x70 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082a30                UARTClass::init(unsigned long, unsigned long)
  .text._ZN9UARTClass5beginEm
-                0x00082a9c        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082a9c                UARTClass::begin(unsigned long)
+                0x00082aa0        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082aa0                UARTClass::begin(unsigned long)
  .text._ZN9UARTClass17availableForWriteEv
-                0x00082aa4       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082aa4                UARTClass::availableForWrite()
+                0x00082aa8       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082aa8                UARTClass::availableForWrite()
  .text._ZN9UARTClass10IrqHandlerEv
-                0x00082ac2       0x5a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x00082ac2                UARTClass::IrqHandler()
+                0x00082ac6       0x5a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x00082ac6                UARTClass::IrqHandler()
  .text._ZN10USARTClass5beginEm
-                0x00082b1c        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
-                0x00082b1c                USARTClass::begin(unsigned long)
+                0x00082b20        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+                0x00082b20                USARTClass::begin(unsigned long)
  .text._ZN10USARTClassC2EP5Usart4IRQnmP10RingBufferS4_
-                0x00082b24       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
-                0x00082b24                USARTClass::USARTClass(Usart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
-                0x00082b24                USARTClass::USARTClass(Usart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
+                0x00082b28       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+                0x00082b28                USARTClass::USARTClass(Usart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
+                0x00082b28                USARTClass::USARTClass(Usart*, IRQn, unsigned long, RingBuffer*, RingBuffer*)
  .text._watchdogDefaultSetup
-                0x00082b48        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
-                0x00082b48                _watchdogDefaultSetup
-                0x00082b48                watchdogSetup()
+                0x00082b4c        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
+                0x00082b4c                _watchdogDefaultSetup
+                0x00082b4c                watchdogSetup()
  .text._ZN7Serial_9availableEv
-                0x00082b54       0x18 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082b54                Serial_::available()
+                0x00082b58       0x18 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082b58                Serial_::available()
  .text._ZN7Serial_17availableForWriteEv
-                0x00082b6c        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082b6c                Serial_::availableForWrite()
- *fill*         0x00082b72        0x2 
+                0x00082b70        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082b70                Serial_::availableForWrite()
+ *fill*         0x00082b76        0x2 
  .text._ZN7Serial_4peekEv
-                0x00082b74       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082b74                Serial_::peek()
+                0x00082b78       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082b78                Serial_::peek()
  .text._ZN7Serial_5writeEh
-                0x00082b94       0x16 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082b94                Serial_::write(unsigned char)
- *fill*         0x00082baa        0x2 
+                0x00082b98       0x16 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082b98                Serial_::write(unsigned char)
+ *fill*         0x00082bae        0x2 
  .text._ZN7Serial_4readEv
-                0x00082bac       0x44 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082bac                Serial_::read()
+                0x00082bb0       0x44 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082bb0                Serial_::read()
  .text._ZN7Serial_5flushEv
-                0x00082bf0        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082bf0                Serial_::flush()
- *fill*         0x00082bf6        0x2 
+                0x00082bf4        0x6 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082bf4                Serial_::flush()
+ *fill*         0x00082bfa        0x2 
  .text._ZN7Serial_6acceptEv
-                0x00082bf8       0x70 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082bf8                Serial_::accept()
+                0x00082bfc       0x70 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082bfc                Serial_::accept()
  .text._ZN7Serial_5writeEPKhj
-                0x00082c68       0x2c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082c68                Serial_::write(unsigned char const*, unsigned int)
+                0x00082c6c       0x2c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082c6c                Serial_::write(unsigned char const*, unsigned int)
  .text._Z16CDC_GetInterfacePh
-                0x00082c94       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082c94                CDC_GetInterface(unsigned char*)
+                0x00082c98       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082c98                CDC_GetInterface(unsigned char*)
  .text._Z21CDC_GetOtherInterfacePh
-                0x00082ca8       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082ca8                CDC_GetOtherInterface(unsigned char*)
+                0x00082cac       0x14 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082cac                CDC_GetOtherInterface(unsigned char*)
  .text._Z9CDC_SetupR8USBSetup
-                0x00082cbc       0x78 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082cbc                CDC_Setup(USBSetup&)
+                0x00082cc0       0x78 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082cc0                CDC_Setup(USBSetup&)
  .text._ZN7Serial_5beginEm
-                0x00082d34        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082d34                Serial_::begin(unsigned long)
- *fill*         0x00082d36        0x2 
+                0x00082d38        0x2 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082d38                Serial_::begin(unsigned long)
+ *fill*         0x00082d3a        0x2 
  .text._ZN7Serial_cvbEv
-                0x00082d38       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x00082d38                Serial_::operator bool()
+                0x00082d3c       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082d3c                Serial_::operator bool()
  .text.startup._GLOBAL__sub_I_cdc_rx_buffer
-                0x00082d60       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x00082d64       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
  .text.unlikely._ZL11USB_SendZlpv
-                0x00082d7c       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082d80       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .text._Z14USBD_Availablem
-                0x00082d9c       0x2c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082d9c                USBD_Available(unsigned long)
+                0x00082da0       0x2c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082da0                USBD_Available(unsigned long)
  .text._Z9USBD_RecvmPvm
-                0x00082dc8       0x7c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082dc8                USBD_Recv(unsigned long, void*, unsigned long)
+                0x00082dcc       0x7c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082dcc                USBD_Recv(unsigned long, void*, unsigned long)
  .text._Z9USBD_Recvm
-                0x00082e44       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082e44                USBD_Recv(unsigned long)
- *fill*         0x00082e66        0x2 
+                0x00082e48       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082e48                USBD_Recv(unsigned long)
+ *fill*         0x00082e6a        0x2 
  .text._Z9USBD_SendmPKvm
-                0x00082e68       0x4c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082e68                USBD_Send(unsigned long, void const*, unsigned long)
+                0x00082e6c       0x4c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082e6c                USBD_Send(unsigned long, void const*, unsigned long)
  .text._Z16USBD_SendControlhPKvm
-                0x00082eb4       0x40 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082eb4                USBD_SendControl(unsigned char, void const*, unsigned long)
+                0x00082eb8       0x40 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082eb8                USBD_SendControl(unsigned char, void const*, unsigned long)
  .text.unlikely._ZL24USB_SendStringDescriptorPKhi
-                0x00082ef4       0x64 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082ef8       0x64 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .text._Z16USBD_RecvControlPvm
-                0x00082f58       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082f58                USBD_RecvControl(void*, unsigned long)
+                0x00082f5c       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082f5c                USBD_RecvControl(void*, unsigned long)
  .text._Z26USBD_ClassInterfaceRequestR8USBSetup
-                0x00082f74       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082f74                USBD_ClassInterfaceRequest(USBSetup&)
+                0x00082f78       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082f78                USBD_ClassInterfaceRequest(USBSetup&)
  .text._Z19USBD_SendInterfacesv
-                0x00082f92       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082f92                USBD_SendInterfaces()
+                0x00082f96       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082f96                USBD_SendInterfaces()
  .text._Z24USBD_SendOtherInterfacesv
-                0x00082fb4       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082fb4                USBD_SendOtherInterfaces()
+                0x00082fb8       0x22 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082fb8                USBD_SendOtherInterfaces()
  .text._Z10USBD_Flushm
-                0x00082fd6       0x16 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082fd6                USBD_Flush(unsigned long)
+                0x00082fda       0x16 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082fda                USBD_Flush(unsigned long)
  .text._ZN10USBDevice_C2Ev
-                0x00082fec       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00082fec                USBDevice_::USBDevice_()
-                0x00082fec                USBDevice_::USBDevice_()
+                0x00082ff0       0x24 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00082ff0                USBDevice_::USBDevice_()
+                0x00082ff0                USBDevice_::USBDevice_()
  .text._ZN10USBDevice_6attachEv
-                0x00083010       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x00083010                USBDevice_::attach()
+                0x00083014       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00083014                USBDevice_::attach()
  .text.startup._GLOBAL__sub_I_EndPoints
-                0x00083030        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00083034        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .text._ZL7USB_ISRv
-                0x0008303c      0x454 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x00083040      0x454 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .text._ZN13PluggableUSB_12getInterfaceEPh
-                0x00083490       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
-                0x00083490                PluggableUSB_::getInterface(unsigned char*)
+                0x00083494       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+                0x00083494                PluggableUSB_::getInterface(unsigned char*)
  .text._ZN13PluggableUSB_13getDescriptorER8USBSetup
-                0x000834b8       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
-                0x000834b8                PluggableUSB_::getDescriptor(USBSetup&)
+                0x000834bc       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+                0x000834bc                PluggableUSB_::getDescriptor(USBSetup&)
  .text._ZN13PluggableUSB_12getShortNameEPc
-                0x000834d4       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
-                0x000834d4                PluggableUSB_::getShortName(char*)
+                0x000834d8       0x1c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+                0x000834d8                PluggableUSB_::getShortName(char*)
  .text._ZN13PluggableUSB_5setupER8USBSetup
-                0x000834f0       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
-                0x000834f0                PluggableUSB_::setup(USBSetup&)
+                0x000834f4       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+                0x000834f4                PluggableUSB_::setup(USBSetup&)
  .text._Z12PluggableUSBv
-                0x00083510       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
-                0x00083510                PluggableUSB()
+                0x00083514       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+                0x00083514                PluggableUSB()
  .text.TimeTick_Increment
-                0x00083538       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(timetick.o)
-                0x00083538                TimeTick_Increment
+                0x0008353c       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(timetick.o)
+                0x0008353c                TimeTick_Increment
  .text.GetTickCount
-                0x00083548        0xc C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(timetick.o)
-                0x00083548                GetTickCount
+                0x0008354c        0xc C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(timetick.o)
+                0x0008354c                GetTickCount
  .text.WDT_Disable
-                0x00083554        0x8 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(wdt.o)
-                0x00083554                WDT_Disable
+                0x00083558        0x8 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(wdt.o)
+                0x00083558                WDT_Disable
  .text.UDD_SetStack
-                0x0008355c        0xc C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x0008355c                UDD_SetStack
+                0x00083560        0xc C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083560                UDD_SetStack
  .text.UDD_Init
-                0x00083568       0xd0 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083568                UDD_Init
+                0x0008356c       0xd0 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x0008356c                UDD_Init
  .text.UDD_Attach
-                0x00083638       0x50 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083638                UDD_Attach
+                0x0008363c       0x50 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x0008363c                UDD_Attach
  .text.UDD_InitEP
-                0x00083688       0x2c C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083688                UDD_InitEP
+                0x0008368c       0x2c C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x0008368c                UDD_InitEP
  .text.UDD_InitEndpoints
-                0x000836b4       0x3c C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x000836b4                UDD_InitEndpoints
+                0x000836b8       0x3c C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x000836b8                UDD_InitEndpoints
  .text.UDD_WaitIN
-                0x000836f0       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x000836f0                UDD_WaitIN
+                0x000836f4       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x000836f4                UDD_WaitIN
  .text.UDD_WaitOUT
-                0x00083700       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083700                UDD_WaitOUT
+                0x00083704       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083704                UDD_WaitOUT
  .text.UDD_ClearIN
-                0x00083710       0x18 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083710                UDD_ClearIN
+                0x00083714       0x18 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083714                UDD_ClearIN
  .text.UDD_ClearOUT
-                0x00083728       0x18 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083728                UDD_ClearOUT
+                0x0008372c       0x18 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x0008372c                UDD_ClearOUT
  .text.UDD_ReceivedSetupInt
-                0x00083740       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083740                UDD_ReceivedSetupInt
+                0x00083744       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083744                UDD_ReceivedSetupInt
  .text.UDD_ClearSetupInt
-                0x00083750       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083750                UDD_ClearSetupInt
+                0x00083754       0x10 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083754                UDD_ClearSetupInt
  .text.UDD_Send
-                0x00083760       0x88 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083760                UDD_Send
+                0x00083764       0x88 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083764                UDD_Send
  .text.UDD_Send8
-                0x000837e8       0x24 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x000837e8                UDD_Send8
+                0x000837ec       0x24 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x000837ec                UDD_Send8
  .text.UDD_Recv8
-                0x0008380c       0x28 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x0008380c                UDD_Recv8
+                0x00083810       0x28 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083810                UDD_Recv8
  .text.UDD_Recv
-                0x00083834       0x34 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083834                UDD_Recv
+                0x00083838       0x34 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083838                UDD_Recv
  .text.UDD_Stall
-                0x00083868       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083868                UDD_Stall
+                0x0008386c       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x0008386c                UDD_Stall
  .text.UDD_FifoByteCount
-                0x0008387c       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x0008387c                UDD_FifoByteCount
+                0x00083880       0x14 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083880                UDD_FifoByteCount
  .text.UDD_ReleaseRX
-                0x00083890       0x28 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x00083890                UDD_ReleaseRX
+                0x00083894       0x28 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x00083894                UDD_ReleaseRX
  .text.UDD_ReleaseTX
-                0x000838b8       0x28 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x000838b8                UDD_ReleaseTX
+                0x000838bc       0x28 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x000838bc                UDD_ReleaseTX
  .text.UDD_SetAddress
-                0x000838e0       0x20 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
-                0x000838e0                UDD_SetAddress
+                0x000838e4       0x20 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(uotghs_device.o)
+                0x000838e4                UDD_SetAddress
  .text.__fpclassifyd
-                0x00083900       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libm.a(lib_a-s_fpclassify.o)
-                0x00083900                __fpclassifyd
- .text          0x00083950      0x370 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_addsubdf3.o)
-                0x00083950                __aeabi_drsub
-                0x00083958                __aeabi_dsub
-                0x00083958                __subdf3
-                0x0008395c                __aeabi_dadd
-                0x0008395c                __adddf3
-                0x00083bd4                __floatunsidf
-                0x00083bd4                __aeabi_ui2d
-                0x00083bf4                __floatsidf
-                0x00083bf4                __aeabi_i2d
-                0x00083c18                __aeabi_f2d
-                0x00083c18                __extendsfdf2
-                0x00083c54                __floatundidf
-                0x00083c54                __aeabi_ul2d
-                0x00083c64                __floatdidf
-                0x00083c64                __aeabi_l2d
- .text          0x00083cc0      0x424 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_muldivdf3.o)
-                0x00083cc0                __aeabi_dmul
-                0x00083cc0                __muldf3
-                0x00083f14                __divdf3
-                0x00083f14                __aeabi_ddiv
- .text          0x000840e4      0x110 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_cmpdf2.o)
-                0x000840e4                __gtdf2
-                0x000840e4                __gedf2
-                0x000840ec                __ltdf2
-                0x000840ec                __ledf2
-                0x000840f4                __nedf2
-                0x000840f4                __eqdf2
-                0x000840f4                __cmpdf2
-                0x00084170                __aeabi_cdrcmple
-                0x00084180                __aeabi_cdcmpeq
-                0x00084180                __aeabi_cdcmple
-                0x00084190                __aeabi_dcmpeq
-                0x000841a4                __aeabi_dcmplt
-                0x000841b8                __aeabi_dcmple
-                0x000841cc                __aeabi_dcmpge
-                0x000841e0                __aeabi_dcmpgt
- .text          0x000841f4      0x21c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_addsubsf3.o)
-                0x000841f4                __aeabi_frsub
-                0x000841fc                __subsf3
-                0x000841fc                __aeabi_fsub
-                0x00084200                __aeabi_fadd
-                0x00084200                __addsf3
-                0x00084360                __aeabi_ui2f
-                0x00084360                __floatunsisf
-                0x00084368                __aeabi_i2f
-                0x00084368                __floatsisf
-                0x00084384                __aeabi_ul2f
-                0x00084384                __floatundisf
-                0x00084394                __aeabi_l2f
-                0x00084394                __floatdisf
- .text          0x00084410      0x2a0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_muldivsf3.o)
-                0x00084410                __mulsf3
-                0x00084410                __aeabi_fmul
-                0x00084578                __aeabi_fdiv
-                0x00084578                __divsf3
- .text          0x000846b0       0xec c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_cmpsf2.o)
-                0x000846b0                __gesf2
-                0x000846b0                __gtsf2
-                0x000846b8                __lesf2
-                0x000846b8                __ltsf2
-                0x000846c0                __nesf2
-                0x000846c0                __eqsf2
-                0x000846c0                __cmpsf2
-                0x00084720                __aeabi_cfrcmple
-                0x00084728                __aeabi_cfcmpeq
-                0x00084728                __aeabi_cfcmple
-                0x00084738                __aeabi_fcmpeq
-                0x0008474c                __aeabi_fcmplt
-                0x00084760                __aeabi_fcmple
-                0x00084774                __aeabi_fcmpge
-                0x00084788                __aeabi_fcmpgt
- .text          0x0008479c       0x40 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_fixunssfsi.o)
-                0x0008479c                __fixunssfsi
-                0x0008479c                __aeabi_f2uiz
+                0x00083904       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libm.a(lib_a-s_fpclassify.o)
+                0x00083904                __fpclassifyd
+ .text          0x00083954      0x370 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_addsubdf3.o)
+                0x00083954                __aeabi_drsub
+                0x0008395c                __aeabi_dsub
+                0x0008395c                __subdf3
+                0x00083960                __aeabi_dadd
+                0x00083960                __adddf3
+                0x00083bd8                __floatunsidf
+                0x00083bd8                __aeabi_ui2d
+                0x00083bf8                __floatsidf
+                0x00083bf8                __aeabi_i2d
+                0x00083c1c                __aeabi_f2d
+                0x00083c1c                __extendsfdf2
+                0x00083c58                __floatundidf
+                0x00083c58                __aeabi_ul2d
+                0x00083c68                __floatdidf
+                0x00083c68                __aeabi_l2d
+ .text          0x00083cc4      0x424 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_muldivdf3.o)
+                0x00083cc4                __aeabi_dmul
+                0x00083cc4                __muldf3
+                0x00083f18                __divdf3
+                0x00083f18                __aeabi_ddiv
+ .text          0x000840e8      0x110 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_cmpdf2.o)
+                0x000840e8                __gtdf2
+                0x000840e8                __gedf2
+                0x000840f0                __ltdf2
+                0x000840f0                __ledf2
+                0x000840f8                __nedf2
+                0x000840f8                __eqdf2
+                0x000840f8                __cmpdf2
+                0x00084174                __aeabi_cdrcmple
+                0x00084184                __aeabi_cdcmpeq
+                0x00084184                __aeabi_cdcmple
+                0x00084194                __aeabi_dcmpeq
+                0x000841a8                __aeabi_dcmplt
+                0x000841bc                __aeabi_dcmple
+                0x000841d0                __aeabi_dcmpge
+                0x000841e4                __aeabi_dcmpgt
+ .text          0x000841f8      0x21c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_addsubsf3.o)
+                0x000841f8                __aeabi_frsub
+                0x00084200                __subsf3
+                0x00084200                __aeabi_fsub
+                0x00084204                __aeabi_fadd
+                0x00084204                __addsf3
+                0x00084364                __aeabi_ui2f
+                0x00084364                __floatunsisf
+                0x0008436c                __aeabi_i2f
+                0x0008436c                __floatsisf
+                0x00084388                __aeabi_ul2f
+                0x00084388                __floatundisf
+                0x00084398                __aeabi_l2f
+                0x00084398                __floatdisf
+ .text          0x00084414      0x2a0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_muldivsf3.o)
+                0x00084414                __mulsf3
+                0x00084414                __aeabi_fmul
+                0x0008457c                __aeabi_fdiv
+                0x0008457c                __divsf3
+ .text          0x000846b4       0xec c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_cmpsf2.o)
+                0x000846b4                __gesf2
+                0x000846b4                __gtsf2
+                0x000846bc                __lesf2
+                0x000846bc                __ltsf2
+                0x000846c4                __nesf2
+                0x000846c4                __eqsf2
+                0x000846c4                __cmpsf2
+                0x00084724                __aeabi_cfrcmple
+                0x0008472c                __aeabi_cfcmpeq
+                0x0008472c                __aeabi_cfcmple
+                0x0008473c                __aeabi_fcmpeq
+                0x00084750                __aeabi_fcmplt
+                0x00084764                __aeabi_fcmple
+                0x00084778                __aeabi_fcmpge
+                0x0008478c                __aeabi_fcmpgt
+ .text          0x000847a0       0x40 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_fixunssfsi.o)
+                0x000847a0                __fixunssfsi
+                0x000847a0                __aeabi_f2uiz
  .text.__libc_init_array
-                0x000847dc       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-init.o)
-                0x000847dc                __libc_init_array
- .text.iprintf  0x0008482c       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-iprintf.o)
-                0x0008482c                iprintf
- .text.malloc   0x00084854       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-malloc.o)
-                0x00084854                malloc
+                0x000847e0       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-init.o)
+                0x000847e0                __libc_init_array
+ .text.iprintf  0x00084830       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-iprintf.o)
+                0x00084830                iprintf
+ .text.malloc   0x00084858       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-malloc.o)
+                0x00084858                malloc
  .text._malloc_r
-                0x00084864      0x538 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mallocr.o)
-                0x00084864                _malloc_r
- .text.memset   0x00084d9c       0x94 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memset.o)
-                0x00084d9c                memset
+                0x00084868      0x538 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mallocr.o)
+                0x00084868                _malloc_r
+ .text.memset   0x00084da0       0x94 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memset.o)
+                0x00084da0                memset
  .text.__malloc_lock
-                0x00084e30        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mlock.o)
-                0x00084e30                __malloc_lock
- .text.__malloc_unlock
                 0x00084e34        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mlock.o)
-                0x00084e34                __malloc_unlock
- .text._sbrk_r  0x00084e38       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-sbrkr.o)
-                0x00084e38                _sbrk_r
- .text.sprintf  0x00084e5c       0x4c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-sprintf.o)
-                0x00084e5c                sprintf
- .text.strcat   0x00084ea8       0x4c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-strcat.o)
-                0x00084ea8                strcat
- .text.strcpy   0x00084ef4       0xbc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-strcpy.o)
-                0x00084ef4                strcpy
- .text.strlen   0x00084fb0       0x60 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-strlen.o)
-                0x00084fb0                strlen
+                0x00084e34                __malloc_lock
+ .text.__malloc_unlock
+                0x00084e38        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mlock.o)
+                0x00084e38                __malloc_unlock
+ .text._sbrk_r  0x00084e3c       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-sbrkr.o)
+                0x00084e3c                _sbrk_r
+ .text.sprintf  0x00084e60       0x4c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-sprintf.o)
+                0x00084e60                sprintf
+ .text.strcat   0x00084eac       0x4c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-strcat.o)
+                0x00084eac                strcat
+ .text.strcpy   0x00084ef8       0xbc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-strcpy.o)
+                0x00084ef8                strcpy
+ .text.strlen   0x00084fb4       0x60 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-strlen.o)
+                0x00084fb4                strlen
  .text._svfprintf_r
-                0x00085010     0x14e0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
-                0x00085010                _svfprintf_r
- .text.kill     0x000864f0       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-syskill.o)
-                0x000864f0                kill
- .text.sbrk     0x00086500       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-syssbrk.o)
-                0x00086500                sbrk
+                0x00085014     0x14e0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
+                0x00085014                _svfprintf_r
+ .text.kill     0x000864f4       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-syskill.o)
+                0x000864f4                kill
+ .text.sbrk     0x00086504       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-syssbrk.o)
+                0x00086504                sbrk
  .text.__sprint_r.part.0
-                0x00086510       0x78 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
+                0x00086514       0x78 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
  .text._vfiprintf_r
-                0x00086588      0xc54 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
-                0x00086588                _vfiprintf_r
+                0x0008658c      0xc54 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
+                0x0008658c                _vfiprintf_r
  .text.__sbprintf
-                0x000871dc       0x7c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
+                0x000871e0       0x7c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
  .text.__swsetup_r
-                0x00087258       0xc4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wsetup.o)
-                0x00087258                __swsetup_r
+                0x0008725c       0xc4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wsetup.o)
+                0x0008725c                __swsetup_r
  .text.startup.register_fini
-                0x0008731c       0x14 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-__call_atexit.o)
- .text.atexit   0x00087330        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-atexit.o)
-                0x00087330                atexit
- .text.quorem   0x0008733c      0x134 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-dtoa.o)
- .text._dtoa_r  0x00087470      0xe38 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-dtoa.o)
-                0x00087470                _dtoa_r
+                0x00087320       0x14 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-__call_atexit.o)
+ .text.atexit   0x00087334        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-atexit.o)
+                0x00087334                atexit
+ .text.quorem   0x00087340      0x134 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-dtoa.o)
+ *fill*         0x00087474        0x4 
+ .text._dtoa_r  0x00087478      0xe38 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-dtoa.o)
+                0x00087478                _dtoa_r
  .text.__sflush_r
-                0x000882a8      0x148 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fflush.o)
-                0x000882a8                __sflush_r
+                0x000882b0      0x148 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fflush.o)
+                0x000882b0                __sflush_r
  .text._fflush_r
-                0x000883f0       0x2c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fflush.o)
-                0x000883f0                _fflush_r
+                0x000883f8       0x2c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fflush.o)
+                0x000883f8                _fflush_r
  .text._cleanup_r
-                0x0008841c        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
-                0x0008841c                _cleanup_r
- .text.__sinit  0x00088428       0xf4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
-                0x00088428                __sinit
+                0x00088424        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
+                0x00088424                _cleanup_r
+ .text.__sinit  0x00088430       0xf4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
+                0x00088430                __sinit
  .text.__sfp_lock_acquire
-                0x0008851c        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
-                0x0008851c                __sfp_lock_acquire
+                0x00088524        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
+                0x00088524                __sfp_lock_acquire
  .text.__sfp_lock_release
-                0x00088520        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
-                0x00088520                __sfp_lock_release
+                0x00088528        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-findfp.o)
+                0x00088528                __sfp_lock_release
  .text.__libc_fini_array
-                0x00088524       0x30 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fini.o)
-                0x00088524                __libc_fini_array
+                0x0008852c       0x30 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fini.o)
+                0x0008852c                __libc_fini_array
  .text._fputwc_r
-                0x00088554       0xc0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fputwc.o)
-                0x00088554                _fputwc_r
+                0x0008855c       0xc0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fputwc.o)
+                0x0008855c                _fputwc_r
  .text._malloc_trim_r
-                0x00088614       0x9c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-freer.o)
-                0x00088614                _malloc_trim_r
- .text._free_r  0x000886b0      0x198 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-freer.o)
-                0x000886b0                _free_r
+                0x0008861c       0x9c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-freer.o)
+                0x0008861c                _malloc_trim_r
+ .text._free_r  0x000886b8      0x198 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-freer.o)
+                0x000886b8                _free_r
  .text.__sfvwrite_r
-                0x00088848      0x314 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fvwrite.o)
-                0x00088848                __sfvwrite_r
- .text._fwalk   0x00088b5c       0x48 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fwalk.o)
-                0x00088b5c                _fwalk
+                0x00088850      0x314 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fvwrite.o)
+                0x00088850                __sfvwrite_r
+ .text._fwalk   0x00088b64       0x48 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fwalk.o)
+                0x00088b64                _fwalk
  .text.__locale_charset
-                0x00088ba4        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
-                0x00088ba4                __locale_charset
+                0x00088bac        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
+                0x00088bac                __locale_charset
  .text.__locale_mb_cur_max
-                0x00088bac        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
-                0x00088bac                __locale_mb_cur_max
+                0x00088bb4        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
+                0x00088bb4                __locale_mb_cur_max
  .text._localeconv_r
-                0x00088bb8        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
-                0x00088bb8                _localeconv_r
+                0x00088bc0        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
+                0x00088bc0                _localeconv_r
  .text.__smakebuf_r
-                0x00088bc0       0xe0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-makebuf.o)
-                0x00088bc0                __smakebuf_r
- .text.memchr   0x00088ca0       0x94 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memchr-stub.o)
-                0x00088ca0                memchr
- .text          0x00088d34       0xec c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memcpy.o)
-                0x00088d34                memcpy
- .text.memmove  0x00088e20       0xcc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memmove.o)
-                0x00088e20                memmove
- .text._Balloc  0x00088eec       0x4c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00088eec                _Balloc
- .text._Bfree   0x00088f38       0x14 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00088f38                _Bfree
+                0x00088bc8       0xe0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-makebuf.o)
+                0x00088bc8                __smakebuf_r
+ .text.memchr   0x00088ca8       0x94 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memchr-stub.o)
+                0x00088ca8                memchr
+ .text          0x00088d3c       0xec c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memcpy.o)
+                0x00088d3c                memcpy
+ .text.memmove  0x00088e28       0xcc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-memmove.o)
+                0x00088e28                memmove
+ .text._Balloc  0x00088ef4       0x4c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00088ef4                _Balloc
+ .text._Bfree   0x00088f40       0x14 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00088f40                _Bfree
  .text.__multadd
-                0x00088f4c       0x94 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00088f4c                __multadd
+                0x00088f54       0x94 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00088f54                __multadd
  .text.__hi0bits
-                0x00088fe0       0x40 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00088fe0                __hi0bits
+                0x00088fe8       0x40 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00088fe8                __hi0bits
  .text.__lo0bits
-                0x00089020       0x5c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00089020                __lo0bits
- .text.__i2b    0x0008907c       0x14 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x0008907c                __i2b
+                0x00089028       0x5c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00089028                __lo0bits
+ .text.__i2b    0x00089084       0x14 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00089084                __i2b
  .text.__multiply
-                0x00089090      0x13c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00089090                __multiply
+                0x00089098      0x13c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00089098                __multiply
  .text.__pow5mult
-                0x000891cc       0x9c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x000891cc                __pow5mult
+                0x000891d4       0x9c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x000891d4                __pow5mult
  .text.__lshift
-                0x00089268       0xbc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00089268                __lshift
- .text.__mcmp   0x00089324       0x48 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00089324                __mcmp
- .text.__mdiff  0x0008936c       0xd8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x0008936c                __mdiff
- .text.__d2b    0x00089444       0xbc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x00089444                __d2b
+                0x00089270       0xbc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00089270                __lshift
+ .text.__mcmp   0x0008932c       0x48 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x0008932c                __mcmp
+ .text.__mdiff  0x00089374       0xd8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x00089374                __mdiff
+ .text.__d2b    0x0008944c       0xbc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x0008944c                __d2b
  .text._realloc_r
-                0x00089500      0x3c0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-reallocr.o)
-                0x00089500                _realloc_r
- .text._kill_r  0x000898c0       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-signalr.o)
-                0x000898c0                _kill_r
- .text.__sread  0x000898e8       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
-                0x000898e8                __sread
+                0x00089508      0x3c0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-reallocr.o)
+                0x00089508                _realloc_r
+ .text._kill_r  0x000898c8       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-signalr.o)
+                0x000898c8                _kill_r
+ .text.__sread  0x000898f0       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
+                0x000898f0                __sread
  .text.__swrite
-                0x0008990c       0x38 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
-                0x0008990c                __swrite
- .text.__sseek  0x00089944       0x20 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
-                0x00089944                __sseek
+                0x00089914       0x38 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
+                0x00089914                __swrite
+ .text.__sseek  0x0008994c       0x20 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
+                0x0008994c                __sseek
  .text.__sclose
-                0x00089964        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
-                0x00089964                __sclose
+                0x0008996c        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-stdio.o)
+                0x0008996c                __sclose
  .text.__ssprint_r
-                0x0008996c      0x100 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfiprintf.o)
-                0x0008996c                __ssprint_r
+                0x00089974      0x100 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfiprintf.o)
+                0x00089974                __ssprint_r
  .text.__swbuf_r
-                0x00089a6c       0xa8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wbuf.o)
-                0x00089a6c                __swbuf_r
+                0x00089a74       0xa8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wbuf.o)
+                0x00089a74                __swbuf_r
  .text._wcrtomb_r
-                0x00089b14       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wcrtomb.o)
-                0x00089b14                _wcrtomb_r
+                0x00089b1c       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wcrtomb.o)
+                0x00089b1c                _wcrtomb_r
  .text.__ascii_wctomb
-                0x00089b64       0x1c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wctomb_r.o)
-                0x00089b64                __ascii_wctomb
+                0x00089b6c       0x1c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-wctomb_r.o)
+                0x00089b6c                __ascii_wctomb
  .text._write_r
-                0x00089b80       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-writer.o)
-                0x00089b80                _write_r
+                0x00089b88       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-writer.o)
+                0x00089b88                _write_r
  .text.__register_exitproc
-                0x00089ba8       0xa8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-__atexit.o)
-                0x00089ba8                __register_exitproc
+                0x00089bb0       0xa8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-__atexit.o)
+                0x00089bb0                __register_exitproc
  .text._calloc_r
-                0x00089c50       0x60 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-callocr.o)
-                0x00089c50                _calloc_r
+                0x00089c58       0x60 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-callocr.o)
+                0x00089c58                _calloc_r
  .text._close_r
-                0x00089cb0       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-closer.o)
-                0x00089cb0                _close_r
+                0x00089cb8       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-closer.o)
+                0x00089cb8                _close_r
  .text._fclose_r
-                0x00089cd4       0x80 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fclose.o)
-                0x00089cd4                _fclose_r
- .text.fclose   0x00089d54       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fclose.o)
-                0x00089d54                fclose
+                0x00089cdc       0x80 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fclose.o)
+                0x00089cdc                _fclose_r
+ .text.fclose   0x00089d5c       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fclose.o)
+                0x00089d5c                fclose
  .text._fstat_r
-                0x00089d64       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fstatr.o)
-                0x00089d64                _fstat_r
+                0x00089d6c       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-fstatr.o)
+                0x00089d6c                _fstat_r
  .text._isatty_r
-                0x00089d8c       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-isattyr.o)
-                0x00089d8c                _isatty_r
+                0x00089d94       0x24 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-isattyr.o)
+                0x00089d94                _isatty_r
  .text._lseek_r
-                0x00089db0       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-lseekr.o)
-                0x00089db0                _lseek_r
- .text._read_r  0x00089dd8       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-readr.o)
-                0x00089dd8                _read_r
- .text          0x00089e00       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_fixdfsi.o)
-                0x00089e00                __aeabi_d2iz
-                0x00089e00                __fixdfsi
- .text          0x00089e50       0x2c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_aeabi_uldivmod.o)
-                0x00089e50                __aeabi_uldivmod
- .text          0x00089e7c       0x60 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(bpabi.o)
-                0x00089e7c                __gnu_ldivmod_helper
-                0x00089eac                __gnu_uldivmod_helper
- .text          0x00089edc        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_dvmd_tls.o)
-                0x00089edc                __aeabi_idiv0
-                0x00089edc                __aeabi_ldiv0
- .text          0x00089ee0      0x2a0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_divdi3.o)
-                0x00089ee0                __divdi3
- .text          0x0008a180      0x290 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_udivdi3.o)
-                0x0008a180                __udivdi3
+                0x00089db8       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-lseekr.o)
+                0x00089db8                _lseek_r
+ .text._read_r  0x00089de0       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-readr.o)
+                0x00089de0                _read_r
+ .text          0x00089e08       0x50 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_arm_fixdfsi.o)
+                0x00089e08                __aeabi_d2iz
+                0x00089e08                __fixdfsi
+ .text          0x00089e58       0x2c c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_aeabi_uldivmod.o)
+                0x00089e58                __aeabi_uldivmod
+ .text          0x00089e84       0x60 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(bpabi.o)
+                0x00089e84                __gnu_ldivmod_helper
+                0x00089eb4                __gnu_uldivmod_helper
+ .text          0x00089ee4        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_dvmd_tls.o)
+                0x00089ee4                __aeabi_idiv0
+                0x00089ee4                __aeabi_ldiv0
+ .text          0x00089ee8      0x2a0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_divdi3.o)
+                0x00089ee8                __divdi3
+ .text          0x0008a188      0x290 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_udivdi3.o)
+                0x0008a188                __udivdi3
  *(.glue_7t)
  .glue_7t       0x00000000        0x0 linker stubs
  *(.glue_7)
  .glue_7        0x00000000        0x0 linker stubs
  *(.rodata .rodata* .gnu.linkonce.r.*)
- .rodata        0x0008a410       0xc8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+ .rodata        0x0008a418       0xc8 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
  .rodata.str1.1
-                0x0008a4d8      0xa01 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+                0x0008a4e0      0xa01 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
                                 0xa02 (size before relaxing)
- *fill*         0x0008aed9        0x3 
+ *fill*         0x0008aee1        0x3 
  .rodata.g_APinDescription
-                0x0008aedc      0xa2c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
-                0x0008aedc                g_APinDescription
- .rodata        0x0008b908       0x40 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
+                0x0008aee4      0xa2c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+                0x0008aee4                g_APinDescription
+ .rodata        0x0008b910       0x40 C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/libsam_sam3x8e_gcc_rel.a(adc.o)
  .rodata.str1.1
-                0x0008b948       0x19 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
- *fill*         0x0008b961        0x7 
+                0x0008b950       0x19 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+ *fill*         0x0008b969        0x7 
  .rodata._ZTV9UARTClass
-                0x0008b968       0x30 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
-                0x0008b968                vtable for UARTClass
+                0x0008b970       0x30 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+                0x0008b970                vtable for UARTClass
  .rodata._ZTV10USARTClass
-                0x0008b998       0x30 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
-                0x0008b998                vtable for USARTClass
+                0x0008b9a0       0x30 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+                0x0008b9a0                vtable for USARTClass
  .rodata._ZTV7Serial_
-                0x0008b9c8       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
-                0x0008b9c8                vtable for Serial_
+                0x0008b9d0       0x28 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x0008b9d0                vtable for Serial_
  .rodata._ZL18_cdcOtherInterface
-                0x0008b9f0       0x42 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x0008b9f8       0x42 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
  .rodata._ZL13_cdcInterface
-                0x0008ba32       0x42 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+                0x0008ba3a       0x42 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
  .rodata.STRING_PRODUCT
-                0x0008ba74        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x0008ba74                STRING_PRODUCT
+                0x0008ba7c        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008ba7c                STRING_PRODUCT
  .rodata.USB_DeviceDescriptor
-                0x0008ba80       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x0008ba80                USB_DeviceDescriptor
+                0x0008ba88       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008ba88                USB_DeviceDescriptor
  .rodata.STRING_LANGUAGE
-                0x0008ba92        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x0008ba92                STRING_LANGUAGE
+                0x0008ba9a        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008ba9a                STRING_LANGUAGE
  .rodata._ZL18test_packet_buffer
-                0x0008ba96       0x35 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008ba9e       0x35 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .rodata.STRING_MANUFACTURER
-                0x0008bacb        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x0008bacb                STRING_MANUFACTURER
+                0x0008bad3        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008bad3                STRING_MANUFACTURER
  .rodata.USB_DeviceDescriptorA
-                0x0008bad7       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x0008bad7                USB_DeviceDescriptorA
+                0x0008badf       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008badf                USB_DeviceDescriptorA
  .rodata._ZL19USB_DeviceQualifier
-                0x0008bae9        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
- *fill*         0x0008baf2        0x2 
+                0x0008baf1        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+ *fill*         0x0008bafa        0x2 
  .rodata.str1.4
-                0x0008baf4        0x2 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-impure.o)
+                0x0008bafc        0x2 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-impure.o)
                                   0x4 (size before relaxing)
- *fill*         0x0008baf6        0x2 
+ *fill*         0x0008bafe        0x2 
  .rodata._global_impure_ptr
-                0x0008baf8        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-impure.o)
-                0x0008baf8                _global_impure_ptr
+                0x0008bb00        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-impure.o)
+                0x0008bb00                _global_impure_ptr
  .rodata.zeroes.6760
-                0x0008bafc       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
+                0x0008bb04       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
  .rodata.str1.4
-                0x0008bb0c       0x42 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
+                0x0008bb14       0x42 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
                                  0x44 (size before relaxing)
- *fill*         0x0008bb4e        0x2 
+ *fill*         0x0008bb56        0x2 
  .rodata.blanks.6759
-                0x0008bb50       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
+                0x0008bb58       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-svfprintf.o)
  .rodata.blanks.6717
-                0x0008bb60       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
+                0x0008bb68       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
  .rodata.str1.4
                 0x00000000       0x30 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
  .rodata.zeroes.6718
-                0x0008bb70       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
+                0x0008bb78       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-vfiprintf.o)
  .rodata.str1.4
-                0x0008bb80       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-dtoa.o)
+                0x0008bb88       0x10 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-dtoa.o)
                                  0x14 (size before relaxing)
  .rodata.str1.4
-                0x0008bb90        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
+                0x0008bb98        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-locale.o)
                                  0x14 (size before relaxing)
- *fill*         0x0008bb9c        0x4 
+ *fill*         0x0008bba4        0x4 
  .rodata.__mprec_tens
-                0x0008bba0       0xc8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x0008bba0                __mprec_tens
+                0x0008bba8       0xc8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x0008bba8                __mprec_tens
  .rodata.__mprec_bigtens
-                0x0008bc68       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
-                0x0008bc68                __mprec_bigtens
+                0x0008bc70       0x28 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x0008bc70                __mprec_bigtens
  .rodata.p05.5266
-                0x0008bc90        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
+                0x0008bc98        0xc c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-mprec.o)
  *(.ARM.extab* .gnu.linkonce.armextab.*)
-                0x0008bc9c                . = ALIGN (0x4)
+                0x0008bca4                . = ALIGN (0x4)
  *(.init)
- .init          0x0008bc9c        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crti.o
-                0x0008bc9c                _init
- .init          0x0008bca0        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtn.o
-                0x0008bca8                . = ALIGN (0x4)
-                0x0008bca8                __preinit_array_start = .
+ .init          0x0008bca4        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crti.o
+                0x0008bca4                _init
+ .init          0x0008bca8        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtn.o
+                0x0008bcb0                . = ALIGN (0x4)
+                0x0008bcb0                __preinit_array_start = .
  *(.preinit_array)
-                0x0008bca8                __preinit_array_end = .
-                0x0008bca8                . = ALIGN (0x4)
-                0x0008bca8                __init_array_start = .
+                0x0008bcb0                __preinit_array_end = .
+                0x0008bcb0                . = ALIGN (0x4)
+                0x0008bcb0                __init_array_start = .
  *(SORT(.init_array.*))
  .init_array.00000
-                0x0008bca8        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-__call_atexit.o)
+                0x0008bcb0        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/../../../../arm-none-eabi/lib/armv7-m\libg.a(lib_a-__call_atexit.o)
  *(.init_array)
- .init_array    0x0008bcac        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
- .init_array    0x0008bcb0        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
- .init_array    0x0008bcb4        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
- .init_array    0x0008bcb8        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
- .init_array    0x0008bcbc        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
-                0x0008bcc0                __init_array_end = .
-                0x0008bcc0                . = ALIGN (0x4)
+ .init_array    0x0008bcb4        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
+ .init_array    0x0008bcb8        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+ .init_array    0x0008bcbc        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+ .init_array    0x0008bcc0        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+ .init_array    0x0008bcc4        0x4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+                0x0008bcc8                __init_array_end = .
+                0x0008bcc8                . = ALIGN (0x4)
  *crtbegin.o(.ctors)
  *(EXCLUDE_FILE(*crtend.o) .ctors)
  *(SORT(.ctors.*))
  *crtend.o(.ctors)
-                0x0008bcc0                . = ALIGN (0x4)
+                0x0008bcc8                . = ALIGN (0x4)
  *(.fini)
- .fini          0x0008bcc0        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crti.o
-                0x0008bcc0                _fini
- .fini          0x0008bcc4        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtn.o
-                0x0008bccc                . = ALIGN (0x4)
-                0x0008bccc                __fini_array_start = .
+ .fini          0x0008bcc8        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crti.o
+                0x0008bcc8                _fini
+ .fini          0x0008bccc        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtn.o
+                0x0008bcd4                . = ALIGN (0x4)
+                0x0008bcd4                __fini_array_start = .
  *(.fini_array)
- .fini_array    0x0008bccc        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
+ .fini_array    0x0008bcd4        0x4 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
  *(SORT(.fini_array.*))
-                0x0008bcd0                __fini_array_end = .
+                0x0008bcd8                __fini_array_end = .
  *crtbegin.o(.dtors)
  *(EXCLUDE_FILE(*crtend.o) .dtors)
  *(SORT(.dtors.*))
  *crtend.o(.dtors)
-                0x0008bcd0                . = ALIGN (0x4)
-                0x0008bcd0                _efixed = .
-                0x0008bcd0                PROVIDE (__exidx_start, .)
+                0x0008bcd8                . = ALIGN (0x4)
+                0x0008bcd8                _efixed = .
+                0x0008bcd8                PROVIDE (__exidx_start, .)
 
-.vfp11_veneer   0x0008bcd0        0x0
+.vfp11_veneer   0x0008bcd8        0x0
  .vfp11_veneer  0x00000000        0x0 linker stubs
 
-.v4_bx          0x0008bcd0        0x0
+.v4_bx          0x0008bcd8        0x0
  .v4_bx         0x00000000        0x0 linker stubs
 
-.iplt           0x0008bcd0        0x0
+.iplt           0x0008bcd8        0x0
  .iplt          0x00000000        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
 
-.ARM.exidx      0x0008bcd0        0x8
+.ARM.exidx      0x0008bcd8        0x8
  *(.ARM.exidx* .gnu.linkonce.armexidx.*)
- .ARM.exidx     0x0008bcd0        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_divdi3.o)
- .ARM.exidx     0x0008bcd8        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_udivdi3.o)
+ .ARM.exidx     0x0008bcd8        0x8 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_divdi3.o)
+ .ARM.exidx     0x0008bce0        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m\libgcc.a(_udivdi3.o)
                                   0x8 (size before relaxing)
-                0x0008bcd8                PROVIDE (__exidx_end, .)
+                0x0008bce0                PROVIDE (__exidx_end, .)
 
-.eh_frame       0x0008bcd8        0x0
- .eh_frame      0x0008bcd8        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
+.eh_frame       0x0008bce0        0x0
+ .eh_frame      0x0008bce0        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
 
-.rel.dyn        0x0008bcd8        0x0
+.rel.dyn        0x0008bce0        0x0
  .rel.iplt      0x00000000        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
 
-.jcr            0x0008bcd8        0x0
- .jcr           0x0008bcd8        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
+.jcr            0x0008bce0        0x0
+ .jcr           0x0008bce0        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
 
-.igot.plt       0x0008bcd8        0x0
+.igot.plt       0x0008bce0        0x0
  .igot.plt      0x00000000        0x0 c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/../lib/gcc/arm-none-eabi/4.8.3/armv7-m/crtbegin.o
-                0x0008bcd8                . = ALIGN (0x4)
-                0x0008bcd8                _etext = .
+                0x0008bce0                . = ALIGN (0x4)
+                0x0008bce0                _etext = .
 
-.relocate       0x20070000      0xa14 load address 0x0008bcd8
+.relocate       0x20070000      0xa14 load address 0x0008bce0
                 0x20070000                . = ALIGN (0x4)
                 0x20070000                _srelocate = .
  *(.ramfunc .ramfunc.*)
@@ -2312,7 +2313,7 @@ LOAD c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eab
                 0x20070a14                . = ALIGN (0x4)
                 0x20070a14                _erelocate = .
 
-.bss            0x20070a14     0x3058 load address 0x0008c6ec
+.bss            0x20070a14     0x3058 load address 0x0008c6f4
                 0x20070a14                . = ALIGN (0x4)
                 0x20070a14                _sbss = .
                 0x20070a14                _szero = .
@@ -2867,22 +2868,22 @@ OUTPUT(C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Rele
  .debug_abbrev  0x00002f7a      0x6d3 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .debug_abbrev  0x0000364d      0x2b4 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
-.debug_loc      0x00000000     0x50bb
- .debug_loc     0x00000000     0x1556 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
- .debug_loc     0x00001556       0x8a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
- .debug_loc     0x000015e0      0x176 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
- .debug_loc     0x00001756      0x358 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
- .debug_loc     0x00001aae       0xfc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
- .debug_loc     0x00001baa      0x76c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
- .debug_loc     0x00002316      0x1eb C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
- .debug_loc     0x00002501     0x117a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
- .debug_loc     0x0000367b       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
- .debug_loc     0x00003699      0x42b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
- .debug_loc     0x00003ac4      0x230 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
- .debug_loc     0x00003cf4       0x69 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
- .debug_loc     0x00003d5d      0x638 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
- .debug_loc     0x00004395      0xb08 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
- .debug_loc     0x00004e9d      0x21e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+.debug_loc      0x00000000     0x5086
+ .debug_loc     0x00000000     0x1521 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+ .debug_loc     0x00001521       0x8a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+ .debug_loc     0x000015ab      0x176 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+ .debug_loc     0x00001721      0x358 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+ .debug_loc     0x00001a79       0xfc C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
+ .debug_loc     0x00001b75      0x76c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
+ .debug_loc     0x000022e1      0x1eb C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
+ .debug_loc     0x000024cc     0x117a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
+ .debug_loc     0x00003646       0x1e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
+ .debug_loc     0x00003664      0x42b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+ .debug_loc     0x00003a8f      0x230 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+ .debug_loc     0x00003cbf       0x69 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
+ .debug_loc     0x00003d28      0x638 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+ .debug_loc     0x00004360      0xb08 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+ .debug_loc     0x00004e68      0x21e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
 .debug_aranges  0x00000000      0x800
  .debug_aranges
@@ -2948,27 +2949,27 @@ OUTPUT(C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Rele
  .debug_ranges  0x00000930      0x248 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .debug_ranges  0x00000b78       0xd0 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
-.debug_line     0x00000000     0x6720
- .debug_line    0x00000000      0xf02 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
- .debug_line    0x00000f02       0x87 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
- .debug_line    0x00000f89      0x633 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
- .debug_line    0x000015bc      0x35a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
- .debug_line    0x00001916       0xb1 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
- .debug_line    0x000019c7      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
- .debug_line    0x00001e62      0x5d9 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
- .debug_line    0x0000243b      0x35e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
- .debug_line    0x00002799      0x5f3 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
- .debug_line    0x00002d8c      0x4ad C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
- .debug_line    0x00003239      0x3d5 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
- .debug_line    0x0000360e      0x717 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
- .debug_line    0x00003d25      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
- .debug_line    0x000041c0      0x1d7 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
- .debug_line    0x00004397      0x65c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
- .debug_line    0x000049f3      0x4ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
- .debug_line    0x00004ef2      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
- .debug_line    0x000052de      0x814 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
- .debug_line    0x00005af2      0x92f C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
- .debug_line    0x00006421      0x2ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+.debug_line     0x00000000     0x6722
+ .debug_line    0x00000000      0xf04 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+ .debug_line    0x00000f04       0x87 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
+ .debug_line    0x00000f8b      0x633 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+ .debug_line    0x000015be      0x35a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
+ .debug_line    0x00001918       0xb1 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
+ .debug_line    0x000019c9      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+ .debug_line    0x00001e64      0x5d9 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+ .debug_line    0x0000243d      0x35e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
+ .debug_line    0x0000279b      0x5f3 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
+ .debug_line    0x00002d8e      0x4ad C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
+ .debug_line    0x0000323b      0x3d5 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
+ .debug_line    0x00003610      0x717 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
+ .debug_line    0x00003d27      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
+ .debug_line    0x000041c2      0x1d7 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
+ .debug_line    0x00004399      0x65c C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+ .debug_line    0x000049f5      0x4ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+ .debug_line    0x00004ef4      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
+ .debug_line    0x000052e0      0x814 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+ .debug_line    0x00005af4      0x92f C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+ .debug_line    0x00006423      0x2ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
 .debug_str      0x00000000     0x58d5
  .debug_str     0x00000000      0xf4f C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
