@@ -153,7 +153,7 @@ namespace ICR_Run
             _flag_send_rcv: true,
             _id:
             new char[16]{ // prefix giving masage id
-            'i', // handshake request [NA]
+            'i', // setup handshake [NA]
             'p', // simulation data [ts, x, y]
             'G', // matlab gui loaded [NA]
             'A', // connected to AC computer [NA]
@@ -199,8 +199,9 @@ namespace ICR_Run
             _lock_check_done: lock_checkDone,
             _flag_send_rcv: false,
             _id:
-            new char[16] {
+            new char[17] {
             'h', // setup handshake
+            't', // ping test
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -228,8 +229,9 @@ namespace ICR_Run
             _lock_check_done: lock_checkDone,
             _flag_send_rcv: true,
             _id:
-            new char[16] {
+            new char[17] {
             'h', // setup handshake
+            't', // ping test
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -257,7 +259,8 @@ namespace ICR_Run
             _lock_check_done: new object(),
             _flag_send_rcv: false,
             _id:
-            new char[5] {
+            new char[6] {
+            't', // ping test
             'q', // quit/reset
 	        'r', // reward
 	        's', // sound cond [0, 1, 2]
@@ -511,6 +514,27 @@ namespace ICR_Run
 
                 // Log/print success
                 LogEvent_Thread("[Setup] SUCCEEDED: Robot Handshake");
+
+                // Run ping round trip test
+                LogEvent_Thread("[Setup] RUNNING: Ping Test...");
+
+                // Wait for x pings
+                pass = WaitForSerial(id: 't', dat: r2c.dat[r2c.ID_Ind('h')][0] + 1, do_abort: true, timeout: 15000);
+                if (pass)
+                {
+                    // Log/print success
+                    LogEvent_Thread("[Setup] FINISHED: Ping Test");
+
+                    // Log/print average ping time
+                    double dt_ping_r2c = r2c.dat[r2c.ID_Ind('t')][1];
+                    double dt_ping_r2a = r2c.dat[r2c.ID_Ind('t')][2];
+                    LogEvent_Thread(String.Format("PING TIMES: r2c={0:0.00}ms r2a={1:0.00}ms", dt_ping_r2c, dt_ping_r2a));
+                }
+                else
+                {
+                    LogEvent_Thread("!!ERROR!! [Setup] ABORTED: Ping Test", is_error: true);
+                    return false;
+                }
             }
             else
             {
@@ -1237,13 +1261,13 @@ namespace ICR_Run
         }
 
         // WAIT FOR R2C CONFIRMATION
-        public static bool WaitForSerial(char id, string check_for = "send", bool do_abort = false, long timeout = long.MaxValue)
+        public static bool WaitForSerial(char id, double dat = double.NaN, string check_for = "send", bool do_abort = false, long timeout = long.MaxValue)
         {
             // Local vars
             char[] id_arr = { id };
-            return WaitForSerial(id_arr: id_arr, check_for: check_for, do_abort: do_abort, timeout: timeout);
+            return WaitForSerial(id_arr: id_arr, dat: dat, check_for: check_for, do_abort: do_abort, timeout: timeout);
         }
-        public static bool WaitForSerial(char[] id_arr, string check_for = "send", bool do_abort = false, long timeout = long.MaxValue)
+        public static bool WaitForSerial(char[] id_arr, double dat = double.NaN, string check_for = "send", bool do_abort = false, long timeout = long.MaxValue)
         {
             // Local vars
             long t_start = sw_main.ElapsedMilliseconds;
@@ -1254,6 +1278,7 @@ namespace ICR_Run
             bool wait_4_send = false;
             bool wait_4_conf = false;
             bool wait_4_done = false;
+            bool wait_4_dat = false;
             bool pass = false;
             string wait_str = " ";
 
@@ -1269,13 +1294,17 @@ namespace ICR_Run
                 wait_4_send = check_for == "send";
                 wait_4_conf = check_for == "send";
                 wait_4_done = check_for == "send";
+                wait_4_dat = !Double.IsNaN(dat);
 
                 // Wait for confirmation
-                do
+                while (true)
                 {
 
-                    // Check if received
+                    // Check if received id
                     wait_4_rcv = wait_4_rcv ? r2c.Wait4SendRcv(id) : wait_4_rcv;
+
+                    // Check if recieved dat
+                    wait_4_rcv = wait_4_rcv || (wait_4_dat && r2c.dat[r2c.ID_Ind(id)][0] != dat);
 
                     // Check if sent
                     wait_4_send = wait_4_send ? c2r.Wait4SendRcv(id) : wait_4_send;
@@ -1300,8 +1329,8 @@ namespace ICR_Run
                             check_for == "send" ? "Send|" : "", check_for == "rcv" ? "Rcv|" : "", c2r.Wait4RcvConf(id) ? "Conf|" : "", c2r.Wait4DoneConf(id) ? "Done|" : "");
 
                     // Get current status string
-                    string dat_str = String.Format("Wait for {0}: id=\'{1}\' pack={2} check_for={3} do_abort={4} timeout={5} wait_4_conf={6} wait_4_done={7} dt_wait={8}",
-                            wait_str, id, c2r.pack[c2r.ID_Ind(id)], check_for, do_abort, timeout == long.MaxValue ? 0 : timeout, wait_4_conf, wait_4_done, sw_main.ElapsedMilliseconds - t_start);
+                    string dat_str = String.Format("Wait for {0}: id=\'{1}\' dat={2:0.00} pack={3} check_for={4} do_abort={5} timeout={6} wait_4_conf={7} wait_4_done={8} dt_wait={9}",
+                            wait_str, id, dat, c2r.pack[c2r.ID_Ind(id)], check_for, do_abort, timeout == long.MaxValue ? 0 : timeout, wait_4_conf, wait_4_done, sw_main.ElapsedMilliseconds - t_start);
 
                     // Print what we are waiting on
                     if (first_loop)
@@ -1354,7 +1383,7 @@ namespace ICR_Run
 
                         Thread.Sleep(1);
 
-                } while (true);
+                }
 
             }
 
@@ -2973,23 +3002,28 @@ namespace ICR_Run
         public void RunPauseForDB()
         {
             // Pause to let printing finish
-            Thread.Sleep(500);
+            Thread.Sleep(1000);
 
             // Print messeage with error
-            Thread.Sleep(500);
-            Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            if (isRunError)
+            lock (_lock_printLog)
             {
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                // Print all errors
-                for (int i = 0; i < _cnt_err; i++)
-                    Console.WriteLine(_err_list[i]);
-            }
-            else
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+                Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                if (isRunError)
+                {
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    // Print all errors
+                    for (int i = 0; i < _cnt_err; i++)
+                        Console.WriteLine(_err_list[i]);
+                }
+                else
+                {
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                }
 
+                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+                
+            }
 
             // Wait for key press
             lock (_lock_printLog)

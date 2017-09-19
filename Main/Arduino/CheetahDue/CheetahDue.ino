@@ -167,7 +167,8 @@ int cnt_logBytesSent = 0;
 // Serial from rob
 struct R2A
 {
-	const char id[5] = {
+	const char id[6] = {
+		't', // ping test
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
@@ -193,8 +194,9 @@ struct R2C
 {
 	const char head = '<';
 	const char foot = '>';
-	const char id[16] = {
+	const char id[17] = {
 		'h', // setup handshake
+		't', // ping test
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -218,7 +220,8 @@ r2c;
 // Serial to rob
 struct A2R
 {
-	const char id[5] = {
+	const char id[6] = {
+		't', // ping test
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]

@@ -4,6 +4,8 @@
 
 // ######################################
 
+#include "FeederDue.h"
+
 // NOTES:
 /*
 
@@ -35,51 +37,527 @@
 */
 
 
-#pragma region ========== LIBRARIES & EXT DEFS =========
+#pragma region ========== CLASS DECLARATIONS ===========
 
-//----------LIBRARIES------------
-
-// General
-#include <string.h>
-
-
-// Memory
-#include <MemoryFree.h>
-
-// Timers
-#include <DueTimer.h>
-
-// AutoDriver
-
-#include <SPI.h>
-//
-#include "AutoDriver_Due.h"
-
-// Pixy
-
-#include <Wire.h> 
-//
-#include <PixyI2C.h>
-
-// LCD
-#include <LCD5110_Basic.h>
-
-// TinyEKF
-#define N 4     // States
-#define M 6     // Measurements
-#include <TinyEKF.h>
-
-// FeederDue
-#include "FeederDue.h"
-
-//-------SOFTWARE RESET----------
-#define SYSRESETREQ    (1<<2)
-#define VECTKEY        (0x05fa0000UL)
-#define VECTKEY_MASK   (0x0000ffffUL)
-#define AIRCR          (*(uint32_t*)0xe000ed0cUL) // fixed arch-defined address
-#define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
+#pragma region ----------CLASS: POSTRACK----------
+class POSTRACK
+{
+public:
+	// VARS
+	char instID[20] = { 0 };
+	int nSamp = 0;
+	double posArr[6] = { 0,0,0,0,0,0 }; // (cm)
+	uint32_t t_tsArr[6] = { 0,0,0,0,0,0 }; // (ms)
+	int dt_skip = 0;
+	double velNow = 0.0f; // (cm/sec)
+	double velLast = 0.0f; // (cm/sec)
+	double posNow = 0.0f; // (cm)
+	double posAbs = 0.0f; // (cm)
+	int cnt_error = 0;
+	uint32_t t_tsNow = 0;
+	uint32_t t_msNow = millis();
+	int nLaps = 0;
+	int sampCnt = 0;
+	bool isNew = false;
+	bool is_streamStarted = false;
+	uint32_t t_init;
+	// METHODS
+	POSTRACK(uint32_t t, char obj_id[], int n_samp);
+	void UpdatePos(double pos_new, uint32_t ts_new);
+	double GetPos();
+	double GetVel();
+	void SwapPos(double set_pos, uint32_t t);
+	void Reset();
+};
 
 #pragma endregion 
+
+#pragma region ----------CLASS: PID----------
+class PID
+{
+
+public:
+	// VARS
+	uint32_t t_updateLast = 0;
+	double dt_update = 0;
+	bool isPidUpdated = false;
+	double p_term = 0;
+	double i_term = 0;
+	double d_term = 0;
+	bool isFirstRun = true;
+	String mode = "Manual"; // ["Manual" "Automatic" "Halted"]
+	bool isHolding4cross = false;
+	bool doThrottle = false;
+	bool isThrottled = false;
+	double error = 0;
+	double errorLast = 0;
+	double errorFeeder = 0;
+	double integral = 0;
+	double derivative = 0;
+	double velUpdate = 0;
+	double runSpeed = 0;
+	int speedMax = maxSpeed;
+	double dT = 0;
+	double kP = 0;
+	double kI = 0;
+	double kD = 0;
+	float setPoint = 0;
+	uint32_t t_ekfReady = 0;
+	const int dt_ekfSettle = 250; // (ms)
+	bool is_ekfNew = false;
+	float throttleAcc = 20;
+	float throttleSpeedStop = 40;
+	const int dt_throttle = 4000;
+	uint32_t t_throttleTill = 0;
+	uint32_t t_lastThrottle = millis();
+	int cal_dt_min = 40; // (ms)
+	int cal_cntPcArr[4] = { 0, 0, 0, 0 };
+	int cal_stepNow = 0;
+	float cal_PcCnt = 0; // oscillation count
+	float cal_PcSum = 0; // oscillation period sum
+	uint32_t cal_t_PcNow = 0;
+	uint32_t cal_t_PcLast = 0;
+	float cal_PcArr[4] = { 0, 0, 0, 0 };
+	float cal_PcAvg = 0;
+	float cal_PcNow = 0;
+	float cal_PcAll = 0;
+	float cal_errNow = 0;
+	float cal_errLast = 0;
+	float cal_errAvg = 0;
+	float cal_errArr[4] = { 0, 0, 0, 0 };
+	float cal_dt_update = 0;
+	float cal_errCnt = 0;
+	float cal_errSum = 0;
+	float cal_errMax = 0;
+	float cal_errMin = 0;
+	double cal_ratPos = 0;
+	double cal_ratVel = 0;
+	bool cal_isPidUpdated = false;
+	bool cal_isCalFinished = false;
+	uint32_t t_init;
+	// METHODS
+	PID(uint32_t t, const float kC, const float pC, const float set_point);
+	double UpdatePID();
+	void Run(char called_from[]);
+	void Stop(char called_from[]);
+	void Hold(char called_from[]);
+	void Reset();
+	void SetThrottle();
+	void CheckThrottle();
+	void CheckMotorControl();
+	void CheckSetpointCrossing();
+	void CheckEKF(uint32_t t);
+	void ResetEKF(char called_from[]);
+	void SetUpdateTime(uint32_t t);
+	void PrintPID(char msg[]);
+	double RunPidCalibration();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: BULLDOZE----------
+class BULLDOZE
+{
+public:
+	// VARS
+	uint32_t t_updateNext = 0;
+	int dt_update = 50; // (ms)
+	float moveMin = 5; // (cm)
+	String mode = "Inactive"; // ["Active" "Inactive"]
+	String state = "Off"; // ["off", "On", "Hold"]
+	uint32_t t_bullNext = 0; // (ms)
+	int bSpeed = 0;
+	int bDelay = 0; // (ms)
+	double posCheck = 0;
+	double posNow = 0;
+	double distMoved = 0;
+	double guardPos = 0;
+	bool isMoved = false;
+	bool isTimeUp = false;
+	bool isPassedReset = false;
+	uint32_t t_init;
+	// METHODS
+	BULLDOZE(uint32_t t);
+	void UpdateBull();
+	void Reinitialize(byte del, byte spd, char called_from[]);
+	void Run(char called_from[]);
+	void Stop(char called_from[]);
+	void TurnOn(char called_from[]);
+	void TurnOff(char called_from[]);
+	void Hold(char called_from[]);
+	void Resume(char called_from[]);
+	void Reset();
+	void CheckMotorControl();
+	void PrintBull(char msg[]);
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: MOVETO----------
+class MOVETO
+{
+public:
+	// VARS
+	int targSetTimeout = 1000;
+	int moveTimeout = 10000;
+	uint32_t t_tryTargSetTill = 0;
+	uint32_t t_tryMoveTill = 0;
+	bool doAbortMove = false;
+	double posAbs = 0;
+	float minSpeed = 0;
+	const int dt_update = 10;
+	uint32_t t_updateNext = 0;
+	double distLeft = 0;
+	double posCumStart = 0;
+	double posAbsStart = 0;
+	double targPos = 0;
+	double targDist = 0;
+	char moveDir = 'f';
+	double baseSpeed = 0;
+	bool isTargSet = false;
+	bool isMoveStarted = false;
+	bool isTargReached = false;
+	double haltError = 0;
+	const double velCoeff[3] = {
+		0.001830357142857,
+		0.131160714285714,
+		-2.425892857142854,
+	};
+	uint32_t t_init;
+	// METHODS
+	MOVETO(uint32_t t);
+	bool CompTarg(double now_pos, double targ_pos);
+	double DecelToTarg(double now_pos, double now_vel, double dist_decelerate, double speed_min);
+	double GetError(double now_pos);
+	void Reset();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: REWARD----------
+class REWARD
+{
+public:
+	// VARS
+	const int zoneRewDurs[9] = { // (ms)
+		500,
+		910,
+		1420,
+		1840,
+		2000,
+		1840,
+		1420,
+		910,
+		500
+	};
+	const int zoneLocs[9] = { // (deg)
+		20,
+		15,
+		10,
+		5,
+		0,
+		-5,
+		-10,
+		-15,
+		-20,
+	};
+	static const int zoneLng =
+		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
+	double zoneBounds[zoneLng][2] = { { 0 } };
+	int zoneOccTim[zoneLng] = { 0 };
+	int zoneOccCnt[zoneLng] = { 0 };
+	uint32_t t_nowZoneCheck = 0;
+	uint32_t t_lastZoneCheck = 0;
+	char mode_str[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
+	String mode = mode_str;
+	int occThresh = 0; // (ms)
+	int durationDefault = 1420; // (ms) 
+	int duration = 0; // (ms) 
+	byte durationByte = 0; // (ms) 
+	int zoneMin = 0;
+	int zoneMax = 0;
+	double boundMin = 0;
+	double boundMax = 0;
+	uint32_t t_rew_str = 0;
+	uint32_t t_rew_end = 0;
+	uint32_t t_closeSol = 0;
+	uint32_t t_retractArm = 0;
+	uint32_t t_moveArmStr = 0;
+	double rewCenterRel = 0;
+	bool isRewarding = false;
+	bool isBoundsSet = false;
+	bool isZoneTriggered = false;
+	bool isAllZonePassed = false;
+	bool is_ekfNew = false;
+	int zoneInd = 255;
+	int zoneRewarded = 0;
+	double boundsRewarded[2] = { 0 };
+	int occRewarded = 0;
+	int lapN = 0;
+	uint32_t armMoveTimeout = 5000;
+	bool doArmMove = false;
+	bool doExtendArm = false;
+	bool doRetractArm = false;
+	bool doTimedRetract = false;
+	bool isArmExtended = true;
+	const int armExtStps = 150;
+	const int dt_step_high = 500; // (us)
+	const int dt_step_low = 500; // (us)
+	bool isArmStpOn = false;
+	uint32_t t_init;
+	// METHODS
+	REWARD(uint32_t t);
+	void StartRew();
+	bool EndRew();
+	void SetRewDur(int zone_ind);
+	void SetRewMode(char mode_now[], int arg2 = 0);
+	bool CompZoneBounds(double now_pos, double rew_pos);
+	bool CheckZoneBounds(double now_pos);
+	void ExtendFeedArm();
+	void RetractFeedArm();
+	void CheckFeedArm();
+	void Reset();
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: LOGGER----------
+class LOGGER
+{
+public:
+	// VARS
+	USARTClass &port = Serial1;
+	uint32_t t_sent = 0; // (ms)
+	uint32_t t_rcvd = 0; // (ms)
+	uint32_t t_write = 0; // (us)
+	int dt_write = 50 * 1000; // (us)
+	uint32_t t_beginSend = 0;
+	int dt_beginSend = 1000;
+	static const int logQueueSize = 40;
+	char logQueue[logQueueSize][300] = { { 0 } };
+	int queueIndStore = 0;
+	int queueIndRead = 0;
+	int cnt_logsStored = 0;
+	static const int maxBytesStore = 2500;
+	char rcvdArr[maxBytesStore] = { 0 };
+	char mode = ' '; // ['<', '>']
+	char openLgSettings[100] = { 0 };
+	char logFile[50] = { 0 };
+	int logNum = 0;
+	char logCntStr[10] = { 0 };
+	int cnt_logBytesStored = 0;
+	int cnt_logBytesSent = 0;
+	uint32_t t_init;
+	// METHODS
+	LOGGER(uint32_t t);
+	bool Setup();
+	int OpenNewLog();
+	bool SetToCmdMode();
+	void GetCommand();
+	char SendCommand(char msg[], bool do_conf = true, uint32_t timeout = 5000);
+	char GetReply(uint32_t timeout);
+	bool SetToWriteMode(char log_file[]);
+	void QueueLog(char msg[], uint32_t t = millis());
+	bool WriteLog(bool do_send = false);
+	void StreamLogs();
+	void TestLoad(int n_entry, char log_file[] = '\0');
+	int GetFileSize(char log_file[]);
+	void PrintLOGGER(char msg[], bool start_entry = false);
+
+};
+
+#pragma endregion 
+
+#pragma region ----------CLASS: FUSER----------
+class FUSER : public TinyEKF
+{
+public:
+	FUSER()
+	{
+		// We approximate the process noise using a small constant
+		this->setQ(0, 0, .0001); // Rat pos
+		this->setQ(1, 1, .0001); // Rob pos
+		this->setQ(2, 2, .0001); // Rat vel
+		this->setQ(3, 3, .0001); // Rob vel
+
+								 // Same for measurement noise
+		this->setR(0, 0, .001); // Rat pos vt
+		this->setR(1, 1, .001); // Rat pos pixy
+		this->setR(2, 2, .0001); // Rob pos vt
+		this->setR(3, 3, .01); // Rat vel vt
+		this->setR(4, 4, .01); // Rat vel pixy
+		this->setR(5, 5, .001); // Rob vel vt
+	}
+protected:
+	void model(double fx[N], double F[N][N], double hx[M], double H[M][N])
+	{
+		// Process model is f(x) = x
+		fx[0] = this->x[0];
+		fx[1] = this->x[1];
+		fx[2] = this->x[2];
+		fx[3] = this->x[3];
+
+		// So process model Jacobian is identity matrix
+		F[0][0] = 1;
+		F[1][1] = 1;
+		F[2][2] = 1;
+		F[3][3] = 1;
+
+		// Measurement function
+		hx[0] = this->x[0]; // Rat pos vt from previous state
+		hx[1] = this->x[0]; // Rat pos pixy from previous state
+		hx[2] = this->x[1]; // Rob pos vt from previous state
+		hx[3] = this->x[2]; // Rat vel vt from previous state
+		hx[4] = this->x[2]; // Rat vel pixy from previous state
+		hx[5] = this->x[3]; // Rob vel vt from previous state
+
+							// Jacobian of measurement function
+		H[0][0] = 1; // Rat pos vt from previous state
+		H[1][0] = 1; // Rat pos pixy from previous state
+		H[2][1] = 1; // Rob pos vt from previous state
+		H[3][2] = 1; // Rat vel vt from previous state
+		H[4][2] = 1; // Rat vel pixy from previous state
+		H[5][3] = 1; // Rob vel vt from previous state
+	}
+};
+
+#pragma endregion 
+
+#pragma region ----------UNION----------
+union UTAG {
+	byte b[4]; // (byte) 1 byte
+	char c[4]; // (char) 1 byte
+	uint16_t i16[2]; // (uint16_t) 2 byte
+	uint32_t i32; // (uint32_t) 4 byte
+	float f; // (float) 4 byte
+};
+
+#pragma endregion 
+
+#pragma region ----------INITILIZE OBJECTS----------
+
+FUSER ekf;
+UTAG U;
+AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
+AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
+PixyI2C Pixy(0x54);
+LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
+POSTRACK Pos[3] = {
+	POSTRACK(millis(), "RatVT", 4),
+	POSTRACK(millis(), "RobVT", 4),
+	POSTRACK(millis(), "RatPixy", 6)
+};
+PID Pid(millis(), kC, pC, pidSetPoint);
+BULLDOZE Bull(millis());
+MOVETO Move(millis());
+REWARD Reward(millis());
+LOGGER Log(millis());
+
+#pragma endregion 
+
+#pragma endregion 
+
+
+#pragma region ========= FUNCTION DECLARATIONS =========
+
+// PARSE SERIAL INPUT
+void GetSerial(R4 *r4);
+// WAIT FOR BUFFER TO FILL
+byte WaitBuffRead(R4 *r4, char mtch = '\0');
+// STORE PACKET DATA TO BE SENT
+void QueuePacket(R2 *r2, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true);
+// SEND SERIAL PACKET DATA
+bool SendPacket(R2 *r2);
+// CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
+bool CheckResend(R2 *r2);
+// RESET AUTODRIVER BOARDS
+void AD_Reset(float max_speed = maxSpeed, float max_acc = maxAcc, float max_dec = maxDec);
+// CONFIGURE AUTODRIVER BOARDS
+void AD_Config(float max_speed, float max_acc, float max_dec);
+// CHECK AUTODRIVER STATUS
+void AD_CheckOC(bool force_check = false);
+// HARD STOP
+void HardStop(char called_from[]);
+// IR TRIGGERED HARD STOP
+void IRprox_Halt();
+// RUN AUTODRIVER
+bool RunMotor(char dir, double new_speed, String agent);
+// RUN MOTOR MANUALLY
+bool ManualRun(char dir);
+// SET WHATS CONTROLLING THE MOTOR
+bool SetMotorControl(char set_to[], char called_from[]);
+// BLOCK MOTOR TILL TIME ELLAPESED
+void BlockMotorTill(int dt, char called_from[]);
+// CHECK IF TIME ELLAPESED
+void CheckBlockTimElapsed();
+// DO SETUP TO BEGIN TRACKING
+void InitializeTracking();
+// CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
+void CheckSampDT();
+// PROCESS PIXY STREAM
+void CheckPixy();
+// UPDATE EKF
+void UpdateEKF();
+// LOG TRACKING
+void LogTrackingData();
+// CHECK FOR BUTTON INPUT
+bool GetButtonInput();
+// OPEN/CLOSE REWARD SOLENOID
+void OpenCloseRewSolenoid();
+// OPEN/CLOSE EtOH SOLENOID
+void OpenCloseEtOHSolenoid();
+// CHECK FOR ETOH UPDATE
+void CheckEtOH();
+// CHECK BATTERY VALUES
+float CheckBattery(bool force_check = false);
+// TURN LCD LIGHT ON/OFF
+void ChangeLCDlight(uint32_t duty = 256);
+// QUIT AND RESTART ARDUINO
+void QuitSession();
+// CHECK LOOP TIME AND MEMORY
+void CheckLoop();
+// LOG/PRINT MAIN EVENT
+void DebugFlow(char msg[], uint32_t t = millis());
+// LOG/PRINT ERRORS
+void DebugError(char msg[], bool is_error = false, uint32_t t = millis());
+// LOG/PRINT MOTOR CONTROL DEBUG STRING
+void DebugMotorControl(bool pass, char set_to[], char called_from[]);
+// LOG/PRINT MOTOR BLOCKING DEBUG STRING
+void DebugMotorBocking(char msg[], char called_from[], uint32_t t = millis());
+// LOG/PRINT MOTOR SPEED CHANGE
+void DebugRunSpeed(String agent, double speed_last, double speed_now);
+// LOG/PRINT RECIEVED PACKET DEBUG STRING
+void DebugRcvd(R4 *r4, char msg[], bool is_repeat = false);
+// LOG/PRINT SENT PACKET DEBUG STRING
+void DebugSent(R2 *r2, char msg[], bool is_repeat = false);
+// STORE STRING FOR PRINTING
+void QueueDebug(char msg[], uint32_t t);
+// PRINT DEBUG STRINGS TO CONSOLE/LCD
+bool PrintDebug();
+// FOR PRINTING TO LCD
+void PrintLCD(bool do_block, char msg_1[], char msg_2[] = { 0 }, char f_siz = 's');
+// CLEAR LCD
+void ClearLCD();
+// PRINT SPECIAL CHARICTERS
+char* PrintSpecialChars(char chr, bool do_show_byte = false);
+// CHECK AUTODRIVER BOARD STATUS
+int CheckAD_Status(uint16_t stat_reg, String stat_str);
+// SEND TEST PACKET
+void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
+// HOLD FOR CRITICAL ERRORS
+void RunErrorHold(char msg[], uint32_t t_kill = 0);
+// GET ID INDEX
+template <typename T> int CharInd(char id, T *r24);
+// BLINK LEDS AT RESTART/UPLOAD
+bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0);
+// TIMER INTERUPT/HANDLER
+void Interupt_TimerHandler();
+// HALT RUN ON IR TRIGGER
+void Interupt_IRprox_Halt();
+// DETECT IR SYNC EVENT
+void Interupt_IR_Detect();
+
+#pragma endregion
 
 
 #pragma region =========== CLASS DEFINITIONS ===========
@@ -247,7 +725,7 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 {
 	// Make sure pos val range [0, 140*PI]
 	set_pos = set_pos < 0 ? set_pos + (140 * PI) : set_pos;
-	set_pos = set_pos > (140 * PI) ? set_pos - (140 * PI) : set_pos;
+	set_pos = set_pos >(140 * PI) ? set_pos - (140 * PI) : set_pos;
 
 	// Compute ts
 	uint32_t ts = this->t_tsNow + (t - this->t_msNow);
@@ -2773,10 +3251,10 @@ void GetSerial(R4 *r4)
 	R2 *r2;
 
 	// Set pointer to R2 struct
-	if (r4->instID == 'c') {
+	if (r4->instID == "c2r") {
 		r2 = &r2c;
 	}
-	else if (r4->instID == 'a') {
+	else if (r4->instID == "a2r") {
 		r2 = &r2a;
 	}
 
@@ -2844,7 +3322,7 @@ void GetSerial(R4 *r4)
 		r4->t_rcvd = millis();
 
 		// Get id ind
-		id_ind = CharInd(id, r4->id, r4->lng);
+		id_ind = CharInd<R4>(id, r4);
 
 		// Send confirmation
 		if (do_conf) {
@@ -2852,7 +3330,7 @@ void GetSerial(R4 *r4)
 		}
 
 		// Set coms started flag
-		if (r4->instID == 'c' && !fc.isComsStarted) {
+		if (r4->instID == "c2r" && !fc.isComsStarted) {
 			fc.isComsStarted = true;
 		}
 	}
@@ -2864,7 +3342,7 @@ void GetSerial(R4 *r4)
 		r4->cnt_dropped++;
 
 		// Log/print dropped packet info
-		sprintf(str, "**WARNING** [GetSerial] Dropped %c2r Packet: cnt=%d",
+		sprintf(str, "**WARNING** [GetSerial] Dropped %s Packet: cnt=%d",
 			r4->instID, r4->cnt_dropped);
 		strcat(str, dat_str);
 		DebugError(str);
@@ -2893,7 +3371,7 @@ void GetSerial(R4 *r4)
 		pack_tot_last = r4->packTot;
 
 		// Log/print skipped packet info
-		sprintf(str, "**WARNING** [GetSerial] Missed %c2r Packets: cnt=%d|%d pack_last=%d",
+		sprintf(str, "**WARNING** [GetSerial] Missed %s Packets: cnt=%d|%d pack_last=%d",
 			r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last);
 		strcat(str, dat_str);
 		DebugError(str);
@@ -3029,7 +3507,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 	int buff_rx = r4->port.available();
 
 	// Store current info
-	sprintf(dat_str, " from=%c buff=\'%s\' bytes_read=%d bytes_dumped=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
+	sprintf(dat_str, " from=%s buff=\'%s\' bytes_read=%d bytes_dumped=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
 		r4->instID, PrintSpecialChars(buff), cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
 
 	// Buffer flooded
@@ -3078,10 +3556,10 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 	R4 *r4;
 
 	// Set pointer to R4 struct
-	if (r2->instID == 'c') {
+	if (r2->instID == "r2c") {
 		r4 = &c2r;
 	}
-	else if (r2->instID == 'a') {
+	else if (r2->instID == "r2a") {
 		r4 = &a2r;
 	}
 
@@ -3111,7 +3589,7 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 		int buff_rx = r2->port.available();
 
 		// Store overflow error instead
-		sprintf(str, "!!ERRROR!! [QueuePacket] r2%c SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_send=%d dt_rcv=%d tx=%d rx=%d",
+		sprintf(str, "!!ERRROR!! [QueuePacket] %s SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_send=%d dt_rcv=%d tx=%d rx=%d",
 			r2->instID, r2->sendQueueIndStore, r2->sendQueueIndRead, queue_state, millis() - r2->t_sent, millis() - r4->t_rcvd, buff_tx, buff_rx);
 
 		// Log/print error
@@ -3183,10 +3661,10 @@ bool SendPacket(R2 *r2)
 	R4 *r4;
 
 	// Set pointer to R4 struct
-	if (r2->instID == 'c') {
+	if (r2->instID == "r2c") {
 		r4 = &c2r;
 	}
-	else if (r2->instID == 'a') {
+	else if (r2->instID == "r2a") {
 		r4 = &a2r;
 	}
 
@@ -3254,7 +3732,7 @@ bool SendPacket(R2 *r2)
 	r2->sendQueue[r2->sendQueueIndRead][0] = '\0';
 
 	// Get id ind
-	id_ind = CharInd(id, r2->id, r2->lng);
+	id_ind = CharInd<R2>(id, r2);
 
 	// Check if resending
 	is_resend = pack == r2a.packLast[id_ind];
@@ -3324,7 +3802,7 @@ bool CheckResend(R2 *r2)
 
 			// Get dat string
 			sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt_sent=%dms tx=%d rx=%d",
-				 r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
+				r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
 
 			if (r2->cnt_resend[i] < resendMax) {
 
@@ -3335,7 +3813,7 @@ bool CheckResend(R2 *r2)
 				r2->cnt_resend[i]++;
 
 				// Print resent packet
-				sprintf(str, "**WARNING** [CheckResend] Resending r2%c Packet: cnt=%d %s", 
+				sprintf(str, "**WARNING** [CheckResend] Resending %s Packet: cnt=%d %s",
 					r2->instID, r2->cnt_resend[i], dat_str);
 				DebugError(str);
 
@@ -3348,7 +3826,7 @@ bool CheckResend(R2 *r2)
 			else {
 
 				// Log/print error
-				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending r2%c Packet: cnt=%d %s", 
+				sprintf(str, "!!ERROR!! [CheckResend] ABORTED: Resending %s Packet: cnt=%d %s",
 					r2->instID, r2->cnt_resend[i], dat_str);
 				DebugError(str, true);
 
@@ -3428,7 +3906,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	Peak Amp for 2.82 A stepper = 2.82*1.41 = 3.97 mA
 	*/
 	AD_R.setOCThreshold(OC_4875mA);
-	AD_F.setOCThreshold(OC_3750mA);
+	AD_F.setOCThreshold(OC_4875mA);
 
 	// Low speed compensation
 	/*
@@ -3478,14 +3956,14 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	// NIMA 23 24V MIN KVALS
 	AD_R.setAccKVAL(50);				        // This controls the acceleration current
 	AD_R.setDecKVAL(50);				        // This controls the deceleration current
-	AD_R.setRunKVAL(50);					    // This controls the run current
-	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
+	AD_R.setRunKVAL(60);					    // This controls the run current
+	AD_R.setHoldKVAL(35);				        // This controls the holding current keep it low
 
 												// NIMA 17 24V
 	AD_F.setAccKVAL(50);				        // This controls the acceleration current
 	AD_F.setDecKVAL(50);				        // This controls the deceleration current
-	AD_F.setRunKVAL(50);					    // This controls the run current
-	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
+	AD_F.setRunKVAL(60);					    // This controls the run current
+	AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
 
 												/*
 												// NIMA 17 12V
@@ -4548,7 +5026,7 @@ float CheckBattery(bool force_check)
 
 			// Turn on switch
 			digitalWrite(pin.Rel_Vcc, HIGH);
-			
+
 			// Bail
 			return vccNow;
 		}
@@ -4603,7 +5081,7 @@ float CheckBattery(bool force_check)
 
 		// Log/print voltage and current
 		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA dt_check=%d",
-			vccNow, icNow, millis()- t_vcc_update);
+			vccNow, icNow, millis() - t_vcc_update);
 		DebugFlow(str);
 
 		// Store time
@@ -4707,6 +5185,11 @@ void CheckLoop()
 		return;
 	}
 
+	// Bail if this is a test run
+	if (db.is_runTest) {
+		return;
+	}
+
 	// Get total data left in buffers
 	c_buff_rx = c2r.port.available();
 	c_buff_tx = SERIAL_BUFFER_SIZE - 1 - c2r.port.availableForWrite();
@@ -4721,8 +5204,10 @@ void CheckLoop()
 	t_loop_last = millis();
 
 	// Check for errors durring this or last loop
+	/*
 	is_loop_error = db.isErrLoop;
 	db.isErrLoop = false;
+	*/
 
 	// Check long loop time
 	is_dt_change = dt_loop > 60;
@@ -4934,12 +5419,12 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 
 	// Get print status
 	do_print =
-		((r4->instID == 'c' && ((db.print_c2r && r4->idNow != 'P') || (db.print_rcvdVT && r4->idNow == 'P'))) ||
-		(r4->instID == 'a' && db.print_a2r)) &&
+		((r4->instID == "c2r" && ((db.print_c2r && r4->idNow != 'P') || (db.print_rcvdVT && r4->idNow == 'P'))) ||
+		(r4->instID == "a2r" && db.print_a2r)) &&
 			(db.Console || db.LCD);
 	do_log =
-		((r4->instID == 'c' && db.log_c2r && r4->idNow != 'P') ||
-		(r4->instID == 'a' && db.log_a2r)) &&
+		((r4->instID == "c2r" && db.log_c2r && r4->idNow != 'P') ||
+		(r4->instID == "a2r" && db.log_a2r)) &&
 		db.Log;
 
 	// Bail if neither set
@@ -4949,10 +5434,10 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 
 	// Check if this is a repeat
 	if (!is_repeat) {
-		sprintf(msg_out, "   [RCVD] %c2r: %s", r4->instID, msg);
+		sprintf(msg_out, "   [RCVD] %s: %s", r4->instID, msg);
 	}
 	else {
-		sprintf(msg_out, "   [*RE-RCVD*] %c2r: cnt=%d %s", r4->instID, r4->cnt_repeat, msg);
+		sprintf(msg_out, "   [*RE-RCVD*] %s: cnt=%d %s", r4->instID, r4->cnt_repeat, msg);
 	}
 
 	// Add samp dt for pos data
@@ -4986,17 +5471,17 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 	bool do_log = false;
 
 	// Set pointer to struct
-	if (r2->instID == 'c') {
+	if (r2->instID == "r2c") {
 		r2 = &r2c;
 	}
-	else if (r2->instID == 'a') {
+	else if (r2->instID == "r2a") {
 		r2 = &r2a;
 	}
 
 	// Get print status
-	do_print = ((db.print_r2c && r2->instID == 'c') || (db.print_r2a && r2->instID == 'a')) &&
+	do_print = ((db.print_r2c && r2->instID == "r2c") || (db.print_r2a && r2->instID == "r2a")) &&
 		(db.Console || db.LCD);
-	do_log = ((db.log_r2c && r2->instID == 'c') || (db.log_r2a && r2->instID == 'a')) &&
+	do_log = ((db.log_r2c && r2->instID == "r2c") || (db.log_r2a && r2->instID == "r2a")) &&
 		db.Log;
 
 	// Bail if neither set
@@ -5006,10 +5491,10 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 
 	// Check if this is a repeat
 	if (!is_repeat) {
-		sprintf(msg_out, "   [SENT] r2%c: %s", r2->instID, msg);
+		sprintf(msg_out, "   [SENT] %s: %s", r2->instID, msg);
 	}
 	else {
-		sprintf(msg_out, "   [*RE-SENT*] r2%c: cnt=%d %s", r2->instID, r2->cnt_repeat, msg);
+		sprintf(msg_out, "   [*RE-SENT*] %s: cnt=%d %s", r2->instID, r2->cnt_repeat, msg);
 	}
 
 	// Concatinate strings
@@ -5146,8 +5631,8 @@ void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 	// Print
 	if (msg_2[0] != '\0')
 	{
-		LCD.print(msg_1, 5, 24-4);
-		LCD.print(msg_2, 5, 24+4);
+		LCD.print(msg_1, 5, 24 - 4);
+		LCD.print(msg_2, 5, 24 + 4);
 	}
 	else {
 		LCD.print(msg_1, 5, 24);
@@ -5391,15 +5876,14 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 {
 	// EXAMPLE:
 	/*
-	// TEMP
 	static uint32_t t_s = 0;
 	static int send_cnt = 0;
 	static uint16_t pack = 0;
 	if (send_cnt == 0 && millis()>t_s + 30) {
-		pack++;
-		TestSendPack(&r2c, 'Z', 0, 0, 0, 1, true);
-		t_s = millis();
-		send_cnt++;
+	pack++;
+	TestSendPack(&r2c, 'Z', 0, 0, 0, 1, true);
+	t_s = millis();
+	send_cnt++;
 	}
 	*/
 
@@ -5423,13 +5907,13 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 
 	// Block resend
 	R4 *r4;
-	if (r2->instID == 'c') {
+	if (r2->instID == "r2c") {
 		r4 = &c2r;
 	}
-	else if (r2->instID == 'a') {
+	else if (r2->instID == "r2a") {
 		r4 = &a2r;
 	}
-	r2c.doRcvCheck[CharInd(id, r4->id, r4->lng)] = false;
+	r2c.doRcvCheck[CharInd<R4>(id, r4)] = false;
 
 	// Print everything
 	while (PrintDebug());
@@ -5491,23 +5975,23 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 #pragma region --------MINOR FUNCTIONS---------
 
 // GET ID INDEX
-int CharInd(char id, const char id_arr[], int arr_size)
+template <typename T> int CharInd(char id, T *r24)
 {
 	// Local vars
 	char str[200] = { 0 };
 
 	// Return -1 if not found
 	int ind = -1;
-	for (int i = 0; i < arr_size; i++) {
+	for (int i = 0; i < r24->lng; i++) {
 
-		if (id == id_arr[i]) {
+		if (id == r24->id[i]) {
 			ind = i;
 		}
 	}
 
 	// Print error if not found
 	if (ind == -1) {
-		sprintf(str, "**WARNING** [CharInd] ID \'%c\' Not Found", id);
+		sprintf(str, "**WARNING** [CharInd] ID \'%c\' Not Found in %s", id, r24->instID);
 		DebugError(str);
 	}
 
@@ -5516,28 +6000,51 @@ int CharInd(char id, const char id_arr[], int arr_size)
 }
 
 // BLINK LEDS AT RESTART/UPLOAD
-void StatusBlink(int n_blinks, int dt_led)
+bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 {
+	static uint32_t t_blink_last = 0;
+	static byte _n_blinks = 0;
+	static uint16_t _dt_led = 0;
+	static bool do_led_on = true;
+	static bool do_blink = true;
+	static int cnt_blink = 0;
 	int duty[2] = { 100, 0 };
-	bool do_led_on = true;
-	int cnt_blink = 0;
+
+	// Set values
+	if (do_set) {
+		_n_blinks = n_blinks;
+		_dt_led = dt_blink;
+		do_blink = true;
+	}
+
+	// Bail if not running
+	else if (!do_blink) {
+		return false;
+	}
 
 	// Flash sequentially
-	while (cnt_blink <= n_blinks)
-	{
-		analogWrite(pin.Disp_LED, duty[(int)do_led_on]);
-		delay(dt_led);
-		analogWrite(pin.TrackLED, duty[(int)do_led_on]);
-		delay(dt_led);
-		analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
-		delay(100);
-		do_led_on = !do_led_on;
-		cnt_blink = !do_led_on ? cnt_blink + 1 : cnt_blink;
+	if (cnt_blink <= n_blinks) {
+		if (millis() > t_blink_last + _dt_led) {
+			analogWrite(pin.Disp_LED, duty[(int)do_led_on]);
+			analogWrite(pin.TrackLED, duty[(int)do_led_on]);
+			analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
+			t_blink_last = millis();
+			do_led_on = !do_led_on;
+			cnt_blink = !do_led_on ? cnt_blink + 1 : cnt_blink;
+		}
+		return true;
 	}
+
 	// Reset LEDs
-	analogWrite(pin.Disp_LED, 0);
-	analogWrite(pin.RewLED_C, rewLEDmin);
-	analogWrite(pin.TrackLED, trackLEDduty);
+	else {
+		analogWrite(pin.Disp_LED, 0);
+		analogWrite(pin.RewLED_C, rewLEDmin);
+		analogWrite(pin.TrackLED, trackLEDduty);
+		do_led_on = true;
+		cnt_blink = 0;
+		do_blink = false;
+		return false;
+	}
 }
 
 #pragma endregion
@@ -5781,14 +6288,15 @@ void setup() {
 	delayMicroseconds(100);
 
 	// ENABLE VOLTGAGE REGULATORS
-	delay(250);
+	delay(1000); 
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V_ENBLE, HIGH);
 
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);
-	StatusBlink(1, 0);
+	StatusBlink(true, 1, 100);
+	while (StatusBlink());
 
 	// INITIALIZE LCD
 	LCD.InitLCD();
@@ -6097,6 +6605,9 @@ void loop() {
 	// GET VCC
 	CheckBattery();
 
+	// CHECK STATUS BLINK
+	StatusBlink();
+
 #pragma endregion
 
 #pragma region //--- FIRST PASS SETUP ---
@@ -6131,7 +6642,7 @@ void loop() {
 				DebugFlow(horeStr);
 
 				// Send handshake 
-				QueuePacket(&r2c, 'h', 1, 0, 0, 0, true);
+				QueuePacket(&r2c, 'h', n_pings, 0, 0, 0, true);
 				SendPacket(&r2c);
 			}
 			// Restart loop
@@ -6141,7 +6652,7 @@ void loop() {
 		}
 
 		// DO SETUP BLINK
-		StatusBlink(5);
+		StatusBlink(true, 5, 100);
 
 		// RESET LCD
 		if (!fc.isManualSes &&
@@ -6180,6 +6691,9 @@ void loop() {
 		// Store message data
 		cmd.testCond = (byte)c2r.dat[0];
 		cmd.testDat = (byte)c2r.dat[1];
+
+		// Set testing flag
+		db.is_runTest = true;
 
 		// Set run pid calibration flag
 		if (cmd.testCond == 1)
@@ -6287,7 +6801,7 @@ void loop() {
 			// Print values
 			/*
 			millis()%50 == 0
-			{Pid.cal_isCalFinished}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
+			{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
 			*/
 			millis();
 			// Plot error
@@ -6300,6 +6814,76 @@ void loop() {
 		}
 	}
 
+#pragma endregion
+
+#pragma region //--- (h) PING TEST ---
+	if (c2r.idNow == 'h' && c2r.isNew)
+	{
+		// Log/print
+		DebugFlow("[loop] DO PING TEST");
+
+		// Print remaining queue
+		while (PrintDebug());
+		// Store remaining logs
+		while (Log.WriteLog());
+
+		// Make sure all data sent
+		do {
+			GetSerial(&c2r);
+		} while (SendPacket(&r2c));
+		do {
+			GetSerial(&a2r);
+		} while (SendPacket(&r2a));
+
+		// Send pings
+		while (cnt_ping < n_pings) {
+
+			// Interate count
+			cnt_ping++;
+
+			// Pick CS and CheetahDue
+			for (int i = 0; i < 2; i++)
+			{
+				R2 *r2 = i == 0 ? &r2c : &r2a;
+				R4 *r4 = i == 0 ? &c2r : &a2r;
+
+				// Send next r2c ping
+				QueuePacket(r2, 't', cnt_ping, cnt_ping > 1 ? dt_ping[cnt_ping - 2][0]: 0, cnt_ping > 1 ? dt_ping[cnt_ping - 2][1] : 0, 0, true);
+				while (SendPacket(r2));
+
+				// Wait for c2r ping
+				do {
+					GetSerial(r4);
+				} while (!r4->isNew);
+
+				// Store round trip time
+				dt_ping[cnt_ping - 1][i] = (r4->t_rcvd - t_sync) - (r2->t_sent - t_sync);
+
+			}
+		}
+
+		// Local vars
+		float dt_ping_r2c = 0;
+		float dt_ping_r2a = 0;
+		uint32_t dt_ping_sum_r2c = 0;
+		uint32_t dt_ping_sum_r2a = 0;
+
+		// Compute r2c ping average
+		for (int i = 0; i < cnt_ping; i++) {
+			dt_ping_sum_r2c += dt_ping[i][0];
+			dt_ping_sum_r2a += dt_ping[i][1];
+		}
+		dt_ping_r2c = (float)dt_ping_sum_r2c / (cnt_ping);
+		dt_ping_r2a = (float)dt_ping_sum_r2a / (cnt_ping);
+
+		// Send r2c and r2a ping times
+		QueuePacket(&r2c, 't', ++cnt_ping, dt_ping_r2c, dt_ping_r2a, 0, true);
+
+		// Log/print ping time
+		sprintf(horeStr, "[loop] PING TIMES: r2c=%0.2f r2a=%0.2f", dt_ping_r2c, dt_ping_r2a);
+		DebugFlow(horeStr);
+
+	}
 #pragma endregion
 
 #pragma region //--- (S) DO SETUP ---
@@ -6455,7 +7039,7 @@ void loop() {
 			if (Move.isTargReached) {
 
 				// Tell CS movement is done
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd('M', c2r.id, c2r.lng)], true);
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
 
 				// Print success message
 				sprintf(horeStr, "[loop] SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
@@ -6727,7 +7311,7 @@ void loop() {
 	if (fc.doStreamCheck && Pos[1].is_streamStarted)
 	{
 		// Send streaming confirmation
-		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd('V', c2r.id, c2r.lng)], true);
+		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('V', &c2r)], true);
 		fc.doStreamCheck = false;
 		DebugFlow("[loop] STREAMING CONFIRMED");
 
@@ -6821,9 +7405,7 @@ void loop() {
 			DebugFlow("[loop] DO SEND LOG");
 
 			// Store remaining logs
-			while (Log.WriteLog()) {
-				delay(100);
-			}
+			while (Log.WriteLog());
 		}
 
 	}

@@ -78,13 +78,113 @@
     <ProjectCapability Include="VisualMicro" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_pulse_asm.S" />
+    <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\library.properties" />
+    <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\Wire\library.properties" />
+    <None Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\library.json" />
+    <None Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\library.properties" />
     <None Include="FeederDue.ino">
       <FileType>CppCode</FileType>
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Arduino.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\avr\dtostrf.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\avr\interrupt.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\avr\pgmspace.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\binary.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Client.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\HardwareSerial.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\IPAddress.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\itoa.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Print.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Printable.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Reset.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\RingBuffer.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Server.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Stream.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\syscalls.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Tone.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\UARTClass.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Udp.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USARTClass.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\PluggableUSB.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBAPI.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBCore.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBDesc.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\watchdog.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WCharacter.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WInterrupts.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_analog.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_constants.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_digital.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_private.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_pulse.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_shift.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WMath.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WString.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src\SPI.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\Wire\src\Wire.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\pins_arduino.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\variant.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriver_Due.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\dSPINConstants_Due.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\DueTimer.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\LCD5110_Basic.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\Pixy.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\PixyI2C.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\PixySPI_SS.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\PixyUART.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\TPixy.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\TinyEKF.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\tiny_ekf.h" />
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\tiny_ekf_struct.h" />
     <ClInclude Include="FeederDue.h" />
     <ClInclude Include="__vm\.FeederDue.vsarduino.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\abi.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\IPAddress.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\main.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\new.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Print.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Reset.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\RingBuffer.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Stream.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\UARTClass.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USARTClass.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\CDC.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\PluggableUSB.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBCore.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\watchdog.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_pulse.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WMath.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WString.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src\SPI.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\Wire\src\Wire.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\variant.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriverCommands_Due.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriverConfig_Due.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriverSupport_Due.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriver_Due.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\DueTimer.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\DefaultFonts.c" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\LCD5110_Basic.cpp" />
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\tiny_ekf.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\keywords.txt" />
+    <Text Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\Wire\keywords.txt" />
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\Readme.txt" />
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\keywords.txt" />
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\DueTimer\LICENSE.txt" />
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\keywords.txt" />
+    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\keywords.txt" />
   </ItemGroup>
   <PropertyGroup>
     <DebuggerFlavor>VisualMicroDebugger</DebuggerFlavor>
