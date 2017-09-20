@@ -151,7 +151,7 @@ const int sendQueueBytes = 18;
 byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
-const int dt_sendSent = 11; // (ms) 
+const int dt_sendSent = 7; // (ms) 
 const int dt_sendRcvd = 1; // (ms) 
 uint32_t t_xBeeSent = 0; // (ms)
 uint32_t t_xBeeRcvd = 0; // (ms)
@@ -863,11 +863,15 @@ bool SendPacket()
 	// Bail if buffer or time inadequate
 	if (!(buff_tx == 0 &&
 		buff_rx == 0 &&
-		millis() > t_xBeeSent + dt_sendSent &&
-		millis() > t_xBeeRcvd + dt_sendRcvd)) {
+		millis() > t_xBeeSent + dt_sendSent)) {
 
 		// Indicate still packs to send
 		return true;
+	}
+
+	// Add small delay if just recieved
+	else if (millis() < t_xBeeRcvd + dt_sendRcvd) {
+		delayMicroseconds(500);
 	}
 
 	// Itterate send ind
@@ -1864,6 +1868,12 @@ void loop()
 	cnt_loop_tot = 0;
 	cnt_loop_short = cnt_loop_short < 999 ? cnt_loop_short + 1 : 1;
 
+	// RESET TTL PINS
+	ResetTTL();
+
+	// GET SERIAL INPUT
+	GetSerial();
+
 	// SEND DATA
 	if (SendPacket());
 
@@ -1872,12 +1882,6 @@ void loop()
 
 	// SEND QUEUED LOG
 	else(SendLog());
-
-	// RESET TTL PINS
-	ResetTTL();
-
-	// GET SERIAL INPUT
-	GetSerial();
 
 	// WAIT FOR HANDSHAKE
 	if (!CheckForStart()) {

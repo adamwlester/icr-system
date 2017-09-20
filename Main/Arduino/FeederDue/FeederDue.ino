@@ -3681,11 +3681,15 @@ bool SendPacket(R2 *r2)
 	// Bail if buffer or time inadequate
 	if (!(buff_tx == 0 &&
 		buff_rx == 0 &&
-		millis() > r2->t_sent + dt_sendSent &&
-		millis() > r4->t_rcvd + dt_sendRcvd)) {
+		millis() > r2->t_sent + dt_sendSent)) {
 
 		// Indicate still packs to send
 		return true;
+	}
+
+	// Add small delay if just recieved
+	else if (millis() < r4->t_rcvd + dt_sendRcvd) {
+		delayMicroseconds(500);
 	}
 
 	// Itterate send ind
@@ -6476,14 +6480,14 @@ void loop() {
 	// CHECK LOOP TIME AND MEMORY
 	CheckLoop();
 
-	// PARSE CS SERIAL INPUT
-	GetSerial(&c2r);
-
 	// PARSE CHEETAHDUE SERIAL INPUT
 	GetSerial(&a2r);
 
 	// SEND CHEETAHDUE DATA
 	SendPacket(&r2a);
+
+	// PARSE CS SERIAL INPUT
+	GetSerial(&c2r);
 
 	// SEND CS DATA
 	SendPacket(&r2c);

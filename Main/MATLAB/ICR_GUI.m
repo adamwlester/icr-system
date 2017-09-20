@@ -69,7 +69,7 @@ end
 %---------------------SET DEBUG/TEST PARAMETERS----------------------------
 
 % Session conditions
-D.DB.ratLab = 'r0000';
+D.DB.ratLab = 'r9999';
 D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
 D.DB.Reward_Delay = '1.0';
@@ -2535,14 +2535,16 @@ fprintf('END OF RUN\n');
             if is_running
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
-                Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
-                tic;
-                while (toc < 5 && ~doExit)
-                end
-                if ~doExit
-                    Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
-                else
-                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Load');
+                if ~isMatSolo
+                    Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
+                    tic;
+                    while (toc < 5 && ~doExit)
+                    end
+                    if ~doExit
+                        Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
+                    else
+                        Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Load');
+                    end
                 end
             else
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
@@ -5493,6 +5495,9 @@ fprintf('END OF RUN\n');
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopCond', char(D.PAR.sesCond)));
             Update_UI(10);
+            
+             % Check settings 
+            CheckSetupDefaults();
         end
         
         % SESSION TASK
@@ -5509,6 +5514,9 @@ fprintf('END OF RUN\n');
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopTask', char(D.PAR.sesTask)));
             Update_UI(10);
+            
+             % Check settings 
+            CheckSetupDefaults();
         end
         
         % REWARD DELAY
@@ -5527,21 +5535,26 @@ fprintf('END OF RUN\n');
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRewDel', num2str(D.PAR.rewDel)));
             Update_UI(10);
+            
+             % Check settings 
+            CheckSetupDefaults();
         end
         
         % CUE CONDITION
         function [] = ToggCue(~, ~, ~)
             
             % Get trigger button
-            cue_cond = get(gcbo, 'UserData');
+            cue_cond = find(cell2mat(get(D.UI.toggCue, 'Value')) == 1);
             
-            % Check if callback was run without button press
-            if isempty(cue_cond)
-                cue_cond = find(cell2mat(get(D.UI.toggCue, 'Value')) == 1);
+            % Switching buttons
+            if length(cue_cond)>1
+                cue_cond = get(gcbo, 'UserData');
             end
             
-            % Change button
+            % Change to active
             if get(D.UI.toggCue(cue_cond), 'Value') == 1
+                
+                % Store string
                 cue_str = get(D.UI.toggCue(cue_cond), 'String');
                 
                 % Activate current button
@@ -5555,36 +5568,20 @@ fprintf('END OF RUN\n');
                 
                 % Save data
                 D.PAR.cueFeed(:) = cue_str;
-            end
-            
-            % Change Reward delay
-            rew_del = str2double(D.UI.delList{get(D.UI.popRewDel,'Value'),:});
-            if (D.PAR.cueFeed == 'Half' || ...
-                    D.PAR.cueFeed == 'None') && ...
-                    D.PAR.sesCond ~= 'Manual_Training' && ...
-                    rew_del == 0
                 
-                % Set reward delay
-                set(D.UI.popRewDel, 'Value', ...
-                    find(ismember(D.UI.delList, D.UI.delList(3))));
-                % run callback
-                PopRewDel();
-                
-            elseif D.PAR.cueFeed == 'All' && ...
-                    rew_del ~= 0
-                
-                % 'All' should have 0 delay
-                % Set reward delay
-                set(D.UI.popRewDel, 'Value', ...
-                    find(ismember(D.UI.delList, D.UI.delList(2))));
-                % run callback
-                PopRewDel();
-                
+                % Change to inactive
+            else
+                set(D.UI.toggCue(cue_cond), ...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'Value',0);
             end
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%s\"', 'ToggCue', char(D.PAR.cueFeed)));
             Update_UI(10);
+            
+             % Check settings 
+            CheckSetupDefaults();
         end
         
         % SOUND CONDITION
@@ -5624,6 +5621,9 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%d\" \"%d\"', 'ToggSnd', ...
                 get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
             Update_UI(10);
+            
+             % Check settings 
+            CheckSetupDefaults();
         end
         
         % SETUP DONE
@@ -5730,9 +5730,10 @@ fprintf('END OF RUN\n');
             % Start aquisition
             if get(D.UI.btnRec,'Value') == 1
                 NlxSendCommand('-StartRecording');
-                set(D.UI.btnRec,'CData',D.UI.radBtnCmap{3})
-            else NlxSendCommand('-StopRecording');
-                set(D.UI.btnRec,'CData',D.UI.radBtnCmap{1})
+                set(D.UI.btnRec,'CData',D.UI.radBtnCmap{3});
+            else
+                NlxSendCommand('-StopRecording');
+                set(D.UI.btnRec,'CData',D.UI.radBtnCmap{1});
             end
             
             % Set time tracking variables
@@ -6251,7 +6252,157 @@ fprintf('END OF RUN\n');
             Update_UI(10);
         end
         
-        
+        % CHECK DEFAULTS
+        function [] = CheckSetupDefaults()
+            
+            % Local vars
+            rew_del = D.UI.delList{get(D.UI.popRewDel,'Value'),:};
+            cue_cond = D.PAR.catCueCond(logical(cell2mat(get(D.UI.toggCue, 'Value'))));
+            task_cond = D.UI.taskList{get(D.UI.popTask, 'Value')};
+            is_del_changed = false;
+            is_cue_changed = false;
+            is_task_changed = false;
+            is_sound_changed = false;
+            
+            % Bail on recursive call
+            stack = dbstack;
+            if contains(stack(3).name, 'CheckSetupDefaults')
+                return;
+            end
+            
+            % Set empty values
+            if  isempty(cue_cond)
+                cue_cond = 'Null';
+            end
+            
+            % CHANGE VALUES BASED ON CUE COND
+            if (D.PAR.cueFeed == 'Half' || ...
+                    D.PAR.cueFeed == 'None') && ...
+                    D.PAR.sesCond ~= 'Manual_Training' && ...
+                    strcmp(rew_del, D.UI.delList{2})
+                
+                % Set to minimum delay
+                set(D.UI.popRewDel, 'Value', ...
+                    find(ismember(D.UI.delList, D.UI.delList(3))));
+                PopRewDel();
+                
+                % Set flag
+                is_del_changed = true;
+                
+            elseif D.PAR.cueFeed == 'All' && ...
+                    ~strcmp(rew_del, D.UI.delList{2})
+                
+                % Set to no delay
+                set(D.UI.popRewDel, 'Value', ...
+                    find(ismember(D.UI.delList, D.UI.delList(2))));
+                PopRewDel();
+                
+                % Set flag
+                is_del_changed = true;
+            end
+            
+            % CHANGE VALUES BASED ON SES COND
+            if D.PAR.sesCond == 'Manual_Training'
+                
+                % Set to no delay
+                if ~strcmp(rew_del, D.UI.delList{2})
+                    
+                    % Change button
+                    set(D.UI.popRewDel, 'Value', ...
+                        find(ismember(D.UI.delList, D.UI.delList(2))));
+                    PopRewDel();
+                    
+                    % Set flag
+                    is_del_changed = true;
+                end
+                
+                % Set cue condition to 'None'
+                if ~strcmp(cue_cond, 'None')
+                    
+                    % Change buttons
+                    set(D.UI.toggCue( ...
+                        ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
+                    set(D.UI.toggCue( ...
+                        ~ismember(D.PAR.catCueCond, 'None')), 'Value', 0);
+                    ToggCue();
+                    
+                    % Set flag
+                    is_cue_changed = true;
+                end
+                
+                % Change other buttons for rot cond
+            elseif D.PAR.sesCond == 'Rotation'
+                
+                % Set session task to 'Track'
+                if ~strcmp(task_cond, 'Track')
+                    
+                    % Change button
+                    set(D.UI.popTask, 'Value', ...
+                        find(ismember(D.UI.taskList, 'Track')));
+                    PopTask();
+                    
+                    % Set flag
+                    is_task_changed = true;
+                end
+                
+                % Set reward delay to max
+                if ~strcmp(rew_del, D.UI.delList{end})
+                    
+                    % Change button
+                    set(D.UI.popRewDel, 'Value', ...
+                        find(ismember(D.UI.delList, D.UI.delList(end))));
+                    PopRewDel();
+                    
+                    % Set flag
+                    is_del_changed = true;
+                end
+                
+                % Set cue condition to 'None'
+                if ~strcmp(cue_cond, 'None')
+                    
+                    % Change buttons
+                    set(D.UI.toggCue( ...
+                        ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
+                    set(D.UI.toggCue( ...
+                        ~ismember(D.PAR.catCueCond, 'None')), 'Value', 0);
+                    ToggCue();
+                    
+                    % Set flag
+                    is_cue_changed = true;
+                end
+                
+                % Set sound condition
+                if ~all(D.UI.snd(1:2))
+                    
+                    % Change buttons
+                    set(D.UI.toggSnd(), 'Value', 1);
+                    ToggSnd();
+                    
+                    % Set flag
+                    is_sound_changed = true;
+                end
+                
+            end
+            
+            % Log/print
+            if (is_del_changed)
+                Console_Write('[CheckSetupDefaults] Changed Reward Delay');
+                Update_UI(10);
+            end
+            if (is_cue_changed)
+                Console_Write('[CheckSetupDefaults] Changed Cue Condition');
+                Update_UI(10);
+            end
+            if (is_task_changed)
+                Console_Write('[CheckSetupDefaults] Changed Task Condition');
+                Update_UI(10);
+            end
+            if (is_sound_changed)
+                Console_Write('[CheckSetupDefaults] Changed Sound Condition');
+                Update_UI(10);
+            end
+            
+        end
         
         
         
