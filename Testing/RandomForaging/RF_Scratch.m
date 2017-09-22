@@ -1,0 +1,369 @@
+function[] = RF_Scratch()
+close all;
+
+% Set params
+datFi = 'path_mat.mat';
+dir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Testing\RandomForaging';
+doLoadPath = false;
+doPlotPathAvg = false;
+oPlotPathAll = false;
+pathWdth = 5;
+pixels = 400;
+nBins = 101;
+degDist = 5;
+
+% Mouse vars
+doNewTarg = true;
+rewTarg = 0;
+rewBnd = [];
+ptchRew = gobjects(1,1);
+
+% Setup
+cd(dir);
+arnRad = 140/2;
+cm2pxl = (pixels/2)/arnRad;
+bndWdth = 10;
+binEdges = linspace(0,pixels,nBins+1);
+occMat = zeros(nBins,nBins);
+img = [];
+rewCnt = 0;
+
+% Get screen dimensions
+sc = get(0,'MonitorPositions');
+sc2 = sc(1,:);
+sc1 = sc(2,:);
+
+% Set figure
+fig = figure();
+set(fig,...
+    'MenuBar', 'none', ...
+    'Color', [1, 1, 1]);
+% Set figure pos
+fg_wh = [pixels*2 pixels*2];
+fg_pos = [ ...
+    sc1(3) + (sc2(3)-fg_wh(1))/2, ...
+    (sc2(4) - fg_wh(2))/2, ...
+    fg_wh(1), ...
+    fg_wh(2)];
+set(fig,'Position',fg_pos);
+
+% First axis
+ax_1 = axes('Position', [0,0,1,1], ...
+    'Color', 'None', ...
+    'YDir', 'reverse', ...
+    'XLim', [0,nBins], ...
+    'YLim', [0,nBins]);
+hold on;
+
+% Second axis
+ax_2 = axes('Position', [0,0,1,1], ...
+    'Color', 'None', ...
+    'XLim', [0,pixels], ...
+    'YLim', [0,pixels], ...
+    'XTick', 0:pixels, ...
+    'YTick', 0:pixels);
+grid on;
+hold on;
+
+% Plot outer bounds
+circ = [0:.01:2*pi,0];
+[X_out,Y_out] = pol2cart(circ, ones(1,length(circ)) * (pixels/2));
+X_out = X_out+pixels/2;
+Y_out = Y_out+pixels/2;
+plot(X_out,Y_out,'k', ...
+    'Parent', ax_2);
+
+% Plot inner bounds
+circ = [0:.01:2*pi,0];
+in_bnd = (pixels - pixels*(bndWdth/arnRad))/2;
+[X_in,Y_in] = pol2cart(circ, ones(1,length(circ)) * in_bnd);
+X_in = X_in+pixels/2;
+Y_in = Y_in+pixels/2;
+plot(X_in,Y_in,'k', ...
+    'Parent', ax_2);
+
+% Compute trajectories
+if (doLoadPath)
+    % Load path
+    load(fullfile(dir,datFi));
+    path_mat = double(path_mat);
+else
+    % Deg bin vars
+    n_paths = 45/degDist*2 + 1;
+    n_targs = 360/degDist;
+    
+    % Setup path mat
+    mat_eye = padarray(eye(nBins-5),[5,5],'pre');
+    mat = zeros(nBins);
+    for i = 1:pathWdth
+        mat = mat + padarray(mat_eye(i+1:end,:),[i,0],'post');
+    end
+    path_mat = zeros(nBins,nBins,n_paths,n_targs);
+    
+    for i = 0:floor(n_paths/2)
+        
+        if (i<floor(n_paths/2))
+            deg = i*degDist;
+            % Rotate
+            mat_rot = rotMat(mat,deg);
+            % Cut and pad
+            mat_rot = mat_rot(:,1:ceil(nBins/2));
+            mat_rot = padarray(mat_rot, [0,nBins-size(mat_rot,2)],'pre');
+            % Flip
+            mat_rot = flip(flip(mat_rot',2),1);
+        else
+            mat_rot = zeros(nBins);
+            mat_rot(ceil(nBins/2)-floor(pathWdth/2):ceil(nBins/2)-floor(pathWdth/2)+pathWdth, :) = 1;
+            mat_rot(:,end-5:end) = 0;
+        end
+        
+        % Mirror values
+        mat_mir = flip(mat_rot,1);
+        
+        % Store
+        for j = [1:n_targs]-1
+            path_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*degDist,'bilinear','crop');
+            path_mat(:,:,n_paths-i,j+1) = imrotate(mat_mir,j*degDist,'bilinear','crop');
+        end
+    end
+    
+    % Mask values outside circle
+    [colNums, rowNums] = meshgrid(1:nBins, 1:nBins);
+    mask = (rowNums - ceil(nBins/2)).^2 ...
+        + (colNums - ceil(nBins/2)).^2 <= ceil(nBins/2).^2;
+    mask = repmat(mask,[1,1,n_paths,n_targs]);
+    path_mat = path_mat.*mask;
+    
+    % Nomalize
+    path_mat(path_mat>0) = 1;
+    path_mat = path_mat ./ repmat(sum(sum(path_mat,1),2),[nBins,nBins,1,1]);
+    
+    % Save path
+    path_mat = single(path_mat);
+    save(fullfile(dir,datFi),'path_mat');
+    path_mat = double(path_mat);
+    
+    
+    % Plot path averages
+    if (doPlotPathAvg)
+        % Plot accross paths
+        ih = imagesc(sum(path_mat(:,:,:,1),3), 'Parent', ax_1);
+        pause(1);
+        delete(ih);
+        % Plot accross start pos and paths
+        ih = imagesc(sum(sum(path_mat(:,:,:,:),3),4), 'Parent', ax_1);
+        pause(1);
+        delete(ih);
+    end
+    
+    % Plot each path
+    if (oPlotPathAll)
+        for j = 1:n_targs
+            ih = imagesc(sum(path_mat(:,:,:,j),3), 'Parent', ax_1);
+            pause(0.5);
+        end
+    end
+    
+end
+
+% Get first reward target
+GetNewTarg();
+doNewTarg = false;
+
+% Get mouse position
+fig.UserData
+set (fig, 'WindowButtonMotionFcn', @mouseMove);
+
+%N = histcounts2([1,2,3],[1,2,3],0:10,0:10);
+
+% GET MOUSE POS
+    function mouseMove (~, ~)
+        
+        % Block callback re-entry
+        s = dbstack();
+        if numel(s) > 1
+            return;
+        end
+        
+        % Get new mouse data
+        C = get (ax_2, 'CurrentPoint');
+        
+        % Get cart coord
+        x = C(1,1);
+        y = C(1,2);
+        
+        % Get pol coord
+        [rad, roh] = cart2pol(x - (pixels/2), y - (pixels/2));
+        rad = wrapTo2Pi(rad);
+        
+        % Bail if out of bound
+        if roh > (pixels)/2
+            return;
+        end
+        
+        % Get new target
+        if doNewTarg
+            
+            % Reset flag
+            doNewTarg = false;
+            
+            % Track rewards
+            rewCnt = rewCnt+1;
+            fprintf('rewCnt=%d\r\n', rewCnt)
+            
+            % Get new target
+            GetNewTarg();
+            
+            % Bail
+            return;
+        end
+        
+        % Plot trig bound dat in red
+        if roh > ((pixels - pixels*(bndWdth/arnRad))/2)
+            
+            % Check if in reward bounds
+            in_bnd = Check_Rad_Bnds(rad, rewBnd);
+            
+            % Handle targ reached
+            if (in_bnd)
+                
+                % Change targ patch color
+                set(ptchRew, 'FaceColor', [0,1,0]);
+                
+                % Set to find new target
+                doNewTarg = true;
+            end
+            
+        end
+        
+        % Histogram data
+        N = histcounts2(y,x,binEdges,binEdges);
+        occMat = occMat+flip(N,1);
+        
+        % Plot valuse
+        delete(img);
+        img = imagesc(occMat, ...
+            'Parent', ax_1);
+    end
+
+% GET NEW TARG
+    function [] = GetNewTarg()
+        
+        % Local vars
+        targ_arr = 0:degDist:360-degDist;
+        path_arr = linspace(-45,45,45/degDist*2 + 1);
+        
+        % Get inner product of current pos and occ
+        targ_ind = find(targ_arr == rewTarg);
+        occ_prod = ...
+            squeeze(sum(sum(path_mat(:,:,:,targ_ind).*repmat(occMat,[1,1,size(path_mat,3)]),1),2));
+        path_ind = find(occ_prod == min(occ_prod));
+        if length(path_ind) > 1
+            path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
+        end
+        path_new = path_arr(path_ind);
+        
+        % Get new targ
+        rew_last = rewTarg;
+        rewTarg = 360/2 + rew_last + path_new;
+        if rewTarg > 360
+            rewTarg = rewTarg - 360;
+        elseif rewTarg < 0
+            rewTarg = rewTarg + 360;
+        end
+        
+        fprintf('rew_last=%d path_ind=%d path_new=%d rewTarg=%d \r\n', rew_last, path_ind, path_new, rewTarg)
+        
+        % Plot path
+        path_plot = path_mat(:,:,path_ind,targ_ind);
+        path_plot(path_plot>0) = max(max(occMat));
+        img = imagesc(path_plot+occMat, ...
+            'Parent', ax_1);
+        drawnow;
+        pause(1);
+        
+        % Plot targ patch
+        rewBnd = [deg2rad(rewTarg-5), deg2rad(rewTarg+5)];
+        [xbnd, ybnd] =  Get_Rad_Bnds(rewBnd);
+        delete(ptchRew);
+        ptchRew = ...
+            patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+            [ybnd(1,:),fliplr(ybnd(2,:))], ...
+            [1,0,0], ...
+            'FaceAlpha',0.9, ...
+            'Parent',ax_2);
+        drawnow;
+    end
+
+% CHECK RAD BOUNDS
+    function [bool_arr] = Check_Rad_Bnds(rad_arr, polbnds)
+        
+        if all(isnan(rad_arr))
+            bool_arr = false(size(rad_arr));
+        else
+            if polbnds(1) > polbnds(2)
+                polbnds = wrapToPi(polbnds);
+                rad_arr = wrapToPi(rad_arr);
+            end
+            bool_arr = rad_arr > polbnds(1) & rad_arr < polbnds(2);
+        end
+        
+    end
+
+% GET TRACK BOUNDS
+    function [xbnd, ybnd] = Get_Rad_Bnds(polbnds)
+        
+        if (length(polbnds) == 2)
+            if polbnds(1) > polbnds(2)
+                polbnds = wrapToPi(polbnds);
+            end
+            radDist = min(2*pi - abs(polbnds(2)-polbnds(1)), abs(polbnds(2)-polbnds(1)));
+            nPoints =  round(360 * (radDist/(2*pi))); % 360 pnts per 2*pi
+            polbnds = linspace(polbnds(1), polbnds(2), nPoints);
+        end
+        % inner bounds 0 deg
+        [x(1,:),y(1,:)] = pol2cart(polbnds, ones(1,length(polbnds)) * (arnRad-bndWdth));
+        xbnd(1,:) = x(1,:)*cm2pxl + arnRad*cm2pxl;
+        ybnd(1,:) = y(1,:)*cm2pxl + arnRad*cm2pxl;
+        % outer bounds 0 deg
+        [x(2,:),y(2,:)] = pol2cart(polbnds, ones(1,length(polbnds)) * arnRad);
+        xbnd(2,:) = x(2,:)*cm2pxl + arnRad*cm2pxl;
+        ybnd(2,:) = y(2,:)*cm2pxl + arnRad*cm2pxl;
+        
+    end
+
+% ROTATE MATRIX
+    function[M_rot] = rotMat(M,ang)
+        
+        % Check if not rotating
+        if (ang==0)
+            M_rot = M;
+            return;
+        end
+        
+        % Convert to rad
+        theta = ang*pi/180;
+        
+        % Make grid
+        [x y] = ndgrid(1:size(M,1), 1:size(M,2));
+        
+        % Calculate rotation matrix
+        R = [ cos(theta) -sin(theta);
+            sin(theta)  cos(theta)]; % just 2D case
+        
+        % calculate new positions of image indicies
+        
+        tmp = R*[x(:)' ; y(:)']; % 2 by numel(M)
+        xi = reshape(tmp(1,:),size(x)); % new x-indicies
+        yi = reshape(tmp(2,:),size(y)); % new y-indicies
+        
+        M_rot = interpn(x,y,M,xi,yi); % interpolate from old->new indicies
+        M_rot(isnan(M_rot)) = 0;
+        
+        
+    end
+
+end
+
+
+

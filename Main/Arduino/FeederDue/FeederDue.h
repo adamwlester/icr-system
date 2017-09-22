@@ -221,6 +221,7 @@ struct FC
 	bool doAllowRevMove = false;
 	bool isBlockingTill = false;
 	bool doQuit = false;
+	bool isQuitConfirmed = false;
 	bool isSesStarted = false;
 	bool doStreamCheck = false;
 	bool isComsStarted = false;
@@ -337,8 +338,8 @@ uint32_t t_rewBlockMove = 0; // (ms)
 /*
 EtOH run after min time or distance
 */
-const int dt_durEtOH[2] = { 200, 100 }; // (ms)
-const int dt_delEtOH[2] = { 10000, 60000 }; // (ms)
+const int dt_durEtOH[2] = { 100, 100 }; // (ms)
+const int dt_delEtOH[2] = { 30000, 60000 }; // (ms)
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
 

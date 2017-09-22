@@ -133,7 +133,7 @@ uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
 
 // Log debugging
-const int logQueueSize = 15;
+const int logQueueSize = 40;
 char logQueue[logQueueSize][300] = { { 0 } };
 int logQueueIndStore = 0;
 int logQueueIndRead = 0;
@@ -247,9 +247,6 @@ struct A2C
 }
 // Initialize
 a2c;
-
-// Start/Quit
-uint32_t t_quit = 0;
 
 // Reward
 uint32_t rewDur; // (ms) 
@@ -2012,7 +2009,6 @@ void loop()
 
 			// Set flags
 			fc.doQuit = true;
-			t_quit = millis() + 1000;
 			DebugFlow("[loop] QUITING...");
 		}
 
@@ -2047,17 +2043,16 @@ void loop()
 			return;
 		}
 
-		// Make sure minimum time ellapsed
-		if (millis() > t_xBeeSent + 100 &&
-			millis() > t_xBeeRcvd + 100 &&
-			millis() > t_quit) {
-
-			// Run bleep bleep
-			QuitBeep();
-
-			// Restart Arduino
-			REQUEST_EXTERNAL_RESET;
+		// Make sure we wont recieve a resend request
+		if (millis() < t_xBeeRcvd + 200) {
+			return;
 		}
+
+		// Run bleep bleep
+		QuitBeep();
+
+		// Restart Arduino
+		REQUEST_EXTERNAL_RESET;
 	}
 
 }

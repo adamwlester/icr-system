@@ -884,7 +884,7 @@ namespace ICR_Run
             }
 
             // Send command for arduino to quit on seperate thread
-            RepeatSendPack_Thread(id: 'Q');
+            RepeatSendPack_Thread(id: 'Q', do_check_done: true);
             // Wait for quit confirmation from robot for fixed period of time
             LogEvent_Thread("[Exit] RUN: Confirm Robot Quit...");
             pass = WaitForSerial(id: 'Q', timeout: 5000);

@@ -4942,26 +4942,31 @@ void CheckEtOH()
 
 	// Check if sol should be opened
 	if (do_open) {
+
 		// Open solenoid
 		digitalWrite(pin.Rel_EtOH, HIGH);
-
 
 		// Store current time and pos
 		t_solOpen = millis();
 		etoh_dist_start = kal.RobPos;
+
+		// Print to debug
+		sprintf(str, "[CheckEtOH] Open EtOH: dt_close=%d dt_open=%d", t_solOpen - t_solClose);
+		DebugFlow(str);
 	}
 
 	// Check if sol should be closed
 	else if (do_close) {
+
 		// Close solenoid
 		digitalWrite(pin.Rel_EtOH, LOW);
 
-		// Print to debug
-		sprintf(str, "[CheckEtOH] Ran EtOH: dt_close=%d dt_open=%d", t_solOpen - t_solClose, millis() - t_solOpen);
-		DebugFlow(str);
-
-		// Store current time and pos
+		// Store current time 
 		t_solClose = millis();
+
+		// Print to debug
+		sprintf(str, "[CheckEtOH] Close EtOH: dt_close=%d dt_open=%d", t_solOpen - t_solClose, millis() - t_solOpen);
+		DebugFlow(str);
 	}
 }
 
@@ -6929,7 +6934,6 @@ void loop() {
 
 		// Set flags and delay time
 		fc.doQuit = true;
-		t_quit = millis() + 1000;
 		DebugFlow("[loop] DO QUIT");
 
 		// Tell CheetahDue to quit 
@@ -6940,18 +6944,35 @@ void loop() {
 
 	}
 
-	// Wait for queue buffer to empty and quit delay to pass 
+	// Wait for queue buffer to empty
 	if (
-		fc.doQuit && millis() > t_quit &&
+		fc.doQuit && 
 		!CheckResend(&r2a) &&
 		!CheckResend(&r2c) &&
 		!SendPacket(&r2a) &&
 		!SendPacket(&r2c)) {
 
-		// Quit session
-		DebugFlow("[loop] QUITING...");
-		QuitSession();
+		// Tell CS quit is done
+		if (!fc.isQuitConfirmed) {
+			QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('Q', &c2r)], true);
+			fc.isQuitConfirmed = true;
+		}
+
+		// Quit after 100 ms
+		if (t_quit == 0) {
+			t_quit = millis() + 100;
+		}
+
+		// Quit
+		else if(fc.doQuit && millis() > t_quit)
+		{
+			// Quit session
+			DebugFlow("[loop] QUITING...");
+			QuitSession();
+		}
 	}
+
+
 #pragma endregion
 
 #pragma region //--- (M) DO MOVE ---
