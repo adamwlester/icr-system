@@ -6,10 +6,11 @@ datFi = 'path_mat.mat';
 dir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Testing\RandomForaging';
 doLoadPath = false;
 doPlotPathAvg = false;
-oPlotPathAll = false;
+doPlotPathAll = false;
+doSimRat = true;
 pathWdth = 5;
 pixels = 400;
-nBins = 101;
+nBins = 401;
 degDist = 5;
 
 % Mouse vars
@@ -94,36 +95,53 @@ else
     
     % Setup path mat
     mat_eye = padarray(eye(nBins-5),[5,5],'pre');
-    mat = zeros(nBins);
+    mat_p = zeros(nBins);
     for i = 1:pathWdth
-        mat = mat + padarray(mat_eye(i+1:end,:),[i,0],'post');
+        mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
     end
     path_mat = zeros(nBins,nBins,n_paths,n_targs);
     
-    for i = 0:floor(n_paths/2)
-        
-        if (i<floor(n_paths/2))
-            deg = i*degDist;
-            % Rotate
-            mat_rot = rotMat(mat,deg);
-            % Cut and pad
-            mat_rot = mat_rot(:,1:ceil(nBins/2));
-            mat_rot = padarray(mat_rot, [0,nBins-size(mat_rot,2)],'pre');
-            % Flip
-            mat_rot = flip(flip(mat_rot',2),1);
+    % Setup sim rat mat
+    mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
+    rat_mat = path_mat;
+    
+    for c = 1:2
+        if c==1
+            mat_now = mat_p;
         else
-            mat_rot = zeros(nBins);
-            mat_rot(ceil(nBins/2)-floor(pathWdth/2):ceil(nBins/2)-floor(pathWdth/2)+pathWdth, :) = 1;
-            mat_rot(:,end-5:end) = 0;
+            mat_now = mat_r;
         end
         
-        % Mirror values
-        mat_mir = flip(mat_rot,1);
-        
-        % Store
-        for j = [1:n_targs]-1
-            path_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*degDist,'bilinear','crop');
-            path_mat(:,:,n_paths-i,j+1) = imrotate(mat_mir,j*degDist,'bilinear','crop');
+        for i = 0:floor(n_paths/2)
+            
+            if (i<floor(n_paths/2))
+                deg = i*degDist;
+                % Rotate
+                mat_rot = rotMat(mat_now,deg);
+                % Cut and pad
+                mat_rot = mat_rot(:,1:ceil(nBins/2));
+                mat_rot = padarray(mat_rot, [0,nBins-size(mat_rot,2)],'pre');
+                % Flip
+                mat_rot = flip(flip(mat_rot',2),1);
+            else
+                mat_rot = zeros(nBins);
+                mat_rot(ceil(nBins/2)-floor(pathWdth/2):ceil(nBins/2)-floor(pathWdth/2)+pathWdth, :) = 1;
+                mat_rot(:,end-5:end) = 0;
+            end
+            
+            % Mirror values
+            mat_mir = flip(mat_rot,1);
+            
+            % Store
+            for j = [1:n_targs]-1
+                if c==1
+                    path_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*degDist,'bilinear','crop');
+                    path_mat(:,:,n_paths-i,j+1) = imrotate(mat_mir,j*degDist,'bilinear','crop');
+                else
+                    rat_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*degDist,'bilinear','crop');
+                    rat_mat(:,:,n_paths-i,j+1) = imrotate(mat_mir,j*degDist,'bilinear','crop');
+                end
+            end
         end
     end
     
@@ -133,10 +151,12 @@ else
         + (colNums - ceil(nBins/2)).^2 <= ceil(nBins/2).^2;
     mask = repmat(mask,[1,1,n_paths,n_targs]);
     path_mat = path_mat.*mask;
+    rat_mat = rat_mat.*mask;
     
     % Nomalize
     path_mat(path_mat>0) = 1;
     path_mat = path_mat ./ repmat(sum(sum(path_mat,1),2),[nBins,nBins,1,1]);
+    rat_mat(rat_mat>0) = 1;
     
     % Save path
     path_mat = single(path_mat);
@@ -157,7 +177,7 @@ else
     end
     
     % Plot each path
-    if (oPlotPathAll)
+    if (doPlotPathAll)
         for j = 1:n_targs
             ih = imagesc(sum(path_mat(:,:,:,j),3), 'Parent', ax_1);
             pause(0.5);
@@ -166,18 +186,29 @@ else
     
 end
 
-% Get first reward target
-GetNewTarg();
-doNewTarg = false;
-
 % Get mouse position
-fig.UserData
-set (fig, 'WindowButtonMotionFcn', @mouseMove);
+if (~doSimRat)
+    
+    % Get first reward target
+    GetNewTarg();
+    doNewTarg = false;
+    
+    % Set callback
+    set(fig, 'WindowButtonMotionFcn', @getVT);
+end
 
-%N = histcounts2([1,2,3],[1,2,3],0:10,0:10);
+% Simulate rat
+if (doSimRat)
+    while(true)
+        GetNewTarg();
+        pause(0.1);
+    end
+end
+
+
 
 % GET MOUSE POS
-    function mouseMove (~, ~)
+    function getVT (~, ~)
         
         % Block callback re-entry
         s = dbstack();
@@ -261,26 +292,34 @@ set (fig, 'WindowButtonMotionFcn', @mouseMove);
         if length(path_ind) > 1
             path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
         end
-        path_new = path_arr(path_ind);
+        path_ang = path_arr(path_ind)*2;
         
         % Get new targ
         rew_last = rewTarg;
-        rewTarg = 360/2 + rew_last + path_new;
-        if rewTarg > 360
+        rewTarg = 360/2 + rew_last + path_ang;
+        if rewTarg >= 360
             rewTarg = rewTarg - 360;
         elseif rewTarg < 0
             rewTarg = rewTarg + 360;
         end
         
-        fprintf('rew_last=%d path_ind=%d path_new=%d rewTarg=%d \r\n', rew_last, path_ind, path_new, rewTarg)
+        fprintf('rew_last=%d path_ind=%d path_new=%d rewTarg=%d \r\n', rew_last, path_ind, path_ang, rewTarg)
         
         % Plot path
-        path_plot = path_mat(:,:,path_ind,targ_ind);
-        path_plot(path_plot>0) = max(max(occMat));
-        img = imagesc(path_plot+occMat, ...
-            'Parent', ax_1);
+        if (~doSimRat)
+            path_plot = path_mat(:,:,path_ind,targ_ind);
+            path_plot(path_plot>0) = 1;
+            img = imagesc(path_plot+occMat, ...
+                'Parent', ax_1);
+        end
+        
+        % Add rat path to OCC
+        if (doSimRat)
+            occMat = rat_mat(:,:,path_ind,targ_ind)+occMat;
+            img = imagesc(occMat, ...
+                'Parent', ax_1);
+        end
         drawnow;
-        pause(1);
         
         % Plot targ patch
         rewBnd = [deg2rad(rewTarg-5), deg2rad(rewTarg+5)];

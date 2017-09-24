@@ -2850,10 +2850,11 @@ void LOGGER::StreamLogs()
 	while (millis() < (t_start + timeout)) {
 
 		// Dump anything in openlog buffer
-		uint32_t t_out = millis() + 10;
+		uint32_t t_out = millis() + 100;
 		while (millis() < t_out || port.available() > 0) {
 			if (port.available() > 0) {
 				port.read();
+				t_out += 100;
 			}
 		}
 
@@ -2986,6 +2987,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Resume logging
+	delay(100);
 	fc.doBlockLogWrite = false;
 	SetToWriteMode(logFile);
 
@@ -3009,9 +3011,6 @@ void LOGGER::StreamLogs()
 	sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? warn_lines : "");
 	DebugFlow(str);
 
-	// Send any new logs
-	while (WriteLog(true));
-
 	// Get total data left in buffers
 	int xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - r2c.port.availableForWrite();
 	int xbee_buff_rx = r2c.port.available();
@@ -3023,8 +3022,6 @@ void LOGGER::StreamLogs()
 	sprintf(str, "[LOGGER::StreamLogs] Run Info: dt_run=%0.2fs bytes_sent=%d bytes_stored=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d openlog_tx=%d openlog_rx=%d xbee_tx=%d xbee_rx=%d",
 		dt_s, cnt_logBytesSent, cnt_logBytesStored, cnt_err_set_cmd_mode, cnt_err_read_cmd, cnt_err_read_timeout, ol_buff_tx, ol_buff_rx, xbee_buff_tx, xbee_buff_rx);
 	DebugFlow(str);
-	// Send imediately
-	while (WriteLog(true));
 
 	// Print final status then send as log
 	if (!do_abort) {
@@ -3035,8 +3032,10 @@ void LOGGER::StreamLogs()
 		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: Sending %d Logs: errors=%s", cnt_logsStored + 1, err_str);
 		DebugError(str, true);
 	}
-	// Send imediately
-	while (WriteLog(true));
+
+	// Send remaining logs imediately
+	while (WriteLog(true) && mode == '<');
+	delay(100);
 
 	// End reached send ">>>"
 	if (!do_abort) {

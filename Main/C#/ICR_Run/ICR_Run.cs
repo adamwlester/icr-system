@@ -74,7 +74,7 @@ namespace ICR_Run
             do_debug_mat: false,
             break_line: 0, // 0
             do_print_blocked_vt: false,
-            do_print_sent_rat_vt: false,
+            do_print_sent_rat_vt: true,
             do_print_sent_rob_vt: false,
             do_print_rob_log: false,
             do_print_due_log: false

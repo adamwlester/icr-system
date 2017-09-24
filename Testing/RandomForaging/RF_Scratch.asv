@@ -6,7 +6,8 @@ datFi = 'path_mat.mat';
 dir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Testing\RandomForaging';
 doLoadPath = false;
 doPlotPathAvg = false;
-oPlotPathAll = false;
+doPlotPathAll = false;
+doSimRat = false;
 pathWdth = 5;
 pixels = 400;
 nBins = 101;
@@ -157,7 +158,7 @@ else
     end
     
     % Plot each path
-    if (oPlotPathAll)
+    if (doPlotPathAll)
         for j = 1:n_targs
             ih = imagesc(sum(path_mat(:,:,:,j),3), 'Parent', ax_1);
             pause(0.5);
@@ -172,12 +173,22 @@ doNewTarg = false;
 
 % Get mouse position
 fig.UserData
-set (fig, 'WindowButtonMotionFcn', @mouseMove);
+if (~doSimRat)
+    set (fig, 'WindowButtonMotionFcn', @getVT);
+end
 
-%N = histcounts2([1,2,3],[1,2,3],0:10,0:10);
+% Simulate rat
+if (doSimRat)
+    while(true)
+        getVT();
+        pause(0.1);
+    end
+end
+
+
 
 % GET MOUSE POS
-    function mouseMove (~, ~)
+    function getVT (~, ~)
         
         % Block callback re-entry
         s = dbstack();
@@ -261,18 +272,18 @@ set (fig, 'WindowButtonMotionFcn', @mouseMove);
         if length(path_ind) > 1
             path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
         end
-        path_new = path_arr(path_ind);
+        path_ang = path_arr(path_ind)*2;
         
         % Get new targ
         rew_last = rewTarg;
-        rewTarg = 360/2 + rew_last + path_new;
+        rewTarg = 360/2 + rew_last + path_ang;
         if rewTarg > 360
             rewTarg = rewTarg - 360;
         elseif rewTarg < 0
             rewTarg = rewTarg + 360;
         end
         
-        fprintf('rew_last=%d path_indpath_new=%d rewTarg=%d \r\n', rew_last, path_new, path_ind, rewTarg)
+        fprintf('rew_last=%d path_ind=%d path_new=%d rewTarg=%d \r\n', rew_last, path_ind, path_ang, rewTarg)
         
         % Plot path
         path_plot = path_mat(:,:,path_ind,targ_ind);
