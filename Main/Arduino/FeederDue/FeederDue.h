@@ -84,10 +84,10 @@ struct DB
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = true;
-	const bool print_r2c = true;
-	const bool print_a2r = true;
-	const bool print_r2a = true;
+	const bool print_c2r = false;
+	const bool print_r2c = false;
+	const bool print_a2r = false;
+	const bool print_r2a = false;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
