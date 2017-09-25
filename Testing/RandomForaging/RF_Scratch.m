@@ -2,16 +2,16 @@ function[] = RF_Scratch()
 close all;
 
 % Set params
-datFi = 'path_mat.mat';
+datFi = 'D.P.pathMat.mat';
 dir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Testing\RandomForaging';
 doLoadPath = false;
 doPlotPathAvg = false;
 doPlotPathAll = false;
 doSimRat = true;
-pathWdth = 5;
+D.PAR.pathWdth = 5;
 pixels = 400;
-nBins = 401;
-degDist = 5;
+D.UI.rfBins = 401;
+D.PAR.pathDegDist = 5;
 
 % Mouse vars
 doNewTarg = true;
@@ -24,8 +24,8 @@ cd(dir);
 arnRad = 140/2;
 cm2pxl = (pixels/2)/arnRad;
 bndWdth = 10;
-binEdges = linspace(0,pixels,nBins+1);
-occMat = zeros(nBins,nBins);
+binEdges = linspace(0,pixels,D.UI.rfBins+1);
+D.P.occMat = zeros(D.UI.rfBins,D.UI.rfBins);
 img = [];
 rewCnt = 0;
 
@@ -52,8 +52,8 @@ set(fig,'Position',fg_pos);
 ax_1 = axes('Position', [0,0,1,1], ...
     'Color', 'None', ...
     'YDir', 'reverse', ...
-    'XLim', [0,nBins], ...
-    'YLim', [0,nBins]);
+    'XLim', [0,D.UI.rfBins], ...
+    'YLim', [0,D.UI.rfBins]);
 hold on;
 
 % Second axis
@@ -87,23 +87,23 @@ plot(X_in,Y_in,'k', ...
 if (doLoadPath)
     % Load path
     load(fullfile(dir,datFi));
-    path_mat = double(path_mat);
+    D.P.pathMat = double(D.P.pathMat);
 else
     % Deg bin vars
-    n_paths = 45/degDist*2 + 1;
-    n_targs = 360/degDist;
+    D.PAR.nPaths = 45/D.PAR.pathDegDist*2 + 1;
+    n_targs = 360/D.PAR.pathDegDist;
     
     % Setup path mat
-    mat_eye = padarray(eye(nBins-5),[5,5],'pre');
-    mat_p = zeros(nBins);
-    for i = 1:pathWdth
+    mat_eye = padarray(eye(D.UI.rfBins-5),[5,5],'pre');
+    mat_p = zeros(D.UI.rfBins);
+    for i = 1:D.PAR.pathWdth
         mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
     end
-    path_mat = zeros(nBins,nBins,n_paths,n_targs);
+    D.P.pathMat = zeros(D.UI.rfBins,D.UI.rfBins,D.PAR.nPaths,n_targs);
     
     % Setup sim rat mat
     mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
-    rat_mat = path_mat;
+    rat_mat = D.P.pathMat;
     
     for c = 1:2
         if c==1
@@ -112,20 +112,20 @@ else
             mat_now = mat_r;
         end
         
-        for i = 0:floor(n_paths/2)
+        for i = 0:floor(D.PAR.nPaths/2)
             
-            if (i<floor(n_paths/2))
-                deg = i*degDist;
+            if (i<floor(D.PAR.nPaths/2))
+                deg = i*D.PAR.pathDegDist;
                 % Rotate
                 mat_rot = rotMat(mat_now,deg);
                 % Cut and pad
-                mat_rot = mat_rot(:,1:ceil(nBins/2));
-                mat_rot = padarray(mat_rot, [0,nBins-size(mat_rot,2)],'pre');
+                mat_rot = mat_rot(:,1:ceil(D.UI.rfBins/2));
+                mat_rot = padarray(mat_rot, [0,D.UI.rfBins-size(mat_rot,2)],'pre');
                 % Flip
                 mat_rot = flip(flip(mat_rot',2),1);
             else
-                mat_rot = zeros(nBins);
-                mat_rot(ceil(nBins/2)-floor(pathWdth/2):ceil(nBins/2)-floor(pathWdth/2)+pathWdth, :) = 1;
+                mat_rot = zeros(D.UI.rfBins);
+                mat_rot(ceil(D.UI.rfBins/2)-floor(D.PAR.pathWdth/2):ceil(D.UI.rfBins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
                 mat_rot(:,end-5:end) = 0;
             end
             
@@ -135,43 +135,43 @@ else
             % Store
             for j = [1:n_targs]-1
                 if c==1
-                    path_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*degDist,'bilinear','crop');
-                    path_mat(:,:,n_paths-i,j+1) = imrotate(mat_mir,j*degDist,'bilinear','crop');
+                    D.P.pathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                    D.P.pathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
                 else
-                    rat_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*degDist,'bilinear','crop');
-                    rat_mat(:,:,n_paths-i,j+1) = imrotate(mat_mir,j*degDist,'bilinear','crop');
+                    rat_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                    rat_mat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
                 end
             end
         end
     end
     
     % Mask values outside circle
-    [colNums, rowNums] = meshgrid(1:nBins, 1:nBins);
-    mask = (rowNums - ceil(nBins/2)).^2 ...
-        + (colNums - ceil(nBins/2)).^2 <= ceil(nBins/2).^2;
-    mask = repmat(mask,[1,1,n_paths,n_targs]);
-    path_mat = path_mat.*mask;
+    [colNums, rowNums] = meshgrid(1:D.UI.rfBins, 1:D.UI.rfBins);
+    mask = (rowNums - ceil(D.UI.rfBins/2)).^2 ...
+        + (colNums - ceil(D.UI.rfBins/2)).^2 <= ceil(D.UI.rfBins/2).^2;
+    mask = repmat(mask,[1,1,D.PAR.nPaths,n_targs]);
+    D.P.pathMat = D.P.pathMat.*mask;
     rat_mat = rat_mat.*mask;
     
     % Nomalize
-    path_mat(path_mat>0) = 1;
-    path_mat = path_mat ./ repmat(sum(sum(path_mat,1),2),[nBins,nBins,1,1]);
+    D.P.pathMat(D.P.pathMat>0) = 1;
+    D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.UI.rfBins,D.UI.rfBins,1,1]);
     rat_mat(rat_mat>0) = 1;
     
     % Save path
-    path_mat = single(path_mat);
-    save(fullfile(dir,datFi),'path_mat');
-    path_mat = double(path_mat);
+    D.P.pathMat = single(D.P.pathMat);
+    save(fullfile(dir,datFi),'D.P.pathMat');
+    D.P.pathMat = double(D.P.pathMat);
     
     
     % Plot path averages
     if (doPlotPathAvg)
         % Plot accross paths
-        ih = imagesc(sum(path_mat(:,:,:,1),3), 'Parent', ax_1);
+        ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', ax_1);
         pause(1);
         delete(ih);
         % Plot accross start pos and paths
-        ih = imagesc(sum(sum(path_mat(:,:,:,:),3),4), 'Parent', ax_1);
+        ih = imagesc(sum(sum(D.P.pathMat(:,:,:,:),3),4), 'Parent', ax_1);
         pause(1);
         delete(ih);
     end
@@ -179,7 +179,7 @@ else
     % Plot each path
     if (doPlotPathAll)
         for j = 1:n_targs
-            ih = imagesc(sum(path_mat(:,:,:,j),3), 'Parent', ax_1);
+            ih = imagesc(sum(D.P.pathMat(:,:,:,j),3), 'Parent', ax_1);
             pause(0.5);
         end
     end
@@ -269,11 +269,11 @@ end
         
         % Histogram data
         N = histcounts2(y,x,binEdges,binEdges);
-        occMat = occMat+flip(N,1);
+        D.P.occMat = D.P.occMat+flip(N,1);
         
         % Plot valuse
         delete(img);
-        img = imagesc(occMat, ...
+        img = imagesc(D.P.occMat, ...
             'Parent', ax_1);
     end
 
@@ -281,13 +281,13 @@ end
     function [] = GetNewTarg()
         
         % Local vars
-        targ_arr = 0:degDist:360-degDist;
-        path_arr = linspace(-45,45,45/degDist*2 + 1);
+        D.PAR.pathTargArr = 0:D.PAR.pathDegDist:360-D.PAR.pathDegDist;
+        path_arr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
         
         % Get inner product of current pos and occ
-        targ_ind = find(targ_arr == rewTarg);
+        targ_ind = find(D.PAR.pathTargArr == rewTarg);
         occ_prod = ...
-            squeeze(sum(sum(path_mat(:,:,:,targ_ind).*repmat(occMat,[1,1,size(path_mat,3)]),1),2));
+            squeeze(sum(sum(D.P.pathMat(:,:,:,targ_ind).*repmat(D.P.occMat,[1,1,size(D.P.pathMat,3)]),1),2));
         path_ind = find(occ_prod == min(occ_prod));
         if length(path_ind) > 1
             path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
@@ -307,16 +307,16 @@ end
         
         % Plot path
         if (~doSimRat)
-            path_plot = path_mat(:,:,path_ind,targ_ind);
+            path_plot = D.P.pathMat(:,:,path_ind,targ_ind);
             path_plot(path_plot>0) = 1;
-            img = imagesc(path_plot+occMat, ...
+            img = imagesc(path_plot+D.P.occMat, ...
                 'Parent', ax_1);
         end
         
         % Add rat path to OCC
         if (doSimRat)
-            occMat = rat_mat(:,:,path_ind,targ_ind)+occMat;
-            img = imagesc(occMat, ...
+            D.P.occMat = rat_mat(:,:,path_ind,targ_ind)+D.P.occMat;
+            img = imagesc(D.P.occMat, ...
                 'Parent', ax_1);
         end
         drawnow;

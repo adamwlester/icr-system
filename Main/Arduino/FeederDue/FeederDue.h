@@ -68,26 +68,26 @@ struct DB
 	const bool log_pos = false;
 	const bool log_pos_rat_vt = false;
 	const bool log_pos_rat_pixy = false;
-	const bool log_pos_rob_vt = false;
+	const bool log_pos_rob_vt = true;
 	const bool log_pos_rat_ekf = false;
 	const bool log_pos_rob_ekf = false;
-	const bool log_vel_rat_vt = false;
+	const bool log_vel_rat_vt = true;
 	const bool log_vel_rat_pixy = false;
 	const bool log_vel_rob_vt = false;
 	const bool log_vel_rat_ekf = false;
 	const bool log_vel_rob_ekf = false;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = false;
-	const bool print_r2c = false;
-	const bool print_a2r = false;
-	const bool print_r2a = false;
+	const bool print_c2r = true;
+	const bool print_r2c = true;
+	const bool print_a2r = true;
+	const bool print_r2a = true;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;

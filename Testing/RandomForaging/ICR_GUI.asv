@@ -70,8 +70,8 @@ end
 
 % Session conditions
 D.DB.ratLab = 'r9999';
-D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
-D.DB.Session_Task = 'Track'; % ['Track' 'Forrage']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
+D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
@@ -350,7 +350,10 @@ fprintf('END OF RUN\n');
         start(timer_c2m);
         
         % ------------------------ SETUP AC CONNECTION --------------------
-        Console_Write('[Setup] FINISHED: Connect to AC Computer');
+        Console_Write('[Setup] RUNNING: Connect to AC Computer...');
+        
+        % Set flag
+        D.AC.connected = false;
         
         % Setup communication with ARENACONTROLLER
         D.AC.IP = '172.17.0.3';
@@ -368,24 +371,33 @@ fprintf('END OF RUN\n');
         
         % Stop timer
         stop(timer_c2m);
-                
-%         % TEMP
-%         % Create tcpip object
-%         tcpIP = tcpip('0.0.0.0',55000, ...
-%             'OutputBufferSize', length(D.AC.data), ...
-%             'NetworkRole','Server');
-%         
-%         
-%         % Establish connection
-%         % will loop here until connection established
-%         fopen(tcpIP);
+        
+        % Create tcpip object
+        tcpIP = tcpip('0.0.0.0',55000, ...
+            'OutputBufferSize', length(D.AC.data), ...
+            'NetworkRole','Server', ...
+            'Timeout', 1);
+        
+        % Establish connection
+        % will loop here until connection established
+        if ~isMatSolo
+            fopen(tcpIP);
+            D.AC.connected = true;
+        else
+            D.AC.connected = false;
+        end
         
         % Restart timer
         start(timer_c2m);
         
         % Print that AC computer is connected
-        Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer... IP=%s', ...
-            D.AC.IP));
+        if (D.AC.connected)
+            Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer IP=%s', ...
+                D.AC.IP));
+        else
+            Console_Write(sprintf('**WARNING** [Setup] ABORTED: Connect to AC Computer IP=%s', ...
+                D.AC.IP));
+        end
         
         % Send to CS
         SendM2C('A');
@@ -405,15 +417,16 @@ fprintf('END OF RUN\n');
                     ~doExit
                 pause(0.01);
             end
-        end
-        
-        % Set sync time
-        if (c2m.('h').dat1 ~= 0)
-            Console_Write('[Setup] FINISHED: Wait for Handshake');
-            Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
-        elseif (~isMatSolo)
-            Console_Write('!!ERROR!! ABORTED: Wait for Handshake');
-            return;
+            
+            % Set sync time
+            if (c2m.('h').dat1 ~= 0)
+                Console_Write('[Setup] FINISHED: Wait for Handshake');
+                Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
+            else
+                Console_Write('!!ERROR!! ABORTED: Wait for Handshake');
+                return;
+            end
+            
         end
         
         % Open figure
@@ -521,22 +534,21 @@ fprintf('END OF RUN\n');
                     case 'FINISH SETUP'
                         %% -----------------FINISH SETUP-------------------
                         
-                        % Run Zone setup code
-                        Console_Write('[MainLoop] RUNNING: "Zone_Dist_Setup()"');
-                        Zone_Dist_Setup();
-                        Console_Write('[MainLoop] FINISHED: "Zone_Dist_Setup()"');
-                        
                         % Dump initial vt recs
                         Console_Write('[MainLoop] RUNNING: Dump VT Recs...');
-                        rat_vt_recs = 1; rob_vt_recs = 1; evt_recs = 1;
-                        while ...
-                                rat_vt_recs > 0 || ...
-                                rob_vt_recs > 0 || ...
-                                evt_recs > 0
+                        while true
                             pause(0.01);
-                            [~, ~, ~, ~, rat_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rat_ent);
-                            [~, ~, ~, ~, rob_vt_recs, ~] = NlxGetNewVTData(D.NLX.vt_rob_ent);
-                            [~, ~, ~, ~ , ~, evt_recs, ~] = NlxGetNewEventData('Events');
+                            VT_Get('Rat');
+                            VT_Get('Rob');
+                            Evt_Get();
+                            
+                            % Check if no new recs
+                            if ...
+                                    D.P.Rat.vtNRecs == 0 && ...
+                                    D.P.Rat.vtNRecs == 0 && ...
+                                    D.E.evtNRecs == 0
+                                break;
+                            end
                         end
                         Console_Write('[MainLoop] FINISHED: Dump VT Recs...');
                         
@@ -559,6 +571,22 @@ fprintf('END OF RUN\n');
                         Console_Write('[MainLoop] RUNNING: "Finish_Setup()"...');
                         Finish_Setup();
                         Console_Write('[MainLoop] FINISHED: "Finish_Setup()"');
+                        
+                        % Run 'Track' task setup code
+                        if D.PAR.sesTask == 'Track'
+                            Console_Write('[MainLoop] RUNNING: "Track_Task_Setup()"');
+                            Track_Task_Setup();
+                            Console_Write('[MainLoop] FINISHED: "Track_Task_Setup()"');
+                        end
+                        
+                        % Run 'Forage' task setup code
+                        if D.PAR.sesTask == 'Forage'
+                            Console_Write('[MainLoop] RUNNING: "Forage_Task_Setup()"');
+                            Forage_Task_Setup();
+                            Console_Write('[MainLoop] FINISHED: "Forage_Task_Setup()"');
+                        end
+                        
+                        % Refresh UI
                         Update_UI(0);
                         
                         % Set to start polling NLX
@@ -639,9 +667,9 @@ fprintf('END OF RUN\n');
                                 
                                 % Send C# command to move robot to start quad or reward loc
                                 if D.PAR.sesCond ~= 'Manual_Training' %#ok<*STCMP>
-                                    SendM2C('M', D.UI.strQuadBnds(1));
+                                    SendM2C('M', D.PAR.strQuadBnds(1));
                                 else
-                                    SendM2C('M', D.UI.rewFeedRad(1));
+                                    SendM2C('M', D.UI.rewZoneRad(1));
                                 end
                                 
                                 % Set flag
@@ -726,7 +754,69 @@ fprintf('END OF RUN\n');
         
         function [] = Var_Setup()
             
-            % SESSION VARIABLES
+            %% TOP LEVEL PARAMETERS
+            
+            % LOAD TRACK BOUNDS
+            
+            % bounding box for video tracker (in pixels)
+            % track plot bounds (width, hight)
+            S = load(D.DIR.ioTrkBnds);
+            % track bound radius
+            D.PAR.R = S.R;
+            % track bound center X
+            D.PAR.XC = S.XC;
+            % track bound center Y
+            D.PAR.YC = S.YC;
+            clear S;
+            
+            % POSITION VARS
+            
+            % Plot bounds
+            D.UI.vtRes = round(D.PAR.R*2);
+            % track plot bounds (left, bottom)
+            D.UI.lowLeft = round([D.PAR.XC-D.PAR.R,D.PAR.YC-D.PAR.R]);
+            
+            % Calculate pixel to cm conversion factors
+            D.UI.cm2pxl = D.UI.vtRes/140;
+            
+            % Pos lims
+            % arena radius (cm)
+            D.UI.arnRad = 70;
+            % track width (cm)
+            D.UI.trkWdt = 10;
+            % random forrage radius (cm)
+            D.UI.rfRad = 60;
+            % rew zone width (cm)
+            D.UI.rfTargWdt = 20;
+            
+            % FORAGE TASK VARS
+            
+            % pos occ bins
+            D.UI.rfBins = D.UI.arnRad*2 + 1;
+            % width of path
+            D.PAR.pathWdth = 5;
+            % distance between paths in degrees
+            D.PAR.pathDegDist = 5;
+            % target width
+            D.PAR.pathTargWdt = 10;
+            % target array
+            D.PAR.pathTargArr = 0:D.PAR.pathDegDist:360-D.PAR.pathDegDist;
+            % number of posible paths from each targ
+            D.PAR.nPaths = 45/D.PAR.pathDegDist*2 + 1;
+            
+            % TRACK TASK VARS
+            
+            % min/max reward duration
+            D.PAR.rewDurLim = [500, 2000];
+            % reward zone positions
+            D.PAR.zoneLocs = 20:-5:-20;
+            % reward zone reward durations
+            D.PAR.zoneRewDur = ...
+                [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
+            % current reward duration
+            D.PAR.rewDur = max(D.PAR.rewDurLim);
+            
+            %% FLOW CONTROL VARIABLES
             
             % Load data tables
             T = load(D.DIR.ioSS_In_All);
@@ -734,6 +824,8 @@ fprintf('END OF RUN\n');
             T = load(D.DIR.ioSS_Out_ICR);
             D.SS_Out_ICR = T.SS_Out_ICR;
             clear T;
+            
+            % CATEGORICAL VARS
             
             % age group
             D.PAR.catAgeGrp = categories(D.SS_In_All.Age_Group); % [Young,Old];
@@ -764,6 +856,8 @@ fprintf('END OF RUN\n');
             D.C.missed_rew_cnt = [0, 0];
             % bulldozing event count
             D.C.bull_cnt = 0;
+            % counter for each reward zone
+            D.C.zone = zeros(2,length(D.PAR.zoneLocs));
             
             % FLAGS
             
@@ -875,18 +969,6 @@ fprintf('END OF RUN\n');
             D.T.Rat.last_pos_update = Elapsed_Seconds(now);
             D.T.Rob.last_pos_update = Elapsed_Seconds(now);
             
-            % DEBUG VARS
-            % track reward duration [now, min, max, sum, count]
-            D.DB.rew_duration = [0, inf, 0, 0, 0];
-            % track reward round trip [now, min, max, sum, count]
-            D.DB.rew_round_trip = [0, inf, 0, 0, 0];
-            % track loop dt [now, min, max, sum, count]
-            D.DB.loop = [0, inf, 0, 0, 0];
-            % draw now dt [now, min, max, sum, count]
-            D.DB.draw = [0, inf, 0, 0, 0];
-            % halt error [now, min, max, sum, count]
-            D.DB.halt_error = [0, inf, 0, 0, 0];
-            
             % INDEXING
             
             % current wall image index
@@ -895,78 +977,40 @@ fprintf('END OF RUN\n');
             D.I.img_ind = [1, NaN];
             % current lap quadrant for lap track
             D.I.lap_hunt_ind = 1;
-            
-            % REWARD VARS
-            
-            % min/max reward duration
-            D.PAR.rewDurLim = [500, 2000];
-            % reward zone positions
-            D.PAR.zoneLocs = 20:-5:-20;
-            % reward zone reward durations
-            D.PAR.zoneRewDur = ...
-                [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
-            % current reward duration
-            D.PAR.rewDur = max(D.PAR.rewDurLim);
             % current reward zone
             D.I.zone = ceil(length(D.PAR.zoneLocs)/2); % default max
             % distrebution of reward zones
             D.I.zoneArr = NaN(1,100);
             % store reward zone for each reward event
             D.I.zoneHist = NaN(1,100);
-            % counter for each reward zone
-            D.C.zone = zeros(2,length(D.PAR.zoneLocs));
-            % handles
-            D.UI.zoneAllH = gobjects(length(D.PAR.zoneLocs),2);
-            D.UI.zoneNowH = gobjects(1,1);
-            D.UI.zoneAvgH = gobjects(1,1);
-            D.UI.durNowTxtH = gobjects(1,1);
+            % current targ ind
+            D.I.targInd = 1;
+            
+            %% DATA STORAGE VARIABLES
             
             % VCC VARS
+            
             D.PAR.vcc_now = 0;
             D.PAR.vcc_last = 0;
             
-            % VT VARS
-            % Bounding box for video tracker (in pixels)
-            % track plot bounds (width, hight)
+            % EVENT DATA
+            D.E.evtTS = NaN;
+            D.E.evtStr = '';
+            D.E.evtNRecs = 0;
+            D.E.cnt_evtRec = 0;
             
-            % POSITION VARS
+            % POS DATA
             
-            % Arena dimensions radius (cm)
-            D.UI.arnRad = 70;
-            % track width (cm)
-            D.UI.trkWdt = 10;
-            
-            % Load track bound data
-            % bounding box for video tracker (in pixels)
-            % track plot bounds (width, hight)
-            S = load(D.DIR.ioTrkBnds);
-            % track bound radius
-            D.PAR.R = S.R;
-            % track bound center X
-            D.PAR.XC = S.XC;
-            % track bound center Y
-            D.PAR.YC = S.YC;
-            clear S;
-            
-            % Plot bounds
-            D.UI.vtRes = round([D.PAR.R*2,D.PAR.R*2]);
-            % track plot bounds (left, bottom)
-            D.UI.lowLeft = round([D.PAR.XC-D.PAR.R,D.PAR.YC-D.PAR.R]);
-            
-            % Calculate pixel to cm conversion factors
-            D.UI.xCMcnv = D.UI.vtRes(1)/140;
-            D.UI.yCMcnv = D.UI.vtRes(2)/140;
-            
-            % nlx input
+            % nlx inputs
             D.P.Rat.vtTS = NaN;
             D.P.Rat.vtPos = NaN;
             D.P.Rat.vtHD = NaN;
-            D.P.Rat.vtNRecs = NaN;
+            D.P.Rat.vtNRecs = 0;
             D.P.Rat.cnt_vtRec = 0;
             D.P.Rob.vtTS = NaN;
             D.P.Rob.vtPos = NaN;
             D.P.Rob.vtHD = NaN;
-            D.P.Rob.vtNRecs = NaN;
+            D.P.Rob.vtNRecs = 0;
             D.P.Rob.cnt_vtRec = 0;
             % cardinal pos now
             D.P.Rat.x = NaN;
@@ -1005,16 +1049,71 @@ fprintf('END OF RUN\n');
             % store 1 lap of vel by roh
             D.P.Rat.vel_hist = NaN(500,101,2);
             D.P.Rob.vel_hist = NaN(500,101,2);
-            % position cutoff
-            D.P.posRohMax = 1 + (5/D.UI.arnRad);
-            D.P.posRohMin = (1 - (D.UI.trkWdt+5)/D.UI.arnRad);
+            % track position cutoff
+            D.P.trackRohMax = 1 + (5/D.UI.arnRad);
+            D.P.trackRohMin = (1 - (D.UI.trkWdt+5)/D.UI.arnRad);
             % velocity cutoff
-            D.P.velRohMax = D.P.posRohMin;
-            D.P.velRohMin = D.P.posRohMin - 0.25;
+            D.P.velRohMax = D.P.trackRohMin;
+            D.P.velRohMin = D.P.trackRohMin - 0.25;
             D.P.velMin = 0;
             D.P.velMax = 100;
+            % random forage
+            D.P.occMat = zeros(D.UI.rfBins,D.UI.rfBins);
+            D.P.pathMat = zeros(D.UI.rfBins,D.UI.rfBins,D.PAR.nPaths,length(D.PAR.pathTargArr));
             
-            % UI POS PLOT HANDLES AND CUMULATIVE DATA ARRAYS
+            
+            % DEBUG VARS
+            
+            % track reward duration [now, min, max, sum, count]
+            D.DB.rew_duration = [0, inf, 0, 0, 0];
+            % track reward round trip [now, min, max, sum, count]
+            D.DB.rew_round_trip = [0, inf, 0, 0, 0];
+            % track loop dt [now, min, max, sum, count]
+            D.DB.loop = [0, inf, 0, 0, 0];
+            % draw now dt [now, min, max, sum, count]
+            D.DB.draw = [0, inf, 0, 0, 0];
+            % halt error [now, min, max, sum, count]
+            D.DB.halt_error = [0, inf, 0, 0, 0];
+            % simulated rat forage data
+            D.DB.simRatPathMat = D.P.pathMat;
+            
+            %% UI HANDLES
+            
+            % AXIS HANDLES
+            D.UI.axH = gobjects(4,1);
+            
+            % TRACK TASK HANDLES
+            
+            % track bound line handles
+            D.UI.linTrckH = gobjects(2,1);
+            % vel plot line handles
+            D.UI.nVelRings = ceil(D.P.velMax/10)+1;
+            D.UI.linVelH = gobjects(D.UI.nVelRings,1);
+            % start quad patch
+            D.UI.ptchStQ = [];
+            % start quad text
+            D.UI.txtStQ = [];
+            % reward zone patch
+            D.UI.ptchFdZineH = gobjects(length(D.PAR.zoneLocs),2);
+            % reward duration text
+            D.UI.txtFdDurH = gobjects(length(D.PAR.zoneLocs),2);
+            % lap bounds patch
+            D.UI.ptchLapBnds = gobjects(1,4);
+            % reward reset patch
+            D.UI.ptchFdRstH = gobjects(1,2);
+            % current feeder marker/patch/line
+            D.UI.mixFdNow = gobjects(3,2);
+            
+            % FORAGE TASK HANDLES
+            
+            % rf bound line handles
+            D.UI.linRFH = gobjects(2,1);
+            % rf bound mask
+            D.UI.imgMaskRFH = [];
+            % rf targ patch
+            D.UI.ptchRFTarg = gobjects(360/D.PAR.pathDegDist,1);
+            
+            % POS DATA
             
             % vt plot handle array
             D.UI.ratPltH = gobjects(1,60*120/D.PAR.polRate);
@@ -1031,15 +1130,13 @@ fprintf('END OF RUN\n');
             D.UI.Rat.pltHposAll = gobjects(1,1); % rat
             D.UI.Rat.pltHvelAll = gobjects(1,1); % rat
             D.UI.Rob.pltHvelAll = gobjects(1,1); % rob
+            % reward zone
+            D.UI.zoneAllH = gobjects(length(D.PAR.zoneLocs),2);
+            D.UI.zoneNowH = gobjects(1,1);
+            D.UI.zoneAvgH = gobjects(1,1);
+            D.UI.txtFdDurH = gobjects(1,1);
             
-                        % RANDOM FORAGE
-                        
-            % random forrage radius (cm)
-            D.UI.rfRad = 60;
-            % rew zone width (cm)
-            D.UI.rfRad = 20;
-            % pos occ bins
-            D.UI.rfBins = round((D.UI.rfRad*2)/3);
+            %% UI APPERANCE
             
             % UI COLOR
             
@@ -1115,7 +1212,7 @@ fprintf('END OF RUN\n');
                 D.UI.ratList(:,1), D.UI.ratList(:,2), 'Uni', false)];
             
             % popTask
-            D.UI.taskList = {''; 'Track'; 'Forrage'};
+            D.UI.taskList = {''; 'Track'; 'Forage'};
             D.PAR.sesTask = categorical({'<undefined>'}, {'Track', 'Forage'});
             
             % popCond
@@ -1187,7 +1284,7 @@ fprintf('END OF RUN\n');
                 'Color', [1, 1, 1], ...
                 'Visible', 'off');
             
-            % Generate backround axis
+            % Generate data axis
             % backround axis
             D.UI.axH(1) = axes(...
                 'Units', 'Normalized', ...
@@ -1213,6 +1310,12 @@ fprintf('END OF RUN\n');
                 'Visible', 'off');
             hold on;
             
+            % Specify stack order
+            uistack(D.UI.axH(1),'bottom');
+            uistack(D.UI.axH(3),'top');
+            uistack(D.UI.axH(4),'top');
+            uistack(D.UI.axH(2),'top');
+            
             % Specigy figure width/hight
             fg_wh = [1240 800];
             
@@ -1227,17 +1330,17 @@ fprintf('END OF RUN\n');
             % Set axis limits
             axis(D.UI.axH, [ ...
                 D.UI.lowLeft(1), ...
-                D.UI.lowLeft(1)+D.UI.vtRes(1), ...
+                D.UI.lowLeft(1)+D.UI.vtRes, ...
                 D.UI.lowLeft(2), ...
-                D.UI.lowLeft(2)+D.UI.vtRes(2)]);
+                D.UI.lowLeft(2)+D.UI.vtRes]);
             
             % Set axis pos
-            ax_pos = [ ...
+            D.UI.ax_pos = [ ...
                 (1 - (0.9/(fg_wh(1)/fg_wh(2)))) / 2, ...
                 0.05, ...
                 0.9/(fg_wh(1)/fg_wh(2)), ...
                 0.9];
-            set(D.UI.axH, 'Position', ax_pos);
+            set(D.UI.axH, 'Position', D.UI.ax_pos);
             
             % ADD CARDINAL COORDINATES
             
@@ -1263,7 +1366,6 @@ fprintf('END OF RUN\n');
                 'Color', [1,1,1], ...
                 'HorizontalAlignment','center', ...
                 'VerticalAlignment','middle')
-            % CREATE TRACK OUTLINE
             t2_h = copyobj(t_h, D.UI.axH(2));
             set(t2_h, ...
                 'Color', D.UI.activeCol, ...
@@ -1274,32 +1376,41 @@ fprintf('END OF RUN\n');
             % Get coordinates for circle
             circ = [0:.01:2*pi,0];
             
+            % Clear vars
+            clear xy_mid xy_min xy_max offset t2_h;
+            
+            % CREATE TRACK OUTLINE
+            
             % Plot outer track
             [out_X,out_Y] = pol2cart(circ, ones(1,length(circ)) * (D.UI.arnRad));
-            xout = out_X*D.UI.xCMcnv + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.xCMcnv;
-            yout = out_Y*D.UI.yCMcnv + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.yCMcnv;
-            D.UI.trckH(1) = plot(xout, yout, ...
+            xout = out_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            yout = out_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            D.UI.linTrckH(1) = plot(xout, yout, ...
                 'color', [0.5 0.5 0.5], ...
                 'LineWidth', 2, ...
-                'Parent', D.UI.axH(2));
+                'Parent', D.UI.axH(2), ...
+                'Visible', 'off');
             
             % Plot inner track
             [in_X,in_Y] = pol2cart(circ, ones(1,length(circ)) * (D.UI.arnRad-D.UI.trkWdt));
-            xin = in_X*D.UI.xCMcnv + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.xCMcnv;
-            yin = in_Y*D.UI.yCMcnv + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.yCMcnv;
-            D.UI.trckH(2) = plot(xin, yin, ...
+            xin = in_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            yin = in_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            D.UI.linTrckH(2) = plot(xin, yin, ...
                 'color', [0.5 0.5 0.5], ...
                 'LineWidth', 2, ...
-                'Parent', D.UI.axH(2));
+                'Parent', D.UI.axH(2), ...
+                'Visible', 'off');
+            
+            % Clear vars
+            clear out_X out_Y xout yout in_X in_Y xin yin;
             
             % CREATE VEL PLOT OUTLINE
-            n_rings = ceil(D.P.velMax/10)+1;
-            roh_inc = linspace(D.P.velRohMin, D.P.velRohMax, n_rings);
+            roh_inc = linspace(D.P.velRohMin, D.P.velRohMax, D.UI.nVelRings);
             
-            for z_lin = 1:n_rings
+            for z_lin = 1:D.UI.nVelRings
                 [x,y] = pol2cart(circ, ones(1,length(circ))*D.UI.arnRad*roh_inc(z_lin));
-                x = x*D.UI.xCMcnv + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.xCMcnv;
-                y = y*D.UI.yCMcnv + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.yCMcnv;
+                x = x*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+                y = y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
                 % set line width
                 if z_lin==1 || z_lin == length(roh_inc)
                     lin_wdth = 1;
@@ -1310,15 +1421,41 @@ fprintf('END OF RUN\n');
                     lin_style = '-';
                     col = [0.75, 0.75, 0.75];
                 end
-                D.UI.velLimH(z_lin) = plot(x, y, ...
+                D.UI.linVelH(z_lin) = plot(x, y, ...
                     'color', col, ...
                     'LineWidth', lin_wdth, ...
                     'LineStyle', lin_style, ...
-                    'Parent', D.UI.axH(2));
+                    'Parent', D.UI.axH(2), ...
+                    'Visible', 'off');
             end
+            
+            % Clear vars
+            clear roh_inc x y lin_wdth lin_style col;
             
             % CREATE RF BND LINES
             
+            % Plot outer bounds
+            [out_X,out_Y] = pol2cart(circ, ones(1,length(circ)) * (D.UI.rfRad));
+            xout = out_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            yout = out_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            D.UI.linRFH(1) = plot(xout, yout, ...
+                'color', [0.5 0.5 0.5], ...
+                'LineWidth', 2, ...
+                'Parent', D.UI.axH(2), ...
+                'Visible', 'off');
+            
+            % Plot inner bounds
+            [in_X,in_Y] = pol2cart(circ, ones(1,length(circ)) * (D.UI.rfRad-D.UI.rfTargWdt));
+            xin = in_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            yin = in_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            D.UI.linRFH(2) = plot(xin, yin, ...
+                'color', [0.5 0.5 0.5], ...
+                'LineWidth', 2, ...
+                'Parent', D.UI.axH(2), ...
+                'Visible', 'off');
+            
+            % Clear vars
+            clear out_X out_Y xout yout in_X in_Y xin yin;
             
             % GUI OBJECT POSITIONS
             
@@ -1327,10 +1464,10 @@ fprintf('END OF RUN\n');
             
             % Bounds of plot space
             D.UI.main_ax_bounds = [ ...
-                ax_pos(1) - 0.05, ...
-                ax_pos(2) - 0.05, ...
-                ax_pos(3) + 0.1, ...
-                ax_pos(4) + 0.1];
+                D.UI.ax_pos(1) - 0.05, ...
+                D.UI.ax_pos(2) - 0.05, ...
+                D.UI.ax_pos(3) + 0.1, ...
+                D.UI.ax_pos(4) + 0.1];
             
             % Panel positions
             % setup
@@ -1362,32 +1499,54 @@ fprintf('END OF RUN\n');
             
             % MAKE RF MASK
             
-            % TEMP
-            set(D.UI.axH(2),'Color',[0,0,0],'Visible','on');
-            set(D.UI.axH(3),'Visible','on');
-            set(FigH,'visible','on');
+            %             % TEMP
+            %             set(D.UI.axH(2), ...
+            %                 'XLim', [0,D.UI.vtRes],...
+            %                 'YLim', [0,D.UI.vtRes]);
+            %             imshow(ones(D.UI.vtRes,D.UI.vtRes)*0.5, 'Parent',D.UI.axH(2));
+            %             set(FigH,'visible','on');
             
-            % Set pos and units
+            % Get scaled up pixel vals
+            rad_pxl = ceil(D.UI.rfRad*D.UI.cm2pxl)*4;
+            lim_pxl = D.UI.vtRes*4;
+            pad_pxl = round((lim_pxl-(rad_pxl*2))/2);
             
-            [colNums, rowNums] = meshgrid(1:D.UI.vtRes(1), 1:D.UI.vtRes(1));
-            D.UI.rfMask = (rowNums - ceil(D.UI.rfRad*D.UI.xCMcnv)).^2 ...
-                + (colNums - ceil(D.UI.rfRad*D.UI.xCMcnv)).^2 <= ceil(D.UI.rfRad*D.UI.xCMcnv).^2;
-            h_mask = imshow(ones(D.UI.vtRes(1),D.UI.vtRes(1)), 'Parent',D.UI.axH(1));
-            set(h_mask, 'AlphaData', D.UI.rfMask);
-            uistack(D.UI.axH(3), 'top');
+            % Make mask
+            [colNums, rowNums] = meshgrid(1:rad_pxl*2, 1:rad_pxl*2);
+            D.PAR.pathMask = ...
+                (rowNums - rad_pxl).^2 + (colNums - rad_pxl).^2 <= rad_pxl.^2;
+            D.PAR.pathMask = ~padarray(D.PAR.pathMask, [pad_pxl, pad_pxl]);
+            
+            % Set lims
+            set(D.UI.axH(3), ...
+                'XLim', [1,size(D.PAR.pathMask,1)],...
+                'YLim', [1,size(D.PAR.pathMask,2)]);
+            
+            % Show mask
+            D.UI.imgMaskRFH = ...
+                imshow(ones(size(D.PAR.pathMask,1),size(D.PAR.pathMask,2)), ...
+                'Parent',D.UI.axH(3));
+            set(D.UI.imgMaskRFH, ...
+                'AlphaData', D.PAR.pathMask, ...
+                'Visible', 'off');
+            
+            % Store path mask
+            D.PAR.pathMask = imresize(~D.PAR.pathMask, [D.UI.rfBins,D.UI.rfBins]);
+            
+            % Clear vars
+            clear rad_pxl lim_pxl pad_pxl mask;
             
             % MAKE WALL IMAGES
-            img_ax_pos = [ax_pos(1) - ax_pos(3)*0.035, ...
-                ax_pos(2) - ax_pos(4)*0.035, ...
-                ax_pos(3) * 1.07, ...
-                ax_pos(4) * 1.07];
+            img_ax_pos = [D.UI.ax_pos(1) - D.UI.ax_pos(3)*0.035, ...
+                D.UI.ax_pos(2) - D.UI.ax_pos(4)*0.035, ...
+                D.UI.ax_pos(3) * 1.07, ...
+                D.UI.ax_pos(4) * 1.07];
             
             % Wall image axis
             set(D.UI.axH(4), 'Position', img_ax_pos);
-            uistack(D.UI.axH(4), 'bottom');
             
             % Read in image
-            img{1} = imread(D.DIR.ioWallImage, 'BackgroundColor', D.UI.figBckCol);
+            [img{1}, ~, alph] = imread(D.DIR.ioWallImage);
             set(D.UI.axH(4), 'XLim', [0,size(img{1},2)], 'YLim', [0,size(img{1},1)]);
             img{1} = flip(img{1}, 1);
             mask = true(size(img{1}));
@@ -1404,6 +1563,11 @@ fprintf('END OF RUN\n');
             D.UI.wallImgH(1) = image(img{1}, 'Parent', D.UI.axH(4), 'Visible', 'on');
             D.UI.wallImgH(2) = image(img{2}, 'Parent', D.UI.axH(4), 'Visible', 'off');
             D.UI.wallImgH(3) = image(img{3}, 'Parent', D.UI.axH(4), 'Visible', 'off');
+            % set alpha
+            set(D.UI.wallImgH, 'AlphaData', alph);
+            
+            % Clear vars
+            clear img alph;
             
             %% ========================= ADD UI OBJECTS ===============================
             
@@ -2560,15 +2724,22 @@ fprintf('END OF RUN\n');
             
             %% CONNECT TO NETCOM
             
+            % Set flag
+            D.NLX.running = false;
+            D.NLX.connected = false;
+            
             % Wait for Cheetah to open
             Console_Write('[NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
-            is_running = false;
-            while ~is_running && ~doExit
+            while ~D.NLX.running && ...
+                    ~isMatSolo && ...
+                    ~doExit
+                % Check EXE status
                 [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
-                is_running = any(strfind(result, 'Cheetah.exe'));
+                D.NLX.running = any(strfind(result, 'Cheetah.exe'));
             end
+            
             % Log/print
-            if is_running
+            if D.NLX.running
                 Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
                 % Pause before connecting
                 if ~isMatSolo
@@ -2586,25 +2757,36 @@ fprintf('END OF RUN\n');
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
             end
             
-            % Load NetCom into Matlab, and connect to the NetCom server if we aren’t connected
+            % Load NetCom into Matlab, and connect to the NetCom server
             Console_Write(sprintf('[NLX_Setup] RUNNING: Connect to NLX... IP=%s', ...
                 D.NLX.IP));
-            succeeded = 0;
+            
+            % Run if not connected already
             if NlxAreWeConnected() ~= 1
-                while NlxAreWeConnected() ~= 1 && ~doExit
-                    succeeded = NlxConnectToServer(D.NLX.IP);
-                    if succeeded == 1
-                        %Identify this program to the server.
+                
+                % Keep attempting till success
+                while ~D.NLX.connected && ...
+                        ~isMatSolo && ...
+                        ~doExit
+                    
+                    % Attempt connection
+                    D.NLX.connected = NlxConnectToServer(D.NLX.IP) == 1;
+                    
+                    % Identify id to server
+                    if D.NLX.connected
                         NlxSetApplicationName('ICR_GUI');
                     end
+                    
                 end
-                if succeeded == 1
+                
+                % Log/print status
+                if D.NLX.connected
                     Console_Write('[NLX_Setup] FINISHED: Connect to NLX');
                 else
-                    Console_Write('[NLX_Setup] ABORTED: Connect to NLX');
+                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Connect to NLX');
                 end
             else
-                % Log/print
+                % Log/print already connected
                 Console_Write('[NLX_Setup] CONFIRM: Already Connected to NLX');
             end
             
@@ -2723,194 +2905,7 @@ fprintf('END OF RUN\n');
             
         end
         
-        % -------------------------REWARD ZONE SETUP-----------------------
-        
-        function[] = Zone_Dist_Setup()
-            
-            % Initialize long distrebution
-            sub_samp = 100;
-            x_long = 1:11*sub_samp;
-            zone_short = linspace(-25,25,11);
-            
-            % Setup axes
-            wdth = 0.23;
-            ht = 0.2;
-            lft = (D.UI.main_ax_bounds(1)+(D.UI.main_ax_bounds(3)/2)) - wdth/2;
-            botm = 0.5 - ht/2;
-            zone_ax_pos = [...
-                lft, ...
-                botm, ...
-                wdth, ...
-                ht ...
-                ];
-            D.UI.axZoneH(1) = axes( ...
-                'Color', 'none', ...
-                'Position',zone_ax_pos, ...
-                'XLim',[min(x_long)+sub_samp/2-1,max(x_long)-sub_samp/2], ...
-                'Visible','off');
-            hold on;
-            D.UI.axZoneH(2) = axes( ...
-                'Color','none', ...
-                'Position',zone_ax_pos, ...
-                'XLim',[min(zone_short)+2.5, max(zone_short)-2.5], ...
-                'XTick',zone_short, ...
-                'Visible','on');
-            box on;
-            hold on
-            set(D.UI.axZoneH, ...
-                'FontWeight', 'bold', ...
-                'FontSize', 7)
-            
-            % Get long dist
-            % front (i.e., < 0)
-            han = sub_samp*11;
-            dist_long = hanning(han);
-            dist_long = (dist_long/max(dist_long)) * (max(dist_long)/5)*4 + max(dist_long)/5;
-            dist_long = [min(dist_long)*ones((length(x_long)-han)/2, 1); dist_long];
-            % set first and last values to zero
-            dist_long([1:sub_samp,end-sub_samp+1:end]) = 0;
-            % normalize
-            dist_long = (dist_long/sum(dist_long))';
-            % scale y axis
-            set(D.UI.axZoneH(1), 'YLim', [0,max(dist_long)]);
-            
-            % Plot example distrebution
-            y = dist_long;
-            y(y == 0) = NaN;
-            plot(x_long, y,'k', ...
-                'LineWidth', 2, ...
-                'Parent',D.UI.axZoneH(1));
-            % plot center line
-            x = repmat(round(max(x_long)/2),1,2);
-            y = get(D.UI.axZoneH(1),'YLim');
-            plot(x, y, 'k', ...
-                'LineWidth', 2, ...
-                'Color', [0, 0, 0], ...
-                'Parent',D.UI.axZoneH(1));
-            
-            % Subsample long distrebution
-            short_ind = floor(linspace(1, length(x_long), length(zone_short)));
-            dist_short = dist_long(short_ind);
-            
-            % Plot point for reward size at each zone
-            x =  short_ind(2:end-1);
-            y = D.PAR.zoneRewDur/max(D.PAR.zoneRewDur)*max(dist_long);
-            plot(x, y, 'or', ...
-                'MarkerFaceColor', [0.5, 0.5, 0.5], ...
-                'MarkerEdgeColor', [0.1, 0.1, 0.1], ...
-                'MarkerSize', 10, ...
-                'Parent',D.UI.axZoneH(1));
-            
-            % Rescale dist and set main axis
-            dist_short = dist_short * (1/sum(dist_short));
-            % set axis
-            set(D.UI.axZoneH(2), ...
-                'YLim' , [0, 1], ...
-                'YTick',0:500/D.PAR.rewDurLim(2):1, ...
-                'YTickLabel',0:500:D.PAR.rewDurLim(2), ...
-                'XTickLabel' , [], ...
-                'XGrid', 'on', ...
-                'YGrid', 'on', ...
-                'YMinorGrid', 'on');
-            % make lables
-            x_tic_labs = arrayfun(@(x,y,z) (sprintf('%d%c \n%d_{ms} \n(%0.0f%%)', x, char(176), y, z)), ...
-                zone_short, [0,D.PAR.zoneRewDur,0], dist_short*100, 'uni', false);
-            for z_tick = 2:length(x_tic_labs)-1
-                text(D.UI.axZoneH(2).XTick(z_tick), -0.15, x_tic_labs{z_tick}, ...
-                    'FontSize', 7, ...
-                    'FontWeight', 'bold', ...
-                    'HorizontalAlignment', 'center');
-            end
-            
-            % Remove unused vals
-            dist_cut = find(dist_short ~= 0, 1, 'last');
-            zone_interp = zone_short(1:dist_cut);
-            dist_interp = dist_short(1:dist_cut);
-            
-            % Compute cumsum and interpolate from random data
-            cum = cumsum(dist_interp);
-            cum = cum/max(cum);
-            
-            % get random values based on distrebution
-            bins = linspace(min(zone_interp)-5,max(zone_interp),length(zone_interp)+1);
-            % run initial rand
-            rand_dist = round(interp1(cum, zone_interp, sort(rand(1,100))));
-            samp_hist = histc(rand_dist, bins);
-            samp_hist = samp_hist(1:end-1);
-            
-            % Get final zone dist
-            zone_arr = cell2mat(arrayfun(@(x) (repmat(zone_interp(x),samp_hist(x),1)), ...
-                (1:dist_cut)', 'Uni', false));
-            % shuffle
-            zone_arr = zone_arr(randperm(length(zone_arr)));
-            
-            % remove unused values
-            zone_arr(zone_arr < -20 | zone_arr > 20) = 0;
-            
-            % Plot saved sample dist
-            bins = ...
-                linspace(min(-1*D.PAR.zoneLocs)-2.5, max(-1*D.PAR.zoneLocs)+2.5, length(D.PAR.zoneLocs)+1);
-            samp_hist = histc(zone_arr, bins);
-            samp_hist(end) = [];
-            % rescale for plotting
-            samp_dist = samp_hist'/max(samp_hist);
-            
-            % Reverse sign and store values
-            D.I.zoneArr = zone_arr*-1;
-            
-            % plot sample dist
-            if D.PAR.cueFeed ~= 'None'
-                D.UI.zoneArrH = createPatches(...
-                    -1*D.PAR.zoneLocs, samp_dist, 2, ...
-                    [0, 0, 0], ...
-                    0.25, ...
-                    D.UI.axZoneH(2));
-            end
-            
-            % Compute reward vlue by pos
-            rew_by_pos = dist_short(2:end-1);
-            rew_by_pos = (rew_by_pos-min(rew_by_pos)) / ...
-                (max(rew_by_pos)-min(rew_by_pos));
-            rew_by_pos = ...
-                rew_by_pos * ...
-                diff(D.PAR.rewDurLim) + D.PAR.rewDurLim(1);
-            % must be convertable to byte
-            rew_by_pos = floor(rew_by_pos/10)*10; %#ok<NASGU>
-            % Store values
-            %D.PAR.zoneRewDur = rew_by_pos;
-            
-            % Keep count shown on top of ax 1
-            set(D.UI.axZoneH(1), ...
-                'Visible', 'on', ...
-                'XAxisLocation','top', ...
-                'YTickLabel', [], ...
-                'XTick', short_ind(2:end-1), ...
-                'XTickLabel', D.C.zone(D.I.rot,:));
-            
-            % Move axes to top of stack
-            uistack(D.UI.axZoneH, 'top');
-            uistack(D.UI.axZoneH(1), 'top');
-            
-            %             % Print vals to console
-            %             str = [];
-            %             for z_s = 1:7:length(D.I.zoneArr)
-            %                 if z_s+7 < length(D.I.zoneArr)
-            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
-            %                 else
-            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
-            %                 end
-            %             end
-            %
-            %             Console_Write(sprintf('[Zone_Dist_Setup] Computed Zone Dist: \r%s', ...
-            %                 str,));
-            
-            % Log/print
-            Console_Write('[Zone_Dist_Setup] FINISHED: Zone Dist Setup');
-            
-        end
-        
         % ----------------------------FINISH SETUP-------------------------
-        
         function [] = Finish_Setup()
             
             %% Update session specific vars
@@ -2988,9 +2983,9 @@ fprintf('END OF RUN\n');
                 {sprintf('ROTATE 40%c %s', char(176), char(D.PAR.ratRotDrc))}];
             
             % Modify vars based on rot dir
-            if D.PAR.ratRotDrc == 'CCW';
+            if D.PAR.ratRotDrc == 'CCW'
                 D.I.img_ind(2) = 2;
-            elseif D.PAR.ratRotDrc == 'CW';
+            elseif D.PAR.ratRotDrc == 'CW'
                 D.I.img_ind(2) = 3;
             end
             
@@ -3003,7 +2998,7 @@ fprintf('END OF RUN\n');
             D.AC.data(3) = single(D.UI.snd(1));
             
             % Post to AC computer
-            fwrite(tcpIP,D.AC.data,'int8');
+            SendM2AC();
             
             %% Update UI objects
             
@@ -3242,37 +3237,38 @@ fprintf('END OF RUN\n');
             % Calculate all feed locs
             [fd_X,fd_Y] = pol2cart(deg2rad(fdLocs), ones(1,length(fdLocs)) * D.UI.arnRad);
             % all feeders x
-            D.UI.fd_x = fd_X*D.UI.xCMcnv + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.xCMcnv;
+            D.UI.fd_x = fd_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
             % all feeders y
-            D.UI.fd_y = fd_Y*D.UI.yCMcnv + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.yCMcnv;
+            D.UI.fd_y = fd_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
             
             % Save reward feeder rad pos
-            D.UI.rewFeedRad(1) = deg2rad(fdLocs(D.UI.rewFeed(1)));
-            D.UI.rewFeedRad(2) = deg2rad(fdLocs(D.UI.rewFeed(2)));
+            D.UI.rewZoneRad(1) = deg2rad(fdLocs(D.UI.rewFeed(1)));
+            D.UI.rewZoneRad(2) = deg2rad(fdLocs(D.UI.rewFeed(2)));
             % with setpoint correction
             D.UI.rewRatHead(1:2) = ...
-                D.UI.rewFeedRad + deg2rad(D.PAR.trigDist);
+                D.UI.rewZoneRad + deg2rad(D.PAR.trigDist);
             
-            % REWARD FEEDER BOUNDS
+            % TRACK REWARD ZONE BOUNDS
+            D.PAR.rewZoneBnds = NaN(length(D.PAR.zoneLocs),2,2);
             for z_zone = 1:length(D.PAR.zoneLocs)
-                D.UI.rewBnds(z_zone,:,1) = [...
-                    D.UI.rewFeedRad(1) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
-                    D.UI.rewFeedRad(1) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
-                D.UI.rewBnds(z_zone,:,2) = [...
-                    D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
-                    D.UI.rewFeedRad(2) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
+                D.PAR.rewZoneBnds(z_zone,:,1) = [...
+                    D.UI.rewZoneRad(1) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
+                    D.UI.rewZoneRad(1) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
+                D.PAR.rewZoneBnds(z_zone,:,2) = [...
+                    D.UI.rewZoneRad(2) + deg2rad(D.PAR.feedSet(1) + D.PAR.zoneLocs(z_zone)), ...
+                    D.UI.rewZoneRad(2) + deg2rad(D.PAR.feedSet(2) + D.PAR.zoneLocs(z_zone))];
             end
             % [zone,min_max,rot_cond]
-            D.UI.rewBnds = wrapTo2Pi(D.UI.rewBnds);
+            D.PAR.rewZoneBnds = wrapTo2Pi(D.PAR.rewZoneBnds);
             
             % REWARD RESET BOUNDS
-            D.UI.rewRstBnds(1,1:2) = D.UI.rewBnds(1,end,1) + [deg2rad(10),deg2rad(40)];
-            D.UI.rewRstBnds(2,1:2) = D.UI.rewBnds(1,end,2) + [deg2rad(10),deg2rad(40)];
+            D.UI.rewRstBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(10),deg2rad(40)];
+            D.UI.rewRstBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(10),deg2rad(40)];
             D.UI.rewRstBnds = wrapTo2Pi(D.UI.rewRstBnds);
             
             % REWARD PASS BOUNDS
-            D.UI.rewPassBnds(1,1:2) = D.UI.rewBnds(end,end,1) - [deg2rad(35), deg2rad(5)];
-            D.UI.rewPassBnds(2,1:2) = D.UI.rewBnds(end,end,2) - [deg2rad(35), deg2rad(5)];
+            D.UI.rewPassBnds(1,1:2) = D.PAR.rewZoneBnds(end,end,1) - [deg2rad(35), deg2rad(5)];
+            D.UI.rewPassBnds(2,1:2) = D.PAR.rewZoneBnds(end,end,2) - [deg2rad(35), deg2rad(5)];
             D.UI.rewPassBnds = wrapTo2Pi(D.UI.rewPassBnds);
             
             % ROTATION BOUNDS
@@ -3307,184 +3303,34 @@ fprintf('END OF RUN\n');
             lapBndLocs = flip(lapBndLocs);
             
             % Calculate 90 deg wide bounds
-            D.UI.lapBnds = arrayfun(@(x) [x-45, x+45], lapBndLocs, 'Uni', false);
-            D.UI.lapBnds = cell2mat(D.UI.lapBnds);
+            D.PAR.lapBnds = arrayfun(@(x) [x-45, x+45], lapBndLocs, 'Uni', false);
+            D.PAR.lapBnds = cell2mat(D.PAR.lapBnds);
             % set range to [0, 360]
-            D.UI.lapBnds = wrapTo360(D.UI.lapBnds);
+            D.PAR.lapBnds = wrapTo360(D.PAR.lapBnds);
             % convert to radians
-            D.UI.lapBnds = deg2rad(D.UI.lapBnds);
-            D.UI.lapBnds = wrapTo2Pi(D.UI.lapBnds);
+            D.PAR.lapBnds = deg2rad(D.PAR.lapBnds);
+            D.PAR.lapBnds = wrapTo2Pi(D.PAR.lapBnds);
             
             % START QUADRANT BOUNDS
             
             % Set start quadrant bound to 60 deg
-            D.UI.strQuadBnds = [lapBndLocs(end) - 30, ...
+            D.PAR.strQuadBnds = [lapBndLocs(end) - 30, ...
                 lapBndLocs(end) + 30];
             % convert to radians
-            D.UI.strQuadBnds = deg2rad(D.UI.strQuadBnds);
-            D.UI.strQuadBnds = wrapTo2Pi(D.UI.strQuadBnds);
+            D.PAR.strQuadBnds = deg2rad(D.PAR.strQuadBnds);
+            D.PAR.strQuadBnds = wrapTo2Pi(D.PAR.strQuadBnds);
             
-            %% Plot bounds data
-            
-            % Plot start quadrant
-            [xbnd, ybnd] =  Get_Rad_Bnds(D.UI.strQuadBnds);
-            D.UI.ptchStQ = ...
-                patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                [0.5,0.5,0.5], ...
-                'FaceAlpha',0.5, ...
-                'Parent',D.UI.axH(2));
-            % add star text
-            D.UI.txtStQ = ...
-                text(mean(xbnd(:,round(size(xbnd,2)/2))), ...
-                mean(ybnd(:,round(size(ybnd,2)/2))), ...
-                'Start', ...
-                'FontSize', 12, ...
-                'FontWeight', 'Bold', ...
-                'Color', D.UI.enabledCol, ...
-                'HorizontalAlignment', 'Center', ...
-                'Parent',D.UI.axH(2));
-            
-            % Plot reward bounds
-            D.UI.ptchFdH = gobjects(length(D.PAR.zoneLocs),2);
-            D.UI.durNowTxtH = gobjects(length(D.PAR.zoneLocs),2);
-            for z_fd = 1:2
-                for z_zone = 1:length(D.PAR.zoneLocs)
-                    
-                    % reward bounds
-                    [xbnd, ybnd] =  ...
-                        Get_Rad_Bnds(D.UI.rewBnds(z_zone,:,z_fd));
-                    D.UI.ptchFdH(z_zone,z_fd) = ...
-                        patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                        [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                        D.UI.rotCol(z_fd,:), ...
-                        'EdgeColor', [0, 0, 0], ...
-                        'EdgeAlpha', 0.025, ...
-                        'FaceAlpha', 0.05, ...
-                        'LineWidth', 1, ...
-                        'Parent', D.UI.axH(2));
-                    
-                    % Add reward duration text
-                    str = ...
-                        sprintf('%d%c\n%d ms', -1*D.PAR.zoneLocs(z_zone), char(176), D.PAR.zoneRewDur(z_zone));
-                    D.UI.durNowTxtH(z_zone,z_fd) = text(...
-                        mean(mean(xbnd)), mean(mean(ybnd)), ...
-                        str, ...
-                        'Color', [1, 1, 1], ...
-                        'HorizontalAlignment', 'center', ...
-                        'FontSize', 8, ...
-                        'FontWeight', 'bold', ...
-                        'Visible', 'off', ...
-                        'Parent', D.UI.axH(2));
-                end
+            % FORAGE REWARD TARGET BOUNDS
+            D.PAR.rewTargBnds = NaN(length(D.PAR.pathTargArr),2);
+            for z_targ = 1:length(D.PAR.pathTargArr)
+                D.PAR.rewTargBnds(z_targ,:) = [...
+                    deg2rad(D.PAR.pathTargArr(z_targ) - D.PAR.pathTargWdt/2), ...
+                    deg2rad(D.PAR.pathTargArr(z_targ) + D.PAR.pathTargWdt/2)];
             end
-            % bring text to top of stack
-            uistack(reshape(D.UI.durNowTxtH,1,[]),'top');
-            % make 0 bounds visible
-            set(D.UI.ptchFdH(:,1), 'EdgeAlpha', 0.05, 'FaceAlpha', 0.15);
+            % [zone,min_max,rot_cond]
+            D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
             
-            % Plot reward reset bounds
-            D.UI.ptchFdRstH = gobjects(1,2);
-            for z_fd = 1:2
-                [xbnd, ybnd] =  ...
-                    Get_Rad_Bnds(D.UI.rewRstBnds(z_fd,:));
-                D.UI.ptchFdRstH(z_fd) = ...
-                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                    D.UI.rotCol(z_fd,:), ...
-                    'FaceAlpha', 0.5, ...
-                    'EdgeAlpha', 0.5, ...
-                    'Parent', D.UI.axH(2), ...
-                    'Visible', 'off');
-            end
-            
-            % Plot lap bounds
-            % set alpha to 0 (transparent)
-            D.UI.ptchLapBnds = gobjects(1,4);
-            for z_quad = 1:4
-                [xbnd, ybnd] =  ...
-                    Get_Rad_Bnds(D.UI.lapBnds(z_quad,:));
-                D.UI.ptchLapBnds(z_quad) = ...
-                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                    [0.5,0.5,0.5], ...
-                    'FaceAlpha', 0.1, ...
-                    'EdgeAlpha', 0, ...
-                    'Parent', D.UI.axH(2), ...
-                    'Visible', 'off');
-            end
-            
-            %% Plot remaining features
-            
-            % Plot all feeders
-            D.UI.fdAllH = plot(D.UI.fd_x, D.UI.fd_y, 'o', ...
-                'MarkerFaceColor', [0.5 0.5 0.5], ...
-                'MarkerEdgeColor', [0.1,0.1,0.1], ...
-                'MarkerSize', 20, ...
-                'Parent', D.UI.axH(2));
-            
-            % Feeder reward feeder marker
-            D.UI.fdH = gobjects(4,2);
-            for z_fd = 1:2
-                [xbnd, ybnd] =  ...
-                    Get_Rad_Bnds([D.UI.rewFeedRad(z_fd), ...
-                    D.UI.rewFeedRad(z_fd) + deg2rad(D.PAR.trigDist)]);
-                % setpoint zone line
-                D.UI.fdH(1,z_fd) = ...
-                    plot(xbnd(:,end), ybnd(:,end), ...
-                    'Color', D.UI.rotCol(z_fd,:), ...
-                    'LineWidth', 2, ...
-                    'Parent',D.UI.axH(2));
-                % distance line
-                D.UI.fdH(2,z_fd) = ...
-                    plot(xbnd(2,:), ybnd(2,:), ...
-                    'Color', D.UI.rotCol(z_fd,:), ...
-                    'LineWidth', 3, ...
-                    'Parent',D.UI.axH(2),...
-                    'Visible', 'on');
-                % marker
-                D.UI.fdH(3,z_fd) = ...
-                    plot(D.UI.fd_x(D.UI.rewFeed(z_fd)), ...
-                    D.UI.fd_y(D.UI.rewFeed(z_fd)), 'o', ...
-                    'MarkerFaceColor', D.UI.rotCol(z_fd,:), ...
-                    'MarkerEdgeColor', [0.1,0.1,0.1], ...
-                    'MarkerSize', 20, ...
-                    'Parent',D.UI.axH(2));
-            end
-            % Enlarge 0 deg marker
-            set(D.UI.fdH(3,1), 'MarkerSize', 25)
-            uistack(reshape(D.UI.fdH(1:2,:),1,[]),'down',1);
-            
-            % Plot opposite unrewarded feeders darker
-            plot(D.UI.fd_x(D.UI.oppFeed), D.UI.fd_y(D.UI.oppFeed), 'o', ...
-                'MarkerFaceColor', [0.25 0.25 0.25], ...
-                'MarkerEdgeColor', [0.1,0.1,0.1], ...
-                'MarkerSize', 20, ...
-                'Parent',D.UI.axH(2));
-            
-            % Plot feeder pos in rad and cm
-            fd_cm = (140*pi)-(140*pi)/36/2:-(140*pi)/36:(140*pi)/36/2;
-            fd_rad = (2*pi)/36/2:(2*pi)/36:(2*pi)-(2*pi)/36/2;
-            fdcmH = gobjects(1,36);
-            for z_fd = 1:36
-                fdcmH(z_fd) = text(...
-                    D.UI.fd_x(z_fd), D.UI.fd_y(z_fd), ...
-                    sprintf('%0.1f\n%0.0f', fd_rad(z_fd), fd_cm(z_fd)), ...
-                    'Color', [1, 1, 1], ...
-                    'HorizontalAlignment', 'center', ...
-                    'FontSize', 6, ...
-                    'FontWeight', 'bold', ...
-                    'Visible', 'on', ...
-                    'Parent', D.UI.axH(2));
-            end
-            
-            %% Start recording and set remaining vars
-            
-            % Make sure reward reset is active
-            if D.PAR.sesCond ~= 'Manual_Training' %#ok<*STCMP>
-                % Set reset patch to visible
-                set(D.UI.ptchFdRstH(D.I.rot), 'Visible', 'on');
-            end
+            %% Start recording a
             
             % Run BtnRec
             set(D.UI.btnRec,'Value', 1);
@@ -3513,6 +3359,533 @@ fprintf('END OF RUN\n');
             
         end
         
+        % --------------------------TRACK TASK SETUP-----------------------
+        
+        function[] = Track_Task_Setup()
+            
+            %% REWARD ZONE SETUP
+            
+            % Initialize long distrebution
+            sub_samp = 100;
+            x_long = 1:11*sub_samp;
+            zone_short = linspace(-25,25,11);
+            
+            % Setup axes
+            wdth = 0.23;
+            ht = 0.2;
+            lft = (D.UI.main_ax_bounds(1)+(D.UI.main_ax_bounds(3)/2)) - wdth/2;
+            botm = 0.5 - ht/2;
+            zone_ax_pos = [...
+                lft, ...
+                botm, ...
+                wdth, ...
+                ht ...
+                ];
+            D.UI.axZoneH(1) = axes( ...
+                'Color', 'none', ...
+                'Position',zone_ax_pos, ...
+                'XLim',[min(x_long)+sub_samp/2-1,max(x_long)-sub_samp/2], ...
+                'Visible','off');
+            hold on;
+            D.UI.axZoneH(2) = axes( ...
+                'Color','none', ...
+                'Position',zone_ax_pos, ...
+                'XLim',[min(zone_short)+2.5, max(zone_short)-2.5], ...
+                'XTick',zone_short, ...
+                'Visible','off');
+            box on;
+            hold on
+            set(D.UI.axZoneH, ...
+                'FontWeight', 'bold', ...
+                'FontSize', 7)
+            
+            % Get long dist
+            % front (i.e., < 0)
+            han = sub_samp*11;
+            dist_long = hanning(han);
+            dist_long = (dist_long/max(dist_long)) * (max(dist_long)/5)*4 + max(dist_long)/5;
+            dist_long = [min(dist_long)*ones((length(x_long)-han)/2, 1); dist_long];
+            % set first and last values to zero
+            dist_long([1:sub_samp,end-sub_samp+1:end]) = 0;
+            % normalize
+            dist_long = (dist_long/sum(dist_long))';
+            % scale y axis
+            set(D.UI.axZoneH(1), 'YLim', [0,max(dist_long)]);
+            
+            % Plot example distrebution
+            y = dist_long;
+            y(y == 0) = NaN;
+            plot(x_long, y,'k', ...
+                'LineWidth', 2, ...
+                'Parent',D.UI.axZoneH(1));
+            % plot center line
+            x = repmat(round(max(x_long)/2),1,2);
+            y = get(D.UI.axZoneH(1),'YLim');
+            plot(x, y, 'k', ...
+                'LineWidth', 2, ...
+                'Color', [0, 0, 0], ...
+                'Parent',D.UI.axZoneH(1));
+            
+            % Subsample long distrebution
+            short_ind = floor(linspace(1, length(x_long), length(zone_short)));
+            dist_short = dist_long(short_ind);
+            
+            % Plot point for reward size at each zone
+            x =  short_ind(2:end-1);
+            y = D.PAR.zoneRewDur/max(D.PAR.zoneRewDur)*max(dist_long);
+            plot(x, y, 'or', ...
+                'MarkerFaceColor', [0.5, 0.5, 0.5], ...
+                'MarkerEdgeColor', [0.1, 0.1, 0.1], ...
+                'MarkerSize', 10, ...
+                'Parent',D.UI.axZoneH(1));
+            
+            % Rescale dist and set main axis
+            dist_short = dist_short * (1/sum(dist_short));
+            % set axis
+            set(D.UI.axZoneH(2), ...
+                'YLim' , [0, 1], ...
+                'YTick',0:500/D.PAR.rewDurLim(2):1, ...
+                'YTickLabel',0:500:D.PAR.rewDurLim(2), ...
+                'XTickLabel' , [], ...
+                'XGrid', 'on', ...
+                'YGrid', 'on', ...
+                'YMinorGrid', 'on');
+            % make lables
+            x_tic_labs = arrayfun(@(x,y,z) (sprintf('%d%c \n%d_{ms} \n(%0.0f%%)', x, char(176), y, z)), ...
+                zone_short, [0,D.PAR.zoneRewDur,0], dist_short*100, 'uni', false);
+            for z_tick = 2:length(x_tic_labs)-1
+                text(D.UI.axZoneH(2).XTick(z_tick), -0.15, x_tic_labs{z_tick}, ...
+                    'FontSize', 7, ...
+                    'FontWeight', 'bold', ...
+                    'HorizontalAlignment', 'center');
+            end
+            
+            % Remove unused vals
+            dist_cut = find(dist_short ~= 0, 1, 'last');
+            zone_interp = zone_short(1:dist_cut);
+            dist_interp = dist_short(1:dist_cut);
+            
+            % Compute cumsum and interpolate from random data
+            cum = cumsum(dist_interp);
+            cum = cum/max(cum);
+            
+            % get random values based on distrebution
+            bins = linspace(min(zone_interp)-5,max(zone_interp),length(zone_interp)+1);
+            % run initial rand
+            rand_dist = round(interp1(cum, zone_interp, sort(rand(1,100))));
+            samp_hist = histc(rand_dist, bins);
+            samp_hist = samp_hist(1:end-1);
+            
+            % Get final zone dist
+            zone_arr = cell2mat(arrayfun(@(x) (repmat(zone_interp(x),samp_hist(x),1)), ...
+                (1:dist_cut)', 'Uni', false));
+            % shuffle
+            zone_arr = zone_arr(randperm(length(zone_arr)));
+            
+            % remove unused values
+            zone_arr(zone_arr < -20 | zone_arr > 20) = 0;
+            
+            % Plot saved sample dist
+            bins = ...
+                linspace(min(-1*D.PAR.zoneLocs)-2.5, max(-1*D.PAR.zoneLocs)+2.5, length(D.PAR.zoneLocs)+1);
+            samp_hist = histc(zone_arr, bins);
+            samp_hist(end) = [];
+            % rescale for plotting
+            samp_dist = samp_hist'/max(samp_hist);
+            
+            % Reverse sign and store values
+            D.I.zoneArr = zone_arr*-1;
+            
+            % plot sample dist
+            if D.PAR.cueFeed ~= 'None'
+                D.UI.zoneArrH = createPatches(...
+                    -1*D.PAR.zoneLocs, samp_dist, 2, ...
+                    [0, 0, 0], ...
+                    0.25, ...
+                    D.UI.axZoneH(2));
+            end
+            
+            % Compute reward vlue by pos
+            rew_by_pos = dist_short(2:end-1);
+            rew_by_pos = (rew_by_pos-min(rew_by_pos)) / ...
+                (max(rew_by_pos)-min(rew_by_pos));
+            rew_by_pos = ...
+                rew_by_pos * ...
+                diff(D.PAR.rewDurLim) + D.PAR.rewDurLim(1);
+            % must be convertable to byte
+            rew_by_pos = floor(rew_by_pos/10)*10; %#ok<NASGU>
+            % Store values
+            %D.PAR.zoneRewDur = rew_by_pos;
+            
+            % Keep count shown on top of ax 1
+            set(D.UI.axZoneH(1), ...
+                'XAxisLocation','top', ...
+                'YTickLabel', [], ...
+                'XTick', short_ind(2:end-1), ...
+                'XTickLabel', D.C.zone(D.I.rot,:));
+            
+            % Move axes to top of stack
+            uistack(D.UI.axZoneH, 'top');
+            uistack(D.UI.axZoneH(1), 'top');
+            
+            %             % Print vals to console
+            %             str = [];
+            %             for z_s = 1:7:length(D.I.zoneArr)
+            %                 if z_s+7 < length(D.I.zoneArr)
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
+            %                 else
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
+            %                 end
+            %             end
+            %
+            %             Console_Write(sprintf('[Track_Task_Setup] Computed Track Task: \r%s', ...
+            %                 str,));
+            
+            %% SETUP UI OBJECTS
+            
+            % Plot start quadrant
+            [xbnd, ybnd] =  Get_Rad_Bnds(D.PAR.strQuadBnds);
+            D.UI.ptchStQ = ...
+                patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                [0.5,0.5,0.5], ...
+                'FaceAlpha',0.5, ...
+                'Visible', 'off', ...
+                'Parent',D.UI.axH(2));
+            % add star text
+            D.UI.txtStQ = ...
+                text(mean(xbnd(:,round(size(xbnd,2)/2))), ...
+                mean(ybnd(:,round(size(ybnd,2)/2))), ...
+                'Start', ...
+                'FontSize', 12, ...
+                'FontWeight', 'Bold', ...
+                'Color', D.UI.enabledCol, ...
+                'HorizontalAlignment', 'Center', ...
+                'Visible', 'off', ...
+                'Parent',D.UI.axH(2));
+            
+            % Plot reward bounds
+            for z_fd = 1:2
+                for z_zone = 1:length(D.PAR.zoneLocs)
+                    
+                    % reward bounds
+                    [xbnd, ybnd] =  ...
+                        Get_Rad_Bnds(D.PAR.rewZoneBnds(z_zone,:,z_fd));
+                    D.UI.ptchFdZineH(z_zone,z_fd) = ...
+                        patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                        [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                        D.UI.rotCol(z_fd,:), ...
+                        'EdgeColor', [0, 0, 0], ...
+                        'EdgeAlpha', 0.025, ...
+                        'FaceAlpha', 0.05, ...
+                        'LineWidth', 1, ...
+                        'Visible', 'off', ...
+                        'Parent', D.UI.axH(2));
+                    
+                    % Add reward duration text
+                    str = ...
+                        sprintf('%d%c\n%d ms', -1*D.PAR.zoneLocs(z_zone), char(176), D.PAR.zoneRewDur(z_zone));
+                    D.UI.txtFdDurH(z_zone,z_fd) = text(...
+                        mean(mean(xbnd)), mean(mean(ybnd)), ...
+                        str, ...
+                        'Color', [1, 1, 1], ...
+                        'HorizontalAlignment', 'center', ...
+                        'FontSize', 8, ...
+                        'FontWeight', 'bold', ...
+                        'Visible', 'off', ...
+                        'Parent', D.UI.axH(2));
+                end
+            end
+            % bring text to top of stack
+            uistack(reshape(D.UI.txtFdDurH,1,[]),'top');
+            % make 0 bounds visible
+            set(D.UI.ptchFdZineH(:,1), 'EdgeAlpha', 0.05, 'FaceAlpha', 0.15);
+            
+            % Plot reward reset bounds
+            for z_fd = 1:2
+                [xbnd, ybnd] =  ...
+                    Get_Rad_Bnds(D.UI.rewRstBnds(z_fd,:));
+                D.UI.ptchFdRstH(z_fd) = ...
+                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                    D.UI.rotCol(z_fd,:), ...
+                    'FaceAlpha', 0.5, ...
+                    'EdgeAlpha', 0.5, ...
+                    'Visible', 'off', ...
+                    'Parent', D.UI.axH(2));
+            end
+            
+            % Plot lap bounds
+            % set alpha to 0 (transparent)
+            for z_quad = 1:4
+                [xbnd, ybnd] =  ...
+                    Get_Rad_Bnds(D.PAR.lapBnds(z_quad,:));
+                D.UI.ptchLapBnds(z_quad) = ...
+                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                    [0.5,0.5,0.5], ...
+                    'FaceAlpha', 0.1, ...
+                    'EdgeAlpha', 0, ...
+                    'Visible', 'off', ...
+                    'Parent', D.UI.axH(2));
+            end
+            
+            % Plot all feeders
+            D.UI.fdAllH = plot(D.UI.fd_x, D.UI.fd_y, 'o', ...
+                'MarkerFaceColor', [0.5 0.5 0.5], ...
+                'MarkerEdgeColor', [0.1,0.1,0.1], ...
+                'MarkerSize', 20, ...
+                'Parent', D.UI.axH(2));
+            
+            % Feeder reward feeder marker
+            for z_fd = 1:2
+                [xbnd, ybnd] =  ...
+                    Get_Rad_Bnds([D.UI.rewZoneRad(z_fd), ...
+                    D.UI.rewZoneRad(z_fd) + deg2rad(D.PAR.trigDist)]);
+                % setpoint zone line
+                D.UI.mixFdNow(1,z_fd) = ...
+                    plot(xbnd(:,end), ybnd(:,end), ...
+                    'Color', D.UI.rotCol(z_fd,:), ...
+                    'LineWidth', 2, ...
+                    'Visible', 'off', ...
+                    'Parent',D.UI.axH(2));
+                % distance line
+                D.UI.mixFdNow(2,z_fd) = ...
+                    plot(xbnd(2,:), ybnd(2,:), ...
+                    'Color', D.UI.rotCol(z_fd,:), ...
+                    'LineWidth', 3, ...
+                    'Visible', 'off', ...
+                    'Parent',D.UI.axH(2));
+                % marker
+                D.UI.mixFdNow(3,z_fd) = ...
+                    plot(D.UI.fd_x(D.UI.rewFeed(z_fd)), ...
+                    D.UI.fd_y(D.UI.rewFeed(z_fd)), 'o', ...
+                    'MarkerFaceColor', D.UI.rotCol(z_fd,:), ...
+                    'MarkerEdgeColor', [0.1,0.1,0.1], ...
+                    'MarkerSize', 20, ...
+                    'Visible', 'off', ...
+                    'Parent',D.UI.axH(2));
+            end
+            
+            % Plot opposite unrewarded feeders darker
+            plot(D.UI.fd_x(D.UI.oppFeed), D.UI.fd_y(D.UI.oppFeed), 'o', ...
+                'MarkerFaceColor', [0.25 0.25 0.25], ...
+                'MarkerEdgeColor', [0.1,0.1,0.1], ...
+                'MarkerSize', 20, ...
+                'Parent',D.UI.axH(2));
+            
+            % Plot feeder pos in rad and cm
+            fd_cm = (140*pi)-(140*pi)/36/2:-(140*pi)/36:(140*pi)/36/2;
+            fd_rad = (2*pi)/36/2:(2*pi)/36:(2*pi)-(2*pi)/36/2;
+            fdcmH = gobjects(1,36);
+            for z_fd = 1:36
+                fdcmH(z_fd) = text(...
+                    D.UI.fd_x(z_fd), D.UI.fd_y(z_fd), ...
+                    sprintf('%0.1f\n%0.0f', fd_rad(z_fd), fd_cm(z_fd)), ...
+                    'Color', [1, 1, 1], ...
+                    'HorizontalAlignment', 'center', ...
+                    'FontSize', 6, ...
+                    'FontWeight', 'bold', ...
+                    'Visible', 'on', ...
+                    'Parent', D.UI.axH(2));
+            end
+            
+            %% MAKE UI OBJECTS VISIBLE
+            
+            % Set other plot features to visible
+            set(D.UI.linTrckH, 'Visible', 'on');
+            set(D.UI.linVelH, 'Visible', 'on');
+            set(D.UI.ptchStQ, 'Visible', 'on');
+            set(D.UI.txtStQ, 'Visible', 'on');
+            set(D.UI.ptchFdZineH, 'Visible', 'on');
+            
+            % Enlarge 0 deg marker
+            set(D.UI.mixFdNow(3,1), 'MarkerSize', 25);
+            set(D.UI.mixFdNow, 'Visible', 'on');
+            uistack(reshape(D.UI.mixFdNow(1:2,:),1,[]),'bottom',1);
+            
+            % Make sure reward reset is active
+            if D.PAR.sesCond ~= 'Manual_Training' %#ok<*STCMP>
+                % Set reset patch to visible
+                set(D.UI.ptchFdRstH(D.I.rot), 'Visible', 'on');
+            end
+            
+            % Set reward zone axes
+            set(D.UI.axZoneH, 'Visible', 'on');
+            
+        end
+        
+        % --------------------------FORAGE TASK SETUP----------------------
+        
+        function[] = Forage_Task_Setup()
+            
+            % TEMP
+            do_plot_avg = true;
+            do_plot_all = true;
+            
+            
+            % Set axis lims
+            set(D.UI.axH(1), ...
+                'YDir', 'reverse', ...
+                'XLim', [0,D.UI.rfBins], ...
+                'YLim', [0,D.UI.rfBins]);
+            
+            % Compute occ bins
+            %D.PAR.rfBinEdgeX = linspace(0,pixels,nBins+1);
+            
+            % Deg bin vars
+            n_targs = 360/D.PAR.pathDegDist;
+            
+            % Setup path mat
+            D.P.pathMat = zeros(D.UI.rfBins,D.UI.rfBins,D.PAR.nPaths,n_targs);
+            
+            % Setup temp path mat
+            path_bins = round(D.UI.rfBins* (D.UI.rfRad / D.UI.arnRad));
+            mat_eye = padarray(eye(path_bins-5),[5,5],'pre');
+            mat_p = zeros(path_bins);
+            for i = 1:D.PAR.pathWdth
+                mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
+            end
+            
+            % Setup temp sim rat mat
+            mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
+            
+            % Compute mat for each pos condition
+            for c = 1:2
+                if c==1
+                    mat_now = mat_p;
+                else
+                    mat_now = mat_r;
+                end
+                
+                for i = 0:floor(D.PAR.nPaths/2)
+                    
+                    if (i<floor(D.PAR.nPaths/2))
+                        deg = i*D.PAR.pathDegDist;
+                        % Rotate
+                        mat_rot = rotMat(mat_now,deg);
+                        % Cut and pad
+                        mat_rot = mat_rot(:,1:ceil(path_bins/2));
+                        mat_rot = padarray(mat_rot, [0,path_bins-size(mat_rot,2)],'pre');
+                        % Flip
+                        mat_rot = flip(flip(mat_rot',2),1);
+                    else
+                        mat_rot = zeros(path_bins);
+                        mat_rot(ceil(path_bins/2)-floor(D.PAR.pathWdth/2):ceil(path_bins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
+                        mat_rot(:,end-5:end) = 0;
+                    end
+                    
+                    % Mirror values
+                    mat_mir = flip(mat_rot,1);
+                    
+                    % Pad to full size
+                    mat_pad = padarray(mat_rot, [0,path_bins-size(mat_rot,2)]
+                    
+                    % Store
+                    for j = [1:n_targs]-1
+                        if c==1
+                            D.P.pathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                            D.P.pathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                        else
+                            D.DB.simRatPathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                            D.DB.simRatPathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                        end
+                    end
+                end
+            end
+            
+            % Mask values outside circle
+            mask = repmat(D.PAR.pathMask,[1,1,D.PAR.nPaths,n_targs]);
+            D.P.pathMat = D.P.pathMat.*mask;
+            D.DB.simRatPathMat = D.DB.simRatPathMat.*mask;
+            
+            % Nomalize
+            D.P.pathMat(D.P.pathMat>0) = 1;
+            D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.UI.rfBins,D.UI.rfBins,1,1]);
+            D.DB.simRatPathMat(D.DB.simRatPathMat>0) = 1;
+            
+            % Save path
+            %D.P.pathMat = single(D.P.pathMat);
+            %save(fullfile(dir,datFi),'D.P.pathMat');
+            D.P.pathMat = double(D.P.pathMat);
+            
+            % Create target patches
+            for z_targ = 1:length(D.PAR.pathTargArr)
+                
+                % reward bounds
+                [xbnd, ybnd] =  ...
+                    Get_Rad_Bnds(D.PAR.rewTargBnds(z_targ,:));
+                D.UI.ptchRFTarg(z_targ) = ...
+                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                    D.UI.activeCol, ...
+                    'EdgeColor', [0, 0, 0], ...
+                    'EdgeAlpha', 0.025, ...
+                    'FaceAlpha', 0.05, ...
+                    'LineWidth', 1, ...
+                    'Visible', 'off', ...
+                    'Parent', D.UI.axH(2));
+            end
+            
+            % Set other plot features to visible
+            set(D.UI.linRFH, 'Visible', 'on');
+            set(D.UI.imgMaskRFH, 'Visible', 'on');
+            
+            % Plot path averages
+            if (do_plot_avg)
+                % Plot accross paths
+                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(1));
+                pause(1);
+                delete(ih);
+                % Plot accross start pos and paths
+                ih = imagesc(sum(sum(D.P.pathMat(:,:,:,:),3),4), 'Parent', D.UI.axH(1));
+                pause(1);
+                delete(ih);
+            end
+            
+            % Plot each path
+            if (do_plot_all)
+                for j = 1:n_targs
+                    ih = imagesc(sum(D.P.pathMat(:,:,:,j),3), 'Parent', D.UI.axH(1));
+                    pause(0.5);
+                end
+            end
+            
+            disp('');
+            
+            % ROTATE MATRIX
+            function[M_rot] = rotMat(M,ang)
+                
+                % Check if not rotating
+                if (ang==0)
+                    M_rot = M;
+                    return;
+                end
+                
+                % Convert to rad
+                theta = ang*pi/180;
+                
+                % Make grid
+                [x, y] = ndgrid(1:size(M,1), 1:size(M,2));
+                
+                % Calculate rotation matrix
+                R = [ cos(theta) -sin(theta);
+                    sin(theta)  cos(theta)]; % just 2D case
+                
+                % calculate new positions of image indicies
+                
+                tmp = R*[x(:)' ; y(:)']; % 2 by numel(M)
+                xi = reshape(tmp(1,:),size(x)); % new x-indicies
+                yi = reshape(tmp(2,:),size(y)); % new y-indicies
+                
+                M_rot = interpn(x,y,M,xi,yi); % interpolate from old->new indicies
+                M_rot(isnan(M_rot)) = 0;
+                
+                
+            end
+            
+        end
+        
         % ----------------------------RAT IN CHECK-------------------------
         
         function [] = Rat_In_Check()
@@ -3530,7 +3903,7 @@ fprintf('END OF RUN\n');
             end
             
             % Keep checking if rat is in the arena
-            check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.UI.strQuadBnds);
+            check_inbound = Check_Rad_Bnds(D.P.Rat.rad, D.PAR.strQuadBnds);
             if ~any(check_inbound)
                 % Reinitialize
                 D.T.strqd_inbnd_t1 = 0;
@@ -3624,7 +3997,11 @@ fprintf('END OF RUN\n');
             var_ind = ...
                 ismember(D.SS_In_All.Properties.VariableNames, ...
                 ['Session_',char(D.DB.Session_Condition)]);
-            col_ind = ismember([{'Track'},{'Forage'}], D.DB.Session_Task);
+            if strcmp(D.DB.Session_Condition, 'Rotation')
+                col_ind = 1;
+            else
+                col_ind = ismember([{'Track'},{'Forage'}], D.DB.Session_Task);
+            end
             ses_next = ...
                 D.SS_In_All{ratInd, var_ind}(col_ind) + 1;
             % Get session total
@@ -3742,9 +4119,15 @@ fprintf('END OF RUN\n');
             
         end
         
+        
         % ---------------------------GET NLX VT----------------------------
         
         function [] = VT_Get(fld)
+            
+            % Bail if not connected
+            if ~D.NLX.connected
+                return;
+            end
             
             % Get NXL vt data and reformat data with samples in column vectors
             if strcmp(fld, 'Rat')
@@ -3797,7 +4180,11 @@ fprintf('END OF RUN\n');
                 rad = abs(rad - 2*pi);
                 
                 % Exclude outlyer values > || < track bounds plus 5 cm
-                exc_1 = roh > D.P.posRohMax | roh < D.P.posRohMin;
+                if ~(D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat'))
+                    exc_1 = roh > D.P.trackRohMax | roh < D.P.trackRohMin;
+                else
+                    exc_1 = false(length(roh),1);
+                end
                 
                 % Exclude values based on current sample diff
                 rad_diff = abs(diff([D.P.(fld).radLast; rad]));
@@ -3811,7 +4198,7 @@ fprintf('END OF RUN\n');
                     rad_diff_last > (1/8)*0.9*(2 * pi) &...
                     rad_diff_last < 0.9*(2 * pi);
                 
-                % Do not use exc_3/4 if more than reward duration of unused data
+                % Do not use exc_3 if more than reward duration of unused data
                 if Elapsed_Seconds(now) - D.T.(fld).last_pos_update > (D.PAR.rewDur+100)/1000
                     exc_3 = zeros(size(exc_3,1), 1);
                 end
@@ -3880,6 +4267,14 @@ fprintf('END OF RUN\n');
                     ind(2) = ind(1)+length(x)-1;
                     D.P.Rat.pos_hist(ind(1):ind(2), 1) = x;
                     D.P.Rat.pos_hist(ind(1):ind(2), 2) = y;
+                end
+                
+                %% HANDLE RAT FORAGE DATA
+                
+                % Bail if processing rat forrage data
+                if D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat')
+                    
+                    return;
                 end
                 
                 %% GET SETPOINT, FEEDER POS AND GUARD POS
@@ -4059,30 +4454,46 @@ fprintf('END OF RUN\n');
             
         end
         
+        % -------------------------GET NLX EVENTS--------------------------
+        
+        function [] = Evt_Get()
+            
+            % Bail if not connected
+            if ~D.NLX.connected
+                return;
+            end
+            
+            % Read in event data
+            %[evtPass, D.E.evtTS, evtID, evtTTL, D.E.evtStr, D.E.evtNRecs, evtDropped]
+            [~, D.E.evtTS, ~, ~ , D.E.evtStr, D.E.evtNRecs, ~] = ...
+                NlxGetNewEventData('Events');
+            
+            % Add to count
+            D.P.(fld).cnt_evtRec = D.P.(fld).cnt_evtRec + D.E.evtNRecs;
+        end
+        
         % ------------------------PROCESS NLX EVENTS-----------------------
         
         function [] = Evt_Proc()
             
-            %% READ IN DATA AND BAIL IF NO NEW DATA
-            %[evtPass, evtTS, evtID, evtTTL, evtStr, evtNRecs, evtDropped]
-            [~, evtTS, ~, ~ , evtStr, evtNRecs, ~] = ...
-                NlxGetNewEventData('Events');
+            %% CHECK FOR NEW DATA
+            Evt_Get();
             
             % Bail if no new data
-            if evtNRecs == 0
+            if D.E.evtNRecs == 0
                 return
             end
             
             %% CHECK FOR REWARD
             
             % Reward Started
-            if any(ismember(evtStr, D.NLX.rew_on_str))
+            if any(ismember(D.E.evtStr, D.NLX.rew_on_str))
                 
                 % Save reward start time
                 D.T.rew_start = Elapsed_Seconds(now);
                 
                 % Get time stamp
-                D.T.rew_nlx_ts(1) = evtTS(ismember(evtStr, D.NLX.rew_on_str));
+                D.T.rew_nlx_ts(1) = D.E.evtTS(ismember(D.E.evtStr, D.NLX.rew_on_str));
                 
                 % Store round trip time
                 if datenum(D.T.manual_rew_sent) > 0 && ...
@@ -4121,13 +4532,13 @@ fprintf('END OF RUN\n');
             end
             
             % Reward Ended
-            if any(ismember(evtStr, D.NLX.rew_off_str))
+            if any(ismember(D.E.evtStr, D.NLX.rew_off_str))
                 
                 % Save reward end time
                 D.T.rew_end = Elapsed_Seconds(now);
                 
                 % Get time stamp
-                D.T.rew_nlx_ts(2) = evtTS(ismember(evtStr, D.NLX.rew_off_str));
+                D.T.rew_nlx_ts(2) = D.E.evtTS(ismember(D.E.evtStr, D.NLX.rew_off_str));
                 
                 % Store reward duration
                 dt = [0,0];
@@ -4152,7 +4563,7 @@ fprintf('END OF RUN\n');
                 
                 % Save halt error
                 if ~isempty(D.I.zone)
-                    halt_err = D.UI.rewBnds(D.I.zone,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
+                    halt_err = D.PAR.rewZoneBnds(D.I.zone,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
                     % Save reward duration
                     D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
                     D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
@@ -4182,13 +4593,13 @@ fprintf('END OF RUN\n');
             %% CHECK FOR PID
             
             % Running
-            if any(ismember(evtStr, D.NLX.pid_run_str))
+            if any(ismember(D.E.evtStr, D.NLX.pid_run_str))
                 % Change setpoint plot color and width
                 D.UI.setPosCol = D.UI.activeCol;
                 D.UI.setPosLineWidth = 4;
             end
             % Stopped
-            if any(ismember(evtStr, D.NLX.pid_stop_str))
+            if any(ismember(D.E.evtStr, D.NLX.pid_stop_str))
                 % Change setpoint plot color
                 D.UI.setPosCol = D.UI.robNowCol;
                 D.UI.setPosLineWidth = 2;
@@ -4197,7 +4608,7 @@ fprintf('END OF RUN\n');
             %% CHECK FOR BULLDOZE
             
             % Running
-            if any(ismember(evtStr, D.NLX.bull_run_str))
+            if any(ismember(D.E.evtStr, D.NLX.bull_run_str))
                 % Change guard plot color and width
                 D.UI.guardPosCol = D.UI.activeCol;
                 D.UI.guardPosLineWidth = 10;
@@ -4206,7 +4617,7 @@ fprintf('END OF RUN\n');
                 D.C.bull_cnt = D.C.bull_cnt + 1;
             end
             % Stopped
-            if any(ismember(evtStr, D.NLX.bull_stop_str))
+            if any(ismember(D.E.evtStr, D.NLX.bull_stop_str))
                 % Change guard plot color
                 D.UI.guardPosCol = D.UI.robNowCol;
                 D.UI.guardPosLineWidth = 5;
@@ -4240,17 +4651,17 @@ fprintf('END OF RUN\n');
             
             % Update D.AC.data(2) and send command to rotate image
             D.AC.data(2) = D.I.img_ind(D.I.rot);
-            fwrite(tcpIP,D.AC.data,'int8');
+            SendM2AC();
             
             % Post NLX event: rotaion *deg
             NlxSendCommand(D.NLX.rot_evt{D.I.rot});
             
             % Change plot marker size
             % active feeder
-            set(D.UI.fdH(3, D.I.rot), ...
+            set(D.UI.mixFdNow(3, D.I.rot), ...
                 'MarkerSize', 25);
             % inactive feeder
-            set(D.UI.fdH(3, [1, 2] ~=  D.I.rot), ...
+            set(D.UI.mixFdNow(3, [1, 2] ~=  D.I.rot), ...
                 'MarkerSize', 20)
             
             % Delete old patches
@@ -4267,12 +4678,12 @@ fprintf('END OF RUN\n');
                 'Parent',D.UI.axH(2));
             
             % Reset reward bounds patch feeder
-            set(D.UI.ptchFdH, ...
+            set(D.UI.ptchFdZineH, ...
                 'EdgeColor', [0, 0, 0], ...
                 'FaceAlpha', 0.05, ...
                 'EdgeAlpha',0.025)
             % active feeder
-            set(D.UI.ptchFdH(:, D.I.rot), ...
+            set(D.UI.ptchFdZineH(:, D.I.rot), ...
                 'FaceAlpha', 0.15, ...
                 'EdgeAlpha',0.025)
             
@@ -4365,12 +4776,12 @@ fprintf('END OF RUN\n');
             end
             
             % Reset patches
-            set(D.UI.ptchFdH(:, D.I.rot), ...
+            set(D.UI.ptchFdZineH(:, D.I.rot), ...
                 'EdgeColor', [0, 0, 0], ...
                 'FaceAlpha', 0.15, ...
                 'EdgeAlpha', 0.05);
             % Clear last duration
-            set(D.UI.durNowTxtH(:, :), ...
+            set(D.UI.txtFdDurH(:, :), ...
                 'Visible', 'off');
             
             % Check if this is cued reward
@@ -4385,13 +4796,13 @@ fprintf('END OF RUN\n');
                 SendM2C('R', r_pos, r_cond, z_ind);
                 
                 % Show new reward taget patch
-                set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
+                set(D.UI.ptchFdZineH(D.I.zone, D.I.rot), ...
                     'EdgeColor', D.UI.activeCol, ...
                     'FaceAlpha', 0.75, ...
                     'EdgeAlpha', 1);
                 
                 % Print new duration
-                set(D.UI.durNowTxtH(D.I.zone, D.I.rot), ...
+                set(D.UI.txtFdDurH(D.I.zone, D.I.rot), ...
                     'Visible', 'on');
             else
                 
@@ -4404,7 +4815,7 @@ fprintf('END OF RUN\n');
                 SendM2C('R', r_pos, r_cond, r_del);
                 
                 % Darken all zone patches
-                set(D.UI.ptchFdH(:, D.I.rot), ...
+                set(D.UI.ptchFdZineH(:, D.I.rot), ...
                     'FaceAlpha', 0.75)
             end
             
@@ -4470,16 +4881,16 @@ fprintf('END OF RUN\n');
                 D.I.zoneHist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone);
                 
                 % Reset reward zone patches
-                set(D.UI.ptchFdH(:, D.I.rot), ...
+                set(D.UI.ptchFdZineH(:, D.I.rot), ...
                     'EdgeColor', [0, 0, 0], ...
                     'FaceAlpha', 0.15, ...
                     'EdgeAlpha', 0.05);
                 % Lighten rewarded zone
-                set(D.UI.ptchFdH(D.I.zone, D.I.rot), ...
+                set(D.UI.ptchFdZineH(D.I.zone, D.I.rot), ...
                     'FaceAlpha', 0.5, ...
                     'EdgeAlpha', 0.5);
                 % Print new duration
-                set(D.UI.durNowTxtH(D.I.zone, D.I.rot), ...
+                set(D.UI.txtFdDurH(D.I.zone, D.I.rot), ...
                     'Visible', 'on');
                 
                 % Update zone dist plot
@@ -4511,7 +4922,7 @@ fprintf('END OF RUN\n');
                 delete(D.UI.zoneAvgH);
                 avg_trig = D.PAR.zoneLocs*D.C.zone(D.I.rot,:)' / sum(D.C.zone(D.I.rot,:));
                 [xbnd, ybnd] =  ...
-                    Get_Rad_Bnds(D.UI.rewFeedRad(D.I.rot) + deg2rad(avg_trig + D.PAR.trigDist));
+                    Get_Rad_Bnds(D.UI.rewZoneRad(D.I.rot) + deg2rad(avg_trig + D.PAR.trigDist));
                 D.UI.zoneAvgH = ...
                     plot(xbnd, ybnd, ...
                     'Color', D.UI.rotCol(D.I.rot,:), ...
@@ -4571,11 +4982,11 @@ fprintf('END OF RUN\n');
                     end
                     
                     % Reset reward zone patches
-                    set(D.UI.ptchFdH(:, D.I.rot), ...
+                    set(D.UI.ptchFdZineH(:, D.I.rot), ...
                         'EdgeColor', [0, 0, 0], ...
                         'FaceAlpha', 0.15, ...
                         'EdgeAlpha', 0.05);
-                    set(D.UI.durNowTxtH(:, D.I.rot), ...
+                    set(D.UI.txtFdDurH(:, D.I.rot), ...
                         'Visible', 'off');
                     
                     % Print missed reward
@@ -4617,7 +5028,7 @@ fprintf('END OF RUN\n');
         function [] = Lap_Check()
             
             % CHECK BOUNDS AND/OR BAIL
-            track_quad = Check_Rad_Bnds(D.P.Rat.rad, D.UI.lapBnds(D.I.lap_hunt_ind, :));
+            track_quad = Check_Rad_Bnds(D.P.Rat.rad, D.PAR.lapBnds(D.I.lap_hunt_ind, :));
             
             % Bail if not in bounds
             if ~any(track_quad)
@@ -4678,7 +5089,7 @@ fprintf('END OF RUN\n');
             delete(D.UI.Rat.pltHposAll);
             x = D.P.Rat.pos_hist(:,1);
             y = D.P.Rat.pos_hist(:,2);
-            exc = find(diff(x)/D.UI.xCMcnv > 10 | diff(y)/D.UI.yCMcnv > 10 == 1) + 1;
+            exc = find(diff(x)/D.UI.cm2pxl > 10 | diff(y)/D.UI.cm2pxl > 10 == 1) + 1;
             x(exc) = NaN;
             y(exc) = NaN;
             D.UI.Rat.pltHposAll = ...
@@ -5283,7 +5694,7 @@ fprintf('END OF RUN\n');
                         
                         % Start rat in start quad
                         if D.F.initVals
-                            D.F.simRadLast = mean(D.UI.strQuadBnds);
+                            D.F.simRadLast = mean(D.PAR.strQuadBnds);
                             D.F.simVelLast = 0;
                             D.F.simTSStart = Elapsed_Seconds(now);
                             D.F.simTSLast = 0;
@@ -5532,7 +5943,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopCond', char(D.PAR.sesCond)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5551,7 +5962,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopTask', char(D.PAR.sesTask)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5572,7 +5983,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRewDel', num2str(D.PAR.rewDel)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5616,7 +6027,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'ToggCue', char(D.PAR.cueFeed)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5658,7 +6069,7 @@ fprintf('END OF RUN\n');
                 get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -6191,7 +6602,7 @@ fprintf('END OF RUN\n');
                     D.F.do_block_cue = true;
                     
                     % Set cue maker to not visible
-                    set(reshape(D.UI.ptchFdH,1,[]), ...
+                    set(reshape(D.UI.ptchFdZineH,1,[]), ...
                         'EdgeColor', [0, 0, 0]);
                     
                     % Set flag to false
@@ -6441,7 +6852,7 @@ fprintf('END OF RUN\n');
         end
         
         
-       
+        
         
         
         
@@ -6455,6 +6866,16 @@ fprintf('END OF RUN\n');
         % ---------------------------GET TRACK BOUNDS----------------------
         function [xbnd, ybnd] = Get_Rad_Bnds(polbnds)
             
+            % Set roh lims
+            if D.PAR.sesTask == 'Track'
+                inRohLim = D.UI.arnRad-D.UI.trkWdt;
+                outRohLim = D.UI.arnRad;
+            else
+                inRohLim = D.UI.rfRad-D.UI.rfTargWdt;
+                outRohLim = D.UI.rfRad;
+            end
+            
+            % Convert to rad array
             if (length(polbnds) == 2)
                 if polbnds(1) > polbnds(2)
                     polbnds = wrapToPi(polbnds);
@@ -6463,14 +6884,16 @@ fprintf('END OF RUN\n');
                 nPoints =  round(360 * (radDist/(2*pi))); % 360 pnts per 2*pi
                 polbnds = linspace(polbnds(1), polbnds(2), nPoints);
             end
-            % inner bounds 0 deg
-            [x(1,:),y(1,:)] = pol2cart(polbnds, ones(1,length(polbnds)) * (D.UI.arnRad-D.UI.trkWdt));
-            xbnd(1,:) = x(1,:)*D.UI.xCMcnv + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.xCMcnv;
-            ybnd(1,:) = y(1,:)*D.UI.yCMcnv + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.yCMcnv;
-            % outer bounds 0 deg
-            [x(2,:),y(2,:)] = pol2cart(polbnds, ones(1,length(polbnds)) * D.UI.arnRad);
-            xbnd(2,:) = x(2,:)*D.UI.xCMcnv + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.xCMcnv;
-            ybnd(2,:) = y(2,:)*D.UI.yCMcnv + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.yCMcnv;
+            
+            % Compute inner bounds 0 deg
+            [x(1,:),y(1,:)] = pol2cart(polbnds, ones(1,length(polbnds)) * inRohLim);
+            xbnd(1,:) = x(1,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            ybnd(1,:) = y(1,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            
+            % Compute outer bounds 0 deg
+            [x(2,:),y(2,:)] = pol2cart(polbnds, ones(1,length(polbnds)) * outRohLim);
+            xbnd(2,:) = x(2,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            ybnd(2,:) = y(2,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
             
         end
         
@@ -6786,7 +7209,7 @@ fprintf('END OF RUN\n');
             fi_path = D.DIR.logTemp;
             fid = fopen(fi_path,'wt');
             for z_l = 1:D.DB.logCount
-                fprintf(fid, D.DB.logStr{z_l});
+I                fprintf(fid, D.DB.logStr{z_l});
             end
             fclose(fid);
             Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
@@ -6826,7 +7249,7 @@ fprintf('END OF RUN\n');
 
 %% =================== TOP LEVEL SUPPORT FUNCTIONS ========================
 
-% --------------------------SEND CS COMMAND--------------------------------
+% --------------------------SEND DATA TO CS--------------------------------
     function[] = SendM2C(id, dat1, dat2, dat3, pack)
         
         % Bail if isMatSolo
@@ -6983,6 +7406,22 @@ fprintf('END OF RUN\n');
         
     end
 
+% --------------------------SEND DATA TO AC--------------------------------
+    function[] = SendM2AC()
+        
+        % Bail if not connected
+        if ~D.AC.connected
+            return;
+        end
+        
+        % Send data
+        fwrite(tcpIP,D.AC.data,'int8');
+        
+        % Log/print
+        Console_Write(sprintf('   [SENT] m2ac: dat=|%d|%d|%d|', ...
+            D.AC.data(1),D.AC.data(2),D.AC.data(3)));
+    end
+
 % ---------------------------PRINT TO CONSOLE------------------------------
     function [] = Console_Write(str, t_now)
         
@@ -7117,12 +7556,12 @@ fprintf('END OF RUN\n');
                                 % Pause to allow image to close
                                 D.AC.data = zeros(1, length(D.AC.data));
                                 D.AC.data(1) = 1;
-                                fwrite(tcpIP,D.AC.data,'int8');
+                                SendM2AC();
                                 pause(0.1);
                                 
                                 % Send command to terminate run
                                 D.AC.data = zeros(1, length(D.AC.data));
-                                fwrite(tcpIP,D.AC.data,'int8');
+                                SendM2AC();
                                 
                                 % Close AC computer connection
                                 fclose(tcpIP);

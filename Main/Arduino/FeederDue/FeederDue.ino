@@ -2650,7 +2650,7 @@ bool LOGGER::SetToWriteMode(char log_file[])
 
 	// Log/print error
 	else {
-		sprintf(str, "!!ERROR!! [LOGGER::SetToWriteMode] ABORTED: file_name=%s mode = %c",
+		sprintf(str, "!!ERROR!! [LOGGER::SetToWriteMode] FAILED: OpenLog Set to Write Mode: file_name=%s mode = %c",
 			log_file, mode);
 		DebugError(str, true);
 	}
@@ -2728,26 +2728,38 @@ bool LOGGER::WriteLog(bool do_send)
 
 	// Local vars
 	char str[300] = { 0 };
-
-	// Bail if not in write mode, no new logs or write blocked
-	if (mode != '<' ||
-		(queueIndRead == queueIndStore &&
-			logQueue[queueIndStore][0] == '\0')) {
+	bool is_logs = false;
+	
+	// Bail no new logs or write blocked
+	if (queueIndRead == queueIndStore &&
+			logQueue[queueIndStore][0] == '\0') {
 
 		// Indicate no logs to write
-		return false;
+		is_logs = false;
+		return is_logs;
+	}
+	else {
+		is_logs = true;
+	}
+
+	// Bail if not in write mode
+	if (mode != '<' &&
+		!do_send) {
+
+		// Return queue status
+		return is_logs;
 	}
 
 	// Bail if writing blocked
 	if (fc.doBlockLogWrite) {
 
-		return false;
+		return is_logs;
 	}
 
 	// Bail if less than 50ms sinse last write
 	if (micros() < t_write + dt_write) {
 		// Indicate still logs to store
-		return true;
+		return is_logs;
 	}
 
 	// Itterate send ind
@@ -2759,8 +2771,10 @@ bool LOGGER::WriteLog(bool do_send)
 	}
 
 	// Write to SD
-	port.write(logQueue[queueIndRead]);
-	t_write = micros();
+	if (mode == '<') {
+		port.write(logQueue[queueIndRead]);
+		t_write = micros();
+	}
 
 	// Send now
 	if (do_send) {
@@ -2774,16 +2788,17 @@ bool LOGGER::WriteLog(bool do_send)
 
 	// Print stored log
 	if (db.print_logStore) {
-		sprintf(str, "   [LOG] r2c: log_cnt=%d bytes_sent=%d/%d queueIndStore=%d, queueIndRead=%d, msg=\"%s\"",
-			cnt_logsStored, strlen(logQueue[queueIndRead]), cnt_logBytesStored, queueIndStore, queueIndRead, logQueue[queueIndRead]);
+		logQueue[queueIndRead][strlen(logQueue[queueIndRead])-2] = '\0';
+		sprintf(str, "   [LOG] r2c: cnt=%d b_stored=%d/%d b_sent=%d q_store=%d q_read=%d \"%s\"",
+			cnt_logsStored, strlen(logQueue[queueIndRead]), cnt_logBytesStored, cnt_logBytesSent, queueIndStore, queueIndRead, logQueue[queueIndRead]);
 		QueueDebug(str, millis());
 	}
 
 	// Set entry to null
 	logQueue[queueIndRead][0] = '\0';
 
-	// Return success
-	return true;
+	// Return queue status
+	return is_logs;
 }
 
 void LOGGER::StreamLogs()
@@ -2989,7 +3004,7 @@ void LOGGER::StreamLogs()
 	// Resume logging
 	delay(100);
 	fc.doBlockLogWrite = false;
-	SetToWriteMode(logFile);
+	SetToWriteMode(logFile); 
 
 	// Log warnings summary
 	char warn_lines[200] = "ON LINES |";
@@ -3034,7 +3049,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Send remaining logs imediately
-	while (WriteLog(true) && mode == '<');
+	while (WriteLog(true) && mode == '<'); 
 	delay(100);
 
 	// End reached send ">>>"
@@ -6465,7 +6480,7 @@ void setup() {
 	while (PrintDebug());
 
 	// TEMP
-	//Log.TestLoad(0, "LOG00027.CSV");
+	//Log.TestLoad(0, "LOG00035.CSV");
 	//Log.TestLoad(2500);
 
 	// RESET FEEDER ARM

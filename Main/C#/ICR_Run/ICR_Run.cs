@@ -74,7 +74,7 @@ namespace ICR_Run
             do_debug_mat: false,
             break_line: 0, // 0
             do_print_blocked_vt: false,
-            do_print_sent_rat_vt: true,
+            do_print_sent_rat_vt: false,
             do_print_sent_rob_vt: false,
             do_print_rob_log: false,
             do_print_due_log: false
@@ -287,7 +287,7 @@ namespace ICR_Run
 
         // Communication general
         private static long dt_sendSent = 5; // (ms)
-        private static long dt_sendRcvd = 1; // (ms)
+        private static long dt_sendRcvd = 5; // (ms)
         private static long dt_resend = 500; // (ms)
         private static int resendMax = 5;
         private static long timeoutLoadGUI = 15000; // (ms)
@@ -417,8 +417,6 @@ namespace ICR_Run
             sp_Xbee.ReadTimeout = 100;
             sp_Xbee.BaudRate = 57600;
             sp_Xbee.PortName = "COM4";
-            // Create event handeler for incoming data
-            sp_Xbee.DataReceived += DataReceived_Xbee;
             // Set byte threshold to max packet size
             sp_Xbee.ReceivedBytesThreshold = 1;
             // Open serial port connection
@@ -1098,7 +1096,6 @@ namespace ICR_Run
                 long t_send = 0;
                 bool do_loop = true;
                 bool buff_ready = false;
-                bool is_recieving = false;
                 bool is_clogged = false;
                 bool is_hanging = false;
                 string dat_str = "";
@@ -1109,7 +1106,9 @@ namespace ICR_Run
                 while (do_loop)
                 {
                     // Delay send time till x ms after last send or rcvd
-                    t_send = c2r.t_new > r2c.t_new ? c2r.t_new + dt_sendSent : r2c.t_new + dt_sendRcvd;
+                    t_send = c2r.DT_SentRcvd(t: sw_main.ElapsedMilliseconds) > r2c.DT_SentRcvd(t: sw_main.ElapsedMilliseconds) ?
+                        sw_main.ElapsedMilliseconds + (dt_sendSent - c2r.DT_SentRcvd(t: sw_main.ElapsedMilliseconds)) :
+                        sw_main.ElapsedMilliseconds + (dt_sendRcvd - r2c.DT_SentRcvd(t: sw_main.ElapsedMilliseconds));
 
                     // Make sure outbut and input buffer have enough space
                     buff_ready = sp_Xbee.BytesToWrite == 0 && sp_Xbee.BytesToRead == 0;
@@ -1120,12 +1119,11 @@ namespace ICR_Run
                         fc.ContinueRobCom();
 
                     // Get status
-                    is_recieving = fc.isXbeeBusy;
                     is_clogged = queue_SendXBee >= 3;
                     is_hanging = sw_main.ElapsedMilliseconds > t_queued + 100;
 
                     // Abort if sending pos data
-                    if ((is_clogged || is_hanging || is_recieving) &&
+                    if ((is_clogged || is_hanging) &&
                         id == 'P')
                         break;
 
@@ -1143,7 +1141,7 @@ namespace ICR_Run
                     id, dat[0], dat[1], dat[2], pack, do_conf, do_check_done);
 
                 // Check if queue backed up or hanging
-                if (is_clogged || is_hanging || is_recieving)
+                if (is_clogged || is_hanging)
                 {
                     // Get status info
                     dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
@@ -1151,8 +1149,8 @@ namespace ICR_Run
                    sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
                     // Log/print
-                    LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue |{0}{1}{2}: {3}",
-                        is_recieving ? "Holding for RX|" : "", is_hanging ? "Hanging|" : "", is_clogged ? "Clogged|" : "", dat_str + buff_str), is_warning: true);
+                    LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue |{0}{1}: {2}",
+                        is_hanging ? "Hanging|" : "", is_clogged ? "Clogged|" : "", dat_str + buff_str), is_warning: true);
 
                     // Bail if this is pos data
                     if (id == 'P')
@@ -1209,7 +1207,6 @@ namespace ICR_Run
                 c2r.foot.CopyTo(msgByteArr, c2r.head.Length + msg_id.Length + msg_data.Length + msg_pack.Length + msg_conf.Length);
 
                 // Send to arduino
-                while (fc.isXbeeBusy) ;
                 sp_Xbee.Write(msgByteArr, 0, msgByteArr.Length);
 
                 // Update c2r info
@@ -1391,23 +1388,6 @@ namespace ICR_Run
             return true;
         }
 
-        // HANDLE INCOMING XBEE DATA
-        public static void DataReceived_Xbee(object sender, SerialDataReceivedEventArgs e)
-        {
-            // Prevent multiple intances running
-            if (fc.isXbeeBusy ||
-                robLogger.isLogging)
-                return;
-
-            // Block any xbee writing till complete packet received
-            fc.isXbeeBusy = true;
-            while (sp_Xbee.BytesToRead > 0)
-                Thread.Sleep(1);
-
-            // Flag xbee free
-            fc.isXbeeBusy = false;
-        }
-
         // PARSE RECIEVED XBEE DATA 
         public static void ParserR2C()
         {
@@ -1429,7 +1409,6 @@ namespace ICR_Run
                 }
 
                 // Local vars
-                long t_parse_str = sw_main.ElapsedMilliseconds;
                 UnionHack U = new UnionHack(0, '0', 0, 0, 0);
                 bool r2c_head_found = false;
                 bool r2a_head_found = false;
@@ -1451,8 +1430,11 @@ namespace ICR_Run
                 bool do_conf = false;
                 char foot = ' ';
 
+                // Store parse start time
+                r2c.t_parse_str = sw_main.ElapsedMilliseconds;
+
                 // Get header
-                if (XbeeBuffReady(1, t_parse_str, "head"))
+                if (XbeeBuffReady(1, r2c.t_parse_str, "head"))
                 {
                     sp_Xbee.Read(head_bytes, 0, 1);
                     bytes_read += 1;
@@ -1475,7 +1457,7 @@ namespace ICR_Run
                 if (r2c_head_found || r2a_head_found)
                 {
 
-                    if (XbeeBuffReady(1, t_parse_str, "id"))
+                    if (XbeeBuffReady(1, r2c.t_parse_str, "id"))
                     {
 
                         sp_Xbee.Read(id_bytes, 0, 1);
@@ -1516,7 +1498,7 @@ namespace ICR_Run
                     // Get data
                     for (int i = 0; i < 3; i++)
                     {
-                        if (XbeeBuffReady(4, t_parse_str, String.Format("dat{0}", i + 1)))
+                        if (XbeeBuffReady(4, r2c.t_parse_str, String.Format("dat{0}", i + 1)))
                         {
                             sp_Xbee.Read(dat_bytes, 0, 4);
                             U.b_0 = dat_bytes[0];
@@ -1529,7 +1511,7 @@ namespace ICR_Run
                     }
 
                     // Get packet number
-                    if (XbeeBuffReady(2, t_parse_str, "pack"))
+                    if (XbeeBuffReady(2, r2c.t_parse_str, "pack"))
                     {
 
                         // Read in data
@@ -1541,7 +1523,7 @@ namespace ICR_Run
                     }
 
                     // Get do confirm byte
-                    if (XbeeBuffReady(1, t_parse_str, "do_comf"))
+                    if (XbeeBuffReady(1, r2c.t_parse_str, "do_comf"))
                     {
                         sp_Xbee.Read(conf_bytes, 0, 1);
                         bytes_read += 1;
@@ -1550,7 +1532,7 @@ namespace ICR_Run
                     }
 
                     // Find footer
-                    if (XbeeBuffReady(1, t_parse_str, "foot"))
+                    if (XbeeBuffReady(1, r2c.t_parse_str, "foot"))
                     {
                         // Read in data
                         sp_Xbee.Read(foot_bytes, 0, 1);
@@ -1574,7 +1556,7 @@ namespace ICR_Run
 
                 // Format data string
                 long dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
-                long dt_parse = sw_main.ElapsedMilliseconds - t_parse_str;
+                long dt_parse = sw_main.ElapsedMilliseconds - r2c.t_parse_str;
                 string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
                         id, dat[0], dat[1], dat[2], pack, do_conf, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, dt_parse, c2r.DT_SentRcvd(), dt_rcvd);
 
@@ -1582,7 +1564,7 @@ namespace ICR_Run
                 if (r2c_foot_found)
                 {
                     // Update flags
-                    r2c.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
+                    r2c.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: r2c.t_parse_str);
 
                     // Check for repeat packet
                     string msg_str;
@@ -1670,7 +1652,7 @@ namespace ICR_Run
 
                     // Log/print available info
                     LogEvent_Thread(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packet: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6:0.00}|{7:0.00}|{8:0.00}| pack={9} do_conf={10} foot={11} bytes_read={12} rx={13} tx={14} parse_dt={15}",
-                        from, cnt_dropped[0], cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - t_parse_str), is_warning: true);
+                        from, cnt_dropped[0], cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - r2c.t_parse_str), is_warning: true);
 
                     // Dump buffer if > 1 consecutive drops and no bytes read
                     if (cnt_dropped[0] > 1)
@@ -1904,9 +1886,10 @@ namespace ICR_Run
             while (!is_timedout)
             {
 
-                // Check for timeout
+                // Check for run timeout
                 if (sw_main.ElapsedMilliseconds > t_timeout)
                 {
+                    // Check for dt read timeout
                     if (sw_main.ElapsedMilliseconds - t_read_last > 5000)
                     {
                         dt_run = sw_main.ElapsedMilliseconds - t_stream_str;
@@ -2915,11 +2898,9 @@ namespace ICR_Run
     {
         // Private vars
         private static object _lock_printLog = new object();
-        private static object _lock_isXbeeBusy = new object();
         private static bool _isRunError = false;
         private static bool _doAbort = false;
         private static bool _isMAThanging = false;
-        private static bool _isXbeeBusy = false;
         private static int _cnt_err = 0;
         private string[] _err_list = new string[100];
         // Public vars
@@ -2975,21 +2956,7 @@ namespace ICR_Run
             }
             get { return _isMAThanging; }
         }
-        public bool isXbeeBusy
-        {
-            set
-            {
-                lock (_lock_isXbeeBusy)
-                    _isXbeeBusy = value;
-
-            }
-            get
-            {
-                lock (_lock_isXbeeBusy)
-                    return _isXbeeBusy;
-            }
-        }
-
+       
         // Constructor
         public Flow_Control(
             object _lock_print_log
@@ -3074,6 +3041,7 @@ namespace ICR_Run
         public int cnt_repeat = 0;
         public long t_new = 0;
         public long t_last = 0;
+        public long t_parse_str = 0;
         public long[] t_sentRcvd;
 
         // Constructor
@@ -3207,9 +3175,9 @@ namespace ICR_Run
         public long DT_SentRcvd(long t = 0)
         {
             if (t == 0)
-                return t_new - t_last;
+                return t_parse_str > t_new ? t_parse_str : t_new - t_last;
             else
-                return t - t_new;
+                return t - t_parse_str > t_new? t_parse_str : t_new;
         }
 
         // Find id index
