@@ -2818,6 +2818,8 @@ void LOGGER::StreamLogs()
 	bool is_timedout = false;
 	char err_str[200] = "|";
 	char c_arr[3] = { 0 };
+	int milestone_incriment[11] = { 0 };
+	int milestone_ind = 0;
 
 	// Bail if not ready to send
 	if (millis() < t_beginSend) {
@@ -2860,6 +2862,14 @@ void LOGGER::StreamLogs()
 
 	// Start timers
 	t_start = millis();
+
+	// Get incriments to update status
+	for (int i = 1; i < 10; i++)
+	{
+		milestone_incriment[i] = round((cnt_logBytesStored / 10) * (i + 1));
+	}
+	milestone_incriment[0] = 1;
+	milestone_incriment[10] = cnt_logBytesStored;
 
 	// Begin streaming data
 	while (millis() < (t_start + timeout)) {
@@ -2980,8 +2990,21 @@ void LOGGER::StreamLogs()
 			r2c.port.write(c_arr[2]);
 			cnt_logBytesSent++;
 
+			// Print status
+			if (cnt_logBytesSent == milestone_incriment[milestone_ind]) {
+
+				// Print
+				sprintf(str, "[LOGGER::StreamLogs] Log Write %d%% Complete: bytes_sent=%d/%d", 
+					milestone_ind * 10, cnt_logBytesSent, cnt_logBytesStored);
+				DebugFlow(str, millis());
+				while (PrintDebug());
+
+				// Itterate count
+				milestone_ind++;
+			}
+
 			// Check if all bytes sent
-			if (cnt_logBytesSent == cnt_logBytesStored) {
+			if (cnt_logBytesSent >= cnt_logBytesStored) {
 
 				send_done = true;
 				break;
