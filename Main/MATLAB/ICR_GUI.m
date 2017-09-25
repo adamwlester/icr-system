@@ -2538,7 +2538,7 @@ fprintf('END OF RUN\n');
                 if ~isMatSolo
                     Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
                     tic;
-                    while (toc < 5 && ~doExit)
+                    while (toc < 10 && ~doExit)
                     end
                     if ~doExit
                         Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');

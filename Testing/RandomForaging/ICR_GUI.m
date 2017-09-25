@@ -239,6 +239,7 @@ fprintf('END OF RUN\n');
         D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
         D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
         D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
+        D.DIR.ioRFPath = fullfile(D.DIR.ioTop, 'Operational', 'forrage_path.mat');
         
         % Cheetah dirs
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
@@ -3721,7 +3722,7 @@ fprintf('END OF RUN\n');
             
             % TEMP
             do_plot_avg = true;
-            do_plot_all = true;
+            do_plot_all = false;
             
             
             % Set axis lims
@@ -3736,79 +3737,92 @@ fprintf('END OF RUN\n');
             % Deg bin vars
             n_targs = 360/D.PAR.pathDegDist;
             
-            % Setup path mat
-            D.P.pathMat = zeros(D.UI.rfBins,D.UI.rfBins,D.PAR.nPaths,n_targs);
-            
-            % Setup temp path mat
-            path_bins = round(D.UI.rfBins*(D.UI.rfRad / D.UI.arnRad));
-            mat_eye = padarray(eye(path_bins-5),[5,5],'pre');
-            mat_p = zeros(path_bins);
-            for i = 1:D.PAR.pathWdth
-                mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
-            end
-            
-            % Setup temp sim rat mat
-            mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
-            
-            % Compute mat for each pos condition
-            for c = 1:2
-                if c==1
-                    mat_now = mat_p;
-                else
-                    mat_now = mat_r;
+            % Load file if exists
+            if exist(D.DIR.ioRFPath, 'file')
+                load(D.DIR.ioRFPath);
+                
+                % Store in struct
+                D.P.pathMat = double(path_mat); %#ok<NODEF>
+                D.DB.simRatPathMat = double(sim_rat_path_mat); %#ok<NODEF>
+                clear path_mat sim_rat_path_mat;
+            else
+                
+                % Setup path mat
+                D.P.pathMat = zeros(D.UI.rfBins,D.UI.rfBins,D.PAR.nPaths,n_targs);
+                
+                % Setup temp path mat
+                path_bins = round(D.UI.rfBins*(D.UI.rfRad / D.UI.arnRad));
+                mat_eye = padarray(eye(path_bins-5),[5,5],'pre');
+                mat_p = zeros(path_bins);
+                for i = 1:D.PAR.pathWdth
+                    mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
                 end
                 
-                for i = 0:floor(D.PAR.nPaths/2)
-                    
-                    if (i<floor(D.PAR.nPaths/2))
-                        deg = i*D.PAR.pathDegDist;
-                        % Rotate
-                        mat_rot = rotMat(mat_now,deg);
-                        % Cut and pad
-                        mat_rot = mat_rot(:,1:ceil(path_bins/2));
-                        mat_rot = padarray(mat_rot, [0,path_bins-size(mat_rot,2)],'pre');
-                        % Flip
-                        mat_rot = flip(flip(mat_rot',2),1);
+                % Setup temp sim rat mat
+                mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
+                
+                % Compute mat for each pos condition
+                for c = 1:2
+                    if c==1
+                        mat_now = mat_p;
                     else
-                        mat_rot = zeros(path_bins);
-                        mat_rot(ceil(path_bins/2)-floor(D.PAR.pathWdth/2):ceil(path_bins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
-                        mat_rot(:,end-5:end) = 0;
+                        mat_now = mat_r;
                     end
                     
-                    % Pad to full size
-                    pad_lng = round((D.UI.rfBins - path_bins)/2);
-                    mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
-                    
-                    % Mirror values
-                    mat_mir = flip(mat_rot,1);
-                    
-                    % Store
-                    for j = [1:n_targs]-1
-                        if c==1
-                            D.P.pathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
-                            D.P.pathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                    for i = 0:floor(D.PAR.nPaths/2)
+                        
+                        if (i<floor(D.PAR.nPaths/2))
+                            deg = i*D.PAR.pathDegDist;
+                            % Rotate
+                            mat_rot = rotMat(mat_now,deg);
+                            % Cut and pad
+                            mat_rot = mat_rot(:,1:ceil(path_bins/2));
+                            mat_rot = padarray(mat_rot, [0,path_bins-size(mat_rot,2)],'pre');
+                            % Flip
+                            mat_rot = flip(flip(mat_rot',2),1);
                         else
-                            D.DB.simRatPathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
-                            D.DB.simRatPathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                            mat_rot = zeros(path_bins);
+                            mat_rot(ceil(path_bins/2)-floor(D.PAR.pathWdth/2):ceil(path_bins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
+                            mat_rot(:,end-5:end) = 0;
+                        end
+                        
+                        % Pad to full size
+                        pad_lng = round((D.UI.rfBins - path_bins)/2);
+                        mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
+                        
+                        % Mirror values
+                        mat_mir = flip(mat_rot,1);
+                        
+                        % Store
+                        for j = [1:n_targs]-1
+                            if c==1
+                                D.P.pathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                                D.P.pathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                            else
+                                D.DB.simRatPathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                                D.DB.simRatPathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                            end
                         end
                     end
                 end
+                
+                % Mask values outside circle
+                mask = repmat(D.PAR.pathMask,[1,1,D.PAR.nPaths,n_targs]);
+                D.P.pathMat = D.P.pathMat.*mask;
+                D.DB.simRatPathMat = D.DB.simRatPathMat.*mask;
+                
+                % Nomalize
+                D.P.pathMat(D.P.pathMat>0) = 1;
+                D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.UI.rfBins,D.UI.rfBins,1,1]);
+                D.DB.simRatPathMat(D.DB.simRatPathMat>0) = 1;
+                
+                % Save path
+                path_mat = single(D.P.pathMat); %#ok<NASGU>
+                sim_rat_path_mat = single(D.DB.simRatPathMat); %#ok<NASGU>
+                save(D.DIR.ioRFPath, 'path_mat', 'sim_rat_path_mat');
+                clear path_mat sim_rat_path_mat;
+                
             end
-            
-            % Mask values outside circle
-            mask = repmat(D.PAR.pathMask,[1,1,D.PAR.nPaths,n_targs]);
-            D.P.pathMat = D.P.pathMat.*mask;
-            D.DB.simRatPathMat = D.DB.simRatPathMat.*mask;
-            
-            % Nomalize
-            D.P.pathMat(D.P.pathMat>0) = 1;
-            D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.UI.rfBins,D.UI.rfBins,1,1]);
-            D.DB.simRatPathMat(D.DB.simRatPathMat>0) = 1;
-            
-            % Save path
-            %D.P.pathMat = single(D.P.pathMat);
-            %save(fullfile(dir,datFi),'D.P.pathMat');
-            D.P.pathMat = double(D.P.pathMat);
             
             % Create target patches
             for z_targ = 1:length(D.PAR.pathTargArr)
@@ -4050,22 +4064,24 @@ fprintf('END OF RUN\n');
             
             % SIMULATED RAT TEST
             if D.DB.doSimRatTest
-                D.F.simRadLast = NaN;
-                D.F.simVelLast = NaN;
-                D.F.simTSStart = NaN;
-                D.F.simTSLast = NaN;
+                D.DB.simRadLast = NaN;
+                D.DB.simVelLast = NaN;
+                D.DB.simTSStart = NaN;
+                D.DB.simTSLast = NaN;
                 D.F.initVals = true;
                 
-                pos = [0.5-0.175/2, 0.63, 0.175,0.02];
-                D.F.UI.sld = uicontrol('Style', 'slider',...
+                pos = [D.UI.sesInfPanPos(1)-0.18, 0.01, 0.175,0.02];
+                D.UI.sldSimVel = uicontrol('Style', 'slider',...
                     'Parent',FigH, ...
                     'Units', 'Normalized', ...
                     'Min',0,'Max',100,'Value',D.DB.ratVelStart,...
                     'SliderStep', [0.01,0.1], ...
+                    'Visible', 'off',...
+                    'Enable', 'off',...
                     'Position', pos);
                 % Vel text
-                pos = [pos(1)+pos(3), pos(2), 0.03, pos(4)];
-                D.F.UI.txt = uicontrol('Style', 'text',...
+                pos = [pos(1)-0.03, pos(2), 0.03, pos(4)];
+                D.UI.txtSimVel = uicontrol('Style', 'text',...
                     'Parent',FigH, ...
                     'Units', 'Normalized', ...
                     'BackgroundColor', D.UI.figBckCol, ...
@@ -4073,6 +4089,7 @@ fprintf('END OF RUN\n');
                     'FontSize', 12, ...
                     'FontWeight', 'Bold', ...
                     'String','100',...
+                    'Visible', 'off',...
                     'Position', pos);
             end
             
@@ -5695,24 +5712,31 @@ fprintf('END OF RUN\n');
                         
                         % Start rat in start quad
                         if D.F.initVals
-                            D.F.simRadLast = mean(D.PAR.strQuadBnds);
-                            D.F.simVelLast = 0;
-                            D.F.simTSStart = Elapsed_Seconds(now);
-                            D.F.simTSLast = 0;
+                            D.DB.simRadLast = mean(D.PAR.strQuadBnds);
+                            D.DB.simVelLast = 0;
+                            D.DB.simTSStart = Elapsed_Seconds(now);
+                            D.DB.simTSLast = 0;
                             D.F.initVals = false;
+                            
+                            % Make UI stuff visible
+                            set(D.UI.sldSimVel, ...
+                                'Visible', 'on',...
+                                'Enable', 'on');
+                            set(D.UI.txtSimVel, ...
+                                'Visible', 'on');
                             
                             % Send test info to robot once
                             SendM2C('T', sysTest, 0);
                         end
                         
                         % Compute ts(us) from dt(s)
-                        ts_now = ceil((Elapsed_Seconds(now) - D.F.simTSStart)*10^6);
-                        dt_sec = (ts_now - D.F.simTSLast) / 10^6;
-                        D.F.simTSLast = ts_now;
+                        ts_now = ceil((Elapsed_Seconds(now) - D.DB.simTSStart)*10^6);
+                        dt_sec = (ts_now - D.DB.simTSLast) / 10^6;
+                        D.DB.simTSLast = ts_now;
                         
                         % Get slider val
-                        sld_vel = round(get(D.F.UI.sld, 'Value'));
-                        set(D.F.UI.txt, 'String', num2str(sld_vel));
+                        sld_vel = round(get(D.UI.sldSimVel, 'Value'));
+                        set(D.UI.txtSimVel, 'String', num2str(sld_vel));
                         
                         % Update vel if not halted or holding for 2 sec for setup
                         if ...
@@ -5721,22 +5745,22 @@ fprintf('END OF RUN\n');
                                 Elapsed_Seconds(now) - D.T.run_str > 2
                             
                             % Check vel
-                            if D.F.simVelLast == sld_vel
+                            if D.DB.simVelLast == sld_vel
                                 % Hold velocity
-                                vel_now = D.F.simVelLast;
-                            elseif D.F.simVelLast < sld_vel
+                                vel_now = D.DB.simVelLast;
+                            elseif D.DB.simVelLast < sld_vel
                                 % Accelerate
-                                vel_now = D.F.simVelLast + (D.DB.ratMaxAcc*dt_sec);
-                            elseif D.F.simVelLast > sld_vel
+                                vel_now = D.DB.simVelLast + (D.DB.ratMaxAcc*dt_sec);
+                            elseif D.DB.simVelLast > sld_vel
                                 % Deccelerate
-                                vel_now = D.F.simVelLast - (D.DB.ratMaxDec*dt_sec);
+                                vel_now = D.DB.simVelLast - (D.DB.ratMaxDec*dt_sec);
                             end
                             
                             % Keep in bounds
-                            if vel_now > D.F.UI.sld.Max
-                                vel_now = D.F.UI.sld.Max;
-                            elseif vel_now < D.F.UI.sld.Min
-                                vel_now = D.F.UI.sld.Min;
+                            if vel_now > D.UI.sldSimVel.Max
+                                vel_now = D.UI.sldSimVel.Max;
+                            elseif vel_now < D.UI.sldSimVel.Min
+                                vel_now = D.UI.sldSimVel.Min;
                             end
                         else
                             % Keep robot halted
@@ -5753,7 +5777,7 @@ fprintf('END OF RUN\n');
                             % Use old pos
                             rad_diff = 0;
                         end
-                        rad_now = D.F.simRadLast - rad_diff;
+                        rad_now = D.DB.simRadLast - rad_diff;
                         
                         % Convert rad back to cart
                         rad = wrapTo2Pi(rad_now);
@@ -5772,8 +5796,8 @@ fprintf('END OF RUN\n');
                         SendM2C('p', ts_now, x, y);
                         
                         % Update simulated rat data
-                        D.F.simRadLast = rad_now;
-                        D.F.simVelLast = vel_now;
+                        D.DB.simRadLast = rad_now;
+                        D.DB.simVelLast = vel_now;
                         D.P.Rat.vtTS = single(ts_now);
                         D.P.Rat.vtPos = single(xy_pos);
                         D.P.Rat.vtNRecs = single(1);
@@ -7206,11 +7230,12 @@ fprintf('END OF RUN\n');
         
         % Save log
         Console_Write('[ICR_GUI] RUNNING: Save ICR_GUI Log...');
-        if size(who('global'),1) > 0
+        if size(who('global'),1) > 0 && ...
+                exist(D.DIR.logTemp, 'dir')
             fi_path = D.DIR.logTemp;
             fid = fopen(fi_path,'wt');
             for z_l = 1:D.DB.logCount
-I                fprintf(fid, D.DB.logStr{z_l});
+                fprintf(fid, D.DB.logStr{z_l});
             end
             fclose(fid);
             Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log to \"%s\"', D.DIR.logTemp));
