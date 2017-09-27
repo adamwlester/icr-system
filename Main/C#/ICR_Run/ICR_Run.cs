@@ -885,7 +885,7 @@ namespace ICR_Run
             RepeatSendPack_Thread(id: 'Q', do_check_done: true);
             // Wait for quit confirmation from robot for fixed period of time
             LogEvent_Thread("[Exit] RUN: Confirm Robot Quit...");
-            pass = WaitForSerial(id: 'Q', timeout: 5000);
+            pass = WaitForSerial(id: 'Q', timeout: 15000);
             if (pass)
                 LogEvent_Thread("[Exit] SUCCEEDED: Confirm Robot Quit");
             else

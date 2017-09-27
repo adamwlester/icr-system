@@ -71,7 +71,7 @@ end
 % Session conditions
 D.DB.ratLab = 'r9999';
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
-D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
+D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
@@ -5086,7 +5086,7 @@ fprintf('END OF RUN\n');
         
         function [] = Forage_Reward_Zone_Check()
             
-            % BAIL IF MANUAL OR TRACK TRAINING
+            %% BAIL IF MANUAL OR TRACK TRAINING
             
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Track'
@@ -5952,7 +5952,7 @@ fprintf('END OF RUN\n');
                                 D.DB.simXY = reshape(xy_pos', 1, []);
                             else
                                 % Move along roh
-                                roh_diff = cm / D.UI.arnRad;
+                                roh_diff = cm / (D.UI.arnRad/2);
                                 
                                 % Convert to cart
                                 [x_diff,y_diff] = pol2cart(deg2rad(D.DB.simRunAng), roh_diff);

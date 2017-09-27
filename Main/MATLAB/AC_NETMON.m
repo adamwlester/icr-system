@@ -1,6 +1,6 @@
-function[] = AC_NETMON()
+function[] = AC_NETMON% NOTE: packet contains [1,4] numiric data()
 
-% NOTE: packet contains [1,4] numiric data
+
 %   val 1 = conection [0, 1], [no, yes]
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]

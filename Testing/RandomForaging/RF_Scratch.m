@@ -10,7 +10,7 @@ doPlotPathAll = false;
 doSimRat = true;
 D.PAR.pathWdth = 5;
 pixels = 400;
-D.UI.rfBins = 401;
+D.PAR.rfBins = 401;
 D.PAR.pathDegDist = 5;
 
 % Mouse vars
@@ -24,8 +24,9 @@ cd(dir);
 arnRad = 140/2;
 cm2pxl = (pixels/2)/arnRad;
 bndWdth = 10;
-binEdges = linspace(0,pixels,D.UI.rfBins+1);
-D.P.occMat = zeros(D.UI.rfBins,D.UI.rfBins);
+D.PAR.rfBinEdgeX = linspace(0,pixels,D.PAR.rfBins+1);
+D.PAR.rfBinEdgeY = D.PAR.rfBinEdgeX;
+D.P.occMat = zeros(D.PAR.rfBins,D.PAR.rfBins);
 img = [];
 rewCnt = 0;
 
@@ -52,8 +53,8 @@ set(fig,'Position',fg_pos);
 ax_1 = axes('Position', [0,0,1,1], ...
     'Color', 'None', ...
     'YDir', 'reverse', ...
-    'XLim', [0,D.UI.rfBins], ...
-    'YLim', [0,D.UI.rfBins]);
+    'XLim', [0,D.PAR.rfBins], ...
+    'YLim', [0,D.PAR.rfBins]);
 hold on;
 
 % Second axis
@@ -94,12 +95,12 @@ else
     n_targs = 360/D.PAR.pathDegDist;
     
     % Setup path mat
-    mat_eye = padarray(eye(D.UI.rfBins-5),[5,5],'pre');
-    mat_p = zeros(D.UI.rfBins);
+    mat_eye = padarray(eye(D.PAR.rfBins-5),[5,5],'pre');
+    mat_p = zeros(D.PAR.rfBins);
     for i = 1:D.PAR.pathWdth
         mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
     end
-    D.P.pathMat = zeros(D.UI.rfBins,D.UI.rfBins,D.PAR.nPaths,n_targs);
+    D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,n_targs);
     
     % Setup sim rat mat
     mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
@@ -119,13 +120,13 @@ else
                 % Rotate
                 mat_rot = rotMat(mat_now,deg);
                 % Cut and pad
-                mat_rot = mat_rot(:,1:ceil(D.UI.rfBins/2));
-                mat_rot = padarray(mat_rot, [0,D.UI.rfBins-size(mat_rot,2)],'pre');
+                mat_rot = mat_rot(:,1:ceil(D.PAR.rfBins/2));
+                mat_rot = padarray(mat_rot, [0,D.PAR.rfBins-size(mat_rot,2)],'pre');
                 % Flip
                 mat_rot = flip(flip(mat_rot',2),1);
             else
-                mat_rot = zeros(D.UI.rfBins);
-                mat_rot(ceil(D.UI.rfBins/2)-floor(D.PAR.pathWdth/2):ceil(D.UI.rfBins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
+                mat_rot = zeros(D.PAR.rfBins);
+                mat_rot(ceil(D.PAR.rfBins/2)-floor(D.PAR.pathWdth/2):ceil(D.PAR.rfBins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
                 mat_rot(:,end-5:end) = 0;
             end
             
@@ -146,16 +147,16 @@ else
     end
     
     % Mask values outside circle
-    [colNums, rowNums] = meshgrid(1:D.UI.rfBins, 1:D.UI.rfBins);
-    mask = (rowNums - ceil(D.UI.rfBins/2)).^2 ...
-        + (colNums - ceil(D.UI.rfBins/2)).^2 <= ceil(D.UI.rfBins/2).^2;
+    [colNums, rowNums] = meshgrid(1:D.PAR.rfBins, 1:D.PAR.rfBins);
+    mask = (rowNums - ceil(D.PAR.rfBins/2)).^2 ...
+        + (colNums - ceil(D.PAR.rfBins/2)).^2 <= ceil(D.PAR.rfBins/2).^2;
     mask = repmat(mask,[1,1,D.PAR.nPaths,n_targs]);
     D.P.pathMat = D.P.pathMat.*mask;
     rat_mat = rat_mat.*mask;
     
     % Nomalize
     D.P.pathMat(D.P.pathMat>0) = 1;
-    D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.UI.rfBins,D.UI.rfBins,1,1]);
+    D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.PAR.rfBins,D.PAR.rfBins,1,1]);
     rat_mat(rat_mat>0) = 1;
     
     % Save path
@@ -268,7 +269,7 @@ end
         end
         
         % Histogram data
-        N = histcounts2(y,x,binEdges,binEdges);
+        N = histcounts2(y,x,D.PAR.rfBinEdgeY,D.PAR.rfBinEdgeX);
         D.P.occMat = D.P.occMat+flip(N,1);
         
         % Plot valuse
@@ -285,9 +286,9 @@ end
         path_arr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
         
         % Get inner product of current pos and occ
-        targ_ind = find(D.PAR.pathTargArr == rewTarg);
+        D.I.targInd = find(D.PAR.pathTargArr == rewTarg);
         occ_prod = ...
-            squeeze(sum(sum(D.P.pathMat(:,:,:,targ_ind).*repmat(D.P.occMat,[1,1,size(D.P.pathMat,3)]),1),2));
+            squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd).*repmat(D.P.occMat,[1,1,size(D.P.pathMat,3)]),1),2));
         path_ind = find(occ_prod == min(occ_prod));
         if length(path_ind) > 1
             path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
@@ -307,7 +308,7 @@ end
         
         % Plot path
         if (~doSimRat)
-            path_plot = D.P.pathMat(:,:,path_ind,targ_ind);
+            path_plot = D.P.pathMat(:,:,path_ind,D.I.targInd);
             path_plot(path_plot>0) = 1;
             img = imagesc(path_plot+D.P.occMat, ...
                 'Parent', ax_1);
@@ -315,7 +316,7 @@ end
         
         % Add rat path to OCC
         if (doSimRat)
-            D.P.occMat = rat_mat(:,:,path_ind,targ_ind)+D.P.occMat;
+            D.P.occMat = rat_mat(:,:,path_ind,D.I.targInd)+D.P.occMat;
             img = imagesc(D.P.occMat, ...
                 'Parent', ax_1);
         end

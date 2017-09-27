@@ -129,6 +129,12 @@ int cal_nMeasPerSteps = 10;
 // Pin mapping
 struct PIN
 {
+	// Power off
+	const int PWR_OFF = 45;
+	const int PWR_ON = 44;
+	const int PWR_Swtch = 24;
+	const int PWR_Swtch_Grn = 25;
+
 	// Autodriver
 	const int AD_CSP_R = 5;
 	const int AD_CSP_F = 6;
@@ -181,11 +187,8 @@ struct PIN
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch_Gnd = 24;
-	const int FeedSwitch = 25;
-
-	// Power off
-	const int KillSwitch = 45;
+	const int FeedSwitch_Gnd = 33;
+	const int FeedSwitch = 32;
 
 	// Voltage monitor
 	const int BatVcc = A6;
@@ -377,7 +380,7 @@ volatile int v_cnt_ir = 0;
 volatile bool v_doIRhardStop = false;
 volatile bool v_doLogIR = false;
 volatile bool v_stepState = false;
-volatile bool v_stepTimerActive = false;
+volatile bool v_doStepTimer = false;
 volatile bool v_isArmMoveDone = false;
 volatile int v_cnt_steps = 0;
 volatile int v_stepTarg = 0;

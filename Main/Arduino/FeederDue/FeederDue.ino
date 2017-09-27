@@ -552,6 +552,8 @@ template <typename T> int CharInd(char id, T *r24);
 bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0);
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler();
+// POWER OFF
+void Interupt_Power();
 // HALT RUN ON IR TRIGGER
 void Interupt_IRprox_Halt();
 // DETECT IR SYNC EVENT
@@ -1967,8 +1969,8 @@ void REWARD::ExtendFeedArm()
 	}
 
 	// Block handler
-	v_stepTimerActive = false;
-	delayMicroseconds(500);
+	v_doStepTimer = false;
+	delayMicroseconds(1100);
 
 	// Set targ and flag
 	v_stepTarg = armExtStps;
@@ -1994,8 +1996,8 @@ void REWARD::ExtendFeedArm()
 	t_moveArmStr = millis();
 
 	// Set intterupt flag
-	delayMicroseconds(500);
-	v_stepTimerActive = true;
+	delayMicroseconds(100);
+	v_doStepTimer = true;
 
 	// Log/print
 	DebugFlow("[REWARD::ExtendFeedArm] Set Extend Feed Arm");
@@ -2020,8 +2022,8 @@ void REWARD::RetractFeedArm()
 	}
 
 	// Block handler
-	v_stepTimerActive = false;
-	delayMicroseconds(500);
+	v_doStepTimer = false;
+	delayMicroseconds(1100);
 
 	// Set targ and flag
 	v_stepTarg = 0;
@@ -2047,8 +2049,8 @@ void REWARD::RetractFeedArm()
 	t_moveArmStr = millis();
 
 	// Set intterupt flag
-	delayMicroseconds(500);
-	v_stepTimerActive = true;
+	delayMicroseconds(100);
+	v_doStepTimer = true;
 
 	// Log/print
 	DebugFlow("[REWARD::RetractFeedArm] Set Retract Feed Arm");
@@ -2093,6 +2095,40 @@ void REWARD::CheckFeedArm()
 		return;
 	}
 
+	// Release switch when switch triggered on retract
+	if (v_stepDir == 'r' &&
+		digitalRead(pin.FeedSwitch) == LOW) {
+
+		// Block handler
+		v_doStepTimer = false;
+		delayMicroseconds(1100);
+
+		// Make sure step off
+		v_stepState = false;
+		digitalWrite(pin.ED_STP, v_stepState);
+
+		// Set direction to extend
+		digitalWrite(pin.ED_DIR, LOW);
+		delayMicroseconds(100);
+
+		// Move arm x steps
+		for (int i = 0; i < 20; i++)
+		{
+			digitalWrite(pin.ED_STP, HIGH);
+			delayMicroseconds(500);
+			digitalWrite(pin.ED_STP, LOW);
+			delayMicroseconds(500);
+			v_cnt_steps--;
+		}
+
+		// Set done flag
+		v_isArmMoveDone = true;
+
+		// Bail
+		return;
+
+	}
+
 	// Check if done extending/retracting
 	if ((doExtendArm || doRetractArm) &&
 		v_isArmMoveDone) {
@@ -2110,7 +2146,7 @@ void REWARD::CheckFeedArm()
 	if (is_move_done || is_timedout) {
 
 		// Set intterupt flag
-		v_stepTimerActive = false;
+		v_doStepTimer = false;
 
 		// Unstep motor
 		if (digitalRead(pin.ED_STP) == HIGH) {
@@ -6004,7 +6040,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 			delay(1000);
 
 			// Set kill switch high
-			digitalWrite(pin.KillSwitch, HIGH);
+			digitalWrite(pin.PWR_OFF, HIGH);
 
 			// Quit if still powered by USB
 			QuitSession();
@@ -6100,7 +6136,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 void Interupt_TimerHandler()
 {
 	// Bail if not active now
-	if (!v_stepTimerActive) {
+	if (!v_doStepTimer) {
 		return;
 	}
 
@@ -6113,7 +6149,7 @@ void Interupt_TimerHandler()
 		digitalWrite(pin.ED_STP, v_stepState);
 
 		// Block handler
-		v_stepTimerActive = false;
+		v_doStepTimer = false;
 
 		// Set done flag
 		v_isArmMoveDone = true;
@@ -6122,36 +6158,15 @@ void Interupt_TimerHandler()
 		return;
 	}
 
-	// Release swtich when switch triggered on retract
+	// Release switch when switch triggered on retract
 	else if (v_stepDir == 'r' &&
 		digitalRead(pin.FeedSwitch) == LOW) {
 
-		// Make sure step off
-		v_stepState = false;
-		digitalWrite(pin.ED_STP, v_stepState);
-
-		// Set direction to extend
-		digitalWrite(pin.ED_DIR, LOW);
-
-		// Move arm x steps
-		for (int i = 0; i < 20; i++)
-		{
-			digitalWrite(pin.ED_STP, HIGH);
-			delayMicroseconds(500);
-			digitalWrite(pin.ED_STP, LOW);
-			delayMicroseconds(500);
-			v_cnt_steps--;
-		}
-
 		// Block handler
-		v_stepTimerActive = false;
-
-		// Set done flag
-		v_isArmMoveDone = true;
+		v_doStepTimer = false;
 
 		// Bail
 		return;
-
 	}
 
 	// Itterate count
@@ -6162,6 +6177,24 @@ void Interupt_TimerHandler()
 
 	// Step motor
 	digitalWrite(pin.ED_STP, v_stepState);
+}
+
+// POWER OFF
+void Interupt_Power()
+{
+	// Local vars
+	uint32_t t_wait = 0; // (us)
+
+	// Turn off power
+	digitalWrite(pin.PWR_OFF, HIGH);
+
+	// Disable regulators
+	digitalWrite(pin.REG_24V_ENBLE, LOW);
+	digitalWrite(pin.REG_12V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V_ENBLE, LOW);
+
+	// Restart Arduino
+	REQUEST_EXTERNAL_RESET;
 }
 
 // HALT RUN ON IR TRIGGER
@@ -6230,6 +6263,10 @@ void setup() {
 
 	// SETUP OUTPUT PINS
 
+	// Power
+	pinMode(pin.PWR_OFF, OUTPUT);
+	pinMode(pin.PWR_ON, OUTPUT);
+	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
 	// Autodriver
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
@@ -6266,10 +6303,12 @@ void setup() {
 	pinMode(pin.OL_RST, OUTPUT);
 	// Feeder switch
 	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
-	// Power off
-	pinMode(pin.KillSwitch, OUTPUT);
 	delayMicroseconds(100);
 
+	// Power
+	digitalWrite(pin.PWR_OFF, LOW);
+	digitalWrite(pin.PWR_ON, LOW);
+	digitalWrite(pin.PWR_Swtch_Grn, LOW);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
@@ -6306,12 +6345,12 @@ void setup() {
 	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
 	digitalWrite(pin.FeedSwitch_Gnd, LOW);
-	// Power off
-	digitalWrite(pin.KillSwitch, LOW);
 	delayMicroseconds(100);
 
 	// SET INPUT PINS
 
+	// Power
+	pinMode(pin.PWR_Swtch, INPUT);
 	// XBees
 	pinMode(pin.X1a_CTS, INPUT);
 	pinMode(pin.X1b_CTS, INPUT);
@@ -6324,15 +6363,37 @@ void setup() {
 	// IR detector
 	pinMode(pin.IRdetect, INPUT);
 
-	// Set button and switch pins enable internal pullup
+	// Set power, button and switch internal pullup
+	pinMode(pin.PWR_Swtch, INPUT_PULLUP);
 	for (int i = 0; i <= 2; i++) {
 		pinMode(pin.Btn[i], INPUT_PULLUP);
 	}
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
 
+	// WAIT FOR POWER SWITCH RELEASE
+	while (digitalRead(pin.PWR_Swtch) == LOW) {
+		delay(10);
+	}
+
+	// WAIT FOR POWER SWITCH
+	digitalWrite(pin.PWR_OFF, HIGH);
+	while (digitalRead(pin.PWR_Swtch) == HIGH);
+	
+	// TURN ON POWER
+	digitalWrite(pin.PWR_OFF, LOW);
+	delayMicroseconds(100);
+	digitalWrite(pin.PWR_ON, HIGH);
+	delayMicroseconds(100);
+	digitalWrite(pin.PWR_ON, LOW);
+	delayMicroseconds(100);
+
+	// WAIT FOR POWER SWITCH RELEASE
+	while (digitalRead(pin.PWR_Swtch) == LOW) {
+		delay(10);
+	}
+
 	// ENABLE VOLTGAGE REGULATORS
-	delay(1000); 
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V_ENBLE, HIGH);
@@ -6474,6 +6535,9 @@ void setup() {
 		DebugError("!!ERROR!! [setup] IR SENSOR DISABLED", true);
 		while (PrintDebug());
 	}
+
+	// Power off
+	attachInterrupt(digitalPinToInterrupt(pin.PWR_Swtch), Interupt_Power, FALLING);
 
 	// IR prox right
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), Interupt_IRprox_Halt, FALLING);
