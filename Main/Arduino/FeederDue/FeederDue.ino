@@ -3950,12 +3950,12 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-												// Overcurent enable
+	// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-												// Motor V compensation
-												/*
+	// Motor V compensation
+	/*
 												VS_COMP_ENABLE, VS_COMP_DISABLE
 												*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
@@ -3965,11 +3965,11 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-												// Slew rate
-												/*
-												Upping the edge speed increases torque
-												SR_180V_us, SR_290V_us, SR_530V_us
-												*/
+	// Slew rate
+	/*
+	Upping the edge speed increases torque
+	SR_180V_us, SR_290V_us, SR_530V_us
+	*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -3999,8 +3999,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_F.setMaxSpeed(max_speed * cm2stp);
 
 	// Minimum speed
-	AD_R.setMinSpeed(10 * cm2stp);
-	AD_F.setMinSpeed(10 * cm2stp);
+	//AD_R.setMinSpeed(10 * cm2stp);
+	//AD_F.setMinSpeed(10 * cm2stp);
 
 	// Full speed
 	AD_R.setFullSpeed(max_speed * cm2stp);
@@ -4036,19 +4036,12 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setRunKVAL(60);					    // This controls the run current
 	AD_R.setHoldKVAL(35);				        // This controls the holding current keep it low
 
-												// NIMA 17 24V
+	// NIMA 17 24V
 	AD_F.setAccKVAL(50);				        // This controls the acceleration current
 	AD_F.setDecKVAL(50);				        // This controls the deceleration current
 	AD_F.setRunKVAL(60);					    // This controls the run current
 	AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
 
-												/*
-												// NIMA 17 12V
-												AD_F.setAccKVAL(100);				        // This controls the acceleration current
-												AD_F.setDecKVAL(100);				        // This controls the deceleration current
-												AD_F.setRunKVAL(120);					    // This controls the run current
-												AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
-												*/
 }
 
 // RESET AUTODRIVER BOARDS
@@ -4170,22 +4163,37 @@ void IRprox_Halt()
 bool RunMotor(char dir, double new_speed, String agent)
 {
 	// Local vars
-	double speed_steps = new_speed*cm2stp;
+	double speed_rear = 0;
+	double speed_front = 0;
 
 	// Check that caller has control
 	if (agent == fc.motorControl ||
 		agent == "Override") {
 
+		// Scale vel
+		speed_rear =
+			rearMotCoeff[0] * (new_speed * new_speed * new_speed * new_speed) +
+			rearMotCoeff[1] * (new_speed * new_speed * new_speed) +
+			rearMotCoeff[2] * (new_speed * new_speed) +
+			rearMotCoeff[3] * new_speed +
+			rearMotCoeff[4];
+		speed_front =
+			frontMotCoeff[0] * (new_speed * new_speed * new_speed * new_speed) +
+			frontMotCoeff[1] * (new_speed * new_speed * new_speed) +
+			frontMotCoeff[2] * (new_speed * new_speed) +
+			frontMotCoeff[3] * new_speed +
+			frontMotCoeff[4];
+
 		// Run forward
 		if (dir == 'f') {
-			AD_R.run(FWD, speed_steps);
-			AD_F.run(FWD, speed_steps*scaleFrontAD);
+			AD_R.run(FWD, speed_rear*cm2stp);
+			AD_F.run(FWD, speed_front*cm2stp);
 		}
 
 		// Run reverse
 		else if (dir == 'r') {
-			AD_R.run(REV, speed_steps);
-			AD_F.run(REV, speed_steps*scaleFrontAD);
+			AD_R.run(REV, speed_rear*cm2stp);
+			AD_F.run(REV, speed_front*cm2stp);
 		}
 
 		// Log/print speed change
@@ -6817,17 +6825,13 @@ void loop() {
 		else if (cmd.testCond == 2)
 		{
 			double new_speed = double(cmd.testDat);
-			double speed_steps = new_speed*cm2stp;
 
 
-			if (new_speed > 0)
-			{
+			if (new_speed > 0){
 				// Run motor
-				AD_R.run(FWD, speed_steps);
-				AD_F.run(FWD, speed_steps*scaleFrontAD);
+				RunMotor('f', new_speed, "Override");
 			}
-			else
-			{
+			else{
 				// Halt robot
 				AD_R.hardStop();
 				AD_F.hardStop();

@@ -297,20 +297,29 @@ const double pixyCoeff[5] = {
 // AutoDriver
 const double cm2stp = 200 / (9 * PI);
 const double stp2cm = (9 * PI) / 200;
-const float maxSpeed = 110; // (cm) 
+const float maxSpeed = 100; // (cm) 
 const float maxAcc = 80; // (cm) 
 const float maxDec = 160; // (cm)
-const double scaleFrontAD = 1.031; // 1.0375
-const byte kAcc = 60 * 2;
-const byte kDec = 60 * 2;
-const byte kRun = 60;
-const byte kHold = 60 / 2;
 double runSpeedNow = 0;
 char runDirNow = 'f';
 uint16_t adR_stat = 0x0;
 uint16_t adF_stat = 0x0;
 const int dt_checkAD = 10; // (ms)
 uint32_t t_checkAD = millis() + dt_checkAD; // (ms)
+const double rearMotCoeff[5] = {
+	-0.000000058932058,
+	0.000009845434568,
+	-0.000541009380000,
+	0.963688216950139,
+	-0.055704482695916,
+};
+const double frontMotCoeff[5] = {
+	0.000000026883954,
+	-0.000004335393670,
+	0.000272261663068,
+	0.971864621268447,
+	0.010403353339533,
+};
 
 // Kalman model measures
 struct KAL

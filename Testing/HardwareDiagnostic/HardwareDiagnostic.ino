@@ -4,9 +4,18 @@
 /*
 Connect pot and use to test motor function
 */
-const bool do_POT_Test = false;
+const bool do_POT_Test = true;
 const bool do_POT_PrintSpeed = false;
 const bool do_POT_PrintStat = false;
+
+// Stepper Rotation Test
+const bool do_Step_Rot_Test = false;
+const bool do_scale_speed_correction = false;
+const bool do_lin_speed_correction = false;
+const int nSpeedSteps = 31; //10; // 20;
+const double speedStepsArr[nSpeedSteps] = { 5.0,7.5,10.0,12.5,15.0,17.5,20.0,22.5,25.0,27.5,30.0,32.5,35.0,37.5,40.0,42.5,45.0,47.5,50.0,52.5,55.0,57.5,60.0,62.5,65.0,67.5,70.0,72.5,75.0,77.5,80.0 };// { 5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80 };// {1,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80 }; //{ 5,15,25,35,45,55,65,75,85,95 }; // {5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100};
+const int stepsPerSpeed = 3; 
+const int accRots = 1;
 
 // Feed Arm Test
 /*
@@ -25,7 +34,7 @@ const bool do_VoltTest = false;
 /*
 Send keyboard entries from XBee on XCTU
 */
-const bool do_XBeeTest = true;
+const bool do_XBeeTest = false;
 
 // Solenoid Test 
 /*
@@ -89,6 +98,12 @@ const uint32_t t_LED_Dur = 250; // (ms)
 // Pin mapping
 struct PIN
 {
+	// Power off
+	const int PWR_OFF = 45;
+	const int PWR_ON = 44;
+	const int PWR_Swtch = 24;
+	const int PWR_Swtch_Grn = 25;
+
 	// Autodriver
 	const int AD_CSP_R = 5;
 	const int AD_CSP_F = 6;
@@ -141,11 +156,8 @@ struct PIN
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch_Gnd = 24;
-	const int FeedSwitch = 25;
-
-	// Power off
-	const int KillSwitch = 45;
+	const int FeedSwitch_Gnd = 33;
+	const int FeedSwitch = 32;
 
 	// Voltage monitor
 	const int BatVcc = A6;
@@ -165,11 +177,22 @@ struct PIN
 
 	// IR detector
 	const int IRdetect = 31;
+}
+// Initialize
+pin;
 
+struct PINS
+{
 	// POT switch test
 	int POT_Gnd = A10;
 	int POT_In = A9;
 	int POT_Vcc = A8;
+
+	// Stepper Rotation Test
+	int StpSwitch_R = A8;
+	int StpSwitch_F = A10;
+	int StpSwitch_Gnd_R = A9;
+	int StpSwitch_Gnd_F = A11;
 
 	// IR detector test
 	int IRdetect_Relay = 51;
@@ -178,9 +201,7 @@ struct PIN
 	int CheetahDueID_IP = A9;
 }
 // Initialize
-pin;
-
-
+pins;
 
 #pragma endregion
 
@@ -190,14 +211,27 @@ pin;
 // AutoDriver
 const float cm2stp = 200 / (9 * PI);
 const float stp2cm = (9 * PI) / 200;
-const float maxSpeed = 100; // (cm) // TEMP
-const float maxAcc = 80; // (cm) // TEMP
-const float maxDec = 80; // (cm)
-const double scaleFrontAD = 1.0375;
-const byte kAcc = 60 * 2;
-const byte kDec = 60 * 2;
-const byte kRun = 60;
-const byte kHold = 60 / 2;
+const float maxSpeed = 100; // (cm) 
+const float maxAcc = 80; // (cm) 
+const float maxDec = 160; // (cm)
+const double scaleSpeedRear = 0.952948;
+const double scaleSpeedFront = 0.977682;
+const double regSpeedRear[2] = { 0.952605008829939 , 0.010741382111862 };
+const double regSpeedFront[2] = { 0.980100148567747, -0.074087227493359 };
+const double rearMotCoeff[5] = {
+	-0.000000058932058,
+	0.000009845434568,
+	-0.000541009380000,
+	0.963688216950139,
+	-0.055704482695916,
+};
+const double frontMotCoeff[5] = {
+	0.000000026883954,
+	-0.000004335393670,
+	0.000272261663068,
+	0.971864621268447,
+	0.010403353339533,
+};
 
 // LEDs
 const int trackLEDduty = 75; // value between 0 and 255
@@ -220,6 +254,19 @@ boolean switched = false;
 long switchLst = millis();
 uint16_t ad_r_stat;
 uint16_t ad_f_stat;
+
+// Stepper Rotation Variables
+volatile int v_cnt_Step_R = 0;
+volatile int v_cnt_Step_F = 0;
+volatile uint32_t t_debounce_R = 0;
+volatile uint32_t t_debounce_F = 0;
+volatile bool v_do_step_interupt_R = false;
+volatile bool v_do_step_interupt_F = false;
+volatile int v_stepMax = 0;
+volatile uint32_t v_t_start_R = 0;
+volatile uint32_t v_t_start_F = 0;
+volatile uint32_t v_t_end_R = 0;
+volatile uint32_t v_t_end_F = 0;
 
 // Button variables
 volatile uint32_t t_debounce[3] = { millis(), millis(), millis() };
@@ -303,6 +350,10 @@ void setup()
 
 	// SETUP OUTPUT PINS
 
+	// Power
+	pinMode(pin.PWR_OFF, OUTPUT);
+	pinMode(pin.PWR_ON, OUTPUT);
+	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
 	// Autodriver
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
@@ -339,10 +390,12 @@ void setup()
 	pinMode(pin.OL_RST, OUTPUT);
 	// Feeder switch
 	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
-	// Power off
-	pinMode(pin.KillSwitch, OUTPUT);
 	delayMicroseconds(100);
 
+	// Power
+	digitalWrite(pin.PWR_OFF, LOW);
+	digitalWrite(pin.PWR_ON, LOW);
+	digitalWrite(pin.PWR_Swtch_Grn, LOW);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
@@ -366,16 +419,28 @@ void setup()
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V_ENBLE, LOW);
 	digitalWrite(pin.REG_5V_ENBLE, LOW);
+	// Big Easy Driver
+	digitalWrite(pin.ED_MS1, LOW);
+	digitalWrite(pin.ED_MS2, LOW);
+	digitalWrite(pin.ED_MS3, LOW);
+	digitalWrite(pin.ED_RST, LOW);
+	digitalWrite(pin.ED_SLP, LOW);
+	digitalWrite(pin.ED_DIR, LOW);
+	digitalWrite(pin.ED_STP, LOW);
+	digitalWrite(pin.ED_ENBL, LOW);
 	// OpenLog
 	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
 	digitalWrite(pin.FeedSwitch_Gnd, LOW);
-	// Power off
-	digitalWrite(pin.KillSwitch, LOW);
 	delayMicroseconds(100);
 
 	// SET INPUT PINS
 
+	// Power
+	pinMode(pin.PWR_Swtch, INPUT);
+	// XBees
+	pinMode(pin.X1a_CTS, INPUT);
+	pinMode(pin.X1b_CTS, INPUT);
 	// Battery monitor
 	pinMode(pin.BatVcc, INPUT);
 	pinMode(pin.BatIC, INPUT);
@@ -385,7 +450,8 @@ void setup()
 	// IR detector
 	pinMode(pin.IRdetect, INPUT);
 
-	// Set button pins enable internal pullup
+	// Set power, button and switch internal pullup
+	pinMode(pin.PWR_Swtch, INPUT_PULLUP);
 	for (int i = 0; i <= 2; i++) {
 		pinMode(pin.Btn[i], INPUT_PULLUP);
 	}
@@ -416,13 +482,6 @@ void setup()
 	AD_R.hardHiZ();
 	AD_F.hardHiZ();
 
-	// Print ad board status
-	SerialUSB.println(' ');
-	SerialUSB.print("BOARD R STATUS: ");
-	SerialUSB.println(AD_R.getStatus(), HEX);
-	SerialUSB.print("BOARD F STATUS: ");
-	SerialUSB.println(AD_F.getStatus(), HEX);
-
 	// SETUP BIG EASY DRIVER
 
 	// Set to 1/2 step mode
@@ -447,10 +506,28 @@ void setup()
 	// TEST STUFF SETUP
 
 	// POT vcc and Gnd
-	pinMode(pin.POT_Gnd, OUTPUT);
-	pinMode(pin.POT_Vcc, OUTPUT);
-	digitalWrite(pin.POT_Vcc, HIGH);
-	digitalWrite(pin.POT_Gnd, LOW);
+	if (do_POT_Test) {
+		pinMode(pins.POT_Gnd, OUTPUT);
+		pinMode(pins.POT_Vcc, OUTPUT);
+		digitalWrite(pins.POT_Vcc, HIGH);
+		digitalWrite(pins.POT_Gnd, LOW);
+	}
+
+	// Stepper Rotation Test
+	if (do_Step_Rot_Test) {
+
+		// Setup pins
+		pinMode(pins.StpSwitch_R, INPUT_PULLUP);
+		pinMode(pins.StpSwitch_F, INPUT_PULLUP);
+		pinMode(pins.StpSwitch_Gnd_R, OUTPUT);
+		pinMode(pins.StpSwitch_Gnd_F, OUTPUT);
+		digitalWrite(pins.StpSwitch_Gnd_R, LOW);
+		digitalWrite(pins.StpSwitch_Gnd_F, LOW);
+
+		// Setup interupts
+		attachInterrupt(digitalPinToInterrupt(pins.StpSwitch_R), InteruptStpSwitch_R, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pins.StpSwitch_F), InteruptStpSwitch_F, FALLING);
+	}
 
 	// Initialize bat volt array
 	for (int i = 0; i < 100; i++) {
@@ -460,32 +537,70 @@ void setup()
 
 	if (do_IR_ComTest)
 	{
-		pinMode(pin.CheetahDueID_IP, INPUT_PULLUP);
-		pinMode(pin.CheetahDueID_Gnd, OUTPUT);
-		digitalWrite(pin.CheetahDueID_Gnd, LOW);
+		pinMode(pins.CheetahDueID_IP, INPUT_PULLUP);
+		pinMode(pins.CheetahDueID_Gnd, OUTPUT);
+		digitalWrite(pins.CheetahDueID_Gnd, LOW);
 		delay(10);
 		// Detect if code is running on FeederDue
-		if (digitalRead(pin.CheetahDueID_IP) == HIGH)
+		if (digitalRead(pins.CheetahDueID_IP) == HIGH)
 		{
 			is_FeederDue = true;
 			attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, HIGH);
-			attachInterrupt(digitalPinToInterrupt(pin.IRdetect_PlsIn), Interupt_Pulse_Detect, HIGH);
+			attachInterrupt(digitalPinToInterrupt(pins.IRdetect_PlsIn), Interupt_Pulse_Detect, HIGH);
 			SerialUSB.println("Running on FeederDue");
 		}
 		else
 		{
 			// Set all relays low on CheetahDue
-			pinMode(pin.IRdetect_Relay, OUTPUT);
+			pinMode(pins.IRdetect_Relay, OUTPUT);
 			pinMode(11, OUTPUT);
 			pinMode(12, OUTPUT);
-			digitalWrite(pin.IRdetect_Relay, LOW);
+			digitalWrite(pins.IRdetect_Relay, LOW);
 			digitalWrite(11, LOW);
 			digitalWrite(12, LOW);
 			SerialUSB.println("Running on CheetahDue");
 		}
-		pinMode(pin.CheetahDueID_IP, INPUT);
-		pinMode(pin.CheetahDueID_Gnd, INPUT);
+		pinMode(pins.CheetahDueID_IP, INPUT);
+		pinMode(pins.CheetahDueID_Gnd, INPUT);
 	}
+
+	// PRINT TEST
+
+	// POT Run Test
+	if (do_POT_Test) {
+		SerialUSB.println("RUNNING \"POT Run Test\"");
+	}
+
+	// Stepper Rotation Test
+	if (do_Step_Rot_Test) {
+		SerialUSB.println("RUNNING \"Stepper Rotation Test\"");
+	}
+
+	// Feed Arm Test
+	if (do_FeedArmTest) {
+		SerialUSB.println("RUNNING \"Feed Arm Test\"");
+	}
+
+	// Volt Test 
+	if (do_VoltTest) {
+		SerialUSB.println("RUNNING \"Volt Test\"");
+	}
+
+	// XBee Test 
+	if (do_XBeeTest) {
+		SerialUSB.println("RUNNING \"XBee Test\"");
+	}
+
+	// Solenoid Test 
+	if (do_SolTest) {
+		SerialUSB.println("RUNNING \"Solenoid Test\"");
+	}
+
+	// IR Detector Timing Test 
+	if (do_IR_ComTest) {
+		SerialUSB.println("RUNNING \"IR Detector Timing Test\"");
+	}
+
 
 }
 
@@ -544,6 +659,13 @@ void loop()
 		}
 	}
 
+	// Stepper Rotation Test
+	if (do_Step_Rot_Test)
+	{
+		StepRun();
+	}
+
+
 	// Voltage Test
 	if (do_VoltTest)
 	{
@@ -571,7 +693,7 @@ void loop()
 
 bool POT_Run() {
 
-	vccNow = analogRead(pin.POT_In);
+	vccNow = analogRead(pins.POT_In);
 	vccNorm = vccNow / vccMax;
 	velNow = round(vccNorm * maxSpeed * 100) / 100;
 	runSpeed = velNow * cm2stp;
@@ -601,8 +723,28 @@ bool POT_Run() {
 		}
 		else
 		{
-			AD_R.run(FWD, runSpeed);
-			AD_F.run(FWD, runSpeed*scaleFrontAD);
+			//AD_R.run(FWD, runSpeed*scaleSpeedRear);
+			//AD_F.run(FWD, runSpeed*scaleSpeedFront);
+			//AD_R.run(FWD, runSpeed*scaleSpeedRear);
+			//AD_F.run(FWD, runSpeed*scaleSpeedFront);
+			double speed_R = 
+				rearMotCoeff[0] * (velNow * velNow * velNow * velNow) +
+				rearMotCoeff[1] * (velNow * velNow * velNow) +
+				rearMotCoeff[2] * (velNow * velNow) +
+				rearMotCoeff[3] * velNow +
+				rearMotCoeff[4];
+			double speed_F =
+				frontMotCoeff[0] * (velNow * velNow * velNow * velNow) +
+				frontMotCoeff[1] * (velNow * velNow * velNow) +
+				frontMotCoeff[2] * (velNow * velNow) +
+				frontMotCoeff[3] * velNow +
+				frontMotCoeff[4];
+			double runSpeed_R = speed_R * cm2stp;
+			double runSpeed_F = speed_F * cm2stp;
+			AD_R.run(FWD, runSpeed_R);
+			AD_F.run(FWD, runSpeed_F);
+
+			// Turn on lcd
 			analogWrite(13, 120);
 		}
 	}
@@ -688,6 +830,185 @@ void RetractFeedArm()
 
 		is_armExtended = false;
 	}
+}
+
+void StepRun()
+{
+	// Local vars
+	char str[200];
+	int cnt_step_R = 0;
+	int cnt_step_F = 0;
+	double speed_R = 0;
+	double speed_F = 0;
+	double speed_arr_R[nSpeedSteps] = { 0 };
+	double speed_arr_F[nSpeedSteps] = { 0 };
+	double ratio_arr_R[nSpeedSteps] = { 0 };
+	double ratio_arr_F[nSpeedSteps] = { 0 };
+	double ratio_sum = 0;
+	double ratio_avg_R = 0;
+	double ratio_avg_F = 0;
+	float runSpeed = 0;
+	int step_last_R = 0;
+	int step_last_F = 0;
+
+	// Loop through speed steps
+	for (int i = 0; i < nSpeedSteps; i++)
+	{
+		// Reset counters
+		v_cnt_Step_R = 0;
+		v_cnt_Step_F = 0;
+
+		// Align wheels
+		runSpeed = 10 * cm2stp;
+		AD_R.run(FWD, runSpeed);
+		while (digitalRead(pins.StpSwitch_R) == HIGH);
+		delay(100);
+		AD_R.hardStop();
+		AD_F.run(FWD, runSpeed);
+		while (digitalRead(pins.StpSwitch_F) == HIGH);
+		delay(100);
+		AD_F.hardStop();
+
+		// Get settings
+		runSpeed = speedStepsArr[i] * cm2stp;
+		v_stepMax = stepsPerSpeed + accRots;
+
+		// Print new speed
+		sprintf(str, "\r\n[StepRun] Run Settings: Speed=%0.2fcm/sec Steps=%d", runSpeed / cm2stp, stepsPerSpeed);
+		SerialUSB.println(str);
+		delay(100);
+
+		// Reset timers
+		v_t_start_R = 0;
+		v_t_start_F = 0;
+		v_t_end_R = 0;
+		v_t_end_F = 0;
+		step_last_R = 0;
+		step_last_F = 0;
+
+		// Run motor
+		if (do_scale_speed_correction) {
+			AD_R.run(FWD, runSpeed*scaleSpeedRear);
+			AD_F.run(FWD, runSpeed*scaleSpeedFront);
+		}
+		else if (do_lin_speed_correction) {
+			AD_R.run(FWD, runSpeed*regSpeedRear[0] + regSpeedRear[1]);
+			AD_F.run(FWD, runSpeed*regSpeedFront[0] + regSpeedFront[1]);
+		}
+		else {
+			AD_R.run(FWD, runSpeed);
+			AD_F.run(FWD, runSpeed);
+		}
+
+		// Enable interupts
+		v_do_step_interupt_R = true;
+		v_do_step_interupt_F = true;
+		delay(10);
+
+		// Wait for time to ellapse
+		while (v_t_end_R == 0 || v_t_end_F == 0) {
+
+			// Stop when done
+			if (v_t_end_R > 0) {
+				AD_R.hardStop();
+			}
+			if (v_t_end_F > 0) {
+				AD_F.hardStop();
+			}
+
+			// Track steps
+			if (step_last_R != v_cnt_Step_R) {
+				step_last_R = v_cnt_Step_R;
+				sprintf(str, "   rear step %d", step_last_R);
+				SerialUSB.println(str);
+			}
+			if (step_last_F != v_cnt_Step_F) {
+				step_last_F = v_cnt_Step_F;
+				sprintf(str, "   front step %d", step_last_F);
+				SerialUSB.println(str);
+			}
+		}
+		delay(100);
+
+		// Remove extra step
+		cnt_step_R = v_cnt_Step_R - accRots;
+		cnt_step_F = v_cnt_Step_F - accRots;
+
+		// Get speed
+		speed_R = (cnt_step_R * (9 * PI)) / ((double)(v_t_end_R - v_t_start_R) / 1000);
+		speed_F = (cnt_step_F * (9 * PI)) / ((double)(v_t_end_F - v_t_start_F) / 1000);
+		speed_arr_R[i] = speed_R;
+		speed_arr_F[i] = speed_F;
+
+		// Print rotations
+		ratio_arr_R[i] = (runSpeed / cm2stp) / speed_R;
+		ratio_arr_F[i] = (runSpeed / cm2stp) / speed_F;
+		sprintf(str, "[StepRun] Steps: Rear=%d Front=%d", cnt_step_R, cnt_step_F);
+		SerialUSB.println(str);
+		sprintf(str, "[StepRun] Speed: Rear=%0.4fcm/sec Front=%0.4fcm/sec", speed_R, speed_F);
+		SerialUSB.println(str);
+		sprintf(str, "[StepRun] Ratio: Rear=%0.4fcm/sec Front=%0.4fcm/sec", ratio_arr_R[i], ratio_arr_F[i]);
+		SerialUSB.println(str);
+
+	}
+
+	// Print speed settings
+	SerialUSB.println("\r\nvel = [ ...");
+	for (int i = 0; i < nSpeedSteps; i++)
+	{
+		sprintf(str, "%0.2f, ...", speedStepsArr[i]);
+		SerialUSB.println(str);
+	}
+	SerialUSB.println("];");
+
+	// Print rear speeds 
+	SerialUSB.println("\r\nr_vel = [ ...");
+	for (int i = 0; i < nSpeedSteps; i++)
+	{
+		sprintf(str, "%0.6f, ...", speed_arr_R[i]);
+		SerialUSB.println(str);
+	}
+	SerialUSB.println("];");
+
+	// Print front speeds 
+	SerialUSB.println("\r\nf_vel = [ ...");
+	for (int i = 0; i < nSpeedSteps; i++)
+	{
+		sprintf(str, "%0.6f, ...", speed_arr_F[i]);
+		SerialUSB.println(str);
+	}
+	SerialUSB.println("];");
+
+	// Get rear ratio average 
+	SerialUSB.println("\r\nr_ratio = [ ...");
+	ratio_sum = 0;
+	for (int i = 0; i < nSpeedSteps; i++)
+	{
+		ratio_sum += ratio_arr_R[i];
+		sprintf(str, "%0.6f, ...", ratio_arr_R[i]);
+		SerialUSB.println(str);
+	}
+	SerialUSB.println("];");
+	ratio_avg_R = ratio_sum / nSpeedSteps;
+
+	// Get front ratio average 
+	SerialUSB.println("\r\nf_ratio = [ ...");
+	ratio_sum = 0;
+	for (int i = 0; i < nSpeedSteps; i++)
+	{
+		ratio_sum += ratio_arr_F[i];
+		sprintf(str, "%0.6f, ...", ratio_arr_F[i]);
+		SerialUSB.println(str);
+	}
+	SerialUSB.println("];");
+	ratio_avg_F = ratio_sum / nSpeedSteps;
+
+
+	sprintf(str, "\r\n[StepRun] Speed Ratios Average: Rear=%0.6f Front=%0.6f", ratio_avg_R, ratio_avg_F);
+	SerialUSB.println(str);
+
+	// Hold here
+	while (true);
 }
 
 void CheckBattery()
@@ -807,7 +1128,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur + t_IR_Del
 			)
 		{
-			digitalWrite(pin.IRdetect_Relay, HIGH);
+			digitalWrite(pins.IRdetect_Relay, HIGH);
 			t_IR_Sent = millis();
 			cnt_IR_Sent++;
 			is_IR_On = true;
@@ -819,7 +1140,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur
 			)
 		{
-			digitalWrite(pin.IRdetect_Relay, LOW);
+			digitalWrite(pins.IRdetect_Relay, LOW);
 			is_IR_On = false;
 			SerialUSB.println("IR Off");
 		}
@@ -979,6 +1300,76 @@ void CheckButtons()
 	else return;
 }
 
+void InteruptStpSwitch_R()
+{
+	// Bail if blocking
+	if (!v_do_step_interupt_R) {
+		return;
+	}
+
+	// Bail if max steps reached
+	if (v_cnt_Step_R >= v_stepMax) {
+		return;
+	}
+
+	// Exit if < debounce time has not passed
+	if (t_debounce_R + 150 > millis()) {
+		return;
+	}
+
+	// Add to count
+	v_cnt_Step_R++;
+
+	// Reset debounce time
+	t_debounce_R = millis();
+
+	// Check if one rotation completed
+	if (v_cnt_Step_R == accRots && v_t_start_R == 0) {
+		v_t_start_R = millis();
+	}
+
+	// Check if steps reached 
+	if (v_cnt_Step_R == v_stepMax) {
+		v_t_end_R = millis();
+		v_do_step_interupt_R = false;
+	}
+}
+
+void InteruptStpSwitch_F()
+{
+	// Bail if blocking
+	if (!v_do_step_interupt_F) {
+		return;
+	}
+
+	// Bail if max steps reached
+	if (v_cnt_Step_F >= v_stepMax) {
+		return;
+	}
+
+	// Exit if < debounce time has not passed
+	if (t_debounce_F + 150 > millis()) {
+		return;
+	}
+
+	// Add to count
+	v_cnt_Step_F++;
+
+	// Reset debounce time
+	t_debounce_F = millis();
+
+	// Check if one rotation completed
+	if (v_cnt_Step_F == accRots && v_t_start_F == 0) {
+		v_t_start_F = millis();
+	}
+
+	// Check if steps reached 
+	if (v_cnt_Step_F == v_stepMax) {
+		v_t_end_F = millis();
+		v_do_step_interupt_F = false;
+	}
+}
+
 void InteruptIRproxHalt() {
 	AD_R.hardStop();
 	AD_F.hardStop();
@@ -1094,7 +1485,6 @@ void PrintBits(uint16_t stat_reg)
 	SerialUSB.println("\r");
 }
 
-// CONFIGURE AUTODRIVER BOARDS
 void AD_Config(float max_speed, float max_acc, float max_dec)
 {
 	// Set busy pin as BUSY_PIN or SYNC_PIN;
@@ -1111,8 +1501,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	STEP_FS - Full-step mode; microstepping disabled
 	STEP_FS_X - Enable microstepping with X microsteps per full step. X can be 2, 4, 8, 16, 32, 64, or 128.
 	*/
-	AD_R.setParam(STEP_MODE, STEP_FS_128);
-	AD_F.setParam(STEP_MODE, STEP_FS_128);
+	AD_R.setParam(STEP_MODE, STEP_FS_64);
+	AD_F.setParam(STEP_MODE, STEP_FS_64);
 
 	// PWM freq
 	/*
@@ -1122,11 +1512,11 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-				// Overcurent enable
+												// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
-	AD_F.setOCShutdown(OC_SD_DISABLE);			// shutdown on OC
+	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-				// Motor V compensation
+												// Motor V compensation
 												/*
 												VS_COMP_ENABLE, VS_COMP_DISABLE
 												*/
@@ -1137,7 +1527,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-				// Slew rate
+												// Slew rate
 												/*
 												Upping the edge speed increases torque
 												SR_180V_us, SR_290V_us, SR_530V_us
@@ -1161,8 +1551,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	/*
 	Enabled low speed compensation. If enabled, MinSpeed is upper threshold at which this compensation is employed.
 	*/
-	AD_R.setLoSpdOpt(true);
-	AD_F.setLoSpdOpt(true);
+	AD_R.setLoSpdOpt(false);
+	AD_F.setLoSpdOpt(false);
 
 	// ---------SPEED SETTTINGS---------
 
@@ -1171,8 +1561,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_F.setMaxSpeed(max_speed * cm2stp);
 
 	// Minimum speed
-	AD_R.setMinSpeed(10 * cm2stp);
-	AD_F.setMinSpeed(10 * cm2stp);
+	//AD_R.setMinSpeed(10 * cm2stp);
+	//AD_F.setMinSpeed(10 * cm2stp);
 
 	// Full speed
 	AD_R.setFullSpeed(max_speed * cm2stp);
@@ -1203,24 +1593,17 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	*/
 
 	// NIMA 23 24V MIN KVALS
-	AD_R.setAccKVAL(50);				        // This controls the acceleration current
-	AD_R.setDecKVAL(50);				        // This controls the deceleration current
-	AD_R.setRunKVAL(50);					    // This controls the run current
-	AD_R.setHoldKVAL(20);				        // This controls the holding current keep it low
+	AD_R.setAccKVAL(40);				        // This controls the acceleration current
+	AD_R.setDecKVAL(40);				        // This controls the deceleration current
+	AD_R.setRunKVAL(30);					    // This controls the run current
+	AD_R.setHoldKVAL(25);				        // This controls the holding current keep it low
 
-	// NIMA 17 24V
-	AD_F.setAccKVAL(50);				        // This controls the acceleration current
-	AD_F.setDecKVAL(50);				        // This controls the deceleration current
-	AD_F.setRunKVAL(50);					    // This controls the run current
-	AD_F.setHoldKVAL(20);				        // This controls the holding current keep it low
+												// NIMA 17 24V
+	AD_F.setAccKVAL(40);				        // This controls the acceleration current
+	AD_F.setDecKVAL(40);				        // This controls the deceleration current
+	AD_F.setRunKVAL(20);					    // This controls the run current
+	AD_F.setHoldKVAL(25);				        // This controls the holding current keep it low
 
-												/*
-				// NIMA 17 12V
-												AD_F.setAccKVAL(100);				        // This controls the acceleration current
-												AD_F.setDecKVAL(100);				        // This controls the deceleration current
-												AD_F.setRunKVAL(120);					    // This controls the run current
-												AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
-												*/
 }
 
 void AD_Reset(float max_speed, float max_acc, float max_dec)

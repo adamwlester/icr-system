@@ -80,8 +80,8 @@ D.DB.Start_Quadrant = 'NW'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
-D.DB.ratVelStart = 20;
-D.DB.ratMaxAcc = 60; % (cm/sec/sec)
+D.DB.ratVelStart = 50;
+D.DB.ratMaxAcc = 80; % (cm/sec/sec)
 D.DB.ratMaxDec = 100; % (cm/sec/sec)
 
 % Halt Error test
@@ -793,7 +793,7 @@ fprintf('END OF RUN\n');
             % random forrage radius (cm)
             D.UI.rfRad = 60;
             % rew zone width (cm)
-            D.UI.rfTargWdt = 20;
+            D.UI.rfTargWdt = 15;
             
             % FORAGE TASK VARS
             
@@ -803,7 +803,7 @@ fprintf('END OF RUN\n');
             D.PAR.rfBinEdgeX = linspace(D.UI.lowLeft(1), D.UI.lowLeft(1)+D.UI.vtRes, D.PAR.rfBins+1);
             D.PAR.rfBinEdgeY = linspace(D.UI.lowLeft(2), D.UI.lowLeft(2)+D.UI.vtRes, D.PAR.rfBins+1);
             % width of path
-            D.PAR.pathWdth = 5;
+            D.PAR.pathWdth = 15;
             % distance between paths in degrees
             D.PAR.pathDegDist = 5;
             % target width
@@ -1076,7 +1076,9 @@ fprintf('END OF RUN\n');
             D.P.rfRohBnd(1) = (D.UI.rfRad/D.UI.arnRad) - ((D.UI.rfTargWdt)/D.UI.arnRad);
             D.P.rfRohBnd(2) = D.UI.rfRad/D.UI.arnRad;
             D.P.occMat = zeros(D.PAR.rfBins,D.PAR.rfBins);
+            D.P.occMatRaw = D.P.occMat;
             D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,length(D.PAR.pathTargArr));
+            D.P.pathNowMat = D.P.occMat;
             
             
             % DEBUG VARS
@@ -3359,7 +3361,7 @@ fprintf('END OF RUN\n');
                 [ybnd(1,:),fliplr(ybnd(2,:))], ...
                 [0.5,0.5,0.5], ...
                 'FaceAlpha',0.5, ...
-                'Visible', 'on', ...
+                'Visible', 'off', ...
                 'Parent',D.UI.axH(2));
             % add start text
             D.UI.txtStQ = ...
@@ -3370,7 +3372,7 @@ fprintf('END OF RUN\n');
                 'FontWeight', 'Bold', ...
                 'Color', D.UI.enabledCol, ...
                 'HorizontalAlignment', 'Center', ...
-                'Visible', 'on', ...
+                'Visible', 'off', ...
                 'Parent',D.UI.axH(2));
             
             % Plot all feeders
@@ -3719,6 +3721,8 @@ fprintf('END OF RUN\n');
             set(D.UI.linTrckH, 'Visible', 'on');
             set(D.UI.linVelH, 'Visible', 'on');
             set(D.UI.ptchFdZineH, 'Visible', 'on');
+            set(D.UI.ptchStQ, 'Visible', 'on');
+            set(D.UI.txtStQ, 'Visible', 'on');
             
             % Enlarge 0 deg marker
             set(D.UI.mixFdNow(3,1), 'MarkerSize', 25);
@@ -3742,7 +3746,6 @@ fprintf('END OF RUN\n');
             
             % Set axis lims
             set(D.UI.axH(3), ...
-                'CLim', [0,1], ...
                 'YDir', 'reverse', ...
                 'XLim', [0,D.PAR.rfBins], ...
                 'YLim', [0,D.PAR.rfBins]);
@@ -3764,11 +3767,19 @@ fprintf('END OF RUN\n');
                 D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,n_targs);
                 
                 % Setup temp path mat
-                path_bins = round(D.PAR.rfBins*(D.UI.rfRad / D.UI.arnRad));
+                path_bins = round(D.PAR.rfBins*((D.UI.rfRad-ceil(D.UI.rfTargWdt/2)) / D.UI.arnRad));
                 mat_eye = padarray(eye(path_bins-5),[5,5],'pre');
                 mat_p = zeros(path_bins);
+                %ind = (floor(D.PAR.pathWdth/2)-3)*-1 : (floor(D.PAR.pathWdth/2)+3);
+                ind = floor(D.PAR.pathWdth/2)*-1 : floor(D.PAR.pathWdth/2);
                 for i = 1:D.PAR.pathWdth
-                    mat_p = mat_p + padarray(mat_eye(i+1:end,:),[i,0],'post');
+                    if ind(i) < 0
+                        mat_p = mat_p + padarray(mat_eye(abs(ind(i))+1:end,:),[abs(ind(i)),0],'post');
+                    elseif ind(i) > 0
+                        mat_p = mat_p + padarray(mat_eye(1:end-abs(ind(i)),:),[abs(ind(i)),0],'pre');
+                    else
+                        mat_p = mat_p + mat_eye;
+                    end
                 end
                 
                 % Setup temp sim rat mat
@@ -3826,8 +3837,27 @@ fprintf('END OF RUN\n');
                 
                 % Nomalize
                 D.P.pathMat(D.P.pathMat>0) = 1;
-                D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.PAR.rfBins,D.PAR.rfBins,1,1]);
+                %D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.PAR.rfBins,D.PAR.rfBins,1,1]);
                 D.DB.simRatPathMat(D.DB.simRatPathMat>0) = 1;
+                
+                % Plot path averages
+                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
+                pause(1);
+                delete(ih);
+                % Plot accross start pos and paths
+                ih = imagesc(sum(sum(D.P.pathMat(:,:,:,:),3),4), 'Parent', D.UI.axH(3));
+                pause(1);
+                delete(ih);
+                
+                % Plot template paths
+                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
+                pause(1);
+                delete(ih);
+                for i = 1:D.PAR.nPaths
+                    ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(3));
+                    pause(0.1);
+                    delete(ih);
+                end
                 
                 % Save path
                 path_mat = single(D.P.pathMat); %#ok<NASGU>
@@ -3855,29 +3885,18 @@ fprintf('END OF RUN\n');
                     'Parent', D.UI.axH(2));
             end
             
+            % Set color lims
+            set(D.UI.axH(3), 'CLim', [0,1]);
+            
+            % Plot occ
+            D.UI.imgRFOCC = imagesc(D.P.occMat+D.P.pathNowMat, ...
+                'Parent', D.UI.axH(3));
+            
             % Set other plot features to visible
             set(D.UI.linRFH, 'Visible', 'on');
             set(D.UI.imgMaskRFH, 'Visible', 'on');
-            
-            %             % Plot path averages
-            %             ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
-            %             pause(1);
-            %             delete(ih);
-            %             % Plot accross start pos and paths
-            %             ih = imagesc(sum(sum(D.P.pathMat(:,:,:,:),3),4), 'Parent', D.UI.axH(3));
-            %             pause(1);
-            %             delete(ih);
-            %
-            %             % Plot each path
-            %             for j = 1:n_targs
-            %                 ih = imagesc(sum(D.P.pathMat(:,:,:,j),3), 'Parent', D.UI.axH(3));
-            %                 pause(0.5);
-            %                 delete(ih);
-            %             end
-            
-            % Plot occ
-            D.UI.imgRFOCC = imagesc(D.P.occMat, ...
-                'Parent', D.UI.axH(3));
+            set(D.UI.ptchStQ, 'Visible', 'on');
+            set(D.UI.txtStQ, 'Visible', 'on');
             
             % Get first target set to 180 from start quad
             D.I.targInd = ...
@@ -4084,7 +4103,8 @@ fprintf('END OF RUN\n');
             if D.DB.doSimRatTest
                 D.DB.simXY = [NaN,NaN];
                 D.DB.simRadLast = NaN;
-                D.DB.simRunAng = NaN;
+                D.DB.simRohLast = NaN;
+                D.DB.simRunRad = NaN;
                 D.DB.simTargAng = NaN;
                 D.DB.simVelLast = NaN;
                 D.DB.simTSStart = NaN;
@@ -4198,25 +4218,8 @@ fprintf('END OF RUN\n');
                 ts = double(D.P.(fld).vtTS)';
                 recs = D.P.(fld).vtNRecs;
                 
-                % Save x/y pos samples in seperate vars
-                x = xy_pos(:,1);
-                y = xy_pos(:,2);
-                
-                % Rescale y as VT data is compressed in y axis
-                y = y*11/10;
-                
-                % Get normalized pos data
-                x_norm = (x-D.PAR.XC)./D.PAR.R;
-                y_norm = (y-D.PAR.YC)./D.PAR.R;
-                
-                % Get position in radians
-                [rad,roh] = cart2pol(x_norm, y_norm);
-                
-                % Convert radians between [0, 2*pi]
-                rad = wrapTo2Pi(rad);
-                
-                % Flip radian values to acount for inverted y values from Cheetah
-                rad = abs(rad - 2*pi);
+                % Convert to normalized polar vals
+                [rad, roh] = VT_2_RAD(xy_pos);
                 
                 % Exclude outlyer values > || < track bounds plus 5 cm
                 if ~(D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat'))
@@ -4324,7 +4327,12 @@ fprintf('END OF RUN\n');
                     D.PAR.rfBinEdgeY = linspace(D.UI.lowLeft(2), D.UI.lowLeft(2)+D.UI.vtRes, D.PAR.rfBins+1);
                     
                     N = histcounts2(D.P.(fld).y,D.P.(fld).x,D.PAR.rfBinEdgeY,D.PAR.rfBinEdgeX);
-                    D.P.occMat = D.P.occMat+flip(N,1);
+                    D.P.occMatRaw = D.P.occMatRaw+flip(N,1);
+                    scale = prctile(D.P.occMatRaw(:),99.99);
+                    if scale == 0
+                        scale = 1;
+                    end
+                    D.P.occMat = D.P.occMatRaw/scale;
                     
                     return
                 end
@@ -4444,10 +4452,10 @@ fprintf('END OF RUN\n');
                     % Cap to vel min,max
                     velRoh = D.P.(fld).vel;
                     % Set >max to max
-                    if velRoh>D.P.velMax;
+                    if velRoh>D.P.velMax
                         velRoh = D.P.velMax;
                         % Set <min to min
-                    elseif velRoh<D.P.velMin;
+                    elseif velRoh<D.P.velMin
                         velRoh = D.P.velMin;
                     end
                     % Adjust range
@@ -4455,7 +4463,7 @@ fprintf('END OF RUN\n');
                     velRoh = velRoh*(D.P.velRohMax-D.P.velRohMin) + D.P.velRohMin;
                     
                     % Cap to roh max
-                    if velRoh > D.P.velRohMax;
+                    if velRoh > D.P.velRohMax
                         velRoh = D.P.velRohMax;
                     end
                     
@@ -5086,7 +5094,7 @@ fprintf('END OF RUN\n');
         
         function [] = Forage_Reward_Zone_Check()
             
-            %% BAIL IF MANUAL OR TRACK TRAINING
+            % BAIL IF MANUAL OR TRACK TRAINING
             
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Track'
@@ -5141,9 +5149,9 @@ fprintf('END OF RUN\n');
                 find(round(rad2deg(rad_new_targ)) == D.PAR.pathTargArr);
             
             % Plot path
-            path_plot = D.P.pathMat(:,:,path_ind,D.I.targInd);
-            path_plot(path_plot>0) = 1;
-            D.UI.imgRFOCC = imagesc(path_plot+D.P.occMat, ...
+            D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
+            D.P.pathNowMat(D.P.pathNowMat>0) = 0.5;
+            D.UI.imgRFOCC = imagesc(D.P.pathNowMat, ...
                 'Parent', D.UI.axH(3));
             
             % Update patches
@@ -5478,7 +5486,7 @@ fprintf('END OF RUN\n');
                 % Plot occ
                 if D.PAR.sesTask == 'Forage'
                     delete(D.UI.imgRFOCC);
-                    D.UI.imgRFOCC = imagesc(D.P.occMat, ...
+                    D.UI.imgRFOCC = imagesc(D.P.occMat+D.P.pathNowMat, ...
                         'Parent', D.UI.axH(3));
                 end
                 
@@ -5850,29 +5858,40 @@ fprintf('END OF RUN\n');
                             
                             % Setup vars
                             if D.PAR.sesTask == 'Forage'
+                                
+                                % Store current target
                                 D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
-                                D.DB.simRunAng = ...
-                                    Rad_Sum(Rad_Sum(mean(D.PAR.strQuadBnds),pi), deg2rad(D.DB.simTargAng)*2);
+                                
+                                % Compute angle between start pos and targ
+                                ang_str = rad2deg(mean(D.PAR.strQuadBnds));
+                                ang_targ = D.DB.simTargAng;
+                                [x1,y1] = pol2cart(deg2rad(ang_str), 1);
+                                [x2,y2] = pol2cart(deg2rad(ang_targ), 1);
+                                x_diff = x2-x1;
+                                y_diff = y2-y1;
+                                ang_new = rad2deg(atan(y_diff/x_diff));
+                                if (x_diff < 0)
+                                    ang_new = ang_new - 180;
+                                    if ang_new < 0
+                                        ang_new = ang_new + 360;
+                                    end
+                                end
+                                D.DB.simRunRad = deg2rad(ang_new);
+                                
+                                % Store rf roh
                                 roh = mean(D.P.rfRohBnd);
                             else
+                                % Store track roh
                                 roh = mean(D.P.trackRohBnd);
                             end
                             D.DB.simRadLast = mean(D.PAR.strQuadBnds);
+                            D.DB.simRohLast = 0;
                             D.DB.simVelLast = 0;
                             D.DB.simTSStart = Elapsed_Seconds(now);
                             D.DB.simTSLast = 0;
-                            D.F.initVals = false;
                             
                             % Get inital x/y
-                            rad = wrapTo2Pi(D.DB.simRadLast);
-                            rad = abs(rad - 2*pi);
-                            rad = wrapToPi(rad);
-                            [x_norm,y_norm] = pol2cart(rad, roh);
-                            x = (x_norm.*D.PAR.R) + D.PAR.XC;
-                            y = (y_norm.*D.PAR.R) + D.PAR.YC;
-                            y = y*(10/11);
-                            xy_pos(:,1) = x;
-                            xy_pos(:,2) = y;
+                            xy_pos = Rad_2_VT(wrapTo2Pi(D.DB.simRadLast), roh);
                             D.DB.simXY = reshape(xy_pos', 1, []);
                             
                             % Make UI stuff visible
@@ -5884,6 +5903,9 @@ fprintf('END OF RUN\n');
                             
                             % Send test info to robot once
                             SendM2C('T', sysTest, 0);
+                            
+                            % Unset flag
+                            D.F.initVals = false;
                         end
                         
                         % Compute ts(us) from dt(s)
@@ -5940,29 +5962,56 @@ fprintf('END OF RUN\n');
                                 D.DB.simRadLast = rad_now;
                                 
                                 % Convert rad back to cart
-                                rad = wrapTo2Pi(rad_now);
-                                rad = abs(rad - 2*pi);
-                                rad = wrapToPi(rad);
-                                [x_norm,y_norm] = pol2cart(rad, mean(D.P.trackRohBnd));
-                                x = (x_norm.*D.PAR.R) + D.PAR.XC;
-                                y = (y_norm.*D.PAR.R) + D.PAR.YC;
-                                y = y*(10/11);
-                                xy_pos(:,1) = x;
-                                xy_pos(:,2) = y;
+                                xy_pos = Rad_2_VT(wrapTo2Pi(rad_now), mean(D.P.trackRohBnd));
                                 D.DB.simXY = reshape(xy_pos', 1, []);
+                                
                             else
+                                
+                                % Check for changed targ
+                                if D.DB.simTargAng ~= D.PAR.pathTargArr(D.I.targInd)
+                                    
+                                    % Compute angle between current pos and new targ
+                                    ang_str = D.DB.simTargAng;
+                                    ang_targ = D.PAR.pathTargArr(D.I.targInd);
+                                    [x1,y1] = pol2cart(deg2rad(ang_str), 1);
+                                    [x2,y2] = pol2cart(deg2rad(ang_targ), 1);
+                                    x_diff = x2-x1;
+                                    y_diff = y2-y1;
+                                    ang_new = rad2deg(atan(y_diff/x_diff));
+                                    if (x_diff < 0)
+                                        ang_new = ang_new - 180;
+                                        if ang_new < 0
+                                            ang_new = ang_new + 360;
+                                        end
+                                    end
+                                    D.DB.simRunRad = deg2rad(ang_new);
+                                    
+                                    % Store current target
+                                    D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
+                                    
+                                    % Reset roh
+                                    D.DB.simRohLast = 0;
+                                end
+                                
                                 % Move along roh
-                                roh_diff = cm / (D.UI.arnRad/2);
+                                roh_diff = cm / D.UI.arnRad;
+                                roh_now = D.DB.simRohLast + roh_diff;
+                                D.DB.simRohLast = roh_now;
                                 
                                 % Convert to cart
-                                [x_diff,y_diff] = pol2cart(deg2rad(D.DB.simRunAng), roh_diff);
-                                D.DB.simXY = [D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff];
+                                rad = wrapTo2Pi(D.DB.simRunRad);
+                                rad = abs(rad - 2*pi);
+                                rad = wrapToPi(rad);
+                                [x_diff,y_diff] = pol2cart(rad, roh_now);
+                                
+                                % Check if out of bounds
+                                [~, roh] = VT_2_RAD([D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff]);
+                                if roh < D.P.rfRohBnd(2)
+                                    D.DB.simXY = [D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff];
+                                end
                                 
                                 % TEMP
-                                fprintf('x_diff=%0.2f y_diff=%0.2f D.DB.simXY=%0.2f|%0.2f\r\n', x_diff, y_diff, D.DB.simXY)
-                                
-                                if D.DB.simTargAng ~= D.PAR.pathTargArr(D.I.targInd)
-                                end
+                                fprintf('roh=%0.2f bnd=%0.2f\r\n', roh, D.P.rfRohBnd(2)-(5/D.UI.arnRad))
                                 
                                 % Store current targ ang
                                 D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
@@ -7064,6 +7113,53 @@ fprintf('END OF RUN\n');
         
         %% ========================== MINOR FUNCTIONS =====================
         
+        % -----------------------CONVERT VT POS TO RAD POS-----------------
+        function [rad, roh] = VT_2_RAD(xy_pos)
+            
+            % Save x/y pos samples in seperate vars
+            x = xy_pos(:,1);
+            y = xy_pos(:,2);
+            
+            % Rescale y as VT data is compressed in y axis
+            y = y*11/10;
+            
+            % Get normalized pos data
+            x_norm = (x-D.PAR.XC)./D.PAR.R;
+            y_norm = (y-D.PAR.YC)./D.PAR.R;
+            
+            % Get position in radians
+            [rad,roh] = cart2pol(x_norm, y_norm);
+            
+            % Convert radians between [0, 2*pi]
+            rad = wrapTo2Pi(rad);
+            
+            % Flip radian values to acount for inverted y values from Cheetah
+            rad = abs(rad - 2*pi);
+        end
+        
+        % -----------------------CONVERT RAD POS TO VT POS-----------------
+        function [xy_pos] = Rad_2_VT(rad, roh)
+            
+            % Flip values for inverted vt y
+            rad = wrapTo2Pi(rad);
+            rad = abs(rad - 2*pi);
+            rad = wrapToPi(rad);
+            
+            % Convert to cart
+            [x_norm,y_norm] = pol2cart(rad, roh);
+            
+            % Translate and scale to pixel space
+            x = (x_norm.*D.PAR.R) + D.PAR.XC;
+            y = (y_norm.*D.PAR.R) + D.PAR.YC;
+            
+            % Rescale y value
+            y = y*(10/11);
+            
+            % Store values
+            xy_pos(:,1) = x;
+            xy_pos(:,2) = y;
+        end
+        
         % ---------------------------COMPUTE RAD DIFF----------------------
         function [rad_diff] = Rad_Diff(rad1, rad2)
             rad_diff = rad1-rad2;
@@ -7418,6 +7514,7 @@ fprintf('END OF RUN\n');
         Console_Write('[ICR_GUI] RUNNING: Exit ICR_GUI...');
         
         % Check if GUI was forced close
+        
         if ~D.DB.isForceClose
             
             % Log/print
