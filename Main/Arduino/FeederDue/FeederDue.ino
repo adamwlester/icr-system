@@ -3939,8 +3939,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	STEP_FS - Full-step mode; microstepping disabled
 	STEP_FS_X - Enable microstepping with X microsteps per full step. X can be 2, 4, 8, 16, 32, 64, or 128.
 	*/
-	AD_R.setParam(STEP_MODE, STEP_FS_128);
-	AD_F.setParam(STEP_MODE, STEP_FS_128);
+	AD_R.setParam(STEP_MODE, STEP_FS_64);
+	AD_F.setParam(STEP_MODE, STEP_FS_64);
 
 	// PWM freq
 	/*
@@ -3950,14 +3950,14 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-	// Overcurent enable
+												// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
 	// Motor V compensation
 	/*
-												VS_COMP_ENABLE, VS_COMP_DISABLE
-												*/
+	VS_COMP_ENABLE, VS_COMP_DISABLE
+	*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
@@ -3989,8 +3989,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	/*
 	Enabled low speed compensation. If enabled, MinSpeed is upper threshold at which this compensation is employed.
 	*/
-	AD_R.setLoSpdOpt(true);
-	AD_F.setLoSpdOpt(true);
+	AD_R.setLoSpdOpt(false);
+	AD_F.setLoSpdOpt(false);
 
 	// ---------SPEED SETTTINGS---------
 
@@ -4031,16 +4031,16 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	*/
 
 	// NIMA 23 24V MIN KVALS
-	AD_R.setAccKVAL(50);				        // This controls the acceleration current
-	AD_R.setDecKVAL(50);				        // This controls the deceleration current
-	AD_R.setRunKVAL(60);					    // This controls the run current
-	AD_R.setHoldKVAL(35);				        // This controls the holding current keep it low
+	AD_R.setAccKVAL(40);				        // This controls the acceleration current
+	AD_R.setDecKVAL(40);				        // This controls the deceleration current
+	AD_R.setRunKVAL(30);					    // This controls the run current
+	AD_R.setHoldKVAL(25);				        // This controls the holding current keep it low
 
-	// NIMA 17 24V
-	AD_F.setAccKVAL(50);				        // This controls the acceleration current
-	AD_F.setDecKVAL(50);				        // This controls the deceleration current
-	AD_F.setRunKVAL(60);					    // This controls the run current
-	AD_F.setHoldKVAL(35);				        // This controls the holding current keep it low
+												// NIMA 17 24V
+	AD_F.setAccKVAL(40);				        // This controls the acceleration current
+	AD_F.setDecKVAL(40);				        // This controls the deceleration current
+	AD_F.setRunKVAL(20);					    // This controls the run current
+	AD_F.setHoldKVAL(25);				        // This controls the holding current keep it low
 
 }
 
