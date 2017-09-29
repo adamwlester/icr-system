@@ -152,7 +152,7 @@ byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
 const int dt_sendSent = 7; // (ms) 
-const int dt_sendRcvd = 1; // (ms) 
+const int dt_sendRcvd = 10; // (ms) 
 uint32_t t_xBeeSent = 0; // (ms)
 uint32_t t_xBeeRcvd = 0; // (ms)
 uint32_t t_csSent = 0; // (ms)
@@ -528,7 +528,6 @@ void GetSerial()
 		sprintf(str, "**WARNING** [GetSerial] Dropped r2a Packet: cnt=%d ", r2a.cnt_dropped);
 		strcat(str, dat_str);
 		DebugError(str);
-		return;
 
 	}
 	else
@@ -2044,7 +2043,7 @@ void loop()
 		}
 
 		// Make sure we wont recieve a resend request
-		if (millis() < t_xBeeRcvd + 200) {
+		if (millis() < t_xBeeRcvd + 500) {
 			return;
 		}
 

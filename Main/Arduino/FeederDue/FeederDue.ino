@@ -3387,8 +3387,21 @@ void GetSerial(R4 *r4)
 	sprintf(dat_str, " head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s bytes_read=%d bytes_dumped=%d rx=%d tx=%d dt_parse=%d dt_send=%d dt_rcv=%d",
 		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "true" : "false", cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx, buff_tx, millis() - t_str, millis() - r2->t_sent, r4->dt_rcvd);
 
-	// Check for matching footer
-	if (foot == r4->foot) {
+	// Check for dropped packet
+	if (foot != r4->foot) {
+
+		// Itterate dropped count
+		r4->cnt_dropped++;
+
+		// Log/print dropped packet info
+		sprintf(str, "**WARNING** [GetSerial] Dropped %s Packet: cnt=%d",
+			r4->instID, r4->cnt_dropped);
+		strcat(str, dat_str);
+		DebugError(str);
+	}
+
+	// Footer found so process packet
+	else {
 
 		// Update recive time
 		r4->dt_rcvd = r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0;
@@ -3406,79 +3419,66 @@ void GetSerial(R4 *r4)
 		if (r4->instID == "c2r" && !fc.isComsStarted) {
 			fc.isComsStarted = true;
 		}
-	}
 
-	// Packet dropped
-	else {
+		// Reset check
+		r2->doRcvCheck[id_ind] = false;
+		r2->cnt_resend[id_ind] = 0;
 
-		// Itterate dropped count
-		r4->cnt_dropped++;
+		// Check for missed packets
+		int pack_diff = (pack - r4->packTot);
 
-		// Log/print dropped packet info
-		sprintf(str, "**WARNING** [GetSerial] Dropped %s Packet: cnt=%d",
-			r4->instID, r4->cnt_dropped);
-		strcat(str, dat_str);
-		DebugError(str);
-		return;
-	}
+		// Get number of dropped/missed packets
+		int cnt_dropped = pack_diff - 1;
 
-	// Reset check
-	r2->doRcvCheck[id_ind] = false;
-	r2->cnt_resend[id_ind] = 0;
+		if (cnt_dropped > 0)
+		{
+			// Add to count and get last pack
+			int cnt_dropped_tot = 0;
+			uint16_t pack_tot_last = 0;
 
-	// Check for missed packets
-	int pack_diff = (pack - r4->packTot);
+			// Store dropped data
+			r4->cnt_dropped += cnt_dropped;
+			cnt_dropped_tot = r4->cnt_dropped;
+			pack_tot_last = r4->packTot;
 
-	// Get number of dropped/missed packets
-	int cnt_dropped = pack_diff - 1;
+			// Log/print skipped packet info
+			sprintf(str, "**WARNING** [GetSerial] Missed %s Packets: cnt=%d|%d pack_last=%d",
+				r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last);
+			strcat(str, dat_str);
+			DebugError(str);
+		}
 
-	if (cnt_dropped > 0)
-	{
-		// Add to count and get last pack
-		int cnt_dropped_tot = 0;
-		uint16_t pack_tot_last = 0;
+		// Update packet history
+		r4->packLast[id_ind] = r4->pack[id_ind];
+		r4->pack[id_ind] = pack;
+		r4->packTot = pack > r4->packTot ? pack : r4->packTot;
+		uint16_t pack_last = r4->packLast[id_ind];
 
-		// Store dropped data
-		r4->cnt_dropped += cnt_dropped;
-		cnt_dropped_tot = r4->cnt_dropped;
-		pack_tot_last = r4->packTot;
+		// Update id
+		r4->idNow = id;
 
-		// Log/print skipped packet info
-		sprintf(str, "**WARNING** [GetSerial] Missed %s Packets: cnt=%d|%d pack_last=%d",
-			r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last);
-		strcat(str, dat_str);
-		DebugError(str);
-	}
+		// New pack
+		if (pack != pack_last)
+		{
+			// Log/print received
+			DebugRcvd(r4, dat_str);
 
-	// Update packet history
-	r4->packLast[id_ind] = r4->pack[id_ind];
-	r4->pack[id_ind] = pack;
-	r4->packTot = pack > r4->packTot ? pack : r4->packTot;
-	uint16_t pack_last = r4->packLast[id_ind];
+			// Store data and flag
+			r4->isNew = true;
+			r4->dat[0] = dat[0];
+			r4->dat[1] = dat[1];
+			r4->dat[2] = dat[2];
+		}
 
-	// Update id
-	r4->idNow = id;
+		// Resent packet
+		else {
+			// Add to counters
+			r4->cnt_repeat++;
 
-	// New pack
-	if (pack != pack_last)
-	{
-		// Log/print received
-		DebugRcvd(r4, dat_str);
+			// Log/print received
+			DebugRcvd(r4, dat_str, true);
+		}
 
-		// Store data and flag
-		r4->isNew = true;
-		r4->dat[0] = dat[0];
-		r4->dat[1] = dat[1];
-		r4->dat[2] = dat[2];
-	}
-
-	// Resent packet
-	else {
-		// Add to counters
-		r4->cnt_repeat++;
-
-		// Log/print received
-		DebugRcvd(r4, dat_str, true);
 	}
 
 	// Check if data was discarded
@@ -3859,6 +3859,7 @@ bool CheckResend(R2 *r2)
 	char str[300] = { 0 };
 	char dat_str[200] = { 0 };
 	bool do_pack_resend = false;
+	bool is_waiting_for_pack = false;
 	int dt_sent = 0;
 
 	// Loop and check ard flags
@@ -3866,6 +3867,11 @@ bool CheckResend(R2 *r2)
 	{
 		// Get dt sent
 		dt_sent = millis() - r2->t_sentList[i];
+
+		// Flag if waiting on anything
+		if (r2->doRcvCheck[i]) {
+			is_waiting_for_pack = true;
+		}
 
 		// Check if should resend
 		if (
@@ -3914,7 +3920,7 @@ bool CheckResend(R2 *r2)
 	}
 
 	// Return
-	return do_pack_resend;
+	return is_waiting_for_pack;
 }
 
 #pragma endregion
@@ -6573,6 +6579,13 @@ void setup() {
 		(float)freeMemory() / 1000);
 	DebugFlow(str);
 	while (PrintDebug());
+
+	// PRINT SERIAL RING BUFFER SIZE
+	sprintf(str, "[setup] RING BUFFER SIZE: %dB", SERIAL_BUFFER_SIZE);
+	DebugFlow(str);
+	while (PrintDebug());
+
+	
 
 	// TEMP
 	//Log.TestLoad(0, "LOG00035.CSV");

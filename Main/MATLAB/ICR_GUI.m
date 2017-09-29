@@ -5068,13 +5068,15 @@ fprintf('END OF RUN\n');
             % Get recording elapsed time plus saved time
             if  D.F.rec
                 nowTim(2) = (Elapsed_Seconds(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
-            else nowTim(2) = D.T.rec_tot_tim; % keep showing save time
+            else
+                nowTim(2) = D.T.rec_tot_tim; % keep showing save time
             end
             
             % Get lap time
             if D.F.rat_in
                 nowTim(3) = Elapsed_Seconds(now) - D.T.lap_tim;
-            else nowTim(3) = 0;
+            else
+                nowTim(3) = 0;
             end
             
             % Run time

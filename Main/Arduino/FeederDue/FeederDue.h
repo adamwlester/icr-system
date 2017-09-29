@@ -52,10 +52,10 @@
 struct DB
 {
 	// Debugging
-	const bool DEBUG = false;
+	const bool DEBUG = true;
 
 	// Printing
-	bool CONSOLE = false;
+	bool CONSOLE = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
