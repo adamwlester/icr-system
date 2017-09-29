@@ -1068,11 +1068,11 @@ void PID::SetUpdateTime(uint32_t t)
 void PID::PrintPID(char msg[])
 {
 	// Add to print queue
-	if (db.print_pid && (db.Console || db.LCD)) {
+	if (db.print_pid && (db.CONSOLE || db.LCD)) {
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
-	if (db.log_pid && db.Log) {
+	if (db.log_pid && db.LOG) {
 		Log.QueueLog(msg, millis());
 	}
 }
@@ -1467,11 +1467,11 @@ void BULLDOZE::CheckMotorControl()
 void BULLDOZE::PrintBull(char msg[])
 {
 	// Add to print queue
-	if (db.print_bull && (db.Console || db.LCD)) {
+	if (db.print_bull && (db.CONSOLE || db.LCD)) {
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
-	if (db.log_bull && db.Log) {
+	if (db.log_bull && db.LOG) {
 		Log.QueueLog(msg, millis());
 	}
 }
@@ -2382,7 +2382,7 @@ int LOGGER::OpenNewLog()
 	}
 
 	// Write first log entry
-	if (db.Log) {
+	if (db.LOG) {
 		sprintf(str, "[OpenNewLog] Begin Logging to \"%s\"", logFile);
 		QueueLog(str);
 	}
@@ -3140,7 +3140,7 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 
 	// Prevent any new info from logging
 	while (WriteLog());
-	db.Log = false;
+	db.LOG = false;
 
 	// Load existing log file
 	if (log_file != '\0') {
@@ -4482,7 +4482,7 @@ void InitializeTracking()
 		// Change led state
 		if (millis() > t_blink + 100)
 		{
-			analogWrite(pin.RewLED_R, do_led_on ? 250 : 0);
+			analogWrite(pin.RewLED_R, do_led_on ? 50 : 0);
 			analogWrite(pin.TrackLED, do_led_on ? 250 : 0);
 
 			// Update vars
@@ -5355,8 +5355,8 @@ void CheckLoop()
 void DebugFlow(char msg[], uint32_t t)
 {
 	// Local vars
-	bool do_print = db.print_flow && (db.Console || db.LCD);
-	bool do_log = db.log_flow && db.Log;
+	bool do_print = db.print_flow && (db.CONSOLE || db.LCD);
+	bool do_log = db.log_flow && db.LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5379,8 +5379,8 @@ void DebugFlow(char msg[], uint32_t t)
 void DebugError(char msg[], bool is_error, uint32_t t)
 {
 	// Local vars
-	bool do_print = db.print_errors && (db.Console || db.LCD);
-	bool do_log = db.log_errors && db.Log;
+	bool do_print = db.print_errors && (db.CONSOLE || db.LCD);
+	bool do_log = db.log_errors && db.LOG;
 
 	// Set error flag
 	db.isErrLoop = true;
@@ -5414,8 +5414,8 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 {
 	// Local vars
 	char str[200] = { 0 };
-	bool do_print = db.print_motorControl && (db.Console || db.LCD);
-	bool do_log = db.log_motorControl && db.Log;
+	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
+	bool do_log = db.log_motorControl && db.LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5442,8 +5442,8 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 {
 	// Local vars
 	char str[200] = { 0 };
-	bool do_print = db.print_motorControl && (db.Console || db.LCD);
-	bool do_log = db.log_motorControl && db.Log;
+	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
+	bool do_log = db.log_motorControl && db.LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5470,8 +5470,8 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 {
 	// Local vars
 	char str[200] = { 0 };
-	bool do_print = db.print_runSpeed && (db.Console || db.LCD);
-	bool do_log = db.log_runSpeed && db.Log;
+	bool do_print = db.print_runSpeed && (db.CONSOLE || db.LCD);
+	bool do_log = db.log_runSpeed && db.LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5509,11 +5509,11 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 	do_print =
 		((r4->instID == "c2r" && ((db.print_c2r && r4->idNow != 'P') || (db.print_rcvdVT && r4->idNow == 'P'))) ||
 		(r4->instID == "a2r" && db.print_a2r)) &&
-			(db.Console || db.LCD);
+			(db.CONSOLE || db.LCD);
 	do_log =
 		((r4->instID == "c2r" && db.log_c2r && r4->idNow != 'P') ||
 		(r4->instID == "a2r" && db.log_a2r)) &&
-		db.Log;
+		db.LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5568,9 +5568,9 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 
 	// Get print status
 	do_print = ((db.print_r2c && r2->instID == "r2c") || (db.print_r2a && r2->instID == "r2a")) &&
-		(db.Console || db.LCD);
+		(db.CONSOLE || db.LCD);
 	do_log = ((db.log_r2c && r2->instID == "r2c") || (db.log_r2a && r2->instID == "r2a")) &&
-		db.Log;
+		db.LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5637,7 +5637,7 @@ void QueueDebug(char msg[], uint32_t t)
 		printQueueIndStore = printQueueIndStore - 1 >= 0 ? printQueueIndStore - 1 : printQueueSize - 1;
 
 		// Log error
-		if (db.log_errors && db.Log) {
+		if (db.log_errors && db.LOG) {
 			Log.QueueLog(msg_copy, t);
 		}
 
@@ -6265,7 +6265,7 @@ void setup() {
 
 	// Wait for SerialUSB if debugging
 	uint32_t t_check = millis() + 100;
-	if (db.Console) {
+	if (db.CONSOLE) {
 		while (!SerialUSB && millis() < t_check);
 	}
 

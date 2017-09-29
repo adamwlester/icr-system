@@ -52,10 +52,10 @@
 struct DB
 {
 	// Debugging
-	const bool DEBUG = true;
+	const bool DEBUG = false;
 
 	// Printing
-	bool Console = true;
+	bool CONSOLE = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -87,7 +87,7 @@ struct DB
 	bool isErrLoop = false;
 
 	// Logging
-	bool Log = true;
+	bool LOG = true;
 	// What to print
 	const bool log_errors = true;
 	const bool log_flow = true;
@@ -103,7 +103,7 @@ struct DB
 	const bool log_pos = false;
 	const bool log_pos_rat_vt = false;
 	const bool log_pos_rat_pixy = false;
-	const bool log_pos_rob_vt = true;
+	const bool log_pos_rob_vt = false;
 	const bool log_pos_rat_ekf = false;
 	const bool log_pos_rob_ekf = false;
 	const bool log_vel_rat_vt = false;

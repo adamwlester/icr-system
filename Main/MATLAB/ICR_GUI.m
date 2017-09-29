@@ -1118,7 +1118,7 @@ fprintf('END OF RUN\n');
             % bulldoze
             D.UI.bullList = {'0 sec'; '5 sec'; '10 sec'; '30 sec'; '60 sec'; '120 sec'};
             D.PAR.bullDel = 30;
-            D.PAR.bullSpeed = 5;
+            D.PAR.bullSpeed = 10;
             D.UI.bullLastVal = 0;
             
             % btnAcq and btnRec
