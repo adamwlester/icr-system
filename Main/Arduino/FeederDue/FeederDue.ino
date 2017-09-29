@@ -300,7 +300,7 @@ public:
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
 	bool isArmExtended = true;
-	const int armExtStps = 150;
+	const int armExtStps = 160;
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -6190,8 +6190,8 @@ void Interupt_TimerHandler()
 // POWER OFF
 void Interupt_Power()
 {
-	// Local vars
-	uint32_t t_wait = 0; // (us)
+	// NOT USING
+	return;
 
 	// Turn off power
 	digitalWrite(pin.PWR_OFF, HIGH);
@@ -6545,7 +6545,7 @@ void setup() {
 	}
 
 	// Power off
-	attachInterrupt(digitalPinToInterrupt(pin.PWR_Swtch), Interupt_Power, FALLING);
+	//attachInterrupt(digitalPinToInterrupt(pin.PWR_Swtch), Interupt_Power, FALLING);
 
 	// IR prox right
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), Interupt_IRprox_Halt, FALLING);

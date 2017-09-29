@@ -103,7 +103,7 @@ struct DB
 	const bool log_pos = false;
 	const bool log_pos_rat_vt = false;
 	const bool log_pos_rat_pixy = false;
-	const bool log_pos_rob_vt = false;
+	const bool log_pos_rob_vt = true;
 	const bool log_pos_rat_ekf = false;
 	const bool log_pos_rob_ekf = false;
 	const bool log_vel_rat_vt = false;
@@ -120,7 +120,7 @@ db;
 Set kC and run ICR_Run.cs
 */
 const float kC = 5; // critical gain [1.5,3,5]
-const float pC = 1.8; // oscillation period [0,0,1.8]  
+const float pC = 1.9; // oscillation period [0,2.25,1.9]  
 const double cal_speedSteps[4] = { 20, 40, 60, 80 }; // (cm/sec) [{ 10, 20, 30, 40 }]
 int cal_nMeasPerSteps = 10;
 
