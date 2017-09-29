@@ -76,7 +76,7 @@ D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NW'; % [NE,SE,SW,NW];
+D.DB.Start_Quadrant = 'SW'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test

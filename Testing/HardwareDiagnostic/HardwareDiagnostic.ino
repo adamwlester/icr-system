@@ -12,9 +12,9 @@ const bool do_POT_PrintStat = false;
 const bool do_Step_Rot_Test = false;
 const bool do_scale_speed_correction = false;
 const bool do_lin_speed_correction = false;
-const int nSpeedSteps = 31; //10; // 20;
-const double speedStepsArr[nSpeedSteps] = { 5.0,7.5,10.0,12.5,15.0,17.5,20.0,22.5,25.0,27.5,30.0,32.5,35.0,37.5,40.0,42.5,45.0,47.5,50.0,52.5,55.0,57.5,60.0,62.5,65.0,67.5,70.0,72.5,75.0,77.5,80.0 };// { 5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80 };// {1,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80 }; //{ 5,15,25,35,45,55,65,75,85,95 }; // {5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100};
-const int stepsPerSpeed = 3; 
+const double deltaSpeed = 5;
+const double speedRange[2] = { 5,90 };
+const int stepsPerSpeed = 3;
 const int accRots = 1;
 
 // Feed Arm Test
@@ -188,11 +188,16 @@ struct PINS
 	int POT_In = A9;
 	int POT_Vcc = A8;
 
-	// Stepper Rotation Test
+	//// Stepper Rotation Test
 	int StpSwitch_R = A8;
 	int StpSwitch_F = A10;
 	int StpSwitch_Gnd_R = A9;
 	int StpSwitch_Gnd_F = A11;
+	//// Stepper Rotation Test
+	//int StpSwitch_R = A7;
+	//int StpSwitch_F = A5;
+	//int StpSwitch_Gnd_R = A6;
+	//int StpSwitch_Gnd_F = A4;
 
 	// IR detector test
 	int IRdetect_Relay = 51;
@@ -214,23 +219,23 @@ const float stp2cm = (9 * PI) / 200;
 const float maxSpeed = 100; // (cm) 
 const float maxAcc = 80; // (cm) 
 const float maxDec = 160; // (cm)
-const double scaleSpeedRear = 0.952948;
-const double scaleSpeedFront = 0.977682;
-const double regSpeedRear[2] = { 0.952605008829939 , 0.010741382111862 };
-const double regSpeedFront[2] = { 0.980100148567747, -0.074087227493359 };
+const double scaleSpeedRear = 0.955556;
+const double scaleSpeedFront = 0.997604;
+const double regSpeedRear[2] = { 0.953122147782673, 0.080943539773743 };
+const double regSpeedFront[2] = { 0.998759337302555, 0.010702522395395 };
 const double rearMotCoeff[5] = {
-	-0.000000058932058,
-	0.000009845434568,
-	-0.000541009380000,
-	0.963688216950139,
-	-0.055704482695916,
+	0.000000044120830,
+	-0.000007753772088,
+	0.000418793299060,
+	0.945620729817402,
+	0.047445535533065,
 };
 const double frontMotCoeff[5] = {
-	0.000000026883954,
-	-0.000004335393670,
-	0.000272261663068,
-	0.971864621268447,
-	0.010403353339533,
+	0.000000032971731,
+	-0.000006928907732,
+	0.000457085441358,
+	0.972947848949920,
+	0.021557249590414,
 };
 
 // LEDs
@@ -267,6 +272,7 @@ volatile uint32_t v_t_start_R = 0;
 volatile uint32_t v_t_start_F = 0;
 volatile uint32_t v_t_end_R = 0;
 volatile uint32_t v_t_end_F = 0;
+volatile uint32_t v_dt_debounce = 0;
 
 // Button variables
 volatile uint32_t t_debounce[3] = { millis(), millis(), millis() };
@@ -458,6 +464,14 @@ void setup()
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
 
+	// TURN ON POWER
+	digitalWrite(pin.PWR_OFF, LOW);
+	delayMicroseconds(100);
+	digitalWrite(pin.PWR_ON, HIGH);
+	delayMicroseconds(100);
+	digitalWrite(pin.PWR_ON, LOW);
+	delayMicroseconds(100);
+
 	// ENABLE VOLTGAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
@@ -496,13 +510,6 @@ void setup()
 	digitalWrite(pin.ED_STP, LOW);
 	digitalWrite(pin.ED_ENBL, LOW);
 
-	// DEFINE EXTERNAL INTERUPTS
-	if (do_POT_Test)
-	{
-		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), InteruptIRproxHalt, FALLING);
-		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), InteruptIRproxHalt, FALLING);
-	}
-
 	// TEST STUFF SETUP
 
 	// POT vcc and Gnd
@@ -511,6 +518,8 @@ void setup()
 		pinMode(pins.POT_Vcc, OUTPUT);
 		digitalWrite(pins.POT_Vcc, HIGH);
 		digitalWrite(pins.POT_Gnd, LOW);
+		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), InteruptIRproxHalt, FALLING);
 	}
 
 	// Stepper Rotation Test
@@ -606,14 +615,6 @@ void setup()
 
 void loop()
 {
-	//// TEMP
-	//delay(5000);
-	//AD_F.run(FWD, 60*cm2stp);
-	//AD_R.run(FWD, 60 * cm2stp);
-	//delay(10000);
-	//AD_F.hardStop();
-	//AD_R.hardStop();
-	//delay(600000);
 
 	static bool first_pass = true;
 	if (first_pass)
@@ -727,7 +728,7 @@ bool POT_Run() {
 			//AD_F.run(FWD, runSpeed*scaleSpeedFront);
 			//AD_R.run(FWD, runSpeed*scaleSpeedRear);
 			//AD_F.run(FWD, runSpeed*scaleSpeedFront);
-			double speed_R = 
+			double speed_R =
 				rearMotCoeff[0] * (velNow * velNow * velNow * velNow) +
 				rearMotCoeff[1] * (velNow * velNow * velNow) +
 				rearMotCoeff[2] * (velNow * velNow) +
@@ -835,97 +836,147 @@ void RetractFeedArm()
 void StepRun()
 {
 	// Local vars
-	char str[200];
+	char str[200] = { 0 };
 	int cnt_step_R = 0;
 	int cnt_step_F = 0;
+	int n_speed_steps = 0;
 	double speed_R = 0;
 	double speed_F = 0;
-	double speed_arr_R[nSpeedSteps] = { 0 };
-	double speed_arr_F[nSpeedSteps] = { 0 };
-	double ratio_arr_R[nSpeedSteps] = { 0 };
-	double ratio_arr_F[nSpeedSteps] = { 0 };
+	double speed_step_arr[100] = { 0 };
+	double speed_arr_R[100] = { 0 };
+	double speed_arr_F[100] = { 0 };
+	double ratio_arr_R[100] = { 0 };
+	double ratio_arr_F[100] = { 0 };
 	double ratio_sum = 0;
 	double ratio_avg_R = 0;
 	double ratio_avg_F = 0;
-	float runSpeed = 0;
+	double runSpeed = 0;
+	double runSteps = 0;
 	int step_last_R = 0;
 	int step_last_F = 0;
+	bool is_stopped_R = false;
+	bool is_stopped_F = false;
+	uint32_t t_step_r = 0;
+	uint32_t t_step_f = 0;
+
+	// Get speed steps
+	n_speed_steps =
+		(speedRange[1] - speedRange[0]) / deltaSpeed + 1;
+	double s = speedRange[0];
+	for (int i = 0; i < n_speed_steps; i++)
+	{
+		speed_step_arr[i] = s;
+		s += deltaSpeed;
+	}
+
+	// Print speed steps
+	SerialUSB.println("\r\nvel = [ ...");
+	for (int i = 0; i < n_speed_steps; i++)
+	{
+		sprintf(str, "%0.2f, ...", speed_step_arr[i]);
+		SerialUSB.println(str);
+	}
+	SerialUSB.println("];");
 
 	// Loop through speed steps
-	for (int i = 0; i < nSpeedSteps; i++)
+	for (int i = 0; i < n_speed_steps; i++)
 	{
 		// Reset counters
 		v_cnt_Step_R = 0;
 		v_cnt_Step_F = 0;
 
 		// Align wheels
-		runSpeed = 10 * cm2stp;
-		AD_R.run(FWD, runSpeed);
+		SerialUSB.println("\r\nResseting Position");
+		runSteps = 10 * cm2stp;
+		AD_R.run(FWD, runSteps);
 		while (digitalRead(pins.StpSwitch_R) == HIGH);
+		while (digitalRead(pins.StpSwitch_R) == LOW);
 		delay(100);
 		AD_R.hardStop();
-		AD_F.run(FWD, runSpeed);
+		AD_F.run(FWD, runSteps);
 		while (digitalRead(pins.StpSwitch_F) == HIGH);
+		while (digitalRead(pins.StpSwitch_F) == LOW);
 		delay(100);
 		AD_F.hardStop();
 
 		// Get settings
-		runSpeed = speedStepsArr[i] * cm2stp;
+		runSpeed = speed_step_arr[i];
+		runSteps = runSpeed * cm2stp;
 		v_stepMax = stepsPerSpeed + accRots;
+		v_dt_debounce = ((1 / (runSpeed / (9 * PI))) / 8) * 1000;
 
 		// Print new speed
-		sprintf(str, "\r\n[StepRun] Run Settings: Speed=%0.2fcm/sec Steps=%d", runSpeed / cm2stp, stepsPerSpeed);
+		sprintf(str, "[StepRun] Run Settings: Speed=%0.2fcm/sec Steps=%d DT_Debounce=%d", runSpeed, stepsPerSpeed, v_dt_debounce);
 		SerialUSB.println(str);
-		delay(100);
+		delay(500);
 
-		// Reset timers
+		// Reset timers and flags
 		v_t_start_R = 0;
 		v_t_start_F = 0;
 		v_t_end_R = 0;
 		v_t_end_F = 0;
 		step_last_R = 0;
 		step_last_F = 0;
+		is_stopped_R = false;
+		is_stopped_F = false;
 
 		// Run motor
 		if (do_scale_speed_correction) {
-			AD_R.run(FWD, runSpeed*scaleSpeedRear);
-			AD_F.run(FWD, runSpeed*scaleSpeedFront);
+			AD_R.run(FWD, runSteps*scaleSpeedRear);
+			AD_F.run(FWD, runSteps*scaleSpeedFront);
 		}
 		else if (do_lin_speed_correction) {
-			AD_R.run(FWD, runSpeed*regSpeedRear[0] + regSpeedRear[1]);
-			AD_F.run(FWD, runSpeed*regSpeedFront[0] + regSpeedFront[1]);
+			AD_R.run(FWD, runSteps*regSpeedRear[0] + regSpeedRear[1]);
+			AD_F.run(FWD, runSteps*regSpeedFront[0] + regSpeedFront[1]);
 		}
 		else {
-			AD_R.run(FWD, runSpeed);
-			AD_F.run(FWD, runSpeed);
+			AD_R.run(FWD, runSteps);
+			AD_F.run(FWD, runSteps);
 		}
+		t_step_r = millis();
+		t_step_f = millis();
+
 
 		// Enable interupts
+		delay(10);
 		v_do_step_interupt_R = true;
 		v_do_step_interupt_F = true;
-		delay(10);
 
 		// Wait for time to ellapse
-		while (v_t_end_R == 0 || v_t_end_F == 0) {
+		while (!is_stopped_R || !is_stopped_F) {
 
-			// Stop when done
-			if (v_t_end_R > 0) {
-				AD_R.hardStop();
-			}
-			if (v_t_end_F > 0) {
-				AD_F.hardStop();
-			}
+			////TEMP
+			//static uint32_t t_print = millis() + 100;
+			//if (millis() > t_print) {
+			//	sprintf(str, "Rear=%s Front=%s", digitalRead(pins.StpSwitch_R) ? "HIGH" : "LOW", digitalRead(pins.StpSwitch_F) ? "HIGH" : "LOW");
+			//	SerialUSB.println(str);
+			//	t_print = millis() + 100;
+			//}
 
 			// Track steps
 			if (step_last_R != v_cnt_Step_R) {
 				step_last_R = v_cnt_Step_R;
-				sprintf(str, "   rear step %d", step_last_R);
+				sprintf(str, "   rear step %d dt=%d", step_last_R, millis()- t_step_r);
 				SerialUSB.println(str);
+				t_step_r = millis();
 			}
 			if (step_last_F != v_cnt_Step_F) {
 				step_last_F = v_cnt_Step_F;
-				sprintf(str, "   front step %d", step_last_F);
+				sprintf(str, "   front step %d dt=%d", step_last_F, millis() - t_step_f);
 				SerialUSB.println(str);
+				t_step_f = millis();
+			}
+
+			// Stop when done
+			if (!is_stopped_R && !v_do_step_interupt_R) {
+				AD_R.hardStop();
+				is_stopped_R = true;
+				SerialUSB.println("Hard Stop Rear");
+			}
+			if (!is_stopped_F && !v_do_step_interupt_F) {
+				AD_F.hardStop();
+				is_stopped_F = true;
+				SerialUSB.println("Hard Stop Front");
 			}
 		}
 		delay(100);
@@ -941,8 +992,8 @@ void StepRun()
 		speed_arr_F[i] = speed_F;
 
 		// Print rotations
-		ratio_arr_R[i] = (runSpeed / cm2stp) / speed_R;
-		ratio_arr_F[i] = (runSpeed / cm2stp) / speed_F;
+		ratio_arr_R[i] = (runSteps / cm2stp) / speed_R;
+		ratio_arr_F[i] = (runSteps / cm2stp) / speed_F;
 		sprintf(str, "[StepRun] Steps: Rear=%d Front=%d", cnt_step_R, cnt_step_F);
 		SerialUSB.println(str);
 		sprintf(str, "[StepRun] Speed: Rear=%0.4fcm/sec Front=%0.4fcm/sec", speed_R, speed_F);
@@ -954,16 +1005,16 @@ void StepRun()
 
 	// Print speed settings
 	SerialUSB.println("\r\nvel = [ ...");
-	for (int i = 0; i < nSpeedSteps; i++)
+	for (int i = 0; i < n_speed_steps; i++)
 	{
-		sprintf(str, "%0.2f, ...", speedStepsArr[i]);
+		sprintf(str, "%0.2f, ...", speed_step_arr[i]);
 		SerialUSB.println(str);
 	}
 	SerialUSB.println("];");
 
 	// Print rear speeds 
 	SerialUSB.println("\r\nr_vel = [ ...");
-	for (int i = 0; i < nSpeedSteps; i++)
+	for (int i = 0; i < n_speed_steps; i++)
 	{
 		sprintf(str, "%0.6f, ...", speed_arr_R[i]);
 		SerialUSB.println(str);
@@ -972,7 +1023,7 @@ void StepRun()
 
 	// Print front speeds 
 	SerialUSB.println("\r\nf_vel = [ ...");
-	for (int i = 0; i < nSpeedSteps; i++)
+	for (int i = 0; i < n_speed_steps; i++)
 	{
 		sprintf(str, "%0.6f, ...", speed_arr_F[i]);
 		SerialUSB.println(str);
@@ -982,28 +1033,28 @@ void StepRun()
 	// Get rear ratio average 
 	SerialUSB.println("\r\nr_ratio = [ ...");
 	ratio_sum = 0;
-	for (int i = 0; i < nSpeedSteps; i++)
+	for (int i = 0; i < n_speed_steps; i++)
 	{
 		ratio_sum += ratio_arr_R[i];
 		sprintf(str, "%0.6f, ...", ratio_arr_R[i]);
 		SerialUSB.println(str);
 	}
 	SerialUSB.println("];");
-	ratio_avg_R = ratio_sum / nSpeedSteps;
+	ratio_avg_R = ratio_sum / n_speed_steps;
 
 	// Get front ratio average 
 	SerialUSB.println("\r\nf_ratio = [ ...");
 	ratio_sum = 0;
-	for (int i = 0; i < nSpeedSteps; i++)
+	for (int i = 0; i < n_speed_steps; i++)
 	{
 		ratio_sum += ratio_arr_F[i];
 		sprintf(str, "%0.6f, ...", ratio_arr_F[i]);
 		SerialUSB.println(str);
 	}
 	SerialUSB.println("];");
-	ratio_avg_F = ratio_sum / nSpeedSteps;
+	ratio_avg_F = ratio_sum / n_speed_steps;
 
-
+	// Print average
 	sprintf(str, "\r\n[StepRun] Speed Ratios Average: Rear=%0.6f Front=%0.6f", ratio_avg_R, ratio_avg_F);
 	SerialUSB.println(str);
 
@@ -1307,21 +1358,19 @@ void InteruptStpSwitch_R()
 		return;
 	}
 
-	// Bail if max steps reached
-	if (v_cnt_Step_R >= v_stepMax) {
-		return;
-	}
-
 	// Exit if < debounce time has not passed
-	if (t_debounce_R + 150 > millis()) {
+	if (t_debounce_R + v_dt_debounce > millis()) {
+		
+		// Reset debounce time
+		t_debounce_R = millis();
 		return;
 	}
-
-	// Add to count
-	v_cnt_Step_R++;
 
 	// Reset debounce time
 	t_debounce_R = millis();
+
+	// Add to count
+	v_cnt_Step_R++;
 
 	// Check if one rotation completed
 	if (v_cnt_Step_R == accRots && v_t_start_R == 0) {
@@ -1342,21 +1391,19 @@ void InteruptStpSwitch_F()
 		return;
 	}
 
-	// Bail if max steps reached
-	if (v_cnt_Step_F >= v_stepMax) {
-		return;
-	}
-
 	// Exit if < debounce time has not passed
-	if (t_debounce_F + 150 > millis()) {
+	if (t_debounce_F + v_dt_debounce > millis()) {
+
+		// Reset debounce time
+		t_debounce_F = millis();
 		return;
 	}
-
-	// Add to count
-	v_cnt_Step_F++;
 
 	// Reset debounce time
 	t_debounce_F = millis();
+
+	// Add to count
+	v_cnt_Step_F++;
 
 	// Check if one rotation completed
 	if (v_cnt_Step_F == accRots && v_t_start_F == 0) {
@@ -1601,7 +1648,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 												// NIMA 17 24V
 	AD_F.setAccKVAL(40);				        // This controls the acceleration current
 	AD_F.setDecKVAL(40);				        // This controls the deceleration current
-	AD_F.setRunKVAL(20);					    // This controls the run current
+	AD_F.setRunKVAL(30);					    // This controls the run current
 	AD_F.setHoldKVAL(25);				        // This controls the holding current keep it low
 
 }

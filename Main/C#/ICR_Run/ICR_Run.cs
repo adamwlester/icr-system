@@ -692,16 +692,16 @@ namespace ICR_Run
             // Check if we have confirmed rat is out and recording is done
             if (fc.isRatIn && !fc.isRecDone)
             {
-                LogEvent_Thread("[Run] RUNNING: Wait for Last Confirmation Rat is Out...");
+                LogEvent_Thread("[Run] RUNNING: Wait for Confirmation Rat is Out...");
                 pass = WaitForMCOM(id: 'O', timeout: 10000);
                 if (pass)
                 {
                     // Wait for all the other crap to be relayed from Matlab
                     Thread.Sleep(1000);
-                    LogEvent_Thread("[Exit] SUCCEEDED: Wait for Last Confirmation Rat is Out");
+                    LogEvent_Thread("[Exit] SUCCEEDED: Wait for Confirmation Rat is Out");
                 }
                 else
-                    LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for Last Confirmation Rat is Out", is_warning: true);
+                    LogEvent_Thread("**WARNING** [Exit] ABORTED: Wait for Confirmation Rat is Out", is_warning: true);
             }
 
             // Wait for reply on any remaining sent packets

@@ -51,43 +51,20 @@
 // LOG DEBUGGING
 struct DB
 {
-	// Logging
-	bool Log = true;
-	// What to print
-	const bool log_errors = true;
-	const bool log_flow = true;
-	const bool log_c2r = true;
-	const bool log_a2r = true;
-	const bool log_r2c = true;
-	const bool log_r2a = true;
-	const bool log_pid = true;
-	const bool log_bull = true;
-	const bool log_motorControl = true;
-	const bool log_runSpeed = false;
-	// tracking data
-	const bool log_pos = false;
-	const bool log_pos_rat_vt = false;
-	const bool log_pos_rat_pixy = false;
-	const bool log_pos_rob_vt = true;
-	const bool log_pos_rat_ekf = false;
-	const bool log_pos_rob_ekf = false;
-	const bool log_vel_rat_vt = true;
-	const bool log_vel_rat_pixy = false;
-	const bool log_vel_rob_vt = false;
-	const bool log_vel_rat_ekf = false;
-	const bool log_vel_rob_ekf = false;
+	// Debugging
+	const bool DEBUG = true;
 
 	// Printing
-	bool Console = false;
+	bool Console = true;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
-	const bool print_c2r = true;
-	const bool print_r2c = true;
-	const bool print_a2r = true;
-	const bool print_r2a = true;
+	const bool print_c2r = false;
+	const bool print_r2c = false;
+	const bool print_a2r = false;
+	const bool print_r2a = false;
 	const bool print_rcvdVT = false;
 	const bool print_pid = false;
 	const bool print_bull = false;
@@ -108,6 +85,32 @@ struct DB
 
 	// Other
 	bool isErrLoop = false;
+
+	// Logging
+	bool Log = true;
+	// What to print
+	const bool log_errors = true;
+	const bool log_flow = true;
+	const bool log_c2r = true;
+	const bool log_a2r = true;
+	const bool log_r2c = true;
+	const bool log_r2a = true;
+	const bool log_pid = true;
+	const bool log_bull = true;
+	const bool log_motorControl = true;
+	const bool log_runSpeed = false;
+	// tracking data
+	const bool log_pos = false;
+	const bool log_pos_rat_vt = false;
+	const bool log_pos_rat_pixy = false;
+	const bool log_pos_rob_vt = false;
+	const bool log_pos_rat_ekf = false;
+	const bool log_pos_rob_ekf = false;
+	const bool log_vel_rat_vt = false;
+	const bool log_vel_rat_pixy = false;
+	const bool log_vel_rob_vt = false;
+	const bool log_vel_rat_ekf = false;
+	const bool log_vel_rob_ekf = false;
 }
 // Initialize
 db;
@@ -307,18 +310,18 @@ uint16_t adF_stat = 0x0;
 const int dt_checkAD = 10; // (ms)
 uint32_t t_checkAD = millis() + dt_checkAD; // (ms)
 const double rearMotCoeff[5] = {
-	-0.000000058932058,
-	0.000009845434568,
-	-0.000541009380000,
-	0.963688216950139,
-	-0.055704482695916,
+	0.000000044120830,
+	-0.000007753772088,
+	0.000418793299060,
+	0.945620729817402,
+	0.047445535533065,
 };
 const double frontMotCoeff[5] = {
-	0.000000026883954,
-	-0.000004335393670,
-	0.000272261663068,
-	0.971864621268447,
-	0.010403353339533,
+	0.000000032971731,
+	-0.000006928907732,
+	0.000457085441358,
+	0.972947848949920,
+	0.021557249590414,
 };
 
 // Kalman model measures

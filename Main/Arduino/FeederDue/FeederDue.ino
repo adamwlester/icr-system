@@ -4036,10 +4036,10 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setRunKVAL(30);					    // This controls the run current
 	AD_R.setHoldKVAL(25);				        // This controls the holding current keep it low
 
-												// NIMA 17 24V
+	// NIMA 17 24V
 	AD_F.setAccKVAL(40);				        // This controls the acceleration current
 	AD_F.setDecKVAL(40);				        // This controls the deceleration current
-	AD_F.setRunKVAL(20);					    // This controls the run current
+	AD_F.setRunKVAL(30);					    // This controls the run current
 	AD_F.setHoldKVAL(25);				        // This controls the holding current keep it low
 
 }
@@ -6384,9 +6384,9 @@ void setup() {
 		delay(10);
 	}
 
-	// WAIT FOR POWER SWITCH
+	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
 	digitalWrite(pin.PWR_OFF, HIGH);
-	while (digitalRead(pin.PWR_Swtch) == HIGH);
+	while (!db.DEBUG && digitalRead(pin.PWR_Swtch) == HIGH);
 	
 	// TURN ON POWER
 	digitalWrite(pin.PWR_OFF, LOW);
