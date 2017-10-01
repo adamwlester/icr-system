@@ -76,13 +76,13 @@ D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NW'; % [NE,SE,SW,NW];
+D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
-D.DB.ratVelStart = 50;
-D.DB.ratMaxAcc = 80; % (cm/sec/sec)
-D.DB.ratMaxDec = 100; % (cm/sec/sec)
+D.DB.ratVelStart = 100;
+D.DB.ratMaxAcc = 200; % (cm/sec/sec)
+D.DB.ratMaxDec = 200; % (cm/sec/sec)
 
 % Halt Error test
 D.DB.velSteps = 10:10:80; % (cm/sec)
@@ -798,20 +798,20 @@ fprintf('END OF RUN\n');
             % FORAGE TASK VARS
             
             % pos occ bins
-            D.PAR.rfBins = D.UI.arnRad*2 + 1;
+            D.PAR.rfBins = (D.UI.arnRad*2)/2 + 1;
             % occ bin edges
             D.PAR.rfBinEdgeX = linspace(D.UI.lowLeft(1), D.UI.lowLeft(1)+D.UI.vtRes, D.PAR.rfBins+1);
             D.PAR.rfBinEdgeY = linspace(D.UI.lowLeft(2), D.UI.lowLeft(2)+D.UI.vtRes, D.PAR.rfBins+1);
-            % width of path
-            D.PAR.pathWdth = 15;
             % distance between paths in degrees
             D.PAR.pathDegDist = 5;
             % target width
-            D.PAR.pathTargWdt = 20;
+            D.PAR.pathTargWdt = 30;
             % target array
             D.PAR.pathTargArr = 0:D.PAR.pathDegDist:360-D.PAR.pathDegDist;
             % number of posible paths from each targ
             D.PAR.nPaths = 45/D.PAR.pathDegDist*2 + 1;
+            % path lenths
+            D.PAR.pathLengthArr = zeros(1,D.PAR.nPaths);
             
             % TRACK TASK VARS
             
@@ -3750,9 +3750,6 @@ fprintf('END OF RUN\n');
                 'XLim', [0,D.PAR.rfBins], ...
                 'YLim', [0,D.PAR.rfBins]);
             
-            % Deg bin vars
-            n_targs = 360/D.PAR.pathDegDist;
-            
             % Load file if exists
             if exist(D.DIR.ioRFPath, 'file')
                 load(D.DIR.ioRFPath);
@@ -3760,19 +3757,34 @@ fprintf('END OF RUN\n');
                 % Store in struct
                 D.P.pathMat = double(path_mat); %#ok<NODEF>
                 D.DB.simRatPathMat = double(sim_rat_path_mat); %#ok<NODEF>
-                clear path_mat sim_rat_path_mat;
+                D.PAR.pathLengthArr = path_length_arr;  %#ok<NODEF>
+                clear path_mat sim_rat_path_mat path_length_arr;
             else
+                
+                % Deg bin var
+                n_targs = 360/D.PAR.pathDegDist;
+                
+                % Number of bins in rf area
+                path_bins = round(D.PAR.rfBins*(D.UI.rfRad / D.UI.arnRad));
+                
+                % Width of path
+                path_width = ((2*D.UI.rfRad*pi) * (D.PAR.pathTargWdt/360)) * ...
+                    (D.PAR.rfBins / (D.UI.arnRad*2));
+                % Make sure width is odd
+                if (mod(floor(path_width),2) == 1)
+                    path_width = floor(path_width);
+                else
+                    path_width = ceil(path_width);
+                end
                 
                 % Setup path mat
                 D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,n_targs);
                 
                 % Setup temp path mat
-                path_bins = round(D.PAR.rfBins*((D.UI.rfRad-ceil(D.UI.rfTargWdt/2)) / D.UI.arnRad));
-                mat_eye = padarray(eye(path_bins-5),[5,5],'pre');
-                mat_p = zeros(path_bins);
-                %ind = (floor(D.PAR.pathWdth/2)-3)*-1 : (floor(D.PAR.pathWdth/2)+3);
-                ind = floor(D.PAR.pathWdth/2)*-1 : floor(D.PAR.pathWdth/2);
-                for i = 1:D.PAR.pathWdth
+                mat_eye = eye(path_bins*2 + path_width);
+                mat_p = zeros(size(mat_eye));
+                ind = floor(path_width/2)*-1 : floor(path_width/2);
+                for i = 1:path_width
                     if ind(i) < 0
                         mat_p = mat_p + padarray(mat_eye(abs(ind(i))+1:end,:),[abs(ind(i)),0],'post');
                     elseif ind(i) > 0
@@ -3786,6 +3798,7 @@ fprintf('END OF RUN\n');
                 mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
                 
                 % Compute mat for each pos condition
+                path_ang_arr = linspace(0,90,90/D.PAR.pathDegDist+1);
                 for c = 1:2
                     if c==1
                         mat_now = mat_p;
@@ -3793,38 +3806,29 @@ fprintf('END OF RUN\n');
                         mat_now = mat_r;
                     end
                     
-                    for i = 0:floor(D.PAR.nPaths/2)
+                    for i = 1:D.PAR.nPaths
                         
-                        if (i<floor(D.PAR.nPaths/2))
-                            deg = i*D.PAR.pathDegDist;
-                            % Rotate
-                            mat_rot = rotMat(mat_now,deg);
-                            % Cut and pad
-                            mat_rot = mat_rot(:,1:ceil(path_bins/2));
-                            mat_rot = padarray(mat_rot, [0,path_bins-size(mat_rot,2)],'pre');
-                            % Flip
-                            mat_rot = flip(flip(mat_rot',2),1);
-                        else
-                            mat_rot = zeros(path_bins);
-                            mat_rot(ceil(path_bins/2)-floor(D.PAR.pathWdth/2):ceil(path_bins/2)-floor(D.PAR.pathWdth/2)+D.PAR.pathWdth, :) = 1;
-                            mat_rot(:,end-5:end) = 0;
-                        end
+                        deg = path_ang_arr(i);
+                        % Rotate
+                        mat_rot = imrotate(mat_now,deg,'bilinear','crop');
+                        % Cut and pad
+                        rind = floor(size(mat_eye,1)/2)-floor(path_bins/2):floor(size(mat_eye,1)/2)+floor(path_bins/2);
+                        cind = floor(size(mat_eye,2)/2):floor(size(mat_eye,1)/2)+path_bins-1;
+                        mat_rot = mat_rot(rind,cind);
+                        % Flip
+                        mat_rot = flip(mat_rot,2);
+                        mat_rot = flip(mat_rot,1);
                         
                         % Pad to full size
                         pad_lng = round((D.PAR.rfBins - path_bins)/2);
                         mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
                         
-                        % Mirror values
-                        mat_mir = flip(mat_rot,1);
-                        
                         % Store
                         for j = [1:n_targs]-1
                             if c==1
-                                D.P.pathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
-                                D.P.pathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                                D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
                             else
-                                D.DB.simRatPathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
-                                D.DB.simRatPathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
+                                D.DB.simRatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
                             end
                         end
                     end
@@ -3844,12 +3848,8 @@ fprintf('END OF RUN\n');
                 ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
                 pause(1);
                 delete(ih);
-                % Plot accross start pos and paths
-                ih = imagesc(sum(sum(D.P.pathMat(:,:,:,:),3),4), 'Parent', D.UI.axH(3));
-                pause(1);
-                delete(ih);
                 
-                % Plot template paths
+                % Plot accross pos and paths
                 ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
                 pause(1);
                 delete(ih);
@@ -3859,11 +3859,19 @@ fprintf('END OF RUN\n');
                     delete(ih);
                 end
                 
-                % Save path
+                % Compute path lengths
+                ang_arr = linspace(-45,45,D.PAR.nPaths);
+                [x_path,y_path] = pol2cart(deg2rad(ang_arr), ones(1,D.PAR.nPaths));
+                [x_str, y_str] = pol2cart(deg2rad(180), 1);
+                path_length_arr = sqrt((abs(x_path-x_str)).^2 + abs((y_path-y_str)).^2);
+                path_length_arr = path_length_arr * (D.UI.rfRad/max(path_length_arr));
+                D.PAR.pathLengthArr = path_length_arr;
+                
+                % Save path info
                 path_mat = single(D.P.pathMat); %#ok<NASGU>
                 sim_rat_path_mat = single(D.DB.simRatPathMat); %#ok<NASGU>
-                save(D.DIR.ioRFPath, 'path_mat', 'sim_rat_path_mat');
-                clear path_mat sim_rat_path_mat;
+                save(D.DIR.ioRFPath, 'path_mat', 'sim_rat_path_mat', 'path_length_arr');
+                clear path_mat sim_rat_path_mat path_length_arr;
                 
             end
             
@@ -3902,38 +3910,7 @@ fprintf('END OF RUN\n');
             D.I.targInd = ...
                 find(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi)) == D.PAR.pathTargArr);
             set(D.UI.ptchRFTarg(D.I.targInd), 'Visible', 'on');
-            
-            % ROTATE MATRIX
-            function[M_rot] = rotMat(M,ang)
-                
-                % Check if not rotating
-                if (ang==0)
-                    M_rot = M;
-                    return
-                end
-                
-                % Convert to rad
-                theta = ang*pi/180;
-                
-                % Make grid
-                [x, y] = ndgrid(1:size(M,1), 1:size(M,2));
-                
-                % Calculate rotation matrix
-                R = [ cos(theta) -sin(theta);
-                    sin(theta)  cos(theta)]; % just 2D case
-                
-                % calculate new positions of image indicies
-                
-                tmp = R*[x(:)' ; y(:)']; % 2 by numel(M)
-                xi = reshape(tmp(1,:),size(x)); % new x-indicies
-                yi = reshape(tmp(2,:),size(y)); % new y-indicies
-                
-                M_rot = interpn(x,y,M,xi,yi); % interpolate from old->new indicies
-                M_rot(isnan(M_rot)) = 0;
-                
-                
-            end
-            
+              
         end
         
         % ----------------------------RAT IN CHECK-------------------------
@@ -4219,7 +4196,7 @@ fprintf('END OF RUN\n');
                 recs = D.P.(fld).vtNRecs;
                 
                 % Convert to normalized polar vals
-                [rad, roh] = VT_2_RAD(xy_pos);
+                [rad, roh] = VT_2_Rad(xy_pos);
                 
                 % Exclude outlyer values > || < track bounds plus 5 cm
                 if ~(D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat'))
@@ -4328,7 +4305,8 @@ fprintf('END OF RUN\n');
                     
                     N = histcounts2(D.P.(fld).y,D.P.(fld).x,D.PAR.rfBinEdgeY,D.PAR.rfBinEdgeX);
                     D.P.occMatRaw = D.P.occMatRaw+flip(N,1);
-                    scale = prctile(D.P.occMatRaw(:),99.99);
+                    non_zer_occ = D.P.occMatRaw(D.P.occMatRaw(:) > 0);
+                    scale = prctile(non_zer_occ,99);
                     if scale == 0
                         scale = 1;
                     end
@@ -5132,14 +5110,26 @@ fprintf('END OF RUN\n');
             % Get path deg array
             path_arr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
             
-            % Get inner product of current pos and occ
+            % Get optimal path
+            % invert occ values
+            inv_occ = abs(D.P.occMat-max(D.P.occMat(:)));
+            % get sum of product of occ and possible paths
             occ_prod = ...
-                squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd).*repmat(D.P.occMat,[1,1,size(D.P.pathMat,3)]),1),2));
-            path_ind = find(occ_prod == min(occ_prod));
+                squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd) .* ...
+                repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
+            % normalize
+            occ_prod = occ_prod/sum(occ_prod);
+            % weight by path length normalized to occ prod range
+            occ_scale = abs(D.PAR.pathLengthArr - max(D.PAR.pathLengthArr));
+            occ_scale = occ_scale/sum(occ_scale);
+            occ_scale = 1 + occ_scale*((max(occ_prod)-min(occ_prod))/max(occ_scale));
+            occ_prod = occ_prod.*occ_scale';
+            % get optimal path
+            path_ind = find(occ_prod == max(occ_prod));
             if length(path_ind) > 1
                 path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
             end
-            path_rad = deg2rad(path_arr(path_ind)*2);
+            path_rad = wrapTo2Pi(deg2rad(path_arr(path_ind)*2));
             
             % Get new targ
             rad_last_targ = deg2rad(D.PAR.pathTargArr(D.I.targInd));
@@ -5464,6 +5454,7 @@ fprintf('END OF RUN\n');
             if D.F.Rat.plot_pos
                 
                 % Plot all new VT data
+                if D.PAR.sesTask == 'Track'
                 D.UI.cnt_ratPltH = D.UI.cnt_ratPltH+1;
                 D.UI.ratPltH(D.UI.cnt_ratPltH) = ...
                     plot(D.P.Rat.x, D.P.Rat.y, '.', ...
@@ -5471,6 +5462,14 @@ fprintf('END OF RUN\n');
                     'MarkerEdgeColor', D.UI.ratPosAllCol, ...
                     'MarkerSize', 2, ... // TEMP
                     'Parent', D.UI.axH(1));
+                end
+                
+                % Plot occ
+                if D.PAR.sesTask == 'Forage'
+                    delete(D.UI.imgRFOCC);
+                    D.UI.imgRFOCC = imagesc(D.P.occMat+D.P.pathNowMat, ...
+                        'Parent', D.UI.axH(3));
+                end
                 
                 % Plot current rat position with larger marker
                 if isfield(D.UI, 'vtRatPltNow')
@@ -5482,13 +5481,6 @@ fprintf('END OF RUN\n');
                     'MarkerEdgeColor', [0, 0, 0], ...
                     'MarkerSize', 10, ...
                     'Parent', D.UI.axH(2));
-                
-                % Plot occ
-                if D.PAR.sesTask == 'Forage'
-                    delete(D.UI.imgRFOCC);
-                    D.UI.imgRFOCC = imagesc(D.P.occMat+D.P.pathNowMat, ...
-                        'Parent', D.UI.axH(3));
-                end
                 
             end
             
@@ -5970,9 +5962,18 @@ fprintf('END OF RUN\n');
                                 % Check for changed targ
                                 if D.DB.simTargAng ~= D.PAR.pathTargArr(D.I.targInd)
                                     
+                                    % Get current rad pos
+                                    [rad_start, ~] = VT_2_Rad(D.DB.simXY);
+                                    
+                                    % Add some noise
+                                    ang_end = D.PAR.pathTargArr(D.I.targInd);
+                                    noise = (rand(1) - 0.5) * ...
+                                        (((2*D.UI.rfRad*pi) * (D.PAR.pathTargWdt/360)) * 0.5);
+                                    ang_end = ang_end+noise;
+                                    
                                     % Compute angle between current pos and new targ
-                                    ang_str = D.DB.simTargAng;
-                                    ang_targ = D.PAR.pathTargArr(D.I.targInd);
+                                    ang_str = rad2deg(rad_start);
+                                    ang_targ = ang_end;
                                     [x1,y1] = pol2cart(deg2rad(ang_str), 1);
                                     [x2,y2] = pol2cart(deg2rad(ang_targ), 1);
                                     x_diff = x2-x1;
@@ -5986,7 +5987,7 @@ fprintf('END OF RUN\n');
                                     end
                                     D.DB.simRunRad = deg2rad(ang_new);
                                     
-                                    % Store current target
+                                    % Store new target
                                     D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
                                     
                                     % Reset roh
@@ -6005,23 +6006,16 @@ fprintf('END OF RUN\n');
                                 [x_diff,y_diff] = pol2cart(rad, roh_now);
                                 
                                 % Check if out of bounds
-                                [~, roh] = VT_2_RAD([D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff]);
+                                [~, roh] = VT_2_Rad([D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff]);
                                 if roh < D.P.rfRohBnd(2)
                                     D.DB.simXY = [D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff];
                                 end
-                                
-                                % TEMP
-                                fprintf('roh=%0.2f bnd=%0.2f\r\n', roh, D.P.rfRohBnd(2)-(5/D.UI.arnRad))
                                 
                                 % Store current targ ang
                                 D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
                             end
                             
                         end
-                        
-                        
-                        % TEMP
-                        %fprintf('roh_diff=%0.2f roh_now=%0.2f rad_now=%0.2f rad_diff=%0.2f x=%0.2f y=%0.2f\r\n', roh_diff, roh_now, rad_now, rad_diff, x, y)
                         
                         % Send Pos data to CS
                         SendM2C('p', ts_now, D.DB.simXY(1), D.DB.simXY(2));
@@ -7114,7 +7108,7 @@ fprintf('END OF RUN\n');
         %% ========================== MINOR FUNCTIONS =====================
         
         % -----------------------CONVERT VT POS TO RAD POS-----------------
-        function [rad, roh] = VT_2_RAD(xy_pos)
+        function [rad, roh] = VT_2_Rad(xy_pos)
             
             % Save x/y pos samples in seperate vars
             x = xy_pos(:,1);

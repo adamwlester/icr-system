@@ -204,7 +204,6 @@ public:
 	uint32_t t_tryMoveTill = 0;
 	bool doAbortMove = false;
 	double posAbs = 0;
-	float minSpeed = 0;
 	const int dt_update = 10;
 	uint32_t t_updateNext = 0;
 	double distLeft = 0;
@@ -4915,7 +4914,8 @@ bool GetButtonInput()
 			!fc.doChangeLCDstate &&
 			(do_flag_fun[i][0] || do_flag_fun[i][1])) {
 
-			ChangeLCDlight(25);
+			// Turn on LCD LED
+			ChangeLCDlight(10);
 		}
 
 		// Reset flag
@@ -5242,7 +5242,14 @@ void QuitSession()
 	HardStop("QuitSession");
 	Pid.Stop("QuitSession");
 	Bull.TurnOff("QuitSession");
-	delayMicroseconds(100);
+
+	// Log/print anything left in queue
+	while (Log.WriteLog());
+	while (PrintDebug());
+
+	// Wait 1 sec for any backround stuff to finish
+	delay(1000);
+
 	// Restart Arduino
 	REQUEST_EXTERNAL_RESET;
 }
@@ -6149,6 +6156,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler()
 {
+
 	// Bail if not active now
 	if (!v_doStepTimer) {
 		return;
@@ -6433,13 +6441,14 @@ void setup() {
 	// SETUP AUTODRIVER
 
 	// Configure SPI
-	PrintLCD(true, "SETUP", "AutoDriver");
+	PrintLCD(true, "RUN SETUP", "AutoDriver");
 	AD_R.SPIConfig();
 	delayMicroseconds(100);
 	AD_F.SPIConfig();
 	delayMicroseconds(100);
 	// Reset boards
 	AD_Reset();
+	PrintLCD(true, "DONE SETUP", "AutoDriver");
 
 	// Make sure motor is stopped and in high impedance
 	AD_R.hardHiZ();
@@ -6448,23 +6457,26 @@ void setup() {
 	// SETUP BIG EASY DRIVER
 
 	// Start BigEasyDriver in sleep
-	PrintLCD(true, "SETUP", "Big Easy");
+	PrintLCD(true, "RUN SETUP", "Big Easy");
 	digitalWrite(pin.ED_RST, HIGH);
 	digitalWrite(pin.ED_SLP, LOW);
+	PrintLCD(true, "DONE SETUP", "Big Easy");
 
 	// INITIALIZE PIXY
-	PrintLCD(true, "SETUP", "Pixy");
+	PrintLCD(true, "RUN SETUP", "Pixy");
 	Pixy.init();
 	Wire.begin();
+	PrintLCD(true, "DONE SETUP", "Pixy");
 
 	// DUMP BUFFER
-	PrintLCD(true, "SETUP", "Dump Serial");
+	PrintLCD(true, "RUN SETUP", "Dump Serial");
 	while (c2r.port.available() > 0) {
 		c2r.port.read();
 	}
 	while (a2r.port.available() > 0) {
 		a2r.port.read();
 	}
+	PrintLCD(true, "DONE SETUP", "Dump Serial");
 
 	// RESET VOLITILES AND RELAYS
 	v_t_irProxDebounce = millis(); // (ms)
@@ -6482,7 +6494,7 @@ void setup() {
 	uint32_t t_check_vcc = millis() + 1000;
 
 	// Loop till vcc or timeout
-	PrintLCD(true, "SETUP", "Battery Check");
+	PrintLCD(true, "RUN SETUP", "Battery Check");
 	while (CheckBattery(true) == 0 && millis() < t_check_vcc);
 
 	// Exit with error if power not on
@@ -6493,9 +6505,10 @@ void setup() {
 		digitalWrite(pin.Rel_EtOH, LOW);
 		RunErrorHold("POWER OFF");
 	}
+	PrintLCD(true, "DONE SETUP", "Battery Check");
 
 	// SETUP OPENLOG
-	PrintLCD(true, "SETUP", "OpenLog");
+	PrintLCD(true, "RUN SETUP", "OpenLog");
 	DebugFlow("[setup] RUNNING: OpenLog Setup...");
 	while (PrintDebug());
 
@@ -6503,32 +6516,37 @@ void setup() {
 	if (Log.Setup())
 	{
 		// Log/print setup finished
+		PrintLCD(true, "DONE SETUP", "OpenLog");
 		DebugFlow("[setup] SUCCEEDED: OpenLog Setup");
 		while (PrintDebug());
 	}
 	else {
 		// Hold for error
+		PrintLCD(true, "FAILED SETUP", "OpenLog");
 		DebugError("!!ERROR!! [setup] ABORTED: OpenLog Setup", true);
 		while (PrintDebug());
 		RunErrorHold("OPENLOG SETUP");
 	}
 
 	// Create new log file
-	PrintLCD(true, "SETUP", "Log File");
+	PrintLCD(true, "RUN SETUP", "Log File");
 	DebugFlow("[setup] RUNNING: Make New Log...");
 	if (Log.OpenNewLog() == 0) {
 		// Hold for error
+		PrintLCD(true, "FAILED SETUP", "Log File");
 		DebugError("!!ERROR!! [setup] ABORTED: Setup", true);
 		while (PrintDebug());
 		RunErrorHold("OPEN LOG FILE");
 	}
 	else {
+		PrintLCD(true, "DONE SETUP", "Log File");
 		sprintf(str, "[setup] SUCCEEDED: Make New Log: file_name=%s", Log.logFile);
 		DebugFlow(str);
 		while (PrintDebug());
 	}
 
 	// DEFINE EXTERNAL INTERUPTS
+	PrintLCD(true, "RUN SETUP", "Interrupts");
 	PrintLCD(true, "SETUP", "Interrupts");
 	uint32_t t_check_ir = millis() + 1000;
 	bool is_ir_low = false;
@@ -6561,6 +6579,7 @@ void setup() {
 
 	// Start Feed Arm timer
 	Timer1.attachInterrupt(Interupt_TimerHandler).start(1000);
+	PrintLCD(true, "DONE SETUP", "Interrupts");
 
 	// CLEAR LCD
 	ChangeLCDlight(0);
@@ -7062,31 +7081,36 @@ void loop() {
 
 	}
 
-	// Wait for queue buffer to empty
-	if (
-		fc.doQuit && 
-		!CheckResend(&r2a) &&
-		!CheckResend(&r2c) &&
-		!SendPacket(&r2a) &&
-		!SendPacket(&r2c)) {
+	// Check if time to quit
+	if (fc.doQuit) {
 
-		// Tell CS quit is done
-		if (!fc.isQuitConfirmed) {
-			QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('Q', &c2r)], true);
-			fc.isQuitConfirmed = true;
-		}
+		// Wait for any unfinished opperations
+		if (
+			!SendPacket(&r2a) &&
+			!SendPacket(&r2c) &&
+			!CheckResend(&r2a) &&
+			!CheckResend(&r2c) &&
+			!Log.WriteLog() &&
+			!PrintDebug()) {
 
-		// Quit after 100 ms
-		if (t_quit == 0) {
-			t_quit = millis() + 100;
-		}
+			// Tell CS quit is done
+			if (!fc.isQuitConfirmed) {
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('Q', &c2r)], true);
+				fc.isQuitConfirmed = true;
+			}
 
-		// Quit
-		else if(fc.doQuit && millis() > t_quit)
-		{
-			// Quit session
-			DebugFlow("[loop] QUITING...");
-			QuitSession();
+			// Quit after 100 ms
+			if (t_quit == 0) {
+				t_quit = millis() + 100;
+			}
+
+			// Quit
+			else if (fc.doQuit && millis() > t_quit)
+			{
+				// Quit session
+				DebugFlow("[loop] QUITING...");
+				QuitSession();
+			}
 		}
 	}
 

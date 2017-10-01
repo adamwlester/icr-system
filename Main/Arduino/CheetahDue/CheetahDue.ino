@@ -1871,7 +1871,7 @@ void loop()
 	GetSerial();
 
 	// SEND DATA
-	if (SendPacket());
+	if (SendPacket()); 
 
 	// PRINT QUEUED DB
 	else if (PrintDebug());

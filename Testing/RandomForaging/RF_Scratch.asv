@@ -109,11 +109,11 @@ else
     % Setup temp path mat
     %path_bins = round(D.PAR.rfBins*((D.UI.rfRad-ceil(D.UI.rfTargWdt/2)) / D.UI.arnRad));
     path_bins = D.PAR.rfBins;
-    path_width = D.PAR.pathWdth*2;
     mat_eye = eye(path_bins*2 + D.PAR.pathWdth);
     mat_p = zeros(size(mat_eye));
-    ind = floor(path_width/2)*-1 : floor(path_width/2);
-    for i = 1:path_width
+    %ind = (floor(D.PAR.pathWdth/2)-3)*-1 : (floor(D.PAR.pathWdth/2)+3);
+    ind = floor(D.PAR.pathWdth/2)*-1 : floor(D.PAR.pathWdth/2);
+    for i = 1:D.PAR.pathWdth
         if ind(i) < 0
             mat_p = mat_p + padarray(mat_eye(abs(ind(i))+1:end,:),[abs(ind(i)),0],'post');
         elseif ind(i) > 0
@@ -141,19 +141,20 @@ else
             % Rotate
             mat_rot = imrotate(mat_now,deg,'bilinear','crop');
             % Cut and pad
-            rind = floor(size(mat_eye,1)/2)-floor(path_bins/2):floor(size(mat_eye,1)/2)+floor(path_bins/2);
+            rind = floor(size(mat_eye,1)/2)-path_bins/2):floor(size(mat_eye,1)/2)+path_bins;
             cind = floor(size(mat_eye,2)/2):floor(size(mat_eye,1)/2)+path_bins;
             mat_rot = mat_rot(rind,cind);
-            % Flip
-            mat_rot = flip(mat_rot,2);
-            imgH = imagesc(mat_rot, 'Parent', ax_1);
-            pause(0.5);
-            delete(imgH);
+            
+            figure 
+            imagesc(mat_rot)
+            imagesc(mat_rot, 'Parent', ax_1);
+            pause(1);
+            delete(gcf);
             continue
             
             % Cut and pad
-            mat_rot = mat_rot(floor(size(mat_eye,1)/2) - ceil(path_width/2) : end, ...
-                floor(size(mat_eye,2)/2) - ceil(path_width/2): end);
+            mat_rot = mat_rot(floor(size(mat_eye,1)/2) - ceil(D.PAR.pathWdth/2) : end, ...
+                floor(size(mat_eye,2)/2) - ceil(D.PAR.pathWdth/2): end);
             mat_rot = mat_rot(1:path_bins,1:path_bins);
             mat_rot = padarray(mat_rot, [0,path_bins-size(mat_rot,2)],'pre');
             % Flip
@@ -166,6 +167,7 @@ else
             for j = [1:n_targs]-1
                 if c==1
                     D.P.pathMat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                    D.P.pathMat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
                 else
                     rat_mat(:,:,i+1,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
                     rat_mat(:,:,D.PAR.nPaths-i,j+1) = imrotate(mat_mir,j*D.PAR.pathDegDist,'bilinear','crop');
