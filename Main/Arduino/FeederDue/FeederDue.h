@@ -65,15 +65,15 @@ struct DB
 	const bool print_r2c = true;
 	const bool print_a2r = true;
 	const bool print_r2a = true;
-	const bool print_rcvdVT = false;
-	const bool print_pid = false;
+	const bool print_motorControl = true;
+	const bool print_pid = true;
 	const bool print_bull = false;
+	const bool print_rcvdVT = false;
 	const bool print_logMode = false;
 	const bool print_logStore = false;
 	const bool print_a2o = false;
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
-	const bool print_motorControl = false;
 	const bool print_runSpeed = false;
 
 	// Testing
@@ -263,9 +263,7 @@ uint16_t cnt_warn = 0;
 uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
-byte n_pings = 5;
-byte cnt_ping = 0;
-uint32_t dt_ping[10][2] = { { 0 } };
+const uint16_t n_pings = 5;
 
 // Print debugging
 const int printQueueSize = 30;
@@ -378,7 +376,7 @@ const int trackLEDduty = 75; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-						 // LCD
+// LCD
 extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 

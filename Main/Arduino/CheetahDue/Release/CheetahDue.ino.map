@@ -2948,27 +2948,27 @@ OUTPUT(C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Rele
  .debug_ranges  0x00000930      0x248 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .debug_ranges  0x00000b78       0xd0 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
-.debug_line     0x00000000     0x6735
- .debug_line    0x00000000      0xf10 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
- .debug_line    0x00000f10       0x87 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
- .debug_line    0x00000f97      0x633 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
- .debug_line    0x000015ca      0x35a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
- .debug_line    0x00001924       0xb1 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
- .debug_line    0x000019d5      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
- .debug_line    0x00001e70      0x5d9 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
- .debug_line    0x00002449      0x35e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
- .debug_line    0x000027a7      0x5f3 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
- .debug_line    0x00002d9a      0x4ad C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
- .debug_line    0x00003247      0x3d5 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
- .debug_line    0x0000361c      0x717 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
- .debug_line    0x00003d33      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
- .debug_line    0x000041ce      0x1d7 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
- .debug_line    0x000043a5      0x663 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
- .debug_line    0x00004a08      0x4ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
- .debug_line    0x00004f07      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
- .debug_line    0x000052f3      0x814 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
- .debug_line    0x00005b07      0x92f C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
- .debug_line    0x00006436      0x2ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+.debug_line     0x00000000     0x6737
+ .debug_line    0x00000000      0xf12 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o
+ .debug_line    0x00000f12       0x87 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
+ .debug_line    0x00000f99      0x633 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\variant\variant.cpp.o
+ .debug_line    0x000015cc      0x35a C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
+ .debug_line    0x00001926       0xb1 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(hooks.c.o)
+ .debug_line    0x000019d7      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+ .debug_line    0x00001e72      0x5d9 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+ .debug_line    0x0000244b      0x35e C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring.c.o)
+ .debug_line    0x000027a9      0x5f3 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
+ .debug_line    0x00002d9c      0x4ad C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
+ .debug_line    0x00003249      0x3d5 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(main.cpp.o)
+ .debug_line    0x0000361e      0x717 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Print.cpp.o)
+ .debug_line    0x00003d35      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(Reset.cpp.o)
+ .debug_line    0x000041d0      0x1d7 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
+ .debug_line    0x000043a7      0x663 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+ .debug_line    0x00004a0a      0x4ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+ .debug_line    0x00004f09      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
+ .debug_line    0x000052f5      0x814 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+ .debug_line    0x00005b09      0x92f C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+ .debug_line    0x00006438      0x2ff C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
 .debug_str      0x00000000     0x58ce
  .debug_str     0x00000000      0xf48 C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.cpp.o

@@ -1093,9 +1093,9 @@ namespace ICR_Run
                 byte[] msg_data = new byte[12];
                 byte[] msg_pack = new byte[2];
                 byte[] msg_conf = new byte[1];
-                long t_send = 0;
                 bool do_loop = true;
-                bool buff_ready = false;
+                bool is_min_dt_send_rcv = false;
+                bool is_buff_ready = false;
                 bool is_clogged = false;
                 bool is_hanging = false;
                 string dat_str = "";
@@ -1106,16 +1106,16 @@ namespace ICR_Run
                 while (do_loop)
                 {
                     // Delay send time till x ms after last send or rcvd
-                    t_send = c2r.DT_SentRcvd(t: sw_main.ElapsedMilliseconds) > r2c.DT_SentRcvd(t: sw_main.ElapsedMilliseconds) ?
-                        sw_main.ElapsedMilliseconds + (dt_sendSent - c2r.DT_SentRcvd(t: sw_main.ElapsedMilliseconds)) :
-                        sw_main.ElapsedMilliseconds + (dt_sendRcvd - r2c.DT_SentRcvd(t: sw_main.ElapsedMilliseconds));
+                    is_min_dt_send_rcv =
+                        c2r.DT_SentRcvd(t: sw_main.ElapsedMilliseconds) < dt_sendSent &&
+                        r2c.DT_SentRcvd(t: sw_main.ElapsedMilliseconds) < dt_sendRcvd;
 
                     // Make sure outbut and input buffer have enough space
-                    buff_ready = sp_Xbee.BytesToWrite == 0 && sp_Xbee.BytesToRead == 0;
+                    is_buff_ready = sp_Xbee.BytesToWrite == 0 && sp_Xbee.BytesToRead == 0;
 
                     // Check if loop should continue
                     do_loop =
-                        (sw_main.ElapsedMilliseconds < t_send || !buff_ready) &&
+                        (is_min_dt_send_rcv || !is_buff_ready) &&
                         fc.ContinueRobCom();
 
                     // Get status
@@ -1144,7 +1144,7 @@ namespace ICR_Run
                 if (is_clogged || is_hanging)
                 {
                     // Get status info
-                    dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
+                    dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
                     buff_str = String.Format("tx={0} rx={1} queued={2} dt_queue={3} dt_send={4} dt_rcvd={5}",
                    sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
@@ -1213,7 +1213,7 @@ namespace ICR_Run
                 c2r.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                 // Store final status info
-                dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
+                dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
                 buff_str = String.Format("bytes_sent={0} tx={1} rx={2} queued={3} dt_queue={4} dt_send={5} dt_rcvd={6}",
                     msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
@@ -1411,11 +1411,8 @@ namespace ICR_Run
                 // Local vars
                 UnionHack U = new UnionHack(0, '0', 0, 0, 0);
                 bool r2c_head_found = false;
-                bool r2a_head_found = false;
                 bool r2c_id_found = false;
-                bool r2a_id_found = false;
                 bool r2c_foot_found = false;
-                bool r2a_foot_found = false;
                 byte[] head_bytes = new byte[1];
                 byte[] id_bytes = new byte[1];
                 byte[] conf_bytes = new byte[1];
@@ -1447,14 +1444,10 @@ namespace ICR_Run
                     if (head == r2c.head[0])
                         r2c_head_found = true;
 
-                    // Check if for r2a head
-                    if (head == r2a.head[0])
-                        r2a_head_found = true;
-
                 }
 
                 // Find id and check message is intended for CS
-                if (r2c_head_found || r2a_head_found)
+                if (r2c_head_found)
                 {
 
                     if (XbeeBuffReady(1, r2c.t_parse_str, "id"))
@@ -1477,22 +1470,11 @@ namespace ICR_Run
                             }
                         }
 
-                        // Check for r2a id 
-                        for (int i = 0; i < r2a.id.Length; i++)
-                        {
-                            if (id == r2a.id[i])
-                            {
-                                r2a_id_found = true;
-                                break;
-                            }
-                        }
-
                     }
                 }
 
                 // Get data, packet number and do_conf flag
-                if ((r2c_head_found && r2c_id_found) ||
-                    (r2a_head_found && r2a_id_found))
+                if (r2c_head_found && r2c_id_found)
                 {
 
                     // Get data
@@ -1547,15 +1529,11 @@ namespace ICR_Run
                         if (foot == r2c.foot[0])
                             r2c_foot_found = true;
 
-                        // Check for r2a foot
-                        if (foot == r2a.foot[0])
-                            r2a_foot_found = true;
-
                     }
                 }
 
                 // Format data string
-                long dt_rcvd = Math.Max(r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds), r2a.DT_SentRcvd(sw_main.ElapsedMilliseconds));
+                long dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
                 long dt_parse = sw_main.ElapsedMilliseconds - r2c.t_parse_str;
                 string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
                         id, dat[0], dat[1], dat[2], pack, do_conf, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, dt_parse, c2r.DT_SentRcvd(), dt_rcvd);
@@ -1599,19 +1577,8 @@ namespace ICR_Run
 
                 }
 
-                // Handle r2a packet
-                else if (r2a_foot_found)
-                {
-                    // Update flags
-                    r2a.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
-
-                    // Log/print rcvd details
-                    LogEvent_Thread("   [RCVD] r2a: " + dat_str, t: r2a.t_new);
-                }
-
                 // If all data found restart loop
-                if ((r2c_head_found && r2c_id_found && r2c_foot_found) ||
-                    (r2a_head_found && r2a_id_found && r2a_foot_found))
+                if (r2c_head_found && r2c_id_found && r2c_foot_found)
                 {
                     // Change streaming status
                     if (!fc.isRobComActive)
@@ -1630,34 +1597,25 @@ namespace ICR_Run
                 else
                 {
                     // Add to dropped count
-                    if (r2c_head_found)
-                        r2c.AddDropped(1);
-                    else if (r2a_head_found)
-                        r2a.AddDropped(1);
-                    else
-                        r2c.AddDropped(1);
+                    r2c.AddDropped(1);
 
                     // Get from info
-                    char from = r2c_head_found ? 'c' : r2a_head_found ? 'a' : '?';
-
-                    // Get drop count info
-                    int[] cnt_dropped = new int[2] { r2c_head_found ? r2c.cnt_dropped[0] : r2a_head_found ? r2a.cnt_dropped[0] : r2c.cnt_dropped[0],
-                        r2c_head_found ? r2c.cnt_dropped[1] : r2a_head_found ? r2a.cnt_dropped[1] : r2c.cnt_dropped[1] };
+                    char from = r2c_head_found ? 'c' : '?';
 
                     // Get found flags info
                     string found = String.Format("|{0}|{1}|{2}|",
-                        r2c_head_found ? "r2c_head" : r2a_head_found ? "r2a_head" : "no_head",
-                        r2c_id_found ? "r2c_id" : r2a_id_found ? "r2a_id" : "no_id",
-                        r2c_foot_found ? "r2c_foot" : r2a_foot_found ? "r2a_foot" : "no_foot");
+                        r2c_head_found ? "r2c_head" : "no_head",
+                        r2c_id_found ? "r2c_id" : "no_id",
+                        r2c_foot_found ? "r2c_foot" : "no_foot");
 
                     // Log/print available info
                     LogEvent_Thread(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packet: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6:0.00}|{7:0.00}|{8:0.00}| pack={9} do_conf={10} foot={11} bytes_read={12} rx={13} tx={14} parse_dt={15}",
-                        from, cnt_dropped[0], cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - r2c.t_parse_str), is_warning: true);
+                        from, r2c.cnt_dropped[0], r2c.cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - r2c.t_parse_str), is_warning: true);
 
                     // Dump buffer if > 1 consecutive drops and no bytes read
-                    if (cnt_dropped[0] > 1)
+                    if (r2c.cnt_dropped[0] > 1)
                     {
-                        LogEvent_Thread("**WARNING** [ParseR2C] Dumping r2 Input Buffer", is_warning: true);
+                        LogEvent_Thread("**WARNING** [ParseR2C] Dumping r2c Input Buffer", is_warning: true);
                         sp_Xbee.DiscardInBuffer();
                     }
                 }
@@ -2956,7 +2914,7 @@ namespace ICR_Run
             }
             get { return _isMAThanging; }
         }
-       
+
         // Constructor
         public Flow_Control(
             object _lock_print_log
@@ -2989,7 +2947,7 @@ namespace ICR_Run
 
                 Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                 Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
-                
+
             }
 
             // Wait for key press
@@ -3174,10 +3132,14 @@ namespace ICR_Run
         // Get dt sent or received
         public long DT_SentRcvd(long t = 0)
         {
-            if (t == 0)
-                return t_parse_str > t_new ? t_parse_str : t_new - t_last;
-            else
-                return t - t_parse_str > t_new? t_parse_str : t_new;
+            // Get t1 and t2
+            long t2 = t != 0 ? t :
+                t_parse_str > t_new ? t_parse_str : t_new;
+            long t1 = t == 0 ? t_last :
+                t_parse_str > t_new ? t_parse_str : t_new;
+
+            // Return t2-t1
+            return t2 - t1;
         }
 
         // Find id index
@@ -3322,7 +3284,7 @@ namespace ICR_Run
                     // Store error info
                     if (is_error)
                     {
-                        _err_line[_cnt_err<1000? _cnt_err++: 999] = cnt_logsStored;
+                        _err_line[_cnt_err < 1000 ? _cnt_err++ : 999] = cnt_logsStored;
                     }
                     else if (is_warning)
                     {

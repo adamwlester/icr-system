@@ -857,9 +857,9 @@ bool SendPacket()
 	buff_rx = Serial1.available();
 
 	// Bail if buffer or time inadequate
-	if (!(buff_tx == 0 &&
-		buff_rx == 0 &&
-		millis() > t_xBeeSent + dt_sendSent)) {
+	if (buff_tx > 0 ||
+		buff_rx > 0 ||
+		millis() < t_xBeeSent + dt_sendSent) {
 
 		// Indicate still packs to send
 		return true;

@@ -513,6 +513,8 @@ float CheckBattery(bool force_check = false);
 void ChangeLCDlight(uint32_t duty = 256);
 // QUIT AND RESTART ARDUINO
 void QuitSession();
+// DO HARDWARE TEST
+void HardwareTest();
 // CHECK LOOP TIME AND MEMORY
 void CheckLoop();
 // LOG/PRINT MAIN EVENT
@@ -726,7 +728,7 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 {
 	// Make sure pos val range [0, 140*PI]
 	set_pos = set_pos < 0 ? set_pos + (140 * PI) : set_pos;
-	set_pos = set_pos >(140 * PI) ? set_pos - (140 * PI) : set_pos;
+	set_pos = set_pos > (140 * PI) ? set_pos - (140 * PI) : set_pos;
 
 	// Compute ts
 	uint32_t ts = this->t_tsNow + (t - this->t_msNow);
@@ -2764,10 +2766,10 @@ bool LOGGER::WriteLog(bool do_send)
 	// Local vars
 	char str[300] = { 0 };
 	bool is_logs = false;
-	
+
 	// Bail no new logs or write blocked
 	if (queueIndRead == queueIndStore &&
-			logQueue[queueIndStore][0] == '\0') {
+		logQueue[queueIndStore][0] == '\0') {
 
 		// Indicate no logs to write
 		is_logs = false;
@@ -2823,7 +2825,7 @@ bool LOGGER::WriteLog(bool do_send)
 
 	// Print stored log
 	if (db.print_logStore) {
-		logQueue[queueIndRead][strlen(logQueue[queueIndRead])-2] = '\0';
+		logQueue[queueIndRead][strlen(logQueue[queueIndRead]) - 2] = '\0';
 		sprintf(str, "   [LOG] r2c: cnt=%d b_stored=%d/%d b_sent=%d q_store=%d q_read=%d \"%s\"",
 			cnt_logsStored, strlen(logQueue[queueIndRead]), cnt_logBytesStored, cnt_logBytesSent, queueIndStore, queueIndRead, logQueue[queueIndRead]);
 		QueueDebug(str, millis());
@@ -3029,7 +3031,7 @@ void LOGGER::StreamLogs()
 			if (cnt_logBytesSent == milestone_incriment[milestone_ind]) {
 
 				// Print
-				sprintf(str, "[LOGGER::StreamLogs] Log Write %d%% Complete: bytes_sent=%d/%d", 
+				sprintf(str, "[LOGGER::StreamLogs] Log Write %d%% Complete: bytes_sent=%d/%d",
 					milestone_ind * 10, cnt_logBytesSent, cnt_logBytesStored);
 				DebugFlow(str, millis());
 				while (PrintDebug());
@@ -3062,7 +3064,7 @@ void LOGGER::StreamLogs()
 	// Resume logging
 	delay(100);
 	fc.doBlockLogWrite = false;
-	SetToWriteMode(logFile); 
+	SetToWriteMode(logFile);
 
 	// Log warnings summary
 	char warn_lines[200] = "ON LINES |";
@@ -3107,7 +3109,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Send remaining logs imediately
-	while (WriteLog(true) && mode == '<'); 
+	while (WriteLog(true) && mode == '<');
 	delay(100);
 
 	// End reached send ">>>"
@@ -3731,13 +3733,19 @@ bool SendPacket(R2 *r2)
 	char dat_str[200] = { 0 };
 	uint32_t t_queue = millis();
 	R4 *r4;
+	R4 *r4o;
+	R2 *r2o;
 
 	// Set pointer to R4 struct
 	if (r2->instID == "r2c") {
 		r4 = &c2r;
+		r2o = &r2a;
+		r4o = &a2r;
 	}
 	else if (r2->instID == "r2a") {
 		r4 = &a2r;
+		r2o = &r2c;
+		r4o = &c2r;
 	}
 
 	// Bail if nothing in queue
@@ -3751,17 +3759,15 @@ bool SendPacket(R2 *r2)
 	buff_rx = r2->port.available();
 
 	// Bail if buffer or time inadequate
-	if (!(buff_tx == 0 &&
-		buff_rx == 0 &&
-		millis() > r2->t_sent + dt_sendSent)) {
+	if (buff_tx > 0 ||
+		buff_rx > 0 ||
+		millis() < r2->t_sent + dt_sendSent ||
+		millis() < r2o->t_sent + dt_sendSent ||
+		millis() < r4->t_rcvd + dt_sendRcvd ||
+		millis() < r4o->t_rcvd + dt_sendRcvd) {
 
 		// Indicate still packs to send
 		return true;
-	}
-
-	// Add small delay if just recieved
-	else if (millis() < r4->t_rcvd + dt_sendRcvd) {
-		delayMicroseconds(500);
 	}
 
 	// Itterate send ind
@@ -4589,11 +4595,8 @@ void CheckPixy() {
 	uint32_t t_px_ts = 0;
 	double pixy_pos_y = 0;
 
-	// Get new blocks
-	uint16_t blocks = Pixy.getBlocks();
-
-	// Bail in no new data
-	if (!blocks) {
+	// Bail if robot not streaming yet
+	if (!Pos[1].is_streamStarted) {
 		return;
 	}
 
@@ -4603,8 +4606,11 @@ void CheckPixy() {
 		return;
 	}
 
-	// Bail if robot not streaming yet
-	if (!Pos[1].is_streamStarted) {
+	// Get new blocks
+	uint16_t blocks = Pixy.getBlocks();
+
+	// Bail in no new data
+	if (!blocks) {
 		return;
 	}
 
@@ -5258,6 +5264,150 @@ void QuitSession()
 
 
 #pragma region --------DEBUGGING---------
+
+// DO HARDWARE TEST
+void HardwareTest()
+{
+	// Local vars
+	char str[200] = { 0 };
+	uint32_t t_test_str = 0;
+	uint32_t dt_test = 10000;
+	uint32_t dt_ping[2][n_pings] = { { 0 } };
+	float dt_ping_avg[2] = { 0 };
+	uint32_t dt_ping_sum = 0;
+	uint16_t cnt_ping[2] = { 0,0 };
+	byte r2i = 0;
+	bool do_send_ping[2] = { true, true };
+	uint32_t t_sol_open = 0;
+	uint32_t dt_sol_open = 500;
+	uint32_t dt_close_etoh_sol = 500;
+	uint32_t dt_close_feed_sol = 100;
+	uint32_t t_mot_run = 0;
+	uint32_t dt_run_mot = 500;
+	bool is_ping_test_done = false;
+	R2 *r2;
+	R4 *r4;
+
+	// Log/print
+	DebugFlow("[HardwareTest] RUNNING HARDWARE TEST...");
+
+	// Print remaining queue
+	while (PrintDebug());
+	// Store remaining logs
+	while (Log.WriteLog());
+
+	// Make sure all data sent
+	do {
+		GetSerial(&c2r);
+	} while (SendPacket(&r2c));
+	do {
+		GetSerial(&a2r);
+	} while (SendPacket(&r2a));
+
+	// Store start time
+	t_test_str = millis();
+
+	// Run Test
+	while (millis() < t_test_str + dt_test) {
+
+		// Send pings
+		if (!is_ping_test_done) {
+
+			// Do send receive check
+			if (cnt_ping[0] <= n_pings ||
+				cnt_ping[1] <= n_pings) {
+
+				// Ping CS and CheetahDue
+				r2 = r2i == 0 ? &r2c : &r2a;
+				r4 = r2i == 0 ? &c2r : &a2r;
+
+				// Check for reply
+				GetSerial(r4);
+
+				// Store round trip time
+				if (r4->isNew &&
+					r4->dat[0] == cnt_ping[r2i]) {
+					
+					// Store dt send
+					dt_ping[r2i][cnt_ping[r2i]] = r4->t_rcvd - r2->t_sent;
+
+					// Itterate count
+					cnt_ping[r2i]++;
+
+					// Set flag to send next
+					do_send_ping[r2i] = cnt_ping[r2i] <= n_pings;
+
+					// Flip destination
+					r2i = r2i == 0 ? 1 : 0;
+
+					// Next loop
+					continue;
+				}
+
+				// Send next r2 ping
+				if (do_send_ping[r2i]) {
+
+					// Send pack
+					float dat1 = cnt_ping[r2i];
+					float dat2 = cnt_ping[0] > 0 ? dt_ping[0][cnt_ping[0] - 1] : 0;
+					float dat3 = cnt_ping[1] > 0 ? dt_ping[1][cnt_ping[1] - 1] : 0;
+					QueuePacket(r2, 't', dat1, dat2, dat3, 0, true);
+
+					// Reset flag
+					do_send_ping[r2i] = false;
+				}
+
+			}
+
+			// Get final ping times
+			else {
+
+				// Compute r2c ping average
+				char str_ping[2][200] = { {0} };
+				for (int i = 0; i < 2; i++) {
+					
+					// Reset sum
+					dt_ping_sum = 0;
+
+					// Loop pings
+					for (int j = 0; j < n_pings; j++) {
+
+						dt_ping_sum += dt_ping[i][j];
+						sprintf(str, "%d|", dt_ping[i][j]);
+						strcat(str_ping[i], str);
+					}
+
+					// Compute average
+					dt_ping_avg[i] = (float)dt_ping_sum / (n_pings);
+				}
+
+				// Send r2c and r2a ping times
+				QueuePacket(&r2c, 't', n_pings + 1, dt_ping_avg[0], dt_ping_avg[1], 0, true);
+
+				// Log/print ping time
+				sprintf(str, "[HardwareTest] PING TIMES r2c: avg=%0.2f all=|%s", dt_ping_avg[0], str_ping[0]);
+				DebugFlow(str);
+				sprintf(str, "[HardwareTest] PING TIMES r2a: avg=%0.2f all=|%s", dt_ping_avg[1], str_ping[1]);
+				DebugFlow(str);
+
+				// Flag done
+				is_ping_test_done = true;
+			}
+
+		}
+
+		// Send any packets
+		SendPacket(&r2c);
+		SendPacket(&r2a); 
+
+		// Log/print all
+		PrintDebug();
+		Log.WriteLog();
+	}
+
+	// Log/print
+	DebugFlow("[HardwareTest] FINISHED HARDWARE TEST...");
+}
 
 // CHECK LOOP TIME AND MEMORY
 void CheckLoop()
@@ -6401,7 +6551,12 @@ void setup() {
 	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
 	digitalWrite(pin.PWR_OFF, HIGH);
 	while (!db.DEBUG && digitalRead(pin.PWR_Swtch) == HIGH);
-	
+
+	// Pause before powering on if in debug mode
+	if (!db.DEBUG) {
+		delay(1000);
+	}
+
 	// TURN ON POWER
 	digitalWrite(pin.PWR_OFF, LOW);
 	delayMicroseconds(100);
@@ -6589,8 +6744,15 @@ void setup() {
 	fc.isManualSes = true;
 	fc.doAllowRevMove = true;
 
-	// PRINT SETUP FINISHED
-	DebugFlow("[setup] FINISHED: Setup");
+	// RESET FEEDER ARM
+	DebugFlow("[setup] RUNNING: Reset Feeder Arm...");
+	while (PrintDebug());
+	PrintLCD(true, "RUN SETUP", "Retract Arm");
+	Reward.RetractFeedArm();
+	while (Reward.doRetractArm) {
+		Reward.CheckFeedArm();
+	}
+	DebugFlow("[setup] FINISHED: Reset Feeder Arm");
 	while (PrintDebug());
 
 	// PRINT AVAILABLE MEMORY
@@ -6604,14 +6766,13 @@ void setup() {
 	DebugFlow(str);
 	while (PrintDebug());
 
-	
+	// PRINT SETUP FINISHED
+	DebugFlow("[setup] FINISHED: Setup");
+	while (PrintDebug());
 
 	// TEMP
 	//Log.TestLoad(0, "LOG00035.CSV");
 	//Log.TestLoad(2500);
-
-	// RESET FEEDER ARM
-	Reward.RetractFeedArm();
 
 }
 
@@ -6859,11 +7020,11 @@ void loop() {
 			double new_speed = double(cmd.testDat);
 
 
-			if (new_speed > 0){
+			if (new_speed > 0) {
 				// Run motor
 				RunMotor('f', new_speed, "Override");
 			}
-			else{
+			else {
 				// Halt robot
 				AD_R.hardStop();
 				AD_F.hardStop();
@@ -6963,69 +7124,8 @@ void loop() {
 #pragma region //--- (h) PING TEST ---
 	if (c2r.idNow == 'h' && c2r.isNew)
 	{
-		// Log/print
-		DebugFlow("[loop] DO PING TEST");
-
-		// Print remaining queue
-		while (PrintDebug());
-		// Store remaining logs
-		while (Log.WriteLog());
-
-		// Make sure all data sent
-		do {
-			GetSerial(&c2r);
-		} while (SendPacket(&r2c));
-		do {
-			GetSerial(&a2r);
-		} while (SendPacket(&r2a));
-
-		// Send pings
-		while (cnt_ping < n_pings) {
-
-			// Interate count
-			cnt_ping++;
-
-			// Pick CS and CheetahDue
-			for (int i = 0; i < 2; i++)
-			{
-				R2 *r2 = i == 0 ? &r2c : &r2a;
-				R4 *r4 = i == 0 ? &c2r : &a2r;
-
-				// Send next r2c ping
-				QueuePacket(r2, 't', cnt_ping, cnt_ping > 1 ? dt_ping[cnt_ping - 2][0]: 0, cnt_ping > 1 ? dt_ping[cnt_ping - 2][1] : 0, 0, true);
-				while (SendPacket(r2));
-
-				// Wait for c2r ping
-				do {
-					GetSerial(r4);
-				} while (!r4->isNew);
-
-				// Store round trip time
-				dt_ping[cnt_ping - 1][i] = (r4->t_rcvd - t_sync) - (r2->t_sent - t_sync);
-
-			}
-		}
-
-		// Local vars
-		float dt_ping_r2c = 0;
-		float dt_ping_r2a = 0;
-		uint32_t dt_ping_sum_r2c = 0;
-		uint32_t dt_ping_sum_r2a = 0;
-
-		// Compute r2c ping average
-		for (int i = 0; i < cnt_ping; i++) {
-			dt_ping_sum_r2c += dt_ping[i][0];
-			dt_ping_sum_r2a += dt_ping[i][1];
-		}
-		dt_ping_r2c = (float)dt_ping_sum_r2c / (cnt_ping);
-		dt_ping_r2a = (float)dt_ping_sum_r2a / (cnt_ping);
-
-		// Send r2c and r2a ping times
-		QueuePacket(&r2c, 't', ++cnt_ping, dt_ping_r2c, dt_ping_r2a, 0, true);
-
-		// Log/print ping time
-		sprintf(horeStr, "[loop] PING TIMES: r2c=%0.2f r2a=%0.2f", dt_ping_r2c, dt_ping_r2a);
-		DebugFlow(horeStr);
+		// Run hardware test
+		HardwareTest();
 
 	}
 #pragma endregion
