@@ -4531,6 +4531,12 @@ void CheckSampDT() {
 		return;
 	}
 
+	// Bail if we have not gotten at least one record from each
+	if (!Pos[0].is_streamStarted ||
+		!Pos[2].is_streamStarted) {
+		return;
+	}
+
 	// Compute dt
 	dt_vt = millis() - Pos[0].t_msNow;
 	dt_pixy = millis() - Pos[2].t_msNow;
