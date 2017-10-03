@@ -279,6 +279,7 @@ const int dt_vccCheck = 500;
 const int dt_vccSend = 15000;
 const int dt_vccPrint = 60000;
 float vccNow = 0;
+float vccAvg = 0;
 float vccCutoff = 11.6;
 float batVoltArr[100] = { 0 };
 const int dt_icUpdate = 10;

@@ -4251,7 +4251,7 @@ bool ManualRun(char dir)
 	RunMotor(dir, new_speed, "Override");
 
 	// Print voltage and speed to LCD
-	sprintf(vcc_str, "VCC=%0.2fV", vccNow);
+	sprintf(vcc_str, "VCC=%0.2fV", vccAvg);
 	sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
 	PrintLCD(false, vcc_str, speed_str);
 }
@@ -5113,7 +5113,6 @@ float CheckBattery(bool force_check)
 	static int n_samples = 0;
 	uint32_t vcc_bit_in = 0;
 	uint32_t ic_bit_in = 0;
-	float vcc_in = 0;
 	float vcc_sum = 0;
 	bool is_mot_off = false;
 	byte do_shutdown = false;
@@ -5163,19 +5162,19 @@ float CheckBattery(bool force_check)
 			digitalWrite(pin.Rel_Vcc, HIGH);
 
 			// Bail
-			return vccNow;
+			return vccAvg;
 		}
 
 		// Calculate voltage
 		vcc_bit_in = analogRead(pin.BatVcc);
-		vcc_in = (float)vcc_bit_in * bit2volt;
+		vccNow = (float)vcc_bit_in * bit2volt;
 		vcc_sum = 0;
 		// Shift array and compute average
 		for (int i = 99; i > 0; i--) {
 			batVoltArr[i] = batVoltArr[i - 1];
 			vcc_sum += batVoltArr[i];
 		}
-		batVoltArr[0] = vcc_in;
+		batVoltArr[0] = vccNow;
 		vcc_avg = vcc_sum / 99;
 
 		// Return 0 till array full
@@ -5185,8 +5184,8 @@ float CheckBattery(bool force_check)
 		}
 
 		// Store new voltage level
-		vcc_last = vccNow;
-		vccNow = vcc_avg;
+		vcc_last = vccAvg;
+		vccAvg = vcc_avg;
 
 		// Store time
 		t_vcc_update = millis();
@@ -5195,7 +5194,7 @@ float CheckBattery(bool force_check)
 		for (int i = 0; i < 10 - 1; i++) {
 			vcc_arr[i] = vcc_arr[i + 1];
 		}
-		vcc_arr[9] = vccNow;
+		vcc_arr[9] = vccAvg;
 
 	}
 
@@ -5205,7 +5204,7 @@ float CheckBattery(bool force_check)
 		millis() > t_vcc_send + dt_vccSend) {
 
 		// Send
-		QueuePacket(&r2c, 'J', vccNow, 0, 0, 0, false);
+		QueuePacket(&r2c, 'J', vccAvg, 0, 0, 0, false);
 
 		// Store time
 		t_vcc_send = millis();
@@ -5216,7 +5215,7 @@ float CheckBattery(bool force_check)
 
 		// Log/print voltage and current
 		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA dt_check=%d",
-			vccNow, icNow, millis() - t_vcc_update);
+			vccAvg, icNow, millis() - t_vcc_update);
 		DebugFlow(str);
 
 		// Store time
@@ -5224,10 +5223,10 @@ float CheckBattery(bool force_check)
 	}
 
 	// Print voltage and current to LCD if voltage changed
-	if (round(vccNow * 100) != round(vcc_last * 100)) {
+	if (round(vccAvg * 100) != round(vcc_last * 100)) {
 		char vcc_str[100];
 		char speed_str[100];
-		sprintf(vcc_str, "VCC=%0.2fV", vccNow);
+		sprintf(vcc_str, "VCC=%0.2fV", vccAvg);
 		sprintf(speed_str, "IC=%0.2fA", icNow);
 		PrintLCD(false, vcc_str, speed_str);
 	}
@@ -5242,12 +5241,12 @@ float CheckBattery(bool force_check)
 	// Perform shutdown
 	if (do_shutdown) {
 		// Run error hold then shutdown after 5 min
-		sprintf(str, "BATT LOW %0.2fV", vccNow);
+		sprintf(str, "BATT LOW %0.2fV", vccAvg);
 		RunErrorHold(str, 60000);
 	}
 
 	// Return battery voltage
-	return vccNow;
+	return vccAvg;
 }
 
 // TURN LCD LIGHT ON/OFF
@@ -5313,19 +5312,9 @@ void HardwareTest()
 	uint16_t cnt_ping[2] = { 0,0 };
 	byte r2i = 0;
 	bool do_send_ping[2] = { true, true };
-	bool is_ping_test_done = false;
 	R2 *r2;
 	R4 *r4;
-
-	// Solenoid test
-	uint32_t t_sol_open = 0;
-	uint32_t dt_sol_open = 500;
-	uint32_t dt_close_etoh_sol = 500;
-	uint32_t dt_close_feed_sol = 100;
-
-	// Moter test
-	uint32_t t_mot_run = 0;
-	uint32_t dt_run_mot = 500;
+	bool is_ping_test_done = false;
 
 	// Pixy test
 	const byte n_pixy_samp = 10;
@@ -5338,6 +5327,23 @@ void HardwareTest()
 	double pixy_pos_avg = 0;
 	bool is_pixy_test_done = false;
 
+	// Stress test
+	const byte n_stress_samp = 10;
+	byte cnt_stress = 0;
+	uint32_t t_stress_run = 0;
+	uint32_t dt_stress_run = dt_test / n_stress_samp;
+	uint32_t dt_close_sol = 100;
+	double run_speed[n_stress_samp] = { 0 };
+	bool is_stressin = false;
+	double vcc_arr[n_stress_samp] = { 0 };
+	double vcc_sum = 0;
+	double vcc_avg = 0;
+	run_speed[0] = 5;
+	byte s_now = 5;
+	for (int i = 0; i < n_stress_samp; i++) {
+		run_speed[i] = i % 2 == 0 ? s_now += 20 : s_now;
+	}
+	bool is_stress_test_done = false;
 
 	// Log/print
 	DebugFlow("[HardwareTest] RUNNING HARDWARE TEST...");
@@ -5359,7 +5365,11 @@ void HardwareTest()
 	t_test_str = millis();
 
 	// Run Test
-	while (millis() < t_test_str + dt_test) {
+	while (
+		(!is_ping_test_done ||
+			!is_pixy_test_done ||
+			!is_stress_test_done) &&
+		millis() < t_test_str + dt_test * 2) {
 
 		// Send pings
 		if (!is_ping_test_done) {
@@ -5495,6 +5505,93 @@ void HardwareTest()
 				is_pixy_test_done = true;
 			}
 
+		}
+
+		// Do stress test
+		if (!is_stress_test_done) {
+
+			// Do next stage
+			if (cnt_stress < n_stress_samp &&
+				millis() > t_stress_run + dt_stress_run) {
+
+				// Flip state
+				is_stressin = !is_stressin;
+
+				// Run motors
+				RunMotor(runDirNow == 'f' ? 'r' : 'f', run_speed[cnt_stress], "Override");
+
+				// Open Solenoids
+				digitalWrite(pin.Rel_Rew, HIGH);
+				digitalWrite(pin.Rel_EtOH, HIGH);
+
+				// Change LEDS
+				analogWrite(pin.Disp_LED, is_stressin ? 255 : 0);
+				analogWrite(pin.RewLED_C, is_stressin ? 255 : 0);
+				analogWrite(pin.RewLED_R, is_stressin ? 255 : 0);
+				analogWrite(pin.TrackLED, 255);
+
+				// Print to LCD
+				sprintf(str, "STRESS %d %0.0f", cnt_stress + 1, run_speed[cnt_stress]);
+				PrintLCD(false, str);
+
+				// Store time
+				t_stress_run = millis();
+
+				// Store battery voltage
+				CheckBattery(true);
+				vcc_arr[cnt_stress] = vccNow;
+
+				// Itterate count
+				cnt_stress++;
+			}
+
+			else if (cnt_stress == n_stress_samp &&
+				millis() > t_stress_run + dt_stress_run) {
+
+				// Stop motors
+				HardStop("HardwareTest");
+
+				// Turn all off
+				analogWrite(pin.Disp_LED, 0);
+				analogWrite(pin.RewLED_C, 0);
+				analogWrite(pin.RewLED_R, 0);
+				analogWrite(pin.TrackLED, 0);
+				digitalWrite(pin.Rel_Rew, LOW);
+				digitalWrite(pin.Rel_EtOH, LOW);
+
+				// Get average vcc
+				char str_vcc[200] = { 0 };
+				for (int i = 0; i < n_stress_samp; i++) {
+
+					vcc_sum += vcc_arr[i];
+					sprintf(str, "%0.2f|", vcc_arr[i]);
+					strcat(str_vcc, str);
+				}
+
+				// Compute average
+				vcc_avg = vcc_sum / (n_stress_samp);
+
+				// Log/print vcc
+				sprintf(str, "[HardwareTest] VCC: avg=%0.2f all=|%s", vcc_avg, str_vcc);
+				DebugFlow(str);
+
+				// Set flag
+				is_stress_test_done = true;
+			}
+
+			// Close solonoids
+			if (millis() > t_stress_run + dt_close_sol) {
+
+				// Close reward sol
+				if (digitalRead(pin.Rel_Rew) == HIGH) {
+					digitalWrite(pin.Rel_Rew, LOW);
+				}
+
+				// Close reward sol
+				if (digitalRead(pin.Rel_EtOH) == HIGH) {
+					digitalWrite(pin.Rel_EtOH, LOW);
+				}
+			}
 		}
 
 		// Send any packets
