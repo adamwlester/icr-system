@@ -6,6 +6,8 @@
 //----------LIBRARIES------------
 
 // General
+#include "FeederDue_PinMap.h"
+//
 #include "Arduino.h"
 //
 #include <string.h>
@@ -52,10 +54,11 @@
 struct DB
 {
 	// Debugging
-	const bool DEBUG = false;
+	const bool DEBUG = true;
 
 	// Printing
-	bool CONSOLE = false;
+	bool CONSOLE = true;
+	bool PRINTNOW = false;
 	bool LCD = false;
 	// What to print
 	const bool print_errors = true;
@@ -127,97 +130,6 @@ int cal_nMeasPerSteps = 10;
 #pragma endregion
 
 
-#pragma region ============== PIN MAPPING ==============
-
-// Pin mapping
-struct PIN
-{
-	// Power off
-	const int PWR_OFF = 45;
-	const int PWR_ON = 44;
-	const int PWR_Swtch = 24;
-	const int PWR_Swtch_Grn = 25;
-
-	// Autodriver
-	const int AD_CSP_R = 5;
-	const int AD_CSP_F = 6;
-	const int AD_RST = 7;
-
-	// XBees
-	const int X1a_CTS = 29;
-	const int X1b_CTS = 27;
-	const int X1a_UNDEF = 28;
-	const int X1b_UNDEF = 26;
-
-	// Display
-	const int Disp_SCK = 8;
-	const int Disp_MOSI = 9;
-	const int Disp_DC = 10;
-	const int Disp_RST = 11;
-	const int Disp_CS = 12;
-	const int Disp_LED = 13;
-
-	// LEDs
-	const int RewLED_R = 4;
-	const int RewLED_C = 3;
-	const int TrackLED = 2;
-
-	// Relays
-	const int Rel_EtOH = 23;
-	const int Rel_Rew = 22;
-	const int Rel_Vcc = A5;
-
-	// Voltage Regulators
-	const int REG_24V_ENBLE = 34;
-	const int REG_12V_ENBLE = 46;
-	const int REG_5V_ENBLE = 48;
-
-	// BigEasyDriver
-	const int ED_RST = 47;
-	const int ED_SLP = 49;
-	const int ED_DIR = 51;
-	const int ED_STP = 53;
-	const int ED_ENBL = 35;
-	const int ED_MS1 = 37;
-	const int ED_MS2 = 39;
-	const int ED_MS3 = 41;
-
-	// OpenLog
-	const int OL_RST = 30;
-
-	// Feeder switch
-	/*
-	Note: Do not use real ground pin as this will cause
-	an upload error if switch is shorted when writing sketch
-	*/
-	const int FeedSwitch_Gnd = 33;
-	const int FeedSwitch = 32;
-
-	// Voltage monitor
-	const int BatVcc = A6;
-	const int BatIC = A7;
-
-	// Buttons
-	const int Btn[3] = { A2, A1, A0 };
-
-	/*
-	Note: pins bellow are all used for external interupts
-	and must all be members of the same port (PortA)
-	*/
-
-	// IR proximity sensors
-	const int IRprox_Rt = 42;
-	const int IRprox_Lft = 43;
-
-	// IR detector
-	const int IRdetect = 31;
-}
-// Initialize
-pin;
-
-#pragma endregion
-
-
 #pragma region ============= VARIABLE SETUP ============
 
 // Flow/state control
@@ -228,6 +140,7 @@ struct FC
 	bool isBlockingTill = false;
 	bool doQuit = false;
 	bool isQuitConfirmed = false;
+	bool isHandShook = false;
 	bool isSesStarted = false;
 	bool doStreamCheck = false;
 	bool isComsStarted = false;
@@ -343,7 +256,7 @@ const float feedDist = 66;
 // Movement
 float moveToSpeed = 80; // (cm/sec)
 
-						// REWARD
+// REWARD
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
@@ -372,7 +285,8 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-const int trackLEDduty = 75; // value between 0 and 255
+const int trackLEDdutyMax = 75; // value between 0 and 255
+const int trackLEDdutyMin = 50; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 

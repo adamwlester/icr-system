@@ -143,6 +143,7 @@
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\tiny_ekf.h" />
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\TinyEKF\tiny_ekf_struct.h" />
     <ClInclude Include="FeederDue.h" />
+    <ClInclude Include="FeederDue_PinMap.h" />
     <ClInclude Include="__vm\.FeederDue.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>

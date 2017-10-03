@@ -5,6 +5,8 @@
 // ######################################
 
 #include "FeederDue.h"
+//
+#include "FeederDue_PinMap.h"
 
 // NOTES:
 /*
@@ -410,7 +412,7 @@ protected:
 		hx[4] = this->x[2]; // Rat vel pixy from previous state
 		hx[5] = this->x[3]; // Rob vel vt from previous state
 
-							// Jacobian of measurement function
+	// Jacobian of measurement function
 		H[0][0] = 1; // Rat pos vt from previous state
 		H[1][0] = 1; // Rat pos pixy from previous state
 		H[2][1] = 1; // Rob pos vt from previous state
@@ -494,7 +496,7 @@ void InitializeTracking();
 // CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
 void CheckSampDT();
 // PROCESS PIXY STREAM
-void CheckPixy();
+double CheckPixy(bool do_test_check = false);
 // UPDATE EKF
 void UpdateEKF();
 // LOG TRACKING
@@ -1562,7 +1564,8 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	isTargSet = true;
 
 	// Log/print
-	sprintf(str, "[MOVETO::CompTarg] FINISHED: Set Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'", posCumStart, posAbsStart, targPos, targDist, moveDir);
+	sprintf(str, "[MOVETO::CompTarg] FINISHED: Set Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
+		posCumStart, posAbsStart, targPos, targDist, moveDir);
 	DebugFlow(str);
 
 	// Retern flag
@@ -3961,7 +3964,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-												// Overcurent enable
+						// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
@@ -4434,14 +4437,14 @@ void InitializeTracking()
 		// Log/Print
 		DebugFlow("[InitializeTracking] RUNNING: Initialize Rat Tracking...");
 
-		// Log/print rat and robot starting pos
-		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f",
-			Pos[0].posNow, Pos[2].posNow, Pos[1].posNow);
-		DebugFlow(str);
-
 		// Check that pos values make sense
 		cm_diff = Pos[0].posNow - Pos[1].posNow;
 		cm_dist = min((140 * PI) - abs(cm_diff), abs(cm_diff));
+
+		// Log/print rat and robot starting pos
+		sprintf(str, "[InitializeTracking] Starting Positions: rat_vt=%0.2f rat_pixy=%0.2f rob_vt=%0.2f rat_dist=%0.2f",
+			Pos[0].posNow, Pos[2].posNow, Pos[1].posNow, cm_dist);
+		DebugFlow(str);
 
 		// Rat should be ahead of robot and by no more than 90 deg
 		if (cm_diff < 0 ||
@@ -4506,7 +4509,7 @@ void InitializeTracking()
 		if (cnt_blink >= 3)
 		{
 			analogWrite(pin.RewLED_R, rewLEDmin);
-			analogWrite(pin.TrackLED, trackLEDduty);
+			analogWrite(pin.TrackLED, trackLEDdutyMax);
 			run_blink = false;
 		}
 	}
@@ -4593,31 +4596,46 @@ void CheckSampDT() {
 }
 
 // PROCESS PIXY STREAM
-void CheckPixy() {
+double CheckPixy(bool do_test_check) {
 
 	// Local vars
+	char str[200] = { 0 };
 	double px_rel = 0;
 	double px_abs = 0;
 	uint32_t t_px_ts = 0;
 	double pixy_pos_y = 0;
 
 	// Bail if robot not streaming yet
-	if (!Pos[1].is_streamStarted) {
-		return;
+	if (!do_test_check &&
+		!Pos[1].is_streamStarted) {
+		return px_rel;
 	}
 
 	// Bail if rat not in or doing sym test
-	if ((!fc.isRatIn || db.do_simRatTest) &&
-		!db.do_posDebug) {
-		return;
+	if (!do_test_check &&
+		!db.do_posDebug &&
+		(!fc.isRatIn || db.do_simRatTest)) {
+		return px_rel;
 	}
+
+	//// TEMP
+	//static int cnt = 0;
+	//char str[100];
+	//cnt++;
+	//sprintf(str, "%d block start", cnt);
+	//SerialUSB.println(str);
+	//delay(10);
 
 	// Get new blocks
 	uint16_t blocks = Pixy.getBlocks();
 
+	//// TEMP
+	//sprintf(str, "%d block end", cnt);
+	//SerialUSB.println(str);
+
 	// Bail in no new data
 	if (!blocks) {
-		return;
+		return px_rel;
 	}
 
 	// Save time stamp
@@ -4632,6 +4650,11 @@ void CheckPixy() {
 		pixyCoeff[3] * pixy_pos_y +
 		pixyCoeff[4];
 
+	// Return rel val is testing
+	if (do_test_check) {
+		return px_rel;
+	}
+
 	// Scale to abs space with rob vt data
 	px_abs = px_rel + Pos[1].posAbs;
 	if (px_abs > (140 * PI)) {
@@ -4643,10 +4666,14 @@ void CheckPixy() {
 
 	// Log/print first sample
 	if (!Pos[2].is_streamStarted) {
-		DebugFlow("[NetComCallbackVT] FIRST RAT PIXY RECORD");
+		sprintf(str, "[CheckPixy] FIRST RAT PIXY RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
+			Pos[2].posAbs, Pos[2].posNow, Pos[2].nLaps);
+		DebugFlow(str);
 		Pos[2].is_streamStarted = true;
 	}
 
+	// Return relative pos
+	return px_rel;
 }
 
 // UPDATE EKF
@@ -4862,7 +4889,7 @@ bool GetButtonInput()
 
 				// Reset flags etc
 				t_debounce[btn_ind] = millis() + dt_debounce[btn_ind];
-				analogWrite(pin.TrackLED, trackLEDduty);
+				analogWrite(pin.TrackLED, trackLEDdutyMax);
 				is_running[btn_ind] = false;
 				t_hold_min[btn_ind] = 0;
 				t_long_hold[btn_ind] = 0;
@@ -5276,23 +5303,41 @@ void HardwareTest()
 {
 	// Local vars
 	char str[200] = { 0 };
+	const uint32_t dt_test = 10000;
 	uint32_t t_test_str = 0;
-	uint32_t dt_test = 10000;
-	uint32_t dt_ping[2][n_pings] = { { 0 } };
+
+	// Pin test
+	uint32_t dt_ping_mat[2][n_pings] = { { 0 } };
 	float dt_ping_avg[2] = { 0 };
 	uint32_t dt_ping_sum = 0;
 	uint16_t cnt_ping[2] = { 0,0 };
 	byte r2i = 0;
 	bool do_send_ping[2] = { true, true };
+	bool is_ping_test_done = false;
+	R2 *r2;
+	R4 *r4;
+
+	// Solenoid test
 	uint32_t t_sol_open = 0;
 	uint32_t dt_sol_open = 500;
 	uint32_t dt_close_etoh_sol = 500;
 	uint32_t dt_close_feed_sol = 100;
+
+	// Moter test
 	uint32_t t_mot_run = 0;
 	uint32_t dt_run_mot = 500;
-	bool is_ping_test_done = false;
-	R2 *r2;
-	R4 *r4;
+
+	// Pixy test
+	const byte n_pixy_samp = 10;
+	uint32_t t_pixy_check = 0;
+	uint32_t dt_pixy_check = dt_test / n_pixy_samp / 4;
+	byte cnt_pixy = 0;
+	bool is_led_on = false;
+	double pixy_pos_arr[n_pixy_samp] = { 0 };
+	double pixy_pos_sum = 0;
+	double pixy_pos_avg = 0;
+	bool is_pixy_test_done = false;
+
 
 	// Log/print
 	DebugFlow("[HardwareTest] RUNNING HARDWARE TEST...");
@@ -5333,9 +5378,9 @@ void HardwareTest()
 				// Store round trip time
 				if (r4->isNew &&
 					r4->dat[0] == cnt_ping[r2i]) {
-					
+
 					// Store dt send
-					dt_ping[r2i][cnt_ping[r2i]] = r4->t_rcvd - r2->t_sent;
+					dt_ping_mat[r2i][cnt_ping[r2i]] = r4->t_rcvd - r2->t_sent;
 
 					// Itterate count
 					cnt_ping[r2i]++;
@@ -5355,8 +5400,8 @@ void HardwareTest()
 
 					// Send pack
 					float dat1 = cnt_ping[r2i];
-					float dat2 = cnt_ping[0] > 0 ? dt_ping[0][cnt_ping[0] - 1] : 0;
-					float dat3 = cnt_ping[1] > 0 ? dt_ping[1][cnt_ping[1] - 1] : 0;
+					float dat2 = cnt_ping[0] > 0 ? dt_ping_mat[0][cnt_ping[0] - 1] : 0;
+					float dat3 = cnt_ping[1] > 0 ? dt_ping_mat[1][cnt_ping[1] - 1] : 0;
 					QueuePacket(r2, 't', dat1, dat2, dat3, 0, true);
 
 					// Reset flag
@@ -5371,15 +5416,15 @@ void HardwareTest()
 				// Compute r2c ping average
 				char str_ping[2][200] = { {0} };
 				for (int i = 0; i < 2; i++) {
-					
+
 					// Reset sum
 					dt_ping_sum = 0;
 
 					// Loop pings
 					for (int j = 0; j < n_pings; j++) {
 
-						dt_ping_sum += dt_ping[i][j];
-						sprintf(str, "%d|", dt_ping[i][j]);
+						dt_ping_sum += dt_ping_mat[i][j];
+						sprintf(str, "%d|", dt_ping_mat[i][j]);
 						strcat(str_ping[i], str);
 					}
 
@@ -5402,17 +5447,70 @@ void HardwareTest()
 
 		}
 
+		// Test Pixy
+		if (!is_pixy_test_done) {
+
+			// Get new sample
+			if (cnt_pixy < n_pixy_samp &&
+				millis() > t_pixy_check + dt_pixy_check) {
+
+				// Flip led state
+				is_led_on = !is_led_on;
+
+				// Turn on/off LED
+				analogWrite(pin.RewLED_R, is_led_on ? 15 : 0);
+				t_pixy_check = millis();
+
+				// Check pixy and store pos
+				if (!is_led_on) {
+
+					// Store value
+					pixy_pos_arr[cnt_pixy] = CheckPixy(true);
+
+					// Itterate count
+					cnt_pixy++;
+				}
+			}
+
+			// Get final average
+			else if (cnt_pixy == n_pixy_samp) {
+
+				// Loop samples
+				char str_pixy[200] = { 0 };
+				for (int i = 0; i < n_pixy_samp; i++) {
+
+					pixy_pos_sum += pixy_pos_arr[i];
+					sprintf(str, "%0.2f|", pixy_pos_arr[i]);
+					strcat(str_pixy, str);
+				}
+
+				// Compute average
+				pixy_pos_avg = pixy_pos_sum / (n_pixy_samp);
+
+				// Log/print ping time
+				sprintf(str, "[HardwareTest] PIXY POS: avg=%0.2f all=|%s", pixy_pos_avg, str_pixy);
+				DebugFlow(str);
+
+				// Set flag
+				is_pixy_test_done = true;
+			}
+
+		}
+
 		// Send any packets
 		SendPacket(&r2c);
-		SendPacket(&r2a); 
+		SendPacket(&r2a);
 
 		// Log/print all
 		PrintDebug();
 		Log.WriteLog();
 	}
 
+	// Set flag
+	fc.isSesStarted = true;
+
 	// Log/print
-	DebugFlow("[HardwareTest] FINISHED HARDWARE TEST...");
+	DebugFlow("[HardwareTest] FINISHED HARDWARE TEST");
 }
 
 // CHECK LOOP TIME AND MEMORY
@@ -5428,6 +5526,7 @@ void CheckLoop()
 	static int c_buff_tx_last = 0;
 	static int a_buff_rx_last = 0;
 	static int a_buff_tx_last = 0;
+	static bool is_led_high = false;
 	bool is_dt_change = false;
 	bool is_loop_error = false;
 	bool is_buff_flooding = false;
@@ -5443,6 +5542,10 @@ void CheckLoop()
 	if (!fc.isSesStarted) {
 		return;
 	}
+
+	// Flicker led
+	analogWrite(pin.TrackLED, is_led_high ? trackLEDdutyMin : trackLEDdutyMax);
+	is_led_high = !is_led_high;
 
 	// Bail if this is a test run
 	if (db.is_runTest) {
@@ -5837,6 +5940,11 @@ void QueueDebug(char msg[], uint32_t t)
 
 	// Put it all together
 	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str_tim, spc, msg_copy);
+
+	// Check if should print now
+	if (db.PRINTNOW) {
+		PrintDebug();
+	}
 
 }
 
@@ -6296,7 +6404,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 	else {
 		analogWrite(pin.Disp_LED, 0);
 		analogWrite(pin.RewLED_C, rewLEDmin);
-		analogWrite(pin.TrackLED, trackLEDduty);
+		analogWrite(pin.TrackLED, trackLEDdutyMax);
 		do_led_on = true;
 		cnt_blink = 0;
 		do_blink = false;
@@ -6439,115 +6547,8 @@ void setup() {
 		while (!SerialUSB && millis() < t_check);
 	}
 
-	// SETUP OUTPUT PINS
-
-	// Power
-	pinMode(pin.PWR_OFF, OUTPUT);
-	pinMode(pin.PWR_ON, OUTPUT);
-	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
-	// Autodriver
-	pinMode(pin.AD_CSP_R, OUTPUT);
-	pinMode(pin.AD_CSP_F, OUTPUT);
-	pinMode(pin.AD_RST, OUTPUT);
-	// Display
-	pinMode(pin.Disp_SCK, OUTPUT);
-	pinMode(pin.Disp_MOSI, OUTPUT);
-	pinMode(pin.Disp_DC, OUTPUT);
-	pinMode(pin.Disp_RST, OUTPUT);
-	pinMode(pin.Disp_CS, OUTPUT);
-	pinMode(pin.Disp_LED, OUTPUT);
-	// LEDs
-	pinMode(pin.RewLED_R, OUTPUT);
-	pinMode(pin.RewLED_C, OUTPUT);
-	pinMode(pin.TrackLED, OUTPUT);
-	// Relays
-	pinMode(pin.Rel_Rew, OUTPUT);
-	pinMode(pin.Rel_EtOH, OUTPUT);
-	pinMode(pin.Rel_Vcc, OUTPUT);
-	// Voltage Regulators
-	pinMode(pin.REG_24V_ENBLE, OUTPUT);
-	pinMode(pin.REG_12V_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V_ENBLE, OUTPUT);
-	// BigEasyDriver
-	pinMode(pin.ED_RST, OUTPUT);
-	pinMode(pin.ED_SLP, OUTPUT);
-	pinMode(pin.ED_DIR, OUTPUT);
-	pinMode(pin.ED_STP, OUTPUT);
-	pinMode(pin.ED_ENBL, OUTPUT);
-	pinMode(pin.ED_MS1, OUTPUT);
-	pinMode(pin.ED_MS2, OUTPUT);
-	pinMode(pin.ED_MS3, OUTPUT);
-	// OpenLog
-	pinMode(pin.OL_RST, OUTPUT);
-	// Feeder switch
-	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
-	delayMicroseconds(100);
-
-	// Power
-	digitalWrite(pin.PWR_OFF, LOW);
-	digitalWrite(pin.PWR_ON, LOW);
-	digitalWrite(pin.PWR_Swtch_Grn, LOW);
-	// Autodriver
-	digitalWrite(pin.AD_CSP_R, LOW);
-	digitalWrite(pin.AD_CSP_F, LOW);
-	digitalWrite(pin.AD_RST, LOW);
-	// Display
-	digitalWrite(pin.Disp_SCK, LOW);
-	digitalWrite(pin.Disp_MOSI, LOW);
-	digitalWrite(pin.Disp_DC, LOW);
-	digitalWrite(pin.Disp_RST, LOW);
-	digitalWrite(pin.Disp_CS, LOW);
-	digitalWrite(pin.Disp_LED, LOW);
-	// LEDs
-	digitalWrite(pin.RewLED_R, LOW);
-	digitalWrite(pin.RewLED_C, LOW);
-	digitalWrite(pin.TrackLED, LOW);
-	// Relays
-	digitalWrite(pin.Rel_Rew, LOW);
-	digitalWrite(pin.Rel_EtOH, LOW);
-	digitalWrite(pin.Rel_Vcc, LOW);
-	// Voltage Regulators
-	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V_ENBLE, LOW);
-	digitalWrite(pin.REG_5V_ENBLE, LOW);
-	// Big Easy Driver
-	digitalWrite(pin.ED_MS1, LOW);
-	digitalWrite(pin.ED_MS2, LOW);
-	digitalWrite(pin.ED_MS3, LOW);
-	digitalWrite(pin.ED_RST, LOW);
-	digitalWrite(pin.ED_SLP, LOW);
-	digitalWrite(pin.ED_DIR, LOW);
-	digitalWrite(pin.ED_STP, LOW);
-	digitalWrite(pin.ED_ENBL, LOW);
-	// OpenLog
-	digitalWrite(pin.OL_RST, LOW);
-	// Feeder switch
-	digitalWrite(pin.FeedSwitch_Gnd, LOW);
-	delayMicroseconds(100);
-
-	// SET INPUT PINS
-
-	// Power
-	pinMode(pin.PWR_Swtch, INPUT);
-	// XBees
-	pinMode(pin.X1a_CTS, INPUT);
-	pinMode(pin.X1b_CTS, INPUT);
-	// Battery monitor
-	pinMode(pin.BatVcc, INPUT);
-	pinMode(pin.BatIC, INPUT);
-	// IR proximity sensors
-	pinMode(pin.IRprox_Rt, INPUT);
-	pinMode(pin.IRprox_Lft, INPUT);
-	// IR detector
-	pinMode(pin.IRdetect, INPUT);
-
-	// Set power, button and switch internal pullup
-	pinMode(pin.PWR_Swtch, INPUT_PULLUP);
-	for (int i = 0; i <= 2; i++) {
-		pinMode(pin.Btn[i], INPUT_PULLUP);
-	}
-	pinMode(pin.FeedSwitch, INPUT_PULLUP);
-	delayMicroseconds(100);
+	// SETUP PINS
+	SetupPins();
 
 	// WAIT FOR POWER SWITCH RELEASE
 	while (digitalRead(pin.PWR_Swtch) == LOW) {
@@ -6925,8 +6926,8 @@ void loop() {
 
 #pragma endregion
 
-#pragma region //--- FIRST PASS SETUP ---
-	if (!fc.isSesStarted)
+#pragma region //--- HOLD FOR HANDSHAKE ---
+	if (!fc.isHandShook)
 	{
 
 		// PULSE TRACKER LED
@@ -6992,7 +6993,7 @@ void loop() {
 		DebugFlow(horeStr);
 
 		// SET FLAG
-		fc.isSesStarted = true;
+		fc.isHandShook = true;
 		DebugFlow("[loop] READY TO ROCK!");
 
 	}
@@ -7614,7 +7615,9 @@ void loop() {
 
 			// Log/print first sample
 			if (!Pos[1].is_streamStarted) {
-				DebugFlow("[NetComCallbackVT] FIRST ROBOT VT RECORD");
+				sprintf(horeStr, "[loop] FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
+					Pos[1].posAbs, Pos[1].posNow, Pos[1].nLaps);
+				DebugFlow(horeStr);
 				Pos[1].is_streamStarted = true;
 			}
 		}
@@ -7635,7 +7638,9 @@ void loop() {
 
 				// Log/print first sample
 				if (!Pos[0].is_streamStarted) {
-					DebugFlow("[NetComCallbackVT] FIRST RAT VT RECORD");
+					sprintf(horeStr, "[loop] FIRST RAT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
+						Pos[0].posAbs, Pos[0].posNow, Pos[0].nLaps);
+					DebugFlow(horeStr);
 					Pos[0].is_streamStarted = true;
 				}
 			}
