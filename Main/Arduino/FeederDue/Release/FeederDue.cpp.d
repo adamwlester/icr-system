@@ -136,6 +136,7 @@ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\Feed
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Stream.h \
  C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue_PinMap.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\Arduino-MemoryFree/MemoryFree.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\DueTimer/DueTimer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src/SPI.h \

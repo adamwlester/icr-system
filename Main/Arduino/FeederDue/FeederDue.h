@@ -55,12 +55,13 @@ struct DB
 {
 	// Debugging
 	const bool DEBUG = true;
+	bool CONSOLE = true;
+	bool LOG = true;
+	bool PRINTNOW = false;
+	bool LOGNOW = true;
+	bool LCD = false;
 
 	// Printing
-	bool CONSOLE = true;
-	bool PRINTNOW = false;
-	bool LCD = false;
-	// What to print
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
@@ -79,19 +80,7 @@ struct DB
 	const bool print_o2aRaw = false;
 	const bool print_runSpeed = false;
 
-	// Testing
-	const bool do_posDebug = false; // I set
-	const bool do_posPlot = false; // I set
-	bool do_pidCalibration = false; // set by system
-	bool do_simRatTest = false; // set by system
-	bool is_runTest = false; // set by system
-
-	// Other
-	bool isErrLoop = false;
-
 	// Logging
-	bool LOG = true;
-	// What to print
 	const bool log_errors = true;
 	const bool log_flow = true;
 	const bool log_c2r = true;
@@ -114,6 +103,16 @@ struct DB
 	const bool log_vel_rob_vt = false;
 	const bool log_vel_rat_ekf = false;
 	const bool log_vel_rob_ekf = false;
+
+	// Testing
+	const bool do_posDebug = false; // I set
+	const bool do_posPlot = false; // I set
+	bool do_pidCalibration = false; // set by system
+	bool do_simRatTest = false; // set by system
+	bool is_runTest = false; // set by system
+
+	// Other
+	bool isErrLoop = false;
 }
 // Initialize
 db;
@@ -177,10 +176,12 @@ uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
 const uint16_t n_pings = 5;
+const uint16_t maxStoreStrLng = 300;
+const uint16_t maxMsgStrLng = maxStoreStrLng-50;
 
 // Print debugging
 const int printQueueSize = 30;
-char printQueue[printQueueSize][300] = { { 0 } };
+char printQueue[printQueueSize][maxStoreStrLng] = { { 0 } };
 int printQueueIndStore = 0;
 int printQueueIndRead = 0;
 
@@ -373,7 +374,7 @@ R4 c2r
 	// id
 	 {
 		'h', // setup handshake
-		't', // ping test
+		't', // hardware test
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -428,7 +429,7 @@ R4 a2r
 	'}',
 	// id
 	{
-		't', // ping test
+		't', // hardware test
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
@@ -502,7 +503,7 @@ R2 r2c
 	// id
 	{
 		'h', // setup handshake
-		't', // ping test
+		't', // hardware test
 		'T', // system test command
 		'S', // start session
 		'Q', // quit session
@@ -567,7 +568,7 @@ R2 r2a
 	'}',
 	// id
 	{
-		't', // ping test
+		't', // hardware test
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]

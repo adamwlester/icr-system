@@ -201,7 +201,7 @@ namespace ICR_Run
             _id:
             new char[17] {
             'h', // setup handshake
-            't', // ping test
+            't', // hardware test
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -231,7 +231,7 @@ namespace ICR_Run
             _id:
             new char[17] {
             'h', // setup handshake
-            't', // ping test
+            't', // hardware test
             'T', // system test command
             'S', // start session
             'Q', // quit session
@@ -260,7 +260,7 @@ namespace ICR_Run
             _flag_send_rcv: false,
             _id:
             new char[6] {
-            't', // ping test
+            't', // hardware test
             'q', // quit/reset
 	        'r', // reward
 	        's', // sound cond [0, 1, 2]
@@ -514,14 +514,14 @@ namespace ICR_Run
                 LogEvent_Thread("[Setup] SUCCEEDED: Robot Handshake");
 
                 // Run ping round trip test
-                LogEvent_Thread("[Setup] RUNNING: Ping Test...");
+                LogEvent_Thread("[Setup] RUNNING: Hardware Test...");
 
                 // Wait for x pings
-                pass = WaitForSerial(id: 't', dat: r2c.dat[r2c.ID_Ind('h')][0] + 1, do_abort: true, timeout: 15000);
+                pass = WaitForSerial(id: 't', dat: r2c.dat[r2c.ID_Ind('h')][0] + 1, do_abort: true, timeout: 20000);
                 if (pass)
                 {
                     // Log/print success
-                    LogEvent_Thread("[Setup] FINISHED: Ping Test");
+                    LogEvent_Thread("[Setup] FINISHED: Hardware Test");
 
                     // Log/print average ping time
                     double dt_ping_r2c = r2c.dat[r2c.ID_Ind('t')][1];
@@ -530,7 +530,7 @@ namespace ICR_Run
                 }
                 else
                 {
-                    LogEvent_Thread("!!ERROR!! [Setup] ABORTED: Ping Test", is_error: true);
+                    LogEvent_Thread("!!ERROR!! [Setup] ABORTED: Hardware Test", is_error: true);
                     return false;
                 }
             }
@@ -869,14 +869,14 @@ namespace ICR_Run
 
             // Check if complete log was imported
             if (robLogger.isLogComplete)
-                LogEvent_Thread(String.Format("[Exit] SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
+                LogEvent_Thread(String.Format("[Exit] SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
                     robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
             else if (robLogger.cnt_logsStored > 0)
-                LogEvent_Thread(String.Format("**WARNING** [Exit] PARTIALLY SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
+                LogEvent_Thread(String.Format("**WARNING** [Exit] PARTIALLY SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
                     robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_warning: true);
             else
             {
-                LogEvent_Thread(String.Format("!!ERROR!! [Exit] FAILED: Wait for Robot Log Save: logged={0} dropped={1} bytes_read={2} bytes_expected={3} dt_run={4}",
+                LogEvent_Thread(String.Format("!!ERROR!! [Exit] FAILED: Wait for Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
                     robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_error: true);
                 fc.isRunError = true;
             }
@@ -1145,7 +1145,7 @@ namespace ICR_Run
                 {
                     // Get status info
                     dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
-                    buff_str = String.Format("tx={0} rx={1} queued={2} dt_queue={3} dt_send={4} dt_rcvd={5}",
+                    buff_str = String.Format("tx={0} rx={1} queued={2} dt_queue={3} dt_snd={4} dt_rcv={5}",
                    sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
                     // Log/print
@@ -1214,7 +1214,7 @@ namespace ICR_Run
 
                 // Store final status info
                 dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
-                buff_str = String.Format("bytes_sent={0} tx={1} rx={2} queued={3} dt_queue={4} dt_send={5} dt_rcvd={6}",
+                buff_str = String.Format("bytes_sent={0} tx={1} rx={2} queued={3} dt_queue={4} dt_snd={5} dt_rcv={6}",
                     msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
                 // Check if sending pos data
@@ -1535,7 +1535,7 @@ namespace ICR_Run
                 // Format data string
                 long dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
                 long dt_parse = sw_main.ElapsedMilliseconds - r2c.t_parse_str;
-                string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} bytes_read={6} rx={7} tx={8} dt_parse={9} dt_send={10} dt_rcv={11}",
+                string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} b_read={6} rx={7} tx={8} dt_prs={9} dt_snd={10} dt_rcv={11}",
                         id, dat[0], dat[1], dat[2], pack, do_conf, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, dt_parse, c2r.DT_SentRcvd(), dt_rcvd);
 
                 // Store r2c packet data
@@ -1609,7 +1609,7 @@ namespace ICR_Run
                         r2c_foot_found ? "r2c_foot" : "no_foot");
 
                     // Log/print available info
-                    LogEvent_Thread(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packet: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6:0.00}|{7:0.00}|{8:0.00}| pack={9} do_conf={10} foot={11} bytes_read={12} rx={13} tx={14} parse_dt={15}",
+                    LogEvent_Thread(String.Format("**WARNING** [ParseR2C] Dropped r2{0} Packs: dropped={1}|{2} found={3} head={4} id=\'{5}\' dat=|{6:0.00}|{7:0.00}|{8:0.00}| pack={9} do_conf={10} foot={11} b_read={12} rx={13} tx={14} dt_prs={15}",
                         from, r2c.cnt_dropped[0], r2c.cnt_dropped[1], found, head, id, dat[0], dat[1], dat[2], pack, do_conf, foot, bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, sw_main.ElapsedMilliseconds - r2c.t_parse_str), is_warning: true);
 
                     // Dump buffer if > 1 consecutive drops and no bytes read
@@ -1755,7 +1755,7 @@ namespace ICR_Run
 
                         // Print
                         if (db.do_printDueLog)
-                            LogEvent_Thread(String.Format("   [LOG] a2c[{0}]: message=\"{1}\" chksum={2} bytes_read={3} rx={4} tx={5}",
+                            LogEvent_Thread(String.Format("   [LOG] a2c[{0}]: message=\"{1}\" chksum={2} b_read={3} rx={4} tx={5}",
                                 dueLogger.cnt_logsStored, log_str, chksum, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite));
                     }
 
@@ -1773,7 +1773,7 @@ namespace ICR_Run
                     dueLogger.AddDropped(1);
 
                     // Print
-                    LogEvent_Thread(String.Format("**WARNING** [GetArdLog] Dropped a2c Log: logged={0} dropped={1}|{2} head={3} message=\"{4}\" chksum={5} foot={6} bytes_read={7} rx={8} tx={9}",
+                    LogEvent_Thread(String.Format("**WARNING** [GetArdLog] Dropped a2c Log: logged={0} dropped={1}|{2} head={3} message=\"{4}\" chksum={5} foot={6} b_read={7} rx={8} tx={9}",
                        dueLogger.cnt_logsStored, dueLogger.cnt_dropped[0], dueLogger.cnt_dropped[1], head, log_str, chksum, foot, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
 
                     // Dump buffer if > 1 consecutive drops and no bytes read
@@ -1923,7 +1923,7 @@ namespace ICR_Run
             robLogger.bytesRead = read_ind;
 
             // Store data string
-            string dat_str = String.Format("bytes_read={0} bytes_expected=~{1} rx={2} tx={3} dt_stream={4}",
+            string dat_str = String.Format("b_read={0} bytes_expected=~{1} rx={2} tx={3} dt_stream={4}",
                     robLogger.bytesRead, robLogger.bytesToRcv, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, robLogger.logDT);
 
             // Check if logging timed out
@@ -2249,7 +2249,7 @@ namespace ICR_Run
             }
 
             // Store commmon data
-            string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} dt_rcvd={5}",
+            string dat_str = String.Format("id=\'{0}\' dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} dt_rcv={5}",
                     id, dat[0], dat[1], dat[2], pack, m2c.DT_SentRcvd());
 
             // Check for repeat packet
@@ -2662,7 +2662,7 @@ namespace ICR_Run
             }
             else if (db.do_printBlockedVt)
             {
-                LogEvent_Thread(String.Format("**WARNING** [NetComCallbackVT] VT Blocked: ent={0} cnt={1} dt_send={2}|{3}|{4}",
+                LogEvent_Thread(String.Format("**WARNING** [NetComCallbackVT] VT Blocked: ent={0} cnt={1} dt_snd={2}|{3}|{4}",
                     ent, vtHandler.cnt_block[ent], vtHandler.GetSendDT(ent), vtHandler.GetSendDT(ent, "avg"), sw_main.ElapsedMilliseconds - vtHandler.t_sent[ent]), is_warning: true);
             }
         }
@@ -2887,7 +2887,7 @@ namespace ICR_Run
             set
             {
                 _isRunError = value;
-                if (value)
+                if (value && !isRatIn)
                 {
                     _doAbort = true;
                 }

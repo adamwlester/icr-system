@@ -48,8 +48,8 @@ public:
 	// VARS
 	char instID[20] = { 0 };
 	int nSamp = 0;
-	double posArr[6] = { 0,0,0,0,0,0 }; // (cm)
-	uint32_t t_tsArr[6] = { 0,0,0,0,0,0 }; // (ms)
+	double posArr[6] = { 0 }; // (cm)
+	uint32_t t_tsArr[6] = { 0 }; // (ms)
 	int dt_skip = 0;
 	double velNow = 0.0f; // (cm/sec)
 	double velLast = 0.0f; // (cm/sec)
@@ -113,20 +113,20 @@ public:
 	uint32_t t_throttleTill = 0;
 	uint32_t t_lastThrottle = millis();
 	int cal_dt_min = 40; // (ms)
-	int cal_cntPcArr[4] = { 0, 0, 0, 0 };
+	int cal_cntPcArr[4] = { 0 };
 	int cal_stepNow = 0;
 	float cal_PcCnt = 0; // oscillation count
 	float cal_PcSum = 0; // oscillation period sum
 	uint32_t cal_t_PcNow = 0;
 	uint32_t cal_t_PcLast = 0;
-	float cal_PcArr[4] = { 0, 0, 0, 0 };
+	float cal_PcArr[4] = { 0 };
 	float cal_PcAvg = 0;
 	float cal_PcNow = 0;
 	float cal_PcAll = 0;
 	float cal_errNow = 0;
 	float cal_errLast = 0;
 	float cal_errAvg = 0;
-	float cal_errArr[4] = { 0, 0, 0, 0 };
+	float cal_errArr[4] = { 0 };
 	float cal_dt_update = 0;
 	float cal_errCnt = 0;
 	float cal_errSum = 0;
@@ -331,15 +331,15 @@ public:
 	uint32_t t_sent = 0; // (ms)
 	uint32_t t_rcvd = 0; // (ms)
 	uint32_t t_write = 0; // (us)
-	int dt_write = 50 * 1000; // (us)
+	const int dt_write = 50 * 1000; // (us)
 	uint32_t t_beginSend = 0;
 	int dt_beginSend = 1000;
-	static const int logQueueSize = 40;
-	char logQueue[logQueueSize][300] = { { 0 } };
-	int queueIndStore = 0;
-	int queueIndRead = 0;
+	static const int logQueueSize = 50;
+	char logQueue[logQueueSize][maxStoreStrLng] = { { 0 } };
+	int logQueueIndStore = 0;
+	int logQueueIndRead = 0;
 	int cnt_logsStored = 0;
-	static const int maxBytesStore = 2500;
+	static const int maxBytesStore = 500;
 	char rcvdArr[maxBytesStore] = { 0 };
 	char mode = ' '; // ['<', '>']
 	char openLgSettings[100] = { 0 };
@@ -553,6 +553,8 @@ void RunErrorHold(char msg[], uint32_t t_kill = 0);
 template <typename T> int CharInd(char id, T *r24);
 // BLINK LEDS AT RESTART/UPLOAD
 bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0);
+// PRINT ALL IN QUEUE ["PrintDebug", "WriteLog"]
+bool DoAll(char fun_id[]);
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler();
 // POWER OFF
@@ -583,7 +585,7 @@ POSTRACK::POSTRACK(uint32_t t, char obj_id[], int n_samp)
 void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 {
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	double pos_diff = 0;
 	double dist = 0;
 	double dist_sum = 0;
@@ -867,7 +869,7 @@ double PID::UpdatePID()
 void PID::Run(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Take motor control
 	SetMotorControl("Pid", "PID::Run");
@@ -887,7 +889,7 @@ void PID::Run(char called_from[])
 void PID::Stop(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	if (fc.motorControl == "Pid")
 	{
@@ -917,7 +919,7 @@ void PID::Stop(char called_from[])
 void PID::Hold(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Call Stop
 	Stop("Pid.Hold");
@@ -941,7 +943,7 @@ void PID::Reset()
 void PID::SetThrottle()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	if (!doThrottle) {
 		return;
@@ -1046,7 +1048,7 @@ void PID::CheckEKF(uint32_t t)
 void PID::ResetEKF(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Set flag and time
 	fc.isEKFReady = false;
@@ -1093,7 +1095,7 @@ double PID::RunPidCalibration()
 	*/
 
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	float pc_sum = 0;
 
 	if (cal_isCalFinished) {
@@ -1298,7 +1300,7 @@ void BULLDOZE::UpdateBull()
 void BULLDOZE::Reinitialize(byte del, byte spd, char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Update vars
 	bSpeed = (int)spd;
@@ -1314,7 +1316,7 @@ void BULLDOZE::Reinitialize(byte del, byte spd, char called_from[])
 void BULLDOZE::Run(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Take control
 	SetMotorControl("Bull", "BULLDOZE::Run");
@@ -1336,7 +1338,7 @@ void BULLDOZE::Run(char called_from[])
 void BULLDOZE::Stop(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Stop movement
 	RunMotor('f', 0, "Bull");
@@ -1368,7 +1370,7 @@ void BULLDOZE::Stop(char called_from[])
 void BULLDOZE::TurnOn(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Change state
 	state = "On";
@@ -1384,7 +1386,7 @@ void BULLDOZE::TurnOn(char called_from[])
 void BULLDOZE::TurnOff(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Change state
 	state = "Off";
@@ -1403,7 +1405,7 @@ void BULLDOZE::TurnOff(char called_from[])
 void BULLDOZE::Hold(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Change state
 	state = "Hold";
@@ -1426,7 +1428,7 @@ void BULLDOZE::Hold(char called_from[])
 void BULLDOZE::Resume(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Set state back to "On"
 	state = "On";
@@ -1496,7 +1498,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	}
 
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	double move_diff = 0;
 	int circ = 0;
 	int pos = 0;
@@ -1575,7 +1577,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerate, double speed_min)
 {
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	double new_speed = 0;
 
 	// Run if targ not reached
@@ -1678,7 +1680,7 @@ REWARD::REWARD(uint32_t t)
 void REWARD::StartRew()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Set to extend feeder arm 
 	ExtendFeedArm();
@@ -1734,7 +1736,7 @@ void REWARD::StartRew()
 bool REWARD::EndRew()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Bail if not rewarding
 	if (!isRewarding) {
@@ -1777,7 +1779,7 @@ bool REWARD::EndRew()
 void REWARD::SetRewDur(int zone_ind)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Set duration
 	duration = zoneRewDurs[zone_ind];
@@ -1796,8 +1798,8 @@ void REWARD::SetRewMode(char mode_now[], int arg2)
 	// NOTE: arg2 = reward delay or zone ind or reward duration
 
 	// Local vars
-	char str[200] = { 0 };
-	char dat_str[100] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
+	static char dat_str[100] = { 0 }; dat_str[0] = '\0';
 
 	// Store mode
 	sprintf(mode_str, "%s", mode_now);
@@ -2020,10 +2022,10 @@ void REWARD::RetractFeedArm()
 	H	H	H	Sixteenth Step	4W1 - 2 Phase
 	*/
 
-	// Bail if arm not extended
-	if (!isArmExtended) {
-		return;
-	}
+	//// Bail if arm not extended
+	//if (!isArmExtended) {
+	//	return;
+	//}
 
 	// Block handler
 	v_doStepTimer = false;
@@ -2064,7 +2066,7 @@ void REWARD::RetractFeedArm()
 void REWARD::CheckFeedArm()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	bool is_move_done = false;
 	bool is_timedout = false;
 
@@ -2196,14 +2198,16 @@ void REWARD::Reset()
 	// Log zone info
 	if (mode == "Free" || mode == "Cue")
 	{
-		char str1[200] = "[REWARD::Reset] ZONE OCC:";
-		char str2[200] = "[REWARD::Reset] ZONE CNT:";
+		static char str1[200] = { 0 }; str1[0] = '\0';
+		static char str2[200] = { 0 }; str2[0] = '\0';
+		static char ss1[50]; ss1[0] = '\0';
+		static char ss2[50]; ss2[0] = '\0';
+		sprintf(str1, "[REWARD::Reset] ZONE OCC:");
+		sprintf(str2, "[REWARD::Reset] ZONE CNT:");
 		for (int i = zoneMin; i <= zoneMax; i++)
 		{
-			char ss1[50];
 			sprintf(ss1, " z%d=%dms", i + 1, zoneOccTim[i]);
 			strcat(str1, ss1);
-			char ss2[50];
 			sprintf(ss2, " z%d=%d", i + 1, zoneOccCnt[i]);
 			strcat(str2, ss2);
 		}
@@ -2291,9 +2295,9 @@ bool LOGGER::Setup()
 int LOGGER::OpenNewLog()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
+	static char file_str[50] = { 0 }; file_str[0] = '\0';
 	byte match = 0;
-	char new_file[50] = { 0 };
 
 	// Make sure in command mode
 	if (!SetToCmdMode())
@@ -2378,10 +2382,10 @@ int LOGGER::OpenNewLog()
 	}
 
 	// Create new log file
-	sprintf(new_file, "LOG%05u.CSV", logNum);
+	sprintf(file_str, "LOG%05u.CSV", logNum);
 
 	// Begin logging to this file
-	if (!SetToWriteMode(new_file)) {
+	if (!SetToWriteMode(file_str)) {
 		return 0;
 	}
 
@@ -2399,7 +2403,7 @@ int LOGGER::OpenNewLog()
 bool LOGGER::SetToCmdMode()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	bool pass = false;
 	char rstArr[3] = { 26,26,26 };
 
@@ -2444,7 +2448,7 @@ bool LOGGER::SetToCmdMode()
 void LOGGER::GetCommand()
 {
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static int byte_ind_out = 0;
 
 	// Get terminal command
@@ -2468,9 +2472,9 @@ void LOGGER::GetCommand()
 char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
+	static char msg_copy[maxStoreStrLng] = { 0 }; msg_copy[0] = '\0';
 	char reply = '\0';
-	char msg_copy[300] = { 0 };
 
 	// Add min delay
 	int del = 15 - (millis() - t_sent);
@@ -2521,7 +2525,7 @@ char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 char LOGGER::GetReply(uint32_t timeout)
 {
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	uint32_t t_start = millis();
 	uint32_t t_timeout = millis() + timeout;
 	int dat_ind[2] = { 0,0 };
@@ -2665,7 +2669,7 @@ char LOGGER::GetReply(uint32_t timeout)
 bool LOGGER::SetToWriteMode(char log_file[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	bool pass = false;
 
 	// Check if already in log mode
@@ -2706,43 +2710,72 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	*/
 
 	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
+	static char msg_copy[maxStoreStrLng] = { 0 }; msg_copy[0] = '\0';
+	static char queue_state[logQueueSize + 1] = { 0 }; queue_state[0] = '\0';
+	bool is_queue_overflowed = false;
+	bool is_mem_overflowed = false;
 	uint32_t t_m = 0;
-	char msg_copy[300] = { 0 };
 
 	// Update queue ind
-	queueIndStore++;
+	logQueueIndStore++;
 
 	// Check if ind should roll over 
-	if (queueIndStore == logQueueSize) {
+	if (logQueueIndStore == logQueueSize) {
 
 		// Reset queueIndWrite
-		queueIndStore = 0;
+		logQueueIndStore = 0;
 	}
 
-	// Check if overfloweed
-	if (logQueue[queueIndStore][0] != '\0')
-	{
+	// Get message length
+	is_mem_overflowed = strlen(msg) >= maxMsgStrLng;
 
-		// Get list of empty entries
-		char queue_state[logQueueSize + 1];
-		for (int i = 0; i < logQueueSize; i++) {
-			queue_state[i] = logQueue[i][0] == '\0' ? '0' : '1';
+	// Check for overflow
+	is_queue_overflowed = logQueue[logQueueIndStore][0] != '\0';
+
+	// Check if queue overflowed or message too long
+	if (is_queue_overflowed || is_mem_overflowed) {
+
+		// Handle overflow queue
+		if (is_queue_overflowed) {
+
+			// Get list of empty entries
+			for (int i = 0; i < logQueueSize; i++) {
+				queue_state[i] = logQueue[i][0] == '\0' ? '0' : '1';
+			}
+			queue_state[logQueueSize] = '\0';
+
+			// Store overflow error instead
+			sprintf(msg_copy, "**WARNING** [LOGGER::QueueLog] LOG QUEUE OVERFLOWED: queue_s=%d queue_r=%d queue_state=|%s|",
+				logQueueIndStore, logQueueIndRead, queue_state);
+
+			// Set queue back so overflow will write over last log
+			logQueueIndStore = logQueueIndStore - 1 >= 0 ? logQueueIndStore - 1 : logQueueSize - 1;
 		}
-		queue_state[logQueueSize] = '\0';
 
-		// Store overflow error instead
-		sprintf(msg_copy, "**WARNING** [LOGGER::QueueLog] LOG QUEUE OVERFLOWED: queueIndStore=%d queueIndRead=%d queue_state=|%s|",
-			queueIndStore, queueIndRead, queue_state);
+		// Handle overflow char array
+		else if (is_mem_overflowed) {
 
-		// Set queue back so overflow will write over last log
-		queueIndStore = queueIndStore - 1 >= 0 ? queueIndStore - 1 : logQueueSize - 1;
+			// Store part of message
+			for (int i = 0; i < 100; i++){
+				str[i] = msg[i];
+			}
+			str[100] = '\0';
 
+			// Store overflow error instead
+			sprintf(msg_copy, "**WARNING** [LOGGER::QueueLog] MESSAGE TOO LONG: msg_lng=%d max_lng=%d \"%s%s\"",
+				strlen(msg), maxMsgStrLng, str, "...");
+		}
+
+		// Print error
+		if (db.print_errors && db.CONSOLE) {
+			QueueDebug(msg_copy, t);
+		}
 	}
-	// Update log count
+
+	// Copy message and Update log count
 	else {
-		// Copy message
-		for (int i = 0; i < strlen(msg); i++)
-		{
+		for (int i = 0; i < strlen(msg); i++) {
 			msg_copy[i] = msg[i];
 		}
 		msg_copy[strlen(msg)] = '\0';
@@ -2755,7 +2788,13 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	t_m = t - t_sync;
 
 	// Store log
-	sprintf(logQueue[queueIndStore], "[%d],%lu,%d,%s\r\n", cnt_logsStored, t_m, cnt_loop_short, msg_copy);
+	sprintf(logQueue[logQueueIndStore], "[%d],%lu,%d,%s\r\n", cnt_logsStored, t_m, cnt_loop_short, msg_copy);
+
+	// Check if should write now
+	if (db.LOGNOW &&
+		mode == '<') {
+		DoAll("WriteLog");
+	}
 
 }
 
@@ -2767,12 +2806,12 @@ bool LOGGER::WriteLog(bool do_send)
 	*/
 
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool is_logs = false;
 
 	// Bail no new logs or write blocked
-	if (queueIndRead == queueIndStore &&
-		logQueue[queueIndStore][0] == '\0') {
+	if (logQueueIndRead == logQueueIndStore &&
+		logQueue[logQueueIndStore][0] == '\0') {
 
 		// Indicate no logs to write
 		is_logs = false;
@@ -2797,45 +2836,45 @@ bool LOGGER::WriteLog(bool do_send)
 	}
 
 	// Bail if less than 50ms sinse last write
-	if (micros() < t_write + dt_write) {
+	if (!db.LOGNOW && micros() < t_write + dt_write) {
 		// Indicate still logs to store
 		return is_logs;
 	}
 
 	// Itterate send ind
-	queueIndRead++;
+	logQueueIndRead++;
 
 	// Check if ind should roll over 
-	if (queueIndRead == logQueueSize) {
-		queueIndRead = 0;
+	if (logQueueIndRead == logQueueSize) {
+		logQueueIndRead = 0;
 	}
 
 	// Write to SD
 	if (mode == '<') {
-		port.write(logQueue[queueIndRead]);
+		port.write(logQueue[logQueueIndRead]);
 		t_write = micros();
 	}
 
 	// Send now
 	if (do_send) {
-		r2c.port.write(logQueue[queueIndRead]);
+		r2c.port.write(logQueue[logQueueIndRead]);
 		cnt_logBytesSent++;
 		delay(10);
 	}
 
 	// Update bytes stored
-	cnt_logBytesStored += strlen(logQueue[queueIndRead]);
+	cnt_logBytesStored += strlen(logQueue[logQueueIndRead]);
 
 	// Print stored log
 	if (db.print_logStore) {
-		logQueue[queueIndRead][strlen(logQueue[queueIndRead]) - 2] = '\0';
+		logQueue[logQueueIndRead][strlen(logQueue[logQueueIndRead]) - 2] = '\0';
 		sprintf(str, "   [LOG] r2c: cnt=%d b_stored=%d/%d b_sent=%d q_store=%d q_read=%d \"%s\"",
-			cnt_logsStored, strlen(logQueue[queueIndRead]), cnt_logBytesStored, cnt_logBytesSent, queueIndStore, queueIndRead, logQueue[queueIndRead]);
+			cnt_logsStored, strlen(logQueue[logQueueIndRead]), cnt_logBytesStored, cnt_logBytesSent, logQueueIndStore, logQueueIndRead, logQueue[logQueueIndRead]);
 		QueueDebug(str, millis());
 	}
 
 	// Set entry to null
-	logQueue[queueIndRead][0] = '\0';
+	logQueue[logQueueIndRead][0] = '\0';
 
 	// Return queue status
 	return is_logs;
@@ -2844,7 +2883,10 @@ bool LOGGER::WriteLog(bool do_send)
 void LOGGER::StreamLogs()
 {
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char err_str[200] = { 0 }; err_str[0] = '|';
+	static char warn_lines[200] = { 0 }; sprintf(warn_lines, "ON LINES |");
+	static char err_lines[200] = { 0 }; sprintf(err_lines, "ON LINES |");
 	const int timeout = 1200000;
 	static int cnt_err_set_cmd_mode = 0;
 	static int cnt_err_read_cmd = 0;
@@ -2856,7 +2898,6 @@ void LOGGER::StreamLogs()
 	bool send_done = false;
 	bool do_abort = false;
 	bool is_timedout = false;
-	char err_str[200] = "|";
 	char c_arr[3] = { 0 };
 	int milestone_incriment[11] = { 0 };
 	int milestone_ind = 0;
@@ -2867,7 +2908,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Store remaining logs
-	while (WriteLog());
+	DoAll("WriteLog");
 	delay(100);
 
 	// Stop writing logs
@@ -2898,7 +2939,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Print anything left in queue
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// Start timers
 	t_start = millis();
@@ -3037,7 +3078,7 @@ void LOGGER::StreamLogs()
 				sprintf(str, "[LOGGER::StreamLogs] Log Write %d%% Complete: bytes_sent=%d/%d",
 					milestone_ind * 10, cnt_logBytesSent, cnt_logBytesStored);
 				DebugFlow(str, millis());
-				while (PrintDebug());
+				DoAll("PrintDebug");
 
 				// Itterate count
 				milestone_ind++;
@@ -3070,7 +3111,6 @@ void LOGGER::StreamLogs()
 	SetToWriteMode(logFile);
 
 	// Log warnings summary
-	char warn_lines[200] = "ON LINES |";
 	for (int i = 0; i < cnt_warn; i++) {
 		char str_lin[10];
 		sprintf(str_lin, "%d|", warn_line[i]);
@@ -3080,7 +3120,6 @@ void LOGGER::StreamLogs()
 	DebugFlow(str);
 
 	// Log errors summary
-	char err_lines[200] = "ON LINES |";
 	for (int i = 0; i < cnt_err; i++) {
 		char str_lin[10];
 		sprintf(str_lin, "%d|", err_line[i]);
@@ -3129,7 +3168,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Print anything left in queue
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// Reset flag
 	fc.doLogSend = false;
@@ -3139,18 +3178,18 @@ void LOGGER::StreamLogs()
 void LOGGER::TestLoad(int n_entry, char log_file[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	bool pass = false;
 
 	// Prevent any new info from logging
-	while (WriteLog());
+	DoAll("WriteLog");
 	db.LOG = false;
 
 	// Load existing log file
 	if (log_file != '\0') {
 		sprintf(str, "[LOGGER::TestLoad] RUNNING: Load Log: file_name=%s...", log_file);
 		DebugFlow(str, millis());
-		while (PrintDebug());
+		DoAll("PrintDebug");
 
 		if (SetToCmdMode()) {
 
@@ -3169,11 +3208,11 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 			sprintf(str, "[LOGGER::TestLoad] SUCCEEDED: Load Log: file_name=%s size=%dB",
 				logFile, cnt_logBytesStored);
 			DebugFlow(str, millis());
-			while (PrintDebug());
+			DoAll("PrintDebug");
 		}
 		else {
 			DebugError("!!ERROR!! [LOGGER::TestLoad] ABORTED: Load Log File", true);
-			while (PrintDebug());
+			DoAll("PrintDebug");
 		}
 	}
 
@@ -3181,9 +3220,9 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 	else if (n_entry != 0) {
 		sprintf(str, "[LOGGER::TestLoad] RUNNING: Write %d Logs...", n_entry);
 		DebugFlow(str, millis());
-		while (PrintDebug());
+		DoAll("PrintDebug");
 		delayMicroseconds(100);
-		while (WriteLog());
+		DoAll("WriteLog");
 
 		// Add n new logs
 		randomSeed(analogRead(A0));
@@ -3194,8 +3233,8 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 			if (i%milestone_incriment == 0) {
 				sprintf(str, "[LOGGER::TestLoad] Log Write %d%% Complete", i / milestone_incriment * 10);
 				DebugFlow(str, millis());
-				while (PrintDebug());
-				while (WriteLog());
+				DoAll("PrintDebug");
+				DoAll("WriteLog");
 			}
 
 			// Store a 120 charicter string
@@ -3203,7 +3242,7 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 
 			//// Make random sized strings
 			//char num_str[15] = { 0 };
-			//char msg[300] = { 0 };
+			//char msg[maxStrLng] = { 0 };
 			//for (int i = 0; i < 18; i++)
 			//{
 			//	int num = random(999999999);
@@ -3215,12 +3254,12 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 			// Store log
 			QueueLog(msg, millis());
 			t_write = micros() - dt_write;
-			while (WriteLog());
+			DoAll("WriteLog");
 		}
 		sprintf(str, "[LOGGER::TestLoad] FINISHED: Write %d Logs", n_entry);
 		DebugFlow(str, millis());
-		while (PrintDebug());
-		while (WriteLog());
+		DoAll("PrintDebug");
+		DoAll("WriteLog");
 	}
 }
 
@@ -3229,7 +3268,7 @@ int LOGGER::GetFileSize(char log_file[])
 	// Local vars
 	int ind = -1;
 	int fi_size = 0;
-	char num_str[20] = { 0 };
+	static char num_str[20] = { 0 }; num_str[0] = '\0';
 
 	// Find file index in array
 	for (int i = strlen(rcvdArr) - strlen(log_file); i >= 0; i--)
@@ -3285,7 +3324,7 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 	if (start_entry) {
 		DebugFlow(msg, millis());
 		// Print right away
-		while (PrintDebug());
+		DoAll("PrintDebug");
 	}
 
 	// Print directly 
@@ -3312,9 +3351,11 @@ void GetSerial(R4 *r4)
 	*/
 
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char dat_str_1[200] = { 0 }; dat_str_1[0] = '\0';
+	static char dat_str_2[200] = { 0 }; dat_str_2[0] = '\0';
 	uint32_t t_str = millis();
-	char dat_str[200] = { 0 };
+	int dt_parse = 0;
 	int buff_tx = 0;
 	int buff_rx = 0;
 	byte buff = 0;
@@ -3383,13 +3424,18 @@ void GetSerial(R4 *r4)
 	// Get footer
 	foot = WaitBuffRead(r4);
 
+	// Strore parse time
+	dt_parse = millis() - t_str;
+
 	// Get total data in buffers
 	buff_rx = r4->port.available();
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - r4->port.availableForWrite();
 
-	// Store data string
-	sprintf(dat_str, " head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s bytes_read=%d bytes_dumped=%d rx=%d tx=%d dt_parse=%d dt_send=%d dt_rcv=%d",
-		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "true" : "false", cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx, buff_tx, millis() - t_str, millis() - r2->t_sent, r4->dt_rcvd);
+	// Store data strings
+	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s b_read=%d b_dump=%d",
+		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "1" : "0", cnt_packBytesRead, cnt_packBytesDiscarded);
+	sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
+		buff_rx, buff_tx, dt_parse, millis() - r2->t_sent, r4->dt_rcvd);
 
 	// Check for dropped packet
 	if (foot != r4->foot) {
@@ -3398,9 +3444,8 @@ void GetSerial(R4 *r4)
 		r4->cnt_dropped++;
 
 		// Log/print dropped packet info
-		sprintf(str, "**WARNING** [GetSerial] Dropped %s Packet: cnt=%d",
-			r4->instID, r4->cnt_dropped);
-		strcat(str, dat_str);
+		sprintf(str, "**WARNING** [GetSerial] Dropped %s Packs: cnt=%d %s %s",
+			r4->instID, r4->cnt_dropped, dat_str_1, dat_str_2);
 		DebugError(str);
 	}
 
@@ -3446,9 +3491,9 @@ void GetSerial(R4 *r4)
 			pack_tot_last = r4->packTot;
 
 			// Log/print skipped packet info
-			sprintf(str, "**WARNING** [GetSerial] Missed %s Packets: cnt=%d|%d pack_last=%d",
-				r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last);
-			strcat(str, dat_str);
+			sprintf(str, "**WARNING** [GetSerial] Missed %s Packs: cnt=%d|%d pack_last=%d %s %s",
+				r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last, dat_str_1, dat_str_2);
+			strcat(str, dat_str_1);
 			DebugError(str);
 		}
 
@@ -3461,11 +3506,14 @@ void GetSerial(R4 *r4)
 		// Update id
 		r4->idNow = id;
 
+		// Combine data strings
+		sprintf(str, "%s %s", dat_str_1, dat_str_2);
+
 		// New pack
 		if (pack != pack_last)
 		{
 			// Log/print received
-			DebugRcvd(r4, dat_str);
+			DebugRcvd(r4, str);
 
 			// Store data and flag
 			r4->isNew = true;
@@ -3480,7 +3528,7 @@ void GetSerial(R4 *r4)
 			r4->cnt_repeat++;
 
 			// Log/print received
-			DebugRcvd(r4, dat_str, true);
+			DebugRcvd(r4, str, true);
 		}
 
 	}
@@ -3489,13 +3537,13 @@ void GetSerial(R4 *r4)
 	if (cnt_packBytesDiscarded > 0) {
 
 		// Log/print discarded data
-		sprintf(str, "**WARNING** [GetSerial] Discarded Bytes:%s", dat_str);
+		sprintf(str, "**WARNING** [GetSerial] Dumped Bytes: %s %s", dat_str_1, dat_str_2);
 		DebugError(str);
 	}
 
 	// Check if parsing took unusually long
-	if (millis() - t_str > 30) {
-		sprintf(str, "**WARNING** [GetSerial] Parser Hanging:%s", dat_str);
+	if (dt_parse > 30) {
+		sprintf(str, "**WARNING** [GetSerial] Parser Hanging: %s %s", dat_str_1, dat_str_2);
 		DebugError(str);
 	}
 
@@ -3584,7 +3632,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 	int buff_rx = r4->port.available();
 
 	// Store current info
-	sprintf(dat_str, " from=%s buff=\'%s\' bytes_read=%d bytes_dumped=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
+	sprintf(dat_str, " from=%s buff=\'%s\' b_read=%d b_dump=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
 		r4->instID, PrintSpecialChars(buff), cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
 
 	// Buffer flooded
@@ -3627,7 +3675,8 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 	*/
 
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char queue_state[sendQueueSize + 1] = { 0 }; queue_state[0] = '\0';
 	int id_ind = 0;
 	float dat[3] = { dat1 , dat2 , dat3 };
 	R4 *r4;
@@ -3655,7 +3704,6 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 	{
 
 		// Get list of empty entries
-		char queue_state[sendQueueSize + 1];
 		for (int i = 0; i < sendQueueSize; i++) {
 			queue_state[i] = r2->sendQueue[i][0] == '\0' ? '0' : '1';
 		}
@@ -3666,7 +3714,7 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 		int buff_rx = r2->port.available();
 
 		// Store overflow error instead
-		sprintf(str, "!!ERRROR!! [QueuePacket] %s SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_send=%d dt_rcv=%d tx=%d rx=%d",
+		sprintf(str, "!!ERRROR!! [QueuePacket] %s SEND QUEUE OVERFLOWED: queue_s=%d queue_r=%d queue_state=|%s| dt_snd=%d dt_rcv=%d tx=%d rx=%d",
 			r2->instID, r2->sendQueueIndStore, r2->sendQueueIndRead, queue_state, millis() - r2->t_sent, millis() - r4->t_rcvd, buff_tx, buff_rx);
 
 		// Log/print error
@@ -3723,6 +3771,7 @@ bool SendPacket(R2 *r2)
 
 	// Local vars
 	const int msg_lng = sendQueueBytes;
+	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
 	byte msg[msg_lng];
 	cnt_packBytesSent = 0;
 	bool is_resend = false;
@@ -3733,7 +3782,6 @@ bool SendPacket(R2 *r2)
 	int buff_tx;
 	int buff_rx;
 	int id_ind = 0;
-	char dat_str[200] = { 0 };
 	uint32_t t_queue = millis();
 	R4 *r4;
 	R4 *r4o;
@@ -3839,8 +3887,8 @@ bool SendPacket(R2 *r2)
 	is_resend = pack == r2->packLast[id_ind];
 
 	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d cts=%s dt_send=%d dt_rcv=%d dt_queue=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "true" : "false", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "high" : "low", r2->dt_sent, millis() - r4->t_rcvd, millis() - t_queue);
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d cts=%s dt_snd=%d dt_rcv=%d dt_queue=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "high" : "low", r2->dt_sent, millis() - r4->t_rcvd, millis() - t_queue);
 
 	// Is first send
 	if (!is_resend) {
@@ -3864,8 +3912,8 @@ bool SendPacket(R2 *r2)
 bool CheckResend(R2 *r2)
 {
 	// Local vars
-	char str[300] = { 0 };
-	char dat_str[200] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
 	bool do_pack_resend = false;
 	bool is_waiting_for_pack = false;
 	int dt_sent = 0;
@@ -4080,7 +4128,7 @@ void AD_Reset(float max_speed, float max_acc, float max_dec)
 void AD_CheckOC(bool force_check)
 {
 	// Local vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static bool dp_disable = false;
 	static int cnt_errors = 0;
 	static int ocd_last_r = 1;
@@ -4140,7 +4188,7 @@ void AD_CheckOC(bool force_check)
 void HardStop(char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Normal hard stop
 	AD_R.hardStop();
@@ -4228,8 +4276,8 @@ bool RunMotor(char dir, double new_speed, String agent)
 bool ManualRun(char dir)
 {
 	// Local vars
-	char speed_str[100] = { 0 };
-	char vcc_str[100] = { 0 };
+	static char speed_str[100] = { 0 }; speed_str[0] = '\0';
+	static char vcc_str[100] = { 0 }; vcc_str[0] = '\0';
 	int inc_speed = 10; // (cm/sec)
 	double new_speed;
 
@@ -4410,7 +4458,7 @@ void CheckBlockTimElapsed()
 void InitializeTracking()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	static bool run_blink = false;
 	static bool do_led_on = true;
 	static int cnt_blink = 0;
@@ -4519,7 +4567,7 @@ void InitializeTracking()
 void CheckSampDT() {
 
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	static int cnt_swap_vt = 0;
 	static int cnt_swap_pixy = 0;
 	bool do_swap_vt = false;
@@ -4599,7 +4647,7 @@ void CheckSampDT() {
 double CheckPixy(bool do_test_check) {
 
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	double px_rel = 0;
 	double px_abs = 0;
 	uint32_t t_px_ts = 0;
@@ -4618,20 +4666,8 @@ double CheckPixy(bool do_test_check) {
 		return px_rel;
 	}
 
-	//// TEMP
-	//static int cnt = 0;
-	//char str[100];
-	//cnt++;
-	//sprintf(str, "%d block start", cnt);
-	//SerialUSB.println(str);
-	//delay(10);
-
 	// Get new blocks
 	uint16_t blocks = Pixy.getBlocks();
-
-	//// TEMP
-	//sprintf(str, "%d block end", cnt);
-	//SerialUSB.println(str);
 
 	// Bail in no new data
 	if (!blocks) {
@@ -4680,7 +4716,7 @@ double CheckPixy(bool do_test_check) {
 void UpdateEKF()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	static int cnt_error = 0;
 	static bool is_nans_last = false;
 	double rat_pos = 0;
@@ -4793,7 +4829,7 @@ bool GetButtonInput()
 	*/
 
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	bool is_new_input = false;
 	static bool is_pressed[3] = { false, false, false };
 	static bool is_running[3] = { false, false, false };
@@ -4971,8 +5007,8 @@ void OpenCloseRewSolenoid()
 {
 	// Local vars
 	byte is_sol_open = digitalRead(pin.Rel_Rew);
-	char etoh_str[100] = { 0 };
-	char rew_str[100] = { 0 };
+	static char etoh_str[100] = { 0 }; etoh_str[0] = '\0';
+	static char rew_str[100] = { 0 }; rew_str[0] = '\0';
 
 	// Change state
 	is_sol_open = !is_sol_open;
@@ -5000,8 +5036,8 @@ void OpenCloseEtOHSolenoid()
 {
 	// Local vars
 	byte is_sol_open = digitalRead(pin.Rel_EtOH);
-	char etoh_str[100] = { 0 };
-	char rew_str[100] = { 0 };
+	static char etoh_str[100] = { 0 }; etoh_str[0] = '\0';
+	static char rew_str[100] = { 0 }; rew_str[0] = '\0';
 
 	// Change state
 	is_sol_open = !is_sol_open;
@@ -5030,7 +5066,7 @@ void OpenCloseEtOHSolenoid()
 void CheckEtOH()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	byte is_sol_open = digitalRead(pin.Rel_EtOH);
 	static float etoh_dist_start = 0; // (cm)
 	static float etoh_dist_diff = 0; // (cm)
@@ -5100,7 +5136,7 @@ void CheckEtOH()
 float CheckBattery(bool force_check)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	static uint32_t t_vcc_update = 0;
 	static uint32_t t_vcc_send = 0;
 	static uint32_t t_vcc_print = 0;
@@ -5253,7 +5289,7 @@ float CheckBattery(bool force_check)
 void ChangeLCDlight(uint32_t duty)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Check if new duty given
 	if (duty == 256) {
@@ -5269,7 +5305,7 @@ void ChangeLCDlight(uint32_t duty)
 
 	// Log/print
 	sprintf(str, "[ChangeLCDlight] Set LCD Light: is_lit=%s duty=%d",
-		fc.isLitLCD ? "true" : "false", duty);
+		fc.isLitLCD ? "1" : "0", duty);
 	DebugFlow(str);
 }
 
@@ -5282,8 +5318,8 @@ void QuitSession()
 	Bull.TurnOff("QuitSession");
 
 	// Log/print anything left in queue
-	while (Log.WriteLog());
-	while (PrintDebug());
+	DoAll("WriteLog");
+	DoAll("PrintDebug");
 
 	// Wait 1 sec for any backround stuff to finish
 	delay(1000);
@@ -5301,7 +5337,7 @@ void QuitSession()
 void HardwareTest()
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	const uint32_t dt_test = 10000;
 	uint32_t t_test_str = 0;
 
@@ -5321,27 +5357,29 @@ void HardwareTest()
 	uint32_t t_pixy_check = 0;
 	uint32_t dt_pixy_check = dt_test / n_pixy_samp / 4;
 	byte cnt_pixy = 0;
-	bool is_led_on = false;
+	bool is_pixy_led_on = false;
 	double pixy_pos_arr[n_pixy_samp] = { 0 };
 	double pixy_pos_sum = 0;
 	double pixy_pos_avg = 0;
 	bool is_pixy_test_done = false;
 
 	// Stress test
+	double speed_range[2] = { 5,65 };
 	const byte n_stress_samp = 10;
+	byte speed_step = (speed_range[1] - speed_range[0]) / (n_stress_samp / 2);
 	byte cnt_stress = 0;
 	uint32_t t_stress_run = 0;
 	uint32_t dt_stress_run = dt_test / n_stress_samp;
 	uint32_t dt_close_sol = 100;
 	double run_speed[n_stress_samp] = { 0 };
 	bool is_stressin = false;
+	double vcc_baseline = 0;
 	double vcc_arr[n_stress_samp] = { 0 };
 	double vcc_sum = 0;
 	double vcc_avg = 0;
-	run_speed[0] = 5;
-	byte s_now = 5;
+	byte s_now = speed_range[0];
 	for (int i = 0; i < n_stress_samp; i++) {
-		run_speed[i] = i % 2 == 0 ? s_now += 20 : s_now;
+		run_speed[i] = i % 2 == 0 ? s_now += speed_step : s_now;
 	}
 	bool is_stress_test_done = false;
 
@@ -5349,9 +5387,9 @@ void HardwareTest()
 	DebugFlow("[HardwareTest] RUNNING HARDWARE TEST...");
 
 	// Print remaining queue
-	while (PrintDebug());
+	DoAll("PrintDebug");
 	// Store remaining logs
-	while (Log.WriteLog());
+	DoAll("WriteLog");
 
 	// Make sure all data sent
 	do {
@@ -5360,6 +5398,10 @@ void HardwareTest()
 	do {
 		GetSerial(&a2r);
 	} while (SendPacket(&r2a));
+
+	// Store baseline vcc
+	CheckBattery(true);
+	vcc_baseline = vccNow;
 
 	// Store start time
 	t_test_str = millis();
@@ -5442,9 +5484,6 @@ void HardwareTest()
 					dt_ping_avg[i] = (float)dt_ping_sum / (n_pings);
 				}
 
-				// Send r2c and r2a ping times
-				QueuePacket(&r2c, 't', n_pings + 1, dt_ping_avg[0], dt_ping_avg[1], 0, true);
-
 				// Log/print ping time
 				sprintf(str, "[HardwareTest] PING TIMES r2c: avg=%0.2f all=|%s", dt_ping_avg[0], str_ping[0]);
 				DebugFlow(str);
@@ -5465,14 +5504,15 @@ void HardwareTest()
 				millis() > t_pixy_check + dt_pixy_check) {
 
 				// Flip led state
-				is_led_on = !is_led_on;
+				is_pixy_led_on = !is_pixy_led_on;
 
 				// Turn on/off LED
-				analogWrite(pin.RewLED_R, is_led_on ? 15 : 0);
+				analogWrite(pin.RewLED_R, is_pixy_led_on ? 15 : 0);
+				analogWrite(pin.RewLED_C, 0);
 				t_pixy_check = millis();
 
 				// Check pixy and store pos
-				if (!is_led_on) {
+				if (!is_pixy_led_on) {
 
 					// Store value
 					pixy_pos_arr[cnt_pixy] = CheckPixy(true);
@@ -5510,6 +5550,13 @@ void HardwareTest()
 		// Do stress test
 		if (!is_stress_test_done) {
 
+			// Extend retract feed arm
+			if (!Reward.doExtendArm &&
+				!Reward.doRetractArm) {
+				Reward.isArmExtended ? Reward.RetractFeedArm() : Reward.ExtendFeedArm();
+			}
+			Reward.CheckFeedArm();
+
 			// Do next stage
 			if (cnt_stress < n_stress_samp &&
 				millis() > t_stress_run + dt_stress_run) {
@@ -5526,12 +5573,14 @@ void HardwareTest()
 
 				// Change LEDS
 				analogWrite(pin.Disp_LED, is_stressin ? 255 : 0);
-				analogWrite(pin.RewLED_C, is_stressin ? 255 : 0);
-				analogWrite(pin.RewLED_R, is_stressin ? 255 : 0);
 				analogWrite(pin.TrackLED, 255);
+				if (!is_pixy_led_on) {
+					analogWrite(pin.RewLED_C, is_stressin ? 255 : 0);
+					analogWrite(pin.RewLED_R, is_stressin ? 255 : 0);
+				}
 
 				// Print to LCD
-				sprintf(str, "STRESS %d %0.0f", cnt_stress + 1, run_speed[cnt_stress]);
+				sprintf(str, "C=%d S=%0.0f V=%0.0f", cnt_stress + 1, run_speed[cnt_stress], vccNow);
 				PrintLCD(false, str);
 
 				// Store time
@@ -5572,8 +5621,12 @@ void HardwareTest()
 				vcc_avg = vcc_sum / (n_stress_samp);
 
 				// Log/print vcc
-				sprintf(str, "[HardwareTest] VCC: avg=%0.2f all=|%s", vcc_avg, str_vcc);
+				sprintf(str, "[HardwareTest] VCC: baseline=%0.2f avg=%0.2f all=|%s", 
+					vcc_baseline, vcc_avg, str_vcc);
 				DebugFlow(str);
+
+				// Make sure arm retracted
+				Reward.RetractFeedArm();
 
 				// Set flag
 				is_stress_test_done = true;
@@ -5592,6 +5645,9 @@ void HardwareTest()
 					digitalWrite(pin.Rel_EtOH, LOW);
 				}
 			}
+
+			// Check motor status
+			AD_CheckOC();
 		}
 
 		// Send any packets
@@ -5606,6 +5662,9 @@ void HardwareTest()
 	// Set flag
 	fc.isSesStarted = true;
 
+	// Send final ping times
+	QueuePacket(&r2c, 't', n_pings + 1, dt_ping_avg[0], dt_ping_avg[1], 0, true);
+
 	// Log/print
 	DebugFlow("[HardwareTest] FINISHED HARDWARE TEST");
 }
@@ -5614,7 +5673,7 @@ void HardwareTest()
 void CheckLoop()
 {
 	// Local static vars
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static bool first_log = true;
 	static uint32_t t_loop_last = millis();
 	static int dt_loop = 0;
@@ -5641,8 +5700,10 @@ void CheckLoop()
 	}
 
 	// Flicker led
-	analogWrite(pin.TrackLED, is_led_high ? trackLEDdutyMin : trackLEDdutyMax);
-	is_led_high = !is_led_high;
+	if (!StatusBlink()) {
+		analogWrite(pin.TrackLED, is_led_high ? trackLEDdutyMin : trackLEDdutyMax);
+		is_led_high = !is_led_high;
+	}
 
 	// Bail if this is a test run
 	if (db.is_runTest) {
@@ -5782,7 +5843,7 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 void DebugMotorControl(bool pass, char set_to[], char called_from[])
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
 	bool do_log = db.log_motorControl && db.LOG;
 
@@ -5810,7 +5871,7 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
 	bool do_log = db.log_motorControl && db.LOG;
 
@@ -5838,7 +5899,8 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 void DebugRunSpeed(String agent, double speed_last, double speed_now)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
+	static char agent_str[50] = { 0 }; agent_str[0] = '\0';
 	bool do_print = db.print_runSpeed && (db.CONSOLE || db.LCD);
 	bool do_log = db.log_runSpeed && db.LOG;
 
@@ -5848,7 +5910,6 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 	}
 
 	// Log/print
-	char agent_str[50];
 	agent.toCharArray(agent_str, 50);
 	sprintf(str, "[RunMotor] Changed Motor Speed: agent=%s speed_last=%0.2f speed_new=%0.2f",
 		agent_str, speed_last, speed_now);
@@ -5869,8 +5930,8 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 {
 	// Local vars
-	char msg_out[300] = { 0 };
-	char str[300] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
+	static char msg_out[maxStoreStrLng + 50] = { 0 }; msg_out[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -5921,8 +5982,8 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 void DebugSent(R2 *r2, char msg[], bool is_repeat)
 {
 	// Local vars
-	char msg_out[300] = { 0 };
-	char str[300] = { 0 };
+	char msg_out[maxStoreStrLng + 50] = { 0 };
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool is_resend = false;
 	bool do_print = false;
 	bool do_log = false;
@@ -5972,10 +6033,15 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 void QueueDebug(char msg[], uint32_t t)
 {
 	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
+	static char msg_copy[maxStoreStrLng + 50] = { 0 }; msg_copy[0] = '\0';
+	static char queue_state[printQueueSize + 1]; queue_state[0] = '\0';
+	static char spc[50] = { 0 }; spc[0] = '\0';
+	static char arg[50] = { 0 }; arg[0] = '\0';
+	bool is_queue_overflowed = false;
+	bool is_mem_overflowed = false;
 	uint32_t t_m = 0;
 	float t_s = 0;
-	char msg_copy[300] = { 0 };
-	char str_tim[100] = { 0 };
 
 	// Update printQueue ind
 	printQueueIndStore++;
@@ -5987,23 +6053,45 @@ void QueueDebug(char msg[], uint32_t t)
 		printQueueIndStore = 0;
 	}
 
-	// Check if overfloweed
-	if (printQueue[printQueueIndStore][0] != '\0')
-	{
+	// Get message length
+	is_mem_overflowed = strlen(msg) >= maxMsgStrLng;
 
-		// Get list of empty entries
-		char queue_state[printQueueSize + 1];
-		for (int i = 0; i < printQueueSize; i++) {
-			queue_state[i] = printQueue[i][0] == '\0' ? '0' : '1';
+	// Check for overflow
+	is_queue_overflowed = printQueue[printQueueIndStore][0] != '\0';
+
+	// Check if queue overflowed or message too long
+	if (is_queue_overflowed || is_mem_overflowed) {
+
+		// Handle overflow queue
+		if (is_queue_overflowed) {
+
+			// Get list of empty entries
+			for (int i = 0; i < printQueueSize; i++) {
+				queue_state[i] = printQueue[i][0] == '\0' ? '0' : '1';
+			}
+			queue_state[printQueueSize] = '\0';
+
+			// Store overflow error instead
+			sprintf(msg_copy, "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED: queue_s=%d queue_r=%d queue_state=|%s|",
+				printQueueIndStore, printQueueIndRead, queue_state);
+
+			// Set queue back so overflow will write over last print
+			printQueueIndStore = printQueueIndStore - 1 >= 0 ? printQueueIndStore - 1 : printQueueSize - 1;
 		}
-		queue_state[printQueueSize] = '\0';
 
-		// Store overflow error instead
-		sprintf(msg_copy, "**WARNING** [QueueDebug] PRINT QUEUE OVERFLOWED: printQueueIndStore=%d printQueueIndRead=%d queue_state=|%s|",
-			printQueueIndStore, printQueueIndRead, queue_state);
+		// Handle overflow char array
+		else if (is_mem_overflowed) {
 
-		// Set queue back so overflow will write over last print
-		printQueueIndStore = printQueueIndStore - 1 >= 0 ? printQueueIndStore - 1 : printQueueSize - 1;
+			// Store part of message
+			for (int i = 0; i < 100; i++) {
+				str[i] = msg[i];
+			}
+			str[100] = '\0';
+
+			// Store overflow error instead
+			sprintf(msg_copy, "**WARNING** [QueueDebug] MESSAGE TOO LONG: msg_lng=%d max_lng=%d \"%s%s\"",
+				strlen(msg), maxMsgStrLng, str, "...");
+		}
 
 		// Log error
 		if (db.log_errors && db.LOG) {
@@ -6011,10 +6099,10 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 	}
+
+	// Copy message
 	else {
-		// Copy message
-		for (int i = 0; i < strlen(msg); i++)
-		{
+		for (int i = 0; i < strlen(msg); i++) {
 			msg_copy[i] = msg[i];
 		}
 		msg_copy[strlen(msg)] = '\0';
@@ -6027,20 +6115,18 @@ void QueueDebug(char msg[], uint32_t t)
 	t_s = (float)(t_m) / 1000.0f;
 
 	// Make time string
-	sprintf(str_tim, "[%0.3f][%d]", t_s, cnt_loop_short);
+	sprintf(str, "[%0.3f][%d]", t_s, cnt_loop_short);
 
 	// Add space after time
-	char spc[50] = { 0 };
-	char arg[50] = { 0 };
-	sprintf(arg, "%%%ds", 20 - strlen(str_tim));
+	sprintf(arg, "%%%ds", 20 - strlen(str));
 	sprintf(spc, arg, '_');
 
 	// Put it all together
-	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str_tim, spc, msg_copy);
+	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str, spc, msg_copy);
 
 	// Check if should print now
 	if (db.PRINTNOW) {
-		PrintDebug();
+		DoAll("PrintDebug");
 	}
 
 }
@@ -6138,7 +6224,7 @@ char* PrintSpecialChars(char chr, bool do_show_byte)
 	*/
 
 	// Local vars
-	static char str[10] = { 0 };
+	static char str[10] = { 0 }; str[0] = '\0';
 	byte b = chr;
 
 	for (int i = 0; i < 10; i++) {
@@ -6246,14 +6332,15 @@ void LogTrackingData()
 	}
 
 	// Local vars
-	char str[300] = { 0 };
-	static int cnt_last = 0;
-	static int16_t pos_hist[10][40] = { { 0 } };
-	static int hist_ind = 0;
-	static char id_str[10][50] = { { "Rat VT Pos: |" } ,{ "Rat Px Pos: |" } ,{ "Rob VT Pos: |" } ,{ "Rat EKF Pos: |" } ,{ "Rob EKF Pos: |" },
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
+	static const byte n_samps = 40;
+	static int16_t pos_hist[10][n_samps] = { { 0 } };
+	static const char id_str[10][n_samps] = { { "Rat VT Pos: |" } ,{ "Rat Px Pos: |" } ,{ "Rob VT Pos: |" } ,{ "Rat EKF Pos: |" } ,{ "Rob EKF Pos: |" },
 	{ "Rat VT Vel: |" } ,{ "Rat Px Vel: |" } ,{ "Rob VT Vel: |" } ,{ "Rat EKF Vel: |" } ,{ "Rob EKF Vel: |" } };
 	static bool do_log[10] = { db.log_pos_rat_vt, db.log_pos_rat_pixy, db.log_pos_rob_vt, db.log_pos_rat_ekf, db.log_pos_rob_ekf,
 		db.log_vel_rat_vt, db.log_vel_rat_pixy, db.log_vel_rob_vt, db.log_vel_rat_ekf, db.log_vel_rob_ekf };
+	static int hist_ind = 0;
+	static int cnt_last = 0;
 
 	// Bail in ekf not new or not logging
 	if (kal.cnt == cnt_last ||
@@ -6303,7 +6390,7 @@ void LogTrackingData()
 	cnt_last = kal.cnt;
 
 	// Check if hist filled
-	if (millis() >= t_last_log + 1000 || hist_ind == 40) {
+	if (millis() >= t_last_log + 1000 || hist_ind == n_samps) {
 
 		// Store values in respective string
 		for (int i = 0; i < 10; i++) {
@@ -6378,14 +6465,14 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 	r2c.doRcvCheck[CharInd<R4>(id, r4)] = false;
 
 	// Print everything
-	while (PrintDebug());
+	DoAll("PrintDebug");
 }
 
 // HOLD FOR CRITICAL ERRORS
 void RunErrorHold(char msg[], uint32_t t_kill)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 	static uint32_t t_shutdown = t_kill > 0 ? millis() + t_kill : 0;
 	int duty[2] = { 255, 0 };
 	bool do_led_on = true;
@@ -6393,7 +6480,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 	float t_s = 0;
 
 	// Print anything left in print queue
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// Turn on LCD LED
 	ChangeLCDlight(100);
@@ -6440,7 +6527,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 template <typename T> int CharInd(char id, T *r24)
 {
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Return -1 if not found
 	int ind = -1;
@@ -6465,8 +6552,8 @@ template <typename T> int CharInd(char id, T *r24)
 bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 {
 	static uint32_t t_blink_last = 0;
-	static byte _n_blinks = 0;
-	static uint16_t _dt_led = 0;
+	static byte n_cycles = 0;
+	static uint16_t dt_cycle = 0;
 	static bool do_led_on = true;
 	static bool do_blink = true;
 	static int cnt_blink = 0;
@@ -6474,8 +6561,8 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 
 	// Set values
 	if (do_set) {
-		_n_blinks = n_blinks;
-		_dt_led = dt_blink;
+		n_cycles = n_blinks;
+		dt_cycle = dt_blink;
 		do_blink = true;
 	}
 
@@ -6485,14 +6572,14 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 	}
 
 	// Flash sequentially
-	if (cnt_blink <= n_blinks) {
-		if (millis() > t_blink_last + _dt_led) {
+	if (cnt_blink <= n_cycles) {
+		if (millis() > t_blink_last + dt_cycle) {
 			analogWrite(pin.Disp_LED, duty[(int)do_led_on]);
 			analogWrite(pin.TrackLED, duty[(int)do_led_on]);
 			analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
 			t_blink_last = millis();
 			do_led_on = !do_led_on;
-			cnt_blink = !do_led_on ? cnt_blink + 1 : cnt_blink;
+			cnt_blink += !do_led_on ? 1 : 0;
 		}
 		return true;
 	}
@@ -6508,6 +6595,57 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 		return false;
 	}
 }
+
+// PRINT ALL IN QUEUE ["PrintDebug", "WriteLog"]
+bool DoAll(char fun_id[])
+{
+	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
+	static bool do_skip_next_run = false;
+	static bool do_skip_next_print = false;
+	uint32_t dt_timeout = 500;
+	uint32_t t_timeout = millis() + dt_timeout;
+	bool do_loop = true;
+
+	// Bail if skipping
+	if (do_skip_next_run) {
+		do_skip_next_run = false;
+		return false;
+	}
+
+	// Loop till done or timeout reached
+	while (do_loop && millis() < t_timeout) {
+		if (fun_id == "PrintDebug") {
+			do_loop = PrintDebug();
+		}
+		else if (fun_id == "WriteLog") {
+			do_loop = Log.WriteLog();
+		}
+
+	}
+
+	// Check if timedout
+	if (do_loop) {
+
+		// Print error
+		if (!do_skip_next_print) {
+			sprintf(str, "**WARNING** [DoAll] \"%s\" Timedout after %dms", fun_id, dt_timeout);
+			DebugError(str);
+			do_skip_next_print = true;
+		}
+
+		// Skip next run
+		do_skip_next_run = true;
+		return false;
+	}
+
+	// Reset flags
+	do_skip_next_print = false;
+	do_skip_next_run = false;
+	return true;
+
+}
+
 
 #pragma endregion
 
@@ -6625,7 +6763,7 @@ void Interupt_IR_Detect()
 void setup() {
 
 	// Local vars
-	char str[200] = { 0 };
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// SET UP SERIAL STUFF
 
@@ -6695,7 +6833,7 @@ void setup() {
 
 	// Log and print to console
 	DebugFlow("[setup] RUNNING: Setup...");
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// SETUP AUTODRIVER
 
@@ -6760,7 +6898,7 @@ void setup() {
 	if (CheckBattery(true) == 0) {
 		// Hold for error
 		DebugError("!!ERROR!! [setup] ABORTED: Power Off", true);
-		while (PrintDebug());
+		DoAll("PrintDebug");
 		digitalWrite(pin.Rel_EtOH, LOW);
 		RunErrorHold("POWER OFF");
 	}
@@ -6769,7 +6907,7 @@ void setup() {
 	// SETUP OPENLOG
 	PrintLCD(true, "RUN SETUP", "OpenLog");
 	DebugFlow("[setup] RUNNING: OpenLog Setup...");
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// Setup OpenLog
 	if (Log.Setup())
@@ -6777,13 +6915,13 @@ void setup() {
 		// Log/print setup finished
 		PrintLCD(true, "DONE SETUP", "OpenLog");
 		DebugFlow("[setup] SUCCEEDED: OpenLog Setup");
-		while (PrintDebug());
+		DoAll("PrintDebug");
 	}
 	else {
 		// Hold for error
 		PrintLCD(true, "FAILED SETUP", "OpenLog");
 		DebugError("!!ERROR!! [setup] ABORTED: OpenLog Setup", true);
-		while (PrintDebug());
+		DoAll("PrintDebug");
 		RunErrorHold("OPENLOG SETUP");
 	}
 
@@ -6794,14 +6932,14 @@ void setup() {
 		// Hold for error
 		PrintLCD(true, "FAILED SETUP", "Log File");
 		DebugError("!!ERROR!! [setup] ABORTED: Setup", true);
-		while (PrintDebug());
+		DoAll("PrintDebug");
 		RunErrorHold("OPEN LOG FILE");
 	}
 	else {
 		PrintLCD(true, "DONE SETUP", "Log File");
 		sprintf(str, "[setup] SUCCEEDED: Make New Log: file_name=%s", Log.logFile);
 		DebugFlow(str);
-		while (PrintDebug());
+		DoAll("PrintDebug");
 	}
 
 	// DEFINE EXTERNAL INTERUPTS
@@ -6824,7 +6962,7 @@ void setup() {
 		// Skip ir sync setup
 		t_sync = 1;
 		DebugError("!!ERROR!! [setup] IR SENSOR DISABLED", true);
-		while (PrintDebug());
+		DoAll("PrintDebug");
 	}
 
 	// Power off
@@ -6850,29 +6988,29 @@ void setup() {
 
 	// RESET FEEDER ARM
 	DebugFlow("[setup] RUNNING: Reset Feeder Arm...");
-	while (PrintDebug());
+	DoAll("PrintDebug");
 	PrintLCD(true, "RUN SETUP", "Retract Arm");
 	Reward.RetractFeedArm();
 	while (Reward.doRetractArm) {
 		Reward.CheckFeedArm();
 	}
 	DebugFlow("[setup] FINISHED: Reset Feeder Arm");
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// PRINT AVAILABLE MEMORY
 	sprintf(str, "[setup] AVAILABLE MEMORY: %0.2fKB",
 		(float)freeMemory() / 1000);
 	DebugFlow(str);
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// PRINT SERIAL RING BUFFER SIZE
 	sprintf(str, "[setup] RING BUFFER SIZE: %dB", SERIAL_BUFFER_SIZE);
 	DebugFlow(str);
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// PRINT SETUP FINISHED
 	DebugFlow("[setup] FINISHED: Setup");
-	while (PrintDebug());
+	DoAll("PrintDebug");
 
 	// TEMP
 	//Log.TestLoad(0, "LOG00035.CSV");
@@ -6886,7 +7024,7 @@ void loop() {
 #pragma region //--- ONGOING OPPERATIONS ---
 
 	// Local vars
-	static char horeStr[200] = { 0 };
+	static char horeStr[maxStoreStrLng] = { 0 }; horeStr[0] = '\0';
 
 	// CHECK LOOP TIME AND MEMORY
 	CheckLoop();
@@ -7064,9 +7202,6 @@ void loop() {
 			}
 		}
 
-		// DO SETUP BLINK
-		StatusBlink(true, 5, 100);
-
 		// RESET LCD
 		if (!fc.isManualSes &&
 			fc.isLitLCD) {
@@ -7087,6 +7222,11 @@ void loop() {
 		sprintf(horeStr, "[loop] BOARD R STATUS: %04X", AD_R.getStatus());
 		DebugFlow(horeStr);
 		sprintf(horeStr, "[loop] BOARD F STATUS: %04X", AD_F.getStatus());
+		DebugFlow(horeStr);
+
+		// PRINT AVAILABLE MEMORY
+		sprintf(horeStr, "[loop] AVAILABLE MEMORY: %0.2fKB",
+			(float)freeMemory() / 1000);
 		DebugFlow(horeStr);
 
 		// SET FLAG
@@ -7228,8 +7368,14 @@ void loop() {
 #pragma region //--- (h) PING TEST ---
 	if (c2r.idNow == 'h' && c2r.isNew)
 	{
+		// TEMP
+		delay(5000);
+
 		// Run hardware test
 		HardwareTest();
+
+		// Indicate completion
+		StatusBlink(true, 10, 100);
 
 	}
 #pragma endregion
@@ -7420,7 +7566,7 @@ void loop() {
 			else if (Move.doAbortMove) {
 				// Print failure message
 				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-					Move.isTargSet ? "true" : "false", fc.isEKFReady ? "true" : "false", Move.isMoveStarted ? "true" : "false", Move.targDist, Move.GetError(kal.RobPos), Move.moveDir);
+					Move.isTargSet ? "1" : "0", fc.isEKFReady ? "1" : "0", Move.isMoveStarted ? "1" : "0", Move.targDist, Move.GetError(kal.RobPos), Move.moveDir);
 				DebugError(horeStr, true);
 			}
 
@@ -7778,7 +7924,7 @@ void loop() {
 			DebugFlow("[loop] DO SEND LOG");
 
 			// Store remaining logs
-			while (Log.WriteLog());
+			DoAll("WriteLog");
 		}
 
 	}
