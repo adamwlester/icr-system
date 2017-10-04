@@ -53,12 +53,20 @@
 // LOG DEBUGGING
 struct DB
 {
+
+	// Testing
+	const bool do_posDebug = false; // I set
+	const bool do_posPlot = false; // I set
+	bool do_pidCalibration = false; // set by system
+	bool do_simRatTest = false; // set by system
+	bool is_runTest = false; // set by system
+
 	// Debugging
-	const bool DEBUG = true;
-	bool CONSOLE = true;
+	const bool DEBUG = false;
+	bool CONSOLE = false;
 	bool LOG = true;
-	bool PRINTNOW = false;
-	bool LOGNOW = true;
+	bool FASTPRINT = false;
+	bool FASTLOG = false;
 	bool LCD = false;
 
 	// Printing
@@ -103,13 +111,6 @@ struct DB
 	const bool log_vel_rob_vt = false;
 	const bool log_vel_rat_ekf = false;
 	const bool log_vel_rob_ekf = false;
-
-	// Testing
-	const bool do_posDebug = false; // I set
-	const bool do_posPlot = false; // I set
-	bool do_pidCalibration = false; // set by system
-	bool do_simRatTest = false; // set by system
-	bool is_runTest = false; // set by system
 
 	// Other
 	bool isErrLoop = false;

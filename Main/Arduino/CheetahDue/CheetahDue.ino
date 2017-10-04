@@ -38,7 +38,7 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool CONSOLE = true;
+	bool CONSOLE = false;
 	// What to print
 	bool print_flow = true;
 	bool print_errors = true;
@@ -494,11 +494,14 @@ void GetSerial()
 	// Store data strings
 	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s b_read=%d b_dump=%d",
 		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "1" : "0", cnt_packBytesRead, cnt_packBytesDiscarded);
-	sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
-		buff_rx, buff_tx, dt_parse, millis() - a2r.t_sent, r2a.dt_rcvd);
+
 
 	// Check for missing footer
 	if (foot != r2a.foot) {
+
+		// Store data strings
+		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
+			buff_rx, buff_tx, dt_parse, a2r.t_sent > 0 ? millis() - a2r.t_sent : 0, r2a.dt_rcvd);
 
 		// Itterate dropped count
 		r2a.cnt_dropped++;
@@ -514,6 +517,10 @@ void GetSerial()
 		// Update recive time
 		r2a.dt_rcvd = r2a.t_rcvd > 0 ? millis() - r2a.t_rcvd : 0;
 		r2a.t_rcvd = millis();
+
+		// Store data strings
+		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
+			buff_rx, buff_tx, dt_parse, a2r.t_sent > 0 ? millis() - a2r.t_sent : 0, r2a.dt_rcvd);
 
 		// Update last packet
 		int id_ind = CharInd(id, r2a.id, r2a.lng);
@@ -864,7 +871,7 @@ bool SendPacket()
 
 	// Make log/print string
 	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s b_sent=%d tx=%d rx=%d dt_snd=%d dt_rcv=%d dt_q=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, a2r.dt_sent, millis() - r2a.t_rcvd, millis() - t_queue);
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, a2r.dt_sent, r2a.t_rcvd > 0 ? millis() - r2a.t_rcvd : 0, millis() - t_queue);
 
 	// Log/print
 	DebugSent(dat_str, is_resend);

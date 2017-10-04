@@ -2791,7 +2791,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	sprintf(logQueue[logQueueIndStore], "[%d],%lu,%d,%s\r\n", cnt_logsStored, t_m, cnt_loop_short, msg_copy);
 
 	// Check if should write now
-	if (db.LOGNOW &&
+	if (db.FASTLOG &&
 		mode == '<') {
 		DoAll("WriteLog");
 	}
@@ -2836,7 +2836,7 @@ bool LOGGER::WriteLog(bool do_send)
 	}
 
 	// Bail if less than 50ms sinse last write
-	if (!db.LOGNOW && micros() < t_write + dt_write) {
+	if (!db.FASTLOG && micros() < t_write + dt_write) {
 		// Indicate still logs to store
 		return is_logs;
 	}
@@ -3434,11 +3434,13 @@ void GetSerial(R4 *r4)
 	// Store data strings
 	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s b_read=%d b_dump=%d",
 		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "1" : "0", cnt_packBytesRead, cnt_packBytesDiscarded);
-	sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
-		buff_rx, buff_tx, dt_parse, millis() - r2->t_sent, r4->dt_rcvd);
 
 	// Check for dropped packet
 	if (foot != r4->foot) {
+
+		// Store data strings
+		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
+			buff_rx, buff_tx, dt_parse, r2->t_sent > 0 ? millis() - r2->t_sent : 0, r4->dt_rcvd);
 
 		// Itterate dropped count
 		r4->cnt_dropped++;
@@ -3455,6 +3457,10 @@ void GetSerial(R4 *r4)
 		// Update recive time
 		r4->dt_rcvd = r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0;
 		r4->t_rcvd = millis();
+
+		// Store data strings
+		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
+			buff_rx, buff_tx, dt_parse, r2->t_sent > 0 ? millis() - r2->t_sent : 0, r4->dt_rcvd);
 
 		// Get id ind
 		id_ind = CharInd<R4>(id, r4);
@@ -3889,7 +3895,7 @@ bool SendPacket(R2 *r2)
 
 	// Make log/print string
 	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s b_sent=%d tx=%d rx=%d cts=%s dt_snd=%d dt_rcv=%d dt_q=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "1" : "0", r2->dt_sent, millis() - r4->t_rcvd, millis() - t_queue);
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "1" : "0", r2->dt_sent, r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0, millis() - t_queue);
 
 	// Log/print
 	DebugSent(r2, dat_str, is_resend);
@@ -5060,6 +5066,8 @@ void CheckEtOH()
 	byte is_sol_open = digitalRead(pin.Rel_EtOH);
 	static float etoh_dist_start = 0; // (cm)
 	static float etoh_dist_diff = 0; // (cm)
+	int dt_open = 0;
+	int dt_close = 0;
 	bool do_open = false;
 	bool do_close = false;
 
@@ -5102,8 +5110,11 @@ void CheckEtOH()
 		t_solOpen = millis();
 		etoh_dist_start = kal.RobPos;
 
+		// Compute dt
+		dt_close = t_solClose > 0 ? t_solOpen - t_solClose : 0;
+
 		// Print to debug
-		sprintf(str, "[CheckEtOH] Open EtOH: dt_close=%d dt_open=%d", t_solOpen - t_solClose);
+		sprintf(str, "[CheckEtOH] Open EtOH: dt_close=%d", dt_close);
 		DebugFlow(str);
 	}
 
@@ -5116,8 +5127,11 @@ void CheckEtOH()
 		// Store current time 
 		t_solClose = millis();
 
+		// Compute dt
+		dt_open = t_solOpen > 0 ? t_solClose - t_solOpen : 0;
+
 		// Print to debug
-		sprintf(str, "[CheckEtOH] Close EtOH: dt_close=%d dt_open=%d", t_solOpen - t_solClose, millis() - t_solOpen);
+		sprintf(str, "[CheckEtOH] Close EtOH: dt_open=%d", dt_open);
 		DebugFlow(str);
 	}
 }
@@ -5328,10 +5342,13 @@ void HardwareTest()
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+	static char str_ping[2][200] = { { 0 } };
+	static char str_pixy[200] = { 0 };
+	static char str_vcc[200] = { 0 };
 	const uint32_t dt_test = 10000;
 	uint32_t t_test_str = 0;
 
-	// Pin test
+	// Ping test
 	uint32_t dt_ping_mat[2][n_pings] = { { 0 } };
 	float dt_ping_avg[2] = { 0 };
 	uint32_t dt_ping_sum = 0;
@@ -5456,7 +5473,6 @@ void HardwareTest()
 			else {
 
 				// Compute r2c ping average
-				char str_ping[2][200] = { {0} };
 				for (int i = 0; i < 2; i++) {
 
 					// Reset sum
@@ -5473,12 +5489,6 @@ void HardwareTest()
 					// Compute average
 					dt_ping_avg[i] = (float)dt_ping_sum / (n_pings);
 				}
-
-				// Log/print ping time
-				sprintf(str, "[HardwareTest] PING TIMES r2c: avg=%0.2f all=|%s", dt_ping_avg[0], str_ping[0]);
-				DebugFlow(str);
-				sprintf(str, "[HardwareTest] PING TIMES r2a: avg=%0.2f all=|%s", dt_ping_avg[1], str_ping[1]);
-				DebugFlow(str);
 
 				// Flag done
 				is_ping_test_done = true;
@@ -5516,7 +5526,6 @@ void HardwareTest()
 			else if (cnt_pixy == n_pixy_samp) {
 
 				// Loop samples
-				char str_pixy[200] = { 0 };
 				for (int i = 0; i < n_pixy_samp; i++) {
 
 					pixy_pos_sum += pixy_pos_arr[i];
@@ -5526,10 +5535,6 @@ void HardwareTest()
 
 				// Compute average
 				pixy_pos_avg = pixy_pos_sum / (n_pixy_samp);
-
-				// Log/print ping time
-				sprintf(str, "[HardwareTest] PIXY POS: avg=%0.2f all=|%s", pixy_pos_avg, str_pixy);
-				DebugFlow(str);
 
 				// Set flag
 				is_pixy_test_done = true;
@@ -5599,7 +5604,6 @@ void HardwareTest()
 				digitalWrite(pin.Rel_EtOH, LOW);
 
 				// Get average vcc
-				char str_vcc[200] = { 0 };
 				for (int i = 0; i < n_stress_samp; i++) {
 
 					vcc_sum += vcc_arr[i];
@@ -5609,11 +5613,6 @@ void HardwareTest()
 
 				// Compute average
 				vcc_avg = vcc_sum / (n_stress_samp);
-
-				// Log/print vcc
-				sprintf(str, "[HardwareTest] VCC: baseline=%0.2f avg=%0.2f all=|%s",
-					vcc_baseline, vcc_avg, str_vcc);
-				DebugFlow(str);
 
 				// Make sure arm retracted
 				Reward.RetractFeedArm();
@@ -5654,6 +5653,21 @@ void HardwareTest()
 
 	// Send final ping times
 	QueuePacket(&r2c, 't', n_pings + 1, dt_ping_avg[0], dt_ping_avg[1], 0, true);
+
+	// Log/print ping time
+	sprintf(str, "[HardwareTest] PING TIMES r2c: avg=%0.2f all=|%s", dt_ping_avg[0], str_ping[0]);
+	DebugFlow(str);
+	sprintf(str, "[HardwareTest] PING TIMES r2a: avg=%0.2f all=|%s", dt_ping_avg[1], str_ping[1]);
+	DebugFlow(str);
+
+	// Log/print pixy pos
+	sprintf(str, "[HardwareTest] PIXY POS: avg=%0.2f all=|%s", pixy_pos_avg, str_pixy);
+	DebugFlow(str);
+
+	// Log/print vcc
+	sprintf(str, "[HardwareTest] VCC: baseline=%0.2f avg=%0.2f all=|%s",
+		vcc_baseline, vcc_avg, str_vcc);
+	DebugFlow(str);
 
 	// Log/print
 	DebugFlow("[HardwareTest] FINISHED HARDWARE TEST");
@@ -6113,7 +6127,7 @@ void QueueDebug(char msg[], uint32_t t)
 	sprintf(printQueue[printQueueIndStore], "%s%s%s\n", str, spc, msg_copy);
 
 	// Check if should print now
-	if (db.PRINTNOW) {
+	if (db.FASTPRINT) {
 		DoAll("PrintDebug");
 	}
 
@@ -6995,6 +7009,13 @@ void setup() {
 	sprintf(str, "[setup] RING BUFFER SIZE: %dB", SERIAL_BUFFER_SIZE);
 	DebugFlow(str);
 	DoAll("PrintDebug");
+
+	// PRINT DEBUG STATUS
+	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s%s%s%s", 
+		db.DEBUG?"DEBUG":"RELEASE", db.CONSOLE?"PRINT TO CONSOLE|":"", 
+		db.LCD ?"PRINT TO LCD|":"", db.LOG? "LOGGING TO OPENLOG|":"", 
+		db.FASTPRINT?"FAST PRINTING|":"", db.FASTLOG?"FAST LOGGING|":"");
+	DebugFlow(str);
 
 	// PRINT SETUP FINISHED
 	DebugFlow("[setup] FINISHED: Setup");
