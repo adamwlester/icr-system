@@ -62,10 +62,10 @@ struct DB
 	bool is_runTest = false; // set by system
 
 	// Debugging
-	const bool DEBUG = false;
-	bool CONSOLE = false;
+	const bool DEBUG = true;
+	bool CONSOLE = true;
 	bool LOG = true;
-	bool FASTPRINT = false;
+	bool FASTPRINT = true;
 	bool FASTLOG = false;
 	bool LCD = false;
 
