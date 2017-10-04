@@ -803,6 +803,11 @@ double PID::UpdatePID()
 		return -1;
 	}
 
+	if (isFirstRun) {
+		PrintPID("[PID::UpdatePID] First Run");
+		isFirstRun = false;
+	}
+
 	// Re-compute error 
 	error = kal.RatPos - (kal.RobPos + setPoint);
 
@@ -856,11 +861,6 @@ double PID::UpdatePID()
 	isPidUpdated = true;
 	is_ekfNew = false;
 
-	if (isFirstRun) {
-		PrintPID("[PID::UpdatePID] First Run");
-		isFirstRun = false;
-	}
-
 	// Return new run speed
 	return runSpeed;
 
@@ -871,6 +871,10 @@ void PID::Run(char called_from[])
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
+	// Log/print event
+	sprintf(str, "[PID::Run] Run [%s]", called_from);
+	PrintPID(str);
+
 	// Take motor control
 	SetMotorControl("Pid", "PID::Run");
 
@@ -880,16 +884,16 @@ void PID::Run(char called_from[])
 
 	// Tell ard pid is running
 	QueuePacket(&r2a, 'p', 1);
-
-	// Log/print event
-	sprintf(str, "[PID::Run] Run [%s]", called_from);
-	PrintPID(str);
 }
 
 void PID::Stop(char called_from[])
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+
+	// Log/print event
+	sprintf(str, "[PID::Stop] Stop [%s]", called_from);
+	PrintPID(str);
 
 	if (fc.motorControl == "Pid")
 	{
@@ -910,10 +914,6 @@ void PID::Stop(char called_from[])
 
 	// Set mode
 	mode = "Manual";
-
-	// Log/print event
-	sprintf(str, "[PID::Stop] Stop [%s]", called_from);
-	PrintPID(str);
 }
 
 void PID::Hold(char called_from[])
@@ -921,15 +921,15 @@ void PID::Hold(char called_from[])
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
+	// Log/print event
+	sprintf(str, "[PID::Hold] Hold [%s]", called_from);
+	PrintPID(str);
+
 	// Call Stop
 	Stop("Pid.Hold");
 
 	// But set mode to "Hold"
 	mode = "Hold";
-
-	// Log/print event
-	sprintf(str, "[PID::Hold] Hold [%s]", called_from);
-	PrintPID(str);
 }
 
 void PID::Reset()
@@ -955,6 +955,10 @@ void PID::SetThrottle()
 		millis() > t_lastThrottle + 5000
 		) {
 
+		// Log/print
+		sprintf(str, "[PID::SetThrottle] Throttle ACC to %0.2fcm/sec", throttleAcc);
+		PrintPID(str);
+
 		// Change acc to rat pos
 		AD_Reset(maxSpeed, throttleAcc, maxDec);
 
@@ -964,10 +968,6 @@ void PID::SetThrottle()
 		// Set flags
 		isThrottled = true;
 		doThrottle = false;
-
-		// Log/print
-		sprintf(str, "[PID::SetThrottle] Throttle ACC to %0.2fcm/sec", throttleAcc);
-		PrintPID(str);
 	}
 	else {
 		doThrottle = false;
@@ -986,6 +986,9 @@ void PID::CheckThrottle()
 			error < 0
 			) {
 
+			// Log/print event
+			PrintPID("[PID::CheckThrottle] Finished Throttle");
+
 			// Set acc back to normal
 			AD_Reset(maxSpeed, maxAcc, maxDec);
 
@@ -994,7 +997,6 @@ void PID::CheckThrottle()
 
 			// Reset flag
 			isThrottled = false;
-			PrintPID("[PID::CheckThrottle] Finished Throttle");
 		}
 	}
 }
@@ -1027,8 +1029,11 @@ void PID::CheckSetpointCrossing()
 	// Check if rat has moved in front of setpoint
 	if (isHolding4cross && error > 0)
 	{
-		isHolding4cross = false;
+		// Log/print event 
 		PrintPID("[PID::CheckSetpointCrossing] Crossed Setpoint");
+
+		// Set flag
+		isHolding4cross = false;
 	}
 }
 
@@ -1038,9 +1043,11 @@ void PID::CheckEKF(uint32_t t)
 	{
 		if ((t - t_ekfReady) > dt_ekfSettle)
 		{
-			fc.isEKFReady = true;
-			// Log/print
+			// Log/print event 
 			PrintPID("[PID::CheckEKF] EKF Ready");
+
+			// Set flag
+			fc.isEKFReady = true;
 		}
 	}
 }
@@ -1050,13 +1057,13 @@ void PID::ResetEKF(char called_from[])
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
+	// Log/print event
+	sprintf(str, "[PID::ResetEKF] Reset EKF [%s]", called_from);
+	PrintPID(str);
+
 	// Set flag and time
 	fc.isEKFReady = false;
 	t_ekfReady = millis();
-
-	// Log/print
-	sprintf(str, "[PID::ResetEKF] Reset EKF [%s]", called_from);
-	PrintPID(str);
 }
 
 void PID::SetUpdateTime(uint32_t t)
@@ -1107,6 +1114,10 @@ double PID::RunPidCalibration()
 		cal_cntPcArr[3] == cal_nMeasPerSteps &&
 		cal_PcArr[3] > 0
 		) {
+		
+		// Log/print
+		DebugFlow("[PID::RunPidCalibration] Finished PID Calibration");
+
 		// Compute overal average
 		for (int i = 0; i < 4; i++)
 		{
@@ -1118,8 +1129,7 @@ double PID::RunPidCalibration()
 		cal_isPidUpdated = true;
 		cal_isCalFinished = true;
 
-		// Log/print
-		DebugFlow("[PID::RunPidCalibration] Finished PID Calibration");
+        // Stop run
 		return 0;
 	}
 
@@ -1158,7 +1168,6 @@ double PID::RunPidCalibration()
 		else {
 			return -1;
 		}
-
 
 		// Log/print
 		sprintf(str, "[PID::RunPidCalibration] Set Speed to %0.2fcm/sec", cal_speedSteps[cal_stepNow]);
@@ -1302,21 +1311,25 @@ void BULLDOZE::Reinitialize(byte del, byte spd, char called_from[])
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
+	// Log/print event
+	sprintf(str, "[BULLDOZE::Reinitialize] Reinitialize Bull [%s]", called_from);
+	PrintBull(str);
+
 	// Update vars
 	bSpeed = (int)spd;
 	bDelay = (int)del * 1000;
 	t_bullNext = millis() + bDelay;
 	posCheck = kal.RatPos;
-
-	// Log/print event
-	sprintf(str, "[BULLDOZE::Reinitialize] Reinitialize Bull [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::Run(char called_from[])
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+
+	// Log/print event
+	sprintf(str, "[BULLDOZE::Run] Run [%s]", called_from);
+	PrintBull(str);
 
 	// Take control
 	SetMotorControl("Bull", "BULLDOZE::Run");
@@ -1329,16 +1342,16 @@ void BULLDOZE::Run(char called_from[])
 
 	// Set mode
 	mode = "Active";
-
-	// Log/print event
-	sprintf(str, "[BULLDOZE::Run] Run [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::Stop(char called_from[])
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+
+	// Log/print event
+	sprintf(str, "[BULLDOZE::Stop] Stop [%s]", called_from);
+	PrintBull(str);
 
 	// Stop movement
 	RunMotor('f', 0, "Bull");
@@ -1361,10 +1374,6 @@ void BULLDOZE::Stop(char called_from[])
 
 	// Set mode
 	mode = "Inactive";
-
-	// Log/print event
-	sprintf(str, "[BULLDOZE::Stop] Stop [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::TurnOn(char called_from[])
@@ -1372,21 +1381,25 @@ void BULLDOZE::TurnOn(char called_from[])
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
+	// Log/print event
+	sprintf(str, "[BULLDOZE::TurnOn] Turn On [%s]", called_from);
+	PrintBull(str);
+
 	// Change state
 	state = "On";
 
 	// Reset 
 	Reset();
-
-	// Log/print event
-	sprintf(str, "[BULLDOZE::TurnOn] Turn On [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::TurnOff(char called_from[])
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+
+	// Log/print event
+	sprintf(str, "[BULLDOZE::TurnOff] Turn Off [%s]", called_from);
+	PrintBull(str);
 
 	// Change state
 	state = "Off";
@@ -1396,16 +1409,16 @@ void BULLDOZE::TurnOff(char called_from[])
 		// Stop bull
 		Stop("BULLDOZE::TurnOff");
 	}
-
-	// Log/print event
-	sprintf(str, "[BULLDOZE::TurnOff] Turn Off [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::Hold(char called_from[])
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+
+	// Log/print event
+	sprintf(str, "bull: hold [%s]", called_from);
+	PrintBull(str);
 
 	// Change state
 	state = "Hold";
@@ -1419,10 +1432,6 @@ void BULLDOZE::Hold(char called_from[])
 		// Set mode back to active for later
 		mode = "Active";
 	}
-
-	// Log/print event
-	sprintf(str, "bull: hold [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::Resume(char called_from[])
@@ -1430,15 +1439,15 @@ void BULLDOZE::Resume(char called_from[])
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
+	// Log/print event
+	sprintf(str, "[BULLDOZE::Resume] Resume [%s]", called_from);
+	PrintBull(str);
+
 	// Set state back to "On"
 	state = "On";
 
 	// Reset 
 	Reset();
-
-	// Log/print event
-	sprintf(str, "[BULLDOZE::Resume] Resume [%s]", called_from);
-	PrintBull(str);
 }
 
 void BULLDOZE::Reset()
@@ -1511,9 +1520,12 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	// Check if time out reached
 	if (millis() > t_tryTargSetTill) {
 		doAbortMove = true;
+		
 		// Log/print error
 		sprintf(str, "!!ERROR!! [MOVETO::CompTarg] Timedout after %dms", targSetTimeout);
 		DebugError(str, true);
+		
+		// Return failure
 		return isTargSet;
 	}
 
@@ -1592,10 +1604,15 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 
 	// Check if time out reached
 	if (millis() > t_tryMoveTill) {
-		doAbortMove = true;
+				
 		// Log/print error
 		sprintf(str, "!!ERROR!! [MOVETO::DecelToTarg] Timedout after %dms", moveTimeout);
 		DebugError(str, true);
+
+		// Set error flag
+		doAbortMove = true;
+
+		// Stop run
 		return 0;
 	}
 
@@ -1624,16 +1641,16 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 	// Target reached
 	if (distLeft < 1)
 	{
+		// Log/print
+		sprintf(str, "[MOVETO::DecelToTarg] FINISHED: MoveTo: start_abs=%0.2fcm now_abs=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
+			posAbsStart, now_pos, targPos, targDist, distLeft);
+		DebugFlow(str);
+
 		// Set flag true
 		isTargReached = true;
 
 		// Stop movement
 		new_speed = 0;
-
-		// Log/print
-		sprintf(str, "[MOVETO::DecelToTarg] FINISHED: MoveTo: start_abs=%0.2fcm now_abs=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
-			posAbsStart, now_pos, targPos, targDist, distLeft);
-		DebugFlow(str);
 	}
 
 	// Return new speed
@@ -1717,16 +1734,16 @@ void REWARD::StartRew()
 		doTimedRetract = false;
 	}
 
+	// Log/print 
+	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
+		mode_str, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
+	DebugFlow(str, t_rew_str);
+
 
 	// Print to LCD for manual rewards
 	if (mode == "Button") {
 		PrintLCD(true, "REWARDING...");
 	}
-
-	// Log/print 
-	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
-		mode_str, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
-	DebugFlow(str, t_rew_str);
 
 	// Set flags
 	isRewarding = true;
@@ -1758,15 +1775,15 @@ bool REWARD::EndRew()
 	// Store time
 	t_rew_end = millis();
 
-	// Clear LCD
-	if (mode == "Button") {
-		ClearLCD();
-	}
-
 	// Log/print
 	sprintf(str, "[REWARD::EndRew] FINISHED: \"%s\" Reward: dt_rew=%dms dt_retract=%d",
 		mode_str, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(str, t_rew_end);
+
+	// Clear LCD
+	if (mode == "Button") {
+		ClearLCD();
+	}
 
 	// Reset flags etc
 	Reset();
@@ -1974,6 +1991,9 @@ void REWARD::ExtendFeedArm()
 		return;
 	}
 
+	// Log/print
+	DebugFlow("[REWARD::ExtendFeedArm] Set Extend Feed Arm");
+
 	// Block handler
 	v_doStepTimer = false;
 	delayMicroseconds(1100);
@@ -2005,9 +2025,6 @@ void REWARD::ExtendFeedArm()
 	delayMicroseconds(100);
 	v_doStepTimer = true;
 
-	// Log/print
-	DebugFlow("[REWARD::ExtendFeedArm] Set Extend Feed Arm");
-
 }
 
 void REWARD::RetractFeedArm()
@@ -2022,10 +2039,8 @@ void REWARD::RetractFeedArm()
 	H	H	H	Sixteenth Step	4W1 - 2 Phase
 	*/
 
-	//// Bail if arm not extended
-	//if (!isArmExtended) {
-	//	return;
-	//}
+	// Log/print
+	DebugFlow("[REWARD::RetractFeedArm] Set Retract Feed Arm");
 
 	// Block handler
 	v_doStepTimer = false;
@@ -2057,9 +2072,6 @@ void REWARD::RetractFeedArm()
 	// Set intterupt flag
 	delayMicroseconds(100);
 	v_doStepTimer = true;
-
-	// Log/print
-	DebugFlow("[REWARD::RetractFeedArm] Set Retract Feed Arm");
 
 }
 
@@ -2172,11 +2184,15 @@ void REWARD::CheckFeedArm()
 
 		// Log/print status
 		if (!is_timedout) {
+
+			// Print success
 			sprintf(str, "[REWARD::CheckFeedArm] SUCCEEDED: Arm %s: cnt_steps=%d step_targ=%d dt_move=%d",
 				isArmExtended ? "Extend" : "Retract", v_cnt_steps, v_stepTarg, millis() - t_moveArmStr);
 			DebugFlow(str);
 		}
 		else {
+
+			// Print timeout error
 			sprintf(str, "!!ERROR!! [REWARD::CheckFeedArm] TIMEDOUT: Arm %s: cnt_steps=%d step_targ=%d dt_move=%d",
 				isArmExtended ? "Extend" : "Retract", v_cnt_steps, v_stepTarg, millis() - t_moveArmStr);
 			DebugError(str, true);
@@ -2195,13 +2211,18 @@ void REWARD::CheckFeedArm()
 
 void REWARD::Reset()
 {
+	// Local vars
+	static char str1[200] = { 0 }; str1[0] = '\0';
+	static char str2[200] = { 0 }; str2[0] = '\0';
+	static char ss1[50]; ss1[0] = '\0';
+	static char ss2[50]; ss2[0] = '\0';
+
+	// Log/print event
+	DebugFlow("[REWARD::Reset] Reseting Reward");
+
 	// Log zone info
 	if (mode == "Free" || mode == "Cue")
 	{
-		static char str1[200] = { 0 }; str1[0] = '\0';
-		static char str2[200] = { 0 }; str2[0] = '\0';
-		static char ss1[50]; ss1[0] = '\0';
-		static char ss2[50]; ss2[0] = '\0';
 		sprintf(str1, "[REWARD::Reset] ZONE OCC:");
 		sprintf(str2, "[REWARD::Reset] ZONE CNT:");
 		for (int i = zoneMin; i <= zoneMax; i++)
@@ -2427,19 +2448,24 @@ bool LOGGER::SetToCmdMode()
 	//Send "$$$" command mode
 	if (SendCommand(rstArr, true, 500) == '>')
 	{
-		// Set flag
-		pass = true;
-		// Pause to let OpenLog get its shit together
-		delay(100);
 		// Print status
 		sprintf(str, "[LOGGER::SetToCmdMode] OpenLog Set to Cmd Mode: mode = %c", mode);
 		DebugFlow(str);
+
+		// Set flag
+		pass = true;
+		
+		// Pause to let OpenLog get its shit together
+		delay(100);
 	}
 	// Log/print error
 	else {
-		pass = false;
+		// Log/print
 		sprintf(str, "**WARNING** [LOGGER::SetToCmdMode] ABORTED: mode=%c", mode);
 		DebugError(str);
+
+		// Set flag
+		pass = false;
 	}
 
 	return pass;
@@ -3540,8 +3566,6 @@ void GetSerial(R4 *r4)
 
 	// Check if data was discarded
 	if (cnt_packBytesDiscarded > 0) {
-
-		// Log/print discarded data
 		sprintf(str, "**WARNING** [GetSerial] Dumped Bytes: %s %s", dat_str_1, dat_str_2);
 		DebugError(str);
 	}
@@ -4156,12 +4180,13 @@ void AD_CheckOC(bool force_check)
 		// Track events
 		cnt_errors++;
 
+		// Log/print
+		sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected Resetting Motor Reset: cnt=%d now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d", 
+			cnt_errors, ocd_r, ocd_f, ocd_last_r, ocd_last_f);
+		DebugError(str, true);
+
 		// Reset motors
 		AD_Reset();
-
-		// Log/print
-		sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected & Motor Reset: now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d", ocd_r, ocd_f, ocd_last_r, ocd_last_f);
-		DebugError(str, true);
 	}
 
 	// Store status
@@ -4173,8 +4198,12 @@ void AD_CheckOC(bool force_check)
 
 	// Disable checking after 5 errors
 	if (cnt_errors >= 5) {
+		
+		// Log/print
 		sprintf(str, "!!ERROR!! [AD_CheckOC] Disabled AD Check After %d Errors", cnt_errors);
 		DebugError(str, true);
+
+		// Set flag
 		dp_disable = true;
 	}
 
@@ -4185,6 +4214,10 @@ void HardStop(char called_from[])
 {
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+
+	// Log/print event
+	sprintf(str, "[HardStop] Hard Stop [%s]", called_from);
+	DebugFlow(str);
 
 	// Normal hard stop
 	AD_R.hardStop();
@@ -4202,10 +4235,6 @@ void HardStop(char called_from[])
 		AD_R.hardHiZ();
 		AD_F.hardHiZ();
 	}
-
-	// Log/print event
-	sprintf(str, "[HardStop] Hard Stop [%s]", called_from);
-	DebugFlow(str);
 }
 
 // IR TRIGGERED HARD STOP
@@ -4227,6 +4256,9 @@ bool RunMotor(char dir, double new_speed, String agent)
 	// Check that caller has control
 	if (agent == fc.motorControl ||
 		agent == "Override") {
+
+		// Log/print speed change
+		DebugRunSpeed(agent, runSpeedNow, new_speed);
 
 		// Scale vel
 		speed_rear =
@@ -4253,9 +4285,6 @@ bool RunMotor(char dir, double new_speed, String agent)
 			AD_R.run(REV, speed_rear*cm2stp);
 			AD_F.run(REV, speed_front*cm2stp);
 		}
-
-		// Log/print speed change
-		DebugRunSpeed(agent, runSpeedNow, new_speed);
 
 		// Update run speed and dir
 		runSpeedNow = new_speed;
@@ -4494,11 +4523,15 @@ void InitializeTracking()
 		if (cm_diff < 0 ||
 			cm_dist >((140 * PI) / 4))
 		{
+			// Log/print error
+			DebugError("**WARNING** [InitializeTracking] Reseting Position Data Due to Bad Values");
+
 			// Will have to run again with new samples
 			Pos[0].Reset();
 			Pos[2].Reset();
 			Pos[1].Reset();
-			DebugError("**WARNING** [InitializeTracking] Had to Reset Position Data");
+
+			// Bail
 			return;
 		}
 
@@ -4853,15 +4886,15 @@ bool GetButtonInput()
 				return false;
 			}
 
+			// Log/print
+			sprintf(str, "[GetButtonInput] Pressed button %d", i);
+			DebugFlow(str);
+
 			// Get long hold time
 			t_long_hold[btn_ind] = millis() + dt_long_hold - dt_hold_min;
 
 			// Set flag
 			is_pressed[btn_ind] = true;
-
-			// Log/print
-			sprintf(str, "[GetButtonInput] Pressed button %d", i);
-			DebugFlow(str);
 		}
 
 		// Check released
@@ -4887,6 +4920,10 @@ bool GetButtonInput()
 			// Set flag for either condition
 			if (is_short_hold || is_long_hold) {
 
+				// Log/print
+				sprintf(str, "[GetButtonInput] Triggered button %d", i);
+				DebugFlow(str);
+
 				// Run short hold function
 				if (is_short_hold) {
 					do_flag_fun[btn_ind][0] = true;
@@ -4905,10 +4942,6 @@ bool GetButtonInput()
 
 				// Flag input rcvd
 				is_new_input = true;
-
-				// Log/print
-				sprintf(str, "[GetButtonInput] Triggered button %d", i);
-				DebugFlow(str);
 			}
 		}
 
@@ -4919,6 +4952,10 @@ bool GetButtonInput()
 			if (is_running[btn_ind] ||
 				millis() > t_long_hold[btn_ind]) {
 
+				// Log/print
+				sprintf(str, "[GetButtonInput] Reset button %d", i);
+				DebugFlow(str);
+
 				// Reset flags etc
 				t_debounce[btn_ind] = millis() + dt_debounce[btn_ind];
 				analogWrite(pin.TrackLED, trackLEDdutyMax);
@@ -4926,10 +4963,6 @@ bool GetButtonInput()
 				t_hold_min[btn_ind] = 0;
 				t_long_hold[btn_ind] = 0;
 				is_pressed[btn_ind] = false;
-
-				// Log/print
-				sprintf(str, "[GetButtonInput] Reset button %d", i);
-				DebugFlow(str);
 			}
 		}
 
@@ -5303,14 +5336,14 @@ void ChangeLCDlight(uint32_t duty)
 	else {
 		fc.isLitLCD = duty > 0;
 	}
-
-	// Set LCD duty
-	analogWrite(pin.Disp_LED, duty);
-
+	
 	// Log/print
 	sprintf(str, "[ChangeLCDlight] Set LCD Light: is_lit=%s duty=%d",
 		fc.isLitLCD ? "1" : "0", duty);
 	DebugFlow(str);
+
+	// Set LCD duty
+	analogWrite(pin.Disp_LED, duty);
 }
 
 // QUIT AND RESTART ARDUINO
@@ -5371,7 +5404,7 @@ void HardwareTest()
 	bool is_pixy_test_done = false;
 
 	// Stress test
-	double speed_range[2] = { 5,65 };
+	double speed_range[2] = { 5,75 };
 	const byte n_stress_samp = 10;
 	byte speed_step = (speed_range[1] - speed_range[0]) / (n_stress_samp / 2);
 	byte cnt_stress = 0;
@@ -6505,6 +6538,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 
 		// Check if should shutdown
 		if (t_shutdown > 0 && millis() > t_shutdown) {
+			
 			// Log/print
 			sprintf(str, "!!ERROR!! [RunErrorHold] SHUTTING DOWN BECAUSE: %s", msg);
 			DebugError(str, true);
@@ -6633,6 +6667,8 @@ bool DoAll(char fun_id[])
 		if (!do_skip_next_print) {
 			sprintf(str, "**WARNING** [DoAll] \"%s\" Timedout after %dms", fun_id, dt_timeout);
 			DebugError(str);
+
+			// Set flag
 			do_skip_next_print = true;
 		}
 
@@ -6898,10 +6934,10 @@ void setup() {
 
 	// Exit with error if power not on
 	if (CheckBattery(true) == 0) {
+		
 		// Hold for error
 		DebugError("!!ERROR!! [setup] ABORTED: Power Off", true);
 		DoAll("PrintDebug");
-		digitalWrite(pin.Rel_EtOH, LOW);
 		RunErrorHold("POWER OFF");
 	}
 	PrintLCD(true, "DONE SETUP", "Battery Check");
@@ -7260,18 +7296,23 @@ void loop() {
 		// Set run pid calibration flag
 		if (cmd.testCond == 1)
 		{
-			db.do_pidCalibration = true;
-
-			// Print settings
+			// Log/rint settings
 			sprintf(horeStr, "[loop] RUN PID CALIBRATION = kC=%0.2f", kC);
 			DebugFlow(horeStr);
+
+			// Set flag
+			db.do_pidCalibration = true;
 		}
 
 		// Update Halt Error test run speed
 		else if (cmd.testCond == 2)
 		{
+			// Store new speed
 			double new_speed = double(cmd.testDat);
 
+			// Print speed
+			sprintf(horeStr, "[loop] HALT ERROR SPEED = %0.0f cm/sec", new_speed);
+			DebugFlow(horeStr);
 
 			if (new_speed > 0) {
 				// Run motor
@@ -7282,10 +7323,6 @@ void loop() {
 				AD_R.hardStop();
 				AD_F.hardStop();
 			}
-
-			// Print speed
-			sprintf(horeStr, "[loop] HALT ERROR SPEED = %0.0f cm/sec", new_speed);
-			DebugFlow(horeStr);
 		}
 
 		// Symulated rat test
@@ -7425,9 +7462,11 @@ void loop() {
 #pragma region //--- (Q) DO QUIT ---
 	if (c2r.idNow == 'Q' && c2r.isNew) {
 
+		// Log/print event
+		DebugFlow("[loop] DO QUIT");
+
 		// Set flags and delay time
 		fc.doQuit = true;
-		DebugFlow("[loop] DO QUIT");
 
 		// Tell CheetahDue to quit 
 		QueuePacket(&r2a, 'q', 0, 0, 0, 0, true);
@@ -7559,17 +7598,18 @@ void loop() {
 			// Log/print final move status
 			if (Move.isTargReached) {
 
-				// Tell CS movement is done
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
-
 				// Print success message
 				sprintf(horeStr, "[loop] SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
 					Move.targDist, Move.GetError(kal.RobPos), Move.moveDir);
 				DebugFlow(horeStr);
+
+				// Tell CS movement is done
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
 			}
 
 			// Log/print error
 			else if (Move.doAbortMove) {
+
 				// Print failure message
 				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
 					Move.isTargSet ? "1" : "0", fc.isEKFReady ? "1" : "0", Move.isMoveStarted ? "1" : "0", Move.targDist, Move.GetError(kal.RobPos), Move.moveDir);
@@ -7745,9 +7785,13 @@ void loop() {
 			// Mode changed
 			if (!fc.doBulldoze) {
 
+				// Log/print event
+				DebugFlow("[loop] SET BULLDOZE ON");
+
+				// Set flags
 				is_mode_changed = true;
 				fc.doBulldoze = true;
-				DebugFlow("[loop] SET BULLDOZE ON");
+				
 			}
 			// Only settings changed
 			else {
@@ -7758,10 +7802,13 @@ void loop() {
 			// Mode changed
 			if (fc.doBulldoze)
 			{
-
+				// Log/print event
+				DebugFlow("[loop] SET BULLDOZE OFF");
+				
+				// Set flags
 				is_mode_changed = true;
 				fc.doBulldoze = false;
-				DebugFlow("[loop] SET BULLDOZE OFF");
+
 			}
 			// Only settings changed
 			else {
@@ -7775,15 +7822,19 @@ void loop() {
 
 			if (fc.doBulldoze) {
 
+				// Log/print event
+				DebugFlow("[loop] BULLDOZE ON");
+
 				// Turn bulldoze on
 				Bull.TurnOn("loop \'B\'");
-				DebugFlow("[loop] BULLDOZE ON");
 			}
 			else {
 
+				// Log/print event
+				DebugFlow("[loop] BULLDOZE OFF");
+
 				// Turn bulldoze off
 				Bull.TurnOff("loop \'B\'");
-				DebugFlow("[loop] BULLDOZE OFF");
 			}
 		}
 
@@ -7798,14 +7849,17 @@ void loop() {
 
 		if (fc.isRatIn) {
 
+			// Pid started by InitializeTracking()
+			DebugFlow("[loop] RAT IN");
+
 			// Reset rat pos data
 			Pos[0].Reset();
 			Pos[2].Reset();
-
-			// Pid started by InitializeTracking()
-			DebugFlow("[loop] RAT IN");
 		}
 		else {
+
+			// Log/print event
+			DebugFlow("[loop] RAT OUT");
 
 			// Turn off bulldoze
 			Bull.TurnOff("loop \'I\'");
@@ -7816,8 +7870,6 @@ void loop() {
 
 			// Set to stop tracking
 			fc.isTrackingEnabled = false;
-
-			DebugFlow("[loop] RAT OUT");
 		}
 	}
 #pragma endregion
@@ -7831,10 +7883,14 @@ void loop() {
 	// Check for streaming
 	if (fc.doStreamCheck && Pos[1].is_streamStarted)
 	{
+		// Log/print event
+
+		DebugFlow("[loop] STREAMING CONFIRMED");
 		// Send streaming confirmation
 		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('V', &c2r)], true);
+		
+		// Reset flag
 		fc.doStreamCheck = false;
-		DebugFlow("[loop] STREAMING CONFIRMED");
 
 		// Set flag to begin sending vcc
 		fc.doSendVCC = true;
@@ -7864,9 +7920,13 @@ void loop() {
 
 			// Log/print first sample
 			if (!Pos[1].is_streamStarted) {
+
+				// Log/print
 				sprintf(horeStr, "[loop] FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
 					Pos[1].posAbs, Pos[1].posNow, Pos[1].nLaps);
 				DebugFlow(horeStr);
+
+				// Set flag
 				Pos[1].is_streamStarted = true;
 			}
 		}
@@ -7887,9 +7947,13 @@ void loop() {
 
 				// Log/print first sample
 				if (!Pos[0].is_streamStarted) {
+
+					// Log/print
 					sprintf(horeStr, "[loop] FIRST RAT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
 						Pos[0].posAbs, Pos[0].posNow, Pos[0].nLaps);
 					DebugFlow(horeStr);
+
+					// Set flag
 					Pos[0].is_streamStarted = true;
 				}
 			}
@@ -7908,26 +7972,26 @@ void loop() {
 		// Check for 2 way confirmation before sending log
 		if (!fc.doLogSend) {
 
+			// Log/print
+			sprintf(horeStr, "[loop] SENDING LOG: logs_stored=~%d bytes_stored=~%d",
+				Log.cnt_logsStored, Log.cnt_logBytesStored);
+			DebugFlow(horeStr);
+
 			// Send number of log bytes being sent
 			QueuePacket(&r2c, 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
 
 			// Block sending vcc updates
 			fc.doBlockVccSend = true;
-
-			// Log/print
-			sprintf(horeStr, "[loop] SENDING LOG: logs_stored=~%d bytes_stored=~%d",
-				Log.cnt_logsStored, Log.cnt_logBytesStored);
-			DebugFlow(horeStr);
 		}
 
 		// Begin sending log
 		else {
 
-			// Set send time
-			Log.t_beginSend = millis() + Log.dt_beginSend;
-
 			// Log/print
 			DebugFlow("[loop] DO SEND LOG");
+
+			// Set send time
+			Log.t_beginSend = millis() + Log.dt_beginSend;
 
 			// Store remaining logs
 			DoAll("WriteLog");
