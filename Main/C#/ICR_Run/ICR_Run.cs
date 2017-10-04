@@ -1145,7 +1145,7 @@ namespace ICR_Run
                 {
                     // Get status info
                     dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
-                    buff_str = String.Format("tx={0} rx={1} queued={2} dt_queue={3} dt_snd={4} dt_rcv={5}",
+                    buff_str = String.Format("tx={0} rx={1} queued={2} dt_q={3} dt_snd={4} dt_rcv={5}",
                    sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
                     // Log/print
@@ -1214,7 +1214,7 @@ namespace ICR_Run
 
                 // Store final status info
                 dt_rcvd = r2c.DT_SentRcvd(sw_main.ElapsedMilliseconds);
-                buff_str = String.Format("bytes_sent={0} tx={1} rx={2} queued={3} dt_queue={4} dt_snd={5} dt_rcv={6}",
+                buff_str = String.Format("bytes_sent={0} tx={1} rx={2} queued={3} dt_q={4} dt_snd={5} dt_rcv={6}",
                     msgByteArr.Length, sp_Xbee.BytesToWrite, sp_Xbee.BytesToRead, queue_SendXBee, sw_main.ElapsedMilliseconds - t_queued, c2r.DT_SentRcvd(), dt_rcvd);
 
                 // Check if sending pos data
@@ -1641,7 +1641,7 @@ namespace ICR_Run
                 ) ;
 
             // Store data string
-            dat_str = String.Format("getting=\"{0}\" min_byte={1} dt_check={2} dt_queue={3} rx={4} tx={5}",
+            dat_str = String.Format("get=\"{0}\" min_byte={1} dt_chk={2} dt_q={3} rx={4} tx={5}",
                      getting, min_byte, sw_main.ElapsedMilliseconds - t_str, sw_main.ElapsedMilliseconds - t_parse_str, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite);
 
             // Check if hanging
@@ -1809,10 +1809,10 @@ namespace ICR_Run
             {
                 // Timedout
                 if (sw_main.ElapsedMilliseconds > t_timeout)
-                    LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] a2c Hanging: dt_check={0} rx={1} tx={2}",
+                    LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] a2c Hanging: dt_chk={0} rx={1} tx={2}",
                       (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
                 else
-                    LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] ABORTED: dt_check={0} rx={1} tx={2}",
+                    LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] ABORTED: dt_chk={0} rx={1} tx={2}",
                    (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
             }
 
@@ -2416,7 +2416,7 @@ namespace ICR_Run
 
             // Check if queue backed up
             if (queue_sendMCOM >= 3)
-                LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} dt_queue={2}",
+                LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} dt_q={2}",
                                 msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued), is_warning: true);
 
             // Add to queue
@@ -2427,7 +2427,7 @@ namespace ICR_Run
                 // Check if queue hanging
                 if (sw_main.ElapsedMilliseconds > t_queued + 100)
                     // Log/print error
-                    LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} dt_queue={2}",
+                    LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} dt_q={2}",
                                     msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued), is_warning: true);
 
 
@@ -2444,7 +2444,7 @@ namespace ICR_Run
                         c2m.UpdateSentRcvd(id: id, dat: dat, pack: pack, t: sw_main.ElapsedMilliseconds);
 
                         // Log/print sent
-                        LogEvent_Thread(String.Format("   [SENT] c2m: {0} queued={1} dt_queue={2}",
+                        LogEvent_Thread(String.Format("   [SENT] c2m: {0} queued={1} dt_q={2}",
                                 dat_str, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
                     }
 
@@ -2456,7 +2456,7 @@ namespace ICR_Run
 
                         // Log/print message
                         if (do_print)
-                            LogEvent_Thread(String.Format("   [mCOM] c2m: msg=\"{0}\" queued={1} dt_queue={2}",
+                            LogEvent_Thread(String.Format("   [mCOM] c2m: msg=\"{0}\" queued={1} dt_q={2}",
                                 msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued));
                     }
 

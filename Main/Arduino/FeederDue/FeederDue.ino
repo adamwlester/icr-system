@@ -2757,7 +2757,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 		else if (is_mem_overflowed) {
 
 			// Store part of message
-			for (int i = 0; i < 100; i++){
+			for (int i = 0; i < 100; i++) {
 				str[i] = msg[i];
 			}
 			str[100] = '\0';
@@ -3075,7 +3075,7 @@ void LOGGER::StreamLogs()
 			if (cnt_logBytesSent == milestone_incriment[milestone_ind]) {
 
 				// Print
-				sprintf(str, "[LOGGER::StreamLogs] Log Write %d%% Complete: bytes_sent=%d/%d",
+				sprintf(str, "[LOGGER::StreamLogs] Log Write %d%% Complete: b_sent=%d/%d",
 					milestone_ind * 10, cnt_logBytesSent, cnt_logBytesStored);
 				DebugFlow(str, millis());
 				DoAll("PrintDebug");
@@ -3136,7 +3136,7 @@ void LOGGER::StreamLogs()
 
 	// Print log time info
 	float dt_s = (float)(millis() - t_start) / 1000.0f;
-	sprintf(str, "[LOGGER::StreamLogs] Run Info: dt_run=%0.2fs bytes_sent=%d bytes_stored=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d openlog_tx=%d openlog_rx=%d xbee_tx=%d xbee_rx=%d",
+	sprintf(str, "[LOGGER::StreamLogs] Run Info: dt_run=%0.2fs b_sent=%d bytes_stored=%d cnt_err_set_cmd_mode=%d cnt_err_read_cmd=%d cnt_err_read_timeout=%d openlog_tx=%d openlog_rx=%d xbee_tx=%d xbee_rx=%d",
 		dt_s, cnt_logBytesSent, cnt_logBytesStored, cnt_err_set_cmd_mode, cnt_err_read_cmd, cnt_err_read_timeout, ol_buff_tx, ol_buff_rx, xbee_buff_tx, xbee_buff_rx);
 	DebugFlow(str);
 
@@ -3493,7 +3493,6 @@ void GetSerial(R4 *r4)
 			// Log/print skipped packet info
 			sprintf(str, "**WARNING** [GetSerial] Missed %s Packs: cnt=%d|%d pack_last=%d %s %s",
 				r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last, dat_str_1, dat_str_2);
-			strcat(str, dat_str_1);
 			DebugError(str);
 		}
 
@@ -3632,7 +3631,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 	int buff_rx = r4->port.available();
 
 	// Store current info
-	sprintf(dat_str, " from=%s buff=\'%s\' b_read=%d b_dump=%d rx_start=%d rx_now=%d tx_now=%d dt_check=%d",
+	sprintf(dat_str, " from=%s buff=\'%s\' b_read=%d b_dump=%d rx_str=%d rx_now=%d tx_now=%d dt_chk=%d",
 		r4->instID, PrintSpecialChars(buff), cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
 
 	// Buffer flooded
@@ -3773,7 +3772,7 @@ bool SendPacket(R2 *r2)
 	const int msg_lng = sendQueueBytes;
 	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
 	byte msg[msg_lng];
-	cnt_packBytesSent = 0;
+	uint32_t t_queue = millis();
 	bool is_resend = false;
 	char id = '\0';
 	float dat[3] = { 0 };
@@ -3782,10 +3781,12 @@ bool SendPacket(R2 *r2)
 	int buff_tx;
 	int buff_rx;
 	int id_ind = 0;
-	uint32_t t_queue = millis();
 	R4 *r4;
 	R4 *r4o;
 	R2 *r2o;
+
+	// Reset bytes sent
+	cnt_packBytesSent = 0;
 
 	// Set pointer to R4 struct
 	if (r2->instID == "r2c") {
@@ -3887,22 +3888,11 @@ bool SendPacket(R2 *r2)
 	is_resend = pack == r2->packLast[id_ind];
 
 	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s bytes_sent=%d tx=%d rx=%d cts=%s dt_snd=%d dt_rcv=%d dt_queue=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "high" : "low", r2->dt_sent, millis() - r4->t_rcvd, millis() - t_queue);
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s b_sent=%d tx=%d rx=%d cts=%s dt_snd=%d dt_rcv=%d dt_q=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "1" : "0", r2->dt_sent, millis() - r4->t_rcvd, millis() - t_queue);
 
-	// Is first send
-	if (!is_resend) {
-		DebugSent(r2, dat_str);
-	}
-
-	// Is resend
-	else {
-		// Add to counters
-		r2->cnt_repeat++;
-
-		// Log/print resend and count
-		DebugSent(r2, dat_str, true);
-	}
+	// Log/print
+	DebugSent(r2, dat_str, is_resend);
 
 	// Return success
 	return true;
@@ -5250,7 +5240,7 @@ float CheckBattery(bool force_check)
 	if (millis() > t_vcc_print + dt_vccPrint) {
 
 		// Log/print voltage and current
-		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA dt_check=%d",
+		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA dt_chk=%d",
 			vccAvg, icNow, millis() - t_vcc_update);
 		DebugFlow(str);
 
@@ -5621,7 +5611,7 @@ void HardwareTest()
 				vcc_avg = vcc_sum / (n_stress_samp);
 
 				// Log/print vcc
-				sprintf(str, "[HardwareTest] VCC: baseline=%0.2f avg=%0.2f all=|%s", 
+				sprintf(str, "[HardwareTest] VCC: baseline=%0.2f avg=%0.2f all=|%s",
 					vcc_baseline, vcc_avg, str_vcc);
 				DebugFlow(str);
 
@@ -5984,7 +5974,6 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 	// Local vars
 	char msg_out[maxStoreStrLng + 50] = { 0 };
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
-	bool is_resend = false;
 	bool do_print = false;
 	bool do_log = false;
 
@@ -6011,12 +6000,11 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 	if (!is_repeat) {
 		sprintf(msg_out, "   [SENT] %s: %s", r2->instID, msg);
 	}
+	// Add to counters
 	else {
+		r2->cnt_repeat++;
 		sprintf(msg_out, "   [*RE-SENT*] %s: cnt=%d %s", r2->instID, r2->cnt_repeat, msg);
 	}
-
-	// Concatinate strings
-	strcat(msg, str);
 
 	// Store
 	if (do_print) {
@@ -7368,9 +7356,6 @@ void loop() {
 #pragma region //--- (h) PING TEST ---
 	if (c2r.idNow == 'h' && c2r.isNew)
 	{
-		// TEMP
-		delay(5000);
-
 		// Run hardware test
 		HardwareTest();
 
