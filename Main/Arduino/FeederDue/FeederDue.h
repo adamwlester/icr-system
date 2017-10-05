@@ -50,24 +50,20 @@
 
 #pragma region ============ DEBUG SETTINGS =============
 
-// LOG DEBUGGING
+// DEBUG SETTING
+#define DEBUG 1
+#define LOG 1
+
+// DEBUGGING STRUCT
 struct DB
 {
 
-	// Testing
-	const bool do_posDebug = false; // I set
-	const bool do_posPlot = false; // I set
-	bool do_pidCalibration = false; // set by system
-	bool do_simRatTest = false; // set by system
-	bool is_runTest = false; // set by system
-
 	// Debugging
-	const bool DEBUG = true;
-	bool CONSOLE = true;
-	bool LOG = true;
-	bool FASTPRINT = true;
-	bool FASTLOG = false;
-	bool LCD = false;
+	const bool CONSOLE = true;
+	const bool LCD = false;
+	const bool FASTPRINT = true;
+	const bool FASTLOG = false;
+	const bool ALLFUN = true;
 
 	// Printing
 	const bool print_errors = true;
@@ -112,13 +108,20 @@ struct DB
 	const bool log_vel_rat_ekf = false;
 	const bool log_vel_rob_ekf = false;
 
+	// Testing
+	const bool do_posDebug = false; // I set
+	const bool do_posPlot = false; // I set
+	bool do_pidCalibration = false; // set by system
+	bool do_simRatTest = false; // set by system
+	bool is_runTest = false; // set by system
+
 	// Other
 	bool isErrLoop = false;
 }
 // Initialize
 db;
 
-// Pid calibration parameters
+// PID CALIBRATION
 /*
 Set kC and run ICR_Run.cs
 */
@@ -154,6 +157,7 @@ struct FC
 	bool doBulldoze = false;
 	bool doLogSend = false;
 	bool doBlockVccSend = false;
+	bool doBlockLogQueue = false;
 	bool doBlockLogWrite = false;
 	bool doBlockWriteLCD = false;
 	bool isEKFReady = false;
@@ -178,7 +182,7 @@ uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
 const uint16_t n_pings = 5;
 const uint16_t maxStoreStrLng = 300;
-const uint16_t maxMsgStrLng = maxStoreStrLng-50;
+const uint16_t maxMsgStrLng = maxStoreStrLng - 50;
 
 // Print debugging
 const int printQueueSize = 30;

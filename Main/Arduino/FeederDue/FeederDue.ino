@@ -553,7 +553,7 @@ void RunErrorHold(char msg[], uint32_t t_kill = 0);
 template <typename T> int CharInd(char id, T *r24);
 // BLINK LEDS AT RESTART/UPLOAD
 bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0);
-// PRINT ALL IN QUEUE ["PrintDebug", "WriteLog"]
+// PRINT ALL IN QUEUE : fun_id = ["PrintDebug", "WriteLog"]
 bool DoAll(char fun_id[]);
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler();
@@ -1084,7 +1084,7 @@ void PID::PrintPID(char msg[])
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
-	if (db.log_pid && db.LOG) {
+	if (db.log_pid && LOG) {
 		Log.QueueLog(msg, millis());
 	}
 }
@@ -1485,7 +1485,7 @@ void BULLDOZE::PrintBull(char msg[])
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
-	if (db.log_bull && db.LOG) {
+	if (db.log_bull && LOG) {
 		Log.QueueLog(msg, millis());
 	}
 }
@@ -2411,7 +2411,7 @@ int LOGGER::OpenNewLog()
 	}
 
 	// Write first log entry
-	if (db.LOG) {
+	if (LOG) {
 		sprintf(str, "[OpenNewLog] Begin Logging to \"%s\"", logFile);
 		QueueLog(str);
 	}
@@ -2743,6 +2743,12 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	bool is_mem_overflowed = false;
 	uint32_t t_m = 0;
 
+	// Bail if queue store blocked
+	if (fc.doBlockLogQueue) {
+
+		return;
+	}
+
 	// Update queue ind
 	logQueueIndStore++;
 
@@ -2835,7 +2841,7 @@ bool LOGGER::WriteLog(bool do_send)
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool is_logs = false;
 
-	// Bail no new logs or write blocked
+	// Bail no new logs
 	if (logQueueIndRead == logQueueIndStore &&
 		logQueue[logQueueIndStore][0] == '\0') {
 
@@ -2847,17 +2853,17 @@ bool LOGGER::WriteLog(bool do_send)
 		is_logs = true;
 	}
 
+	// Bail if writing blocked
+	if (fc.doBlockLogWrite) {
+
+		return is_logs;
+	}
+
 	// Bail if not in write mode
 	if (mode != '<' &&
 		!do_send) {
 
 		// Return queue status
-		return is_logs;
-	}
-
-	// Bail if writing blocked
-	if (fc.doBlockLogWrite) {
-
 		return is_logs;
 	}
 
@@ -3209,7 +3215,7 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 
 	// Prevent any new info from logging
 	DoAll("WriteLog");
-	db.LOG = false;
+	fc.doBlockLogQueue = true;
 
 	// Load existing log file
 	if (log_file != '\0') {
@@ -3375,6 +3381,7 @@ void GetSerial(R4 *r4)
 	PARSE DATA FROM CS
 	FORMAT: [0]head, [1]id, [2:5]dat[0], [6:9]dat[1], [10:13]dat[1], [14:15]pack, [16]do_conf, [17]footer, [18]targ
 	*/
+	DebugAllFun((char*)__func__, "start");
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -3410,12 +3417,14 @@ void GetSerial(R4 *r4)
 
 	// Bail if no new input
 	if (r4->port.available() == 0) {
+		DebugAllFun((char*)__func__, "end");
 		return;
 	}
 
 	// Dump data till msg header byte is reached
 	buff = WaitBuffRead(r4, r4->head);
 	if (buff == 0) {
+		DebugAllFun((char*)__func__, "end");
 		return;
 	}
 
@@ -3576,11 +3585,15 @@ void GetSerial(R4 *r4)
 		DebugError(str);
 	}
 
+	DebugAllFun((char*)__func__, "end");
+	return;
 }
 
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4 *r4, char mtch)
 {
+	DebugAllFun((char*)__func__, "start");
+
 	// Local vars
 	static int timeout = 100;
 	uint32_t t_timeout = millis() + timeout;
@@ -3607,6 +3620,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 
 			buff = r4->port.read();
 			cnt_packBytesRead++;
+			DebugAllFun((char*)__func__, "end");
 			return buff;
 		}
 	}
@@ -3625,6 +3639,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 
 			// check match was found
 			if (buff == mtch) {
+				DebugAllFun((char*)__func__, "end");
 				return buff;
 			}
 
@@ -3691,6 +3706,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 	DebugError(msg_str);
 
 	// Return 0
+	DebugAllFun((char*)__func__, "end");
 	return 0;
 
 }
@@ -3702,6 +3718,7 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 	STORE DATA FOR CHEETAH DUE
 	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
 	*/
+	DebugAllFun((char*)__func__, "start");
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -3753,6 +3770,7 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 		r2->sendQueueIndStore = r2->sendQueueIndStore - 1 >= 0 ? r2->sendQueueIndStore - 1 : sendQueueSize - 1;
 
 		// Bail
+		DebugAllFun((char*)__func__, "end");
 		return;
 
 	}
@@ -3787,6 +3805,8 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 	// Store footer
 	r2->sendQueue[r2->sendQueueIndStore][b_ind++] = r2->foot;
 
+	DebugAllFun((char*)__func__, "end");
+	return;
 }
 
 // SEND SERIAL PACKET DATA
@@ -3797,6 +3817,7 @@ bool SendPacket(R2 *r2)
 	FORMAT IN:  [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer, [9]targ
 	FORMAT OUT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
 	*/
+	DebugAllFun((char*)__func__, "start");
 
 	// Local vars
 	const int msg_lng = sendQueueBytes;
@@ -3833,6 +3854,7 @@ bool SendPacket(R2 *r2)
 	// Bail if nothing in queue
 	if (r2->sendQueueIndRead == r2->sendQueueIndStore &&
 		r2->sendQueue[r2->sendQueueIndStore][0] == '\0') {
+		DebugAllFun((char*)__func__, "end");
 		return false;
 	}
 
@@ -3849,6 +3871,7 @@ bool SendPacket(R2 *r2)
 		millis() < r4o->t_rcvd + dt_sendRcvd) {
 
 		// Indicate still packs to send
+		DebugAllFun((char*)__func__, "end");
 		return true;
 	}
 
@@ -3925,12 +3948,15 @@ bool SendPacket(R2 *r2)
 	DebugSent(r2, dat_str, is_resend);
 
 	// Return success
+	DebugAllFun((char*)__func__, "end");
 	return true;
 }
 
 // CHECK IF ROB TO ARD PACKET SHOULD BE RESENT
 bool CheckResend(R2 *r2)
 {
+	DebugAllFun((char*)__func__, "start");
+
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
@@ -3996,6 +4022,7 @@ bool CheckResend(R2 *r2)
 	}
 
 	// Return
+	DebugAllFun((char*)__func__, "end");
 	return is_waiting_for_pack;
 }
 
@@ -5818,12 +5845,43 @@ void CheckLoop()
 	a_buff_tx_last = a_buff_tx;
 }
 
+// PRINT ALL FUNCTION ENTRY AND EXITS
+void DebugAllFun(char *fun, char str_where[])
+{
+	/*
+	PUT AT START AND END OF EACH METHOD
+	Example:
+	DebugAllFun((char*)__func__, "start");
+	DebugAllFun((char*)__func__, "end");
+	*/
+#if DEBUG
+	// Local vars
+	static char str[100] = { 0 }; str[0] = '\0';
+	static char msg_copy[100] = { 0 }; msg_copy[0] = '\0';
+
+	// Bail if not set to run
+	if (!db.ALLFUN) {
+		return;
+	}
+
+	// Copy string
+	strcpy(msg_copy, fun);
+
+	// Format string
+	sprintf(str, "[%s] %s", fun, str_where);
+
+	// Queue for printing
+	QueueDebug(str, millis());
+#endif
+
+}
+
 // LOG/PRINT MAIN EVENT
 void DebugFlow(char msg[], uint32_t t)
 {
 	// Local vars
 	bool do_print = db.print_flow && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_flow && db.LOG;
+	bool do_log = db.log_flow && LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5847,7 +5905,7 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 {
 	// Local vars
 	bool do_print = db.print_errors && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_errors && db.LOG;
+	bool do_log = db.log_errors && LOG;
 
 	// Set error flag
 	db.isErrLoop = true;
@@ -5882,7 +5940,7 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_motorControl && db.LOG;
+	bool do_log = db.log_motorControl && LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5910,7 +5968,7 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_motorControl && db.LOG;
+	bool do_log = db.log_motorControl && LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5939,7 +5997,7 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	static char agent_str[50] = { 0 }; agent_str[0] = '\0';
 	bool do_print = db.print_runSpeed && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_runSpeed && db.LOG;
+	bool do_log = db.log_runSpeed && LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5980,7 +6038,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 	do_log =
 		((r4->instID == "c2r" && db.log_c2r && r4->idNow != 'P') ||
 		(r4->instID == "a2r" && db.log_a2r)) &&
-		db.LOG;
+		LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -6036,7 +6094,7 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 	do_print = ((db.print_r2c && r2->instID == "r2c") || (db.print_r2a && r2->instID == "r2a")) &&
 		(db.CONSOLE || db.LCD);
 	do_log = ((db.log_r2c && r2->instID == "r2c") || (db.log_r2a && r2->instID == "r2a")) &&
-		db.LOG;
+		LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -6067,6 +6125,8 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 // STORE STRING FOR PRINTING
 void QueueDebug(char msg[], uint32_t t)
 {
+#if DEBUG
+
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 	static char msg_copy[maxStoreStrLng + 50] = { 0 }; msg_copy[0] = '\0';
@@ -6129,7 +6189,7 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 		// Log error
-		if (db.log_errors && db.LOG) {
+		if (db.log_errors && LOG) {
 			Log.QueueLog(msg_copy, t);
 		}
 
@@ -6164,11 +6224,13 @@ void QueueDebug(char msg[], uint32_t t)
 		DoAll("PrintDebug");
 	}
 
+#endif
 }
 
 // PRINT DB INFO
 bool PrintDebug()
 {
+#if DEBUG
 
 	// Bail if nothing in queue
 	if (printQueueIndRead == printQueueIndStore &&
@@ -6192,6 +6254,11 @@ bool PrintDebug()
 
 	// Return success
 	return true;
+
+#else
+	return false;
+
+#endif
 }
 
 // FOR PRINTING TO LCD
@@ -6632,7 +6699,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink)
 	}
 }
 
-// PRINT ALL IN QUEUE ["PrintDebug", "WriteLog"]
+// PRINT ALL IN QUEUE: fun_id = ["PrintDebug", "WriteLog"]
 bool DoAll(char fun_id[])
 {
 	// Local vars
@@ -6830,10 +6897,10 @@ void setup() {
 
 	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
 	digitalWrite(pin.PWR_OFF, HIGH);
-	while (!db.DEBUG && digitalRead(pin.PWR_Swtch) == HIGH);
+	while (!DEBUG && digitalRead(pin.PWR_Swtch) == HIGH);
 
 	// Pause before powering on if in debug mode
-	if (!db.DEBUG) {
+	if (!DEBUG) {
 		delay(1000);
 	}
 
@@ -7048,8 +7115,8 @@ void setup() {
 
 	// PRINT DEBUG STATUS
 	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s%s%s%s", 
-		db.DEBUG?"DEBUG":"RELEASE", db.CONSOLE?"PRINT TO CONSOLE|":"", 
-		db.LCD ?"PRINT TO LCD|":"", db.LOG? "LOGGING TO OPENLOG|":"", 
+		DEBUG?"DEBUG":"RELEASE", db.CONSOLE?"PRINT TO CONSOLE|":"", 
+		db.LCD ?"PRINT TO LCD|":"", LOG? "LOGGING TO OPENLOG|":"", 
 		db.FASTPRINT?"FAST PRINTING|":"", db.FASTLOG?"FAST LOGGING|":"");
 	DebugFlow(str);
 
