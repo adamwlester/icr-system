@@ -51,8 +51,8 @@
 #pragma region ============ DEBUG SETTINGS =============
 
 // DEBUG SETTING
-#define DEBUG 1
-#define LOG 1
+#define DO_DEBUG 1
+#define DO_LOG 1
 
 // DEBUGGING STRUCT
 struct DB
@@ -61,9 +61,9 @@ struct DB
 	// Debugging
 	const bool CONSOLE = true;
 	const bool LCD = false;
-	const bool FASTPRINT = true;
+	const bool FASTPRINT = false;
 	const bool FASTLOG = false;
-	const bool ALLFUN = true;
+	const bool ALLFUN = false;
 
 	// Printing
 	const bool print_errors = true;

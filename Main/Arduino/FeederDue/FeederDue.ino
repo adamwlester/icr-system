@@ -1084,7 +1084,7 @@ void PID::PrintPID(char msg[])
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
-	if (db.log_pid && LOG) {
+	if (db.log_pid && DO_LOG) {
 		Log.QueueLog(msg, millis());
 	}
 }
@@ -1114,7 +1114,7 @@ double PID::RunPidCalibration()
 		cal_cntPcArr[3] == cal_nMeasPerSteps &&
 		cal_PcArr[3] > 0
 		) {
-		
+
 		// Log/print
 		DebugFlow("[PID::RunPidCalibration] Finished PID Calibration");
 
@@ -1129,7 +1129,7 @@ double PID::RunPidCalibration()
 		cal_isPidUpdated = true;
 		cal_isCalFinished = true;
 
-        // Stop run
+		// Stop run
 		return 0;
 	}
 
@@ -1485,7 +1485,7 @@ void BULLDOZE::PrintBull(char msg[])
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
-	if (db.log_bull && LOG) {
+	if (db.log_bull && DO_LOG) {
 		Log.QueueLog(msg, millis());
 	}
 }
@@ -1520,11 +1520,11 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	// Check if time out reached
 	if (millis() > t_tryTargSetTill) {
 		doAbortMove = true;
-		
+
 		// Log/print error
 		sprintf(str, "!!ERROR!! [MOVETO::CompTarg] Timedout after %dms", targSetTimeout);
 		DebugError(str, true);
-		
+
 		// Return failure
 		return isTargSet;
 	}
@@ -1604,7 +1604,7 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 
 	// Check if time out reached
 	if (millis() > t_tryMoveTill) {
-				
+
 		// Log/print error
 		sprintf(str, "!!ERROR!! [MOVETO::DecelToTarg] Timedout after %dms", moveTimeout);
 		DebugError(str, true);
@@ -2218,7 +2218,7 @@ void REWARD::Reset()
 	static char ss2[50]; ss2[0] = '\0';
 
 	// Log/print event
-	DebugFlow("[REWARD::Reset] Reseting Reward");
+	DebugFlow("[REWARD::Reset] Reseting Reward"); 
 
 	// Log zone info
 	if (mode == "Free" || mode == "Cue")
@@ -2411,7 +2411,7 @@ int LOGGER::OpenNewLog()
 	}
 
 	// Write first log entry
-	if (LOG) {
+	if (DO_LOG) {
 		sprintf(str, "[OpenNewLog] Begin Logging to \"%s\"", logFile);
 		QueueLog(str);
 	}
@@ -2448,24 +2448,24 @@ bool LOGGER::SetToCmdMode()
 	//Send "$$$" command mode
 	if (SendCommand(rstArr, true, 500) == '>')
 	{
+		// Set flag
+		pass = true;
+
+		// Pause to let OpenLog get its shit together
+		delay(100);
+
 		// Print status
 		sprintf(str, "[LOGGER::SetToCmdMode] OpenLog Set to Cmd Mode: mode = %c", mode);
 		DebugFlow(str);
-
-		// Set flag
-		pass = true;
-		
-		// Pause to let OpenLog get its shit together
-		delay(100);
 	}
 	// Log/print error
 	else {
+		// Set flag
+		pass = false;
+
 		// Log/print
 		sprintf(str, "**WARNING** [LOGGER::SetToCmdMode] ABORTED: mode=%c", mode);
 		DebugError(str);
-
-		// Set flag
-		pass = false;
 	}
 
 	return pass;
@@ -4208,7 +4208,7 @@ void AD_CheckOC(bool force_check)
 		cnt_errors++;
 
 		// Log/print
-		sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected Resetting Motor Reset: cnt=%d now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d", 
+		sprintf(str, "!!ERROR!! [AD_CheckOC] Overcurrent Detected Resetting Motor Reset: cnt=%d now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d",
 			cnt_errors, ocd_r, ocd_f, ocd_last_r, ocd_last_f);
 		DebugError(str, true);
 
@@ -4225,7 +4225,7 @@ void AD_CheckOC(bool force_check)
 
 	// Disable checking after 5 errors
 	if (cnt_errors >= 5) {
-		
+
 		// Log/print
 		sprintf(str, "!!ERROR!! [AD_CheckOC] Disabled AD Check After %d Errors", cnt_errors);
 		DebugError(str, true);
@@ -5363,7 +5363,7 @@ void ChangeLCDlight(uint32_t duty)
 	else {
 		fc.isLitLCD = duty > 0;
 	}
-	
+
 	// Log/print
 	sprintf(str, "[ChangeLCDlight] Set LCD Light: is_lit=%s duty=%d",
 		fc.isLitLCD ? "1" : "0", duty);
@@ -5431,7 +5431,7 @@ void HardwareTest()
 	bool is_pixy_test_done = false;
 
 	// Stress test
-	double speed_range[2] = { 5,75 };
+	double speed_range[2] = { 5,65 };
 	const byte n_stress_samp = 10;
 	byte speed_step = (speed_range[1] - speed_range[0]) / (n_stress_samp / 2);
 	byte cnt_stress = 0;
@@ -5854,8 +5854,8 @@ void DebugAllFun(char *fun, char str_where[])
 	DebugAllFun((char*)__func__, "start");
 	DebugAllFun((char*)__func__, "end");
 	*/
-#if DEBUG
-	// Local vars
+	// #if DO_DEBUG
+		// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
 	static char msg_copy[100] = { 0 }; msg_copy[0] = '\0';
 
@@ -5872,7 +5872,7 @@ void DebugAllFun(char *fun, char str_where[])
 
 	// Queue for printing
 	QueueDebug(str, millis());
-#endif
+	// #endif
 
 }
 
@@ -5881,7 +5881,7 @@ void DebugFlow(char msg[], uint32_t t)
 {
 	// Local vars
 	bool do_print = db.print_flow && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_flow && LOG;
+	bool do_log = db.log_flow && DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5905,7 +5905,7 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 {
 	// Local vars
 	bool do_print = db.print_errors && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_errors && LOG;
+	bool do_log = db.log_errors && DO_LOG;
 
 	// Set error flag
 	db.isErrLoop = true;
@@ -5940,7 +5940,7 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_motorControl && LOG;
+	bool do_log = db.log_motorControl && DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5968,7 +5968,7 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_motorControl && LOG;
+	bool do_log = db.log_motorControl && DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -5997,7 +5997,7 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	static char agent_str[50] = { 0 }; agent_str[0] = '\0';
 	bool do_print = db.print_runSpeed && (db.CONSOLE || db.LCD);
-	bool do_log = db.log_runSpeed && LOG;
+	bool do_log = db.log_runSpeed && DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -6038,7 +6038,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 	do_log =
 		((r4->instID == "c2r" && db.log_c2r && r4->idNow != 'P') ||
 		(r4->instID == "a2r" && db.log_a2r)) &&
-		LOG;
+		DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -6094,7 +6094,7 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 	do_print = ((db.print_r2c && r2->instID == "r2c") || (db.print_r2a && r2->instID == "r2a")) &&
 		(db.CONSOLE || db.LCD);
 	do_log = ((db.log_r2c && r2->instID == "r2c") || (db.log_r2a && r2->instID == "r2a")) &&
-		LOG;
+		DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -6125,9 +6125,9 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 // STORE STRING FOR PRINTING
 void QueueDebug(char msg[], uint32_t t)
 {
-#if DEBUG
+	// #if DO_DEBUG
 
-	// Local vars
+		// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 	static char msg_copy[maxStoreStrLng + 50] = { 0 }; msg_copy[0] = '\0';
 	static char queue_state[printQueueSize + 1]; queue_state[0] = '\0';
@@ -6189,7 +6189,7 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 		// Log error
-		if (db.log_errors && LOG) {
+		if (db.log_errors && DO_LOG) {
 			Log.QueueLog(msg_copy, t);
 		}
 
@@ -6224,15 +6224,15 @@ void QueueDebug(char msg[], uint32_t t)
 		DoAll("PrintDebug");
 	}
 
-#endif
+	// #endif
 }
 
 // PRINT DB INFO
 bool PrintDebug()
 {
-#if DEBUG
+	// #if DO_DEBUG
 
-	// Bail if nothing in queue
+		// Bail if nothing in queue
 	if (printQueueIndRead == printQueueIndStore &&
 		printQueue[printQueueIndStore][0] == '\0') {
 		return false;
@@ -6255,10 +6255,10 @@ bool PrintDebug()
 	// Return success
 	return true;
 
-#else
+	// #else
 	return false;
 
-#endif
+	// #endif
 }
 
 // FOR PRINTING TO LCD
@@ -6605,7 +6605,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 
 		// Check if should shutdown
 		if (t_shutdown > 0 && millis() > t_shutdown) {
-			
+
 			// Log/print
 			sprintf(str, "!!ERROR!! [RunErrorHold] SHUTTING DOWN BECAUSE: %s", msg);
 			DebugError(str, true);
@@ -6897,10 +6897,10 @@ void setup() {
 
 	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
 	digitalWrite(pin.PWR_OFF, HIGH);
-	while (!DEBUG && digitalRead(pin.PWR_Swtch) == HIGH);
+	while (!DO_DEBUG && digitalRead(pin.PWR_Swtch) == HIGH);
 
 	// Pause before powering on if in debug mode
-	if (!DEBUG) {
+	if (!DO_DEBUG) {
 		delay(1000);
 	}
 
@@ -7001,7 +7001,6 @@ void setup() {
 
 	// Exit with error if power not on
 	if (CheckBattery(true) == 0) {
-		
 		// Hold for error
 		DebugError("!!ERROR!! [setup] ABORTED: Power Off", true);
 		DoAll("PrintDebug");
@@ -7083,14 +7082,6 @@ void setup() {
 	Timer1.attachInterrupt(Interupt_TimerHandler).start(1000);
 	PrintLCD(true, "DONE SETUP", "Interrupts");
 
-	// CLEAR LCD
-	ChangeLCDlight(0);
-	ClearLCD();
-
-	// SET DEFAULTS
-	fc.isManualSes = true;
-	fc.doAllowRevMove = true;
-
 	// RESET FEEDER ARM
 	DebugFlow("[setup] RUNNING: Reset Feeder Arm...");
 	DoAll("PrintDebug");
@@ -7101,6 +7092,14 @@ void setup() {
 	}
 	DebugFlow("[setup] FINISHED: Reset Feeder Arm");
 	DoAll("PrintDebug");
+
+	// CLEAR LCD
+	ChangeLCDlight(0);
+	ClearLCD();
+
+	// SET DEFAULTS
+	fc.isManualSes = true;
+	fc.doAllowRevMove = true;
 
 	// PRINT AVAILABLE MEMORY
 	sprintf(str, "[setup] AVAILABLE MEMORY: %0.2fKB",
@@ -7114,10 +7113,10 @@ void setup() {
 	DoAll("PrintDebug");
 
 	// PRINT DEBUG STATUS
-	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s%s%s%s", 
-		DEBUG?"DEBUG":"RELEASE", db.CONSOLE?"PRINT TO CONSOLE|":"", 
-		db.LCD ?"PRINT TO LCD|":"", LOG? "LOGGING TO OPENLOG|":"", 
-		db.FASTPRINT?"FAST PRINTING|":"", db.FASTLOG?"FAST LOGGING|":"");
+	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s%s%s%s",
+		DO_DEBUG ? "DEBUG" : "RELEASE", db.CONSOLE ? "PRINT TO CONSOLE|" : "",
+		db.LCD ? "PRINT TO LCD|" : "", DO_LOG ? "LOGGING TO OPENLOG|" : "",
+		db.FASTPRINT ? "FAST PRINTING|" : "", db.FASTLOG ? "FAST LOGGING|" : "");
 	DebugFlow(str);
 
 	// PRINT SETUP FINISHED
@@ -7858,7 +7857,7 @@ void loop() {
 				// Set flags
 				is_mode_changed = true;
 				fc.doBulldoze = true;
-				
+
 			}
 			// Only settings changed
 			else {
@@ -7871,7 +7870,7 @@ void loop() {
 			{
 				// Log/print event
 				DebugFlow("[loop] SET BULLDOZE OFF");
-				
+
 				// Set flags
 				is_mode_changed = true;
 				fc.doBulldoze = false;
@@ -7955,7 +7954,7 @@ void loop() {
 		DebugFlow("[loop] STREAMING CONFIRMED");
 		// Send streaming confirmation
 		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('V', &c2r)], true);
-		
+
 		// Reset flag
 		fc.doStreamCheck = false;
 
