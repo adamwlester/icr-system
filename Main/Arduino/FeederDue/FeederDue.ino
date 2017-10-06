@@ -16,25 +16,25 @@
 * XBee DO (to UART rx) buffer = 202 bytes
 
 * ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO 512
-	Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
+Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
 
 * SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
 
 * DATA TYPES:
-	byte = 1 byte
-	char = 1 byte
-	int = 4 byte
-	long = 4 byte
-	float = 4 byte
-	double = 8 byte
+byte = 1 byte
+char = 1 byte
+int = 4 byte
+long = 4 byte
+float = 4 byte
+double = 8 byte
 
 * Step down resistor for vcc monitoring:
-	To ground = 2.2k Ohm
-	To vcc = 8.2k Ohm
+To ground = 2.2k Ohm
+To vcc = 8.2k Ohm
 
 * config.txt settings:
-	57600,26,3,2,0,0,0
-	baud,escape,esc#,mode,verb,echo,ignoreRX
+57600,26,3,2,0,0,0
+baud,escape,esc#,mode,verb,echo,ignoreRX
 
 */
 
@@ -87,7 +87,7 @@ public:
 	double i_term = 0;
 	double d_term = 0;
 	bool isFirstRun = true;
-	String mode = "Manual"; // ["Manual" "Automatic" "Halted"]
+	char modePID[25]; // ["Manual" "Automatic" "Halted"]
 	bool isHolding4cross = false;
 	bool doThrottle = false;
 	bool isThrottled = false;
@@ -165,8 +165,8 @@ public:
 	uint32_t t_updateNext = 0;
 	int dt_update = 50; // (ms)
 	float moveMin = 5; // (cm)
-	String mode = "Inactive"; // ["Active" "Inactive"]
-	String state = "Off"; // ["off", "On", "Hold"]
+	char modeBull[25]; // ["Active" "Inactive"]
+	char stateBull[25]; // ["off", "On", "Hold"]
 	uint32_t t_bullNext = 0; // (ms)
 	int bSpeed = 0;
 	int bDelay = 0; // (ms)
@@ -269,8 +269,7 @@ public:
 	int zoneOccCnt[zoneLng] = { 0 };
 	uint32_t t_nowZoneCheck = 0;
 	uint32_t t_lastZoneCheck = 0;
-	char mode_str[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
-	String mode = mode_str;
+	char modeReward[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
 	int occThresh = 0; // (ms)
 	int durationDefault = 1420; // (ms) 
 	int duration = 0; // (ms) 
@@ -415,7 +414,7 @@ protected:
 		hx[4] = this->x[2]; // Rat vel pixy from previous state
 		hx[5] = this->x[3]; // Rob vel vt from previous state
 
-	// Jacobian of measurement function
+							// Jacobian of measurement function
 		H[0][0] = 1; // Rat pos vt from previous state
 		H[1][0] = 1; // Rat pos pixy from previous state
 		H[2][1] = 1; // Rob pos vt from previous state
@@ -485,7 +484,7 @@ void HardStop(char called_from[]);
 // IR TRIGGERED HARD STOP
 void IRprox_Halt();
 // RUN AUTODRIVER
-bool RunMotor(char dir, double new_speed, String agent);
+bool RunMotor(char dir, double new_speed, char agent[]);
 // RUN MOTOR MANUALLY
 bool ManualRun(char dir);
 // SET WHATS CONTROLLING THE MOTOR
@@ -533,7 +532,7 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[]);
 // LOG/PRINT MOTOR BLOCKING DEBUG STRING
 void DebugMotorBocking(char msg[], char called_from[], uint32_t t = millis());
 // LOG/PRINT MOTOR SPEED CHANGE
-void DebugRunSpeed(String agent, double speed_last, double speed_now);
+void DebugRunSpeed(char agent[], double speed_last, double speed_now);
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
 void DebugRcvd(R4 *r4, char msg[], bool is_repeat = false);
 // LOG/PRINT SENT PACKET DEBUG STRING
@@ -757,7 +756,7 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 
 	// Make sure pos val range [0, 140*PI]
 	set_pos = set_pos < 0 ? set_pos + (140 * PI) : set_pos;
-	set_pos = set_pos > (140 * PI) ? set_pos - (140 * PI) : set_pos;
+	set_pos = set_pos >(140 * PI) ? set_pos - (140 * PI) : set_pos;
 
 	// Compute ts
 	uint32_t ts = this->t_tsNow + (t - this->t_msNow);
@@ -787,6 +786,7 @@ PID::PID(uint32_t t, const float kC, const float pC, const float set_point)
 	this->kI = 2 * kP / pC; // integral constant
 	this->kD = kP*pC / 8; // derivative constant
 	this->setPoint = set_point;
+	sprintf(this->modePID, "Manual");
 }
 
 double PID::UpdatePID()
@@ -807,8 +807,8 @@ double PID::UpdatePID()
 	// Check throttling 
 	CheckThrottle();
 
-	// Check if in auto mode
-	if (mode != "Automatic") {
+	// Check if not in auto mode
+	if (strcmp(modePID, "Automatic") != 0) {
 		return -1;
 	}
 
@@ -917,7 +917,7 @@ void PID::PID_Run(char called_from[])
 
 	// Reset
 	PID_Reset();
-	mode = "Automatic";
+	sprintf(modePID, "Automatic");
 
 	// Tell ard pid is running
 	QueuePacket(&r2a, 'p', 1);
@@ -936,7 +936,7 @@ void PID::PID_Stop(char called_from[])
 	sprintf(str, "[PID::Stop] Stop [%s]", called_from);
 	PrintPID(str);
 
-	if (fc.motorControl == "Pid")
+	if (strcmp(fc.motorControl, "Pid") == 0)
 	{
 		// Stop movement
 		RunMotor('f', 0, "Pid");
@@ -954,7 +954,7 @@ void PID::PID_Stop(char called_from[])
 	}
 
 	// Set mode
-	mode = "Manual";
+	sprintf(modePID, "Manual");
 }
 
 void PID::PID_Hold(char called_from[])
@@ -974,7 +974,7 @@ void PID::PID_Hold(char called_from[])
 	PID_Stop("Pid.Hold");
 
 	// But set mode to "Hold"
-	mode = "Hold";
+	sprintf(modePID, "Hold");
 }
 
 void PID::PID_Reset()
@@ -1066,8 +1066,8 @@ void PID::PID_CheckMotorControl()
 {
 
 	// Check if motor control available
-	if ((fc.motorControl == "Pid" || fc.motorControl == "Open") &&
-		mode == "Hold") {
+	if ((strcmp(fc.motorControl, "Pid") == 0 || strcmp(fc.motorControl, "Open") == 0) &&
+		strcmp(modePID, "Hold") == 0) {
 
 		// Print taking conrol
 		PrintPID("[PID::CheckMotorControl] Take Motor Control [PID::CheckMotorControl]");
@@ -1075,8 +1075,8 @@ void PID::PID_CheckMotorControl()
 		// Run pid
 		PID_Run("PID::CheckMotorControl");
 	}
-	else if ((fc.motorControl != "Pid" && fc.motorControl != "Open") &&
-		mode == "Automatic") {
+	else if ((strcmp(fc.motorControl, "Pid") != 0 && strcmp(fc.motorControl, "Open") != 0) &&
+		strcmp(modePID, "Automatic") == 0) {
 
 		// Print taking conrol
 		PrintPID("[PID::CheckMotorControl] Surender Motor Control [PID::CheckMotorControl]");
@@ -1334,6 +1334,8 @@ double PID::RunCalibration()
 BULLDOZE::BULLDOZE(uint32_t t)
 {
 	this->t_init = t;
+	sprintf(this->modeBull, "Inactive");
+	sprintf(this->stateBull, "Off");
 }
 
 void BULLDOZE::UpdateBull()
@@ -1342,7 +1344,7 @@ void BULLDOZE::UpdateBull()
 	BullCheckMotorControl();
 
 	// Bail if off
-	if (state == "Off")
+	if (strcmp(stateBull, "Off") == 0)
 	{
 		return;
 	}
@@ -1381,7 +1383,7 @@ void BULLDOZE::UpdateBull()
 
 		// Bulldoze him!
 		if (isTimeUp &&
-			mode == "Inactive") {
+			strcmp(modeBull, "Inactive") == 0) {
 			BullRun("BULLDOZE::UpdateBull");
 		}
 	}
@@ -1396,7 +1398,7 @@ void BULLDOZE::UpdateBull()
 
 		// Stop bulldoze if rat ahead of set point and not 0 delay
 		if (isPassedReset &&
-			mode == "Active" &&
+			strcmp(modeBull, "Active") == 0 &&
 			bDelay != 0) {
 
 			BullStop("BULLDOZE::UpdateBull");
@@ -1451,7 +1453,7 @@ void BULLDOZE::BullRun(char called_from[])
 	QueuePacket(&r2a, 'b', 1);
 
 	// Set mode
-	mode = "Active";
+	sprintf(modeBull, "Active");
 }
 
 void BULLDOZE::BullStop(char called_from[])
@@ -1471,7 +1473,7 @@ void BULLDOZE::BullStop(char called_from[])
 	RunMotor('f', 0, "Bull");
 
 	// Give over control
-	if (fc.motorControl == "Bull") {
+	if (strcmp(fc.motorControl, "Bull") == 0) {
 
 		// Stop movement
 		RunMotor('f', 0, "Bull");
@@ -1487,7 +1489,7 @@ void BULLDOZE::BullStop(char called_from[])
 	QueuePacket(&r2a, 'b', 0);
 
 	// Set mode
-	mode = "Inactive";
+	sprintf(modeBull, "Inactive");
 }
 
 void BULLDOZE::BullOn(char called_from[])
@@ -1504,7 +1506,7 @@ void BULLDOZE::BullOn(char called_from[])
 	PrintBull(str);
 
 	// Change state
-	state = "On";
+	sprintf(stateBull, "On");
 
 	// Reset 
 	BullReset();
@@ -1524,10 +1526,10 @@ void BULLDOZE::BullOff(char called_from[])
 	PrintBull(str);
 
 	// Change state
-	state = "Off";
+	sprintf(stateBull, "Off");
 
 	// Stop bulldozer if running
-	if (mode == "Active") {
+	if (strcmp(modeBull, "Active") == 0) {
 		// Stop bull
 		BullStop("BULLDOZE::TurnOff");
 	}
@@ -1547,16 +1549,16 @@ void BULLDOZE::BullHold(char called_from[])
 	PrintBull(str);
 
 	// Change state
-	state = "Hold";
+	sprintf(stateBull, "Hold");
 
 	// Stop running
-	if (mode == "Active") {
+	if (strcmp(modeBull, "Active") == 0) {
 
 		// Run stop bulldozer
 		BullStop("BULLDOZE::Hold");
 
 		// Set mode back to active for later
-		mode = "Active";
+		sprintf(modeBull, "Active");
 	}
 }
 
@@ -1574,7 +1576,7 @@ void BULLDOZE::BullResume(char called_from[])
 	PrintBull(str);
 
 	// Set state back to "On"
-	state = "On";
+	sprintf(stateBull, "On");
 
 	// Reset 
 	BullReset();
@@ -1587,7 +1589,7 @@ void BULLDOZE::BullReset()
 #endif
 
 	// Set mode
-	mode = "Inactive";
+	sprintf(modeBull, "Inactive");
 
 	// Reset bull next
 	t_bullNext = millis() + bDelay;
@@ -1599,14 +1601,14 @@ void BULLDOZE::BullReset()
 void BULLDOZE::BullCheckMotorControl()
 {
 
-	if ((fc.motorControl == "Bull" || fc.motorControl == "Pid" || fc.motorControl == "Open") &&
-		state == "Hold") {
+	if ((strcmp(fc.motorControl, "Bull") == 0 || strcmp(fc.motorControl, "Pid") == 0 || strcmp(fc.motorControl, "Open") == 0) &&
+		strcmp(stateBull, "Hold") == 0) {
 
 		// Turn bull on
 		BullResume("BULLDOZE::CheckMotorControl");
 	}
-	else if ((fc.motorControl != "Bull" && fc.motorControl != "Pid" && fc.motorControl != "Open") &&
-		state == "On") {
+	else if ((fc.motorControl != "Bull" && strcmp(fc.motorControl, "Pid") != 0 && strcmp(fc.motorControl, "Open") != 0) &&
+		strcmp(stateBull, "On") == 0) {
 
 		// Turn bull off
 		BullHold("BULLDOZE::CheckMotorControl");
@@ -1887,7 +1889,7 @@ void REWARD::StartRew()
 	t_closeSol = t_rew_str + duration;
 
 	// Compute retract arm time
-	if (mode != "Button") {
+	if (strcmp(modeReward, "Button") == 0) {
 		t_retractArm = t_rew_str + dt_rewBlock;
 		doTimedRetract = true;
 	}
@@ -1897,12 +1899,12 @@ void REWARD::StartRew()
 
 	// Log/print 
 	sprintf(str, "[REWARD::StartRew] RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
-		mode_str, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
+		modeReward, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(str, t_rew_str);
 
 
 	// Print to LCD for manual rewards
-	if (mode == "Button") {
+	if (strcmp(modeReward, "Button") == 0) {
 		PrintLCD(true, "REWARDING...");
 	}
 
@@ -1943,11 +1945,11 @@ bool REWARD::EndRew()
 
 	// Log/print
 	sprintf(str, "[REWARD::EndRew] FINISHED: \"%s\" Reward: dt_rew=%dms dt_retract=%d",
-		mode_str, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
+		modeReward, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(str, t_rew_end);
 
 	// Clear LCD
-	if (mode == "Button") {
+	if (strcmp(modeReward, "Button") == 0) {
 		ClearLCD();
 	}
 
@@ -1993,17 +1995,16 @@ void REWARD::SetRewMode(char mode_now[], int arg2)
 	static char dat_str[100] = { 0 }; dat_str[0] = '\0';
 
 	// Store mode
-	sprintf(mode_str, "%s", mode_now);
-	mode = mode_now;
+	sprintf(modeReward, "%s", mode_now);
 
 	// Store info
-	if (mode == "Button") {
+	if (strcmp(modeReward, "Button") == 0) {
 
 		// Set duration to default
 		duration = durationDefault;
 		sprintf(dat_str, "mode=\"Button\" duration=%d", duration);
 	}
-	else if (mode == "Now") {
+	else if (strcmp(modeReward, "Now") == 0) {
 
 		// Set duration
 		SetRewDur(arg2);
@@ -2012,7 +2013,7 @@ void REWARD::SetRewMode(char mode_now[], int arg2)
 		// Change duration default
 		durationDefault = duration;
 	}
-	else if (mode == "Free") {
+	else if (strcmp(modeReward, "Free") == 0) {
 
 		// Include all zones
 		zoneMin = 0;
@@ -2022,7 +2023,7 @@ void REWARD::SetRewMode(char mode_now[], int arg2)
 		occThresh = arg2 * 1000;
 		sprintf(dat_str, "mode=\"Free\" occ_thresh=%d", occThresh);
 	}
-	else if (mode == "Cue") {
+	else if (strcmp(modeReward, "Cue") == 0) {
 
 		// Include one zone
 		zoneMin = arg2;
@@ -2438,7 +2439,7 @@ void REWARD::RewardReset()
 	DebugFlow("[REWARD::Reset] Reseting Reward");
 
 	// Log zone info
-	if (mode == "Free" || mode == "Cue")
+	if (strcmp(modeReward, "Free") == 0 || strcmp(modeReward, "Cue") == 0)
 	{
 		sprintf(str1, "[REWARD::Reset] ZONE OCC:");
 		sprintf(str2, "[REWARD::Reset] ZONE CNT:");
@@ -2454,7 +2455,7 @@ void REWARD::RewardReset()
 	}
 
 	// Reset flags etc
-	sprintf(mode_str, "None");
+	sprintf(modeReward, "None");
 	isRewarding = false;
 	isBoundsSet = false;
 	isZoneTriggered = false;
@@ -4374,14 +4375,14 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-						// Overcurent enable
+												// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-	// Motor V compensation
-	/*
-	VS_COMP_ENABLE, VS_COMP_DISABLE
-	*/
+												// Motor V compensation
+												/*
+												VS_COMP_ENABLE, VS_COMP_DISABLE
+												*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
@@ -4389,11 +4390,11 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-	// Slew rate
-	/*
-	Upping the edge speed increases torque
-	SR_180V_us, SR_290V_us, SR_530V_us
-	*/
+												// Slew rate
+												/*
+												Upping the edge speed increases torque
+												SR_180V_us, SR_290V_us, SR_530V_us
+												*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -4460,7 +4461,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setRunKVAL(30);					    // This controls the run current
 	AD_R.setHoldKVAL(25);				        // This controls the holding current keep it low
 
-	// NIMA 17 24V
+												// NIMA 17 24V
 	AD_F.setAccKVAL(40);				        // This controls the acceleration current
 	AD_F.setDecKVAL(40);				        // This controls the deceleration current
 	AD_F.setRunKVAL(30);					    // This controls the run current
@@ -4601,14 +4602,14 @@ void IRprox_Halt()
 #endif
 
 	// Run if Bull not active and on
-	if (!(Bull.mode == "Active" && Bull.state == "On")) {
+	if (strcmp(Bull.modeBull, "Active") != 0 && strcmp(Bull.stateBull, "On") != 0) {
 
 		HardStop("IRprox_Halt");
 	}
 }
 
 // RUN AUTODRIVER
-bool RunMotor(char dir, double new_speed, String agent)
+bool RunMotor(char dir, double new_speed, char agent[])
 {
 #if DO_DEBUG_XXX
 	DB_INF();
@@ -4619,8 +4620,8 @@ bool RunMotor(char dir, double new_speed, String agent)
 	double speed_front = 0;
 
 	// Bail if caller does not have control
-	if (agent != fc.motorControl &&
-		agent != "Override") {
+	if (strcmp(fc.motorControl, agent) != 0 &&
+		strcmp("Override", agent) != 0) {
 		return false;
 	}
 
@@ -4707,12 +4708,12 @@ bool SetMotorControl(char set_to[], char called_from[])
 	bool pass = false;
 
 	// Set to/from "Halt"
-	if (set_to == "Halt" || fc.motorControl == "Halt") {
+	if (set_to == "Halt" || strcmp(fc.motorControl, "Halt") == 0) {
 
 		// Only "Halt" and "Quit" can set/unset "Halt"
 		if (called_from == "Halt" || called_from == "Quit") {
 
-			fc.motorControl = set_to;
+			sprintf(fc.motorControl, "%s", set_to);
 		}
 	}
 
@@ -4721,11 +4722,11 @@ bool SetMotorControl(char set_to[], char called_from[])
 
 		// Can always set to "None"
 		if (set_to == "None") {
-			fc.motorControl = "None";
+			sprintf(fc.motorControl, "None");
 		}
 
 		// Cannot unset "None" unless certain conditions met
-		if (fc.motorControl == "None") {
+		if (strcmp(fc.motorControl, "None") == 0) {
 
 			// Can still move robot if rat not in
 			if (
@@ -4733,7 +4734,7 @@ bool SetMotorControl(char set_to[], char called_from[])
 				!fc.isRatIn
 				) {
 
-				fc.motorControl = set_to;
+				sprintf(fc.motorControl, "%s", set_to);
 			}
 
 			// Can set to "Open" under these conditions
@@ -4742,7 +4743,7 @@ bool SetMotorControl(char set_to[], char called_from[])
 				// InitializeTracking can always unset "None"
 				if (called_from == "InitializeTracking") {
 
-					fc.motorControl = set_to;
+					sprintf(fc.motorControl, "%s", set_to);
 				}
 
 				// CheckBlockTimElapsed can unblock if tracking setup
@@ -4750,7 +4751,7 @@ bool SetMotorControl(char set_to[], char called_from[])
 					(called_from == "CheckBlockTimElapsed")
 					) {
 
-					fc.motorControl = set_to;
+					sprintf(fc.motorControl, "%s", set_to);
 				}
 
 			}
@@ -4758,33 +4759,33 @@ bool SetMotorControl(char set_to[], char called_from[])
 		}
 
 		// "MoveTo" can only be set to "Open" or "None"
-		else if (fc.motorControl == "MoveTo") {
+		else if (strcmp(fc.motorControl, "MoveTo") == 0) {
 
 			if (set_to == "Open") {
 
-				fc.motorControl = set_to;
+				sprintf(fc.motorControl, "%s", set_to);
 			}
 		}
 
 		// "Bull" can only be set to "MoveTo" or "Open"
-		else if (fc.motorControl == "Bull") {
+		else if (strcmp(fc.motorControl, "Bull") == 0) {
 
 			if (set_to == "MoveTo" || set_to == "Open") {
 
-				fc.motorControl = set_to;
+				sprintf(fc.motorControl, "%s", set_to);
 			}
 		}
 
 		// Otherwise can set to anything
-		else if (fc.motorControl == "Open" || fc.motorControl == "Pid") {
+		else if (strcmp(fc.motorControl, "Open") == 0 || strcmp(fc.motorControl, "Pid") == 0) {
 
-			fc.motorControl = set_to;
+			sprintf(fc.motorControl, "%s", set_to);
 		}
 
 	}
 
 	// Return true if set to input
-	if ((String)set_to == fc.motorControl) {
+	if (strcmp(fc.motorControl, set_to) == 0) {
 		pass = true;
 	}
 
@@ -4843,7 +4844,7 @@ void CheckBlockTimElapsed()
 
 	// Check for time elapsed or rat moved at least 3cm past feeder
 	if (
-		millis() > t_rewBlockMove || 
+		millis() > t_rewBlockMove ||
 		is_passed_feeder ||
 		is_mot_running)
 	{
@@ -6456,7 +6457,7 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 
 	// Format message
 	sprintf(str, "%s[DebugMotorControl] Change %s: set_in=%s set_out=%s [%s]",
-		!pass ? "**WARNING** " : "", pass ? "Succeeded" : "Failed", set_to, fc.motorControl.c_str(), called_from);
+		!pass ? "**WARNING** " : "", pass ? "Succeeded" : "Failed", set_to, fc.motorControl, called_from);
 
 	// Add to print queue
 	if (do_print) {
@@ -6503,7 +6504,7 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 }
 
 // LOG/PRINT MOTOR SPEED CHANGE
-void DebugRunSpeed(String agent, double speed_last, double speed_now)
+void DebugRunSpeed(char agent[], double speed_last, double speed_now)
 {
 #if DO_DEBUG_XXX
 	DB_INF();
@@ -6511,7 +6512,6 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
-	static char agent_str[50] = { 0 }; agent_str[0] = '\0';
 	bool do_print = db.print_runSpeed && (db.CONSOLE || db.LCD);
 	bool do_log = db.log_runSpeed && DO_LOG;
 
@@ -6521,9 +6521,8 @@ void DebugRunSpeed(String agent, double speed_last, double speed_now)
 	}
 
 	// Format message
-	agent.toCharArray(agent_str, 50);
 	sprintf(str, "[RunMotor] Changed Motor Speed: agent=%s speed_last=%0.2f speed_new=%0.2f",
-		agent_str, speed_last, speed_now);
+		agent, speed_last, speed_now);
 
 	// Add to print queue
 	if (do_print) {
@@ -6971,7 +6970,7 @@ int GetAD_Status(uint16_t stat_reg, char stat_str[])
 	// Get id ind
 	for (int i = 0; i < 16; i++)
 	{
-		if (strcmp(stat_str, status_list[i])==0)
+		if (strcmp(stat_str, status_list[i]) == 0)
 		{
 			bit_ind[is_bit_set[0] ? 1 : 0] = i;
 			is_bit_set[is_bit_set[0] ? 1 : 0] = true;
@@ -7863,8 +7862,8 @@ void loop() {
 	if (Reward.EndRew()) {
 
 		// Tell CS what zone was rewarded and get confirmation
-		if (Reward.mode != "Now" &&
-			Reward.mode != "Button") {
+		if (strcmp(Reward.modeReward, "Now") != 0 &&
+			strcmp(Reward.modeReward, "Button") != 0) {
 
 			QueuePacket(&r2c, 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
 		}
