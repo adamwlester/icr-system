@@ -9,48 +9,48 @@
       <VCCodeMacros />
     </VCCodeModel>
     <BreakPoints>
-      <BreakPoint Index="1" Name="FeederDue.ino, line 8090" Id="80bbeb8b-e33e-4204-b0ec-24f55d8db5c0" Enabled="1" Message="{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}" MessageTextType="0" PreProcessedMessage="{0} {1}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="8090" FileColumn="1" FunctionName="loop()" FunctionLineOffset="340" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='80bbeb8b-e33e-4204-b0ec-24f55d8db5c0'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
-        <Source>8083				{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
-8084				*/
-8085				millis();
-8086				// Plot error
-8087				/*
-8088				{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
-8089				*/
---&gt;8090				millis();
-8091				// Reset flag
-8092				Pid.cal_isPidUpdated = false;
-8093			}
-8094		}
-8095	
-8096	#pragma endregion
-8097	
-8098	#pragma region //--- (h) PING TEST ---
-8099		if (c2r.idNow == 'h' &amp;&amp; c2r.isNew)
+      <BreakPoint Index="1" Name="FeederDue.ino, line 8068" Id="80bbeb8b-e33e-4204-b0ec-24f55d8db5c0" Enabled="1" Message="{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}" MessageTextType="0" PreProcessedMessage="{0} {1}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="8068" FileColumn="1" FunctionName="loop()" FunctionLineOffset="340" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='80bbeb8b-e33e-4204-b0ec-24f55d8db5c0'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
+        <Source>8061				{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
+8062				*/
+8063				millis();
+8064				// Plot error
+8065				/*
+8066				{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
+8067				*/
+--&gt;8068				millis();
+8069				// Reset flag
+8070				Pid.cal_isPidUpdated = false;
+8071			}
+8072		}
+8073	
+8074	#pragma endregion
+8075	
+8076	#pragma region //--- (h) PING TEST ---
+8077		if (c2r.idNow == 'h' &amp;&amp; c2r.isNew)
 </Source>
         <MessageVariables>
           <MessageVariable Name="@Plot.Vel.Error.Red Pid.cal_errNow" Index="1" />
           <MessageVariable Name="@Plot.Vel.Setpoint.Black 0" Index="2" />
         </MessageVariables>
       </BreakPoint>
-      <BreakPoint Index="2" Name="FeederDue.ino, line 8085" Id="ec9c8be6-28b5-4fba-846c-02b06b523fb5" Enabled="1" Message="{Pid.cal_isCalFinished}{&quot;SPEED&quot;}{Pid.cal_ratVel}{&quot;ERROR&quot;}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{&quot;PERIOD&quot;}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}" MessageTextType="2" PreProcessedMessage="{0}{1}{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="8085" FileColumn="1" FunctionName="loop()" FunctionLineOffset="335" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='ec9c8be6-28b5-4fba-846c-02b06b523fb5'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
-        <Source>8078					RunMotor('f', new_speed, "Override");
-8079				}
-8080				// Print values
-8081				/*
-8082				millis()%50 == 0
-8083				{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
-8084				*/
---&gt;8085				millis();
-8086				// Plot error
-8087				/*
-8088				{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
-8089				*/
-8090				millis();
-8091				// Reset flag
-8092				Pid.cal_isPidUpdated = false;
-8093			}
-8094		}
+      <BreakPoint Index="2" Name="FeederDue.ino, line 8063" Id="ec9c8be6-28b5-4fba-846c-02b06b523fb5" Enabled="1" Message="{Pid.cal_isCalFinished}{&quot;SPEED&quot;}{Pid.cal_ratVel}{&quot;ERROR&quot;}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{&quot;PERIOD&quot;}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}" MessageTextType="2" PreProcessedMessage="{0}{1}{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="8063" FileColumn="1" FunctionName="loop()" FunctionLineOffset="335" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='ec9c8be6-28b5-4fba-846c-02b06b523fb5'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
+        <Source>8056					RunMotor('f', new_speed, "Override");
+8057				}
+8058				// Print values
+8059				/*
+8060				millis()%50 == 0
+8061				{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
+8062				*/
+--&gt;8063				millis();
+8064				// Plot error
+8065				/*
+8066				{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
+8067				*/
+8068				millis();
+8069				// Reset flag
+8070				Pid.cal_isPidUpdated = false;
+8071			}
+8072		}
 </Source>
         <MessageVariables>
           <MessageVariable Name="Pid.cal_isCalFinished" Index="1" />

@@ -142,7 +142,7 @@ int cal_nMeasPerSteps = 10;
 // Flow/state control
 struct FC
 {
-	char motorControl[25] = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
+	String motorControl = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
 	bool isSetup = false;
 	bool doAllowRevMove = false;
 	bool isBlockingTill = false;
