@@ -87,7 +87,7 @@ public:
 	double i_term = 0;
 	double d_term = 0;
 	bool isFirstRun = true;
-	char modePID[25]; // ["Manual" "Automatic" "Halted"]
+	char modePID[25] = { 0 }; // ["Manual" "Automatic" "Halted"]
 	bool isHolding4cross = false;
 	bool doThrottle = false;
 	bool isThrottled = false;
@@ -165,8 +165,8 @@ public:
 	uint32_t t_updateNext = 0;
 	int dt_update = 50; // (ms)
 	float moveMin = 5; // (cm)
-	char modeBull[25]; // ["Active" "Inactive"]
-	char stateBull[25]; // ["off", "On", "Hold"]
+	char modeBull[25] = { 0 }; // ["Active" "Inactive"]
+	char stateBull[25] = { 0 }; // ["off", "On", "Hold"]
 	uint32_t t_bullNext = 0; // (ms)
 	int bSpeed = 0;
 	int bDelay = 0; // (ms)
@@ -593,7 +593,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 #endif
 
 	// Local vars
-	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	char str[maxStoreStrLng] = { 0 };
 	double pos_diff = 0;
 	double dist = 0;
 	double dist_sum = 0;
@@ -756,7 +756,7 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 
 	// Make sure pos val range [0, 140*PI]
 	set_pos = set_pos < 0 ? set_pos + (140 * PI) : set_pos;
-	set_pos = set_pos >(140 * PI) ? set_pos - (140 * PI) : set_pos;
+	set_pos = set_pos > (140 * PI) ? set_pos - (140 * PI) : set_pos;
 
 	// Compute ts
 	uint32_t ts = this->t_tsNow + (t - this->t_msNow);
@@ -1850,7 +1850,7 @@ REWARD::REWARD(uint32_t t)
 	this->t_init = t;
 	this->duration = durationDefault;
 	this->durationByte = (byte)(duration / 10);
-	RewardReset();
+	sprintf(this->modeReward, "None");
 }
 
 void REWARD::StartRew()
@@ -1888,8 +1888,8 @@ void REWARD::StartRew()
 	t_rew_str = millis();
 	t_closeSol = t_rew_str + duration;
 
-	// Compute retract arm time
-	if (strcmp(modeReward, "Button") == 0) {
+	// Compute retract arm time for non-button reward
+	if (strcmp(modeReward, "Button") != 0) {
 		t_retractArm = t_rew_str + dt_rewBlock;
 		doTimedRetract = true;
 	}
@@ -4602,7 +4602,7 @@ void IRprox_Halt()
 #endif
 
 	// Run if Bull not active and on
-	if (strcmp(Bull.modeBull, "Active") != 0 && strcmp(Bull.stateBull, "On") != 0) {
+	if (!(strcmp(Bull.modeBull, "Active") == 0 && strcmp(Bull.stateBull, "On") == 0)) {
 
 		HardStop("IRprox_Halt");
 	}
