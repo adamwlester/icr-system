@@ -200,23 +200,23 @@ namespace ICR_Run
             _flag_send_rcv: false,
             _id:
             new char[17] {
-            'h', // setup handshake
-            't', // hardware test
-            'T', // system test command
-            'S', // start session
-            'Q', // quit session
-            'M', // move to position
-            'R', // run reward
-            'H', // halt movement
-            'B', // bulldoze rat
-            'I', // rat in/out
-            'V', // request stream status
-            'L', // request log conf/send
-            'J', // battery voltage
-            'Z', // reward zone
-            'U', // log size
-            'D', // execution done
-            'P', // position data
+			'h', // setup handshake
+			't', // hardware test
+			'T', // system test command
+			'S', // start session
+			'Q', // quit session
+			'M', // move to position
+			'R', // run reward
+			'H', // halt movement
+			'B', // bulldoze rat
+			'I', // rat in/out
+			'V', // request stream status
+			'L', // request log conf/send
+			'J', // battery voltage
+			'Z', // reward zone
+			'U', // log size
+			'D', // execution done
+			'P', // position data
              },
             _head: (byte)'<',
             _foot: (byte)'>'
@@ -230,23 +230,23 @@ namespace ICR_Run
             _flag_send_rcv: true,
             _id:
             new char[17] {
-            'h', // setup handshake
-            't', // hardware test
-            'T', // system test command
-            'S', // start session
-            'Q', // quit session
-            'M', // move to position
-            'R', // run reward
-            'H', // halt movement
-            'B', // bulldoze rat
-            'I', // rat in/out
-            'V', // connected and streaming
-            'L', // request log conf/send
-            'J', // battery voltage
-            'Z', // reward zone
-            'U', // log size
-            'D', // execution done
-            'P', // position data
+			'h', // setup handshake
+			't', // hardware test
+			'T', // system test command
+			'S', // start session
+			'Q', // quit session
+			'M', // move to position
+			'R', // run reward
+			'H', // halt movement
+			'B', // bulldoze rat
+			'I', // rat in/out
+			'V', // request stream status
+			'L', // request log conf/send
+			'J', // battery voltage
+			'Z', // reward zone
+			'U', // log size
+			'D', // execution done
+			'P', // position data
              },
             _head: (byte)'<',
             _foot: (byte)'>'

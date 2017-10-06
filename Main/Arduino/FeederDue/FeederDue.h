@@ -53,6 +53,11 @@
 // DEBUG SETTING
 #define DO_DEBUG 1
 #define DO_LOG 1
+#define DO_DEBUG_XXX 1
+#define DO_HARDWARE_TEST 0
+
+// DEBUG POSITION INFO
+#define DB_INF() DebugAllFun(__FUNCTION__, __LINE__, freeMemory());
 
 // DEBUGGING STRUCT
 struct DB
@@ -63,7 +68,6 @@ struct DB
 	const bool LCD = false;
 	const bool FASTPRINT = false;
 	const bool FASTLOG = false;
-	const bool ALLFUN = false;
 
 	// Printing
 	const bool print_errors = true;
@@ -138,7 +142,8 @@ int cal_nMeasPerSteps = 10;
 // Flow/state control
 struct FC
 {
-	String motorControl = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
+	char motorControl[25] = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
+	bool isSetup = false;
 	bool doAllowRevMove = false;
 	bool isBlockingTill = false;
 	bool doQuit = false;
@@ -156,8 +161,8 @@ struct FC
 	bool doHalt = false;
 	bool doBulldoze = false;
 	bool doLogSend = false;
-	bool doBlockVccSend = false;
 	bool doBlockLogQueue = false;
+	bool doBlockPrintQueue = false;
 	bool doBlockLogWrite = false;
 	bool doBlockWriteLCD = false;
 	bool isEKFReady = false;
@@ -181,6 +186,7 @@ uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
 const uint16_t n_pings = 5;
+float dt_pingRoundTrip[2] = { 0 };
 const uint16_t maxStoreStrLng = 300;
 const uint16_t maxMsgStrLng = maxStoreStrLng - 50;
 
@@ -224,8 +230,7 @@ double runSpeedNow = 0;
 char runDirNow = 'f';
 uint16_t adR_stat = 0x0;
 uint16_t adF_stat = 0x0;
-const int dt_checkAD = 10; // (ms)
-uint32_t t_checkAD = millis() + dt_checkAD; // (ms)
+const int dt_checkAD = 1000; // (ms)
 const double rearMotCoeff[5] = {
 	0.000000044120830,
 	-0.000007753772088,
@@ -271,7 +276,7 @@ uint32_t t_rewBlockMove = 0; // (ms)
 EtOH run after min time or distance
 */
 const int dt_durEtOH[2] = { 100, 100 }; // (ms)
-const int dt_delEtOH[2] = { 30000, 60000 }; // (ms)
+const int dt_delEtOH[2] = { 30000, 60000 }; // (ms) TEMP
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
 
@@ -280,20 +285,20 @@ uint32_t t_solClose = 0;
 Updated when EtOH relay opened
 */
 const float bit2volt = 0.01545; // was 0.0164;
-const int dt_vccUpdate = 1000;
-const int dt_vccCheck = 500;
+const int vccMaxSamp = 100;
+const int dt_vccUpdate = 5000;
 const int dt_vccSend = 15000;
-const int dt_vccPrint = 60000;
+const int dt_vccPrint = 30000;
+float vccArr[vccMaxSamp] = { 0 };
 float vccNow = 0;
 float vccAvg = 0;
 float vccCutoff = 11.6;
-float batVoltArr[100] = { 0 };
 const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
 const int trackLEDdutyMax = 75; // value between 0 and 255
-const int trackLEDdutyMin = 50; // value between 0 and 255
+const int trackLEDdutyMin = 30; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
@@ -322,6 +327,39 @@ volatile char v_stepDir = 'e'; // ['e','r']
 
 #pragma region ============ COM STRUCT SETUP ===========
 
+const char cs_id_list[18] =
+{
+	'h', // setup handshake
+	't', // hardware test
+	'T', // system test command
+	'S', // start session
+	'Q', // quit session
+	'M', // move to position
+	'R', // run reward
+	'H', // halt movement
+	'B', // bulldoze rat
+	'I', // rat in/out
+	'V', // request stream status
+	'L', // request log conf/send
+	'J', // battery voltage
+	'Z', // reward zone
+	'U', // log size
+	'D', // execution done
+	'P', // position data
+	'\0'
+};
+
+const char ard_id_list[7] =
+{
+	't', // hardware test
+	'q', // quit/reset
+	'r', // reward
+	's', // sound cond [0, 1, 2]
+	'p', // pid mode [0, 1]
+	'b', // bull mode [0, 1]
+	'\0'
+};
+
 // C2R command vars
 struct CMD
 {
@@ -346,11 +384,11 @@ cmd;
 struct R4
 {
 	USARTClass &port;
-	char *instID;
-	int lng;
-	char head;
-	char foot;
-	char id[20];
+	const char *instID;
+	const int lng;
+	const char head;
+	const char foot;
+	const char *id;
 	uint16_t pack[20];
 	uint16_t packLast[20];
 	int packTot;
@@ -371,32 +409,13 @@ R4 c2r
 	// instID
 	"c2r",
 	// lng
-	17,
+	strlen(cs_id_list),
 	// head
 	'<',
 	// foot
 	'>',
 	// id
-	 {
-		'h', // setup handshake
-		't', // hardware test
-		'T', // system test command
-		'S', // start session
-		'Q', // quit session
-		'M', // move to position
-		'R', // run reward
-		'H', // halt movement
-		'B', // bulldoze rat
-		'I', // rat in/out
-		'V', // request stream status
-		'L', // request log conf/send
-		'J', // battery voltage
-		'Z', // reward zone
-		'U', // log size
-		'D', // execution done
-		'P', // position data
-		' ', ' ', ' '
-	},
+	cs_id_list,
 	// pack
 	{ 0 },
 	// packLast
@@ -427,23 +446,13 @@ R4 a2r
 	// instID
 	"a2r",
 	// lng
-	6,
+	strlen(ard_id_list),
 	// head
 	'{',
 	// foot
 	'}',
 	// id
-	{
-		't', // hardware test
-		'q', // quit/reset
-		'r', // reward
-		's', // sound cond [0, 1, 2]
-		'p', // pid mode [0, 1]
-		'b', // bull mode [0, 1]
-		' ', ' ', ' ', ' ', ' ',
-		' ', ' ', ' ', ' ', ' ',
-		' ', ' ', ' ', ' '
-	},
+	ard_id_list,
 	// pack
 	{ 0 },
 	// packLast
@@ -470,11 +479,11 @@ R4 a2r
 struct R2
 {
 	USARTClass &port;
-	char *instID;
-	int lng;
-	char head;
-	char foot;
-	const char id[20];
+	const char *instID;
+	const int lng;
+	const char head;
+	const char foot;
+	const char *id;
 	uint16_t pack[20];
 	uint16_t packLast[20];
 	uint16_t cnt_pack;
@@ -500,32 +509,13 @@ R2 r2c
 	// instID
 	"r2c",
 	// lng
-	17,
+	strlen(cs_id_list),
 	// head
 	'<',
 	// foot
 	'>',
 	// id
-	{
-		'h', // setup handshake
-		't', // hardware test
-		'T', // system test command
-		'S', // start session
-		'Q', // quit session
-		'M', // move to position
-		'R', // run reward
-		'H', // halt movement
-		'B', // bulldoze rat
-		'I', // rat in/out
-		'V', // request stream status
-		'L', // request log conf/send
-		'J', // battery voltage
-		'Z', // reward zone
-		'U', // log size
-		'D', // execution done
-		'P', // position data
-		' ', ' ', ' '
-	},
+	cs_id_list,
 	// pack
 	{ 0 },
 	// packLast
@@ -566,23 +556,13 @@ R2 r2a
 	// instID
 	"r2a",
 	// lng
-	6,
+	strlen(ard_id_list),
 	// head
 	'{',
 	// foot
 	'}',
 	// id
-	{
-		't', // hardware test
-		'q', // quit/reset
-		'r', // reward
-		's', // sound cond [0, 1, 2]
-		'p', // pid mode [0, 1]
-		'b', // bull mode [0, 1]
-		' ', ' ', ' ', ' ', ' ',
-		' ', ' ', ' ', ' ', ' ',
-		' ', ' ', ' ', ' '
-	},
+	ard_id_list,
 	// pack
 	{ 0 },
 	// packLast
