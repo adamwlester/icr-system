@@ -300,7 +300,7 @@ public:
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
 	bool isArmExtended = true;
-	const int armExtStps = 160;
+	const byte armExtStps = 160;
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -439,23 +439,46 @@ union UTAG {
 
 #pragma region ----------INITILIZE OBJECTS----------
 
+// Initialize FUSER class instance
 FUSER ekf;
+
+// Initialize UTAG union instance
 UTAG U;
+
+// Initialize AutoDriver_Due class instances
 AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
 AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
+ 
+// Initialize PixyI2C class instance
 PixyI2C Pixy(0x54);
+
+// Initialize LCD5110 class instance
 LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
+
+// Initialize array of POSTRACK class instances
 POSTRACK Pos[3] = {
 	POSTRACK(millis(), "RatVT", 4),
 	POSTRACK(millis(), "RobVT", 4),
 	POSTRACK(millis(), "RatPixy", 6)
 };
+
+// Initialize PID class instance
 PID Pid(millis(), kC, pC, pidSetPoint);
+
+// Initialize BULLDOZE class instance
 BULLDOZE Bull(millis());
+
+// Initialize MOVETO class instance
 MOVETO Move(millis());
+
+// Initialize REWARD class instance
 REWARD Reward(millis());
+
+// Initialize LOGGER class instance
 LOGGER Log(millis());
 
+// Initialize DueTimer class instance
+DueTimer FeederArmTimer = DueTimer::getAvailable().setFrequency(dt_armStep);
 #pragma endregion 
 
 #pragma endregion 
@@ -2215,8 +2238,11 @@ void REWARD::ExtendFeedArm()
 	t_moveArmStr = millis();
 
 	// Set intterupt flag
-	delayMicroseconds(100);
 	v_doStepTimer = true;
+	delayMicroseconds(100);
+
+	// Start timer
+	FeederArmTimer.start();
 
 }
 
@@ -2267,8 +2293,11 @@ void REWARD::RetractFeedArm()
 	t_moveArmStr = millis();
 
 	// Set intterupt flag
-	delayMicroseconds(100);
 	v_doStepTimer = true;
+	delayMicroseconds(100);
+
+	// Start timer
+	FeederArmTimer.start();
 
 }
 
@@ -2333,7 +2362,10 @@ void REWARD::CheckFeedArm()
 
 		// Block handler
 		v_doStepTimer = false;
-		delayMicroseconds(1100);
+		delayMicroseconds(500);
+
+		// Stop timer
+		FeederArmTimer.stop();
 
 		// Make sure step off
 		v_stepState = false;
@@ -2377,8 +2409,12 @@ void REWARD::CheckFeedArm()
 	// Target reached
 	if (is_move_done || is_timedout) {
 
-		// Set intterupt flag
+		// Block handler
 		v_doStepTimer = false;
+		delayMicroseconds(500);
+
+		// Stop timer
+		FeederArmTimer.stop();
 
 		// Unstep motor
 		if (digitalRead(pin.ED_STP) == HIGH) {
@@ -4379,10 +4415,10 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-												// Motor V compensation
-												/*
-												VS_COMP_ENABLE, VS_COMP_DISABLE
-												*/
+	// Motor V compensation
+	/*
+	VS_COMP_ENABLE, VS_COMP_DISABLE
+	*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
@@ -4390,11 +4426,11 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-												// Slew rate
-												/*
-												Upping the edge speed increases torque
-												SR_180V_us, SR_290V_us, SR_530V_us
-												*/
+	// Slew rate
+	/*
+	Upping the edge speed increases torque
+	SR_180V_us, SR_290V_us, SR_530V_us
+	*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -5813,7 +5849,7 @@ void HardwareTest()
 	static char str_log[200] = { 0 };
 	static char str_pixy[200] = { 0 };
 	static char str_ping[2][200] = { { 0 } };
-	const uint32_t dt_test = 10000;
+	const int dt_test = 10000;
 	uint32_t t_test_str = 0;
 
 	// Stress test
@@ -6929,12 +6965,6 @@ int GetAD_Status(uint16_t stat_reg, char stat_str[])
 	DB_INF();
 #endif
 
-	// TEMP
-	char str[50];
-	int cnt = 0;
-	sprintf(str, "mem[%d] %0.2f", cnt++, (float)freeMemory() / 1000);
-	SerialUSB.println(str);
-
 	// Local vars
 	const static char status_list[16][25] =
 	{
@@ -6955,17 +6985,10 @@ int GetAD_Status(uint16_t stat_reg, char stat_str[])
 		"STEP_LOSS_B",
 		"SCK_MOD"
 	};
-	// TEMP
-	sprintf(str, "mem[%d] %0.2f", cnt++, (float)freeMemory() / 1000);
-	SerialUSB.println(str);
 
 	byte bit_ind[2] = { 0, 0 };
 	bool is_bit_set[2] = { false, false };
 	uint16_t bit_val = 0x0;
-
-	// TEMP
-	sprintf(str, "mem[%d] %0.2f", cnt++, (float)freeMemory() / 1000);
-	SerialUSB.println(str);
 
 	// Get id ind
 	for (int i = 0; i < 16; i++)
@@ -6977,10 +7000,6 @@ int GetAD_Status(uint16_t stat_reg, char stat_str[])
 		}
 	}
 
-	// TEMP
-	sprintf(str, "mem[%d] %0.2f", cnt++, (float)freeMemory() / 1000);
-	SerialUSB.println(str);
-
 	// Get bit value
 	int n_loop = is_bit_set[1] ? 2 : 1;
 	for (int i = 0; i < n_loop; i++)
@@ -6990,10 +7009,6 @@ int GetAD_Status(uint16_t stat_reg, char stat_str[])
 		uint16_t k = masked_n >> bit_ind[i];
 		bit_val |= bit_val & ~(1 << i) | (k << i);
 	}
-
-	// TEMP
-	sprintf(str, "mem[%d] %0.2f", cnt++, (float)freeMemory() / 1000);
-	SerialUSB.println(str);
 
 	// return bit value
 	return (int)bit_val;
@@ -7372,15 +7387,39 @@ bool DoAll(char fun_id[])
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler()
 {
+	// Local vars
+	bool is_done = false;
 
 	// Bail if not active now
 	if (!v_doStepTimer) {
 		return;
 	}
 
-	// Bail when extend target reached
+	// Extend target reached
 	else if (v_stepDir == 'e' &&
 		v_cnt_steps >= v_stepTarg) {
+
+		// Set flag
+		is_done = true;
+	}
+
+	// Release switch triggered
+	else if (v_stepDir == 'r' &&
+		digitalRead(pin.FeedSwitch) == LOW) {
+
+		// Set flag
+		is_done = true;
+	}
+
+	// Count exeded byte max
+	else if (v_cnt_steps >= 255) {
+
+		// Set flag
+		is_done = true;
+	}
+
+	// Clean up and bail
+	if (is_done) {
 
 		// Make sure step off
 		v_stepState = false;
@@ -7391,17 +7430,6 @@ void Interupt_TimerHandler()
 
 		// Set done flag
 		v_isArmMoveDone = true;
-
-		// Bail
-		return;
-	}
-
-	// Release switch when switch triggered on retract
-	else if (v_stepDir == 'r' &&
-		digitalRead(pin.FeedSwitch) == LOW) {
-
-		// Block handler
-		v_doStepTimer = false;
 
 		// Bail
 		return;
@@ -7438,8 +7466,11 @@ void Interupt_Power()
 // HALT RUN ON IR TRIGGER
 void Interupt_IRprox_Halt() {
 
+	// Local vars
+	static uint32_t t_debounce = 0; 
+
 	// Exit if < 250 ms has not passed
-	if (v_t_irProxDebounce > millis()) {
+	if (t_debounce > millis()) {
 		return;
 	}
 
@@ -7447,14 +7478,17 @@ void Interupt_IRprox_Halt() {
 	v_doIRhardStop = true;
 
 	// Update debounce
-	v_t_irProxDebounce = millis() + 250;
+	t_debounce = millis() + 250;
 }
 
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect()
 {
+	// Local vars
+	static uint32_t t_debounce = 0;
+
 	// Exit if < 25 ms has not passed
-	if (millis() < v_t_irDetectDebounce) {
+	if (millis() < t_debounce) {
 		return;
 	}
 
@@ -7469,7 +7503,34 @@ void Interupt_IR_Detect()
 	}
 
 	// Update debounce
-	v_t_irDetectDebounce = millis() + 50;
+	t_debounce = millis() + 50;
+}
+
+// BLOCK/UNBLOCK ALL INTERUPTS do_what=["block", "unblock"]
+inline void ChangeIRQState(char do_what[])
+{
+	/* 
+	NOTE: 
+		Taken from: https://forum.arduino.cc/index.php?topic=421181.0
+	*/
+
+	// Local vars
+	static uint32_t pmask = __get_PRIMASK() & 1;
+
+	// Block interupts
+	if (do_what = "block") {
+
+		// Save global interupt mask
+		pmask = __get_PRIMASK() & 1;
+
+		// Set so all blocked
+		__set_PRIMASK(1);
+	}
+
+	// Unblock interupts
+	else if (do_what = "unblock") {
+		__set_PRIMASK(pmask);
+	}
 }
 
 #pragma endregion
@@ -7595,10 +7656,7 @@ void setup() {
 	PrintLCD(true, "DONE SETUP", "Dump Serial");
 
 	// RESET VOLITILES AND RELAYS
-	v_t_irProxDebounce = millis(); // (ms)
-	v_t_irDetectDebounce = millis(); // (ms)
 	v_t_irSyncLast = 0; // (ms)
-	t_sync = 0; // (ms)
 	v_dt_ir = 0;
 	v_cnt_ir = 0;
 	v_doIRhardStop = false;
@@ -7693,7 +7751,7 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 
 	// Start Feed Arm timer
-	Timer1.attachInterrupt(Interupt_TimerHandler).start(1000);
+	FeederArmTimer.attachInterrupt(Interupt_TimerHandler);
 	PrintLCD(true, "DONE SETUP", "Interrupts");
 
 	// RESET FEEDER ARM

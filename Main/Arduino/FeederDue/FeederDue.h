@@ -207,7 +207,8 @@ int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
 
-// Start/Quit
+// Handshake/Start/Quit
+uint32_t t_sync = 0; // (ms)
 uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
@@ -268,6 +269,7 @@ const float feedDist = 66;
 float moveToSpeed = 80; // (cm/sec)
 
 // REWARD
+const long dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
@@ -307,20 +309,19 @@ extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 
 // Interrupts 
-volatile uint32_t t_sync = 0; // (ms)
-volatile uint32_t v_t_irProxDebounce = millis(); // (ms)
-volatile uint32_t v_t_irDetectDebounce = millis(); // (ms)
 volatile uint32_t v_t_irSyncLast = 0; // (ms)
 volatile int v_dt_ir = 0;
 volatile int v_cnt_ir = 0;
-volatile bool v_doIRhardStop = false;
-volatile bool v_doLogIR = false;
-volatile bool v_stepState = false;
-volatile bool v_doStepTimer = false;
-volatile bool v_isArmMoveDone = false;
-volatile int v_cnt_steps = 0;
-volatile int v_stepTarg = 0;
-volatile char v_stepDir = 'e'; // ['e','r']
+volatile byte v_doIRhardStop = false;
+volatile byte v_doLogIR = false;
+
+
+volatile byte v_stepState = false;
+volatile byte v_doStepTimer = false;
+volatile byte v_isArmMoveDone = false;
+volatile byte v_cnt_steps = 0;
+volatile byte v_stepTarg = 0;
+volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 
 
