@@ -269,6 +269,7 @@ const float feedDist = 66;
 float moveToSpeed = 80; // (cm/sec)
 
 // REWARD
+//const long armStepFreq = 1000; // (us)
 const long dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)

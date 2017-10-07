@@ -478,7 +478,10 @@ REWARD Reward(millis());
 LOGGER Log(millis());
 
 // Initialize DueTimer class instance
-DueTimer FeederArmTimer = DueTimer::getAvailable().setFrequency(dt_armStep);
+//DueTimer FeederArmTimer = DueTimer::getAvailable().setFrequency(armStepFreq);
+//DueTimer FeederArmTimer = DueTimer::getAvailable().setPeriod(dt_armStep);
+DueTimer FeederArmTimer = Timer1.setFrequency(1000);
+
 #pragma endregion 
 
 #pragma endregion 
@@ -2212,7 +2215,7 @@ void REWARD::ExtendFeedArm()
 
 	// Block handler
 	v_doStepTimer = false;
-	delayMicroseconds(1100);
+	delayMicroseconds(dt_armStep + 100);
 
 	// Set targ and flag
 	v_stepTarg = armExtStps;
@@ -2243,7 +2246,7 @@ void REWARD::ExtendFeedArm()
 
 	// Start timer
 	FeederArmTimer.start();
-
+	delayMicroseconds(100);
 }
 
 void REWARD::RetractFeedArm()
@@ -2267,7 +2270,7 @@ void REWARD::RetractFeedArm()
 
 	// Block handler
 	v_doStepTimer = false;
-	delayMicroseconds(1100);
+	delayMicroseconds(dt_armStep + 100);
 
 	// Set targ and flag
 	v_stepTarg = 0;
@@ -2298,7 +2301,7 @@ void REWARD::RetractFeedArm()
 
 	// Start timer
 	FeederArmTimer.start();
-
+	delayMicroseconds(100);
 }
 
 void REWARD::CheckFeedArm()
@@ -2362,7 +2365,7 @@ void REWARD::CheckFeedArm()
 
 		// Block handler
 		v_doStepTimer = false;
-		delayMicroseconds(500);
+		delayMicroseconds(dt_armStep + 100);
 
 		// Stop timer
 		FeederArmTimer.stop();
@@ -2411,7 +2414,7 @@ void REWARD::CheckFeedArm()
 
 		// Block handler
 		v_doStepTimer = false;
-		delayMicroseconds(500);
+		delayMicroseconds(dt_armStep + 100);
 
 		// Stop timer
 		FeederArmTimer.stop();
