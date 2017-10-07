@@ -6351,7 +6351,8 @@ void DebugAllFun(const char *fun, int line, int mem)
 	static uint32_t t_check = 0; // ()us
 	static uint32_t cnt_chk = 0;
 	static uint32_t chk_last = 0;
-
+	int chk_diff = 0;
+	
 	// Bail if not ready
 	if (!fc.isSetup) {
 		return;
@@ -6378,6 +6379,7 @@ void DebugAllFun(const char *fun, int line, int mem)
 
 	// Store time
 	t_check = micros();
+	t_s = (float)(millis() - t_sync) / 1000.0f;
 
 	// Copy string
 	strcpy(fun_copy, fun);
@@ -6385,23 +6387,23 @@ void DebugAllFun(const char *fun, int line, int mem)
 	// Correct line number
 	line_copy = line - 21;
 
+	// Get skipped checks
+	chk_diff = cnt_chk - chk_last;
+
 	// Get memory
 	mem_copy = (float)mem / 1000;
+	
 
-	// Get time 
-	t_s = (float)(millis() - t_sync) / 1000.0f;
+	// FORMAT AND PRINT STRING
 
-	//// Format and print string
+	// Print all
 	//sprintf(str, "%0.0f|%d|%0.0f %s\n", t_s, cnt_loop_short, mem_copy, fun_copy);
-	//SerialUSB.print(str);
 
+	// Print line
 	sprintf(str, "%0.0f %d|%0.2f\n", t_s, line_copy, mem_copy);
+
+	// Print string
 	SerialUSB.print(str);
-
-	//sprintf(str, "%0.0f %d", (float)(millis() - t_sync) / 1000.0f, line_copy);
-	//SerialUSB.println(str);
-
-	//SerialUSB.println(line_copy);
 
 	// Store cnt
 	chk_last = cnt_chk;
@@ -7506,32 +7508,32 @@ void Interupt_IR_Detect()
 	t_debounce = millis() + 50;
 }
 
-// BLOCK/UNBLOCK ALL INTERUPTS do_what=["block", "unblock"]
-inline void ChangeIRQState(char do_what[])
-{
-	/* 
-	NOTE: 
-		Taken from: https://forum.arduino.cc/index.php?topic=421181.0
-	*/
-
-	// Local vars
-	static uint32_t pmask = __get_PRIMASK() & 1;
-
-	// Block interupts
-	if (do_what = "block") {
-
-		// Save global interupt mask
-		pmask = __get_PRIMASK() & 1;
-
-		// Set so all blocked
-		__set_PRIMASK(1);
-	}
-
-	// Unblock interupts
-	else if (do_what = "unblock") {
-		__set_PRIMASK(pmask);
-	}
-}
+//// BLOCK/UNBLOCK ALL INTERUPTS do_what=["block", "unblock"]
+//inline void ChangeIRQState(char do_what[])
+//{
+//	/* 
+//	NOTE: 
+//		Taken from: https://forum.arduino.cc/index.php?topic=421181.0
+//	*/
+//
+//	// Local vars
+//	static uint32_t pmask = __get_PRIMASK() & 1;
+//
+//	// Block interupts
+//	if (do_what = "block") {
+//
+//		// Save global interupt mask
+//		pmask = __get_PRIMASK() & 1;
+//
+//		// Set so all blocked
+//		__set_PRIMASK(1);
+//	}
+//
+//	// Unblock interupts
+//	else if (do_what = "unblock") {
+//		__set_PRIMASK(pmask);
+//	}
+//}
 
 #pragma endregion
 
