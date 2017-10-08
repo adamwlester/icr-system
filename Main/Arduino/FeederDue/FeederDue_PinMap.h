@@ -22,6 +22,10 @@ struct PIN
 	const int X1a_UNDEF = 28;
 	const int X1b_UNDEF = 26;
 
+	// Teensy
+	const int Teensy_SendStart = A8;
+	const int Teensy_SendEnd = A9;
+
 	// Display
 	const int Disp_SCK = 8;
 	const int Disp_MOSI = 9;
@@ -105,6 +109,8 @@ void SetupPins() {
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
+	// Teensy
+	pinMode(pin.Teensy_SendStart, OUTPUT);
 	// Display
 	pinMode(pin.Disp_SCK, OUTPUT);
 	pinMode(pin.Disp_MOSI, OUTPUT);
@@ -139,14 +145,16 @@ void SetupPins() {
 	digitalWrite(pin.PWR_OFF, LOW);
 	digitalWrite(pin.PWR_ON, LOW);
 	digitalWrite(pin.PWR_Swtch_Grn, LOW);
-	// Voltage Regulators
-	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V_ENBLE, LOW);
-	digitalWrite(pin.REG_5V_ENBLE, LOW);
+	// Voltage Regulators (start high)
+	digitalWrite(pin.REG_24V_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V_ENBLE, HIGH);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
+	// Teensy (start high)
+	digitalWrite(pin.Teensy_SendStart, HIGH);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);
@@ -184,6 +192,8 @@ void SetupPins() {
 	// XBees
 	pinMode(pin.X1a_CTS, INPUT);
 	pinMode(pin.X1b_CTS, INPUT);
+	// Teensy
+	pinMode(pin.Teensy_SendEnd, INPUT);
 	// Battery monitor
 	pinMode(pin.BatVcc, INPUT);
 	pinMode(pin.BatIC, INPUT);

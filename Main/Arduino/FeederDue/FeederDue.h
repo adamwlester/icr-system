@@ -15,6 +15,7 @@
 // Memory
 #include <MemoryFree.h>
 
+
 // Timers
 #include <DueTimer.h>
 
@@ -53,11 +54,12 @@
 // DEBUG SETTING
 #define DO_DEBUG 1
 #define DO_LOG 1
-#define DO_DEBUG_XXX 1
+#define DO_TEENSY_DEBUG 1
 #define DO_HARDWARE_TEST 0
 
 // DEBUG POSITION INFO
-#define DB_INF() DebugAllFun(__FUNCTION__, __LINE__, freeMemory());
+#define DB_FUN_STR() SendTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "str");
+#define DB_FUN_END() SendTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "end");
 
 // DEBUGGING STRUCT
 struct DB
@@ -269,8 +271,8 @@ const float feedDist = 66;
 float moveToSpeed = 80; // (cm/sec)
 
 // REWARD
-//const long armStepFreq = 1000; // (us)
-const long dt_armStep = 1000; // (us)
+const long armStepFreq = 1000; // (us)
+const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
@@ -279,7 +281,7 @@ uint32_t t_rewBlockMove = 0; // (ms)
 EtOH run after min time or distance
 */
 const int dt_durEtOH[2] = { 100, 100 }; // (ms)
-const int dt_delEtOH[2] = { 30000, 60000 }; // (ms) TEMP
+const int dt_delEtOH[2] = { 30000, 60000 }; // (ms)
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
 
@@ -362,6 +364,11 @@ const char ard_id_list[7] =
 	'\0'
 };
 
+const char tnsy_id_list[1] =
+{
+	'\0'
+};
+
 // C2R command vars
 struct CMD
 {
@@ -403,6 +410,34 @@ struct R4
 	int dt_rcvd; // (ms)
 };
 
+// Serial from Robot
+struct R2
+{
+	USARTClass &port;
+	const char *instID;
+	const int lng;
+	const char head;
+	const char foot;
+	const char *id;
+	uint16_t pack[20];
+	uint16_t packLast[20];
+	uint16_t cnt_pack;
+	int cnt_repeat;
+	float datList[20][3];
+	uint32_t t_sentList[20];
+	bool doRcvCheck[20];
+	int cnt_resend[20];
+	int pinCTS;
+	bool stateCTS;
+	byte sendQueue[sendQueueSize][sendQueueBytes];
+	int sendQueueIndStore;
+	int sendQueueIndRead;
+	uint32_t t_sent; // (ms)
+	int dt_sent; // (ms)
+};
+
+// CS SERIAL COMS
+
 // Initialize C2R
 R4 c2r
 {
@@ -438,69 +473,6 @@ R4 c2r
 	0,
 	// dt_rcvd
 	0,
-};
-
-// Serial from other ard
-R4 a2r
-{
-	// serial
-	Serial2,
-	// instID
-	"a2r",
-	// lng
-	strlen(ard_id_list),
-	// head
-	'{',
-	// foot
-	'}',
-	// id
-	ard_id_list,
-	// pack
-	{ 0 },
-	// packLast
-	{ 0 },
-	// packTot
-	0,
-	// cnt_repeat
-	0,
-	// cnt_dropped
-	0,
-	// idNow
-	'\0',
-	// isNew
-	false,
-	// dat
-	{ 0, 0, 0 },
-	// t_rcvd
-	0,
-	// dt_rcvd
-	0,
-};
-
-// Serial from Robot
-struct R2
-{
-	USARTClass &port;
-	const char *instID;
-	const int lng;
-	const char head;
-	const char foot;
-	const char *id;
-	uint16_t pack[20];
-	uint16_t packLast[20];
-	uint16_t cnt_pack;
-	int cnt_repeat;
-	float datList[20][3];
-	uint32_t t_sentList[20];
-	bool doRcvCheck[20];
-	int cnt_resend[20];
-	int pinCTS;
-	bool stateCTS;
-	byte sendQueue[sendQueueSize][sendQueueBytes];
-	int sendQueueIndStore;
-	int sendQueueIndRead;
-	uint32_t t_sent; // (ms)
-	int dt_sent; // (ms)
 };
 
 // Serial to CS
@@ -550,6 +522,46 @@ R2 r2c
 	0,
 };
 
+// CHEETAHDUE SERIAL COMS
+
+// Serial from other ard
+R4 a2r
+{
+	// serial
+	Serial2,
+	// instID
+	"a2r",
+	// lng
+	strlen(ard_id_list),
+	// head
+	'{',
+	// foot
+	'}',
+	// id
+	ard_id_list,
+	// pack
+	{ 0 },
+	// packLast
+	{ 0 },
+	// packTot
+	0,
+	// cnt_repeat
+	0,
+	// cnt_dropped
+	0,
+	// idNow
+	'\0',
+	// isNew
+	false,
+	// dat
+	{ 0, 0, 0 },
+	// t_rcvd
+	0,
+	// dt_rcvd
+	0,
+};
+
+
 // Serial to other ard
 R2 r2a
 {
@@ -596,6 +608,50 @@ R2 r2a
 	// dt_sent
 	0,
 };
+
+// TEENSY SERIAL COMS
+#if DO_TEENSY_DEBUG
+
+struct R42T
+{
+	UARTClass &port;
+	const char *instID;
+	const int lng;
+	const char head;
+	const char foot;
+	const char *id;
+	uint32_t cnt_pack;
+	int cnt_dropped;
+	uint32_t t_rcvd; // (ms)
+	int dt_rcvd; // (ms)
+};
+
+// Initialize C2R
+R42T r42t
+{
+	// serial
+	Serial,
+	// instID
+	"t2r",
+	// lng
+	0,
+	// head
+	'(',
+	// foot
+	')',
+	// id
+	tnsy_id_list,
+	// cnt_pack
+	0,
+	// cnt_dropped
+	0,
+	// t_rcvd
+	0,
+	// dt_rcvd
+	0,
+};
+
+#endif
 
 #pragma endregion 
 

@@ -41,10 +41,11 @@ baud,escape,esc#,mode,verb,echo,ignoreRX
 
 #pragma region ========== CLASS DECLARATIONS ===========
 
-#pragma region ----------CLASS: POSTRACK----------
+//CLASS: POSTRACK
 class POSTRACK
 {
 public:
+
 	// VARS
 	char instID[20] = { 0 };
 	int nSamp = 0;
@@ -63,6 +64,7 @@ public:
 	bool isNew = false;
 	bool is_streamStarted = false;
 	uint32_t t_init;
+
 	// METHODS
 	POSTRACK(uint32_t t, char obj_id[], int n_samp);
 	void UpdatePos(double pos_new, uint32_t ts_new);
@@ -72,13 +74,14 @@ public:
 	void PosReset();
 };
 
-#pragma endregion 
 
-#pragma region ----------CLASS: PID----------
+
+//CLASS: PID
 class PID
 {
 
 public:
+
 	// VARS
 	uint32_t t_updateLast = 0;
 	double dt_update = 0;
@@ -137,6 +140,7 @@ public:
 	bool cal_isPidUpdated = false;
 	bool cal_isCalFinished = false;
 	uint32_t t_init;
+
 	// METHODS
 	PID(uint32_t t, const float kC, const float pC, const float set_point);
 	double UpdatePID();
@@ -155,12 +159,13 @@ public:
 	double RunCalibration();
 };
 
-#pragma endregion 
 
-#pragma region ----------CLASS: BULLDOZE----------
+
+//CLASS: BULLDOZE
 class BULLDOZE
 {
 public:
+
 	// VARS
 	uint32_t t_updateNext = 0;
 	int dt_update = 50; // (ms)
@@ -178,6 +183,7 @@ public:
 	bool isTimeUp = false;
 	bool isPassedReset = false;
 	uint32_t t_init;
+
 	// METHODS
 	BULLDOZE(uint32_t t);
 	void UpdateBull();
@@ -193,12 +199,13 @@ public:
 	void PrintBull(char msg[]);
 };
 
-#pragma endregion 
 
-#pragma region ----------CLASS: MOVETO----------
+
+//CLASS: MOVETO
 class MOVETO
 {
 public:
+
 	// VARS
 	int targSetTimeout = 1000;
 	int moveTimeout = 10000;
@@ -225,20 +232,22 @@ public:
 		-2.425892857142854,
 	};
 	uint32_t t_init;
+
 	// METHODS
 	MOVETO(uint32_t t);
 	bool CompTarg(double now_pos, double targ_pos);
-	double DecelToTarg(double now_pos, double now_vel, double dist_decelerate, double speed_min);
+	double DecelToTarg(double now_pos, double now_vel, double dist_decel, double speed_min);
 	double GetMoveError(double now_pos);
 	void MoveToReset();
 };
 
-#pragma endregion 
 
-#pragma region ----------CLASS: REWARD----------
+
+//CLASS: REWARD
 class REWARD
 {
 public:
+
 	// VARS
 	const int zoneRewDurs[9] = { // (ms)
 		500,
@@ -305,6 +314,7 @@ public:
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
 	uint32_t t_init;
+
 	// METHODS
 	REWARD(uint32_t t);
 	void StartRew();
@@ -319,12 +329,13 @@ public:
 	void RewardReset();
 };
 
-#pragma endregion 
 
-#pragma region ----------CLASS: LOGGER----------
+
+//CLASS: LOGGER
 class LOGGER
 {
 public:
+
 	// VARS
 	USARTClass &port = Serial1;
 	byte msg_streamSuccess[3] = { '>','>','>' };
@@ -351,6 +362,7 @@ public:
 	int cnt_logBytesSent = 0;
 	bool isFileReady = false;
 	uint32_t t_init;
+
 	// METHODS
 	LOGGER(uint32_t t);
 	bool Setup();
@@ -369,9 +381,9 @@ public:
 
 };
 
-#pragma endregion 
 
-#pragma region ----------CLASS: FUSER----------
+
+//CLASS: FUSER
 class FUSER : public TinyEKF
 {
 public:
@@ -424,9 +436,9 @@ protected:
 	}
 };
 
-#pragma endregion 
 
-#pragma region ----------UNION----------
+
+//UNION
 union UTAG {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
@@ -435,9 +447,9 @@ union UTAG {
 	float f; // (float) 4 byte
 };
 
-#pragma endregion 
 
-#pragma region ----------INITILIZE OBJECTS----------
+
+//INITILIZE OBJECTS
 
 // Initialize FUSER class instance
 FUSER ekf;
@@ -448,7 +460,7 @@ UTAG U;
 // Initialize AutoDriver_Due class instances
 AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
 AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
- 
+
 // Initialize PixyI2C class instance
 PixyI2C Pixy(0x54);
 
@@ -478,11 +490,9 @@ REWARD Reward(millis());
 LOGGER Log(millis());
 
 // Initialize DueTimer class instance
-//DueTimer FeederArmTimer = DueTimer::getAvailable().setFrequency(armStepFreq);
-//DueTimer FeederArmTimer = DueTimer::getAvailable().setPeriod(dt_armStep);
-DueTimer FeederArmTimer = Timer1.setFrequency(1000);
+DueTimer FeederArmTimer = DueTimer(1);
 
-#pragma endregion 
+
 
 #pragma endregion 
 
@@ -491,106 +501,160 @@ DueTimer FeederArmTimer = Timer1.setFrequency(1000);
 
 // PARSE SERIAL INPUT
 void GetSerial(R4 *r4);
+
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4 *r4, char mtch = '\0');
+
 // STORE PACKET DATA TO BE SENT
 void QueuePacket(R2 *r2, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true);
+
 // SEND SERIAL PACKET DATA
 bool SendPacket(R2 *r2);
+
 // CHECK IF ARD TO ARD PACKET SHOULD BE RESENT
 bool CheckResend(R2 *r2);
+
 // RESET AUTODRIVER BOARDS
 void AD_Reset(float max_speed = maxSpeed, float max_acc = maxAcc, float max_dec = maxDec);
+
 // CONFIGURE AUTODRIVER BOARDS
 void AD_Config(float max_speed, float max_acc, float max_dec);
+
 // CHECK AUTODRIVER STATUS
 void AD_CheckOC(bool force_check = false);
+
 // HARD STOP
 void HardStop(char called_from[]);
+
 // IR TRIGGERED HARD STOP
 void IRprox_Halt();
+
 // RUN AUTODRIVER
 bool RunMotor(char dir, double new_speed, char agent[]);
+
 // RUN MOTOR MANUALLY
 bool ManualRun(char dir);
+
 // SET WHATS CONTROLLING THE MOTOR
 bool SetMotorControl(char set_to[], char called_from[]);
+
 // BLOCK MOTOR TILL TIME ELLAPESED
 void BlockMotorTill(int dt, char called_from[]);
+
 // CHECK IF TIME ELLAPESED
 void CheckBlockTimElapsed();
+
 // DO SETUP TO BEGIN TRACKING
 void InitializeTracking();
+
 // CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
 void CheckSampDT();
+
 // PROCESS PIXY STREAM
 double CheckPixy(bool do_test_check = false);
+
 // UPDATE EKF
 void UpdateEKF();
+
 // LOG TRACKING
 void LogTrackingData();
+
 // CHECK FOR BUTTON INPUT
 bool GetButtonInput();
+
 // OPEN/CLOSE REWARD SOLENOID
 void OpenCloseRewSolenoid();
+
 // OPEN/CLOSE EtOH SOLENOID
 void OpenCloseEtOHSolenoid();
+
 // CHECK FOR ETOH UPDATE
 void CheckEtOH();
+
 // CHECK BATTERY VALUES
 float CheckBattery(bool force_check = false);
+
 // TURN LCD LIGHT ON/OFF
 void ChangeLCDlight(uint32_t duty = 256);
+
 // QUIT AND RESTART ARDUINO
 void QuitSession();
+
 // DO HARDWARE TEST
 void HardwareTest();
+
 // CHECK LOOP TIME AND MEMORY
 void CheckLoop();
-// PRINT ALL FUNCTION ENTRY AND EXITS: str_where = ["start", "end"]
-void DebugAllFun(const char *fun, int line, int mem);
+
+// LOG FUNCTION RUN TO TEENSY
+void SendTeensyDebug(const char *fun, int line, int mem, char msg[]);
+
+// GET LAST TEENSY LOG
+void GetTeensyDebug();
+
 // LOG/PRINT MAIN EVENT
 void DebugFlow(char msg[], uint32_t t = millis());
+
 // LOG/PRINT ERRORS
 void DebugError(char msg[], bool is_error = false, uint32_t t = millis());
+
 // LOG/PRINT MOTOR CONTROL DEBUG STRING
 void DebugMotorControl(bool pass, char set_to[], char called_from[]);
+
 // LOG/PRINT MOTOR BLOCKING DEBUG STRING
 void DebugMotorBocking(char msg[], char called_from[], uint32_t t = millis());
+
 // LOG/PRINT MOTOR SPEED CHANGE
 void DebugRunSpeed(char agent[], double speed_last, double speed_now);
+
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
 void DebugRcvd(R4 *r4, char msg[], bool is_repeat = false);
+
 // LOG/PRINT SENT PACKET DEBUG STRING
 void DebugSent(R2 *r2, char msg[], bool is_repeat = false);
+
 // STORE STRING FOR PRINTING
 void QueueDebug(char msg[], uint32_t t);
+
 // PRINT DEBUG STRINGS TO CONSOLE/LCD
 bool PrintDebug();
+
 // FOR PRINTING TO LCD
 void PrintLCD(bool do_block, char msg_1[], char msg_2[] = { 0 }, char f_siz = 's');
+
 // CLEAR LCD
 void ClearLCD();
+
 // PRINT SPECIAL CHARICTERS
 char* PrintSpecialChars(char chr, bool do_show_byte = false);
+
 // CHECK AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char stat_str[]);
+
 // SEND TEST PACKET
 void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
+
 // HOLD FOR CRITICAL ERRORS
 void RunErrorHold(char msg[], uint32_t t_kill = 0);
+
 // GET ID INDEX
 template <typename T> int CharInd(char id, T *r24);
+
 // BLINK LEDS AT RESTART/UPLOAD
 bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0, bool rat_in_blink = false);
+
 // PRINT ALL IN QUEUE : fun_id = ["PrintDebug", "WriteLog"]
 bool DoAll(char fun_id[]);
+
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler();
+
 // POWER OFF
 void Interupt_Power();
+
 // HALT RUN ON IR TRIGGER
 void Interupt_IRprox_Halt();
+
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect();
 
@@ -614,8 +678,8 @@ POSTRACK::POSTRACK(uint32_t t, char obj_id[], int n_samp)
 
 void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -753,8 +817,8 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 
 double POSTRACK::GetPos()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Reset flag
@@ -766,8 +830,8 @@ double POSTRACK::GetPos()
 
 double POSTRACK::GetVel()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Return newest vel value
@@ -776,8 +840,8 @@ double POSTRACK::GetVel()
 
 void POSTRACK::SwapPos(double set_pos, uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Make sure pos val range [0, 140*PI]
@@ -793,8 +857,8 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 
 void POSTRACK::PosReset()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	this->sampCnt = 0;
@@ -858,8 +922,8 @@ double PID::UpdatePID()
 		return -1;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	if (isFirstRun) {
@@ -927,8 +991,8 @@ double PID::UpdatePID()
 
 void PID::PID_Run(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -951,8 +1015,8 @@ void PID::PID_Run(char called_from[])
 
 void PID::PID_Stop(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -985,8 +1049,8 @@ void PID::PID_Stop(char called_from[])
 
 void PID::PID_Hold(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1005,8 +1069,8 @@ void PID::PID_Hold(char called_from[])
 
 void PID::PID_Reset()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	integral = 0;
@@ -1034,8 +1098,8 @@ void PID::SetThrottle()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Log/print
@@ -1071,8 +1135,8 @@ void PID::CheckThrottle()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Log/print event
@@ -1120,8 +1184,8 @@ void PID::CheckSetpointCrossing()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Check if rat has moved in front of setpoint
@@ -1143,8 +1207,8 @@ void PID::PID_CheckEKF(uint32_t t)
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	if ((t - t_ekfReady) > dt_ekfSettle)
@@ -1159,8 +1223,8 @@ void PID::PID_CheckEKF(uint32_t t)
 
 void PID::PID_ResetEKF(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1177,8 +1241,8 @@ void PID::PID_ResetEKF(char called_from[])
 
 void PID::PID_SetUpdateTime(uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	is_ekfNew = true;
@@ -1192,8 +1256,8 @@ void PID::PID_SetUpdateTime(uint32_t t)
 
 void PID::PrintPID(char msg[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Add to print queue
@@ -1208,8 +1272,8 @@ void PID::PrintPID(char msg[])
 
 double PID::RunCalibration()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	/*
@@ -1383,8 +1447,8 @@ void BULLDOZE::UpdateBull()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Update rat pos
@@ -1438,8 +1502,8 @@ void BULLDOZE::UpdateBull()
 
 void BULLDOZE::BullReinitialize(byte del, byte spd, char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1458,8 +1522,8 @@ void BULLDOZE::BullReinitialize(byte del, byte spd, char called_from[])
 
 void BULLDOZE::BullRun(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1484,8 +1548,8 @@ void BULLDOZE::BullRun(char called_from[])
 
 void BULLDOZE::BullStop(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1520,8 +1584,8 @@ void BULLDOZE::BullStop(char called_from[])
 
 void BULLDOZE::BullOn(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1540,8 +1604,8 @@ void BULLDOZE::BullOn(char called_from[])
 
 void BULLDOZE::BullOff(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1563,8 +1627,8 @@ void BULLDOZE::BullOff(char called_from[])
 
 void BULLDOZE::BullHold(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1590,8 +1654,8 @@ void BULLDOZE::BullHold(char called_from[])
 
 void BULLDOZE::BullResume(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1610,8 +1674,8 @@ void BULLDOZE::BullResume(char called_from[])
 
 void BULLDOZE::BullReset()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Set mode
@@ -1643,8 +1707,8 @@ void BULLDOZE::BullCheckMotorControl()
 
 void BULLDOZE::PrintBull(char msg[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Add to print queue
@@ -1674,8 +1738,8 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 		return isTargSet;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1758,7 +1822,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	return isTargSet;
 }
 
-double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerate, double speed_min)
+double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, double speed_min)
 {
 
 	// Local vars
@@ -1770,8 +1834,8 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 		return 0;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Get abort timeout
@@ -1797,7 +1861,7 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 	distLeft = targDist - abs(now_pos - posCumStart);
 
 	// Check if rob is dec_pos cm from target
-	if (distLeft <= dist_decelerate) {
+	if (distLeft <= dist_decel) {
 
 		// Get base speed to decelerate from
 		if (baseSpeed == 0) {
@@ -1807,7 +1871,7 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 		// Update decel speed
 		else if (millis() > t_updateNext) {
 			// Compute new speed so range constrained to [min_speed, base_speed]
-			new_speed = (((baseSpeed - speed_min) * distLeft) / dist_decelerate) + speed_min;
+			new_speed = (((baseSpeed - speed_min) * distLeft) / dist_decel) + speed_min;
 
 			// Get next update time
 			t_updateNext = millis() + dt_update;
@@ -1836,8 +1900,8 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decelerat
 
 double MOVETO::GetMoveError(double now_pos)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1855,8 +1919,8 @@ double MOVETO::GetMoveError(double now_pos)
 
 void MOVETO::MoveToReset()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	isTargSet = false;
@@ -1881,8 +1945,8 @@ REWARD::REWARD(uint32_t t)
 
 void REWARD::StartRew()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -1955,8 +2019,8 @@ bool REWARD::EndRew()
 		return false;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Close solenoid
@@ -1989,8 +2053,8 @@ bool REWARD::EndRew()
 
 void REWARD::SetRewDur(int zone_ind)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -2010,8 +2074,8 @@ void REWARD::SetRewDur(int zone_ind)
 
 void REWARD::SetRewMode(char mode_now[], int arg2)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// NOTE: arg2 = reward delay or zone ind or reward duration
@@ -2080,8 +2144,8 @@ bool REWARD::CompZoneBounds(double now_pos, double rew_pos)
 		return isBoundsSet;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Compute laps
@@ -2131,8 +2195,8 @@ bool REWARD::CheckZoneBounds(double now_pos)
 		return isZoneTriggered;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Reset flag
@@ -2206,8 +2270,8 @@ void REWARD::ExtendFeedArm()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Log/print
@@ -2251,8 +2315,8 @@ void REWARD::ExtendFeedArm()
 
 void REWARD::RetractFeedArm()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Step mode:
@@ -2324,8 +2388,8 @@ void REWARD::CheckFeedArm()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Do timed retract
@@ -2464,8 +2528,8 @@ void REWARD::CheckFeedArm()
 
 void REWARD::RewardReset()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -2521,9 +2585,11 @@ LOGGER::LOGGER(uint32_t t)
 
 bool LOGGER::Setup()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
+
+#if DO_LOG
 	/*
 	NOTE:
 	config.txt settings:
@@ -2571,13 +2637,20 @@ bool LOGGER::Setup()
 	}
 
 	return true;
+
+#else
+	return true;
+
+#endif
 }
 
 int LOGGER::OpenNewLog()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
+
+#if DO_LOG
 
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
@@ -2686,12 +2759,18 @@ int LOGGER::OpenNewLog()
 	// Return log number
 	return logNum;
 
+#else
+	sprintf(logFile, "LOGNULL");
+	return -1;
+
+#endif
+
 }
 
 bool LOGGER::SetToCmdMode()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -2744,8 +2823,8 @@ bool LOGGER::SetToCmdMode()
 
 void LOGGER::GetCommand()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -2772,8 +2851,8 @@ void LOGGER::GetCommand()
 
 char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -2829,8 +2908,8 @@ char LOGGER::SendCommand(char msg[], bool do_conf, uint32_t timeout)
 
 char LOGGER::GetReply(uint32_t timeout)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -2977,8 +3056,8 @@ char LOGGER::GetReply(uint32_t timeout)
 
 bool LOGGER::SetToWriteMode(char log_file[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -3017,8 +3096,8 @@ bool LOGGER::SetToWriteMode(char log_file[])
 
 void LOGGER::QueueLog(char msg[], uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 #if DO_LOG
@@ -3166,8 +3245,8 @@ bool LOGGER::WriteLog(bool do_send)
 		return is_logs;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Itterate send ind
@@ -3216,8 +3295,8 @@ bool LOGGER::WriteLog(bool do_send)
 
 void LOGGER::StreamLogs()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 #if DO_LOG
@@ -3522,8 +3601,8 @@ void LOGGER::StreamLogs()
 
 void LOGGER::TestLoad(int n_entry, char log_file[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -3614,8 +3693,8 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 
 int LOGGER::GetFileSize(char log_file[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -3664,8 +3743,8 @@ int LOGGER::GetFileSize(char log_file[])
 
 void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -3748,8 +3827,8 @@ void GetSerial(R4 *r4)
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Dump data till msg header byte is reached
@@ -3923,8 +4002,8 @@ void GetSerial(R4 *r4)
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4 *r4, char mtch)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -4047,8 +4126,8 @@ byte WaitBuffRead(R4 *r4, char mtch)
 // STORE PACKET DATA TO BE SENT
 void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	/*
@@ -4192,8 +4271,8 @@ bool SendPacket(R2 *r2)
 		return false;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Get buffer 
@@ -4309,8 +4388,8 @@ bool CheckResend(R2 *r2)
 		return false;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Loop and check ard flags
@@ -4385,8 +4464,8 @@ bool CheckResend(R2 *r2)
 // CONFIGURE AUTODRIVER BOARDS
 void AD_Config(float max_speed, float max_acc, float max_dec)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Set busy pin as BUSY_PIN or SYNC_PIN;
@@ -4511,8 +4590,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 // RESET AUTODRIVER BOARDS
 void AD_Reset(float max_speed, float max_acc, float max_dec)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Reset each axis
@@ -4556,8 +4635,8 @@ void AD_CheckOC(bool force_check)
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Get/check 16 bit status flag
@@ -4604,8 +4683,8 @@ void AD_CheckOC(bool force_check)
 // HARD STOP
 void HardStop(char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -4636,8 +4715,8 @@ void HardStop(char called_from[])
 // IR TRIGGERED HARD STOP
 void IRprox_Halt()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Run if Bull not active and on
@@ -4650,8 +4729,8 @@ void IRprox_Halt()
 // RUN AUTODRIVER
 bool RunMotor(char dir, double new_speed, char agent[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -4703,8 +4782,8 @@ bool RunMotor(char dir, double new_speed, char agent[])
 // RUN MOTOR MANUALLY
 bool ManualRun(char dir)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -4739,8 +4818,8 @@ bool ManualRun(char dir)
 // SET WHATS CONTROLLING THE MOTOR
 bool SetMotorControl(char set_to[], char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// VALUES:  ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
@@ -4837,8 +4916,8 @@ bool SetMotorControl(char set_to[], char called_from[])
 // BLOCK MOTOR TILL TIME ELLAPESED
 void BlockMotorTill(int dt, char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Set blocking and time
@@ -4867,8 +4946,8 @@ void CheckBlockTimElapsed()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Check that all 3 measures say rat has passed
@@ -4938,8 +5017,8 @@ void InitializeTracking()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Log/Print
@@ -5050,8 +5129,8 @@ void CheckSampDT()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Use Pixy for VT data
@@ -5123,8 +5202,8 @@ double CheckPixy(bool do_test_check)
 		return px_rel;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Save time stamp
@@ -5183,8 +5262,8 @@ void UpdateEKF()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Check EKF progress
@@ -5313,8 +5392,8 @@ bool GetButtonInput()
 		return false;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Loop through and check each button
@@ -5475,8 +5554,8 @@ bool GetButtonInput()
 // OPEN/CLOSE REWARD SOLENOID
 void OpenCloseRewSolenoid()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -5508,8 +5587,8 @@ void OpenCloseRewSolenoid()
 // OPEN/CLOSE EtOH SOLENOID
 void OpenCloseEtOHSolenoid()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -5579,8 +5658,8 @@ void CheckEtOH()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Check if sol should be opened
@@ -5689,8 +5768,8 @@ float CheckBattery(bool force_check)
 		return vccAvg;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Calculate current
@@ -5782,8 +5861,8 @@ float CheckBattery(bool force_check)
 // TURN LCD LIGHT ON/OFF
 void ChangeLCDlight(uint32_t duty)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -5810,8 +5889,8 @@ void ChangeLCDlight(uint32_t duty)
 // QUIT AND RESTART ARDUINO
 void QuitSession()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Stop all movement
@@ -5838,8 +5917,8 @@ void QuitSession()
 // DO HARDWARE TEST
 void HardwareTest()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 #if DO_HARDWARE_TEST
@@ -6342,11 +6421,12 @@ void CheckLoop()
 	a_tx_last = a_tx;
 }
 
-// PRINT ALL FUNCTION ENTRY AND EXITS: str_where = ["start", "end"]
-void DebugAllFun(const char *fun, int line, int mem)
+// LOG FUNCTION RUN TO TEENSY
+void SendTeensyDebug(const char *fun, int line, int mem, char msg[])
 {
 	// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
+	static byte msg_out[100] = { 0 }; msg_out[0] = r42t.head;
 	static char fun_copy[100] = { 0 };
 	static int line_copy = 0;
 	static float mem_copy = 0;
@@ -6355,7 +6435,8 @@ void DebugAllFun(const char *fun, int line, int mem)
 	static uint32_t cnt_chk = 0;
 	static uint32_t chk_last = 0;
 	int chk_diff = 0;
-	
+	uint16_t b_ind = 0;
+
 	// Bail if not ready
 	if (!fc.isSetup) {
 		return;
@@ -6395,29 +6476,183 @@ void DebugAllFun(const char *fun, int line, int mem)
 
 	// Get memory
 	mem_copy = (float)mem / 1000;
-	
-
-	// FORMAT AND PRINT STRING
-
-	// Print all
-	//sprintf(str, "%0.0f|%d|%0.0f %s\n", t_s, cnt_loop_short, mem_copy, fun_copy);
-
-	// Print line
-	sprintf(str, "%0.0f %d|%0.2f\n", t_s, line_copy, mem_copy);
-
-	// Print string
-	SerialUSB.print(str);
 
 	// Store cnt
 	chk_last = cnt_chk;
+
+	// Format string
+	sprintf(str, "[%0.2f] %s_%s: lp=%d skp=%d mem=%0.2f%c", 
+		t_s, msg, fun_copy, cnt_loop_short, chk_diff, mem_copy, r42t.foot);
+
+	// Itterate count
+	r42t.cnt_pack++;
+
+	// Create packet
+	b_ind = 1;
+	U.i32 = r42t.cnt_pack;
+	for (int i = 0; i < 4; i++) {
+		msg_out[b_ind++] = U.b[i];
+		//msg[b_ind++] = 'a';
+	}
+	for (int i = 0; i < strlen(str); i++) {
+		msg_out[b_ind++] = str[i];
+	}
+	msg_out[b_ind] = '\0';
+
+	// Send message
+	r42t.port.write(msg_out, b_ind);
+
+}
+
+// GET LAST TEENSY LOG
+void GetTeensyDebug()
+{
+
+	// Local vars
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char msg[maxStoreStrLng] = { 0 }; msg[0] = '\0';
+	uint32_t t_check = millis() + 5000;
+	uint16_t msg_ind = 0;
+	char c_arr[4] = { 0 };
+	uint16_t cnt_log = 0;
+	bool is_com_fail = false;
+	bool is_timeout = false;
+
+
+	// Log/print
+	sprintf(str, "[GetTeensyDebug] Running: Import Teensy Logs...");
+	DebugFlow(str);
+	DoAll("PrintDebug");
+
+	// Set send pin low for 150 ms
+	digitalWrite(pin.Teensy_SendStart, LOW);
+	delay(10);
+	// Send start string
+	r42t.port.write("<<<");
+	delay(150);
+	digitalWrite(pin.Teensy_SendStart, HIGH);
+
+	// Start getting logs
+	while (strcmp(c_arr, ">>>") != 0 &&
+		millis() < t_check &&
+		digitalRead(pin.Teensy_SendEnd) == LOW) {
+
+		// Wait for new data
+		if (r42t.port.available() < 1) {
+			continue;
+		}
+
+		// Get next byte
+		byte b = r42t.port.read();
+
+		// Update short array
+		c_arr[0] = c_arr[1];
+		c_arr[1] = c_arr[2];
+		c_arr[2] = b;
+
+		// Check for head
+		if (b == r42t.head) {
+
+			// Reset msg string
+			msg[0] = '\0';
+
+			// Reset index
+			msg_ind = 0;
+
+			// Bail
+			continue;
+		}
+
+		// Check for foot
+		else if (b == r42t.foot) {
+
+			// Terminate message string
+			msg[msg_ind] = '\0';
+
+			// Print
+			QueueDebug(msg, millis());
+
+			// Log
+			Log.QueueLog(msg, millis());
+
+			// Itterate count
+			cnt_log++;
+
+			// Bail
+			continue;
+		}
+
+		// Check for end signal
+		else if (digitalRead(pin.Teensy_SendEnd) == HIGH) {
+
+			// Set flag
+			is_com_fail = true;
+
+			// Bail
+			break;
+		}
+
+		// Check for timeout
+		else if (millis() > t_check) {
+
+			// Set flag
+			is_timeout = true;
+
+			// Bail
+			break;
+		}
+
+		// Check for out of bounds
+		else if (msg_ind == maxStoreStrLng) {
+
+			// Bail
+			return;
+		}
+
+		// Add to message
+		msg[msg_ind] = b;
+
+		// Itterate count
+		msg_ind++;
+	}
+
+	// Check for success
+	if (strcmp(c_arr, ">>>") == 0) {
+		sprintf(str, "[GetTeensyDebug] FINISHED: Import Teensy Logs: cnt=%d", cnt_log);
+		DebugFlow(str);
+	}
+
+	// Check for com fail
+	else if (is_com_fail) {
+		sprintf(str, "[GetTeensyDebug] FAILED: Import Teensy Logs: cnt=%d", cnt_log);
+		DebugError(str);
+	}
+
+	// Check for timeout
+	else if (is_timeout) {
+		sprintf(str, "[GetTeensyDebug] TIMEDOUT: Import Teensy Logs: cnt=%d", cnt_log);
+		DebugError(str);
+	}
+
+	// Check for random fail
+	else {
+		sprintf(str, "[GetTeensyDebug] FILED FOR UNKNOWN REASON: Import Teensy Logs: cnt=%d", cnt_log);
+		DebugError(str);
+	}
+
+	// Hold for 500 ms for Teensy to reset
+	delay(500);
+
+	// Print all
+	DoAll("PrintDebug");
 
 }
 
 // LOG/PRINT MAIN EVENT
 void DebugFlow(char msg[], uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6444,8 +6679,8 @@ void DebugFlow(char msg[], uint32_t t)
 // LOG/PRINT ERRORS
 void DebugError(char msg[], bool is_error, uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6482,8 +6717,8 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 // LOG/PRINT MOTOR CONTROL DEBUG STRING
 void DebugMotorControl(bool pass, char set_to[], char called_from[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6515,8 +6750,8 @@ void DebugMotorControl(bool pass, char set_to[], char called_from[])
 // LOG/PRINT MOTOR BLOCKING DEBUG STRING
 void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6547,8 +6782,8 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 // LOG/PRINT MOTOR SPEED CHANGE
 void DebugRunSpeed(char agent[], double speed_last, double speed_now)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6580,8 +6815,8 @@ void DebugRunSpeed(char agent[], double speed_last, double speed_now)
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
 void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6636,8 +6871,8 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 // LOG/PRINT SENT PACKET DEBUG STRING
 void DebugSent(R2 *r2, char msg[], bool is_repeat)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -6689,8 +6924,8 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 // STORE STRING FOR PRINTING
 void QueueDebug(char msg[], uint32_t t)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 #if DO_DEBUG
@@ -6812,8 +7047,8 @@ bool PrintDebug()
 		return false;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Itterate send ind
@@ -6842,8 +7077,8 @@ bool PrintDebug()
 // FOR PRINTING TO LCD
 void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Check if printing blocked
@@ -6879,8 +7114,8 @@ void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 // CLEAR LCD
 void ClearLCD()
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Clear
@@ -6893,8 +7128,8 @@ void ClearLCD()
 // PRINT SPECIAL CHARICTERS
 char* PrintSpecialChars(char chr, bool do_show_byte)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	/*
@@ -6966,8 +7201,8 @@ char* PrintSpecialChars(char chr, bool do_show_byte)
 // GET AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char stat_str[])
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -7028,8 +7263,8 @@ void LogTrackingData()
 		return;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -7124,8 +7359,8 @@ void LogTrackingData()
 // SEND TEST PACKET
 void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// EXAMPLE:
@@ -7179,8 +7414,8 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 // HOLD FOR CRITICAL ERRORS
 void RunErrorHold(char msg[], uint32_t t_kill)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -7239,8 +7474,8 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 // GET ID INDEX
 template <typename T> int CharInd(char id, T *r24)
 {
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Local vars
@@ -7266,7 +7501,7 @@ template <typename T> int CharInd(char id, T *r24)
 }
 
 // BLINK LEDS AT RESTART/UPLOAD
-bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink, bool rat_in_blink)
+bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 {
 
 	static uint32_t t_blink_last = 0;
@@ -7281,7 +7516,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink, bool rat_in_blin
 	// Set values
 	if (do_set) {
 		n_cycles = n_blinks;
-		dt_cycle = dt_blink;
+		dt_cycle = dt_led;
 		do_blink = true;
 		is_rat_blink = rat_in_blink;
 	}
@@ -7291,8 +7526,8 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_blink, bool rat_in_blin
 		return false;
 	}
 
-#if DO_DEBUG_XXX
-	DB_INF();
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
 #endif
 
 	// Flash sequentially
@@ -7472,7 +7707,7 @@ void Interupt_Power()
 void Interupt_IRprox_Halt() {
 
 	// Local vars
-	static uint32_t t_debounce = 0; 
+	static uint32_t t_debounce = 0;
 
 	// Exit if < 250 ms has not passed
 	if (t_debounce > millis()) {
@@ -7568,6 +7803,41 @@ void setup() {
 	// SETUP PINS
 	SetupPins();
 
+	// INITIALIZE LCD
+	LCD.InitLCD();
+
+	// LOG/PRINT SETUP RUNNING
+
+	// Print to LCD
+	ChangeLCDlight(50);
+	PrintLCD(true, "SETUP", "MAIN");
+
+	// Log and print to console
+	DebugFlow("[setup] RUNNING: Setup...");
+	DoAll("PrintDebug");
+
+#if DO_TEENSY_DEBUG
+	DebugFlow("[setup] RUNNING: Get Teensy Log...");
+	PrintLCD(true, "RUN SETUP", "Teensy Log");
+	DoAll("PrintDebug");
+
+	// Setup Teensy serial
+	//r42t.port.begin(57600);
+	r42t.port.begin(115200);
+
+	// Get last db log
+	GetTeensyDebug();
+
+	DebugFlow("[setup] FINISEHD: Get Teensy Log...");
+	PrintLCD(true, "DONE SETUP", "Teensy Log");
+	DoAll("PrintDebug");
+#endif
+
+	// DISABLE VOLTAGE REGULATORS
+	digitalWrite(pin.REG_24V_ENBLE, LOW);
+	digitalWrite(pin.REG_12V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V_ENBLE, LOW);
+
 	// WAIT FOR POWER SWITCH RELEASE
 	while (digitalRead(pin.PWR_Swtch) == LOW) {
 		delay(10);
@@ -7576,11 +7846,11 @@ void setup() {
 	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
 	digitalWrite(pin.PWR_OFF, HIGH);
 	while (!DO_DEBUG &&
-		!DO_DEBUG_XXX &&
+		!DO_TEENSY_DEBUG &&
 		digitalRead(pin.PWR_Swtch) == HIGH);
 
 	// Pause before powering on if in debug mode
-	if (DO_DEBUG || DO_DEBUG_XXX) {
+	if (DO_DEBUG || DO_TEENSY_DEBUG) {
 		delay(1000);
 	}
 
@@ -7606,19 +7876,6 @@ void setup() {
 	delayMicroseconds(100);
 	StatusBlink(true, 1, 100);
 	while (StatusBlink());
-
-	// INITIALIZE LCD
-	LCD.InitLCD();
-
-	// LOG/PRINT SETUP RUNNING
-
-	// Print to LCD
-	ChangeLCDlight(50);
-	PrintLCD(true, "SETUP", "MAIN");
-
-	// Log and print to console
-	DebugFlow("[setup] RUNNING: Setup...");
-	DoAll("PrintDebug");
 
 	// SETUP AUTODRIVER
 
@@ -7723,6 +7980,13 @@ void setup() {
 		DoAll("PrintDebug");
 	}
 
+	// Send log number to Teensy
+#if DO_TEENSY_DEBUG
+	fc.isSetup = true;
+	SendTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), Log.logFile);
+	fc.isSetup = false;
+#endif
+
 	// DEFINE EXTERNAL INTERUPTS
 	PrintLCD(true, "RUN SETUP", "Interrupts");
 	PrintLCD(true, "SETUP", "Interrupts");
@@ -7756,6 +8020,7 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
 
 	// Start Feed Arm timer
+	FeederArmTimer.setPeriod(1000);
 	FeederArmTimer.attachInterrupt(Interupt_TimerHandler);
 	PrintLCD(true, "DONE SETUP", "Interrupts");
 

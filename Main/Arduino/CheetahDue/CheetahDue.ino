@@ -260,7 +260,7 @@ volatile bool isOnAny = false;
 uint32_t t_debounce = 10; // (ms)
 uint32_t dt_ttlPulse = 50; // (ms)
 
-//----------CLASS: union----------
+// union
 union u_tag {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
