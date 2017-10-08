@@ -12,8 +12,9 @@ struct PIN
 	int StatLED = 13;
 
 	// Send log
-	int Teensy_SendStart = 2;
-	int Teensy_SendEnd = 3;
+	int Teensy_SendStart = 4;
+	int Teensy_SendEnd = 5;
+	int Teensy_Unused = 6;
 }
 // Initialize
 pin;
@@ -26,7 +27,7 @@ const char tnsy_id_list[1] =
 
 struct R42T
 {
-	HardwareSerial3 &port;
+	HardwareSerial2 &port;
 	const char *instID;
 	const int lng;
 	const char head;
@@ -42,7 +43,7 @@ struct R42T
 R42T r42t
 {
 	// serial
-	Serial3,
+	Serial2,
 	// instID
 	"t2r",
 	// lng
@@ -361,9 +362,7 @@ void StoreMessage(char msg[], uint32_t cnt_pack)
 	}
 
 	// Print message
-#if DO_DEBUG
 	PrintDebug(str);
-#endif
 }
 
 // SEND LOGS
