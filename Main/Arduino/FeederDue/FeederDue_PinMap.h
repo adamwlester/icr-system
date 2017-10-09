@@ -24,7 +24,7 @@ struct PIN
 
 	// Teensy
 	const int Teensy_SendStart = A8;
-	const int Teensy_SendEnd = A9;
+	const int Teensy_Resetting = A9;
 
 	// Display
 	const int Disp_SCK = 8;
@@ -193,7 +193,7 @@ void SetupPins() {
 	pinMode(pin.X1a_CTS, INPUT);
 	pinMode(pin.X1b_CTS, INPUT);
 	// Teensy
-	pinMode(pin.Teensy_SendEnd, INPUT);
+	pinMode(pin.Teensy_Resetting, INPUT);
 	// Battery monitor
 	pinMode(pin.BatVcc, INPUT);
 	pinMode(pin.BatIC, INPUT);

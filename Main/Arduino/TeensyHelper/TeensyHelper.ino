@@ -13,7 +13,7 @@ struct PIN
 
 	// Send log
 	int Teensy_SendStart = 4;
-	int Teensy_SendEnd = 5;
+	int Teensy_Resetting = 5;
 	int Teensy_Unused = 6;
 }
 // Initialize
@@ -121,7 +121,7 @@ void SendLogs();
 void PrintDebug(char msg[], uint32_t t = millis());
 
 // RUN STATUS BLINK
-void StatusBlink();
+void StatusBlink(bool do_force = true);
 
 #pragma endregion 
 
@@ -131,12 +131,11 @@ void StatusBlink();
 // RESET VARIABLES
 void RunReset() {
 
+	// Local vars
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+
 	// Itterate count
 	cnt_reset++;
-
-	// Set initial state
-	digitalWrite(pin.StatLED, LOW);
-	digitalWrite(pin.Teensy_SendEnd, LOW);
 
 	// Reset counters
 	cnt_logsRcvd = 0;
@@ -153,18 +152,30 @@ void RunReset() {
 		Log[i][0] = '\0';
 	}
 
+	// Dump buffer
+	while (r42t.port.available() > 0) {
+		r42t.port.read();
+	}
+
+	// Set reset indicator pin high
+	sprintf(str, "[RunReset] Setting Reset Pin High");
+	PrintDebug(str);
+	digitalWrite(pin.StatLED, HIGH);
+	digitalWrite(pin.Teensy_Resetting, HIGH);
 	// Flicker LED
-	for (size_t i = 0; i < 50; i++)
+	for (size_t i = 0; i < 40; i++)
 	{
 		is_ledOn = !is_ledOn;
 		digitalWrite(pin.StatLED, is_ledOn ? HIGH : LOW);
-		delay(50);
+		delay(25);
 	}
+	// Print finished
+	digitalWrite(pin.Teensy_Resetting, LOW);
+	sprintf(str, "[RunReset] Setting Reset Pin Low");
+	PrintDebug(str);
 
 	// Print status
-	delay(100);
-	char str[200];
-	sprintf(str, "[setup] FINISHED RESET %d", cnt_reset);
+	sprintf(str, "[RunReset] FINISHED RESET %d", cnt_reset);
 	PrintDebug(str);
 
 }
@@ -189,6 +200,9 @@ void GetSerial()
 		digitalRead(pin.Teensy_SendStart) == LOW) {
 		return;
 	}
+
+	// Set status LED high
+	StatusBlink();
 
 	// Dump data till msg header byte is reached
 	WaitBuffRead(100, r42t.head);
@@ -258,6 +272,7 @@ void GetSerial()
 	// Update counts
 	cnt_logsRcvd++;
 	cnt_logsStored += cnt_logsStored < logSize ? 1 : 0;
+
 }
 
 // WAIT FOR BUFFER TO FILL
@@ -423,6 +438,7 @@ void SendLogs()
 		delay(10);
 		r42t.port.write(Log[logIndArr[i]]);
 		PrintDebug(Log[logIndArr[i]]);
+		StatusBlink();
 	}
 
 	// Send summary
@@ -435,26 +451,14 @@ void SendLogs()
 	r42t.port.write(">>>");
 	delay(100);
 
-	// Send end pin high
-	digitalWrite(pin.Teensy_SendEnd, HIGH);
-	delay(100);
-	digitalWrite(pin.Teensy_SendEnd, LOW);
-
 
 	// Log/print
 	sprintf(str, "[SendLogs] Finished Sending %d of %lu Logs",
 		cnt_logsStored, cnt_logsRcvd);
 	PrintDebug(str);
-	delay(500);
 
 	// Reset Stuff
 	RunReset();
-	delay(100);
-
-	// Dump buffer
-	while (r42t.port.available() > 0) {
-		r42t.port.read();
-	}
 }
 
 // FORMAT AND PRINT MESSAGE
@@ -497,10 +501,13 @@ void PrintDebug(char msg[], uint32_t t)
 }
 
 // RUN STATUS BLINK
-void StatusBlink() {
+void StatusBlink(bool do_force) {
 
 	// Do status blink
-	if (millis() > t_blink + dt_blink) {
+	if (do_force ||
+		millis() > t_blink + dt_blink) {
+
+		// Flip state and run
 		is_ledOn = !is_ledOn;
 		digitalWrite(pin.StatLED, is_ledOn ? HIGH : LOW);
 		t_blink = millis();
@@ -530,7 +537,11 @@ void setup()
 	// Set direction
 	pinMode(pin.Teensy_SendStart, INPUT);
 	pinMode(pin.StatLED, OUTPUT);
-	pinMode(pin.Teensy_SendEnd, OUTPUT);
+	pinMode(pin.Teensy_Resetting, OUTPUT);
+
+	// Set initial state
+	digitalWrite(pin.StatLED, LOW);
+	digitalWrite(pin.Teensy_Resetting, LOW);
 
 	// RUN RESET
 	RunReset();
@@ -540,7 +551,7 @@ void loop()
 {
 
 	// Do status blink
-	StatusBlink();
+	StatusBlink(false);
 
 	// Get new data
 	GetSerial();

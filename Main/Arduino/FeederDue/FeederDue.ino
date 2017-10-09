@@ -644,7 +644,7 @@ template <typename T> int CharInd(char id, T *r24);
 bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0, bool rat_in_blink = false);
 
 // PRINT ALL IN QUEUE : fun_id = ["PrintDebug", "WriteLog"]
-bool DoAll(char fun_id[]);
+bool DoAll(char fun_id[], uint32_t timeout = 500);
 
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler();
@@ -6512,6 +6512,7 @@ void GetTeensyDebug()
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static char msg[maxStoreStrLng] = { 0 }; msg[0] = '\0';
 	uint32_t t_check = millis() + 5000;
+	uint32_t t_wait_reset = 0;
 	uint16_t msg_ind = 0;
 	char c_arr[4] = { 0 };
 	uint16_t cnt_log = 0;
@@ -6535,7 +6536,7 @@ void GetTeensyDebug()
 	// Start getting logs
 	while (strcmp(c_arr, ">>>") != 0 &&
 		millis() < t_check &&
-		digitalRead(pin.Teensy_SendEnd) == LOW) {
+		digitalRead(pin.Teensy_Resetting) == LOW) {
 
 		// Wait for new data
 		if (r42t.port.available() < 1) {
@@ -6583,7 +6584,7 @@ void GetTeensyDebug()
 		}
 
 		// Check for end signal
-		else if (digitalRead(pin.Teensy_SendEnd) == HIGH) {
+		else if (digitalRead(pin.Teensy_Resetting) == HIGH) {
 
 			// Set flag
 			is_com_fail = true;
@@ -6640,8 +6641,23 @@ void GetTeensyDebug()
 		DebugError(str);
 	}
 
-	// Hold for 500 ms for Teensy to reset
-	delay(500);
+	// Check for Teensy reset
+	DebugFlow("[GetTeensyDebug] RUNNING: Wait for Teensy Reset...");
+
+	// Wait till reset indicator pin goes back low
+	t_wait_reset = millis() + 500;
+	while (digitalRead(pin.Teensy_Resetting) == LOW && 
+		millis() < t_wait_reset);
+
+	if (digitalRead(pin.Teensy_Resetting) == HIGH) {
+		DebugFlow("[GetTeensyDebug] FINISHED: Teensy Reset");
+
+		// Hold for 500 ms for Teensy to reset
+		delay(1000);
+	}
+	else {
+		DebugError("[GetTeensyDebug] FAILED: Teensy Reset");
+	}
 
 	// Print all
 	DoAll("PrintDebug");
@@ -7566,15 +7582,14 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 }
 
 // PRINT ALL IN QUEUE: fun_id = ["PrintDebug", "WriteLog"]
-bool DoAll(char fun_id[])
+bool DoAll(char fun_id[], uint32_t timeout)
 {
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 	static bool do_skip_next_run = false;
 	static bool do_skip_next_print = false;
-	uint32_t dt_timeout = 500;
-	uint32_t t_timeout = millis() + dt_timeout;
+	uint32_t t_timeout = millis() + timeout;
 	bool do_loop = true;
 
 	// Bail if skipping
@@ -7599,7 +7614,7 @@ bool DoAll(char fun_id[])
 
 		// Print error
 		if (!do_skip_next_print) {
-			sprintf(str, "**WARNING** [DoAll] \"%s\" Timedout after %dms", fun_id, dt_timeout);
+			sprintf(str, "**WARNING** [DoAll] \"%s\" Timedout after %dms", fun_id, timeout);
 			DebugError(str);
 
 			// Set flag
