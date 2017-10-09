@@ -377,6 +377,7 @@ public:
 	void StreamLogs();
 	void TestLoad(int n_entry, char log_file[] = '\0');
 	int GetFileSize(char log_file[]);
+	int GetLogQueueAvailable();
 	void PrintLOGGER(char msg[], bool start_entry = false);
 
 };
@@ -587,7 +588,7 @@ void HardwareTest();
 void CheckLoop();
 
 // LOG FUNCTION RUN TO TEENSY
-void SendTeensyDebug(const char *fun, int line, int mem, char msg[]);
+void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[] = "");
 
 // GET LAST TEENSY LOG
 void GetTeensyDebug();
@@ -627,6 +628,9 @@ void ClearLCD();
 
 // PRINT SPECIAL CHARICTERS
 char* PrintSpecialChars(char chr, bool do_show_byte = false);
+
+// GET CURRENT NUMBER OF ENTRIES IN DB QUEUE
+int GetPrintQueueAvailable();
 
 // CHECK AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char stat_str[]);
@@ -1089,7 +1093,7 @@ void PID::SetThrottle()
 		return;
 	}
 
-	// Only run if rat ahead of setpoint
+	// Only run if rat ahead of setpoint and throttle not recently set
 	if (
 		error < 5 &&
 		millis() < t_lastThrottle + 5000
@@ -1128,9 +1132,9 @@ void PID::CheckThrottle()
 
 	// Bail if not ready to stop
 	if (
-		!(millis() >= t_throttleTill ||
-			kal.RatVel > throttleSpeedStop ||
-			error < 0)
+		millis() < t_throttleTill &&
+		kal.RatVel < throttleSpeedStop &&
+		error > 0
 		) {
 		return;
 	}
@@ -1202,8 +1206,7 @@ void PID::CheckSetpointCrossing()
 void PID::PID_CheckEKF(uint32_t t)
 {
 	// Bail if not checking
-	if (fc.isEKFReady)
-	{
+	if (fc.isEKFReady) {
 		return;
 	}
 
@@ -3097,7 +3100,7 @@ bool LOGGER::SetToWriteMode(char log_file[])
 void LOGGER::QueueLog(char msg[], uint32_t t)
 {
 #if DO_TEENSY_DEBUG
-	DB_FUN_STR();
+	DB_FUN_STR(); 
 #endif
 
 #if DO_LOG
@@ -3169,8 +3172,12 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 				strlen(msg), maxMsgStrLng, str, "...");
 		}
 
-		// Print error
-		if (db.print_errors && db.CONSOLE) {
+		// Print error if print queue not also overflowed
+		if (db.print_errors && 
+			db.CONSOLE &&
+			GetPrintQueueAvailable() > 1) {
+
+			// Print
 			QueueDebug(msg_copy, t);
 		}
 	}
@@ -3741,6 +3748,23 @@ int LOGGER::GetFileSize(char log_file[])
 	return fi_size;
 }
 
+int LOGGER::GetLogQueueAvailable() {
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Local vars
+	int n_entries = 0;
+
+	// Check each entry
+	for (int i = 0; i < logQueueSize; i++) {
+		n_entries+= logQueue[i][0] != '\0' ? 1 : 0;
+	}
+
+	// Get total available
+	return logQueueSize - n_entries;
+}
+
 void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 {
 #if DO_TEENSY_DEBUG
@@ -4033,6 +4057,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 			buff = r4->port.read();
 			cnt_packBytesRead++;
 
+			// Bail
 			return buff;
 		}
 	}
@@ -4052,6 +4077,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 			// check match was found
 			if (buff == mtch) {
 
+				// Bail
 				return buff;
 			}
 
@@ -4119,6 +4145,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 
 	// Return 0
 
+	// Bail
 	return 0;
 
 }
@@ -4382,7 +4409,7 @@ bool CheckResend(R2 *r2)
 	// Bail if nothing to send
 	for (int i = 0; i < r2->lng; i++)
 	{
-		is_waiting_for_pack = r2->doRcvCheck[i];
+		is_waiting_for_pack = is_waiting_for_pack || r2->doRcvCheck[i];
 	}
 	if (!is_waiting_for_pack) {
 		return false;
@@ -5176,10 +5203,12 @@ double CheckPixy(bool do_test_check)
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
+	static uint32_t t_check = 0;
 	double px_rel = 0;
 	double px_abs = 0;
 	uint32_t t_px_ts = 0;
 	double pixy_pos_y = 0;
+	uint16_t blocks = 0;
 
 	// Bail if robot not streaming yet
 	if (!do_test_check &&
@@ -5194,17 +5223,32 @@ double CheckPixy(bool do_test_check)
 		return px_rel;
 	}
 
-	// Get new blocks
-	uint16_t blocks = Pixy.getBlocks();
-
-	// Bail in no new data
-	if (!blocks) {
+	// Bail if not time to check
+	if (millis() < t_check) {
 		return px_rel;
 	}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
+
+	// Get new blocks
+	blocks = Pixy.getBlocks();
+
+	// Bail in no new data
+	if (!blocks) {
+
+		// Set next check with short dt
+		t_check = millis() + dt_pixyCheck[0];
+
+		// Bail
+		return px_rel;
+	}
+
+	else {
+		// Set next check with longer dt
+		t_check = millis() + dt_pixyCheck[1];
+	}
 
 	// Save time stamp
 	t_px_ts = millis();
@@ -5258,7 +5302,11 @@ void UpdateEKF()
 	double rob_vel = 0;
 
 	// Bail if all data not new
-	if (!(Pos[0].isNew && Pos[2].isNew && Pos[1].isNew)) {
+	if (
+		!Pos[0].isNew ||
+		!Pos[2].isNew ||
+		!Pos[1].isNew
+		) {
 		return;
 	}
 
@@ -5481,7 +5529,7 @@ bool GetButtonInput()
 
 				// Reset flags etc
 				t_debounce[i] = millis() + dt_debounce[i];
-				analogWrite(pin.TrackLED, trackLEDdutyMax);
+				analogWrite(pin.TrackLED, trackLEDduty[1]);
 				is_running[i] = false;
 				t_hold_min[i] = 0;
 				t_long_hold[i] = 0;
@@ -6340,7 +6388,8 @@ void CheckLoop()
 	static uint32_t t_led = 0;
 	static bool is_led_high = false;
 	bool is_dt_change = false;
-	bool is_buff_flooding = false;
+	bool is_cs_buff_flooding = false;
+	bool is_ard_buff_flooding = false;
 	int c_rx = 0;
 	int c_tx = 0;
 	int a_rx = 0;
@@ -6357,7 +6406,7 @@ void CheckLoop()
 	// Flicker led
 	if (!StatusBlink()) {
 		if (millis() > t_led) {
-			analogWrite(pin.TrackLED, is_led_high ? trackLEDdutyMin : trackLEDdutyMax);
+			analogWrite(pin.TrackLED, is_led_high ? trackLEDduty[0] : trackLEDduty[1]);
 			is_led_high = !is_led_high;
 			t_led = millis() + 100;
 		}
@@ -6385,16 +6434,14 @@ void CheckLoop()
 	is_dt_change = dt_loop > 60;
 
 	// Check if either buffer more than half full
-	is_buff_flooding =
-		c_rx >= 96 ||
-		c_tx >= 96 ||
-		a_rx >= 96 ||
-		a_tx >= 96;
+	is_cs_buff_flooding = c_rx >= 96 || c_tx >= 96;
+	is_ard_buff_flooding = a_rx >= 96 || a_tx >= 96;
 
 
 	if (
 		is_dt_change ||
-		is_buff_flooding
+		is_cs_buff_flooding ||
+		is_ard_buff_flooding
 		)
 	{
 
@@ -6404,7 +6451,8 @@ void CheckLoop()
 			// Get message id
 			sprintf(msg, "**CHANGE DETECTED** [CheckLoop] |%s%s%s:",
 				is_dt_change ? "Loop DT Change|" : "",
-				is_buff_flooding ? "Buffer Flooding|" : "");
+				is_cs_buff_flooding ? "CS Buffer Flooding|" : "",
+				is_ard_buff_flooding ? "ARD Buffer Flooding|" : "");
 
 			// Log/print message
 			sprintf(str, "%s cnt_loop:%d|%d dt_loop=%d|%d c_rx=%d|%d c_tx=%d|%d a_rx=%d|%d a_tx=%d|%d",
@@ -6421,21 +6469,26 @@ void CheckLoop()
 	a_tx_last = a_tx;
 }
 
-// LOG FUNCTION RUN TO TEENSY
-void SendTeensyDebug(const char *fun, int line, int mem, char msg[])
+// LOG FUNCTION RUN TO TEENSY msg=["S", "E", other]
+void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[])
 {
+#if DO_TEENSY_DEBUG
+
 	// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
-	static byte msg_out[100] = { 0 }; msg_out[0] = r42t.head;
+	static byte msg_out[100] = { 0 }; msg_out[0] = '\0';
 	static char fun_copy[100] = { 0 };
-	static int line_copy = 0;
-	static float mem_copy = 0;
+	static byte head_byte[1] = { r42t.head };
+	static byte foot_byte[1] = { r42t.foot };
 	static float t_s = 0;
-	static uint32_t t_check = 0; // ()us
 	static uint32_t cnt_chk = 0;
 	static uint32_t chk_last = 0;
+	static bool do_skip_repeat = false;
+	static int  cnt_long_dt_skip = 0;
+	static uint32_t dt_run = 0;
 	int chk_diff = 0;
 	uint16_t b_ind = 0;
+	uint32_t t_str = micros();
 
 	// Bail if not ready
 	if (!fc.isSetup) {
@@ -6445,68 +6498,89 @@ void SendTeensyDebug(const char *fun, int line, int mem, char msg[])
 	// Itterate count
 	cnt_chk++;
 
-	// Handle rollover
-	if (cnt_chk == UINT32_MAX) {
-		cnt_chk = cnt_chk - chk_last;
-		chk_last = 0;
+	// Bail if last run took too long
+	if (dt_run > 500) {
+
+		// Reset dt
+		dt_run = 0;
+
+		// Set skip count
+		cnt_long_dt_skip = 2;
 	}
 
-	//// Bail if less than x us sinse last
-	//if (micros() < t_check + 500) {
-	//	return;
-	//}
+	if (cnt_long_dt_skip > 0) {
 
-	// Bail if message repeat
-	if (strcmp(fun, fun_copy) == 0) {
+		// Decriment count
+		cnt_long_dt_skip--;
+
+		// Bail
 		return;
 	}
 
+	// Bail if message repeat
+	if (strcmp(fun, fun_copy) == 0) {
+
+		// Check if this is start message
+		if (do_skip_repeat ||
+			strcmp(msg1, "S") == 0) {
+
+			// Set flag and bail
+			do_skip_repeat = true;
+			return;
+		}
+	}
+
+	// Reset flag
+	do_skip_repeat = false;
+
 	// Store time
-	t_check = micros();
 	t_s = (float)(millis() - t_sync) / 1000.0f;
 
 	// Copy string
 	strcpy(fun_copy, fun);
 
-	// Correct line number
-	line_copy = line - 21;
+	// Format string
+	//sprintf(str, "[%0.2f] %s_%s: lp=%d skp=%d mem=%0.2f", 
+	//	t_s, msg, fun, cnt_loop_short, cnt_chk - chk_last, (float)mem / 1000);
 
-	// Get skipped checks
-	chk_diff = cnt_chk - chk_last;
+	//// Short summary
+	//sprintf(str, "%0.0f %s_%s l%d s%d m%0.0f",
+	//	t_s, msg, fun, cnt_loop_short, cnt_chk - chk_last, (float)mem / 1000);
 
-	// Get memory
-	mem_copy = (float)mem / 1000;
+	// Detail memory
+	sprintf(str, "%0.0f %s_%s %d%s",
+		t_s, msg1, fun, mem, msg2);
 
 	// Store cnt
 	chk_last = cnt_chk;
 
-	// Format string
-	sprintf(str, "[%0.2f] %s_%s: lp=%d skp=%d mem=%0.2f%c", 
-		t_s, msg, fun_copy, cnt_loop_short, chk_diff, mem_copy, r42t.foot);
-
 	// Itterate count
 	r42t.cnt_pack++;
 
-	// Create packet
-	b_ind = 1;
-	U.i32 = r42t.cnt_pack;
-	for (int i = 0; i < 4; i++) {
-		msg_out[b_ind++] = U.b[i];
-		//msg[b_ind++] = 'a';
-	}
-	for (int i = 0; i < strlen(str); i++) {
-		msg_out[b_ind++] = str[i];
-	}
-	msg_out[b_ind] = '\0';
+	// Send head
+	r42t.port.write(head_byte, 1);
+
+	// Send packet number
+	U.f = 0;
+	U.i16[0] = r42t.cnt_pack;
+	r42t.port.write(U.b, 2);
 
 	// Send message
-	r42t.port.write(msg_out, b_ind);
+	r42t.port.write(str);
 
+	// Send foot
+	r42t.port.write(foot_byte, 1);
+
+	// Get dt run
+	dt_run = micros() - t_str;
+
+#endif
 }
 
 // GET LAST TEENSY LOG
 void GetTeensyDebug()
 {
+#if DO_TEENSY_DEBUG
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -6646,7 +6720,7 @@ void GetTeensyDebug()
 
 	// Wait till reset indicator pin goes back low
 	t_wait_reset = millis() + 500;
-	while (digitalRead(pin.Teensy_Resetting) == LOW && 
+	while (digitalRead(pin.Teensy_Resetting) == LOW &&
 		millis() < t_wait_reset);
 
 	if (digitalRead(pin.Teensy_Resetting) == HIGH) {
@@ -6662,6 +6736,7 @@ void GetTeensyDebug()
 	// Print all
 	DoAll("PrintDebug");
 
+#endif
 }
 
 // LOG/PRINT MAIN EVENT
@@ -6941,7 +7016,7 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 void QueueDebug(char msg[], uint32_t t)
 {
 #if DO_TEENSY_DEBUG
-	DB_FUN_STR();
+	DB_FUN_STR(); 
 #endif
 
 #if DO_DEBUG
@@ -7012,8 +7087,12 @@ void QueueDebug(char msg[], uint32_t t)
 				strlen(msg), maxMsgStrLng, str, "...");
 		}
 
-		// Log error
-		if (db.log_errors && DO_LOG) {
+		// Log error if log queue not also overflowed
+		if (db.log_errors && 
+			DO_LOG &&
+			Log.GetLogQueueAvailable() > 1) {
+
+			// Log
 			Log.QueueLog(msg_copy, t);
 		}
 
@@ -7212,6 +7291,24 @@ char* PrintSpecialChars(char chr, bool do_show_byte)
 	}
 
 	return str;
+}
+
+// GET CURRENT NUMBER OF ENTRIES IN DB QUEUE
+int GetPrintQueueAvailable() {
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Local vars
+	int n_entries = 0;
+
+	// Check each entry
+	for (int i = 0; i < printQueueSize; i++) {
+		n_entries += printQueue[i][0] != '\0' ? 1 : 0;
+	}
+
+	// Get total available
+	return printQueueSize - n_entries;
 }
 
 // GET AUTODRIVER BOARD STATUS
@@ -7572,7 +7669,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 	else {
 		analogWrite(pin.Disp_LED, 0);
 		analogWrite(pin.RewLED_C, rewLEDmin);
-		analogWrite(pin.TrackLED, trackLEDdutyMax);
+		analogWrite(pin.TrackLED, trackLEDduty[1]);
 		do_led_on = true;
 		cnt_blink = 0;
 		do_blink = false;
@@ -7838,7 +7935,8 @@ void setup() {
 
 	// Setup Teensy serial
 	//r42t.port.begin(57600);
-	r42t.port.begin(115200);
+	//r42t.port.begin(115200);
+	r42t.port.begin(256000);
 
 	// Get last db log
 	GetTeensyDebug();
@@ -7998,7 +8096,7 @@ void setup() {
 	// Send log number to Teensy
 #if DO_TEENSY_DEBUG
 	fc.isSetup = true;
-	SendTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), Log.logFile);
+	StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), Log.logFile);
 	fc.isSetup = false;
 #endif
 

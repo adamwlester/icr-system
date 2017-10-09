@@ -1,3 +1,10 @@
+/*
+NOTES
+	Changd "C:\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\serial3"
+	SERIAL2_TX_BUFFER_SIZE 40 to 64
+	SERIAL2_RX_BUFFER_SIZE 64 to 128
+	Have to run from Arduino IDE for changes to take effect
+*/
 
 #define DO_DEBUG 0
 
@@ -33,7 +40,7 @@ struct R42T
 	const char head;
 	const char foot;
 	const char *id;
-	uint32_t cnt_pack;
+	uint16_t cnt_pack;
 	int cnt_dropped;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
@@ -112,7 +119,7 @@ void GetSerial();
 char WaitBuffRead(int timeout, char mtch = '\0');
 
 // STORE MESSAGE
-void StoreMessage(char msg[], uint32_t cnt_pack);
+void StoreMessage(char msg[], uint16_t cnt_pack);
 
 // SEND LOGS
 void SendLogs();
@@ -152,6 +159,9 @@ void RunReset() {
 		Log[i][0] = '\0';
 	}
 
+	// Set log entry to null
+	sprintf(logNumStr, "%cNULL%c", r42t.head, r42t.foot);
+
 	// Dump buffer
 	while (r42t.port.available() > 0) {
 		r42t.port.read();
@@ -174,6 +184,11 @@ void RunReset() {
 	sprintf(str, "[RunReset] Setting Reset Pin Low");
 	PrintDebug(str);
 
+	// CHECK TX BUFFER SIZE
+	PrintDebug("[RunReset] TX BUFFER SHOULD BE 64 Bytes");
+	sprintf(str, "[RunReset] TX BUFFER IS %d Bytes", r42t.port.availableForWrite()+1);
+	PrintDebug(str);
+
 	// Print status
 	sprintf(str, "[RunReset] FINISHED RESET %d", cnt_reset);
 	PrintDebug(str);
@@ -189,7 +204,7 @@ void GetSerial()
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
-	uint32_t pack = 0;
+	uint16_t pack = 0;
 
 	// Reset vars
 	cnt_packBytesRead = 0;
@@ -210,9 +225,11 @@ void GetSerial()
 
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
-			sprintf(str, "**WARNING** [GetSerial] Missing Head: b_read=%lu b_dump=%lu",
-				cnt_packBytesRead, cnt_packBytesDiscarded);
-			PrintDebug(str);
+			if (DO_DEBUG) {
+				sprintf(str, "**WARNING** [GetSerial] Missing Head: b_read=%lu b_dump=%lu",
+					cnt_packBytesRead, cnt_packBytesDiscarded);
+				PrintDebug(str);
+			}
 		}
 
 		// Bail
@@ -220,12 +237,10 @@ void GetSerial()
 	}
 
 	// Get packet num
-	U.i32 = 0;
-	U.c[0] = WaitBuffRead(100);
-	U.c[1] = WaitBuffRead(100);
-	U.c[2] = WaitBuffRead(100);
-	U.c[3] = WaitBuffRead(100);
-	pack = U.i32;
+	U.f = 0;
+	U.b[0] = WaitBuffRead(100);
+	U.b[1] = WaitBuffRead(100);
+	pack = U.i16[0];
 
 	// Read till foot found
 	WaitBuffRead(200, r42t.foot);
@@ -235,9 +250,11 @@ void GetSerial()
 
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
-			sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
-				cnt_packBytesRead, cnt_packBytesDiscarded);
-			PrintDebug(str);
+			if (DO_DEBUG) {
+				sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
+					cnt_packBytesRead, cnt_packBytesDiscarded);
+				PrintDebug(str);
+			}
 		}
 
 		// Bail on first read
@@ -257,7 +274,9 @@ void GetSerial()
 		int cnt_dropped = pack_diff - 1;
 
 		// Add to total
-		r42t.cnt_dropped += cnt_logsRcvd > 0 ? cnt_dropped : 0;
+		if (cnt_dropped > 0 && cnt_logsRcvd > 0) {
+			r42t.cnt_dropped += cnt_dropped;
+		}
 
 		// Update packs
 		r42t.cnt_pack = pack;
@@ -344,7 +363,7 @@ char WaitBuffRead(int timeout, char mtch)
 }
 
 // STORE MESSAGE
-void StoreMessage(char msg[], uint32_t cnt_pack)
+void StoreMessage(char msg[], uint16_t cnt_pack)
 {
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -436,6 +455,9 @@ void SendLogs()
 	// Send logs
 	for (size_t i = 0; i < logSize; i++) {
 		delay(10);
+		if (Log[logIndArr[i]][0] == '\0') {
+			continue;
+		}
 		r42t.port.write(Log[logIndArr[i]]);
 		PrintDebug(Log[logIndArr[i]]);
 		StatusBlink();
@@ -530,8 +552,8 @@ void setup()
 
 	// FeederDue Serial
 	//r42t.port.begin(57600);
-	r42t.port.begin(115200);
-
+	//r42t.port.begin(115200);
+	r42t.port.begin(256000);
 	// SETUP PINS
 
 	// Set direction

@@ -57,9 +57,9 @@
 #define DO_TEENSY_DEBUG 1
 #define DO_HARDWARE_TEST 0
 
-// DEBUG POSITION INFO
-#define DB_FUN_STR() SendTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "str");
-#define DB_FUN_END() SendTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "end");
+// DEBUG VIA TEENSY
+#define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
+#define DB_FUN_END() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "E");
 
 // DEBUGGING STRUCT
 struct DB
@@ -222,6 +222,7 @@ const double pixyCoeff[5] = {
 	-0.677050955917591,
 	75.424132382709260
 };
+const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 
 // AutoDriver
 const double cm2stp = 200 / (9 * PI);
@@ -302,8 +303,7 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-const int trackLEDdutyMax = 75; // value between 0 and 255
-const int trackLEDdutyMin = 30; // value between 0 and 255
+const int trackLEDduty[2] = { 20, 75 }; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
@@ -620,7 +620,7 @@ struct R42T
 	const char head;
 	const char foot;
 	const char *id;
-	uint32_t cnt_pack;
+	uint16_t cnt_pack;
 	int cnt_dropped;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
