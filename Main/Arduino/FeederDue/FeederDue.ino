@@ -5875,7 +5875,7 @@ float CheckBattery(bool force_check)
 	if (millis() > t_vcc_print + dt_vccPrint) {
 
 		// Log/print voltage and current
-		sprintf(str, "[GetBattVolt] VCC Change: vcc=%0.2fV ic=%0.2fA dt_chk=%d",
+		sprintf(str, "[GetBattVolt] Battery VCC & IC: vcc=%0.2fV ic=%0.2fA dt_chk=%d",
 			vccAvg, icNow, millis() - t_vcc_update);
 		DebugFlow(str);
 
