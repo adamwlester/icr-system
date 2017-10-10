@@ -3827,7 +3827,7 @@ bool CheckForStart()
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static bool is_on = false;
 	static uint32_t t_pulse_last = 0;
-	static uint16_t dt_blink_off = 1000;
+	static uint16_t dt_blink_off = 500;
 	static uint16_t dt_blink_on = 10;
 
 	if (fc.isHandShook) {
@@ -8398,19 +8398,6 @@ void loop() {
 
 // Local vars
 static char horeStr[maxStoreStrLng] = { 0 }; horeStr[0] = '\0';
-
-// TEMP
-static uint32_t t_check = 0;
-if (millis() > t_check) {
-	uint32_t ic_bit_in = analogRead(pin.BatIC);
-	//icNow = 36.7*(((float)ic_bit_in * (3.3 / 1024)) / 3.3) - 18.3;
-
-	icNow = (float)(ic_bit_in) * ((1 / 90) * (3.3 / 1024));
-
-	sprintf(horeStr, "[GetBattVolt] Battery IC: bit=%d ic=%0.2fA", ic_bit_in, icNow);
-	DebugFlow(horeStr);
-	t_check = millis() + 50;
-}
 
 // CHECK LOOP TIME AND MEMORY
 CheckLoop();
