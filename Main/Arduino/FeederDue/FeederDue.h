@@ -54,8 +54,8 @@
 // DEBUG SETTING
 #define DO_DEBUG 1
 #define DO_LOG 1
-#define DO_TEENSY_DEBUG 1
-#define DO_HARDWARE_TEST 0
+#define DO_TEENSY_DEBUG 0
+#define DO_HARDWARE_TEST 1
 
 // DEBUG VIA TEENSY
 #define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
@@ -121,7 +121,7 @@ struct DB
 	bool do_simRatTest = false; // set by system
 	bool is_runTest = false; // set by system
 
-	// Other
+							 // Other
 	bool isErrLoop = false;
 }
 // Initialize
@@ -197,20 +197,20 @@ const int printQueueSize = 30;
 char printQueue[printQueueSize][maxStoreStrLng] = { { 0 } };
 int printQueueIndStore = 0;
 int printQueueIndRead = 0;
+bool isPrintQueueOverflowed = false;
 
 // Serial com general
 const int sendQueueSize = 10;
 const int sendQueueBytes = 18;
 const int resendMax = 5;
 const int dt_resend = 100; // (ms)
-const int dt_sendSent = 7; // (ms) 
-const int dt_sendRcvd = 1; // (ms) 
+const int dt_sendSent = 5; // (ms) 
+const int dt_sendRcvd = 0; // (ms) 
 int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
 
-// Handshake/Start/Quit
-uint32_t t_sync = 0; // (ms)
+// Start/Quit
 uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
@@ -224,7 +224,7 @@ const double pixyCoeff[5] = {
 };
 const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 
-// AutoDriver
+									   // AutoDriver
 const double cm2stp = 200 / (9 * PI);
 const double stp2cm = (9 * PI) / 200;
 const float maxSpeed = 100; // (cm) 
@@ -271,16 +271,16 @@ const float feedDist = 66;
 // Movement
 float moveToSpeed = 80; // (cm/sec)
 
-// REWARD
+						// REWARD
 const long armStepFreq = 1000; // (us)
 const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
-// Solonoids
-/*
-EtOH run after min time or distance
-*/
+							 // Solonoids
+							 /*
+							 EtOH run after min time or distance
+							 */
 const int dt_durEtOH[2] = { 100, 100 }; // (ms)
 const int dt_delEtOH[2] = { 30000, 60000 }; // (ms)
 uint32_t t_solOpen = 0;
@@ -307,18 +307,18 @@ const int trackLEDduty[2] = { 20, 75 }; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-// LCD
+						 // LCD
 extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 
 // Interrupts 
+volatile uint32_t t_sync = 0; // (ms)
 volatile uint32_t v_t_irSyncLast = 0; // (ms)
 volatile int v_dt_ir = 0;
-volatile int v_cnt_ir = 0;
+volatile byte v_cnt_ir = 0;
 volatile byte v_doIRhardStop = false;
 volatile byte v_doLogIR = false;
-
-
+volatile byte v_doBlockIR = false;
 volatile byte v_stepState = false;
 volatile byte v_doStepTimer = false;
 volatile byte v_isArmMoveDone = false;

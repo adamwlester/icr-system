@@ -22,5 +22,8 @@
     <ClInclude Include="__vm\.HardwareDiagnostic.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Main\Arduino\FeederDue\FeederDue_PinMap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

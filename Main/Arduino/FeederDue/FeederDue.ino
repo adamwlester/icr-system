@@ -348,8 +348,10 @@ public:
 	int dt_beginSend = 1000;
 	static const int logQueueSize = 50;
 	char logQueue[logQueueSize][maxStoreStrLng] = { { 0 } };
+	char logTemp[maxStoreStrLng] = { { 0 } };
 	int logQueueIndStore = 0;
 	int logQueueIndRead = 0;
+	bool isLogQueueOverflowed = false;
 	int cnt_logsStored = 0;
 	static const int maxBytesStore = 500;
 	char rcvdArr[maxBytesStore] = { 0 };
@@ -373,7 +375,7 @@ public:
 	char GetReply(uint32_t timeout);
 	bool SetToWriteMode(char log_file[]);
 	void QueueLog(char msg[], uint32_t t = millis());
-	bool WriteLog(bool do_send = false);
+	bool WriteLog();
 	void StreamLogs();
 	void TestLoad(int n_entry, char log_file[] = '\0');
 	int GetFileSize(char log_file[]);
@@ -499,6 +501,9 @@ DueTimer FeederArmTimer = DueTimer(1);
 
 
 #pragma region ========= FUNCTION DECLARATIONS =========
+
+// CHECK FOR HANDSHAKE
+bool CheckForStart();
 
 // PARSE SERIAL INPUT
 void GetSerial(R4 *r4);
@@ -3100,7 +3105,7 @@ bool LOGGER::SetToWriteMode(char log_file[])
 void LOGGER::QueueLog(char msg[], uint32_t t)
 {
 #if DO_TEENSY_DEBUG
-	DB_FUN_STR(); 
+	DB_FUN_STR();
 #endif
 
 #if DO_LOG
@@ -3113,8 +3118,8 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	static char str[200] = { 0 }; str[0] = '\0';
 	static char msg_copy[maxStoreStrLng] = { 0 }; msg_copy[0] = '\0';
 	static char queue_state[logQueueSize + 1] = { 0 }; queue_state[0] = '\0';
-	bool is_queue_overflowed = false;
-	bool is_mem_overflowed = false;
+	bool is_queue_overflowing = false;
+	bool is_mem_overflowing = false;
 	uint32_t t_m = 0;
 
 	// Bail if queue store blocked
@@ -3133,16 +3138,32 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	}
 
 	// Get message length
-	is_mem_overflowed = strlen(msg) >= maxMsgStrLng;
+	is_mem_overflowing = strlen(msg) >= maxMsgStrLng;
 
 	// Check for overflow
-	is_queue_overflowed = logQueue[logQueueIndStore][0] != '\0';
+	is_queue_overflowing = logQueue[logQueueIndStore][0] != '\0';
+
+	// Check if already overflowing
+	if (is_queue_overflowing) {
+
+		// Bail
+		if (isLogQueueOverflowed) {
+			return;
+		}
+
+		// Set flag
+		isLogQueueOverflowed = true;
+	}
+	else {
+		// Reset flag
+		isLogQueueOverflowed = false;
+	}
 
 	// Check if queue overflowed or message too long
-	if (is_queue_overflowed || is_mem_overflowed) {
+	if (is_queue_overflowing || is_mem_overflowing) {
 
 		// Handle overflow queue
-		if (is_queue_overflowed) {
+		if (is_queue_overflowing) {
 
 			// Get list of empty entries
 			for (int i = 0; i < logQueueSize; i++) {
@@ -3159,7 +3180,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 		}
 
 		// Handle overflow char array
-		else if (is_mem_overflowed) {
+		else if (is_mem_overflowing) {
 
 			// Store part of message
 			for (int i = 0; i < 100; i++) {
@@ -3173,7 +3194,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 		}
 
 		// Print error if print queue not also overflowed
-		if (db.print_errors && 
+		if (db.print_errors &&
 			db.CONSOLE &&
 			GetPrintQueueAvailable() > 1) {
 
@@ -3208,7 +3229,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 #endif
 }
 
-bool LOGGER::WriteLog(bool do_send)
+bool LOGGER::WriteLog()
 {
 #if DO_LOG
 	/*
@@ -3221,8 +3242,7 @@ bool LOGGER::WriteLog(bool do_send)
 	bool is_logs = false;
 
 	// Bail if no new logs
-	if (logQueueIndRead == logQueueIndStore &&
-		logQueue[logQueueIndStore][0] == '\0') {
+	if (GetLogQueueAvailable() == logQueueSize) {
 
 		// Indicate no logs to write
 		is_logs = false;
@@ -3239,8 +3259,7 @@ bool LOGGER::WriteLog(bool do_send)
 	}
 
 	// Bail if not in write mode
-	if (mode != '<' &&
-		!do_send) {
+	if (mode != '<') {
 
 		// Return queue status
 		return is_logs;
@@ -3270,19 +3289,16 @@ bool LOGGER::WriteLog(bool do_send)
 		t_write = micros();
 	}
 
-	// Send now
-	if (do_send) {
-		r2c.port.write(logQueue[logQueueIndRead]);
-		cnt_logBytesSent++;
-		delay(10);
-	}
-
 	// Update bytes stored
 	cnt_logBytesStored += strlen(logQueue[logQueueIndRead]);
 
 	// Print stored log
 	if (db.print_logStore) {
+
+		// Remove \r\n
 		logQueue[logQueueIndRead][strlen(logQueue[logQueueIndRead]) - 2] = '\0';
+
+		// Format string with added data
 		sprintf(str, "   [LOG] r2c: cnt=%d b_stored=%d/%d b_sent=%d q_store=%d q_read=%d \"%s\"",
 			cnt_logsStored, strlen(logQueue[logQueueIndRead]), cnt_logBytesStored, cnt_logBytesSent, logQueueIndStore, logQueueIndRead, logQueue[logQueueIndRead]);
 		QueueDebug(str, millis());
@@ -3334,7 +3350,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Store remaining logs
-	DoAll("WriteLog");
+	DoAll("WriteLog", 1000);
 	delay(100);
 
 	// Stop writing logs
@@ -3531,11 +3547,6 @@ void LOGGER::StreamLogs()
 		}
 	}
 
-	// Resume logging
-	delay(100);
-	fc.doBlockLogWrite = false;
-	SetToWriteMode(logFile);
-
 	// Log warnings summary
 	for (int i = 0; i < cnt_warn; i++) {
 		char str_lin[10];
@@ -3544,6 +3555,9 @@ void LOGGER::StreamLogs()
 	}
 	sprintf(str, "TOTAL WARNINGS: %d %s", cnt_warn, cnt_warn > 0 ? warn_lines : "");
 	DebugFlow(str);
+	// Send
+	r2c.port.write(logQueue[logQueueIndStore]);
+	delay(10);
 
 	// Log errors summary
 	for (int i = 0; i < cnt_err; i++) {
@@ -3553,6 +3567,9 @@ void LOGGER::StreamLogs()
 	}
 	sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? warn_lines : "");
 	DebugFlow(str);
+	// Send
+	r2c.port.write(logQueue[logQueueIndStore]);
+	delay(10);
 
 	// Get total data left in buffers
 	int xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - r2c.port.availableForWrite();
@@ -3565,6 +3582,9 @@ void LOGGER::StreamLogs()
 	sprintf(str, "[LOGGER::StreamLogs] Run Info: dt_run=%0.2fs b_sent=%d b_stored=%d cnt_err_1=%d cnt_err_2=%d cnt_err_3=%d log_tx=%d log_rx=%d xbee_tx=%d xbee_rx=%d",
 		dt_s, cnt_logBytesSent, cnt_logBytesStored, cnt_err_1, cnt_err_2, cnt_err_3, ol_buff_tx, ol_buff_rx, xbee_buff_tx, xbee_buff_rx);
 	DebugFlow(str);
+	// Send
+	r2c.port.write(logQueue[logQueueIndStore]);
+	delay(10);
 
 	// Print final status then send as log
 	if (!do_abort) {
@@ -3575,20 +3595,17 @@ void LOGGER::StreamLogs()
 		sprintf(str, "!!ERROR!! [LOGGER::StreamLogs] ABORTED: Sending %d Logs: errors=%s", cnt_logsStored + 1, err_str);
 		DebugError(str, true);
 	}
-
-	// Send remaining logs imediately
-	while (WriteLog(true) && mode == '<');
-	delay(100);
+	// Send
+	r2c.port.write(logQueue[logQueueIndStore]);
+	delay(10);
 
 	// End reached send ">>>"
 	if (!do_abort) {
 		r2c.port.write(msg_streamSuccess, 3);
-		delay(100);
 	}
 	// Aborted send ">>!"
 	else {
 		r2c.port.write(msg_streamFail, 3);
-		delay(100);
 	}
 
 	// Print anything left in queue
@@ -3758,11 +3775,12 @@ int LOGGER::GetLogQueueAvailable() {
 
 	// Check each entry
 	for (int i = 0; i < logQueueSize; i++) {
-		n_entries+= logQueue[i][0] != '\0' ? 1 : 0;
+		n_entries += logQueue[i][0] != '\0' ? 1 : 0;
 	}
 
 	// Get total available
 	return logQueueSize - n_entries;
+
 }
 
 void LOGGER::PrintLOGGER(char msg[], bool start_entry)
@@ -3802,6 +3820,97 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 
 #pragma region --------COMMUNICATION---------
 
+// CHECK FOR HANDSHAKE
+bool CheckForStart()
+{
+	// Local vars
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static bool is_on = false;
+	static uint32_t t_pulse_last = 0;
+	static uint16_t dt_blink_off = 1000;
+	static uint16_t dt_blink_on = 10;
+
+	if (fc.isHandShook) {
+		return true;
+	}
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Pulse tracker led
+	if (!is_on && millis() >= t_pulse_last + dt_blink_off) {
+
+		analogWrite(pin.TrackLED, 100);
+		t_pulse_last = millis();
+		is_on = true;
+	}
+	else if (is_on && millis() >= t_pulse_last + dt_blink_on) {
+
+		analogWrite(pin.TrackLED, 0);
+		is_on = false;
+	}
+
+	// Check for sync handshake pulse
+	if (t_sync == 0)
+	{
+
+		// Check for setup ir pulse
+		if (abs(75 - v_dt_ir) < 10) {
+
+			// Set sync time
+			t_sync = v_t_irSyncLast;
+
+			// Log/print sync time
+			sprintf(str, "SET SYNC TIME: %dms", t_sync);
+			DebugFlow(str);
+
+			// Send handshake 
+			QueuePacket(&r2c, 'h', n_pings, 0, 0, 0, true);
+			SendPacket(&r2c);
+		}
+
+		// Bail
+		else {
+			return false;
+		}
+	}
+
+	// Reset LCD
+	if (!fc.isManualSes &&
+		fc.isLitLCD) {
+
+		fc.doChangeLCDstate = true;
+	}
+	ClearLCD();
+
+	// Reset solonoids
+	if (digitalRead(pin.Rel_EtOH) == HIGH) {
+		OpenCloseEtOHSolenoid();
+	}
+	if (digitalRead(pin.Rel_Rew) == HIGH) {
+		OpenCloseRewSolenoid();
+	}
+
+	// Print board status
+	sprintf(str, "[loop] BOARD R STATUS: %04X", AD_R.getStatus());
+	DebugFlow(str);
+	sprintf(str, "[loop] BOARD F STATUS: %04X", AD_F.getStatus());
+	DebugFlow(str);
+
+	// PRINT AVAILABLE MEMORY
+	sprintf(str, "[loop] AVAILABLE MEMORY: %0.2fKB",
+		(float)freeMemory() / 1000);
+	DebugFlow(str);
+
+	// SET FLAG
+	fc.isHandShook = true;
+	DebugFlow("[loop] READY TO ROCK!");
+
+	// Return success
+	return true;
+}
+
 // PARSE SERIAL INPUT
 void GetSerial(R4 *r4)
 {
@@ -3818,6 +3927,8 @@ void GetSerial(R4 *r4)
 	static char dat_str_2[200] = { 0 }; dat_str_2[0] = '\0';
 	uint32_t t_str = millis();
 	int dt_parse = 0;
+	int dt_sent[2] = { 0 };
+	int dt_rcvd[2] = { 0 };
 	int buff_tx = 0;
 	int buff_rx = 0;
 	byte buff = 0;
@@ -3830,13 +3941,19 @@ void GetSerial(R4 *r4)
 	char foot = ' ';
 	bool do_conf;
 	R2 *r2;
+	R2 *r2o;
+	R4 *r4o;
 
 	// Set pointer to R2 struct
 	if (r4->instID == "c2r") {
 		r2 = &r2c;
+		r2o = &r2a;
+		r4o = &a2r;
 	}
 	else if (r4->instID == "a2r") {
 		r2 = &r2a;
+		r2o = &r2c;
+		r4o = &c2r;
 	}
 
 	// Reset vars
@@ -3900,16 +4017,22 @@ void GetSerial(R4 *r4)
 	buff_rx = r4->port.available();
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - r4->port.availableForWrite();
 
+	// Update recive time
+	r4->dt_rcvd = r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0;
+	r4->t_rcvd = millis();
+	dt_rcvd[0] = r4->dt_rcvd;
+	dt_rcvd[1] = r4o->t_rcvd > 0 ? millis() - r4o->t_rcvd : 0;
+	dt_sent[0] = r2->t_sent > 0 ? millis() - r2->t_sent : 0;
+	dt_sent[1] = r2o->t_sent > 0 ? millis() - r2o->t_sent : 0;
+
 	// Store data strings
-	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s b_read=%d b_dump=%d",
-		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "1" : "0", cnt_packBytesRead, cnt_packBytesDiscarded);
+	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%d b_read=%d b_dump=%d",
+		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf, cnt_packBytesRead, cnt_packBytesDiscarded);
+	sprintf(dat_str_2, "rx=%d tx=%d dt_snd=%d|%d dt_rcv=%d|%d dt_prs=%d",
+		buff_rx, buff_tx, dt_sent[0], dt_sent[1], dt_rcvd[0], dt_rcvd[1], dt_parse);
 
 	// Check for dropped packet
 	if (foot != r4->foot) {
-
-		// Store data strings
-		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
-			buff_rx, buff_tx, dt_parse, r2->t_sent > 0 ? millis() - r2->t_sent : 0, r4->dt_rcvd);
 
 		// Itterate dropped count
 		r4->cnt_dropped++;
@@ -3922,14 +4045,6 @@ void GetSerial(R4 *r4)
 
 	// Footer found so process packet
 	else {
-
-		// Update recive time
-		r4->dt_rcvd = r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0;
-		r4->t_rcvd = millis();
-
-		// Store data strings
-		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
-			buff_rx, buff_tx, dt_parse, r2->t_sent > 0 ? millis() - r2->t_sent : 0, r4->dt_rcvd);
 
 		// Get id ind
 		r4_ind = CharInd<R4>(id, r4);
@@ -4263,7 +4378,10 @@ bool SendPacket(R2 *r2)
 	const int msg_lng = sendQueueBytes;
 	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
 	byte msg[msg_lng];
-	uint32_t t_queue = millis();
+	uint32_t t_str = millis();
+	int dt_sent[2] = { 0 };
+	int dt_rcvd[2] = { 0 };
+	int dt_queue = 0;
 	bool is_resend = false;
 	char id = '\0';
 	float dat[3] = { 0 };
@@ -4295,6 +4413,7 @@ bool SendPacket(R2 *r2)
 	if (r2->sendQueueIndRead == r2->sendQueueIndStore &&
 		r2->sendQueue[r2->sendQueueIndStore][0] == '\0') {
 
+		// Bail
 		return false;
 	}
 
@@ -4309,14 +4428,15 @@ bool SendPacket(R2 *r2)
 	// Bail if buffer or time inadequate
 	if (buff_tx > 0 ||
 		buff_rx > 0 ||
-		millis() < r2->t_sent + dt_sendSent ||
-		millis() < r2o->t_sent + dt_sendSent ||
-		millis() < r4->t_rcvd + dt_sendRcvd ||
-		millis() < r4o->t_rcvd + dt_sendRcvd) {
+		millis() < r2->t_sent + dt_sendSent) {
 
-		// Indicate still packs to send
-
+		// Indicate still packs to send and bail
 		return true;
+	}
+
+	// Add small delay if just recieved
+	else if (millis() < r4->t_rcvd + dt_sendRcvd) {
+		delayMicroseconds(500);
 	}
 
 	// Itterate send ind
@@ -4329,9 +4449,18 @@ bool SendPacket(R2 *r2)
 
 	// Send
 	r2->port.write(r2->sendQueue[r2->sendQueueIndRead], msg_lng);
+
+	// Store bytes sent
+	cnt_packBytesSent = msg_lng;
+
+	// Update dt stuff
 	r2->dt_sent = r2->t_sent > 0 ? millis() - r2->t_sent : 0;
 	r2->t_sent = millis();
-	cnt_packBytesSent = msg_lng;
+	dt_sent[0] = r2->dt_sent;
+	dt_sent[1] = r2o->t_sent > 0 ? millis() - r2o->t_sent : 0;
+	dt_rcvd[0] = r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0;
+	dt_rcvd[1] = r4o->t_rcvd > 0 ? millis() - r4o->t_rcvd : 0;
+	dt_queue = r2->t_sent - t_str;
 
 	// Get buffers
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - r2->port.availableForWrite();
@@ -4384,9 +4513,9 @@ bool SendPacket(R2 *r2)
 	// Check if resending
 	is_resend = pack == r2->packLast[id_ind];
 
-	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s b_sent=%d tx=%d rx=%d cts=%s dt_snd=%d dt_rcv=%d dt_q=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS ? "1" : "0", r2->dt_sent, r4->t_rcvd > 0 ? millis() - r4->t_rcvd : 0, millis() - t_queue);
+	// Format data string
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%d b_sent=%d tx=%d rx=%d cts=%d dt_snd=%d|%d dt_rcv=%d|%d dt_q=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf, cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS, dt_sent[0], dt_sent[1], dt_rcvd[0], dt_rcvd[1], dt_queue);
 
 	// Log/print
 	DebugSent(r2, dat_str, is_resend);
@@ -4524,10 +4653,10 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-	// Motor V compensation
-	/*
-	VS_COMP_ENABLE, VS_COMP_DISABLE
-	*/
+												// Motor V compensation
+												/*
+												VS_COMP_ENABLE, VS_COMP_DISABLE
+												*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
@@ -4535,11 +4664,11 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-	// Slew rate
-	/*
-	Upping the edge speed increases torque
-	SR_180V_us, SR_290V_us, SR_530V_us
-	*/
+												// Slew rate
+												/*
+												Upping the edge speed increases torque
+												SR_180V_us, SR_290V_us, SR_530V_us
+												*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -5204,6 +5333,7 @@ double CheckPixy(bool do_test_check)
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 	static uint32_t t_check = 0;
+	static bool is_first_check = true;
 	double px_rel = 0;
 	double px_abs = 0;
 	uint32_t t_px_ts = 0;
@@ -5231,6 +5361,18 @@ double CheckPixy(bool do_test_check)
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
+
+	// Print first check
+	if (is_first_check) {
+
+		// Log/print
+		DebugFlow("[CheckPixy] First Run of \"getBlocks()\"...");
+		DoAll("PrintDebug");
+		DoAll("WriteLog");
+
+		// Reset flag
+		is_first_check = false;
+	}
 
 	// Get new blocks
 	blocks = Pixy.getBlocks();
@@ -5926,8 +6068,8 @@ void ChangeLCDlight(uint32_t duty)
 	}
 
 	// Log/print
-	sprintf(str, "[ChangeLCDlight] Set LCD Light: is_lit=%s duty=%d",
-		fc.isLitLCD ? "1" : "0", duty);
+	sprintf(str, "[ChangeLCDlight] Set LCD Light: is_lit=%d duty=%d",
+		fc.isLitLCD, duty);
 	DebugFlow(str);
 
 	// Set LCD duty
@@ -5971,7 +6113,8 @@ void HardwareTest()
 
 #if DO_HARDWARE_TEST
 
-	// Local vars
+	// ------------------------ LOCAL VARS ------------------------
+
 	static char str[200] = { 0 };
 	static char str_vcc[200] = { 0 };
 	static char str_lcd[200] = { 0 };
@@ -6035,6 +6178,8 @@ void HardwareTest()
 	R4 *r4;
 	bool is_ping_test_done = false;
 
+	// ------------------------ SETUP TEST ------------------------
+
 	// Log/print
 	DebugFlow("[HardwareTest] RUNNING HARDWARE TEST...");
 
@@ -6065,6 +6210,9 @@ void HardwareTest()
 			!is_ping_test_done
 			) &&
 		millis() < t_test_str + dt_test * 2) {
+
+
+		// ----------------------- STRESS TEST ------------------------
 
 		// Do stress test
 		if (!is_stress_test_done) {
@@ -6211,6 +6359,9 @@ void HardwareTest()
 			AD_CheckOC();
 		}
 
+
+		// ------------------------ PIXY TEST -------------------------
+
 		// Test Pixy
 		if (!is_pixy_test_done) {
 
@@ -6257,8 +6408,13 @@ void HardwareTest()
 
 		}
 
+
+		// ------------------------ PING TEST -------------------------
+
 		// Send pings
-		if (!is_ping_test_done) {
+		if (!is_ping_test_done &&
+			is_stress_test_done &&
+			is_pixy_test_done) {
 
 			// Do send receive check
 			if (cnt_ping[0] <= n_pings ||
@@ -6284,9 +6440,6 @@ void HardwareTest()
 					// Set flag to send next
 					do_send_ping[r2i] = cnt_ping[r2i] <= n_pings;
 
-					// Flip destination
-					r2i = r2i == 0 ? 1 : 0;
-
 					// Next loop
 					continue;
 				}
@@ -6300,9 +6453,15 @@ void HardwareTest()
 					float dat3 = cnt_ping[1] > 0 ? dt_ping_mat[1][cnt_ping[1] - 1] : 0;
 					QueuePacket(r2, 't', dat1, dat2, dat3, 0, true);
 
+					// Send now
+					SendPacket(r2);
+
 					// Reset flag
 					do_send_ping[r2i] = false;
 				}
+
+				// Flip destination
+				r2i = r2i == 0 ? 1 : 0;
 
 			}
 
@@ -6338,9 +6497,11 @@ void HardwareTest()
 		SendPacket(&r2a);
 
 		// Log/print all
-		DoAll("PrintDebug");
-		DoAll("WriteLog");
+		PrintDebug();
+		Log.WriteLog();
 	}
+
+	// ----------------------- FINISH TEST ------------------------
 
 	// Log/print
 	DebugFlow("[HardwareTest] FINISHED HARDWARE TEST");
@@ -7016,7 +7177,7 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 void QueueDebug(char msg[], uint32_t t)
 {
 #if DO_TEENSY_DEBUG
-	DB_FUN_STR(); 
+	DB_FUN_STR();
 #endif
 
 #if DO_DEBUG
@@ -7027,8 +7188,8 @@ void QueueDebug(char msg[], uint32_t t)
 	static char queue_state[printQueueSize + 1]; queue_state[0] = '\0';
 	static char spc[50] = { 0 }; spc[0] = '\0';
 	static char arg[50] = { 0 }; arg[0] = '\0';
-	bool is_queue_overflowed = false;
-	bool is_mem_overflowed = false;
+	bool is_queue_overflowing = false;
+	bool is_mem_overflowing = false;
 	uint32_t t_m = 0;
 	float t_s = 0;
 
@@ -7048,16 +7209,32 @@ void QueueDebug(char msg[], uint32_t t)
 	}
 
 	// Get message length
-	is_mem_overflowed = strlen(msg) >= maxMsgStrLng;
+	is_mem_overflowing = strlen(msg) >= maxMsgStrLng;
 
 	// Check for overflow
-	is_queue_overflowed = printQueue[printQueueIndStore][0] != '\0';
+	is_queue_overflowing = printQueue[printQueueIndStore][0] != '\0';
+
+	// Check if already overflowing
+	if (is_queue_overflowing) {
+
+		// Bail
+		if (isPrintQueueOverflowed) {
+			return;
+		}
+
+		// Set flag
+		isPrintQueueOverflowed = true;
+	}
+	else {
+		// Reset flag
+		isPrintQueueOverflowed = false;
+	}
 
 	// Check if queue overflowed or message too long
-	if (is_queue_overflowed || is_mem_overflowed) {
+	if (is_queue_overflowing || is_mem_overflowing) {
 
 		// Handle overflow queue
-		if (is_queue_overflowed) {
+		if (is_queue_overflowing) {
 
 			// Get list of empty entries
 			for (int i = 0; i < printQueueSize; i++) {
@@ -7074,7 +7251,7 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 		// Handle overflow char array
-		else if (is_mem_overflowed) {
+		else if (is_mem_overflowing) {
 
 			// Store part of message
 			for (int i = 0; i < 100; i++) {
@@ -7088,7 +7265,7 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 		// Log error if log queue not also overflowed
-		if (db.log_errors && 
+		if (db.log_errors &&
 			DO_LOG &&
 			Log.GetLogQueueAvailable() > 1) {
 
@@ -7137,8 +7314,7 @@ bool PrintDebug()
 #if DO_DEBUG
 
 	// Bail if nothing in queue
-	if (printQueueIndRead == printQueueIndStore &&
-		printQueue[printQueueIndStore][0] == '\0') {
+	if (GetPrintQueueAvailable() == printQueueSize) {
 		return false;
 	}
 
@@ -7688,6 +7864,7 @@ bool DoAll(char fun_id[], uint32_t timeout)
 	static bool do_skip_next_print = false;
 	uint32_t t_timeout = millis() + timeout;
 	bool do_loop = true;
+	bool is_bad_param = false;
 
 	// Bail if skipping
 	if (do_skip_next_run) {
@@ -7697,21 +7874,38 @@ bool DoAll(char fun_id[], uint32_t timeout)
 
 	// Loop till done or timeout reached
 	while (do_loop && millis() < t_timeout) {
+
+		// Print all
 		if (fun_id == "PrintDebug") {
 			do_loop = PrintDebug();
 		}
+
+		// Log all
 		else if (fun_id == "WriteLog") {
 			do_loop = Log.WriteLog();
 		}
 
+		// Bad parameter
+		else {
+
+			// Set flag
+			is_bad_param = true;
+
+			// Bail
+			break;
+		}
+
 	}
 
-	// Check if timedout
+	// Check for error
 	if (do_loop) {
 
 		// Print error
 		if (!do_skip_next_print) {
-			sprintf(str, "**WARNING** [DoAll] \"%s\" Timedout after %dms", fun_id, timeout);
+
+			// Timeout or bad parameter error
+			sprintf(str, "**WARNING** [DoAll] %s: arg=\"%s\" dt_run=%d",
+				is_bad_param ? "BAD ARG" : "TIMEDOUT", fun_id, timeout);
 			DebugError(str);
 
 			// Set flag
@@ -7839,18 +8033,20 @@ void Interupt_IR_Detect()
 	// Local vars
 	static uint32_t t_debounce = 0;
 
-	// Exit if < 25 ms has not passed
+	// Exit if < 50 ms has not passed
 	if (millis() < t_debounce) {
 		return;
 	}
 
 	// Store time
 	v_dt_ir = millis() - v_t_irSyncLast;
-	v_t_irSyncLast += v_dt_ir;
+	v_t_irSyncLast = millis();
+
+	// Itterate count 
 	v_cnt_ir++;
 
 	// Set flag
-	if (t_sync != 0) {
+	if (t_sync != 0 && !v_doBlockIR) {
 		v_doLogIR = true;
 	}
 
@@ -8031,11 +8227,19 @@ void setup() {
 	PrintLCD(true, "DONE SETUP", "Dump Serial");
 
 	// RESET VOLITILES AND RELAYS
-	v_t_irSyncLast = 0; // (ms)
+	t_sync = 0;
+	v_t_irSyncLast = 0;
 	v_dt_ir = 0;
 	v_cnt_ir = 0;
 	v_doIRhardStop = false;
 	v_doLogIR = false;
+	v_doBlockIR = false;
+	v_stepState = false;
+	v_doStepTimer = false;
+	v_isArmMoveDone = false;
+	v_cnt_steps = 0;
+	v_stepTarg = 0;
+	v_stepDir = 'e';
 	digitalWrite(pin.Rel_Rew, LOW);
 	digitalWrite(pin.Rel_EtOH, LOW);
 
@@ -8192,974 +8396,918 @@ void loop() {
 
 #pragma region //--- ONGOING OPPERATIONS ---
 
-	// Local vars
-	static char horeStr[maxStoreStrLng] = { 0 }; horeStr[0] = '\0';
+// Local vars
+static char horeStr[maxStoreStrLng] = { 0 }; horeStr[0] = '\0';
 
-	// CHECK LOOP TIME AND MEMORY
-	CheckLoop();
+// TEMP
+static uint32_t t_check = 0;
+if (millis() > t_check) {
+	uint32_t ic_bit_in = analogRead(pin.BatIC);
+	//icNow = 36.7*(((float)ic_bit_in * (3.3 / 1024)) / 3.3) - 18.3;
 
-	// PARSE CHEETAHDUE SERIAL INPUT
-	GetSerial(&a2r);
+	icNow = (float)(ic_bit_in) * ((1 / 90) * (3.3 / 1024));
 
-	// SEND CHEETAHDUE DATA
-	SendPacket(&r2a);
+	sprintf(horeStr, "[GetBattVolt] Battery IC: bit=%d ic=%0.2fA", ic_bit_in, icNow);
+	DebugFlow(horeStr);
+	t_check = millis() + 50;
+}
 
-	// PARSE CS SERIAL INPUT
-	GetSerial(&c2r);
+// CHECK LOOP TIME AND MEMORY
+CheckLoop();
 
-	// SEND CS DATA
-	SendPacket(&r2c);
+// PARSE CHEETAHDUE SERIAL INPUT
+GetSerial(&a2r);
 
-	// RESEND CHEETAHDUE DATA
-	CheckResend(&r2a);
+// SEND CHEETAHDUE DATA
+SendPacket(&r2a);
 
-	// RESEND CS DATA
-	CheckResend(&r2c);
+// PARSE CS SERIAL INPUT
+GetSerial(&c2r);
 
-	// PRINT QUEUED DB
-	PrintDebug();
+// SEND CS DATA
+SendPacket(&r2c);
 
-	// STORE QUEUED LOGS
-	Log.WriteLog();
+// RESEND CHEETAHDUE DATA
+CheckResend(&r2a);
 
-	// SEND SERIAL DATA
-	if (fc.doLogSend) {
-		// Send log
-		Log.StreamLogs();
+// RESEND CS DATA
+CheckResend(&r2c);
 
-		// Print
-		if (!fc.doLogSend) {
-			DebugFlow("[loop] FINISHED SENDING LOGS");
+// PRINT QUEUED DB
+PrintDebug();
+
+// STORE QUEUED LOGS
+Log.WriteLog();
+
+// SEND SERIAL DATA
+if (fc.doLogSend) {
+	// Send log
+	Log.StreamLogs();
+
+	// Print
+	if (!fc.doLogSend) {
+		DebugFlow("[loop] FINISHED SENDING LOGS");
+	}
+}
+
+// GET BUTTON INPUT
+if (GetButtonInput())
+{
+
+	// Button triggered reward
+	if (fc.doBtnRew) {
+		// Bail if already rewarding
+		if (Reward.isRewarding) {
+			DebugError("**WARNING** [loop] ABORTED: Button Reward Triggered When Already Running Reward");
 		}
+		else {
+			// Set mode
+			Reward.SetRewMode("Button");
+			Reward.StartRew();
+		}
+		fc.doBtnRew = false;
 	}
 
-	// GET BUTTON INPUT
-	if (GetButtonInput())
-	{
-
-		// Button triggered reward
-		if (fc.doBtnRew) {
-			// Bail if already rewarding
-			if (Reward.isRewarding) {
-				DebugError("**WARNING** [loop] ABORTED: Button Reward Triggered When Already Running Reward");
-			}
-			else {
-				// Set mode
-				Reward.SetRewMode("Button");
-				Reward.StartRew();
-			}
-			fc.doBtnRew = false;
-		}
-
-		// Open/close Rew sol
-		if (fc.doRewSolStateChange) {
-			OpenCloseRewSolenoid();
-			fc.doRewSolStateChange = false;
-		}
-
-		// Open/close EtOH sol
-		if (fc.doEtOHSolStateChange) {
-			OpenCloseEtOHSolenoid();
-			fc.doEtOHSolStateChange = false;
-		}
-
-		// Turn LCD on/off
-		if (fc.doChangeLCDstate) {
-			ChangeLCDlight();
-			fc.doChangeLCDstate = false;
-		}
-
-		// Move robot foward/backward
-		if (fc.doMoveRobFwd) {
-			ManualRun('f');
-			fc.doMoveRobFwd = false;
-		}
-		else if (fc.doMoveRobRev) {
-			ManualRun('r');
-			fc.doMoveRobRev = false;
-		}
-
+	// Open/close Rew sol
+	if (fc.doRewSolStateChange) {
+		OpenCloseRewSolenoid();
+		fc.doRewSolStateChange = false;
 	}
 
-	// CHECK FOR IR TRIGGERED HALT
-	if (v_doIRhardStop)
-	{
-		IRprox_Halt();
-		v_doIRhardStop = false;
+	// Open/close EtOH sol
+	if (fc.doEtOHSolStateChange) {
+		OpenCloseEtOHSolenoid();
+		fc.doEtOHSolStateChange = false;
 	}
 
-	// LOG NEW IR EVENT
-	if (v_doLogIR)
-	{
-		// Log event if streaming started
-		sprintf(horeStr, "[loop] IR Sync Event: cnt=%d dt=%dms", v_cnt_ir, v_dt_ir);
-		DebugFlow(horeStr, v_t_irSyncLast);
-
-		// Reset flag
-		v_doLogIR = false;
+	// Turn LCD on/off
+	if (fc.doChangeLCDstate) {
+		ChangeLCDlight();
+		fc.doChangeLCDstate = false;
 	}
 
-	// END ONGOING REWARD
-	if (Reward.EndRew()) {
-
-		// Tell CS what zone was rewarded and get confirmation
-		if (strcmp(Reward.modeReward, "Now") != 0 &&
-			strcmp(Reward.modeReward, "Button") != 0) {
-
-			QueuePacket(&r2c, 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
-		}
+	// Move robot foward/backward
+	if (fc.doMoveRobFwd) {
+		ManualRun('f');
+		fc.doMoveRobFwd = false;
+	}
+	else if (fc.doMoveRobRev) {
+		ManualRun('r');
+		fc.doMoveRobRev = false;
 	}
 
-	// RETRACT FEEDER ARM
-	Reward.CheckFeedArm();
+}
 
-	// CHECK IF STILL BLOCKING
-	CheckBlockTimElapsed();
+// CHECK FOR IR TRIGGERED HALT
+if (v_doIRhardStop)
+{
+	IRprox_Halt();
+	v_doIRhardStop = false;
+}
 
-	// GET AD STATUS
-	AD_CheckOC();
+// LOG NEW IR EVENT
+if (v_doLogIR)
+{
+	// Log event if streaming started
+	sprintf(horeStr, "[loop] IR Sync Event: dt=%dms", v_dt_ir);
+	DebugFlow(horeStr, v_t_irSyncLast);
 
-	// RUN ETOH SOLONOID
-	CheckEtOH();
+	// Reset flag
+	v_doLogIR = false;
+}
 
-	// GET VCC
-	CheckBattery();
+// END ONGOING REWARD
+if (Reward.EndRew()) {
 
-	// CHECK STATUS BLINK
-	StatusBlink();
+	// Tell CS what zone was rewarded and get confirmation
+	if (strcmp(Reward.modeReward, "Now") != 0 &&
+		strcmp(Reward.modeReward, "Button") != 0) {
 
-#pragma endregion
-
-#pragma region //--- HOLD FOR HANDSHAKE ---
-	if (!fc.isHandShook)
-	{
-
-		// PULSE TRACKER LED
-		static bool is_on = false;
-		static uint32_t t_pulse_last = millis() - 1001;
-		if (
-			(is_on && millis() >= t_pulse_last + 10) ||
-			(!is_on && millis() >= t_pulse_last + 1000)
-			) {
-
-			analogWrite(pin.TrackLED, is_on ? 0 : 100);
-			is_on = !is_on;
-			t_pulse_last = is_on ? millis() : t_pulse_last;
-		}
-
-		// CHECK FOR SYNC IR HANDSHAKE PULSE
-		if (t_sync == 0)
-		{
-
-			// Check for setup ir pulse
-			if (abs(75 - v_dt_ir) < 10) {
-
-				// Set sync time
-				t_sync = v_t_irSyncLast;
-
-				// Log/print sync time
-				sprintf(horeStr, "SET SYNC TIME: %dms", t_sync);
-				DebugFlow(horeStr);
-
-				// Send handshake 
-				QueuePacket(&r2c, 'h', n_pings, 0, 0, 0, true);
-				SendPacket(&r2c);
-			}
-			// Restart loop
-			else {
-				return;
-			}
-		}
-
-		// RESET LCD
-		if (!fc.isManualSes &&
-			fc.isLitLCD) {
-
-			fc.doChangeLCDstate = true;
-		}
-		ClearLCD();
-
-		// RESET SOLONOIDS
-		if (digitalRead(pin.Rel_EtOH) == HIGH) {
-			OpenCloseEtOHSolenoid();
-		}
-		if (digitalRead(pin.Rel_Rew) == HIGH) {
-			OpenCloseRewSolenoid();
-		}
-
-		// PRINT AD BOARD STATUS
-		sprintf(horeStr, "[loop] BOARD R STATUS: %04X", AD_R.getStatus());
-		DebugFlow(horeStr);
-		sprintf(horeStr, "[loop] BOARD F STATUS: %04X", AD_F.getStatus());
-		DebugFlow(horeStr);
-
-		// PRINT AVAILABLE MEMORY
-		sprintf(horeStr, "[loop] AVAILABLE MEMORY: %0.2fKB",
-			(float)freeMemory() / 1000);
-		DebugFlow(horeStr);
-
-		// SET FLAG
-		fc.isHandShook = true;
-		DebugFlow("[loop] READY TO ROCK!");
-
+		QueuePacket(&r2c, 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
 	}
+}
+
+// RETRACT FEEDER ARM
+Reward.CheckFeedArm();
+
+// CHECK IF STILL BLOCKING
+CheckBlockTimElapsed();
+
+// GET AD STATUS
+AD_CheckOC();
+
+// RUN ETOH SOLONOID
+CheckEtOH();
+
+// GET VCC
+CheckBattery();
+
+// CHECK STATUS BLINK
+StatusBlink();
+
+// WAIT FOR HANDSHAKE
+if (!CheckForStart()) {
+	return;
+}
 
 #pragma endregion
 
 #pragma region //--- (T) SYSTEM TESTS ---
 
-	if (c2r.idNow == 'T' && c2r.isNew)
+if (c2r.idNow == 'T' && c2r.isNew)
+{
+	// Store message data
+	cmd.testCond = (byte)c2r.dat[0];
+	cmd.testDat = (byte)c2r.dat[1];
+
+	// Set testing flag
+	db.is_runTest = true;
+
+	// Set run pid calibration flag
+	if (cmd.testCond == 1)
 	{
-		// Store message data
-		cmd.testCond = (byte)c2r.dat[0];
-		cmd.testDat = (byte)c2r.dat[1];
+		// Log/rint settings
+		sprintf(horeStr, "[loop] RUN PID CALIBRATION = kC=%0.2f", kC);
+		DebugFlow(horeStr);
 
-		// Set testing flag
-		db.is_runTest = true;
+		// Set flag
+		db.do_pidCalibration = true;
+	}
 
-		// Set run pid calibration flag
-		if (cmd.testCond == 1)
-		{
-			// Log/rint settings
-			sprintf(horeStr, "[loop] RUN PID CALIBRATION = kC=%0.2f", kC);
-			DebugFlow(horeStr);
+	// Update Halt Error test run speed
+	else if (cmd.testCond == 2)
+	{
+		// Store new speed
+		double new_speed = double(cmd.testDat);
 
-			// Set flag
-			db.do_pidCalibration = true;
+		// Print speed
+		sprintf(horeStr, "[loop] HALT ERROR SPEED = %0.0f cm/sec", new_speed);
+		DebugFlow(horeStr);
+
+		if (new_speed > 0) {
+			// Run motor
+			RunMotor('f', new_speed, "Override");
 		}
-
-		// Update Halt Error test run speed
-		else if (cmd.testCond == 2)
-		{
-			// Store new speed
-			double new_speed = double(cmd.testDat);
-
-			// Print speed
-			sprintf(horeStr, "[loop] HALT ERROR SPEED = %0.0f cm/sec", new_speed);
-			DebugFlow(horeStr);
-
-			if (new_speed > 0) {
-				// Run motor
-				RunMotor('f', new_speed, "Override");
-			}
-			else {
-				// Halt robot
-				AD_R.hardStop();
-				AD_F.hardStop();
-			}
-		}
-
-		// Symulated rat test
-		else if (cmd.testCond == 3)
-		{
-			db.do_simRatTest = true;
+		else {
+			// Halt robot
+			AD_R.hardStop();
+			AD_F.hardStop();
 		}
 	}
 
-	// Run position debugging
-	if (db.do_posDebug)
+	// Symulated rat test
+	else if (cmd.testCond == 3)
 	{
-		static double pos_last[3] = { 0 };
-		bool is_new = false;
+		db.do_simRatTest = true;
+	}
+}
 
-		// Check if position values changed
-		for (int i = 0; i < 3; i++) {
-			if (Pos[i].posNow != pos_last[i]) {
-				is_new = true;
-			}
-			pos_last[i] = Pos[i].posNow;
+// Run position debugging
+if (db.do_posDebug)
+{
+	static double pos_last[3] = { 0 };
+	bool is_new = false;
+
+	// Check if position values changed
+	for (int i = 0; i < 3; i++) {
+		if (Pos[i].posNow != pos_last[i]) {
+			is_new = true;
 		}
-
-		// Plot new data
-		if (is_new)
-		{
-			// Get setpoint pos
-			double setpoint_vt = Pos[1].posNow + Pid.setPoint;
-			double setpoint_ekf = kal.RobPos + Pid.setPoint;
-
-			// Plot pos
-			if (db.do_posPlot) {
-				/*
-				{@Plot.Pos.Pos[0].Blue Pos[0].posNow}{@Plot.Pos.Pos[2].Green Pos[2].posNow}{@Plot.Pos.Pos[1].Orange Pos[1].posNow}{@Plot.Pos.setpoint_vt.Orange setpoint_vt}{@Plot.Pos.ratEKF.Black kal.RatPos}{@Plot.Pos.robEKF.Red kal.RobPos}{@Plot.Pos.setpoint_ekf.Red kal.setpoint_ekf}
-				*/
-				millis();
-			}
-
-			// Turn on rew led when near setpoint
-			if (Pid.error > -0.5 && Pid.error < 0.5 &&
-				Pos[0].is_streamStarted &&
-				Pos[1].is_streamStarted) {
-
-				analogWrite(pin.RewLED_C, 10);
-			}
-			else {
-				analogWrite(pin.RewLED_C, rewLEDmin);
-			}
-
-			// Print pos data
-			char str1[50];
-			char str2[50];
-			sprintf(str1, "Rat Dst = %0.2fcm", kal.RatPos - kal.RobPos);
-			sprintf(str2, "Pid Err = %0.2fcm", Pid.error);
-			PrintLCD(false, str1, str2, 't');
-
-		}
+		pos_last[i] = Pos[i].posNow;
 	}
 
-	// Run Pid calibration
-	if (db.do_pidCalibration)
+	// Plot new data
+	if (is_new)
 	{
-		double new_speed = Pid.RunCalibration();
+		// Get setpoint pos
+		double setpoint_vt = Pos[1].posNow + Pid.setPoint;
+		double setpoint_ekf = kal.RobPos + Pid.setPoint;
 
-		// Run motors
-		if (Pid.cal_isPidUpdated)
-		{
-			if (new_speed >= 0) {
-				RunMotor('f', new_speed, "Override");
-			}
-			// Print values
+		// Plot pos
+		if (db.do_posPlot) {
 			/*
-			millis()%50 == 0
-			{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
+			{@Plot.Pos.Pos[0].Blue Pos[0].posNow}{@Plot.Pos.Pos[2].Green Pos[2].posNow}{@Plot.Pos.Pos[1].Orange Pos[1].posNow}{@Plot.Pos.setpoint_vt.Orange setpoint_vt}{@Plot.Pos.ratEKF.Black kal.RatPos}{@Plot.Pos.robEKF.Red kal.RobPos}{@Plot.Pos.setpoint_ekf.Red kal.setpoint_ekf}
 			*/
 			millis();
-			// Plot error
-			/*
-			{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
-			*/
-			millis();
-			// Reset flag
-			Pid.cal_isPidUpdated = false;
 		}
+
+		// Turn on rew led when near setpoint
+		if (Pid.error > -0.5 && Pid.error < 0.5 &&
+			Pos[0].is_streamStarted &&
+			Pos[1].is_streamStarted) {
+
+			analogWrite(pin.RewLED_C, 10);
+		}
+		else {
+			analogWrite(pin.RewLED_C, rewLEDmin);
+		}
+
+		// Print pos data
+		char str1[50];
+		char str2[50];
+		sprintf(str1, "Rat Dst = %0.2fcm", kal.RatPos - kal.RobPos);
+		sprintf(str2, "Pid Err = %0.2fcm", Pid.error);
+		PrintLCD(false, str1, str2, 't');
+
 	}
+}
+
+// Run Pid calibration
+if (db.do_pidCalibration)
+{
+	double new_speed = Pid.RunCalibration();
+
+	// Run motors
+	if (Pid.cal_isPidUpdated)
+	{
+		if (new_speed >= 0) {
+			RunMotor('f', new_speed, "Override");
+		}
+		// Print values
+		/*
+		millis()%50 == 0
+		{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
+		*/
+		millis();
+		// Plot error
+		/*
+		{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
+		*/
+		millis();
+		// Reset flag
+		Pid.cal_isPidUpdated = false;
+	}
+}
 
 #pragma endregion
 
 #pragma region //--- (h) PING TEST ---
-	if (c2r.idNow == 'h' && c2r.isNew)
-	{
-		// Run hardware test
-		HardwareTest();
+if (c2r.idNow == 'h' && c2r.isNew)
+{
+	// Run hardware test
+	HardwareTest();
 
-		// Send final ping times
-		QueuePacket(&r2c, 't', n_pings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
+	// Send final ping times
+	QueuePacket(&r2c, 't', n_pings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
 
-		// Set flag
-		fc.isSesStarted = true;
+	// Set flag
+	fc.isSesStarted = true;
 
-		// Indicate completion
-		StatusBlink(true, 10, 100);
+	// Indicate completion
+	StatusBlink(true, 10, 100);
 
-	}
+}
 #pragma endregion
 
 #pragma region //--- (S) DO SETUP ---
-	if (c2r.idNow == 'S' && c2r.isNew)
-	{
-		// Store message data
-		cmd.sesCond = (byte)c2r.dat[0];
-		cmd.soundCond = (byte)c2r.dat[1];
-		millis();
-		// Set condition
-		if (cmd.sesCond == 1) {
-			fc.isManualSes = false;
-			DebugFlow("[loop] DO TRACKING");
-		}
-		else {
-			fc.isManualSes = true;
-			DebugFlow("[loop] DONT DO TRACKING");
-		}
-		// Set reward tone
-		if (cmd.soundCond == 0) {
-			// No sound
-			QueuePacket(&r2a, 's', 0);
-			DebugFlow("[loop] NO SOUND");
-		}
-		else if (cmd.soundCond == 1) {
-			// Use white noise only
-			QueuePacket(&r2a, 's', 0);
-			DebugFlow("[loop] DONT DO TONE");
-		}
-		else {
-			// Use white and reward noise
-			QueuePacket(&r2a, 's', 2);
-			DebugFlow("[loop] DO TONE");
-		}
-
+if (c2r.idNow == 'S' && c2r.isNew)
+{
+	// Store message data
+	cmd.sesCond = (byte)c2r.dat[0];
+	cmd.soundCond = (byte)c2r.dat[1];
+	millis();
+	// Set condition
+	if (cmd.sesCond == 1) {
+		fc.isManualSes = false;
+		DebugFlow("[loop] DO TRACKING");
 	}
+	else {
+		fc.isManualSes = true;
+		DebugFlow("[loop] DONT DO TRACKING");
+	}
+	// Set reward tone
+	if (cmd.soundCond == 0) {
+		// No sound
+		QueuePacket(&r2a, 's', 0);
+		DebugFlow("[loop] NO SOUND");
+	}
+	else if (cmd.soundCond == 1) {
+		// Use white noise only
+		QueuePacket(&r2a, 's', 0);
+		DebugFlow("[loop] DONT DO TONE");
+	}
+	else {
+		// Use white and reward noise
+		QueuePacket(&r2a, 's', 2);
+		DebugFlow("[loop] DO TONE");
+	}
+
+}
 #pragma endregion
 
 #pragma region //--- (Q) DO QUIT ---
-	if (c2r.idNow == 'Q' && c2r.isNew) {
+if (c2r.idNow == 'Q' && c2r.isNew) {
 
-		// Log/print event
-		DebugFlow("[loop] DO QUIT");
+	// Log/print event
+	DebugFlow("[loop] DO QUIT");
 
-		// Set flags and delay time
-		fc.doQuit = true;
+	// Set flags and delay time
+	fc.doQuit = true;
 
-		// Tell CheetahDue to quit 
-		QueuePacket(&r2a, 'q', 0, 0, 0, 0, true);
+	// Block IR sensor in case CheetahDue resets early
+	v_doBlockIR = true;
 
-		// Block all motor control
-		SetMotorControl("Halt", "Quit");
+	// Tell CheetahDue to quit 
+	QueuePacket(&r2a, 'q', 0, 0, 0, 0, true);
 
-	}
+	// Block all motor control
+	SetMotorControl("Halt", "Quit");
 
-	// Check if time to quit
-	if (fc.doQuit) {
+}
 
-		// Wait for any unfinished opperations
-		if (
-			!SendPacket(&r2a) &&
-			!SendPacket(&r2c) &&
-			!CheckResend(&r2a) &&
-			!CheckResend(&r2c) &&
-			!Log.WriteLog() &&
-			!PrintDebug()) {
+// Check if time to quit
+if (fc.doQuit) {
 
-			// Tell CS quit is done
-			if (!fc.isQuitConfirmed) {
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('Q', &c2r)], true);
-				fc.isQuitConfirmed = true;
-			}
+	// Wait for any unfinished opperations
+	if (
+		!SendPacket(&r2a) &&
+		!SendPacket(&r2c) &&
+		!CheckResend(&r2a) &&
+		!CheckResend(&r2c) &&
+		!PrintDebug()) {
 
-			// Quit after 100 ms
-			if (t_quit == 0) {
-				t_quit = millis() + 100;
-			}
+		// Tell CS quit is done
+		if (!fc.isQuitConfirmed) {
+			QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('Q', &c2r)], true);
+			fc.isQuitConfirmed = true;
+		}
 
-			// Quit
-			else if (fc.doQuit && millis() > t_quit)
-			{
-				// Quit session
-				DebugFlow("[loop] QUITING...");
-				QuitSession();
-			}
+		// Quit after 100 ms
+		if (t_quit == 0) {
+			t_quit = millis() + 100;
+		}
+
+		// Quit
+		else if (fc.doQuit && millis() > t_quit)
+		{
+			// Quit session
+			DebugFlow("[loop] QUITING...");
+			QuitSession();
 		}
 	}
+}
 
 
 #pragma endregion
 
 #pragma region //--- (M) DO MOVE ---
-	if (c2r.idNow == 'M' && c2r.isNew) {
+if (c2r.idNow == 'M' && c2r.isNew) {
 
-		// Store move pos
-		cmd.moveToTarg = c2r.dat[0];
+	// Store move pos
+	cmd.moveToTarg = c2r.dat[0];
 
-		// Align target pos to feeder
-		cmd.moveToTarg = cmd.moveToTarg - feedDist;
-		cmd.moveToTarg = cmd.moveToTarg < 0 ? cmd.moveToTarg + (140 * PI) : cmd.moveToTarg;
+	// Align target pos to feeder
+	cmd.moveToTarg = cmd.moveToTarg - feedDist;
+	cmd.moveToTarg = cmd.moveToTarg < 0 ? cmd.moveToTarg + (140 * PI) : cmd.moveToTarg;
 
-		// Set flags
-		fc.doMove = true;
+	// Set flags
+	fc.doMove = true;
 
-		sprintf(horeStr, "[loop] DO MOVE: targ=%0.2fcm", cmd.moveToTarg);
-		DebugFlow(horeStr);
-	}
+	sprintf(horeStr, "[loop] DO MOVE: targ=%0.2fcm", cmd.moveToTarg);
+	DebugFlow(horeStr);
+}
 
-	// Perform movement
-	if (fc.doMove) {
+// Perform movement
+if (fc.doMove) {
 
-		// Compute move target
-		if (!Move.isTargSet) {
+	// Compute move target
+	if (!Move.isTargSet) {
 
-			// If succesfull
-			if (Move.CompTarg(kal.RobPos, cmd.moveToTarg)) {
+		// If succesfull
+		if (Move.CompTarg(kal.RobPos, cmd.moveToTarg)) {
 
-				// Start running
-				if (SetMotorControl("MoveTo", "MoveTo")) {
+			// Start running
+			if (SetMotorControl("MoveTo", "MoveTo")) {
 
-					if (RunMotor(Move.moveDir, moveToSpeed, "MoveTo")
-						) {
+				if (RunMotor(Move.moveDir, moveToSpeed, "MoveTo")
+					) {
 
-						// Print message
-						sprintf(horeStr, "[loop] RUNNING: MoveTo: targ_dist=%0.2fcm move_dir=\'%c\'...",
-							Move.targDist, Move.moveDir);
-						DebugFlow(horeStr);
+					// Print message
+					sprintf(horeStr, "[loop] RUNNING: MoveTo: targ_dist=%0.2fcm move_dir=\'%c\'...",
+						Move.targDist, Move.moveDir);
+					DebugFlow(horeStr);
 
-						// Set flag
-						Move.isMoveStarted = true;
-					}
-
-					// Failed to run motor
-					else {
-						// Reset control
-						SetMotorControl("None", "MoveTo");
-
-						// Set flags
-						Move.doAbortMove = true;
-					}
+					// Set flag
+					Move.isMoveStarted = true;
 				}
 
-				// Failed to take motor control
+				// Failed to run motor
 				else {
+					// Reset control
+					SetMotorControl("None", "MoveTo");
+
 					// Set flags
 					Move.doAbortMove = true;
 				}
-
-			}
-		}
-
-		// Check if robot is ready to be stopped
-		else if (!Move.isTargReached && !Move.doAbortMove) {
-
-			// Do deceleration
-			double new_speed = Move.DecelToTarg(kal.RobPos, kal.RobVel, 40, 10);
-
-			// Change speed if > 0
-			if (new_speed > 0 && new_speed != runSpeedNow) {
-
-				RunMotor(Move.moveDir, new_speed, "MoveTo");
 			}
 
-		}
-
-		// Check if target reached or move aborted
-		else {
-
-			// Hard stop
-			HardStop("MoveTo");
-
-			// Set motor cotrol to None
-			SetMotorControl("None", "MoveTo");
-
-			// Log/print final move status
-			if (Move.isTargReached) {
-
-				// Print success message
-				sprintf(horeStr, "[loop] SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-					Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
-				DebugFlow(horeStr);
-
-				// Tell CS movement is done
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
+			// Failed to take motor control
+			else {
+				// Set flags
+				Move.doAbortMove = true;
 			}
 
-			// Log/print error
-			else if (Move.doAbortMove) {
-
-				// Print failure message
-				sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%s ekf_ready=%s move_started=%s targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-					Move.isTargSet ? "1" : "0", fc.isEKFReady ? "1" : "0", Move.isMoveStarted ? "1" : "0", Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
-				DebugError(horeStr, true);
-			}
-
-			// Reset flags
-			fc.doMove = false;
-			Move.MoveToReset();
 		}
 	}
+
+	// Check if robot is ready to be stopped
+	else if (!Move.isTargReached && !Move.doAbortMove) {
+
+		// Do deceleration
+		double new_speed = Move.DecelToTarg(kal.RobPos, kal.RobVel, 40, 10);
+
+		// Change speed if > 0
+		if (new_speed > 0 && new_speed != runSpeedNow) {
+
+			RunMotor(Move.moveDir, new_speed, "MoveTo");
+		}
+
+	}
+
+	// Check if target reached or move aborted
+	else {
+
+		// Hard stop
+		HardStop("MoveTo");
+
+		// Set motor cotrol to None
+		SetMotorControl("None", "MoveTo");
+
+		// Log/print final move status
+		if (Move.isTargReached) {
+
+			// Print success message
+			sprintf(horeStr, "[loop] SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+				Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
+			DebugFlow(horeStr);
+
+			// Tell CS movement is done
+			QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
+		}
+
+		// Log/print error
+		else if (Move.doAbortMove) {
+
+			// Print failure message
+			sprintf(horeStr, "!!ERROR!! [loop] ABORTED: MoveTo: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+				Move.isTargSet, fc.isEKFReady, Move.isMoveStarted, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
+			DebugError(horeStr, true);
+		}
+
+		// Reset flags
+		fc.doMove = false;
+		Move.MoveToReset();
+	}
+}
 #pragma endregion
 
 #pragma region //--- (R) RUN REWARD ---
-	if (c2r.idNow == 'R' && c2r.isNew) {
+if (c2r.idNow == 'R' && c2r.isNew) {
 
-		// Store message data
-		cmd.rewPos = c2r.dat[0];
-		cmd.rewCond = (byte)c2r.dat[1];
-		cmd.rewZoneInd = (byte)c2r.dat[2] - 1;
-		cmd.rewDelay = (byte)c2r.dat[2];
+	// Store message data
+	cmd.rewPos = c2r.dat[0];
+	cmd.rewCond = (byte)c2r.dat[1];
+	cmd.rewZoneInd = (byte)c2r.dat[2] - 1;
+	cmd.rewDelay = (byte)c2r.dat[2];
 
 
-		// Bail if already rewarding
-		if (Reward.isRewarding) {
-			DebugError("**WARNING** [loop] ABORTED: \'R\' Reward Triggered When Already Running Reward");
-			return;
-		}
+	// Bail if already rewarding
+	if (Reward.isRewarding) {
+		DebugError("**WARNING** [loop] ABORTED: \'R\' Reward Triggered When Already Running Reward");
+		return;
+	}
 
-		// Imediate reward
-		else if (cmd.rewCond == 1) {
+	// Imediate reward
+	else if (cmd.rewCond == 1) {
 
-			// Log/print
-			DebugFlow("[loop] DO NOW REWARD");
+		// Log/print
+		DebugFlow("[loop] DO NOW REWARD");
 
-			// Set mode
-			Reward.SetRewMode("Now", cmd.rewZoneInd);
+		// Set mode
+		Reward.SetRewMode("Now", cmd.rewZoneInd);
 
-			// Start reward
-			Reward.StartRew();
-
-		}
-
-		// Cued reward
-		else if (cmd.rewCond == 2) {
-
-			// Log/print
-			DebugFlow("[loop] DO CUED REWARD");
-
-			// Set mode
-			Reward.SetRewMode("Cue", cmd.rewZoneInd);
-
-			// Set flag
-			fc.doRew = true;
-		}
-
-		// Free reward
-		else if (cmd.rewCond == 3) {
-
-			// Log/print
-			DebugFlow("[loop] DO FREE REWARD");
-
-			// Set mode
-			Reward.SetRewMode("Free", cmd.rewDelay);
-
-			// Set flag
-			fc.doRew = true;
-		}
+		// Start reward
+		Reward.StartRew();
 
 	}
 
-	// CHECK REWARD BOUNDS
-	if (fc.doRew) {
+	// Cued reward
+	else if (cmd.rewCond == 2) {
 
-		// If not rewarding 
-		if (!Reward.isRewarding) {
+		// Log/print
+		DebugFlow("[loop] DO CUED REWARD");
 
-			// Zone bounds not set yet
-			if (!Reward.isBoundsSet) {
+		// Set mode
+		Reward.SetRewMode("Cue", cmd.rewZoneInd);
 
-				// Compute bounds
-				Reward.CompZoneBounds(kal.RatPos, cmd.rewPos);
+		// Set flag
+		fc.doRew = true;
+	}
+
+	// Free reward
+	else if (cmd.rewCond == 3) {
+
+		// Log/print
+		DebugFlow("[loop] DO FREE REWARD");
+
+		// Set mode
+		Reward.SetRewMode("Free", cmd.rewDelay);
+
+		// Set flag
+		fc.doRew = true;
+	}
+
+}
+
+// CHECK REWARD BOUNDS
+if (fc.doRew) {
+
+	// If not rewarding 
+	if (!Reward.isRewarding) {
+
+		// Zone bounds not set yet
+		if (!Reward.isBoundsSet) {
+
+			// Compute bounds
+			Reward.CompZoneBounds(kal.RatPos, cmd.rewPos);
+
+			// Print message
+			sprintf(horeStr, "[loop] SET REWARD ZONE: center=%0.2fcm from=%0.2fcm to=%0.2fcm",
+				Reward.rewCenterRel, Reward.boundMin, Reward.boundMax);
+			DebugFlow(horeStr);
+		}
+
+		// Zone not triggered yet
+		else if (!Reward.isZoneTriggered) {
+
+			// Check each zone
+			if (Reward.CheckZoneBounds(kal.RatPos)) {
+
+				// Start reward
+				Reward.StartRew();
+
+				// Reset flag
+				fc.doRew = false;
 
 				// Print message
-				sprintf(horeStr, "[loop] SET REWARD ZONE: center=%0.2fcm from=%0.2fcm to=%0.2fcm",
-					Reward.rewCenterRel, Reward.boundMin, Reward.boundMax);
+				sprintf(horeStr, "[loop] REWARDED ZONE: occ=%dms zone=%d from=%0.2fcm to=%0.2fcm",
+					Reward.occRewarded, Reward.zoneRewarded, Reward.boundsRewarded[0], Reward.boundsRewarded[1]);
 				DebugFlow(horeStr);
-			}
-
-			// Zone not triggered yet
-			else if (!Reward.isZoneTriggered) {
-
-				// Check each zone
-				if (Reward.CheckZoneBounds(kal.RatPos)) {
-
-					// Start reward
-					Reward.StartRew();
-
-					// Reset flag
-					fc.doRew = false;
-
-					// Print message
-					sprintf(horeStr, "[loop] REWARDED ZONE: occ=%dms zone=%d from=%0.2fcm to=%0.2fcm",
-						Reward.occRewarded, Reward.zoneRewarded, Reward.boundsRewarded[0], Reward.boundsRewarded[1]);
-					DebugFlow(horeStr);
-				}
-			}
-
-			// Check if rat passed all bounds
-			if (Reward.isAllZonePassed &&
-				!Reward.isZoneTriggered) {
-
-				// Print reward missed
-				sprintf(horeStr, "[loop] REWARD MISSED: rat=%0.2fcm bound_max=%0.2fcm",
-					kal.RatPos, Reward.boundMax);
-				DebugFlow(horeStr);
-
-				// Reset flags
-				Reward.RewardReset();
-				fc.doRew = false;
 			}
 		}
+
+		// Check if rat passed all bounds
+		if (Reward.isAllZonePassed &&
+			!Reward.isZoneTriggered) {
+
+			// Print reward missed
+			sprintf(horeStr, "[loop] REWARD MISSED: rat=%0.2fcm bound_max=%0.2fcm",
+				kal.RatPos, Reward.boundMax);
+			DebugFlow(horeStr);
+
+			// Reset flags
+			Reward.RewardReset();
+			fc.doRew = false;
+		}
 	}
+}
 
 #pragma endregion
 
 #pragma region //--- (H) HALT ROBOT STATUS ---
-	if (c2r.idNow == 'H' && c2r.isNew) {
+if (c2r.idNow == 'H' && c2r.isNew) {
 
-		// Store message data
-		fc.doHalt = c2r.dat[0] != 0 ? true : false;
+	// Store message data
+	fc.doHalt = c2r.dat[0] != 0 ? true : false;
 
-		if (fc.doHalt) {
+	if (fc.doHalt) {
 
-			// Log/print
-			DebugFlow("[loop] HALT STARTED");
+		// Log/print
+		DebugFlow("[loop] HALT STARTED");
 
-			// Stop pid and set to manual
-			HardStop("Halt");
+		// Stop pid and set to manual
+		HardStop("Halt");
 
-			// Block motor control
-			SetMotorControl("Halt", "Halt");
+		// Block motor control
+		SetMotorControl("Halt", "Halt");
 
-		}
-		else {
-
-			// Log/print
-			DebugFlow("[loop] HALT FINISHED");
-
-			// Open motor control
-			SetMotorControl("Open", "Halt");
-
-		}
 	}
+	else {
+
+		// Log/print
+		DebugFlow("[loop] HALT FINISHED");
+
+		// Open motor control
+		SetMotorControl("Open", "Halt");
+
+	}
+}
 #pragma endregion
 
 #pragma region //--- (B) BULLDOZE RAT STATUS ---
-	if (c2r.idNow == 'B' && c2r.isNew) {
+if (c2r.idNow == 'B' && c2r.isNew) {
 
-		// Store message data
-		cmd.bullDel = (byte)c2r.dat[0];
-		cmd.bullSpeed = (byte)c2r.dat[1];
+	// Store message data
+	cmd.bullDel = (byte)c2r.dat[0];
+	cmd.bullSpeed = (byte)c2r.dat[1];
 
-		// Local vars
-		bool is_mode_changed = false;
+	// Local vars
+	bool is_mode_changed = false;
 
-		// Reinitialize bulldoze
-		Bull.BullReinitialize(cmd.bullDel, cmd.bullSpeed, "loop \'B\'");
+	// Reinitialize bulldoze
+	Bull.BullReinitialize(cmd.bullDel, cmd.bullSpeed, "loop \'B\'");
 
-		// Check if mode should be changedchanged
-		if (cmd.bullSpeed > 0) {
+	// Check if mode should be changedchanged
+	if (cmd.bullSpeed > 0) {
 
-			// Mode changed
-			if (!fc.doBulldoze) {
+		// Mode changed
+		if (!fc.doBulldoze) {
 
-				// Log/print event
-				DebugFlow("[loop] SET BULLDOZE ON");
+			// Log/print event
+			DebugFlow("[loop] SET BULLDOZE ON");
 
-				// Set flags
-				is_mode_changed = true;
-				fc.doBulldoze = true;
+			// Set flags
+			is_mode_changed = true;
+			fc.doBulldoze = true;
 
-			}
-			// Only settings changed
-			else {
-				is_mode_changed = false;
-			}
 		}
+		// Only settings changed
 		else {
-			// Mode changed
-			if (fc.doBulldoze)
-			{
-				// Log/print event
-				DebugFlow("[loop] SET BULLDOZE OFF");
-
-				// Set flags
-				is_mode_changed = true;
-				fc.doBulldoze = false;
-
-			}
-			// Only settings changed
-			else {
-				is_mode_changed = false;
-			}
+			is_mode_changed = false;
 		}
-
-		// Don't exicute until rat is in and mode is changed
-		if (fc.isTrackingEnabled &&
-			is_mode_changed) {
-
-			if (fc.doBulldoze) {
-
-				// Log/print event
-				DebugFlow("[loop] BULLDOZE ON");
-
-				// Turn bulldoze on
-				Bull.BullOn("loop \'B\'");
-			}
-			else {
-
-				// Log/print event
-				DebugFlow("[loop] BULLDOZE OFF");
-
-				// Turn bulldoze off
-				Bull.BullOff("loop \'B\'");
-			}
-		}
-
 	}
-#pragma endregion
+	else {
+		// Mode changed
+		if (fc.doBulldoze)
+		{
+			// Log/print event
+			DebugFlow("[loop] SET BULLDOZE OFF");
 
-#pragma region //--- (I) START/STOP PID ---
-	if (c2r.idNow == 'I' && c2r.isNew)
-	{
-		// Store message data
-		fc.isRatIn = c2r.dat[0] != 0 ? true : false;
+			// Set flags
+			is_mode_changed = true;
+			fc.doBulldoze = false;
 
-		if (fc.isRatIn) {
+		}
+		// Only settings changed
+		else {
+			is_mode_changed = false;
+		}
+	}
 
-			// Pid started by InitializeTracking()
-			DebugFlow("[loop] RAT IN");
+	// Don't exicute until rat is in and mode is changed
+	if (fc.isTrackingEnabled &&
+		is_mode_changed) {
 
-			// Reset rat pos data
-			Pos[0].PosReset();
-			Pos[2].PosReset();
+		if (fc.doBulldoze) {
+
+			// Log/print event
+			DebugFlow("[loop] BULLDOZE ON");
+
+			// Turn bulldoze on
+			Bull.BullOn("loop \'B\'");
 		}
 		else {
 
 			// Log/print event
-			DebugFlow("[loop] RAT OUT");
+			DebugFlow("[loop] BULLDOZE OFF");
 
-			// Turn off bulldoze
-			Bull.BullOff("loop \'I\'");
-			fc.doBulldoze = false;
-
-			// Turn off pid
-			Pid.PID_Stop("loop \'I\'");
-
-			// Set to stop tracking
-			fc.isTrackingEnabled = false;
+			// Turn bulldoze off
+			Bull.BullOff("loop \'B\'");
 		}
 	}
+
+}
+#pragma endregion
+
+#pragma region //--- (I) START/STOP PID ---
+if (c2r.idNow == 'I' && c2r.isNew)
+{
+	// Store message data
+	fc.isRatIn = c2r.dat[0] != 0 ? true : false;
+
+	if (fc.isRatIn) {
+
+		// Pid started by InitializeTracking()
+		DebugFlow("[loop] RAT IN");
+
+		// Reset rat pos data
+		Pos[0].PosReset();
+		Pos[2].PosReset();
+	}
+	else {
+
+		// Log/print event
+		DebugFlow("[loop] RAT OUT");
+
+		// Turn off bulldoze
+		Bull.BullOff("loop \'I\'");
+		fc.doBulldoze = false;
+
+		// Turn off pid
+		Pid.PID_Stop("loop \'I\'");
+
+		// Set to stop tracking
+		fc.isTrackingEnabled = false;
+	}
+}
 #pragma endregion
 
 #pragma region //--- (V) GET STREAM STATUS ---
-	if (c2r.idNow == 'V' && c2r.isNew)
-	{
-		fc.doStreamCheck = true;
-	}
+if (c2r.idNow == 'V' && c2r.isNew)
+{
+	fc.doStreamCheck = true;
+}
 
-	// Check for streaming
-	if (fc.doStreamCheck && Pos[1].is_streamStarted)
-	{
-		// Log/print event
+// Check for streaming
+if (fc.doStreamCheck && Pos[1].is_streamStarted)
+{
+	// Log/print event
 
-		DebugFlow("[loop] STREAMING CONFIRMED");
-		// Send streaming confirmation
-		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('V', &c2r)], true);
+	DebugFlow("[loop] STREAMING CONFIRMED");
+	// Send streaming confirmation
+	QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('V', &c2r)], true);
 
-		// Reset flag
-		fc.doStreamCheck = false;
+	// Reset flag
+	fc.doStreamCheck = false;
 
-		// Set flag to begin sending vcc
-		fc.doSendVCC = true;
-	}
+	// Set flag to begin sending vcc
+	fc.doSendVCC = true;
+}
 #pragma endregion
 
 #pragma region //--- (P) VT DATA RECIEVED ---
-	if (c2r.idNow == 'P' && c2r.isNew)
-	{
-		// Store message data
-		cmd.vtEnt = (byte)c2r.dat[0];
-		cmd.vtCM[cmd.vtEnt] = c2r.dat[1];
-		U.f = c2r.dat[2];
-		cmd.vtTS[cmd.vtEnt] = U.i32;
+if (c2r.idNow == 'P' && c2r.isNew)
+{
+	// Store message data
+	cmd.vtEnt = (byte)c2r.dat[0];
+	cmd.vtCM[cmd.vtEnt] = c2r.dat[1];
+	U.f = c2r.dat[2];
+	cmd.vtTS[cmd.vtEnt] = U.i32;
 
-		// Handle rob vt data
-		if (cmd.vtEnt == 1) {
+	// Handle rob vt data
+	if (cmd.vtEnt == 1) {
 
-			// Update VT
+		// Update VT
+		Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
+
+		// Set rat vt and pixy to setpoint if rat not in 
+		if (!fc.isRatIn && !db.do_posDebug) {
+			Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
+			Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
+		}
+
+		// Log/print first sample
+		if (!Pos[1].is_streamStarted) {
+
+			// Log/print
+			sprintf(horeStr, "[loop] FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
+				Pos[1].posAbs, Pos[1].posNow, Pos[1].nLaps);
+			DebugFlow(horeStr);
+
+			// Set flag
+			Pos[1].is_streamStarted = true;
+		}
+	}
+
+	// Handle rat vt data
+	else if (cmd.vtEnt == 0) {
+
+		// Update only after rat in
+		if (fc.isRatIn || db.do_posDebug) {
+
+			// Update rat VT
 			Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
-			// Set rat vt and pixy to setpoint if rat not in 
-			if (!fc.isRatIn && !db.do_posDebug) {
-				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
-				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
+			// Use rat vt for pixy if running simulated rat test
+			if (cmd.vtEnt == 0 && db.do_simRatTest) {
+				Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
 			}
 
 			// Log/print first sample
-			if (!Pos[1].is_streamStarted) {
+			if (!Pos[0].is_streamStarted) {
 
 				// Log/print
-				sprintf(horeStr, "[loop] FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
-					Pos[1].posAbs, Pos[1].posNow, Pos[1].nLaps);
+				sprintf(horeStr, "[loop] FIRST RAT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
+					Pos[0].posAbs, Pos[0].posNow, Pos[0].nLaps);
 				DebugFlow(horeStr);
 
 				// Set flag
-				Pos[1].is_streamStarted = true;
+				Pos[0].is_streamStarted = true;
 			}
-		}
-
-		// Handle rat vt data
-		else if (cmd.vtEnt == 0) {
-
-			// Update only after rat in
-			if (fc.isRatIn || db.do_posDebug) {
-
-				// Update rat VT
-				Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
-
-				// Use rat vt for pixy if running simulated rat test
-				if (cmd.vtEnt == 0 && db.do_simRatTest) {
-					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
-				}
-
-				// Log/print first sample
-				if (!Pos[0].is_streamStarted) {
-
-					// Log/print
-					sprintf(horeStr, "[loop] FIRST RAT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
-						Pos[0].posAbs, Pos[0].posNow, Pos[0].nLaps);
-					DebugFlow(horeStr);
-
-					// Set flag
-					Pos[0].is_streamStarted = true;
-				}
-			}
-
 		}
 
 	}
+
+}
 #pragma endregion
 
 #pragma region //--- (L) SEND LOG ---
-	if (c2r.idNow == 'L' && c2r.isNew) {
+if (c2r.idNow == 'L' && c2r.isNew) {
 
-		// Flag to begin sending
-		fc.doLogSend = c2r.dat[0] == 1 ? true : false;
+	// Flag to begin sending
+	fc.doLogSend = c2r.dat[0] == 1 ? true : false;
 
-		// Check for 2 way confirmation before sending log
-		if (!fc.doLogSend) {
+	// Check for 2 way confirmation before sending log
+	if (!fc.doLogSend) {
 
-			// Log/print
-			sprintf(horeStr, "[loop] SENDING LOG: logs_stored=~%d b_stored=~%d",
-				Log.cnt_logsStored, Log.cnt_logBytesStored);
-			DebugFlow(horeStr);
+		// Log/print
+		sprintf(horeStr, "[loop] SENDING LOG: logs_stored=~%d b_stored=~%d",
+			Log.cnt_logsStored, Log.cnt_logBytesStored);
+		DebugFlow(horeStr);
 
-			// Send number of log bytes being sent
-			QueuePacket(&r2c, 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
+		// Send number of log bytes being sent
+		QueuePacket(&r2c, 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
 
-			// Block sending vcc updates
-			fc.doSendVCC = false;
-		}
-
-		// Begin sending log
-		else {
-
-			// Log/print
-			DebugFlow("[loop] DO SEND LOG");
-
-			// Set send time
-			Log.t_beginSend = millis() + Log.dt_beginSend;
-
-			// Store remaining logs
-			DoAll("WriteLog");
-		}
-
+		// Block sending vcc updates
+		fc.doSendVCC = false;
 	}
+
+	// Begin sending log
+	else {
+
+		// Log/print
+		DebugFlow("[loop] DO SEND LOG");
+
+		// Set send time
+		Log.t_beginSend = millis() + Log.dt_beginSend;
+
+		// Store remaining logs
+		DoAll("WriteLog");
+	}
+
+}
 
 #pragma endregion
 
 #pragma region //--- UPDATE TRACKING ---
 
-	// UPDATE PIXY
-	CheckPixy();
+// UPDATE PIXY
+CheckPixy();
 
-	// CHECK IF RAT POS FRAMES DROPPING
-	CheckSampDT();
+// CHECK IF RAT POS FRAMES DROPPING
+CheckSampDT();
 
-	// INITIALIZE RAT AHEAD
-	InitializeTracking();
+// INITIALIZE RAT AHEAD
+InitializeTracking();
 
-	// UPDATE EKF
-	UpdateEKF();
+// UPDATE EKF
+UpdateEKF();
 
-	// UPDATE PID AND SPEED
-	double new_speed = Pid.UpdatePID();
+// UPDATE PID AND SPEED
+double new_speed = Pid.UpdatePID();
 
-	if (new_speed == 0) {
-		HardStop("Pid");
-	}
-	else if (new_speed > 0) {
-		RunMotor('f', new_speed, "Pid");
-	}
+if (new_speed == 0) {
+	HardStop("Pid");
+}
+else if (new_speed > 0) {
+	RunMotor('f', new_speed, "Pid");
+}
 
-	// UPDATE BULLDOZER
-	Bull.UpdateBull();
+// UPDATE BULLDOZER
+Bull.UpdateBull();
 
-	// LOG TRACKING DATA
-	LogTrackingData();
+// LOG TRACKING DATA
+LogTrackingData();
 
 #pragma endregion
 

@@ -153,8 +153,8 @@ const int sendQueueBytes = 18;
 byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
 int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
-const int dt_sendSent = 7; // (ms) 
-const int dt_sendRcvd = 10; // (ms) 
+const int dt_sendSent = 5; // (ms) 
+const int dt_sendRcvd = 0; // (ms) 
 int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
@@ -229,7 +229,7 @@ uint32_t word_rewOn;
 uint32_t word_rewOff;
 
 // IR time sync LED
-const uint32_t dt_irSyncPulse = 10; // (ms)
+const int dt_irSyncPulse = 10; // (ms)
 uint32_t del_irSyncPulse = 60000; // (ms)
 uint32_t t_sync = 0;
 bool is_irOn = false;
@@ -260,7 +260,7 @@ volatile bool isOnAny = false;
 uint32_t t_debounce = 10; // (ms)
 uint32_t dt_ttlPulse = 50; // (ms)
 
-// union
+						   // union
 union u_tag {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
@@ -275,7 +275,7 @@ union u_tag {
 
 #pragma region ========= FUNCTION DECLARATIONS =========
 
-// CHECK FOR START COMMAND
+// CHECK FOR HANDSHAKE
 bool CheckForStart();
 // PARSE SERIAL INPUT
 void GetSerial();
@@ -289,6 +289,8 @@ bool SendPacket();
 void QueueLog(char msg[], uint32_t t);
 // SEND LOG DATA OVER SERIAL
 bool SendLog();
+// GET CURRENT NUMBER OF ENTRIES IN DB QUEUE: queue_str=["Log", "Print"]
+int GetQueueAvailable(char queue_str[]);
 // START REWARD
 void StartRew();
 // END REWARD
@@ -313,8 +315,8 @@ void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bo
 void StatusBlink();
 // PLAY SOUND WHEN QUITING
 void QuitBeep();
-// PULSE IR
-bool PulseIR(int del_sync = 1, int dt_sync = 1);
+// PULSE IR: force_state=[0=off, 1=on, 2=auto]
+bool PulseIR(int dt_off, int dt_on, byte force_state = 2);
 // GET ID INDEX
 int CharInd(char id, const char id_arr[], int arr_size);
 // GET 32 BIT WORD FOR PORT
@@ -343,14 +345,14 @@ void EastFun();
 
 #pragma region --------COMMUNICATION---------
 
-// CHECK FOR START COMMAND
+// CHECK FOR HANDSHAKE
 bool CheckForStart()
 {
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	bool is_rcvd = false;
 	byte in_byte[1] = { 0 };
-	byte hand_shake_byte[1] = { 'i' };
+	byte handshake_byte[1] = { 'i' };
 
 	// Bail if session started
 	if (fc.isSesStarted) {
@@ -358,7 +360,7 @@ bool CheckForStart()
 	}
 
 	// Check if IR should be pulsed 
-	PulseIR(1000, dt_irSyncPulse);
+	PulseIR(500, dt_irSyncPulse);
 
 	// Bail if no new data
 	if (Serial.available() < 1) {
@@ -369,23 +371,31 @@ bool CheckForStart()
 	in_byte[0] = Serial.read();
 
 	// Bail if not a match
-	if (in_byte[0] != hand_shake_byte[0]) {
+	if (in_byte[0] != handshake_byte[0]) {
 		return false;
 	}
+
+	// Turn off ir
+	PulseIR(0, 0, 0);
+	delay(1000);
+
+	// Turn ir on for 10 ms
+	PulseIR(0, 0, 1);
+	delayMicroseconds(10 * 1000);
+
+	// Turn ir off for 65 ms
+	PulseIR(0, 0, 0);
+	delayMicroseconds(65 * 1000);
+
+	// Turn ir back on
+	PulseIR(0, 0, 1);
 
 	// Store time
 	t_sync = millis();
 
-	// Pulse ir
-	if (!is_irOn) {
-		PulseIR(); // turn on
-	}
-	delay(10 - (millis() - t_irSyncLast));
-	PulseIR();  // turn off
-	delay(75);
-	PulseIR(); // turn on
-	delay(10);
-	PulseIR();  // turn off
+	// Turn ir on for 10 ms
+	PulseIR(0, 0, 1);
+	delayMicroseconds(10 * 1000);
 
 	// Dump buffer
 	while (Serial.available()) {
@@ -492,8 +502,8 @@ void GetSerial()
 	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
 
 	// Store data strings
-	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%s b_read=%d b_dump=%d",
-		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf ? "1" : "0", cnt_packBytesRead, cnt_packBytesDiscarded);
+	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%d b_read=%d b_dump=%d",
+		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf, cnt_packBytesRead, cnt_packBytesDiscarded);
 
 
 	// Check for missing footer
@@ -870,8 +880,8 @@ bool SendPacket()
 	is_resend = pack == r2a.packLast[CharInd(id, r2a.id, r2a.lng)];
 
 	// Make log/print string
-	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%s b_sent=%d tx=%d rx=%d dt_snd=%d dt_rcv=%d dt_q=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf ? "1" : "0", cnt_packBytesSent, buff_tx, buff_rx, a2r.dt_sent, r2a.t_rcvd > 0 ? millis() - r2a.t_rcvd : 0, millis() - t_queue);
+	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%d b_sent=%d tx=%d rx=%d dt_snd=%d dt_rcv=%d dt_q=%d",
+		id, dat[0], dat[1], dat[2], pack, do_conf, cnt_packBytesSent, buff_tx, buff_rx, a2r.dt_sent, r2a.t_rcvd > 0 ? millis() - r2a.t_rcvd : 0, millis() - t_queue);
 
 	// Log/print
 	DebugSent(dat_str, is_resend);
@@ -895,8 +905,8 @@ void QueueLog(char msg[], uint32_t t)
 	static char msg_copy[maxStoreStrLng] = { 0 }; msg_copy[0] = '\0';
 	static char msg_out[maxStoreStrLng] = { 0 }; msg_out[0] = '\0';
 	static char queue_state[logQueueSize + 1] = { 0 }; queue_state[0] = '\0';
-	bool is_queue_overflowed = false;
-	bool is_mem_overflowed = false;
+	bool is_queue_overflowing = false;
+	bool is_mem_overflowing = false;
 	uint32_t t_m = 0;
 	byte chksum = 0;
 
@@ -911,16 +921,16 @@ void QueueLog(char msg[], uint32_t t)
 	}
 
 	// Get message length
-	is_mem_overflowed = strlen(msg) >= maxMsgStrLng;
+	is_mem_overflowing = strlen(msg) >= maxMsgStrLng;
 
 	// Check for overflow
-	is_queue_overflowed = logQueue[logQueueIndStore][0] != '\0';
+	is_queue_overflowing = logQueue[logQueueIndStore][0] != '\0';
 
 	// Check if queue overflowed or message too long
-	if (is_queue_overflowed || is_mem_overflowed) {
+	if (is_queue_overflowing || is_mem_overflowing) {
 
 		// Handle overflow queue
-		if (is_queue_overflowed) {
+		if (is_queue_overflowing) {
 
 			// Get list of empty entries
 			for (int i = 0; i < logQueueSize; i++) {
@@ -937,7 +947,7 @@ void QueueLog(char msg[], uint32_t t)
 		}
 
 		// Handle overflow char array
-		else if (is_mem_overflowed) {
+		else if (is_mem_overflowing) {
 
 			// Store part of message
 			for (int i = 0; i < 100; i++) {
@@ -950,8 +960,12 @@ void QueueLog(char msg[], uint32_t t)
 				strlen(msg), maxMsgStrLng, str, "...");
 		}
 
-		// Print error
-		if (db.print_errors && db.CONSOLE) {
+		// Print error if print queue not also overflowed
+		if (db.print_errors &&
+			db.CONSOLE &&
+			GetQueueAvailable("Print") > 1) {
+
+			// Print
 			QueueDebug(msg_copy, t);
 		}
 	}
@@ -1079,6 +1093,38 @@ bool SendLog()
 
 	// Return success
 	return true;
+}
+
+// GET CURRENT NUMBER OF ENTRIES IN DB QUEUE: queue_str=["Log", "Print"]
+int GetQueueAvailable(char queue_str[]) {
+
+	// Local vars
+	int n_entries = 0;
+
+	// Check log queue
+	if (strcmp(queue_str, "Log") == 0) {
+		for (int i = 0; i < logQueueSize; i++) {
+			n_entries += logQueue[i][0] != '\0' ? 1 : 0;
+		}
+
+		// Get total available
+		return logQueueSize - n_entries;
+	}
+
+	// Check print queue
+	else if (strcmp(queue_str, "Print") == 0) {
+		for (int i = 0; i < printQueueSize; i++) {
+			n_entries += printQueue[i][0] != '\0' ? 1 : 0;
+		}
+
+		// Get total available
+		return printQueueSize - n_entries;
+	}
+
+	// Bad entry
+	else {
+		return 0;
+	}
 }
 
 #pragma endregion
@@ -1281,8 +1327,8 @@ void QueueDebug(char msg[], uint32_t t)
 	char msg_copy[maxStoreStrLng] = { 0 };
 	char str_time[100] = { 0 };
 	char queue_state[printQueueSize + 1];
-	bool is_queue_overflowed = false;
-	bool is_mem_overflowed = false;
+	bool is_queue_overflowing = false;
+	bool is_mem_overflowing = false;
 	uint32_t t_m = 0;
 	float t_s = 0;
 
@@ -1297,16 +1343,16 @@ void QueueDebug(char msg[], uint32_t t)
 	}
 
 	// Get message length
-	is_mem_overflowed = strlen(msg) >= maxMsgStrLng;
+	is_mem_overflowing = strlen(msg) >= maxMsgStrLng;
 
 	// Check for overflow
-	is_queue_overflowed = printQueue[printQueueIndStore][0] != '\0';
+	is_queue_overflowing = printQueue[printQueueIndStore][0] != '\0';
 
 	// Check if queue overflowed or message too long
-	if (is_queue_overflowed || is_mem_overflowed) {
+	if (is_queue_overflowing || is_mem_overflowing) {
 
 		// Handle overflow queue
-		if (is_queue_overflowed) {
+		if (is_queue_overflowing) {
 
 			// Get list of empty entries
 			for (int i = 0; i < printQueueSize; i++) {
@@ -1323,7 +1369,7 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 		// Handle overflow char array
-		else if (is_mem_overflowed) {
+		else if (is_mem_overflowing) {
 
 			// Store part of message
 			for (int i = 0; i < 100; i++) {
@@ -1337,7 +1383,11 @@ void QueueDebug(char msg[], uint32_t t)
 		}
 
 		// Log error
-		if (db.log_errors && db.LOG) {
+		if (db.log_errors &&
+			db.LOG &&
+			GetQueueAvailable("Log") > 1) {
+
+			// Log
 			QueueLog(msg_copy, t);
 		}
 
@@ -1478,16 +1528,19 @@ void QuitBeep()
 	digitalWrite(pin.relRewTone, LOW);
 }
 
-// PULSE IR
-bool PulseIR(int del_sync, int dt_sync)
+// PULSE IR: force_state=[0,1,2]
+bool PulseIR(int dt_off, int dt_on, byte force_state)
 {
 	// Local vars
 	bool is_changed = false;
 
 	// Set high
 	if (
-		!is_irOn &&
-		millis() > t_irSyncLast + del_sync
+		force_state == 1 ||
+		(
+			force_state == 2 &&
+			!is_irOn &&
+			millis() > t_irSyncLast + dt_off)
 		)
 	{
 		// Set ir pins on
@@ -1498,8 +1551,11 @@ bool PulseIR(int del_sync, int dt_sync)
 	}
 	// Set low
 	else if (
-		is_irOn &&
-		millis() > t_irSyncLast + dt_sync
+		force_state == 0 ||
+		(
+			force_state == 2 &&
+			is_irOn &&
+			millis() > t_irSyncLast + dt_on)
 		)
 	{
 		SetPort(0x0, word_irOn);
@@ -1797,7 +1853,7 @@ void setup()
 	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT C
 	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output port
 
-	// Get ir word
+								   // Get ir word
 	int sam_ir_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
 	word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
 
