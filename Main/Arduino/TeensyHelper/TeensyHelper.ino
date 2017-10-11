@@ -11,6 +11,9 @@ NOTES
 
 #pragma region ============ VARIABLE SETUP =============
 
+// Print port
+//usb_serial_class portPrint = Serial;
+Serial_ portPrint = SerialUSB;
 
 // Pin mapping
 struct PIN
@@ -19,9 +22,12 @@ struct PIN
 	int StatLED = 13;
 
 	// Send log
-	int Teensy_SendStart = 4;
-	int Teensy_Resetting = 5;
-	int Teensy_Unused = 6;
+	//int Teensy_SendStart = 4;
+	//int Teensy_Resetting = 5;
+	//int Teensy_Unused = 6;
+	int Teensy_SendStart = 36;
+	int Teensy_Resetting = 38;
+	int Teensy_Unused = 40;
 }
 // Initialize
 pin;
@@ -34,7 +40,8 @@ const char tnsy_id_list[1] =
 
 struct R42T
 {
-	HardwareSerial2 &port;
+	//HardwareSerial2 &port;
+	USARTClass &port;
 	const char *instID;
 	const int lng;
 	const char head;
@@ -50,6 +57,7 @@ struct R42T
 R42T r42t
 {
 	// serial
+	//Serial2,
 	Serial2,
 	// instID
 	"t2r",
@@ -78,7 +86,7 @@ bool is_ledOn = false;
 
 // Debugging general
 const uint16_t maxStoreStrLng = 300;
-const uint16_t logSize = 20;
+const uint16_t logSize = 40;
 uint32_t cnt_logsRcvd = 0;
 uint16_t cnt_logsStored = 0;
 byte logInd = 0;
@@ -514,7 +522,7 @@ void PrintDebug(char msg[], uint32_t t)
 	sprintf(str, "%s%s%s\n", str_time, spc, msg);
 
 	// Print it
-	Serial.print(str);
+	portPrint.print(str);
 
 	// Store message
 	//StoreMessage(str, 0);
@@ -547,7 +555,7 @@ void setup()
 
 	// Serial monitor
 #if DO_DEBUG
-	Serial.begin(57600);
+	portPrint.begin(57600);
 #endif 
 
 	// FeederDue Serial
@@ -564,6 +572,14 @@ void setup()
 	// Set initial state
 	digitalWrite(pin.StatLED, LOW);
 	digitalWrite(pin.Teensy_Resetting, LOW);
+
+	// Add delay so can load sketch if issue
+	for (size_t i = 0; i < 120; i++)
+	{
+		is_ledOn = !is_ledOn;
+		digitalWrite(pin.StatLED, is_ledOn ? HIGH : LOW);
+		delay(25);
+	}
 
 	// RUN RESET
 	RunReset();

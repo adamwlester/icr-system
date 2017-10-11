@@ -52,10 +52,10 @@
 #pragma region ============ DEBUG SETTINGS =============
 
 // DEBUG SETTING
-#define DO_DEBUG 1
+#define DO_DEBUG 0
 #define DO_LOG 1
-#define DO_TEENSY_DEBUG 0
-#define DO_HARDWARE_TEST 1
+#define DO_TEENSY_DEBUG 1
+#define DO_HARDWARE_TEST 0
 
 // DEBUG VIA TEENSY
 #define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
@@ -197,7 +197,6 @@ const int printQueueSize = 30;
 char printQueue[printQueueSize][maxStoreStrLng] = { { 0 } };
 int printQueueIndStore = 0;
 int printQueueIndRead = 0;
-bool isPrintQueueOverflowed = false;
 
 // Serial com general
 const int sendQueueSize = 10;

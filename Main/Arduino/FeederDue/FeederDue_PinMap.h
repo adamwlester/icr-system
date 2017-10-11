@@ -23,8 +23,9 @@ struct PIN
 	const int X1b_UNDEF = 26;
 
 	// Teensy
-	const int Teensy_SendStart = A8;
-	const int Teensy_Resetting = A9;
+	const int Teensy_SendStart = 36;
+	const int Teensy_Resetting = 38;
+	const int Teensy_Unused = 40;
 
 	// Display
 	const int Disp_SCK = 8;
