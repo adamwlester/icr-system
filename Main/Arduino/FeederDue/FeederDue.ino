@@ -142,7 +142,6 @@ public:
 	void PID_Hold(char called_from[]);
 	void PID_Reset();
 	void PID_CheckMotorControl();
-	void CheckSetpointCrossing();
 	void PID_CheckEKF(uint32_t t);
 	void PID_ResetEKF(char called_from[]);
 	void PID_SetUpdateTime(uint32_t t);
@@ -921,12 +920,16 @@ double PID::UpdatePID()
 	}
 
 	// Check for setpoint crossing
-	CheckSetpointCrossing();
+	if (isHolding4cross && error > 0)
+	{
+		// Reset flag
+		isHolding4cross = false;
+	}
 
-	// Update Pid and speed
+	// Bail if waiting on cross or ekf
 	if (
-		!is_ekfNew || // New EKF data 
-		isHolding4cross // wait for setpoint pass
+		!is_ekfNew ||
+		isHolding4cross
 		) {
 		return -1;
 	}
@@ -935,6 +938,7 @@ double PID::UpdatePID()
 	DB_FUN_STR();
 #endif
 
+	// Log/print first run
 	if (isFirstRun) {
 		PrintPID("[PID::UpdatePID] First Run");
 		isFirstRun = false;
@@ -943,31 +947,18 @@ double PID::UpdatePID()
 	// Re-compute error 
 	error = kal.RatPos - (kal.RobPos + setPoint);
 
-	// Compute new integral
-	if (doIncludeTerm[0]) {
-
-		// Catch setpoint (i.e. error == 0) crossing
-		if ((abs(error) + abs(errorLast)) > abs(error + errorLast)) {
-
-			integral = 0;
-		}
-
-		//else if (error < 0) integral = integral + error * 5;
-		else {
-			integral = integral + error;
-		}
-	}
-	else {
+	// Set integral to zero if rat just crossed setpoint
+	if ((abs(error) + abs(errorLast)) > abs(error + errorLast)) {
 		integral = 0;
 	}
 
-	// Compute new derivative
-	if (doIncludeTerm[1]) {
-		derivative = error - errorLast;
-	}
+	// Update normally
 	else {
-		derivative = 0;
+		integral = integral + error;
 	}
+
+	// Compute new derivative
+	derivative = error - errorLast;
 
 	// Compute new terms
 	p_term = kP*error;
@@ -989,7 +980,10 @@ double PID::UpdatePID()
 		runSpeed = 0;
 	}
 
+	// Store error
 	errorLast = error;
+
+	// Set flags
 	isPidUpdated = true;
 	is_ekfNew = false;
 
@@ -1094,43 +1088,14 @@ void PID::PID_CheckMotorControl()
 	if ((strcmp(fc.motorControl, "Pid") == 0 || strcmp(fc.motorControl, "Open") == 0) &&
 		strcmp(modePID, "Hold") == 0) {
 
-		// Print taking conrol
-		PrintPID("[PID::CheckMotorControl] Take Motor Control [PID::CheckMotorControl]");
-
 		// Run pid
-		PID_Run("PID::CheckMotorControl");
+		PID_Run("PID::PID_CheckMotorControl");
 	}
 	else if ((strcmp(fc.motorControl, "Pid") != 0 && strcmp(fc.motorControl, "Open") != 0) &&
 		strcmp(modePID, "Automatic") == 0) {
 
-		// Print taking conrol
-		PrintPID("[PID::CheckMotorControl] Surender Motor Control [PID::CheckMotorControl]");
-
 		// Hold pid
-		PID_Hold("PID::CheckMotorControl");
-	}
-}
-
-void PID::CheckSetpointCrossing()
-{
-
-	// Bail if not holding for cross
-	if (!isHolding4cross) {
-		return;
-	}
-
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
-
-	// Check if rat has moved in front of setpoint
-	if (error > 0)
-	{
-		// Log/print event 
-		PrintPID("[PID::CheckSetpointCrossing] Crossed Setpoint");
-
-		// Set flag
-		isHolding4cross = false;
+		PID_Hold("PID::PID_CheckMotorControl");
 	}
 }
 
@@ -1195,7 +1160,7 @@ void PID::PrintPID(char msg[])
 #endif
 
 	// Add to print queue
-	if (db.print_pid && (db.CONSOLE || db.LCD)) {
+	if (db.print_pid && DO_CONSOLE_DEBUG) {
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
@@ -1646,7 +1611,7 @@ void BULLDOZE::PrintBull(char msg[])
 #endif
 
 	// Add to print queue
-	if (db.print_bull && (db.CONSOLE || db.LCD)) {
+	if (db.print_bull && DO_CONSOLE_DEBUG) {
 		QueueDebug(msg, millis());
 	}
 	// Add to log queue
@@ -4968,7 +4933,7 @@ bool SetMotorControl(char set_to[], char called_from[])
 	if (strcmp(fc.motorControl, set_to) == 0) {
 		do_change = true;
 	}
-	
+
 
 	return do_change;
 }
@@ -5282,11 +5247,11 @@ double CheckPixy(bool is_hardware_test)
 	blocks = Pixy.getBlocks();
 
 	// Check for pixy error
-	if (blocks == UINT16_MAX-1) {
-		
+	if (blocks == UINT16_MAX - 1) {
+
 		// Log/print error
 		DebugError("!!ERROR!! [CheckPixy] Pixy.getBlocks() Returned CS ERROR");
-		
+
 		// Set blocks to zero
 		blocks = 0;
 	}
@@ -5305,7 +5270,7 @@ double CheckPixy(bool is_hardware_test)
 		// Set next check with longer dt
 		t_check = millis() + dt_pixyCheck[1];
 	}
-	
+
 	// Save time stamp
 	t_px_ts = millis();
 
@@ -6834,7 +6799,7 @@ void DebugFlow(char msg[], uint32_t t)
 #endif
 
 	// Local vars
-	bool do_print = db.print_flow && (db.CONSOLE || db.LCD);
+	bool do_print = db.print_flow && DO_CONSOLE_DEBUG;
 	bool do_log = db.log_flow && DO_LOG;
 
 	// Bail if neither set
@@ -6862,7 +6827,7 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 #endif
 
 	// Local vars
-	bool do_print = db.print_errors && (db.CONSOLE || db.LCD);
+	bool do_print = db.print_errors && DO_CONSOLE_DEBUG;
 	bool do_log = db.log_errors && DO_LOG;
 
 	// Set error flag
@@ -6901,7 +6866,7 @@ void DebugMotorControl(bool pass, char set_from[], char set_to[], char called_fr
 
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
-	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
+	bool do_print = db.print_motorControl && DO_CONSOLE_DEBUG;
 	bool do_log = db.log_motorControl && DO_LOG;
 
 	// Bail if neither set
@@ -6934,7 +6899,7 @@ void DebugMotorBocking(char msg[], char called_from[], uint32_t t)
 
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
-	bool do_print = db.print_motorControl && (db.CONSOLE || db.LCD);
+	bool do_print = db.print_motorControl && DO_CONSOLE_DEBUG;
 	bool do_log = db.log_motorControl && DO_LOG;
 
 	// Bail if neither set
@@ -6966,7 +6931,7 @@ void DebugRunSpeed(char agent[], double speed_last, double speed_now)
 
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
-	bool do_print = db.print_runSpeed && (db.CONSOLE || db.LCD);
+	bool do_print = db.print_runSpeed && DO_CONSOLE_DEBUG;
 	bool do_log = db.log_runSpeed && DO_LOG;
 
 	// Bail if neither set
@@ -7007,7 +6972,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 	do_print =
 		((r4->instID == "c2r" && ((db.print_c2r && r4->idNow != 'P') || (db.print_rcvdVT && r4->idNow == 'P'))) ||
 		(r4->instID == "a2r" && db.print_a2r)) &&
-			(db.CONSOLE || db.LCD);
+		DO_CONSOLE_DEBUG;
 	do_log =
 		((r4->instID == "c2r" && db.log_c2r && r4->idNow != 'P') ||
 		(r4->instID == "a2r" && db.log_a2r)) &&
@@ -7069,7 +7034,7 @@ void DebugSent(R2 *r2, char msg[], bool is_repeat)
 
 	// Get print status
 	do_print = ((db.print_r2c && r2->instID == "r2c") || (db.print_r2a && r2->instID == "r2a")) &&
-		(db.CONSOLE || db.LCD);
+		DO_CONSOLE_DEBUG;
 	do_log = ((db.log_r2c && r2->instID == "r2c") || (db.log_r2a && r2->instID == "r2a")) &&
 		DO_LOG;
 
@@ -7106,7 +7071,7 @@ void QueueDebug(char msg[], uint32_t t)
 	DB_FUN_STR();
 #endif
 
-#if DO_DEBUG
+#if DO_CONSOLE_DEBUG
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
@@ -7211,7 +7176,7 @@ void QueueDebug(char msg[], uint32_t t)
 bool PrintDebug()
 {
 
-#if DO_DEBUG
+#if DO_CONSOLE_DEBUG
 
 	// Bail if nothing in queue
 	if (GetPrintQueueAvailable() == printQueueSize) {
@@ -8049,11 +8014,10 @@ void setup() {
 	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
 	digitalWrite(pin.PWR_OFF, HIGH);
 	while (!DO_DEBUG &&
-		!DO_TEENSY_DEBUG &&
 		digitalRead(pin.PWR_Swtch) == HIGH);
 
 	// Pause before powering on if in debug mode
-	if (DO_DEBUG || DO_TEENSY_DEBUG) {
+	if (DO_DEBUG) {
 		delay(1000);
 	}
 
@@ -8290,10 +8254,13 @@ void setup() {
 	DoAll("PrintDebug");
 
 	// PRINT DEBUG STATUS
-	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s%s%s%s",
-		DO_DEBUG ? "DEBUG" : "RELEASE", db.CONSOLE ? "PRINT TO CONSOLE|" : "",
-		db.LCD ? "PRINT TO LCD|" : "", DO_LOG ? "LOGGING TO OPENLOG|" : "",
-		db.FASTPRINT ? "FAST PRINTING|" : "", db.FASTLOG ? "FAST LOGGING|" : "");
+	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s%s%s%s%s",
+		DO_DEBUG ? "DEBUG" : "RELEASE",
+		DO_LOG ? "LOGGING TO OPENLOG|" : "",
+		DO_CONSOLE_DEBUG ? "PRINTING TO CONSOLE|" : "", 
+		DO_TEENSY_DEBUG ? "USING TEENSY HELPER|" : "",
+		db.FASTPRINT ? "FAST PRINTING|" : "", 
+		db.FASTLOG ? "FAST LOGGING|" : "");
 	DebugFlow(str);
 
 	// PRINT SETUP FINISHED
@@ -9200,11 +9167,7 @@ void loop() {
 
 	// UPDATE PID AND SPEED
 	double new_speed = Pid.UpdatePID();
-
-	if (new_speed == 0) {
-		HardStop("Pid");
-	}
-	else if (new_speed > 0) {
+	if (new_speed >= 0) {
 		RunMotor('f', new_speed, "Pid");
 	}
 

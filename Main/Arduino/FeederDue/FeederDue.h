@@ -52,10 +52,12 @@
 #pragma region ============ DEBUG SETTINGS =============
 
 // DEBUG SETTING
-#define DO_DEBUG 0
 #define DO_LOG 1
+#define DO_CONSOLE_DEBUG 0
 #define DO_TEENSY_DEBUG 1
 #define DO_HARDWARE_TEST 0
+
+#define DO_DEBUG DO_CONSOLE_DEBUG||DO_TEENSY_DEBUG
 
 // DEBUG VIA TEENSY
 #define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
@@ -67,7 +69,6 @@ struct DB
 
 	// Debugging
 	const bool CONSOLE = true;
-	const bool LCD = false;
 	const bool FASTPRINT = false;
 	const bool FASTLOG = false;
 
@@ -262,7 +263,6 @@ struct KAL
 kal;
 
 // Pid Settings
-bool doIncludeTerm[2] = { true, true };
 const float pidSetPoint = 50; // (cm)
 const float guardDist = 4.5;
 const float feedDist = 66;
