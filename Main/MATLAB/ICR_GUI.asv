@@ -987,6 +987,7 @@ fprintf('END OF RUN\n');
             D.P.Rob.vel_pol_arr = NaN(3,2);
             % store hostory of pos x by y
             D.P.Rat.pos_hist = NaN(120*60*33,2);
+            D.P.Rat.pos_hist_lap_ind = false(120*60*33,1);
             % store history of vel by roh
             D.P.Rat.vel_lap = NaN(60*60*33,2);
             D.P.Rob.vel_lap = NaN(60*60*33,2);
@@ -1005,8 +1006,7 @@ fprintf('END OF RUN\n');
             % UI POS PLOT HANDLES AND CUMULATIVE DATA ARRAYS
             
             % vt plot handle array
-            D.UI.ratPltH = gobjects(1,60*120/D.PAR.polRate);
-            D.UI.cnt_ratPltH = 0;
+            D.UI.ratPltH = gobjects(1,1);
             % vt plot handles of velocity
             D.UI.ratPltHvel = gobjects(1,60*120/D.PAR.polRate); % rat
             D.UI.robPltHvel = gobjects(1,60*120/D.PAR.polRate); % rob
@@ -3852,10 +3852,17 @@ fprintf('END OF RUN\n');
                 
                 % Save history for rat pos
                 if strcmp(fld, 'Rat')
+                    
+                    % Get next indces
                     ind(1) = find(isnan(D.P.Rat.pos_hist(:,1)), 1, 'first');
                     ind(2) = ind(1)+length(x)-1;
+                    
+                    % Store pos data
                     D.P.Rat.pos_hist(ind(1):ind(2), 1) = x;
                     D.P.Rat.pos_hist(ind(1):ind(2), 2) = y;
+                    
+                    % Update current lap data
+                    D.P.Rat.pos_hist_lap_ind(ind(1):ind(2)) = true;
                 end
                 
                 %% GET SETPOINT, FEEDER POS AND GUARD POS
@@ -4643,9 +4650,11 @@ fprintf('END OF RUN\n');
             %% PLOT CUMULATIVE VT DATA
             
             % Delete all tracker data from this lap
-            delete(D.UI.ratPltH(1:D.UI.cnt_ratPltH))
+            delete(D.UI.ratPltH)
             delete(D.UI.ratPltHvel(1:D.UI.cnt_ratPltHvel))
             delete(D.UI.robPltHvel(1:D.UI.cnt_robPltHvel))
+            
+            % Reset handle counts
             D.UI.cnt_ratPltH = 0;
             D.UI.cnt_ratPltHvel = 0;
             D.UI.cnt_robPltHvel = 0;
@@ -4874,21 +4883,23 @@ fprintf('END OF RUN\n');
             
             if D.F.Rat.plot_pos
                 
-                % Plot all new VT data
-                D.UI.cnt_ratPltH = D.UI.cnt_ratPltH+1;
-                D.UI.ratPltH(D.UI.cnt_ratPltH) = ...
-                    plot(D.P.Rat.x, D.P.Rat.y, '.', ...
+                % Plot all VT data for this lap
+                delete(D.UI.ratPltH);
+                x = D.P.Rat.pos_hist(D.P.Rat.pos_hist_lap_ind, 1);
+                y = D.P.Rat.pos_hist(D.P.Rat.pos_hist_lap_ind, 2);
+                D.UI.ratPltH = ...
+                    plot(x, y, '.', ...
                     'MarkerFaceColor', D.UI.ratPosAllCol, ...
                     'MarkerEdgeColor', D.UI.ratPosAllCol, ...
                     'MarkerSize', 6, ...
                     'Parent', D.UI.axH(1));
                 
                 % Plot current rat position with larger marker
-                if isfield(D.UI, 'vtRatPltNow');
+                if isfield(D.UI, 'vtRatPltNow')
                     delete(D.UI.vtRatPltNow);
                 end
                 D.UI.vtRatPltNow = ...
-                    plot(D.P.Rat.x(end), D.P.Rat.y(end), 'o', ...
+                    plot(x(end), y(end), 'o', ...
                     'MarkerFaceColor', D.UI.ratNowCol, ...
                     'MarkerEdgeColor', [0, 0, 0], ...
                     'MarkerSize', 10, ...
@@ -6247,10 +6258,9 @@ fprintf('END OF RUN\n');
         function [] = BtnClrVT(~, ~, ~)
             
             % Delete all handle objects
-            delete(D.UI.ratPltH(isgraphics(D.UI.ratPltH)))
+            delete(D.UI.ratPltH)
             delete(D.UI.ratPltHvel(isgraphics(D.UI.ratPltHvel)))
             delete(D.UI.robPltHvel(isgraphics(D.UI.robPltHvel)))
-            D.UI.cnt_ratPltH = 0;
             D.UI.cnt_ratPltHvel = 0;
             D.UI.cnt_robPltHvel = 0;
             delete(D.UI.Rat.pltHposAll);
@@ -6258,10 +6268,12 @@ fprintf('END OF RUN\n');
             delete(D.UI.Rob.pltHvelAll);
             delete(D.UI.Rat.pltHvelAvg);
             delete(D.UI.Rob.pltHvelAvg);
-            % Reset to nan
+            % Reset pos history data to nan
             D.P.Rat.pos_hist = NaN(120*60*33,2);
             D.P.Rat.vel_hist = NaN(500,101,2);
             D.P.Rob.vel_hist = NaN(500,101,2);
+            % Reset lap index to false
+            D.P.Rat.pos_hist_lap_ind = false(120*60*33,1);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnClrVT', get(D.UI.btnClrVT,'Value')));

@@ -52,12 +52,25 @@
 #pragma region ============ DEBUG SETTINGS =============
 
 // DEBUG SETTING
+
+// Logging
 #define DO_LOG 1
-#define DO_CONSOLE_DEBUG 0
+#define DO_FAST_LOG 0
+
+// Console
+#define DO_PRINT_DEBUG 1
+#define DO_FAST_PRINT 0
+
+// Other
 #define DO_TEENSY_DEBUG 1
 #define DO_HARDWARE_TEST 0
 
-#define DO_DEBUG DO_CONSOLE_DEBUG||DO_TEENSY_DEBUG
+// Main debug flag
+#if DO_PRINT_DEBUG || DO_TEENSY_DEBUG
+ #define DO_DEBUG 1
+#else
+ #define DO_DEBUG 0
+#endif
 
 // DEBUG VIA TEENSY
 #define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
@@ -66,11 +79,6 @@
 // DEBUGGING STRUCT
 struct DB
 {
-
-	// Debugging
-	const bool CONSOLE = true;
-	const bool FASTPRINT = false;
-	const bool FASTLOG = false;
 
 	// Printing
 	const bool print_errors = true;
@@ -82,7 +90,7 @@ struct DB
 	const bool print_r2a = true;
 	const bool print_motorControl = true;
 	const bool print_pid = true;
-	const bool print_bull = false;
+	const bool print_bull = true;
 	const bool print_rcvdVT = false;
 	const bool print_logMode = false;
 	const bool print_logStore = false;
@@ -379,8 +387,8 @@ struct CMD
 	float vtCM[2] = { 0,0 };
 	uint32_t vtTS[2] = { 0,0 };
 	float moveToTarg = 0;
-	byte bullDel = 0;
-	byte bullSpeed = 0;
+	float bullDel = 0;
+	float bullSpeed = 0;
 	float rewPos = 0;
 	byte rewZoneInd = 0;
 	byte rewDelay = 0;

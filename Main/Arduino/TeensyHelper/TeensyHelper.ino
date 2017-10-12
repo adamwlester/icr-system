@@ -377,7 +377,7 @@ void StoreMessage(char msg[], uint16_t cnt_pack)
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 
 	// Format string
-	sprintf(str, "TeensyLog %lu: %s", cnt_pack, msg);
+	sprintf(str, "TEENSY %lu: %s", cnt_pack, msg);
 
 	// Store log
 	sprintf(Log[logInd], "%c%s%c", r42t.head, str, r42t.foot);

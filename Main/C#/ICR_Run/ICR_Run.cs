@@ -46,6 +46,8 @@ namespace ICR_Run
             public bool do_printRobLog;
             // Print cheetahdue log
             public bool do_printDueLog;
+            // Is Cheetah already running
+            public bool is_cheetahAlreadyOpen;
 
             // Constructor:
             public DB(
@@ -67,11 +69,12 @@ namespace ICR_Run
                 do_printSentRobVT = do_print_sent_rob_vt;
                 do_printRobLog = do_print_rob_log;
                 do_printDueLog = do_print_due_log;
+                is_cheetahAlreadyOpen = false;
             }
         }
         private static DB db = new DB(
             system_test: 0,
-            do_debug_mat: false,
+            do_debug_mat: true,
             break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -368,6 +371,11 @@ namespace ICR_Run
 
             // Start Cheetah if it is not already running
             LogEvent("[Setup] RUNNING: Run Cheetah.exe...");
+
+            // Flag if already open
+            db.is_cheetahAlreadyOpen = IsProcessOpen("Cheetah");
+
+            // Keep attempting open
             while (!IsProcessOpen("Cheetah") && !fc.doAbort)
             {
                 OpenCheetah("Cheetah.cfg");
@@ -2093,7 +2101,7 @@ namespace ICR_Run
 
             // Run ICR_GUI.m
             LogEvent_Thread("[DoWork_RunGUI] RUNNING: ICR_GUI.m...");
-            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, false);
+            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, db.is_cheetahAlreadyOpen, false);
 
             // Get status
             object[] res = icr_gui_result as object[];
