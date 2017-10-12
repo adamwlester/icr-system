@@ -2284,7 +2284,7 @@ void REWARD::CheckFeedArm()
 	bool is_move_done = false;
 	bool is_timedout = false;
 
-	// Bail if still nothing to do
+	// Bail if nothing to do
 	if (!doExtendArm &&
 		!doRetractArm &&
 		!doTimedRetract)
@@ -2359,6 +2359,8 @@ void REWARD::CheckFeedArm()
 			delayMicroseconds(500);
 			v_cnt_steps--;
 		}
+
+		SerialUSB.println("FEEDER REVERSING");
 
 		// Set done flag
 		v_isArmMoveDone = true;
@@ -2466,7 +2468,6 @@ void REWARD::RewardReset()
 	}
 
 	// Reset flags etc
-	sprintf(modeReward, "None");
 	isRewarding = false;
 	isBoundsSet = false;
 	isZoneTriggered = false;
@@ -7842,13 +7843,6 @@ void Interupt_TimerHandler()
 		is_done = true;
 	}
 
-	// Count exeded byte max
-	else if (v_cnt_steps >= 255) {
-
-		// Set flag
-		is_done = true;
-	}
-
 	// Clean up and bail
 	if (is_done) {
 
@@ -7999,16 +7993,6 @@ void setup() {
 	// INITIALIZE LCD
 	LCD.InitLCD();
 
-	// LOG/PRINT SETUP RUNNING
-
-	// Print to LCD
-	ChangeLCDlight(50);
-	PrintLCD(true, "SETUP", "MAIN");
-
-	// Log and print to console
-	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Setup...");
-	DoAll("PrintDebug");
-
 	// DISABLE VOLTAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V_ENBLE, LOW);
@@ -8046,6 +8030,16 @@ void setup() {
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V_ENBLE, HIGH);
+
+	// LOG/PRINT SETUP RUNNING
+
+	// Print to LCD
+	ChangeLCDlight(50);
+	PrintLCD(true, "SETUP", "MAIN");
+
+	// Log and print to console
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Setup...");
+	DoAll("PrintDebug");
 
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);

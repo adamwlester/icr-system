@@ -62,7 +62,7 @@
 #define DO_FAST_PRINT 0
 
 // Other
-#define DO_TEENSY_DEBUG 1
+#define DO_TEENSY_DEBUG 0
 #define DO_HARDWARE_TEST 0
 
 // Main debug flag
@@ -329,7 +329,7 @@ volatile byte v_doBlockIR = false;
 volatile byte v_stepState = false;
 volatile byte v_doStepTimer = false;
 volatile byte v_isArmMoveDone = false;
-volatile byte v_cnt_steps = 0;
+volatile uint16_t v_cnt_steps = 0;
 volatile byte v_stepTarg = 0;
 volatile byte v_stepDir = 'e'; // ['e','r']
 
