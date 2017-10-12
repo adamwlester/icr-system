@@ -1,4 +1,4 @@
-function ButtonName=dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dlgType)
+function ButtonName = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dlgType)
 %QUESTDLG Question dialog box.
 %  ButtonName = QUESTDLG(Question) creates a modal dialog box that
 %  automatically wraps the cell array or string (vector or matrix)

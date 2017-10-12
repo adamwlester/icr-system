@@ -28,6 +28,7 @@ global FigH; % ui figure handle
 global D; % main data struct
 global tcpIP; % tcp object
 global timer_c2m; % timer to check c2m
+global timer_quit; % timer to indicate quit status
 
 % Matlab to CS communication
 global m2c; % local data struct
@@ -150,11 +151,7 @@ else
     
     % HANDLE ERRRORS
     if ~isempty(ME)
-        if exist('D', 'var')
-            if(isfield(D,'DB'))
-                D.DB.isErrExit = true;
-            end
-        end
+        
         % Log/print error
         err = sprintf([ ...
             'Time: %0.2f\r\n', ...
@@ -262,7 +259,7 @@ fprintf('END OF RUN\n');
             'A', ... % connected to AC computer [NA]
             'N', ... % netcom setup [NA]
             'F', ... % data saved [NA]
-            'X', ... % confirm quit
+            'X', ... % confirm quit abort [(uint)abort]
             'C', ... % confirm close
             'T', ... % system test command [(uint)test]
             'S', ... % setup session [(uint)ses_cond, (byte)sound_cond]
@@ -309,7 +306,6 @@ fprintf('END OF RUN\n');
         D.DB.doPidCalibrationTest = false;
         D.DB.doHaltErrorTest = false;
         D.DB.doSimRatTest = false;
-        D.DB.isErrExit = false;
         D.DB.isForceClose = false;
         
         % Get testing condition
@@ -351,6 +347,13 @@ fprintf('END OF RUN\n');
         timer_c2m.Period = 0.1;
         timer_c2m.TimerFcn = @CheckC2M;
         start(timer_c2m);
+        
+        % Start quit timer
+        timer_quit = timer;
+        timer_quit.ExecutionMode = 'fixedRate';
+        timer_quit.Period = 0.5;
+        timer_quit.TimerFcn = @QuitStatus;
+        start(timer_quit);
         
         % ------------------------ SETUP AC CONNECTION --------------------
         Console_Write('[Setup] FINISHED: Connect to AC Computer');
@@ -1849,7 +1852,7 @@ fprintf('END OF RUN\n');
                 'Position', pos, ...
                 'FontName', D.UI.btnFont, ...
                 'FontSize',14);
-            
+          
             % HALT ROBOT
             wdth = 0.1;
             pos = [D.UI.main_ax_bounds(1)+0.01, D.UI.main_ax_bounds(4)-0.01-0.06, 0.1, 0.06];
@@ -6025,6 +6028,9 @@ fprintf('END OF RUN\n');
                 
             end
             
+            % Start quit status timer
+            start(timer_quit);
+            
             % Print session aborting
             if ~D.UI.save_done
                 Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
@@ -6076,7 +6082,7 @@ fprintf('END OF RUN\n');
             end
             
             % Tell C# to begin quit
-            SendM2C('X');
+            SendM2C('X', 1);
             
             % Set flag
             D.F.quit = true;
@@ -6167,11 +6173,6 @@ fprintf('END OF RUN\n');
             
             % Tell CS to trigger reward
             SendM2C('R', r_pos, r_cond, z_ind);
-            
-            %             % TEMP
-            %             set(D.UI.btnBulldoze, ...
-            %                 'Value', ~get(D.UI.btnBulldoze, 'Value'));
-            %             Bulldoze();
             
             % Track round trip time
             D.T.manual_rew_sent = Elapsed_Seconds(now);
@@ -6823,6 +6824,8 @@ fprintf('END OF RUN\n');
         % Stop and delete timer
         stop(timer_c2m);
         delete(timer_c2m);
+        stop(timer_quit);
+        delete(timer_quit);
     end
 
 
@@ -6934,17 +6937,56 @@ fprintf('END OF RUN\n');
                     id, c2m.(id).dat1), now);
             end
             
-            % Check for exit flag
-            if ...
-                    strcmp(id, 'E') && ...
-                    c2m.(id).dat1 == 1
+            % Check for exit/error flag
+            if strcmp(id, 'E')
                 
-                % Set exit flag
-                doExit = true;
+                % Check if this is exit flag
+                if c2m.(id).dat1 == 1
+                    
+                    % Set exit flag
+                    doExit = true;
+                    
+                    % Log/print exit received
+                    Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                        id, c2m.(id).dat1), now);
+                end
                 
-                % Log/print exit received
-                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                    id, c2m.(id).dat1), now);
+                              % Check for forced abort
+                if c2m.(id).dat1 == 2
+                    
+                    % Format err string
+                    err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
+                    
+                    % Display message
+                    dlgAWL(...
+                        err_str, ...
+                        '!!ERROR!!', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.qstDlfPos, ...
+                        'Err');
+                    
+                end
+                
+                % Check for save abort
+                if c2m.(id).dat1 == 3
+                    
+                    % Format err string
+                    err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
+                    
+                    % Display message
+                    dlgAWL(...
+                        err_str, ...
+                        '!!ERROR!!', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.qstDlfPos, ...
+                        'Err');
+                    
+                    % Set exit flag
+                    doExit = true;
+                    
+                    % Write to console
+                    Console_Write(err_str, now, true); 
+                end
             end
             
             %Print new data
@@ -6990,7 +7032,7 @@ fprintf('END OF RUN\n');
     end
 
 % ---------------------------PRINT TO CONSOLE------------------------------
-    function [] = Console_Write(str, t_now)
+    function [] = Console_Write(str, t_now, is_err)
         
         % Bail if following conditions not met
         if ~exist('D','var'); return; end
@@ -7000,6 +7042,9 @@ fprintf('END OF RUN\n');
         % Get time
         if nargin < 2
             t_now = now;
+            is_err = false;
+        elseif nargin < 3
+            is_err = false;
         end
         
         % Itterate log count
@@ -7024,7 +7069,7 @@ fprintf('END OF RUN\n');
         D.DB.logStr{D.DB.logCount} = l_msg;
         
         % Write to Matlab console
-        disp(p_msg);
+        disp(p_msg); %#ok<DSPS>
         
         % Update console window
         if ~isfield(D, 'UI'); return; end
@@ -7035,7 +7080,7 @@ fprintf('END OF RUN\n');
             'String', D.DB.consoleStr);
         
         % Set to red bold for error
-        if D.DB.isErrExit
+        if is_err
             set(D.UI.listConsole, ...
                 'ForegroundColor', [1 0 0], ...
                 'FontWeight','Bold');
@@ -7048,6 +7093,30 @@ fprintf('END OF RUN\n');
         
     end
 
+% ---------------------------QUIT STATUS TIMER-----------------------------
+    function [] = QuitStatus(~,~)
+        % Local vars
+        persistent cnt_dot
+        if isempty(cnt_dot)
+            cnt_dot = 1;
+        end
+        
+        % Bail if figure closed
+        if ~ishandle(FigH)
+            return
+        end
+        
+        % Change button string
+        bnt_str = sprintf("Quit%s%s",repmat('.',1,cnt_dot),blanks(4-cnt_dot));
+        set(D.UI.btnQuit, ...
+            'String', bnt_str);
+        
+        cnt_dot = cnt_dot +1;
+        if cnt_dot>4
+            cnt_dot = 1;
+        end
+    end
+        
 % ---------------------------GET TIME NOW-------------------------------
     function [t_sec] = Elapsed_Seconds(t_now)
         
@@ -7186,6 +7255,10 @@ fprintf('END OF RUN\n');
         % Set flags
         doExit = true;
         D.DB.isForceClose = true;
+        
+        % Send force close signal to CS
+        SendM2C('X', 2);
+        pause(1);
         
         return;
     end

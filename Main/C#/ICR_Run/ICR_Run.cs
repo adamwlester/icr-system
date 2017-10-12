@@ -74,7 +74,7 @@ namespace ICR_Run
         }
         private static DB db = new DB(
             system_test: 0,
-            do_debug_mat: true,
+            do_debug_mat: false,
             break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -295,7 +295,6 @@ namespace ICR_Run
         private static long timeoutLoadGUI = 15000; // (ms)
         private static long timeoutConnectAC = 15000; // (ms)
         private static long timeoutConnectMatNLX = 60000; // (ms) 
-        private static long timeoutMatCloseConfirm = 10000; // (ms)
         private static long timeoutImportLog = 10000; // (ms)
 
         // Position variables
@@ -700,7 +699,7 @@ namespace ICR_Run
             if (fc.isRatIn && !fc.isRecDone)
             {
                 LogEvent("[Run] RUNNING: Wait for Confirmation Rat is Out...");
-                pass = WaitForMCOM(id: 'O', timeout: 10000);
+                pass = WaitForMCOM(id: 'O', timeout: fc.isSaveAbortRunning ? 30000 : 10000);
                 if (pass)
                 {
                     // Wait for all the other crap to be relayed from Matlab
@@ -907,16 +906,21 @@ namespace ICR_Run
 
             // Wait for GUI to close
             LogEvent("[Exit] RUNNING: Confirm ICR_GUI Closed...");
-            pass = WaitForMCOM(id: 'C', timeout: timeoutMatCloseConfirm);
+            pass = WaitForMCOM(id: 'C', timeout: fc.isMatComActive && !fc.isMAThanging ? 30000 : 10000);
             if (pass)
                 LogEvent("[Exit] SUCCEEDED: Confirm ICR_GUI Closed");
             else
+            {
                 LogEvent("**WARNING** [Exit] ABORTED: Confirm ICR_GUI Closed", is_warning: true);
+
+                // Set MALTBAB hanging flag
+                fc.isMAThanging = true;
+            }
 
             // Tell Matlab close confirmation received
             LogEvent("[Exit] RUNNING: Send ICR_GUI Close Confirmation Received...");
             SendMCOM_Thread(id: 'C', dat_num: 1);
-            pass = WaitForMCOM(id: 'C', check_for: "send", timeout: timeoutMatCloseConfirm);
+            pass = WaitForMCOM(id: 'C', check_for: "send", timeout: fc.isMatComActive && !fc.isMAThanging ? 10000 : 50000);
             if (pass)
                 LogEvent("[Exit] SUCCEEDED: Send ICR_GUI Close Confirmation Received");
             else
@@ -1403,6 +1407,10 @@ namespace ICR_Run
             FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
             */
 
+            // Dump anything in buffers on first run
+            sp_Xbee.DiscardInBuffer();
+            sp_Xbee.DiscardOutBuffer();
+
             // Loop till all data read out
             while (!fc.doExit)
             {
@@ -1672,6 +1680,11 @@ namespace ICR_Run
         // CONTINUALLY CHECK FOR NEW CHEETAHDUE LOG DATA
         public static void ParserA2C()
         {
+
+            // Dump anything in buffers on first run
+            sp_cheetahDue.DiscardInBuffer();
+            sp_cheetahDue.DiscardOutBuffer();
+
             // Loop till all data read out
             while (fc.ContinueArdCom())
             {
@@ -2182,6 +2195,18 @@ namespace ICR_Run
             // Check for matlab input till quit or abort
             while (fc.ContinueMatCom())
             {
+                // Check for abort flag
+                if (fc.doMatSaveAbort)
+                {
+                    LogEvent("**WARNING** [DoWork_MatCOM] SENDING FLAG FOR ICR_GUI TO SAVE AND ABORT");
+                    SendMCOM_Thread(id: 'E', dat_num: 2);
+                }
+                else if (fc.doMatHardAbort)
+                {
+                    LogEvent("**WARNING** [DoWork_MatCOM] SENDING FLAG FOR ICR_GUI TO FORCE ABORT");
+                    SendMCOM_Thread(id: 'E', dat_num: 3);
+                }
+
                 // Pause thread
                 if (dt_check < 5)
                     Thread.Sleep((int)(5 - dt_check));
@@ -2306,10 +2331,23 @@ namespace ICR_Run
                 {
                     // Start exiting early
                     fc.doAbort = true;
-                    // Will print once
+
+                    // Print warning
                     if (!fc.isGUIquit)
-                        LogEvent_Thread("**WARNING** [DoWork_MatCOM] ICR_GUI FORCED QUIT", is_warning: true);
+                        LogEvent_Thread("**WARNING** [DoWork_MatCOM] ICR_GUI QUIT EARLY", is_warning: true);
                 }
+
+                // Check if this is a forced quit
+                if (dat[0] == 2)
+                {
+                    // Start exiting early
+                    fc.doAbort = true;
+
+                    // Print error
+                    LogEvent_Thread("!!ERROR!! [DoWork_MatCOM] ICR_GUI FORCED QUIT", is_error: true);
+                }
+
+
                 // Set flag that GUI has quit
                 fc.isGUIquit = true;
             }
@@ -2861,6 +2899,9 @@ namespace ICR_Run
         // Private vars
         private static bool _isRunError = false;
         private static bool _doAbort = false;
+        private static bool _doMatSaveAbort = false;
+        private static bool _doMatHardAbort = false;
+        private static bool _wasMatAbortRead = false;
         private static bool _isMAThanging = false;
         private static int _cnt_err = 0;
         private string[] _err_list = new string[100];
@@ -2876,6 +2917,7 @@ namespace ICR_Run
         public bool isSesSaved = false;
         public bool isGUIquit = false;
         public bool isGUIfinished = false;
+        public bool isSaveAbortRunning = false;
         public bool doExit = false;
         public string errStr
         {
@@ -2892,11 +2934,56 @@ namespace ICR_Run
                 _isRunError = value;
                 if (value && !isRatIn)
                 {
+                    _doMatHardAbort = true;
                     _doAbort = true;
                 }
+                else
+                    _doMatSaveAbort = true;
             }
             get
             { return _isRunError; }
+        }
+        public bool doMatSaveAbort
+        {
+            set
+            {
+                _doMatSaveAbort = value;
+                isSaveAbortRunning = value;
+            }
+
+            // Only flag once
+            get
+            {
+                if (_doMatSaveAbort &&
+                    !_wasMatAbortRead)
+                {
+                    _wasMatAbortRead = true;
+                    return true;
+                }
+                else
+                    return false;
+            }
+        }
+        public bool doMatHardAbort
+        {
+            set
+            {
+                _doMatHardAbort = value;
+                isSaveAbortRunning = value;
+            }
+
+            // Only flag once
+            get
+            {
+                if (_doMatHardAbort &&
+                    !_wasMatAbortRead)
+                {
+                    _wasMatAbortRead = true;
+                    return true;
+                }
+                else
+                    return false;
+            }
         }
         public bool doAbort
         {
