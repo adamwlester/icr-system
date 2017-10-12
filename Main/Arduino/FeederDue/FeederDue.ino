@@ -594,7 +594,7 @@ void DebugFlow(const char *fun, int line, char msg[], uint32_t t = millis());
 void DebugError(const char *fun, int line, char msg[], bool is_error = false, uint32_t t = millis());
 
 // LOG/PRINT MOTOR CONTROL DEBUG STRING
-void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], char set_to[], char called_from[]);
+void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], char set_to[], char agent[]);
 
 // LOG/PRINT MOTOR SPEED CHANGE
 void DebugRunSpeed(const char *fun, int line, char agent[], double speed_last, double speed_now);
@@ -3227,7 +3227,8 @@ void LOGGER::StreamLogs()
 	DoAll("WriteLog", 1000);
 	delay(100);
 
-	// Stop writing logs
+	// Stop storing and writing logs
+	fc.doBlockLogQueue = true;
 	fc.doBlockLogWrite = true;
 
 	// Make sure in command mode
@@ -3420,6 +3421,9 @@ void LOGGER::StreamLogs()
 			strcat(err_str, str);
 		}
 	}
+
+	// Unblock log store
+	fc.doBlockLogQueue = false;
 
 	// Log warnings summary
 	for (int i = 0; i < cnt_warn; i++) {
@@ -4856,6 +4860,9 @@ bool SetMotorControl(char set_to[], char agent[])
 	bool do_change = false;
 	static char set_from[50]; set_from[0] = '\0';
 
+	// Store set from
+	sprintf(set_from, fc.motorControl);
+
 	// Set to/from "Halt"
 	if (set_to == "Halt" || strcmp(fc.motorControl, "Halt") == 0) {
 
@@ -4928,18 +4935,11 @@ bool SetMotorControl(char set_to[], char agent[])
 
 	// Change controller
 	if (do_change) {
-
-		// Update strings
-		sprintf(set_from, fc.motorControl);
 		sprintf(fc.motorControl, "%s", set_to);
+	}
 
-		// Log/print success
-		DebugMotorControl(__FUNCTION__, __LINE__, do_change, set_from, set_to, agent);
-	}
-	else {
-		// Log/print failure
-		DebugMotorControl(__FUNCTION__, __LINE__, do_change, fc.motorControl, set_to, agent);
-	}
+	// Log/print
+	DebugMotorControl(__FUNCTION__, __LINE__, do_change, set_from, set_to, agent);
 
 	return do_change;
 }
@@ -6888,7 +6888,7 @@ void DebugError(const char *fun, int line, char msg[], bool is_error, uint32_t t
 }
 
 // LOG/PRINT MOTOR CONTROL DEBUG STRING
-void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], char set_to[], char called_from[])
+void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], char set_to[], char agent[])
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -6907,11 +6907,12 @@ void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], ch
 
 	// Format message
 	sprintf(msg, "Change %s: set_from=%s set_in=%s set_out=%s [%s]",
-		pass ? "Succeeded" : "Failed", set_from, set_to, fc.motorControl, called_from);
+		pass ? "Succeeded" : "Failed", set_from, set_to, fc.motorControl, agent);
 
 	// Log as error if failed 
 	if (!pass) {
 		DebugError(__FUNCTION__, __LINE__, msg);
+		return;
 	}
 
 	// Add funciton and line number
@@ -8254,6 +8255,8 @@ void setup() {
 	sprintf(str, "BATTERY VCC: %0.2fV", vccAvg);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	DoAll("PrintDebug");
+	sprintf(str, "%0.2fV", vccAvg);
+	PrintLCD(true, "BATTERY VCC", str);
 
 	// PRINT AVAILABLE MEMORY
 	sprintf(str, "AVAILABLE MEMORY: %0.2fKB", (float)freeMemory() / 1000);

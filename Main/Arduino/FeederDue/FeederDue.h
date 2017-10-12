@@ -284,10 +284,10 @@ const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
-							 // Solonoids
-							 /*
-							 EtOH run after min time or distance
-							 */
+// Solonoids
+/*
+EtOH run after min time or distance
+*/
 const int dt_durEtOH[2] = { 100, 100 }; // (ms)
 const int dt_delEtOH[2] = { 30000, 60000 }; // (ms)
 uint32_t t_solOpen = 0;
