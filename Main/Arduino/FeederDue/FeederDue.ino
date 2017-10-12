@@ -1431,7 +1431,7 @@ void BULLDOZE::BullRun(char called_from[])
 	static char str[100] = { 0 }; str[0] = '\0';
 
 	// Format string with stop time
-	sprintf(str, "Running Bull: Rat has moved %0.2fcm in %dms",
+	sprintf(str, "Running Bull: Rat has moved %0.2fcm in %lums",
 		distMoved, t_bullNext - bullDelay);
 
 	// Log/print event

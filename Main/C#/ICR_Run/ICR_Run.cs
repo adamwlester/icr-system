@@ -100,13 +100,12 @@ namespace ICR_Run
         private static int queue_SendXBee = 0;
         static readonly object lock_checkConf = new object();
         static readonly object lock_checkDone = new object();
-        static readonly object lock_printLog = new object();
 
         // Initialize vt blocking object
         private static VT_Handler vtHandler = new VT_Handler(_stop_watch: sw_main);
 
         // Initialize FC to track program flow
-        private static Flow_Control fc = new Flow_Control(_lock_print_log: lock_printLog);
+        private static Flow_Control fc = new Flow_Control();
 
         // Initialize callback object
         private static MNetCom.MNC_VTCallback deligate_netComCallback;
@@ -203,7 +202,7 @@ namespace ICR_Run
             _flag_send_rcv: false,
             _id:
             new char[17] {
-			'h', // setup handshake
+            'h', // setup handshake
 			't', // hardware test
 			'T', // system test command
 			'S', // start session
@@ -233,7 +232,7 @@ namespace ICR_Run
             _flag_send_rcv: true,
             _id:
             new char[17] {
-			'h', // setup handshake
+            'h', // setup handshake
 			't', // hardware test
 			'T', // system test command
 			'S', // start session
@@ -2819,34 +2818,31 @@ namespace ICR_Run
             // Get time from start of Main()
             t = t > 0 ? t : sw_main.ElapsedMilliseconds;
 
-            lock (lock_printLog)
-            {
-                // Get sync correction
-                t_m = t;
-                t_m_sync = t - t_sync;
+            // Get sync correction
+            t_m = t;
+            t_m_sync = t - t_sync;
 
-                // Convert to seconds
-                t_s = t_m > 0 ? (float)(t_m) / 1000.0f : 0;
-                t_s_sync = t_m_sync > 0 ? (float)(t_m_sync) / 1000.0f : 0;
+            // Convert to seconds
+            t_s = t_m > 0 ? (float)(t_m) / 1000.0f : 0;
+            t_s_sync = t_m_sync > 0 ? (float)(t_m_sync) / 1000.0f : 0;
 
-                // Convert to string
-                ts_str = String.Format("[{0:0.000}][{1:0.000}]", t_s_sync, t_s);
+            // Convert to string
+            ts_str = String.Format("[{0:0.000}][{1:0.000}]", t_s_sync, t_s);
 
-                // Pad ts string
-                ts_str = ts_str.PadRight(20, ' ');
+            // Pad ts string
+            ts_str = ts_str.PadRight(20, ' ');
 
-                // Cat strings
-                msg_print = "\n" + ts_str + msg_in + "\n";
+            // Cat strings
+            msg_print = "\n" + ts_str + msg_in + "\n";
 
-                // Print message
-                Console.Write(msg_print);
+            // Print message
+            Console.Write(msg_print);
 
-                // Remove cammas from message
-                msg_log = msg_in.Replace(",", string.Empty);
+            // Remove cammas from message
+            msg_log = msg_in.Replace(",", string.Empty);
 
-                // Store in logger 
-                csLogger.UpdateList(msg: msg_log, is_warning: is_warning, is_error: is_error, t: t_m_sync);
-            }
+            // Store in logger 
+            csLogger.UpdateList(msg: msg_log, is_warning: is_warning, is_error: is_error, t: t_m_sync);
 
             // Store error string
             if (is_error)
@@ -2863,7 +2859,6 @@ namespace ICR_Run
     class Flow_Control
     {
         // Private vars
-        private static object _lock_printLog = new object();
         private static bool _isRunError = false;
         private static bool _doAbort = false;
         private static bool _isMAThanging = false;
@@ -2923,14 +2918,6 @@ namespace ICR_Run
             get { return _isMAThanging; }
         }
 
-        // Constructor
-        public Flow_Control(
-            object _lock_print_log
-            )
-        {
-            _lock_printLog = _lock_print_log;
-        }
-
         // Run erro hold
         public void RunPauseForDB()
         {
@@ -2938,29 +2925,24 @@ namespace ICR_Run
             Thread.Sleep(1000);
 
             // Print messeage with error
-            lock (_lock_printLog)
+            Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            if (isRunError)
             {
-                Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                if (isRunError)
-                {
-                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                    // Print all errors
-                    for (int i = 0; i < _cnt_err; i++)
-                        Console.WriteLine(_err_list[i]);
-                }
-                else
-                {
-                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                }
-
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
-
+                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                // Print all errors
+                for (int i = 0; i < _cnt_err; i++)
+                    Console.WriteLine(_err_list[i]);
+            }
+            else
+            {
+                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             }
 
+            Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+
             // Wait for key press
-            lock (_lock_printLog)
-                Console.ReadKey();
+            Console.ReadKey();
         }
 
         // Check if Matlab coms are active

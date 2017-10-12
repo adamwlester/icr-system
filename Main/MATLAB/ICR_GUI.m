@@ -471,7 +471,7 @@ fprintf('END OF RUN\n');
                 D.T.loop = Elapsed_Seconds(now);
                 
                 % PLOT POSITION
-                update_ui = Pos_Plot();
+                update_ui = Plot_Pos();
                 
                 % PRINT SES INFO
                 Inf_Print();
@@ -983,16 +983,18 @@ fprintf('END OF RUN\n');
             D.P.Rob.vel_max_all = 0;
             D.P.Rat.vel_max_lap = 0;
             D.P.Rob.vel_max_lap = 0;
-            D.P.Rat.vel_pol_arr = NaN(3,2);
-            D.P.Rob.vel_pol_arr = NaN(3,2);
             % store hostory of pos x by y
-            D.P.Rat.pos_hist = NaN(120*60*33,2);
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.pos_all_hist = NaN(120*60*33,2);
             % store history of vel by roh
-            D.P.Rat.vel_lap = NaN(60*60*33,2);
-            D.P.Rob.vel_lap = NaN(60*60*33,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
+            % store history of vel by roh
+            D.P.Rat.vel_pol_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_pol_lap_hist = NaN(60*60*33,2);
             % store 1 lap of vel by roh
-            D.P.Rat.vel_hist = NaN(500,101,2);
-            D.P.Rob.vel_hist = NaN(500,101,2);
+            D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
             % position cutoff
             D.P.posRohMax = 1 + (5/D.UI.arnRad);
             D.P.posRohMin = (1 - (D.UI.trkWdt+5)/D.UI.arnRad);
@@ -1005,13 +1007,10 @@ fprintf('END OF RUN\n');
             % UI POS PLOT HANDLES AND CUMULATIVE DATA ARRAYS
             
             % vt plot handle array
-            D.UI.ratPltH = gobjects(1,60*120/D.PAR.polRate);
-            D.UI.cnt_ratPltH = 0;
+            D.UI.ratPltH = gobjects(1,1);
             % vt plot handles of velocity
-            D.UI.ratPltHvel = gobjects(1,60*120/D.PAR.polRate); % rat
-            D.UI.robPltHvel = gobjects(1,60*120/D.PAR.polRate); % rob
-            D.UI.cnt_ratPltHvel = 0;
-            D.UI.cnt_robPltHvel = 0;
+            D.UI.ratPltHvel = gobjects(1,1);
+            D.UI.robPltHvel = gobjects(1,1);
             % handles for average vel plots
             D.UI.Rat.pltHvelAvg = gobjects(1,1); % rat
             D.UI.Rob.pltHvelAvg = gobjects(1,1); % rob
@@ -1019,7 +1018,6 @@ fprintf('END OF RUN\n');
             D.UI.Rat.pltHposAll = gobjects(1,1); % rat
             D.UI.Rat.pltHvelAll = gobjects(1,1); % rat
             D.UI.Rob.pltHvelAll = gobjects(1,1); % rob
-            
             
             % UI COLOR
             
@@ -3827,7 +3825,6 @@ fprintf('END OF RUN\n');
                     D.P.(fld).rad = NaN;
                     D.P.(fld).ts = NaN;
                     D.P.(fld).recs = NaN;
-                    D.P.(fld).vel_pol_arr(end,:) = NaN;
                     
                     % Exit function
                     return;
@@ -3852,10 +3849,14 @@ fprintf('END OF RUN\n');
                 
                 % Save history for rat pos
                 if strcmp(fld, 'Rat')
-                    ind(1) = find(isnan(D.P.Rat.pos_hist(:,1)), 1, 'first');
+                    
+                    % Get next indces
+                    ind(1) = find(isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'first');
                     ind(2) = ind(1)+length(x)-1;
-                    D.P.Rat.pos_hist(ind(1):ind(2), 1) = x;
-                    D.P.Rat.pos_hist(ind(1):ind(2), 2) = y;
+                    
+                    % Store pos data
+                    D.P.Rat.pos_lap_hist(ind(1):ind(2), 1) = x;
+                    D.P.Rat.pos_lap_hist(ind(1):ind(2), 2) = y;
                 end
                 
                 %% GET SETPOINT, FEEDER POS AND GUARD POS
@@ -3892,6 +3893,9 @@ fprintf('END OF RUN\n');
                 
                 % Get radian value for vel plot
                 set_vel_nan = false;
+                
+                % Get next vel hisory ind
+                vel_ind = find(isnan(D.P.(fld).vel_cart_lap_hist(:,1)), 1, 'first');
                 
                 % Check what rob vel plot should be aligned to
                 if strcmp(fld, 'Rob') && ~D.F.rat_in
@@ -3950,8 +3954,8 @@ fprintf('END OF RUN\n');
                     % Set not to plot this vel
                     D.F.(fld).plot_vel = false;
                     
-                    % Avoid jumps in plot
-                    D.P.(fld).vel_pol_arr(end,:) = NaN;
+                    % Set to zero (later to NaN) to avoid jumps in plot
+                    D.P.(fld).vel_cart_lap_hist(vel_ind,:) = 0;
                     
                 else
                     
@@ -3967,16 +3971,13 @@ fprintf('END OF RUN\n');
                         D.P.(fld).vel_max_all = max(D.P.(fld).vel_max_lap, D.P.(fld).vel_max_all);
                     end
                     
-                    % Shift stored averages
-                    D.P.(fld).vel_pol_arr = circshift(D.P.(fld).vel_pol_arr, -1, 1);
-                    
                     % Cap to vel min,max
                     velRoh = D.P.(fld).vel;
                     % Set >max to max
-                    if velRoh>D.P.velMax;
+                    if velRoh>D.P.velMax
                         velRoh = D.P.velMax;
                         % Set <min to min
-                    elseif velRoh<D.P.velMin;
+                    elseif velRoh<D.P.velMin
                         velRoh = D.P.velMin;
                     end
                     % Adjust range
@@ -3984,28 +3985,31 @@ fprintf('END OF RUN\n');
                     velRoh = velRoh*(D.P.velRohMax-D.P.velRohMin) + D.P.velRohMin;
                     
                     % Cap to roh max
-                    if velRoh > D.P.velRohMax;
+                    if velRoh > D.P.velRohMax
                         velRoh = D.P.velRohMax;
                     end
                     
                     % Store plot values
                     if ~set_vel_nan
                         % Convert to cart
-                        [D.P.(fld).vel_pol_arr(end, 1), D.P.(fld).vel_pol_arr(end, 2)] = ...
+                        [D.P.(fld).vel_cart_lap_hist(vel_ind, 1), D.P.(fld).vel_cart_lap_hist(vel_ind, 2)] = ...
                             pol2cart(D.P.(fld).velRad, velRoh);
-                        D.P.(fld).vel_pol_arr(end, 1) =  D.P.(fld).vel_pol_arr(end, 1).*D.PAR.R + D.PAR.XC;
-                        D.P.(fld).vel_pol_arr(end, 2) =  D.P.(fld).vel_pol_arr(end, 2).*D.PAR.R + D.PAR.YC;
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, 1) =  D.P.(fld).vel_cart_lap_hist(vel_ind, 1).*D.PAR.R + D.PAR.XC;
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, 2) =  D.P.(fld).vel_cart_lap_hist(vel_ind, 2).*D.PAR.R + D.PAR.YC;
                     else
-                        % Set to NaN because rad diff to large
-                        D.P.(fld).vel_pol_arr(end, :) = NaN;
+                        % Set to zero (later to NaN) because rad diff to large
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, :) = 0;
                         D.P.(fld).velRad = NaN;
                         velRoh = NaN;
+                        
+                        % Set not to plot this vel
+                        D.F.(fld).plot_vel = false;
                     end
                     
-                    % Save history
-                    ind = find(isnan(D.P.(fld).vel_lap(:,1)), 1, 'first');
-                    D.P.(fld).vel_lap(ind, 1) = D.P.(fld).velRad;
-                    D.P.(fld).vel_lap(ind, 2) = velRoh;
+                    % Save pol history
+                    ind = find(isnan(D.P.(fld).vel_pol_lap_hist(:,1)), 1, 'first');
+                    D.P.(fld).vel_pol_lap_hist(ind, 1) = D.P.(fld).velRad;
+                    D.P.(fld).vel_pol_lap_hist(ind, 2) = velRoh;
                     
                 end
                 
@@ -4643,17 +4647,27 @@ fprintf('END OF RUN\n');
             %% PLOT CUMULATIVE VT DATA
             
             % Delete all tracker data from this lap
-            delete(D.UI.ratPltH(1:D.UI.cnt_ratPltH))
-            delete(D.UI.ratPltHvel(1:D.UI.cnt_ratPltHvel))
-            delete(D.UI.robPltHvel(1:D.UI.cnt_robPltHvel))
-            D.UI.cnt_ratPltH = 0;
-            D.UI.cnt_ratPltHvel = 0;
-            D.UI.cnt_robPltHvel = 0;
+            delete(D.UI.ratPltH)
+            delete(D.UI.ratPltHvel)
+            delete(D.UI.robPltHvel)
+            
+            % Add lap data to all hist data
+            lap_hist_lng = find(~isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'last');
+            ind(1) = find(isnan(D.P.Rat.pos_all_hist(:,1)), 1, 'first');
+            ind(2) = ind(1)+lap_hist_lng-1;
+            
+            % Store pos data
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 1) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 1);
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 2) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 2);
+            
+            % Reset lap hist
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
             
             % Rat pos
             delete(D.UI.Rat.pltHposAll);
-            x = D.P.Rat.pos_hist(:,1);
-            y = D.P.Rat.pos_hist(:,2);
+            x = D.P.Rat.pos_all_hist(:,1);
+            y = D.P.Rat.pos_all_hist(:,2);
+            % set big jumps to NaN
             exc = find(diff(x)/D.UI.xCMcnv > 10 | diff(y)/D.UI.yCMcnv > 10 == 1) + 1;
             x(exc) = NaN;
             y(exc) = NaN;
@@ -4670,9 +4684,9 @@ fprintf('END OF RUN\n');
                 fld = flds{i};
                 
                 % Get lap data
-                ind = ~isnan(D.P.(fld).vel_lap(:, 1));
-                vel_rad = D.P.(fld).vel_lap(ind, 1);
-                vel_roh = D.P.(fld).vel_lap(ind, 2);
+                ind = ~isnan(D.P.(fld).vel_pol_lap_hist(:, 1));
+                vel_rad = D.P.(fld).vel_pol_lap_hist(ind, 1);
+                vel_roh = D.P.(fld).vel_pol_lap_hist(ind, 2);
                 
                 % Sort by rad
                 [vel_rad, s_ind] = sort(vel_rad);
@@ -4705,16 +4719,18 @@ fprintf('END OF RUN\n');
                 end
                 
                 % Add to history
-                D.P.(fld).vel_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
-                D.P.(fld).vel_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
                 
                 % Delete old handle and lap data
                 delete(D.UI.(fld).pltHvelAll);
-                D.P.(fld).vel_lap = NaN(60*60*33,2);
+                D.P.(fld).vel_pol_lap_hist = NaN(60*60*33,2);
+                   D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
                 
                 % Get history as 1D array
-                vel_rad = reshape(D.P.(fld).vel_hist(:,:,1)',1,[]);
-                vel_roh = reshape(D.P.(fld).vel_hist(:,:,2)',1,[]);
+                vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
+                vel_roh = reshape(D.P.(fld).vel_pol_all_hist(:,:,2)',1,[]);
                 ind = ~isnan(vel_rad);
                 
                 % Convert to cart
@@ -4736,8 +4752,8 @@ fprintf('END OF RUN\n');
                 fld = flds{i};
                 
                 % Get accross lap average
-                vel_rad = D.P.(fld).vel_hist(1,:,1);
-                roh_avg = nanmean(D.P.(fld).vel_hist(:,:,2),1);
+                vel_rad = D.P.(fld).vel_pol_all_hist(1,:,1);
+                roh_avg = nanmean(D.P.(fld).vel_pol_all_hist(:,:,2),1);
                 
                 % Convert to cart
                 [x, y] = pol2cart(vel_rad, roh_avg);
@@ -4785,7 +4801,7 @@ fprintf('END OF RUN\n');
         
         % --------------------------PLOT POSITION--------------------------
         
-        function [update_ui] = Pos_Plot()
+        function [update_ui] = Plot_Pos()
             
             % BAIL IF SETUP NOT FINISHED
             update_ui = false;
@@ -4874,17 +4890,19 @@ fprintf('END OF RUN\n');
             
             if D.F.Rat.plot_pos
                 
-                % Plot all new VT data
-                D.UI.cnt_ratPltH = D.UI.cnt_ratPltH+1;
-                D.UI.ratPltH(D.UI.cnt_ratPltH) = ...
-                    plot(D.P.Rat.x, D.P.Rat.y, '.', ...
+                % Plot all VT data for this lap
+                delete(D.UI.ratPltH);
+                x = D.P.Rat.pos_lap_hist(:,1);
+                y = D.P.Rat.pos_lap_hist(:,2);
+                D.UI.ratPltH = ...
+                    plot(x, y, '.', ...
                     'MarkerFaceColor', D.UI.ratPosAllCol, ...
                     'MarkerEdgeColor', D.UI.ratPosAllCol, ...
                     'MarkerSize', 6, ...
                     'Parent', D.UI.axH(1));
                 
                 % Plot current rat position with larger marker
-                if isfield(D.UI, 'vtRatPltNow');
+                if isfield(D.UI, 'vtRatPltNow')
                     delete(D.UI.vtRatPltNow);
                 end
                 D.UI.vtRatPltNow = ...
@@ -4900,10 +4918,14 @@ fprintf('END OF RUN\n');
             
             % ROB
             if D.F.Rob.plot_vel
+                % Get non-zero vals to plot
+                inc = D.P.Rob.vel_cart_lap_hist(:,1) > 0 | D.P.Rob.vel_cart_lap_hist(:,2) > 0;
+                x = D.P.Rob.vel_cart_lap_hist(inc, 1);
+                y = D.P.Rob.vel_cart_lap_hist(inc, 2);
                 % Store handle and plot
-                D.UI.cnt_robPltHvel = D.UI.cnt_robPltHvel+1;
-                D.UI.robPltHvel(D.UI.cnt_robPltHvel) = ...
-                    plot(D.P.Rob.vel_pol_arr(:,1), D.P.Rob.vel_pol_arr(:,2), '-', ...
+                delete(D.UI.robPltHvel);
+                D.UI.robPltHvel = ...
+                    plot(x, y, '-', ...
                     'Color', D.UI.robNowCol, ...
                     'LineWidth', 2, ...
                     'Parent', D.UI.axH(1));
@@ -4911,10 +4933,14 @@ fprintf('END OF RUN\n');
             
             % RAT
             if D.F.Rat.plot_vel
+                % Get non-zero vals to plot
+                inc = D.P.Rat.vel_cart_lap_hist(:,1) > 0 | D.P.Rat.vel_cart_lap_hist(:,2) > 0;
+                x = D.P.Rat.vel_cart_lap_hist(inc, 1);
+                y = D.P.Rat.vel_cart_lap_hist(inc, 2);
                 % Store handle and plot
-                D.UI.cnt_ratPltHvel = D.UI.cnt_ratPltHvel+1;
-                D.UI.ratPltHvel(D.UI.cnt_ratPltHvel) = ...
-                    plot(D.P.Rat.vel_pol_arr(:,1), D.P.Rat.vel_pol_arr(:,2), '-', ...
+                delete(D.UI.ratPltHvel);
+                D.UI.ratPltHvel = ...
+                    plot(x, y, '-', ...
                     'Color', D.UI.ratNowCol, ...
                     'LineWidth', 2, ...
                     'Parent', D.UI.axH(1));
@@ -4926,7 +4952,7 @@ fprintf('END OF RUN\n');
             if D.F.plot_hd && D.F.Rat.plot_pos
                 
                 % Delete plot object
-                if isfield(D.UI, 'vtPltHD');
+                if isfield(D.UI, 'vtPltHD')
                     delete(D.UI.ratPltHD(:));
                 end
                 
@@ -6247,21 +6273,21 @@ fprintf('END OF RUN\n');
         function [] = BtnClrVT(~, ~, ~)
             
             % Delete all handle objects
-            delete(D.UI.ratPltH(isgraphics(D.UI.ratPltH)))
-            delete(D.UI.ratPltHvel(isgraphics(D.UI.ratPltHvel)))
-            delete(D.UI.robPltHvel(isgraphics(D.UI.robPltHvel)))
-            D.UI.cnt_ratPltH = 0;
-            D.UI.cnt_ratPltHvel = 0;
-            D.UI.cnt_robPltHvel = 0;
+            delete(D.UI.ratPltH);
+            delete(D.UI.ratPltHvel);
+            delete(D.UI.robPltHvel);
             delete(D.UI.Rat.pltHposAll);
             delete(D.UI.Rat.pltHvelAll);
             delete(D.UI.Rob.pltHvelAll);
             delete(D.UI.Rat.pltHvelAvg);
             delete(D.UI.Rob.pltHvelAvg);
-            % Reset to nan
-            D.P.Rat.pos_hist = NaN(120*60*33,2);
-            D.P.Rat.vel_hist = NaN(500,101,2);
-            D.P.Rob.vel_hist = NaN(500,101,2);
+            % Reset pos history data to nan
+            D.P.Rat.pos_all_hist = NaN(60*60*33,2);
+            D.P.Rat.pos_all_hist = NaN(120*60*33,2);
+            D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnClrVT', get(D.UI.btnClrVT,'Value')));

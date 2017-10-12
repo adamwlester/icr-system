@@ -3277,73 +3277,73 @@ LOAD c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eab
  .rodata._ZZN3PID7PID_RunEPcE12__FUNCTION__
                 0x00095f02        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata.str1.1
-                0x00095f0a     0x217e C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
-                               0x2283 (size before relaxing)
+                0x00095f0a     0x217f C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                               0x2284 (size before relaxing)
  .rodata._ZL12tnsy_id_list
-                0x00098088        0x1 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098089        0x1 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8POSTRACK6GetPosEvE12__FUNCTION__
-                0x00098089        0x7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009808a        0x7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6REWARD13ExtendFeedArmEvE12__FUNCTION__
-                0x00098090        0xe C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098091        0xe C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ20OpenCloseRewSolenoidvE12__FUNCTION__
-                0x0009809e       0x15 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009809f       0x15 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6LOGGER8GetReplyEmE12__FUNCTION__
-                0x000980b3        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000980b4        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ8PrintLCDbPcS_cE12__FUNCTION__
-                0x000980bc        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000980bd        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ10SendPacketP2R2E12__FUNCTION__
-                0x000980c5        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000980c6        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ15LogTrackingDatavE6id_str
-                0x000980d0      0x190 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000980d1      0x190 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ12GetAD_StatustPcE11status_list
-                0x00098260      0x190 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098261      0x190 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ8HardStopPcE12__FUNCTION__
-                0x000983f0        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000983f1        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ9AD_ConfigfffE12__FUNCTION__
-                0x000983f9        0xa C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000983fa        0xa C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6REWARD15CheckZoneBoundsEdE12__FUNCTION__
-                0x00098403       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098404       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6LOGGER11SendCommandEPcbmE12__FUNCTION__
-                0x00098413        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098414        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8BULLDOZE8BullHoldEPcE12__FUNCTION__
-                0x0009841f        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098420        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8POSTRACK7SwapPosEdmE12__FUNCTION__
-                0x00098428        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098429        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ12HardwareTestvE12__FUNCTION__
-                0x00098430        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098431        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8BULLDOZE9BullResetEvE12__FUNCTION__
-                0x0009843d        0xa C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009843e        0xa C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ10QueueDebugPcmE12__FUNCTION__
-                0x00098447        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098448        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6LOGGER10StreamLogsEvE12__FUNCTION__
-                0x00098452        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098453        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN3PID12PID_ResetEKFEPcE12__FUNCTION__
-                0x0009845d        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009845e        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8BULLDOZE8BullStopEPcE12__FUNCTION__
-                0x0009846a        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009846b        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8POSTRACK6GetVelEvE12__FUNCTION__
-                0x00098473        0x7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098474        0x7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6REWARD12CheckFeedArmEvE12__FUNCTION__
-                0x0009847a        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009847b        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN3PID8PID_StopEPcE12__FUNCTION__
-                0x00098487        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098488        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6MOVETO11MoveToResetEvE12__FUNCTION__
-                0x00098490        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x00098491        0xc C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN3PID14RunCalibrationEvE12__FUNCTION__
-                0x0009849c        0xf C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x0009849d        0xf C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ15SetMotorControlPcS_E12__FUNCTION__
-                0x000984ab       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000984ac       0x10 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN3PID17PID_SetUpdateTimeEmE12__FUNCTION__
-                0x000984bb       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000984bc       0x12 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN8BULLDOZE7BullRunEPcE12__FUNCTION__
-                0x000984cd        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000984ce        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZ14BlockMotorTilliE12__FUNCTION__
-                0x000984d5        0xf C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000984d6        0xf C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZL11ard_id_list
-                0x000984e4        0x7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+                0x000984e5        0x7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6LOGGER10OpenNewLogEvE12__FUNCTION__
-                0x000984eb        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
- *fill*         0x000984f6        0x2 
+                0x000984ec        0xb C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
+ *fill*         0x000984f7        0x1 
  .rodata._ZL10dt_durEtOH
                 0x000984f8        0x8 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.cpp.o
  .rodata._ZZN6LOGGER14SetToWriteModeEPcE12__FUNCTION__
