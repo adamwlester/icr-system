@@ -58,7 +58,7 @@
 #define DO_FAST_LOG 0
 
 // Console
-#define DO_PRINT_DEBUG 1
+#define DO_PRINT_DEBUG 0
 #define DO_FAST_PRINT 0
 
 // Other

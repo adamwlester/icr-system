@@ -1852,7 +1852,7 @@ fprintf('END OF RUN\n');
                 'Position', pos, ...
                 'FontName', D.UI.btnFont, ...
                 'FontSize',14);
-          
+            
             % HALT ROBOT
             wdth = 0.1;
             pos = [D.UI.main_ax_bounds(1)+0.01, D.UI.main_ax_bounds(4)-0.01-0.06, 0.1, 0.06];
@@ -1904,14 +1904,14 @@ fprintf('END OF RUN\n');
             D.UI.editBulldoze = uicontrol(...
                 'Parent',FigH, ...
                 'Units','Normalized',...
-                'Position',[pos(1)+wdth, pos(2), wdth*0.5, pos(4)],...
+                'Position',[pos(1)+wdth, pos(2), wdth*0.3, pos(4)],...
                 'Style','edit',...
                 'HorizontalAlignment', 'Left', ...
                 'FontSize', 12, ...
                 'FontName','Monospaced', ...
-                'Max', 1000, ...
+                'Max', 1, ...
                 'Enable','on',...
-                'Visible', 'on',... // TEMP
+                'Visible', 'on', ... % TEMP
                 'String',num2str(D.PAR.bullSpeed));
             
             % REWARD BUTTON
@@ -2365,7 +2365,7 @@ fprintf('END OF RUN\n');
                 'HorizontalAlignment', 'Center', ...
                 'FontSize', text_font_sz(1), ...
                 'FontName','Monospaced', ...
-                'Max', 1000, ...
+                'Max', 1, ...
                 'Enable','on', ...
                 'Visible', 'off');
             % time stop info
@@ -2392,7 +2392,7 @@ fprintf('END OF RUN\n');
                 'HorizontalAlignment', 'Center', ...
                 'FontSize', text_font_sz(1), ...
                 'FontName','Monospaced', ...
-                'Max', 1000, ...
+                'Max', 1, ...
                 'Enable','on', ...
                 'Visible', 'off');
             
@@ -4728,8 +4728,8 @@ fprintf('END OF RUN\n');
                 % Delete old handle and lap data
                 delete(D.UI.(fld).pltHvelAll);
                 D.P.(fld).vel_pol_lap_hist = NaN(60*60*33,2);
-                   D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
-            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
+                D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+                D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
                 
                 % Get history as 1D array
                 vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
@@ -5539,7 +5539,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopCond', char(D.PAR.sesCond)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5558,7 +5558,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopTask', char(D.PAR.sesTask)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5579,7 +5579,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRewDel', num2str(D.PAR.rewDel)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5623,7 +5623,7 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[%s] Set to \"%s\"', 'ToggCue', char(D.PAR.cueFeed)));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -5665,7 +5665,7 @@ fprintf('END OF RUN\n');
                 get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
             Update_UI(10);
             
-             % Check settings 
+            % Check settings
             CheckSetupDefaults();
         end
         
@@ -6448,7 +6448,7 @@ fprintf('END OF RUN\n');
         end
         
         
-       
+        
         
         
         
@@ -6951,7 +6951,7 @@ fprintf('END OF RUN\n');
                         id, c2m.(id).dat1), now);
                 end
                 
-                              % Check for forced abort
+                % Check for forced abort
                 if c2m.(id).dat1 == 2
                     
                     % Format err string
@@ -6985,7 +6985,7 @@ fprintf('END OF RUN\n');
                     doExit = true;
                     
                     % Write to console
-                    Console_Write(err_str, now, true); 
+                    Console_Write(err_str, now, true);
                 end
             end
             
@@ -7116,7 +7116,7 @@ fprintf('END OF RUN\n');
             cnt_dot = 1;
         end
     end
-        
+
 % ---------------------------GET TIME NOW-------------------------------
     function [t_sec] = Elapsed_Seconds(t_now)
         
