@@ -3257,7 +3257,7 @@ namespace ICR_Run
     {
         // Private vars
         private Stopwatch _sw = new Stopwatch();
-        private string[] _logList = new string[50000];
+        private string[] _logList = new string[100000];
         private readonly object _lock_logFlags = new object();
         private readonly object _lock_updateList = new object();
         private readonly object _lock_bytesToRcv = new object();
@@ -3362,10 +3362,20 @@ namespace ICR_Run
                         str = String.Format("{0},{1},{2}", cnt_logsStored, t, msg);
 
                     // Add to list
-                    if (cnt_logsStored - 1 < 50000)
+                    if (cnt_logsStored <= _logList.Length)
+                    {
                         _logList[cnt_logsStored - 1] = str;
-                    else if (cnt_logsStored - 1 == 50000)
-                        _logList[cnt_logsStored - 1] = String.Format("**WARNING** Log Maxed out at {0} entries", 50000);
+                    }
+
+                    // Max logs stored and end reachedd
+                    else 
+                    {
+                        // Set to last entry in array
+                        cnt_logsStored = _logList.Length;
+
+                        // Store error in last entry
+                        _logList[cnt_logsStored - 1] = String.Format("**WARNING** Log Maxed out at {0} entries", _logList.Length);
+                    }
 
                     // Store error info
                     if (is_error)
