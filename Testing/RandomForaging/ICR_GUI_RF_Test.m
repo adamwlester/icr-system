@@ -74,8 +74,8 @@ end
 
 % Session conditions
 D.DB.ratLab = 'r9999';
-D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
-D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
+D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
@@ -84,7 +84,7 @@ D.DB.Start_Quadrant = 'SW'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
-D.DB.ratVelStart = 20;
+D.DB.ratVelStart = 50;
 D.DB.ratMaxAcc = 60; % (cm/sec/sec)
 D.DB.ratMaxDec = 100; % (cm/sec/sec)
 
@@ -489,7 +489,7 @@ fprintf('END OF RUN\n');
                 D.T.loop = Elapsed_Seconds(now);
                 
                 % PLOT POSITION
-                update_ui = Plot_Pos();
+                update_ui = Plot_Pos_New();
                 
                 % PRINT SES INFO
                 Inf_Print();
@@ -1067,22 +1067,22 @@ fprintf('END OF RUN\n');
             % store 1 lap of vel by roh
             D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
             D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
-            % position cutoff
-            D.P.posRohMax = 1 + (5/D.UI.arnRad);
-            D.P.posRohMin = (1 - (D.UI.trkWdt+5)/D.UI.arnRad);
+            % track position cutoff
+            D.P.trackRohBnd(1) = 1 - ((D.UI.trkWdt+5)/D.UI.arnRad);
+            D.P.trackRohBnd(2) = 1 + (5/D.UI.arnRad);
             % velocity cutoff
-            D.P.velRohMax = D.P.posRohMin;
-            D.P.velRohMin = D.P.posRohMin - 0.25;
+            D.P.velRohMax = D.P.trackRohBnd(1);
+            D.P.velRohMin = D.P.trackRohBnd(1) - 0.25;
             D.P.velMin = 0;
             D.P.velMax = 100;
-            
             % random forage
             D.P.rfRohBnd(1) = (D.UI.rfRad/D.UI.arnRad) - ((D.UI.rfTargWdt)/D.UI.arnRad);
             D.P.rfRohBnd(2) = D.UI.rfRad/D.UI.arnRad;
-            D.P.occMat = zeros(D.PAR.rfBins,D.PAR.rfBins);
-            D.P.occMatRaw = D.P.occMat;
+            D.P.occMatRaw =  zeros(D.PAR.rfBins,D.PAR.rfBins);
+            D.P.occMatScale = D.P.occMatRaw;
+            D.P.occMatBinary = D.P.occMatRaw;
             D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,length(D.PAR.pathTargArr));
-            D.P.pathNowMat = D.P.occMat;
+            D.P.pathNowMat = D.P.occMatScale;
             
             
             % DEBUG VARS
@@ -1536,25 +1536,25 @@ fprintf('END OF RUN\n');
             
             % Make mask
             [colNums, rowNums] = meshgrid(1:rad_pxl*2, 1:rad_pxl*2);
-            D.PAR.pathMask = ...
+            D.PAR.rfMask = ...
                 (rowNums - rad_pxl).^2 + (colNums - rad_pxl).^2 <= rad_pxl.^2;
-            D.PAR.pathMask = ~padarray(D.PAR.pathMask, [pad_pxl, pad_pxl]);
+            D.PAR.rfMask = ~padarray(D.PAR.rfMask, [pad_pxl, pad_pxl]);
             
             % Set lims
             set(D.UI.axH(4), ...
-                'XLim', [1,size(D.PAR.pathMask,1)],...
-                'YLim', [1,size(D.PAR.pathMask,2)]);
+                'XLim', [1,size(D.PAR.rfMask,1)],...
+                'YLim', [1,size(D.PAR.rfMask,2)]);
             
             % Show mask
             D.UI.imgMaskRFH = ...
-                imshow(ones(size(D.PAR.pathMask,1),size(D.PAR.pathMask,2)), ...
+                imshow(ones(size(D.PAR.rfMask,1),size(D.PAR.rfMask,2)), ...
                 'Parent',D.UI.axH(4));
             set(D.UI.imgMaskRFH, ...
-                'AlphaData', D.PAR.pathMask, ...
+                'AlphaData', D.PAR.rfMask, ...
                 'Visible', 'off');
             
             % Store path mask
-            D.PAR.pathMask = imresize(~D.PAR.pathMask, [D.PAR.rfBins,D.PAR.rfBins]);
+            D.PAR.rfMask = imresize(~D.PAR.rfMask, [D.PAR.rfBins,D.PAR.rfBins]);
             
             % Clear vars
             clear rad_pxl lim_pxl pad_pxl mask;
@@ -3846,7 +3846,7 @@ fprintf('END OF RUN\n');
                 end
                 
                 % Mask values outside circle
-                mask = repmat(D.PAR.pathMask,[1,1,D.PAR.nPaths,n_targs]);
+                mask = repmat(D.PAR.rfMask,[1,1,D.PAR.nPaths,n_targs]);
                 D.P.pathMat = D.P.pathMat.*mask;
                 D.DB.simRatPathMat = D.DB.simRatPathMat.*mask;
                 
@@ -3908,7 +3908,7 @@ fprintf('END OF RUN\n');
             set(D.UI.axH(3), 'CLim', [0,1]);
             
             % Plot occ
-            D.UI.imgRFOCC = imagesc(D.P.occMat+D.P.pathNowMat, ...
+            D.UI.imgRFOCC = imagesc(D.P.occMatScale+D.P.pathNowMat, ...
                 'Parent', D.UI.axH(3));
             
             % Set other plot features to visible
@@ -4296,29 +4296,41 @@ fprintf('END OF RUN\n');
                 D.P.(fld).ts = ts;
                 D.P.(fld).recs = recs;
                 
-                % Save history for rat pos
+                    % Save history for rat pos
                 if strcmp(fld, 'Rat')
-                    ind(1) = find(isnan(D.P.Rat.pos_hist(:,1)), 1, 'first');
+                    
+                    % Get next indces
+                    ind(1) = find(isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'first');
                     ind(2) = ind(1)+length(x)-1;
-                    D.P.Rat.pos_hist(ind(1):ind(2), 1) = x;
-                    D.P.Rat.pos_hist(ind(1):ind(2), 2) = y;
+                    
+                    % Store pos data
+                    D.P.Rat.pos_lap_hist(ind(1):ind(2), 1) = x;
+                    D.P.Rat.pos_lap_hist(ind(1):ind(2), 2) = y;
                 end
                 
                 %% HANDLE RAT FORAGE DATA
                 
                 % Bail if processing rat forrage data
                 if D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat')
-                    D.PAR.rfBinEdgeX = linspace(D.UI.lowLeft(1), D.UI.lowLeft(1)+D.UI.vtRes, D.PAR.rfBins+1);
-                    D.PAR.rfBinEdgeY = linspace(D.UI.lowLeft(2), D.UI.lowLeft(2)+D.UI.vtRes, D.PAR.rfBins+1);
                     
-                    N = histcounts2(D.P.(fld).y,D.P.(fld).x,D.PAR.rfBinEdgeY,D.PAR.rfBinEdgeX);
-                    D.P.occMatRaw = D.P.occMatRaw+flip(N,1);
+                    % Compute inbound occ bin counts
+                    occ_now = histcounts2(D.P.(fld).y,D.P.(fld).x,D.PAR.rfBinEdgeY,D.PAR.rfBinEdgeX);
+                    occ_now = flip(occ_now,1);
+                    
+                    % Store raw values
+                    D.P.occMatRaw = D.P.occMatRaw + occ_now;
+                    
+                    % Compute and store scaled occ
                     non_zer_occ = D.P.occMatRaw(D.P.occMatRaw(:) > 0);
                     scale = prctile(non_zer_occ,99);
                     if scale == 0
                         scale = 1;
                     end
-                    D.P.occMat = D.P.occMatRaw/scale;
+                    D.P.occMatScale = D.P.occMatRaw/scale;
+                    
+                    % Compute binary value
+                    D.P.occMatBinary = D.P.occMatBinary  + occ_now;
+                    D.P.occMatBinary = ceil(D.P.occMatBinary/max(D.P.occMatBinary(:)));
                     
                     return
                 end
@@ -5095,6 +5107,8 @@ fprintf('END OF RUN\n');
                 return
             end
             
+            % CHECK IF IN REWARD BOUNDS FOR MIN TIME
+            
             % Keep checking if rat is in the arena
             check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targInd,:));
             if ~any(check_inbound)
@@ -5121,22 +5135,45 @@ fprintf('END OF RUN\n');
             % Get path deg array
             path_arr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
             
-            % Get optimal path
-            % invert occ values
-            inv_occ = abs(D.P.occMat-max(D.P.occMat(:)));
-            % get sum of product of occ and possible paths
+            % GET OPTIMAL NEW PATH
+            
+            % Reset occ once 50% of area covered
+            if sum(D.P.occMatBinary(:))/sum(D.PAR.rfMask(:)) >= 0.5
+                % Set all to zero
+                D.P.occMatBinary(:) = 0;
+                
+                % Update plot history
+                Plot_Pos_Hist()
+            end
+            
+            % USE BINARY OCC
+            
+            % Get binary map
+            inv_occ = abs(D.P.occMatBinary-1);
             occ_prod = ...
                 squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd) .* ...
                 repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
-            % normalize
-            occ_prod = occ_prod/sum(occ_prod);
-            % weight by path length normalized to occ prod range
-            occ_scale = abs(D.PAR.pathLengthArr - max(D.PAR.pathLengthArr));
-            occ_scale = occ_scale/sum(occ_scale);
-            %occ_scale = 1 + occ_scale'*((max(occ_prod)-min(occ_prod))/max(occ_scale));
-            occ_scale = 1 + occ_scale';
-            occ_prod = occ_prod.*occ_scale;
-            % get optimal path
+            
+%             % USE NOMALIZED DIST SCALED VALUE
+%             
+%             % Invert occ values and get sum of product of occ and possible paths
+%             inv_occ = abs(D.P.occMatScale-max(D.P.occMatScale(:)));
+%             occ_prod = ...
+%                 squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd) .* ...
+%                 repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
+%             
+%             % Normalize
+%             occ_prod = occ_prod/sum(occ_prod);
+%             
+%             % Weight by path length normalized to occ prod range
+%             occ_scale = abs(D.PAR.pathLengthArr - max(D.PAR.pathLengthArr));
+%             occ_scale = occ_scale/sum(occ_scale);
+%             
+%             %occ_scale = 1 + occ_scale'*((max(occ_prod)-min(occ_prod))/max(occ_scale));
+%             occ_scale = 1 + occ_scale';
+%             occ_prod = occ_prod.*occ_scale;
+            
+            % Pull out optimal path
             path_ind = find(occ_prod == max(occ_prod));
             if length(path_ind) > 1
                 path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
@@ -5150,11 +5187,9 @@ fprintf('END OF RUN\n');
             targ_ind_new = ...
                 find(round(rad2deg(rad_new_targ)) == D.PAR.pathTargArr);
             
-            % Plot path
+            % Store path mat for plotting
             D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
             D.P.pathNowMat(D.P.pathNowMat>0) = 0.5;
-            D.UI.imgRFOCC = imagesc(D.P.pathNowMat, ...
-                'Parent', D.UI.axH(3));
             
             % Update patches
             set(D.UI.ptchRFTarg(targ_ind_last), 'Visible', 'off');
@@ -5176,8 +5211,15 @@ fprintf('END OF RUN\n');
         
         function [] = Lap_Check()
             
+            %% BAIL FOR NON-TRACK RUN
+            
+            % Bail if not a 'Track' session
+            if D.PAR.sesTask == 'Forage'
+                return
+            end
+            
             % CHECK BOUNDS AND/OR BAIL
-            track_quad = Check_Rad_Bnds(D.P.Rat.rad, D.UI.lapBnds(D.I.lap_hunt_ind, :));
+            track_quad = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.lapBnds(D.I.lap_hunt_ind, :));
             
             % Bail if not in bounds
             if ~any(track_quad)
@@ -5224,136 +5266,10 @@ fprintf('END OF RUN\n');
             % Set all back to dark
             set(D.UI.ptchLapBnds, 'Visible', 'on');
             
-            %% PLOT CUMULATIVE VT DATA
+            %% UPDATE PLOT HISTORY AND PRINT LAP TIME INFO
             
-            % Delete all tracker data from this lap
-            delete(D.UI.ratPltH)
-            delete(D.UI.ratPltHvel)
-            delete(D.UI.robPltHvel)
-            
-            % Add lap data to all hist data
-            lap_hist_lng = find(~isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'last');
-            ind(1) = find(isnan(D.P.Rat.pos_all_hist(:,1)), 1, 'first');
-            ind(2) = ind(1)+lap_hist_lng-1;
-            
-            % Store pos data
-            D.P.Rat.pos_all_hist(ind(1):ind(2), 1) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 1);
-            D.P.Rat.pos_all_hist(ind(1):ind(2), 2) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 2);
-            
-            % Reset lap hist
-            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
-            
-            % Rat pos
-            delete(D.UI.Rat.pltHposAll);
-            x = D.P.Rat.pos_all_hist(:,1);
-            y = D.P.Rat.pos_all_hist(:,2);
-            % set big jumps to NaN
-            exc = find(diff(x)/D.UI.xCMcnv > 10 | diff(y)/D.UI.yCMcnv > 10 == 1) + 1;
-            x(exc) = NaN;
-            y(exc) = NaN;
-            D.UI.Rat.pltHposAll = ...
-                plot(x, y, '-', ...
-                'Color', D.UI.ratPosHistCol, ...
-                'LineWidth', 1, ...
-                'Parent', D.UI.axH(1));
-            
-            % Plot vel all
-            cols = [D.UI.ratHistCol; D.UI.robHistCol];
-            flds = [{'Rat'},{'Rob'}];
-            for i = [2,1]
-                fld = flds{i};
-                
-                % Get lap data
-                ind = ~isnan(D.P.(fld).vel_pol_lap_hist(:, 1));
-                vel_rad = D.P.(fld).vel_pol_lap_hist(ind, 1);
-                vel_roh = D.P.(fld).vel_pol_lap_hist(ind, 2);
-                
-                % Sort by rad
-                [vel_rad, s_ind] = sort(vel_rad);
-                vel_roh = vel_roh(s_ind);
-                
-                % Interpolate missing values
-                rad_bins = linspace(0, 2*pi, 101);
-                if length(vel_rad)<10 || ...
-                        max(diff(rad2deg(vel_rad))) > 45 || ...
-                        max(diff(rad2deg(vel_rad))) == 0
-                    
-                    % Set to nan if insuficient samples or big jumps
-                    roh_interp = nan(1,101);
-                    
-                else
-                    
-                    % Histogram
-                    [~,h_inds]= histc(vel_rad, rad_bins);
-                    roh_interp = cell2mat(arrayfun(@(x) nanmean(vel_roh(h_inds==x)), ...
-                        1:101, 'Uni', false));
-                    
-                    % Interpolate missing vals
-                    ind = ~isnan(roh_interp);
-                    roh_interp = interp1(rad_bins(ind), roh_interp(ind), rad_bins);
-                    roh_interp(end) = roh_interp(1);
-                    
-                    % Keep in bounds
-                    roh_interp(roh_interp>D.P.velRohMax) = D.P.velRohMax;
-                    roh_interp(roh_interp<D.P.velRohMin) = D.P.velRohMin;
-                end
-                
-                % Add to history
-                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
-                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
-                
-                % Delete old handle and lap data
-                delete(D.UI.(fld).pltHvelAll);
-                D.P.(fld).vel_pol_lap_hist = NaN(60*60*33,2);
-                D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
-                D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
-                
-                % Get history as 1D array
-                vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
-                vel_roh = reshape(D.P.(fld).vel_pol_all_hist(:,:,2)',1,[]);
-                ind = ~isnan(vel_rad);
-                
-                % Convert to cart
-                [x, y] = pol2cart(vel_rad(ind), vel_roh(ind));
-                x =  x.*D.PAR.R + D.PAR.XC;
-                y =  y.*D.PAR.R + D.PAR.YC;
-                % Plot
-                D.UI.(fld).pltHvelAll = ...
-                    plot(x, y, '-', ...
-                    'Color', cols(i,:), ...
-                    'LineWidth', 1, ...
-                    'Parent', D.UI.axH(1));
-            end
-            
-            % Plot vel avg
-            cols = [D.UI.ratAvgCol; D.UI.robAvgCol];
-            flds = [{'Rat'},{'Rob'}];
-            for i = [2,1]
-                fld = flds{i};
-                
-                % Get accross lap average
-                vel_rad = D.P.(fld).vel_pol_all_hist(1,:,1);
-                roh_avg = nanmean(D.P.(fld).vel_pol_all_hist(:,:,2),1);
-                
-                % Convert to cart
-                [x, y] = pol2cart(vel_rad, roh_avg);
-                x =  x.*D.PAR.R + D.PAR.XC;
-                y =  y.*D.PAR.R + D.PAR.YC;
-                
-                % Plot
-                delete(D.UI.(fld).pltHvelAvg)
-                D.UI.(fld).pltHvelAvg = ...
-                    plot(x, y, '-', ...
-                    'Color', cols(i,:), ...
-                    'LineWidth', 4, ...
-                    'Parent', D.UI.axH(1));
-            end
-            
-            % Reset max velocity
-            D.P.Rat.vel_max_lap = 0;
-            D.P.Rob.vel_max_lap = 0;
-            
-            %% PRINT LAP TIME INFO
+            % Update plot history
+            Plot_Pos_Hist()
             
             % Save time
             lap_tim_ellapsed = Elapsed_Seconds(now) - D.T.lap_tim;
@@ -5379,9 +5295,9 @@ fprintf('END OF RUN\n');
             
         end
         
-        % --------------------------PLOT POSITION--------------------------
+        % ----------------------PLOT CURRENT POSITION----------------------
         
-        function [update_ui] = Plot_Pos()
+        function [update_ui] = Plot_Pos_New()
             
             % BAIL IF SETUP NOT FINISHED
             update_ui = false;
@@ -5484,7 +5400,7 @@ fprintf('END OF RUN\n');
                 % Plot occ
                 if D.PAR.sesTask == 'Forage'
                     delete(D.UI.imgRFOCC);
-                    D.UI.imgRFOCC = imagesc(D.P.occMat+D.P.pathNowMat, ...
+                    D.UI.imgRFOCC = imagesc(D.P.occMatScale+D.P.pathNowMat, ...
                         'Parent', D.UI.axH(3));
                 end
                 
@@ -5594,6 +5510,142 @@ fprintf('END OF RUN\n');
             D.F.Rat.plot_pos = false;
             D.F.Rob.plot_vel = false;
             D.F.Rat.plot_vel = false;
+            
+        end
+        
+        % ----------------------PLOT POSITION HISTORY----------------------
+        
+        function [] = Plot_Pos_Hist()
+            
+            % Delete all tracker data from this lap
+            delete(D.UI.ratPltH)
+            delete(D.UI.ratPltHvel)
+            delete(D.UI.robPltHvel)
+            
+            % Add lap data to all hist data
+            lap_hist_lng = find(~isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'last');
+            ind(1) = find(isnan(D.P.Rat.pos_all_hist(:,1)), 1, 'first');
+            ind(2) = ind(1)+lap_hist_lng-1;
+            
+            % Store pos data
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 1) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 1);
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 2) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 2);
+            
+            % Reset lap level values
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.vel_max_lap = 0;
+            D.P.Rob.vel_max_lap = 0;
+            
+            % Rat pos
+            delete(D.UI.Rat.pltHposAll);
+            x = D.P.Rat.pos_all_hist(:,1);
+            y = D.P.Rat.pos_all_hist(:,2);
+            % set big jumps to NaN
+            exc = find(diff(x)/D.UI.cm2pxl > 10 | diff(y)/D.UI.cm2pxl > 10 == 1) + 1;
+            x(exc) = NaN;
+            y(exc) = NaN;
+            D.UI.Rat.pltHposAll = ...
+                plot(x, y, '-', ...
+                'Color', D.UI.ratPosHistCol, ...
+                'LineWidth', 1, ...
+                'Parent', D.UI.axH(1));
+            
+            % Bail if not a 'Track' session
+            if D.PAR.sesTask == 'Forage'
+                return
+            end
+            
+            % Plot vel all
+            cols = [D.UI.ratHistCol; D.UI.robHistCol];
+            flds = [{'Rat'},{'Rob'}];
+            for i = [2,1]
+                fld = flds{i};
+                
+                % Get lap data
+                ind = ~isnan(D.P.(fld).vel_pol_lap_hist(:, 1));
+                vel_rad = D.P.(fld).vel_pol_lap_hist(ind, 1);
+                vel_roh = D.P.(fld).vel_pol_lap_hist(ind, 2);
+                
+                % Sort by rad
+                [vel_rad, s_ind] = sort(vel_rad);
+                vel_roh = vel_roh(s_ind);
+                
+                % Interpolate missing values
+                rad_bins = linspace(0, 2*pi, 101);
+                if length(vel_rad)<10 || ...
+                        max(diff(rad2deg(vel_rad))) > 45 || ...
+                        max(diff(rad2deg(vel_rad))) == 0
+                    
+                    % Set to nan if insuficient samples or big jumps
+                    roh_interp = nan(1,101);
+                    
+                else
+                    
+                    % Histogram
+                    [~,h_inds]= histc(vel_rad, rad_bins);
+                    roh_interp = cell2mat(arrayfun(@(x) nanmean(vel_roh(h_inds==x)), ...
+                        1:101, 'Uni', false));
+                    
+                    % Interpolate missing vals
+                    ind = ~isnan(roh_interp);
+                    roh_interp = interp1(rad_bins(ind), roh_interp(ind), rad_bins);
+                    roh_interp(end) = roh_interp(1);
+                    
+                    % Keep in bounds
+                    roh_interp(roh_interp>D.P.velRohMax) = D.P.velRohMax;
+                    roh_interp(roh_interp<D.P.velRohMin) = D.P.velRohMin;
+                end
+                
+                % Add to history
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
+                
+                % Reset polar data
+                D.P.(fld).vel_pol_lap_hist = NaN(60*60*33,2);
+                
+                % Get history as 1D array
+                vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
+                vel_roh = reshape(D.P.(fld).vel_pol_all_hist(:,:,2)',1,[]);
+                ind = ~isnan(vel_rad);
+                
+                % Convert to cart
+                delete(D.UI.(fld).pltHvelAll);
+                [x, y] = pol2cart(vel_rad(ind), vel_roh(ind));
+                x =  x.*D.PAR.R + D.PAR.XC;
+                y =  y.*D.PAR.R + D.PAR.YC;
+                % Plot
+                D.UI.(fld).pltHvelAll = ...
+                    plot(x, y, '-', ...
+                    'Color', cols(i,:), ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.axH(1));
+            end
+            
+            % Plot vel avg
+            cols = [D.UI.ratAvgCol; D.UI.robAvgCol];
+            flds = [{'Rat'},{'Rob'}];
+            for i = [2,1]
+                fld = flds{i};
+                
+                % Get accross lap average
+                vel_rad = D.P.(fld).vel_pol_all_hist(1,:,1);
+                roh_avg = nanmean(D.P.(fld).vel_pol_all_hist(:,:,2),1);
+                
+                % Convert to cart
+                [x, y] = pol2cart(vel_rad, roh_avg);
+                x =  x.*D.PAR.R + D.PAR.XC;
+                y =  y.*D.PAR.R + D.PAR.YC;
+                
+                % Plot
+                delete(D.UI.(fld).pltHvelAvg)
+                D.UI.(fld).pltHvelAvg = ...
+                    plot(x, y, '-', ...
+                    'Color', cols(i,:), ...
+                    'LineWidth', 4, ...
+                    'Parent', D.UI.axH(1));
+            end
             
         end
         

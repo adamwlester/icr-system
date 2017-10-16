@@ -4,3 +4,5 @@ NetCom Version 3.1.0
 
 -*  ERROR  *- (mm/dd/yyyy): 10/15/2017 At Time: 17:11:53 - NetworkNodeClient::ConnectToServer - Error Connecting To Server, error code: WSAETIMEDOUT - Attempt to connect timed out without establishing a connection.
 -*  ERROR  *- (mm/dd/yyyy): 10/15/2017 At Time: 17:12:14 - NetworkNodeClient::ConnectToServer - Error Connecting To Server, error code: WSAETIMEDOUT - Attempt to connect timed out without establishing a connection.
+Log File Closed - End of File
+
