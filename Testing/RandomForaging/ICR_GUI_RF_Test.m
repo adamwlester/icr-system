@@ -1,4 +1,4 @@
-function[status] = ICR_GUI(sysTest, doDebug, isMatSolo)
+function[status] = ICR_GUI_RF_Test(sysTest, doDebug, isCheetahOpen, isMatSolo)
 % INPUT:
 %	sysTest = [0,1,2,3]
 %    	0: No test
@@ -28,6 +28,7 @@ global FigH; % ui figure handle
 global D; % main data struct
 global tcpIP; % tcp object
 global timer_c2m; % timer to check c2m
+global timer_quit; % timer to indicate quit status
 
 % Matlab to CS communication
 global m2c; % local data struct
@@ -47,8 +48,11 @@ status = 'failed'; %#ok<NASGU>
 doExit = false;
 
 % Handle input args
-if nargin < 3
+if nargin < 4
     isMatSolo = true;
+end
+if nargin < 3
+    isCheetahOpen = false;
 end
 if nargin < 2
     doDebug = true;
@@ -70,19 +74,19 @@ end
 
 % Session conditions
 D.DB.ratLab = 'r9999';
-D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
-D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
+D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Rotation']
+D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NE'; % [NE,SE,SW,NW];
+D.DB.Start_Quadrant = 'SW'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
-D.DB.ratVelStart = 100;
-D.DB.ratMaxAcc = 200; % (cm/sec/sec)
-D.DB.ratMaxDec = 200; % (cm/sec/sec)
+D.DB.ratVelStart = 20;
+D.DB.ratMaxAcc = 60; % (cm/sec/sec)
+D.DB.ratMaxDec = 100; % (cm/sec/sec)
 
 % Halt Error test
 D.DB.velSteps = 10:10:80; % (cm/sec)
@@ -147,11 +151,7 @@ else
     
     % HANDLE ERRRORS
     if ~isempty(ME)
-        if exist('D', 'var')
-            if(isfield(D,'DB'))
-                D.DB.isErrExit = true;
-            end
-        end
+        
         % Log/print error
         err = sprintf([ ...
             'Time: %0.2f\r\n', ...
@@ -241,7 +241,7 @@ fprintf('END OF RUN\n');
         D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
         D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
         D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
-        D.DIR.ioRFPath = fullfile(D.DIR.ioTop, 'Operational', 'forrage_path.mat');
+        D.DIR.ioRFPath = fullfile(D.DIR.ioTop, 'Operational', 'Forage_path.mat');
         
         % Cheetah dirs
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
@@ -262,7 +262,7 @@ fprintf('END OF RUN\n');
             'A', ... % connected to AC computer [NA]
             'N', ... % netcom setup [NA]
             'F', ... % data saved [NA]
-            'X', ... % confirm quit
+            'X', ... % confirm quit abort [(uint)abort]
             'C', ... % confirm close
             'T', ... % system test command [(uint)test]
             'S', ... % setup session [(uint)ses_cond, (byte)sound_cond]
@@ -309,7 +309,6 @@ fprintf('END OF RUN\n');
         D.DB.doPidCalibrationTest = false;
         D.DB.doHaltErrorTest = false;
         D.DB.doSimRatTest = false;
-        D.DB.isErrExit = false;
         D.DB.isForceClose = false;
         
         % Get testing condition
@@ -351,6 +350,12 @@ fprintf('END OF RUN\n');
         timer_c2m.Period = 0.1;
         timer_c2m.TimerFcn = @CheckC2M;
         start(timer_c2m);
+        
+        % Start quit timer
+        timer_quit = timer;
+        timer_quit.ExecutionMode = 'fixedRate';
+        timer_quit.Period = 0.5;
+        timer_quit.TimerFcn = @QuitStatus;
         
         % ------------------------ SETUP AC CONNECTION --------------------
         Console_Write('[Setup] RUNNING: Connect to AC Computer...');
@@ -420,16 +425,15 @@ fprintf('END OF RUN\n');
                     ~doExit
                 pause(0.01);
             end
-            
-            % Set sync time
-            if (c2m.('h').dat1 ~= 0)
-                Console_Write('[Setup] FINISHED: Wait for Handshake');
-                Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
-            else
-                Console_Write('!!ERROR!! ABORTED: Wait for Handshake');
-                return
-            end
-            
+        end
+        
+        % Set sync time
+        if (c2m.('h').dat1 ~= 0)
+            Console_Write('[Setup] FINISHED: Wait for Handshake');
+            Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
+        elseif (~isMatSolo)
+            Console_Write('!!ERROR!! ABORTED: Wait for Handshake');
+            return;
         end
         
         % Open figure
@@ -1013,7 +1017,7 @@ fprintf('END OF RUN\n');
             
             % POS DATA
             
-            % nlx inputs
+            % nlx input
             D.P.Rat.vtTS = NaN;
             D.P.Rat.vtPos = NaN;
             D.P.Rat.vtHD = NaN;
@@ -1032,9 +1036,6 @@ fprintf('END OF RUN\n');
             % pos rad
             D.P.Rat.rad = NaN;
             D.P.Rob.rad = NaN;
-            % pos roh
-            D.P.Rat.roh = NaN;
-            D.P.Rob.roh = NaN;
             % last used rad
             D.P.Rat.radLast = NaN;
             D.P.Rob.radLast = NaN;
@@ -1054,24 +1055,27 @@ fprintf('END OF RUN\n');
             D.P.Rob.vel_max_all = 0;
             D.P.Rat.vel_max_lap = 0;
             D.P.Rob.vel_max_lap = 0;
-            D.P.Rat.vel_pol_arr = NaN(3,2);
-            D.P.Rob.vel_pol_arr = NaN(3,2);
             % store hostory of pos x by y
-            D.P.Rat.pos_hist = NaN(120*60*33,2);
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.pos_all_hist = NaN(120*60*33,2);
             % store history of vel by roh
-            D.P.Rat.vel_lap = NaN(60*60*33,2);
-            D.P.Rob.vel_lap = NaN(60*60*33,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
+            % store history of vel by roh
+            D.P.Rat.vel_pol_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_pol_lap_hist = NaN(60*60*33,2);
             % store 1 lap of vel by roh
-            D.P.Rat.vel_hist = NaN(500,101,2);
-            D.P.Rob.vel_hist = NaN(500,101,2);
-            % track position cutoff
-            D.P.trackRohBnd(1) = 1 - ((D.UI.trkWdt+5)/D.UI.arnRad);
-            D.P.trackRohBnd(2) = 1 + (5/D.UI.arnRad);
+            D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
+            % position cutoff
+            D.P.posRohMax = 1 + (5/D.UI.arnRad);
+            D.P.posRohMin = (1 - (D.UI.trkWdt+5)/D.UI.arnRad);
             % velocity cutoff
-            D.P.velRohMax = D.P.trackRohBnd(1);
-            D.P.velRohMin = D.P.trackRohBnd(1) - 0.25;
+            D.P.velRohMax = D.P.posRohMin;
+            D.P.velRohMin = D.P.posRohMin - 0.25;
             D.P.velMin = 0;
             D.P.velMax = 100;
+            
             % random forage
             D.P.rfRohBnd(1) = (D.UI.rfRad/D.UI.arnRad) - ((D.UI.rfTargWdt)/D.UI.arnRad);
             D.P.rfRohBnd(2) = D.UI.rfRad/D.UI.arnRad;
@@ -1137,13 +1141,10 @@ fprintf('END OF RUN\n');
             % POS DATA
             
             % vt plot handle array
-            D.UI.ratPltH = gobjects(1,60*120/D.PAR.polRate);
-            D.UI.cnt_ratPltH = 0;
+            D.UI.ratPltH = gobjects(1,1);
             % vt plot handles of velocity
-            D.UI.ratPltHvel = gobjects(1,60*120/D.PAR.polRate); % rat
-            D.UI.robPltHvel = gobjects(1,60*120/D.PAR.polRate); % rob
-            D.UI.cnt_ratPltHvel = 0;
-            D.UI.cnt_robPltHvel = 0;
+            D.UI.ratPltHvel = gobjects(1,1);
+            D.UI.robPltHvel = gobjects(1,1);
             % handles for average vel plots
             D.UI.Rat.pltHvelAvg = gobjects(1,1); % rat
             D.UI.Rob.pltHvelAvg = gobjects(1,1); % rob
@@ -1259,7 +1260,7 @@ fprintf('END OF RUN\n');
             % bulldoze
             D.UI.bullList = {'0 sec'; '5 sec'; '10 sec'; '30 sec'; '60 sec'; '120 sec'};
             D.PAR.bullDel = 30;
-            D.PAR.bullSpeed = 5;
+            D.PAR.bullSpeed = 10;
             D.UI.bullLastVal = 0;
             
             % btnAcq and btnRec
@@ -2122,14 +2123,14 @@ fprintf('END OF RUN\n');
             D.UI.editBulldoze = uicontrol(...
                 'Parent',FigH, ...
                 'Units','Normalized',...
-                'Position',[pos(1)+wdth, pos(2), wdth*0.5, pos(4)],...
+                'Position',[pos(1)+wdth, pos(2), wdth*0.3, pos(4)],...
                 'Style','edit',...
                 'HorizontalAlignment', 'Left', ...
                 'FontSize', 12, ...
                 'FontName','Monospaced', ...
-                'Max', 1000, ...
-                'Enable','inactive',...
-                'Visible', 'off',...
+                'Max', 1, ...
+                'Enable','on',...
+                'Visible', 'on', ... % TEMP
                 'String',num2str(D.PAR.bullSpeed));
             
             % REWARD BUTTON
@@ -2583,7 +2584,7 @@ fprintf('END OF RUN\n');
                 'HorizontalAlignment', 'Center', ...
                 'FontSize', text_font_sz(1), ...
                 'FontName','Monospaced', ...
-                'Max', 1000, ...
+                'Max', 1, ...
                 'Enable','on', ...
                 'Visible', 'off');
             % time stop info
@@ -2610,7 +2611,7 @@ fprintf('END OF RUN\n');
                 'HorizontalAlignment', 'Center', ...
                 'FontSize', text_font_sz(1), ...
                 'FontName','Monospaced', ...
-                'Max', 1000, ...
+                'Max', 1, ...
                 'Enable','on', ...
                 'Visible', 'off');
             
@@ -2746,47 +2747,56 @@ fprintf('END OF RUN\n');
             
             %% CONNECT TO NETCOM
             
-            % Set flag
-            D.NLX.running = false;
-            D.NLX.connected = false;
-            
             % Wait for Cheetah to open
             Console_Write('[NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
-            while ~D.NLX.running && ...
+            if ~isCheetahOpen
+                
+                % Keep checking
+                while ~isCheetahOpen && ...
                     ~isMatSolo && ...
                     ~doExit
+                
                 % Check EXE status
-                [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
-                D.NLX.running = any(strfind(result, 'Cheetah.exe'));
-            end
-            
-            % Log/print
-            if D.NLX.running
-                Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
-                % Pause before connecting
-                if ~isMatSolo
-                    Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
-                    tic;
-                    while (toc < 5 && ~doExit)
+                    [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+                    isCheetahOpen = any(strfind(result, 'Cheetah.exe'));
+                end
+                
+                % Log/print status
+                if isCheetahOpen
+                    Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Running');
+                    
+                    % Pause before connecting
+                    if ~isMatSolo
+                        Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Load...');
+                        tic;
+                        while (toc < 10 && ~doExit)
+                        end
+                        if ~doExit
+                            Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
+                        else
+                            Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Load');
+                        end
                     end
-                    if ~doExit
-                        Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Load');
-                    else
-                        Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Load');
-                    end
+                    
+                    % Log/print program aborted
+                else
+                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
                 end
             else
-                Console_Write('**WARNING** [NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
+                Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Already Running');
             end
             
-            % Load NetCom into Matlab, and connect to the NetCom server
+            % Load NetCom into Matlab, and connect to the NetCom server if we aren’t connected
             Console_Write(sprintf('[NLX_Setup] RUNNING: Connect to NLX... IP=%s', ...
                 D.NLX.IP));
             
+            % Initialzie flag
+             D.NLX.connected = 0;
+             
             % Run if not connected already
             if NlxAreWeConnected() ~= 1
                 
-                % Keep attempting till success
+                 % Keep attempting till success
                 while ~D.NLX.connected && ...
                         ~isMatSolo && ...
                         ~doExit
@@ -2802,13 +2812,13 @@ fprintf('END OF RUN\n');
                 end
                 
                 % Log/print status
-                if D.NLX.connected
+                if D.NLX.connected == 1
                     Console_Write('[NLX_Setup] FINISHED: Connect to NLX');
                 else
-                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Connect to NLX');
+                    Console_Write('[NLX_Setup] ABORTED: Connect to NLX');
                 end
             else
-                % Log/print already connected
+                % Log/print
                 Console_Write('[NLX_Setup] CONFIRM: Already Connected to NLX');
             end
             
@@ -2926,6 +2936,7 @@ fprintf('END OF RUN\n');
             Console_Write('[NLX_Setup] FINISHED: Enable Setup Panel')
             
         end
+        
         
         % ----------------------------FINISH SETUP-------------------------
         function [] = Finish_Setup()
@@ -3910,7 +3921,7 @@ fprintf('END OF RUN\n');
             D.I.targInd = ...
                 find(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi)) == D.PAR.pathTargArr);
             set(D.UI.ptchRFTarg(D.I.targInd), 'Visible', 'on');
-              
+            
         end
         
         % ----------------------------RAT IN CHECK-------------------------
@@ -4155,7 +4166,6 @@ fprintf('END OF RUN\n');
             
         end
         
-        
         % ---------------------------GET NLX VT----------------------------
         
         function [] = VT_Get(fld)
@@ -4261,13 +4271,11 @@ fprintf('END OF RUN\n');
                     D.P.(fld).x = NaN;
                     D.P.(fld).y = NaN;
                     D.P.(fld).rad = NaN;
-                    D.P.(fld).roh = NaN;
                     D.P.(fld).ts = NaN;
                     D.P.(fld).recs = NaN;
-                    D.P.(fld).vel_pol_arr(end,:) = NaN;
                     
                     % Exit function
-                    return
+                    return;
                     
                 else
                     % Plot pos data this loop
@@ -4350,6 +4358,9 @@ fprintf('END OF RUN\n');
                 % Get radian value for vel plot
                 set_vel_nan = false;
                 
+                % Get next vel hisory ind
+                vel_ind = find(isnan(D.P.(fld).vel_cart_lap_hist(:,1)), 1, 'first');
+                
                 % Check what rob vel plot should be aligned to
                 if strcmp(fld, 'Rob') && ~D.F.rat_in
                     % Use setpoint pos
@@ -4407,8 +4418,8 @@ fprintf('END OF RUN\n');
                     % Set not to plot this vel
                     D.F.(fld).plot_vel = false;
                     
-                    % Avoid jumps in plot
-                    D.P.(fld).vel_pol_arr(end,:) = NaN;
+                    % Set to zero (later to NaN) to avoid jumps in plot
+                    D.P.(fld).vel_cart_lap_hist(vel_ind,:) = 0;
                     
                 else
                     
@@ -4423,9 +4434,6 @@ fprintf('END OF RUN\n');
                         D.P.(fld).vel_max_lap = max(D.P.(fld).vel_max_lap, D.P.(fld).vel);
                         D.P.(fld).vel_max_all = max(D.P.(fld).vel_max_lap, D.P.(fld).vel_max_all);
                     end
-                    
-                    % Shift stored averages
-                    D.P.(fld).vel_pol_arr = circshift(D.P.(fld).vel_pol_arr, -1, 1);
                     
                     % Cap to vel min,max
                     velRoh = D.P.(fld).vel;
@@ -4448,21 +4456,24 @@ fprintf('END OF RUN\n');
                     % Store plot values
                     if ~set_vel_nan
                         % Convert to cart
-                        [D.P.(fld).vel_pol_arr(end, 1), D.P.(fld).vel_pol_arr(end, 2)] = ...
+                        [D.P.(fld).vel_cart_lap_hist(vel_ind, 1), D.P.(fld).vel_cart_lap_hist(vel_ind, 2)] = ...
                             pol2cart(D.P.(fld).velRad, velRoh);
-                        D.P.(fld).vel_pol_arr(end, 1) =  D.P.(fld).vel_pol_arr(end, 1).*D.PAR.R + D.PAR.XC;
-                        D.P.(fld).vel_pol_arr(end, 2) =  D.P.(fld).vel_pol_arr(end, 2).*D.PAR.R + D.PAR.YC;
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, 1) =  D.P.(fld).vel_cart_lap_hist(vel_ind, 1).*D.PAR.R + D.PAR.XC;
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, 2) =  D.P.(fld).vel_cart_lap_hist(vel_ind, 2).*D.PAR.R + D.PAR.YC;
                     else
-                        % Set to NaN because rad diff to large
-                        D.P.(fld).vel_pol_arr(end, :) = NaN;
+                        % Set to zero (later to NaN) because rad diff to large
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, :) = 0;
                         D.P.(fld).velRad = NaN;
                         velRoh = NaN;
+                        
+                        % Set not to plot this vel
+                        D.F.(fld).plot_vel = false;
                     end
                     
-                    % Save history
-                    ind = find(isnan(D.P.(fld).vel_lap(:,1)), 1, 'first');
-                    D.P.(fld).vel_lap(ind, 1) = D.P.(fld).velRad;
-                    D.P.(fld).vel_lap(ind, 2) = velRoh;
+                    % Save pol history
+                    ind = find(isnan(D.P.(fld).vel_pol_lap_hist(:,1)), 1, 'first');
+                    D.P.(fld).vel_pol_lap_hist(ind, 1) = D.P.(fld).velRad;
+                    D.P.(fld).vel_pol_lap_hist(ind, 2) = velRoh;
                     
                 end
                 
@@ -5165,15 +5176,8 @@ fprintf('END OF RUN\n');
         
         function [] = Lap_Check()
             
-            %% BAIL FOR NON-TRACK RUN
-            
-            % Bail if not a 'Track' session
-            if D.PAR.sesTask == 'Forage'
-                return
-            end
-            
             % CHECK BOUNDS AND/OR BAIL
-            track_quad = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.lapBnds(D.I.lap_hunt_ind, :));
+            track_quad = Check_Rad_Bnds(D.P.Rat.rad, D.UI.lapBnds(D.I.lap_hunt_ind, :));
             
             % Bail if not in bounds
             if ~any(track_quad)
@@ -5223,18 +5227,28 @@ fprintf('END OF RUN\n');
             %% PLOT CUMULATIVE VT DATA
             
             % Delete all tracker data from this lap
-            delete(D.UI.ratPltH(1:D.UI.cnt_ratPltH))
-            delete(D.UI.ratPltHvel(1:D.UI.cnt_ratPltHvel))
-            delete(D.UI.robPltHvel(1:D.UI.cnt_robPltHvel))
-            D.UI.cnt_ratPltH = 0;
-            D.UI.cnt_ratPltHvel = 0;
-            D.UI.cnt_robPltHvel = 0;
+            delete(D.UI.ratPltH)
+            delete(D.UI.ratPltHvel)
+            delete(D.UI.robPltHvel)
+            
+            % Add lap data to all hist data
+            lap_hist_lng = find(~isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'last');
+            ind(1) = find(isnan(D.P.Rat.pos_all_hist(:,1)), 1, 'first');
+            ind(2) = ind(1)+lap_hist_lng-1;
+            
+            % Store pos data
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 1) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 1);
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 2) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 2);
+            
+            % Reset lap hist
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
             
             % Rat pos
             delete(D.UI.Rat.pltHposAll);
-            x = D.P.Rat.pos_hist(:,1);
-            y = D.P.Rat.pos_hist(:,2);
-            exc = find(diff(x)/D.UI.cm2pxl > 10 | diff(y)/D.UI.cm2pxl > 10 == 1) + 1;
+            x = D.P.Rat.pos_all_hist(:,1);
+            y = D.P.Rat.pos_all_hist(:,2);
+            % set big jumps to NaN
+            exc = find(diff(x)/D.UI.xCMcnv > 10 | diff(y)/D.UI.yCMcnv > 10 == 1) + 1;
             x(exc) = NaN;
             y(exc) = NaN;
             D.UI.Rat.pltHposAll = ...
@@ -5250,9 +5264,9 @@ fprintf('END OF RUN\n');
                 fld = flds{i};
                 
                 % Get lap data
-                ind = ~isnan(D.P.(fld).vel_lap(:, 1));
-                vel_rad = D.P.(fld).vel_lap(ind, 1);
-                vel_roh = D.P.(fld).vel_lap(ind, 2);
+                ind = ~isnan(D.P.(fld).vel_pol_lap_hist(:, 1));
+                vel_rad = D.P.(fld).vel_pol_lap_hist(ind, 1);
+                vel_roh = D.P.(fld).vel_pol_lap_hist(ind, 2);
                 
                 % Sort by rad
                 [vel_rad, s_ind] = sort(vel_rad);
@@ -5285,16 +5299,18 @@ fprintf('END OF RUN\n');
                 end
                 
                 % Add to history
-                D.P.(fld).vel_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
-                D.P.(fld).vel_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
                 
                 % Delete old handle and lap data
                 delete(D.UI.(fld).pltHvelAll);
-                D.P.(fld).vel_lap = NaN(60*60*33,2);
+                D.P.(fld).vel_pol_lap_hist = NaN(60*60*33,2);
+                D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+                D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
                 
                 % Get history as 1D array
-                vel_rad = reshape(D.P.(fld).vel_hist(:,:,1)',1,[]);
-                vel_roh = reshape(D.P.(fld).vel_hist(:,:,2)',1,[]);
+                vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
+                vel_roh = reshape(D.P.(fld).vel_pol_all_hist(:,:,2)',1,[]);
                 ind = ~isnan(vel_rad);
                 
                 % Convert to cart
@@ -5316,8 +5332,8 @@ fprintf('END OF RUN\n');
                 fld = flds{i};
                 
                 % Get accross lap average
-                vel_rad = D.P.(fld).vel_hist(1,:,1);
-                roh_avg = nanmean(D.P.(fld).vel_hist(:,:,2),1);
+                vel_rad = D.P.(fld).vel_pol_all_hist(1,:,1);
+                roh_avg = nanmean(D.P.(fld).vel_pol_all_hist(:,:,2),1);
                 
                 % Convert to cart
                 [x, y] = pol2cart(vel_rad, roh_avg);
@@ -5370,7 +5386,7 @@ fprintf('END OF RUN\n');
             % BAIL IF SETUP NOT FINISHED
             update_ui = false;
             if ~D.F.setup_done
-                return
+                return;
             end
             
             %% ROBOT POS
@@ -5454,16 +5470,16 @@ fprintf('END OF RUN\n');
             
             if D.F.Rat.plot_pos
                 
-                % Plot all new VT data
-                if D.PAR.sesTask == 'Track'
-                D.UI.cnt_ratPltH = D.UI.cnt_ratPltH+1;
-                D.UI.ratPltH(D.UI.cnt_ratPltH) = ...
-                    plot(D.P.Rat.x, D.P.Rat.y, '.', ...
+                % Plot all VT data for this lap
+                delete(D.UI.ratPltH);
+                x = D.P.Rat.pos_lap_hist(:,1);
+                y = D.P.Rat.pos_lap_hist(:,2);
+                D.UI.ratPltH = ...
+                    plot(x, y, '.', ...
                     'MarkerFaceColor', D.UI.ratPosAllCol, ...
                     'MarkerEdgeColor', D.UI.ratPosAllCol, ...
-                    'MarkerSize', 2, ... // TEMP
+                    'MarkerSize', 6, ...
                     'Parent', D.UI.axH(1));
-                end
                 
                 % Plot occ
                 if D.PAR.sesTask == 'Forage'
@@ -5483,16 +5499,21 @@ fprintf('END OF RUN\n');
                     'MarkerSize', 10, ...
                     'Parent', D.UI.axH(2));
                 
+                
             end
             
             %% VELOCITY
             
             % ROB
             if D.F.Rob.plot_vel
+                % Get non-zero vals to plot
+                inc = D.P.Rob.vel_cart_lap_hist(:,1) > 0 | D.P.Rob.vel_cart_lap_hist(:,2) > 0;
+                x = D.P.Rob.vel_cart_lap_hist(inc, 1);
+                y = D.P.Rob.vel_cart_lap_hist(inc, 2);
                 % Store handle and plot
-                D.UI.cnt_robPltHvel = D.UI.cnt_robPltHvel+1;
-                D.UI.robPltHvel(D.UI.cnt_robPltHvel) = ...
-                    plot(D.P.Rob.vel_pol_arr(:,1), D.P.Rob.vel_pol_arr(:,2), '-', ...
+                delete(D.UI.robPltHvel);
+                D.UI.robPltHvel = ...
+                    plot(x, y, '-', ...
                     'Color', D.UI.robNowCol, ...
                     'LineWidth', 2, ...
                     'Parent', D.UI.axH(1));
@@ -5500,10 +5521,14 @@ fprintf('END OF RUN\n');
             
             % RAT
             if D.F.Rat.plot_vel
+                % Get non-zero vals to plot
+                inc = D.P.Rat.vel_cart_lap_hist(:,1) > 0 | D.P.Rat.vel_cart_lap_hist(:,2) > 0;
+                x = D.P.Rat.vel_cart_lap_hist(inc, 1);
+                y = D.P.Rat.vel_cart_lap_hist(inc, 2);
                 % Store handle and plot
-                D.UI.cnt_ratPltHvel = D.UI.cnt_ratPltHvel+1;
-                D.UI.ratPltHvel(D.UI.cnt_ratPltHvel) = ...
-                    plot(D.P.Rat.vel_pol_arr(:,1), D.P.Rat.vel_pol_arr(:,2), '-', ...
+                delete(D.UI.ratPltHvel);
+                D.UI.ratPltHvel = ...
+                    plot(x, y, '-', ...
                     'Color', D.UI.ratNowCol, ...
                     'LineWidth', 2, ...
                     'Parent', D.UI.axH(1));
@@ -5669,13 +5694,15 @@ fprintf('END OF RUN\n');
             % Get recording elapsed time plus saved time
             if  D.F.rec
                 nowTim(2) = (Elapsed_Seconds(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
-            else nowTim(2) = D.T.rec_tot_tim; % keep showing save time
+            else
+                nowTim(2) = D.T.rec_tot_tim; % keep showing save time
             end
             
             % Get lap time
             if D.F.rat_in
                 nowTim(3) = Elapsed_Seconds(now) - D.T.lap_tim;
-            else nowTim(3) = 0;
+            else
+                nowTim(3) = 0;
             end
             
             % Run time
@@ -6682,6 +6709,9 @@ fprintf('END OF RUN\n');
                 
             end
             
+            % Start quit status timer
+            start(timer_quit);
+            
             % Print session aborting
             if ~D.UI.save_done
                 Console_Write('**WARNING** [BtnQuit] ABORTING SESSION...');
@@ -6723,7 +6753,9 @@ fprintf('END OF RUN\n');
                     c2m.('J').dat1 <= D.PAR.batVoltReplace
                 
                 % Confirm that Cheetah is closed
-                dlgAWL('!!WARNING!! REPLACE BATTERY BEFORE NEXT RUN', ...
+                warn_str = ...
+                    sprintf('!!WARNING!! BATTERY IS AT %0.2fV AND NEEDS TO BE REPLACED', c2m.('J').dat1);
+                dlgAWL(warn_str, ...
                     'BATTERY LOW', ...
                     'OK', [], [], 'OK', ...
                     D.UI.qstDlfPos, ...
@@ -6731,7 +6763,7 @@ fprintf('END OF RUN\n');
             end
             
             % Tell C# to begin quit
-            SendM2C('X');
+            SendM2C('X', 1);
             
             % Set flag
             D.F.quit = true;
@@ -6822,11 +6854,6 @@ fprintf('END OF RUN\n');
             
             % Tell CS to trigger reward
             SendM2C('R', r_pos, r_cond, z_ind);
-            
-            %             % TEMP
-            %             set(D.UI.btnBulldoze, ...
-            %                 'Value', ~get(D.UI.btnBulldoze, 'Value'));
-            %             Bulldoze();
             
             % Track round trip time
             D.T.manual_rew_sent = Elapsed_Seconds(now);
@@ -6928,21 +6955,21 @@ fprintf('END OF RUN\n');
         function [] = BtnClrVT(~, ~, ~)
             
             % Delete all handle objects
-            delete(D.UI.ratPltH(isgraphics(D.UI.ratPltH)))
-            delete(D.UI.ratPltHvel(isgraphics(D.UI.ratPltHvel)))
-            delete(D.UI.robPltHvel(isgraphics(D.UI.robPltHvel)))
-            D.UI.cnt_ratPltH = 0;
-            D.UI.cnt_ratPltHvel = 0;
-            D.UI.cnt_robPltHvel = 0;
+            delete(D.UI.ratPltH);
+            delete(D.UI.ratPltHvel);
+            delete(D.UI.robPltHvel);
             delete(D.UI.Rat.pltHposAll);
             delete(D.UI.Rat.pltHvelAll);
             delete(D.UI.Rob.pltHvelAll);
             delete(D.UI.Rat.pltHvelAvg);
             delete(D.UI.Rob.pltHvelAvg);
-            % Reset to nan
-            D.P.Rat.pos_hist = NaN(120*60*33,2);
-            D.P.Rat.vel_hist = NaN(500,101,2);
-            D.P.Rob.vel_hist = NaN(500,101,2);
+            % Reset pos history data to nan
+            D.P.Rat.pos_all_hist = NaN(60*60*33,2);
+            D.P.Rat.pos_all_hist = NaN(120*60*33,2);
+            D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnClrVT', get(D.UI.btnClrVT,'Value')));
@@ -7509,7 +7536,6 @@ fprintf('END OF RUN\n');
         Console_Write('[ICR_GUI] RUNNING: Exit ICR_GUI...');
         
         % Check if GUI was forced close
-        
         if ~D.DB.isForceClose
             
             % Log/print
@@ -7526,8 +7552,12 @@ fprintf('END OF RUN\n');
         
         % Save log
         Console_Write('[ICR_GUI] RUNNING: Save ICR_GUI Log...');
+        
+        % Make sure dir exists
         if size(who('global'),1) > 0 && ...
                 exist(D.DIR.logTemp, 'dir')
+            
+            % Open and write to file
             fi_path = D.DIR.logTemp;
             fid = fopen(fi_path,'wt');
             for z_l = 1:D.DB.logCount
@@ -7562,6 +7592,8 @@ fprintf('END OF RUN\n');
         % Stop and delete timer
         stop(timer_c2m);
         delete(timer_c2m);
+        stop(timer_quit);
+        delete(timer_quit);
     end
 
 
@@ -7571,7 +7603,7 @@ fprintf('END OF RUN\n');
 
 %% =================== TOP LEVEL SUPPORT FUNCTIONS ========================
 
-% --------------------------SEND DATA TO CS--------------------------------
+% --------------------------SEND CS COMMAND--------------------------------
     function[] = SendM2C(id, dat1, dat2, dat3, pack)
         
         % Bail if isMatSolo
@@ -7673,17 +7705,56 @@ fprintf('END OF RUN\n');
                     id, c2m.(id).dat1), now);
             end
             
-            % Check for exit flag
-            if ...
-                    strcmp(id, 'E') && ...
-                    c2m.(id).dat1 == 1
+            % Check for exit/error flag
+            if strcmp(id, 'E')
                 
-                % Set exit flag
-                doExit = true;
+                % Check if this is exit flag
+                if c2m.(id).dat1 == 1
+                    
+                    % Set exit flag
+                    doExit = true;
+                    
+                    % Log/print exit received
+                    Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                        id, c2m.(id).dat1), now);
+                end
                 
-                % Log/print exit received
-                Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                    id, c2m.(id).dat1), now);
+                % Check for forced abort
+                if c2m.(id).dat1 == 2
+                    
+                    % Format err string
+                    err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
+                    
+                    % Display message
+                    dlgAWL(...
+                        err_str, ...
+                        '!!ERROR!!', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.qstDlfPos, ...
+                        'Err');
+                    
+                end
+                
+                % Check for save abort
+                if c2m.(id).dat1 == 3
+                    
+                    % Format err string
+                    err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
+                    
+                    % Display message
+                    dlgAWL(...
+                        err_str, ...
+                        '!!ERROR!!', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.qstDlfPos, ...
+                        'Err');
+                    
+                    % Set exit flag
+                    doExit = true;
+                    
+                    % Write to console
+                    Console_Write(err_str, now, true);
+                end
             end
             
             %Print new data
@@ -7745,7 +7816,7 @@ fprintf('END OF RUN\n');
     end
 
 % ---------------------------PRINT TO CONSOLE------------------------------
-    function [] = Console_Write(str, t_now)
+    function [] = Console_Write(str, t_now, is_err)
         
         % Bail if following conditions not met
         if ~exist('D','var'); return; end
@@ -7755,6 +7826,9 @@ fprintf('END OF RUN\n');
         % Get time
         if nargin < 2
             t_now = now;
+            is_err = false;
+        elseif nargin < 3
+            is_err = false;
         end
         
         % Itterate log count
@@ -7779,7 +7853,7 @@ fprintf('END OF RUN\n');
         D.DB.logStr{D.DB.logCount} = l_msg;
         
         % Write to Matlab console
-        disp(p_msg);
+        disp(p_msg); %#ok<DSPS>
         
         % Update console window
         if ~isfield(D, 'UI'); return; end
@@ -7790,7 +7864,7 @@ fprintf('END OF RUN\n');
             'String', D.DB.consoleStr);
         
         % Set to red bold for error
-        if D.DB.isErrExit
+        if is_err
             set(D.UI.listConsole, ...
                 'ForegroundColor', [1 0 0], ...
                 'FontWeight','Bold');
@@ -7801,6 +7875,30 @@ fprintf('END OF RUN\n');
             drawnow;
         end
         
+    end
+
+% ---------------------------QUIT STATUS TIMER-----------------------------
+    function [] = QuitStatus(~,~)
+        % Local vars
+        persistent cnt_dot
+        if isempty(cnt_dot)
+            cnt_dot = 1;
+        end
+        
+        % Bail if figure closed
+        if ~ishandle(FigH)
+            return
+        end
+        
+        % Change button string
+        bnt_str = sprintf("Quit%s%s",repmat('.',1,cnt_dot),blanks(4-cnt_dot));
+        set(D.UI.btnQuit, ...
+            'String', bnt_str);
+        
+        cnt_dot = cnt_dot +1;
+        if cnt_dot>4
+            cnt_dot = 1;
+        end
     end
 
 % ---------------------------GET TIME NOW-------------------------------
@@ -7941,6 +8039,10 @@ fprintf('END OF RUN\n');
         % Set flags
         doExit = true;
         D.DB.isForceClose = true;
+        
+        % Send force close signal to CS
+        SendM2C('X', 2);
+        pause(1);
         
         return
     end
