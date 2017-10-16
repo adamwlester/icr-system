@@ -4263,6 +4263,15 @@ fprintf('END OF RUN\n');
                     exc_3 = zeros(size(exc_3,1), 1);
                 end
                 
+                % Check that reward flag has not been set for too long
+                if D.T.rew_start > 0
+                    if Elapsed_Seconds(now) - D.T.rew_start > 5 && ...
+                            D.F.is_rewarding == true
+                        % reset flag
+                        D.F.is_rewarding = false;
+                    end
+                end
+                
                 % Combine exclusion criteria
                 exc_ind = exc_1 | exc_2 | exc_3;
                 
@@ -4278,9 +4287,7 @@ fprintf('END OF RUN\n');
                 
                 % TEMP
                 if strcmp(fld, 'Rob')
-                    fprintf('\r\n')
-                    fprintf('Rob x=%0.2f\r\n = ', x)
-                    fprintf('\r\n')
+                    fprintf(')
                 end
                 
                 % Check if any data kept
@@ -6767,6 +6774,9 @@ fprintf('END OF RUN\n');
                 return
             end
             
+            % Disable save button so only pressed once
+            set(D.UI.btnQuit, 'UserData', 1);
+            
             % Check for save unless quit before setup done
             if ~D.UI.save_done && D.F.data_loaded
                 
@@ -6795,9 +6805,6 @@ fprintf('END OF RUN\n');
                 end
                 
             end
-            
-            % Disable save button so only pressed once
-            set(D.UI.btnQuit, 'UserData', 1);
             
             % Start quit status timer
             start(timer_quit);

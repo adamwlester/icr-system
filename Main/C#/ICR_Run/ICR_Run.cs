@@ -569,6 +569,19 @@ namespace ICR_Run
                 return false;
             }
 
+            // Wait for setup command confirmation
+            LogEvent("[Run] RUNNING: Confirm Setup...");
+            pass = WaitForMCOM(id: 'S', chk_rcv: true, do_abort: true);
+            if (pass)
+                pass = WaitForSerial(id: 'S', chk_send: true, chk_conf: true, do_abort: true);
+            if (pass)
+                LogEvent("[Run] SUCCEEDED: Confirm Setup");
+            else
+            {
+                LogEvent("**WARNING** [Run] ABORTED: Confirm Setup", is_warning: true);
+                return false;
+            }
+
             // Setup and begin NetCom streaming
             LogEvent("[Setup] RUNNING: Connect to NLX...");
             if (!(com_netComClient.AreWeConnected()))
@@ -624,19 +637,6 @@ namespace ICR_Run
         {
             // Local vars
             bool pass;
-
-            // Wait for setup command confirmation
-            LogEvent("[Run] RUNNING: Confirm Setup...");
-            pass = WaitForMCOM(id: 'S', chk_rcv: true, do_abort: true);
-            if (pass)
-                pass = WaitForSerial(id: 'S', chk_send: true, chk_conf: true, do_abort: true);
-            if (pass)
-                LogEvent("[Run] SUCCEEDED: Confirm Setup");
-            else
-            {
-                LogEvent("**WARNING** [Run] ABORTED: Confirm Setup", is_warning: true);
-                return false;
-            }
 
             // Wait for initial move to command to complete
             LogEvent("[Run] RUNNING: Wait for MoveTo Start Command from MATLAB...");
