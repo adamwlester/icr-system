@@ -197,7 +197,7 @@ class MOVETO
 public:
 
 	// VARS
-	int targSetTimeout = 1000;
+	int targSetTimeout = 10000;
 	int moveTimeout = 10000;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
@@ -206,7 +206,7 @@ public:
 	const int dt_update = 10;
 	uint32_t t_updateNext = 0;
 	double distLeft = 0;
-	double posCumStart = 0;
+	double posRelStart = 0;
 	double posAbsStart = 0;
 	double targPos = 0;
 	double targDist = 0;
@@ -1106,7 +1106,8 @@ void PID::PID_CheckEKF(uint32_t t, char called_from[])
 	DB_FUN_STR();
 #endif
 
-	if ((t - t_ekfReady) > dt_ekfSettle)
+	if ((t - t_ekfReady) > dt_ekfSettle &&
+		kal.cnt_ekf > 100)
 	{
 		// Log/print event 
 		DebugPID(__FUNCTION__, __LINE__, "EKF Ready for PID", called_from);
@@ -1715,15 +1716,15 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 
 	// Copy to public vars
 	targPos = targ_pos;
-	posCumStart = now_pos;
+	posRelStart = now_pos;
 	posAbsStart = posAbs;
 
 	// Set flag true
 	isTargSet = true;
 
 	// Log/print
-	sprintf(str, "FINISHED: Set Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
-		posCumStart, posAbsStart, targPos, targDist, moveDir);
+	sprintf(str, "FINISHED: Set Target: start_rel=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
+		posRelStart, posAbsStart, targPos, targDist, moveDir);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 
 	// Retern flag
@@ -1766,7 +1767,7 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	}
 
 	// Compute remaining distance
-	distLeft = targDist - abs(now_pos - posCumStart);
+	distLeft = targDist - abs(now_pos - posRelStart);
 
 	// Check if rob is dec_pos cm from target
 	if (distLeft <= dist_decel) {
@@ -1791,8 +1792,8 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	if (distLeft < 1)
 	{
 		// Log/print
-		sprintf(str, "FINISHED: MoveTo: start_abs=%0.2fcm now_abs=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
-			posAbsStart, now_pos, targPos, targDist, distLeft);
+		sprintf(str, "FINISHED: MoveTo: start_rel=%0.2fcm now_rel=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
+			posRelStart, now_pos, targPos, targDist, distLeft);
 		DebugFlow(__FUNCTION__, __LINE__, str);
 
 		// Set flag true
@@ -2359,8 +2360,6 @@ void REWARD::CheckFeedArm()
 			delayMicroseconds(500);
 			v_cnt_steps--;
 		}
-
-		SerialUSB.println("FEEDER REVERSING");
 
 		// Set done flag
 		v_isArmMoveDone = true;
@@ -3210,6 +3209,7 @@ void LOGGER::StreamLogs()
 	static int cnt_err_3 = 0;
 	uint32_t t_start = millis(); // (ms)
 	uint32_t t_last_read = millis(); // (ms)
+	uint32_t t_dump = millis(); // (ms)
 	int read_ind = 0;
 	bool head_passed = false;
 	bool send_done = false;
@@ -3261,6 +3261,7 @@ void LOGGER::StreamLogs()
 
 	// Start timers
 	t_start = millis();
+	t_dump = t_start;
 
 	// Get incriments to update status
 	for (int i = 1; i < 10; i++)
@@ -3275,10 +3276,9 @@ void LOGGER::StreamLogs()
 
 		// Dump anything in openlog buffer
 		uint32_t t_out = millis() + 100;
-		while (millis() < t_out || port.available() > 0) {
+		while (millis() < t_dump || port.available() > 0) {
 			if (port.available() > 0) {
 				port.read();
-				t_out += 100;
 			}
 		}
 
@@ -3396,7 +3396,7 @@ void LOGGER::StreamLogs()
 				sprintf(str, "Log Write %d%% Complete: b_sent=%d/%d",
 					milestone_ind * 10, cnt_logBytesSent, cnt_logBytesStored);
 				DebugFlow(__FUNCTION__, __LINE__, str, millis());
-				DoAll("PrintDebug");
+				PrintDebug();
 
 				// Itterate count
 				milestone_ind++;
@@ -5400,7 +5400,7 @@ void UpdateEKF()
 
 	// Update count and time
 	kal.t_update = millis();
-	kal.cnt++;
+	kal.cnt_ekf++;
 
 	// Check for nan values
 	if (isnan(rat_pos) || isnan(rob_pos) || isnan(rat_vel) || isnan(rob_vel)) {
@@ -7442,7 +7442,7 @@ void LogTrackingData()
 	static int cnt_last = 0;
 
 	// Bail in ekf not new or not logging
-	if (kal.cnt == cnt_last ||
+	if (kal.cnt_ekf == cnt_last ||
 		(!do_log[0] && !do_log[1] && !do_log[2] && !do_log[3])) {
 		return;
 	}
@@ -7486,7 +7486,7 @@ void LogTrackingData()
 
 	// Store counts
 	hist_ind++;
-	cnt_last = kal.cnt;
+	cnt_last = kal.cnt_ekf;
 
 	// Check if hist filled
 	if (millis() >= t_last_log + 1000 || hist_ind == n_samps) {
@@ -8691,7 +8691,7 @@ void loop() {
 	if (fc.doMove) {
 
 		// Compute move target
-		if (!Move.isTargSet) {
+		if (!Move.isTargSet && !Move.doAbortMove) {
 
 			// If succesfull
 			if (Move.CompTarg(kal.RobPos, cmd.moveToTarg)) {
@@ -8757,8 +8757,17 @@ void loop() {
 			// Set motor cotrol to None
 			SetMotorControl("None", "MoveTo");
 
+			// Log/print error
+			if (Move.doAbortMove) {
+
+				// Print failure message
+				sprintf(horeStr, "ABORTED: MoveTo: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+					Move.isTargSet, fc.isEKFReady, Move.isMoveStarted, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
+				DebugError(__FUNCTION__, __LINE__, horeStr, true);
+			}
+
 			// Log/print final move status
-			if (Move.isTargReached) {
+			else if (Move.isTargReached) {
 
 				// Print success message
 				sprintf(horeStr, "SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
@@ -8767,15 +8776,6 @@ void loop() {
 
 				// Tell CS movement is done
 				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
-			}
-
-			// Log/print error
-			else if (Move.doAbortMove) {
-
-				// Print failure message
-				sprintf(horeStr, "ABORTED: MoveTo: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-					Move.isTargSet, fc.isEKFReady, Move.isMoveStarted, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
-				DebugError(__FUNCTION__, __LINE__, horeStr, true);
 			}
 
 			// Reset flags

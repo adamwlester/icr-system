@@ -3,12 +3,12 @@ function[] = SesIOSetup()
 %% =========================== Set paramiters ============================= 
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
 ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
-ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
+ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData'); 
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0000'}; ...
-    {'r9999'} ...
+    {'r0001'}; ...
+    {'r9998'} ...
     ];
 
 % Age group [Young, Old]
@@ -48,13 +48,22 @@ rotation_positions = {'90', '180', '270'};
 rotations_per_session = {'2', '4', '6'};
 laps_per_rotation = {'5:8', '6:9', '7:10'};
 days_till_rotation = {'1:2', '2:3', '3:4'};
+tetrode_mapping = ...
+    {'R1','R2','TT01','TT02','TT03','TT04','TT05','TT06', ...
+    'TT07','TT08','TT09','TT10','TT11','TT12', ...
+    'TT13','TT14','TT15','TT16','TT17','TT18'};
+turn_orientation = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
+    {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
 
 % Variable descriptions
 session_number_description = '[Track, Forage]';
 sound_conditions_description = '[White, Reward]';
-rotations_per_session_description = '[2,4,6]';
-laps_per_rotation_description = '[5:10]';
-days_till_rotation_description = '[1:4]';
+rotations_per_session_description = '{[2,4,6]}';
+laps_per_rotation_description = '{[5:10]}';
+days_till_rotation_description = '{[1:4]}';
+implant_coordinates_description = '[Hipp{A-P, M-L, D-V}, MEC{A-P, M-L, D-V}]';
+implant_configuration_description = '[Hipp{A-P, M-L}, MEC{A-P, M-L}]';
+tetrode_mapping_description = '[Hipp{TT_x by TT_y}, MEC{TT_x by TT_y}]';
 
 %% ======================== SS_In_All =====================================
 
@@ -62,6 +71,7 @@ days_till_rotation_description = '[1:4]';
 T = table('RowNames',ratList);
 T.Include_Run = true(length(ratList),1);
 T.Include_Analysis = true(length(ratList),1);
+T.Implanted = false(length(ratList),1);
 T.Feeder_Version = categorical(repmat({'Mobile_Feeder'},length(ratList),1), feeder_version);
 T.Age_Group = categorical(agestr, age_group);
 T.DOB = DOBstr;
@@ -86,7 +96,7 @@ T.Session_Implant_Training = [T.Session_Implant_Training.T, T.Session_Implant_Tr
 T.Session_Rotation = zeros(length(ratList),1);
 T.Finished_Manual_Training = false(length(ratList),1);
 T.Finished_Behavior_Training = false(length(ratList),1);
-T.Finished_Implant_Training = false(length(ratList),1);
+T.Finished_Study = false(length(ratList),1);
 T.Feeder_Condition = categorical(repmat({'<undefined>'},length(ratList),1), ...
     feeder_condition);
 T.Reward_Delay = categorical(repmat({'<undefined>'},length(ratList),1), ...
@@ -110,13 +120,25 @@ T.Laps_Per_Rotation = repmat({categorical(repmat({'<undefined>'},200,9), ...
     laps_per_rotation)}, length(ratList),1);
 T.Days_Till_Rotation = repmat({categorical(repmat({'<undefined>'},200,1), ...
     days_till_rotation)}, length(ratList),1);
-T.Implant_Coordinates = cell(length(ratList),1);
-T.Implant_Configuration = cell(length(ratList),1);
+T.Implant_Coordinates = repmat({nan(1,3), nan(1,3)},length(ratList),1);
+T.Implant_Configuration = repmat({nan(1,2), nan(1,2)},length(ratList),1);
+T.Tetrode_Mapping = repmat({categorical(repmat({'<undefined>'},20,20), ...
+    tetrode_mapping)}, length(ratList), 2);
+T.Turn_Log = repmat(...
+    {cell2struct(...
+    [{NaN}; ...
+    {cell2struct(repmat({categorical({'<undefined>'}, turn_orientation)},1,20), tetrode_mapping, 2)}; ...
+    {cell2struct(num2cell(nan(1,20)), tetrode_mapping, 2)}; ...
+    {cell2struct(cell(1,20), tetrode_mapping, 2)}], ...
+    {'Date', 'Orientation', 'Depth', 'Notes'})}, ...
+    length(ratList), 1);
 T.Notes = cell(length(ratList),1);
 
 % Set variable units
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
 T.Properties.VariableUnits{'Pulse_Duration'} = 'ms';
+T.Properties.VariableUnits{'Implant_Coordinates'} = 'mm';
+T.Properties.VariableUnits{'Turn_Log'} = 'um';
 
 % Set variable descriptions
 T.Properties.VariableDescriptions{'Session_Manual_Training'} = session_number_description;
@@ -126,6 +148,10 @@ T.Properties.VariableDescriptions{'Sound_Conditions'} = sound_conditions_descrip
 T.Properties.VariableDescriptions{'Rotations_Per_Session'} = rotations_per_session_description;
 T.Properties.VariableDescriptions{'Laps_Per_Rotation'} = laps_per_rotation_description;
 T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
+T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
+T.Properties.VariableDescriptions{'Implant_Coordinates'} = implant_coordinates_description;
+T.Properties.VariableDescriptions{'Implant_Configuration'} = implant_configuration_description;
+T.Properties.VariableDescriptions{'Tetrode_Mapping'} = tetrode_mapping_description;
 
 % Load existing dataset
 if exist(fullfile(ioDir, 'SS_In_All.mat'), 'file')
@@ -208,7 +234,7 @@ strqd = cell(4,ceil(nses/4),nCond);
 % give each rat a different start quad on day 1
 day1 = repmat(1:4,1,ceil(nCond/4));
 day1 = day1(:); 
-for i = 1:nCond;
+for i = 1:nCond
     for j = 1:ceil(nses/4)
         ind = randperm(4);
         if j == 1
@@ -261,7 +287,7 @@ rotps = rotps(1:nses,:,:); % remove unneaded entries
 % ROTATIONS PER SESSION
 % Note: will perform 2 4 or 6 rotations per session
 nrot = cell(3,ceil(nses/3),nCond);
-for i = 1:nCond;
+for i = 1:nCond
     for j = 1:ceil(nses/3)
         nrot(:,j,i) = rotations_per_session(randperm(3));
     end
@@ -275,7 +301,7 @@ nrot = nrot(1:nses,:); % remove unneaded entries
 % will be set to max number of laps to collect more data for standard
 % configuration laps
 nlap = cell(3,rots/3,nses,nCond);
-for i = 1:nCond;
+for i = 1:nCond
     for j = 1:ceil(nses)
         for k = 1:rots/3
             nlap(:,k,j,i) = laps_per_rotation(randperm(3));
@@ -290,7 +316,7 @@ nlap = nlap(1:nses,:,:); % remove unneaded entries
 % DAYS TILL ROTATION
 % Note: a range of days will be saved between 1-4 days
 ndays = cell(3,ceil(nses/3),nCond);
-for i = 1:nCond;
+for i = 1:nCond
     for j = 1:ceil(nses/3)
         ndays(:,j,i) = days_till_rotation(randperm(3));
     end

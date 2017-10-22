@@ -17,7 +17,7 @@ function[status] = ICR_GUI(sysTest, doDebug, isCheetahOpen, isMatSolo)
 
 
 
-%% ========================= TOP LEVEL RUN ==============================
+%% ========================= TOP LEVEL RUN ================================
 
 % ----------------------------- SETUP GLOBALS -----------------------------
 
@@ -76,7 +76,7 @@ end
 % Session conditions
 D.DB.ratLab = 'r9999';
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
-D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
+D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
@@ -86,7 +86,7 @@ D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
 D.DB.ratVelStart = 50;
-D.DB.ratMaxAcc = 60; % (cm/sec/sec)
+D.DB.ratMaxAcc = 100; % (cm/sec/sec)
 D.DB.ratMaxDec = 100; % (cm/sec/sec)
 
 % Halt Error test
@@ -1505,7 +1505,7 @@ fprintf('END OF RUN\n');
             % GUI OBJECT POSITIONS
             
             % Questions dialogue pos
-            D.UI.qstDlfPos = [D.UI.sc1(3) + D.UI.sc2(3)/2, D.UI.sc2(4)/2];
+            D.UI.dlgPos = [D.UI.sc1(3) + D.UI.sc2(3)/2, D.UI.sc2(4)/2];
             
             % Bounds of plot space
             D.UI.main_ax_bounds = [ ...
@@ -4128,7 +4128,8 @@ fprintf('END OF RUN\n');
                 D.UI.sldSimVel = uicontrol('Style', 'slider',...
                     'Parent',FigH, ...
                     'Units', 'Normalized', ...
-                    'Min',0,'Max',100,'Value',D.DB.ratVelStart,...
+                    'Min',0,'Max',100, ...
+                    'Value',D.DB.ratVelStart,...
                     'SliderStep', [0.01,0.1], ...
                     'Visible', 'off',...
                     'Enable', 'off',...
@@ -4222,7 +4223,7 @@ fprintf('END OF RUN\n');
         function [] = VT_Proc(fld)
             
             if D.P.(fld).vtNRecs > 0
-                
+               
                 %% PROCESS NEW DATA
                 
                 % convdert to [r = samp, c = dim]
@@ -4275,13 +4276,6 @@ fprintf('END OF RUN\n');
                 [x, y] = pol2cart(rad,roh);
                 x =  x.*D.PAR.R + D.PAR.XC;
                 y =  y.*D.PAR.R + D.PAR.YC;
-                
-                % TEMP
-                if strcmp(fld, 'Rob')
-                    fprintf('\r\n')
-                    fprintf('Rob x=%0.2f\r\n = ', x)
-                    fprintf('\r\n')
-                end
                 
                 % Check if any data kept
                 if sum(exc_ind) == recs
@@ -5164,10 +5158,10 @@ fprintf('END OF RUN\n');
             if sum(D.P.occMatBinary(:))/sum(D.PAR.rfMask(:)) >= 0.5
                 % Set all to zero
                 D.P.occMatBinary(:) = 0;
-                
-                % Update plot history
-                Plot_Pos_Hist()
             end
+            
+            % Update plot history
+            Plot_Pos_Hist()
             
             % USE BINARY OCC
             
@@ -5212,7 +5206,7 @@ fprintf('END OF RUN\n');
             
             % Store path mat for plotting
             D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
-            D.P.pathNowMat(D.P.pathNowMat>0) = 0.5;
+            D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
             
             % Update patches
             set(D.UI.ptchRFTarg(targ_ind_last), 'Visible', 'off');
@@ -6444,7 +6438,7 @@ fprintf('END OF RUN\n');
                     '!!WARNING: MISSING ENTRY!!', ...
                     'MISSING SETUP ENTRIES', ...
                     'OK', [], [], 'OK', ...
-                    D.UI.qstDlfPos, ...
+                    D.UI.dlgPos, ...
                     'Warn');
                 
                 % Bail out of function
@@ -6472,7 +6466,7 @@ fprintf('END OF RUN\n');
             %                     choice = dlgAWL(qststr, ...
             %                         'CHECK SETTINGS', ...
             %                         'Yes', 'No', [], 'No', ...
-            %                         D.UI.qstDlfPos, ...
+            %                         D.UI.dlgPos, ...
             %                         'Ques');
             %
             %                     % Handle response
@@ -6619,7 +6613,7 @@ fprintf('END OF RUN\n');
                 'End Session?', ...
                 'END SESSION', ...
                 'Yes', 'No', [], 'No', ...
-                D.UI.qstDlfPos, ...
+                D.UI.dlgPos, ...
                 'Ques');
             
             % Handle response
@@ -6659,7 +6653,7 @@ fprintf('END OF RUN\n');
                 'Take out rat', ...
                 'RAT OUT', ...
                 'OK', [], [], 'OK', ...
-                D.UI.qstDlfPos, ...
+                D.UI.dlgPos, ...
                 'Dflt');
             
             % Post NLX event: rat out
@@ -6774,7 +6768,7 @@ fprintf('END OF RUN\n');
                 choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
                     'ABBORT RUN', ...
                     'Yes', 'No', [], 'No', ...
-                    D.UI.qstDlfPos, ...
+                    D.UI.dlgPos, ...
                     'Warn');
                 
                 % Handle response
@@ -6790,7 +6784,7 @@ fprintf('END OF RUN\n');
                         '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
                         'RAT OUT', ...
                         'OK', [], [], 'OK', ...
-                        D.UI.qstDlfPos, ...
+                        D.UI.dlgPos, ...
                         'Warn');
                 end
                 
@@ -6842,7 +6836,7 @@ fprintf('END OF RUN\n');
                 dlgAWL(warn_str, ...
                     'BATTERY LOW', ...
                     'OK', [], [], 'OK', ...
-                    D.UI.qstDlfPos, ...
+                    D.UI.dlgPos, ...
                     'Warn');
             end
             
@@ -7295,8 +7289,8 @@ fprintf('END OF RUN\n');
             end
             
             % Convert roh to cm
-            out_cm_lim = rohbnds(1)*D.UI.arnRad;
-            in_cm_lim = rohbnds(2)*D.UI.arnRad;
+            in_cm_lim = rohbnds(1)*D.UI.arnRad;
+            out_cm_lim = rohbnds(2)*D.UI.arnRad;
             
             % Convert to rad array
             if (length(radbnds) == 2)
@@ -7308,12 +7302,12 @@ fprintf('END OF RUN\n');
                 radbnds = linspace(radbnds(1), radbnds(2), nPoints);
             end
             
-            % Compute inner bounds 0 deg
+            % Compute inner bounds
             [x(1,:),y(1,:)] = pol2cart(radbnds, ones(1,length(radbnds)) * in_cm_lim);
             xbnd(1,:) = x(1,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
             ybnd(1,:) = y(1,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
             
-            % Compute outer bounds 0 deg
+            % Compute outer bounds
             [x(2,:),y(2,:)] = pol2cart(radbnds, ones(1,length(radbnds)) * out_cm_lim);
             xbnd(2,:) = x(2,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
             ybnd(2,:) = y(2,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
@@ -7467,7 +7461,7 @@ fprintf('END OF RUN\n');
             dlgAWL('Close Cheetah', ...
                 'CLOSE CHEETAH', ...
                 'OK', [], [], 'OK', ...
-                D.UI.qstDlfPos, ...
+                D.UI.dlgPos, ...
                 'Dflt');
             
             % Get check start time
@@ -7491,7 +7485,7 @@ fprintf('END OF RUN\n');
                             '!!WARNING: CHEETAH OPEN!!', ...
                             'CHEETAH NOT CLOSED', ...
                             'OK', [], [], 'OK', ...
-                            D.UI.qstDlfPos, ...
+                            D.UI.dlgPos, ...
                             'Warn');
                     else
                         break
@@ -7550,7 +7544,7 @@ fprintf('END OF RUN\n');
             
             % Get row ind
             % determine if this is first entry
-            if strcmp(D.SS_Out_ICR.(D.PAR.ratLab).Date{1}, '');
+            if strcmp(D.SS_Out_ICR.(D.PAR.ratLab).Date{1}, '')
                 % is first entry
                 rowInd = 1;
             else
@@ -7592,9 +7586,9 @@ fprintf('END OF RUN\n');
                 D.SS_Out_ICR.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = D.C.rot_cnt;
                 D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions{rowInd} = ...
                     cell2mat(cellfun(@(x) str2double(x), cellstr(D.PAR.rotPos(1:D.C.rot_cnt)), 'uni', false))';
-                if length(D.C.lap_cnt{1}) < length(D.C.lap_cnt{2});
+                if length(D.C.lap_cnt{1}) < length(D.C.lap_cnt{2})
                     D.C.lap_cnt{1} = [D.C.lap_cnt{1},NaN];
-                elseif length(D.C.lap_cnt{1}) > length(D.C.lap_cnt{2});
+                elseif length(D.C.lap_cnt{1}) > length(D.C.lap_cnt{2})
                     D.C.lap_cnt{2} = [D.C.lap_cnt{2},NaN];
                 end
                 D.SS_Out_ICR.(D.PAR.ratLab).Laps_Per_Rotation{rowInd} = ...
@@ -7606,7 +7600,7 @@ fprintf('END OF RUN\n');
                 D.SS_Out_ICR.(D.PAR.ratLab).Laps_0_Deg{rowInd} = D.C.lap_cnt{1};
             else
                 D.SS_Out_ICR.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = NaN;
-                D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions{rowInd} = {[]};
+                D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions(rowInd) = {[]};
                 D.SS_Out_ICR.(D.PAR.ratLab).Laps_Per_Rotation(rowInd) = {[]};
                 D.SS_Out_ICR.(D.PAR.ratLab).Days_Till_Rotation(rowInd) = '<undefined>';
                 D.SS_Out_ICR.(D.PAR.ratLab).Rewards_40_Deg{rowInd} = 0;
@@ -7898,7 +7892,7 @@ fprintf('END OF RUN\n');
                         err_str, ...
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
-                        D.UI.qstDlfPos, ...
+                        D.UI.dlgPos, ...
                         'Err');
                     
                 end
@@ -7914,7 +7908,7 @@ fprintf('END OF RUN\n');
                         err_str, ...
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
-                        D.UI.qstDlfPos, ...
+                        D.UI.dlgPos, ...
                         'Err');
                     
                     % Set exit flag

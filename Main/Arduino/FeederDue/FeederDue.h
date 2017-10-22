@@ -232,7 +232,7 @@ const double pixyCoeff[5] = {
 };
 const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 
-									   // AutoDriver
+// AutoDriver
 const double cm2stp = 200 / (9 * PI);
 const double stp2cm = (9 * PI) / 200;
 const float maxSpeed = 100; // (cm) 
@@ -265,7 +265,7 @@ struct KAL
 	double RobPos = 0;
 	double RatVel = 0;
 	double RobVel = 0;
-	int cnt = 0;
+	int cnt_ekf = 0;
 	uint32_t t_update = 0;
 }
 kal;

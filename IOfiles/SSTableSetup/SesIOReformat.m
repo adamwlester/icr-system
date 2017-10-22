@@ -3,7 +3,7 @@ function [] = SesIOReformat()
 % Directory containing tables
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
 ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
-ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
+ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData'); 
 
 %% =========================== LOAD TABLES ================================
 [SS_In_All, SS_Out_ICR] = LoadTables(ioDir);
@@ -13,31 +13,47 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % ------------------------------- ADD VAR ---------------------------------
 
 % Specify new variable to add
-Session_Task = categorical({'Track'}, {'Track', 'Forage'});
-var_before = 'Session_Condition';
+implant_coordinates_description = '[Hipp{A-P, M-L, D-V}, MEC{A-P, M-L, D-V}]';
+tetrode_mapping = ...
+    {'R1','R2','TT01','TT02','TT03','TT04','TT05','TT06', ...
+    'TT07','TT08','TT09','TT10','TT11','TT12', ...
+    'TT13','TT14','TT15','TT16','TT17','TT18'};
+turn_log = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
+    {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
+Implant_Coordinates = {nan(1,3), nan(1,3)};
+Turn_Log = {cell2struct(...
+    [{NaN}; ...
+    {cell2struct(repmat({categorical({'<undefined>'}, turn_log)},1,20), tetrode_mapping, 2)}; ...
+    {cell2struct(num2cell(nan(1,20)), tetrode_mapping, 2)}; ...
+    {cell2struct(cell(1,20), tetrode_mapping, 2)}], ...
+    {'Date', 'Orientation', 'Depth', 'Notes'})};
 
 % Add new variable
-SS_In_All = AddNewVar(SS_In_All, Session_Task, var_before);
+%SS_In_All = AddNewVar(SS_In_All, Implant_Coordinates, 'Days_Till_Rotation',implant_coordinates_description,'um');
+SS_In_All = AddNewVar(SS_In_All, Turn_Log, 'Tetrode_Mapping');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
 % Specify inputs
-var_change = 'Rotation_Direction';
-new_val = {categorical(repmat({'<undefined>'},200,1), ...
-    {'CCW', 'CW'})};
-preserve_val = true;
+% var_change = 'Implant_Coordinates';
+% new_val = nan(1,2);
+% description = '[A-P, M-L]';
+% units = 'mm';
+% preserve_val = false;
+
 
 % Make changes
-%SS_In_All = ChangeVarEntries(SS_In_All, var_change, new_val, preserve_val);
+%SS_Out_ICR = ChangeVarEntries(SS_Out_ICR, var_change, new_val, preserve_val);
 
-% --------------------------- MOVE VAR ENTRY ----------------------------
+% ------------------------ MOVE DELETE VAR ENTRY --------------------------
 
 % Specify inputs
-var_move = 'Rotation_Direction';
-var_before = 'Start_Quadrant';
+% var_move = 'Implant_Configuration';
+% var_before = '';
+% remove = true;
 
 % Make changes
-%SS_In_All = MoveVarEntries(SS_In_All, var_move, var_before);
+%SS_In_All = MoveVarEntries(SS_In_All, var_move, var_before, remove);
 
 %% =========================== SAVE TABLES ================================
 
@@ -48,7 +64,7 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
 
 
 % ADD NEW VAR TO TABLE
-    function [T2] = AddNewVar(T, new_var, var_before)
+    function [T2] = AddNewVar(T, new_var, var_before, description_str, unit_str)
         % INPUT:
         %   T(table): Table to be modified
         %   new_var(any class): Var to be added
@@ -60,25 +76,31 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         
         % Set default for optional inputs
         if nargin < 3
+            description_str = [];
+            unit_str = [];
             var_before = '';
+        elseif nargin < 4
+            description_str = [];
+            unit_str = [];
+        elseif nargin < 5
+            unit_str = [];
         end
-        
         
         % Determine what table is being changed
         if strcmp(table_name, 'SS_Out_ICR')
             
             % Add for each field (rat) entry
-            T2 = structfun(@(x) AddV(x, new_var, var_name, var_before), T, 'uni', false);
+            T2 = structfun(@(x) AddV(x, new_var, var_name, var_before, description_str, unit_str), T, 'uni', false);
             
         elseif strcmp(table_name, 'SS_In_All')
             
             % Add single instance
-            T2 = AddV(T, new_var, var_name, var_before);
+            T2 = AddV(T, new_var, var_name, var_before, description_str, unit_str);
             
         end
         
         % Add var function
-        function [t] = AddV(t, nv, vn, vb)
+        function [t] = AddV(t, nv, vn, vb, dsc, unt)
             
             % Get other info
             tab_vars = t.Properties.VariableNames;
@@ -104,18 +126,34 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
             % Update table
             t = t2;
             
+            % Add description and units
+            if ~isempty(dsc)
+                t.Properties.VariableDescriptions{vn} = dsc;
+            end
+            if ~isempty(unt)
+                t.Properties.VariableUnits{vn} = unt;
+            end
+            
         end
         
     end
 
 % CHANGE OLD VAR IN TABLE
-    function [T2] = ChangeVarEntries(T, var_change, new_val, preserve_val)
+    function [T2] = ChangeVarEntries(T, var_change, new_val, preserve_val, description_str, unit_str)
         % INPUT:
         %   T(table): Table to be modified
         %   var_change(string): Var to change
         %   new_val(any): new default value
         %   preserve_val(bool)[optional]: specify if filled entries should
         %       be preserved
+        
+        % Handle inputs
+        if nargin < 5
+            unit_str = [];
+            description_str = [];
+        elseif nargin < 6
+            unit_str = [];
+        end
         
         % Get input names as string
         table_name = inputname(1);
@@ -124,17 +162,17 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         if strcmp(table_name, 'SS_Out_ICR')
             
             % Add for each field (rat) entry
-            T2 = structfun(@(x) ChngV(x, var_change, new_val, preserve_val), T, 'uni', false);
+            T2 = structfun(@(x) ChngV(x, var_change, new_val, preserve_val, description_str, unit_str), T, 'uni', false);
             
         elseif strcmp(table_name, 'SS_In_All')
             
             % Add single instance
-            T2 = ChngV(T, var_change, new_val, preserve_val);
+            T2 = ChngV(T, var_change, new_val, preserve_val, description_str, unit_str);
             
         end
         
         % Change var function
-        function [t] = ChngV(t, vc, nv, pv)
+        function [t] = ChngV(t, vc, nv, pv, dsc, unt)
             
             % Make new entry
             v_new = repmat(nv, height(t), 1);
@@ -196,16 +234,30 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
                 % Copy to table
                     t.(vc) = v_new;
             end
+            
+            % Add description and units
+            if ~isempty(dsc)
+                t.Properties.VariableDescriptions{vc} = dsc;
+            end
+            if ~isempty(unt)
+                t.Properties.VariableUnits{vc} = unt;
+            end
+            
         end
         
     end
 
 % MOVE VAR IN TABLE
-    function [T2] = MoveVarEntries(T, var_move, var_before)
+    function [T2] = MoveVarEntries(T, var_move, var_before, remove_var)
         % INPUT:
         %   T(table): Table to be modified
         %   var_move(string): Var to move
         %   var_before(string): Variable that new var should be after
+        
+        % Handle inputs
+        if nargin < 4
+            remove_var = false;
+        end
         
         % Get input names as string
         table_name = inputname(1);
@@ -214,21 +266,26 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         if strcmp(table_name, 'SS_Out_ICR')
             
             % Add for each field (rat) entry
-            T2 = structfun(@(x) MoveV(x, var_move, var_before), T, 'uni', false);
+            T2 = structfun(@(x) MoveV(x, var_move, var_before, remove_var), T, 'uni', false);
             
         elseif strcmp(table_name, 'SS_In_All')
             
             % Add single instance
-            T2 = MoveV(T, var_move, var_before);
+            T2 = MoveV(T, var_move, var_before, remove_var);
             
         end
         
         % Move var function
-        function [t] = MoveV(t, vm, vb)
+        function [t] = MoveV(t, vm, vb, rmv)
             
             % Store var and delete
             v_dat = table(t.(vm), 'VariableNames', {vm});
             t.(vm) = [];
+            
+            % Check if just removing
+            if rmv
+                return;
+            end
             
             % Get info
             tab_vars = t.Properties.VariableNames;
