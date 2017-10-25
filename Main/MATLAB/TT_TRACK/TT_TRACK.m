@@ -14,7 +14,7 @@ D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\I
 % IO dirs
 D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
 D.DIR.log = fullfile(D.DIR.top,'IOfiles');
-D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
+D.DIR.ioTT_Log = fullfile(D.DIR.ioTop, 'SessionData', 'TT_Log.mat');
 % Image directory
 D.DIR.img = fullfile(D.DIR.ioTop,'Images');
 D.DIR.matFile = fullfile(D.DIR.img, 'Paxinos', 'procPax.mat');
@@ -90,13 +90,12 @@ D.UI.ttLegMrkWdth = [1,4];
 %% ================== IMPORT/FORMAT PAXINOS IMAGES ========================
 
 % Load session data
-T = load(D.DIR.ioSS_In_All);
-D.SS_In_All = T.SS_In_All;
+T = load(D.DIR.ioTT_Log);
+D.TT_Log = T.TT_Log;
 
 % Get rat list
-ind = D.SS_In_All.Include_Run & ...
-    D.SS_In_All.Implanted;
-D.PAR.ratList = D.SS_In_All.Properties.RowNames(ind);
+ind = D.TT_Log.Include_Run;
+D.PAR.ratList = D.TT_Log.Properties.RowNames(ind);
 D.PAR.ratList = regexprep(D.PAR.ratList, 'r', '');
 D.PAR.ratList = [{'Select Rat'};D.PAR.ratList];
 
@@ -653,7 +652,7 @@ D.UI.btnHideTT(1) = uicontrol('style','toggle', ...
     'ForegroundColor', [1,1,1], ...
     'FontWeight','Bold',...
     'Enable', 'off', ...
-    'Value', 0, ...
+    'Value', 1, ...
     'cdata', eye_icon, ...
     'FontSize',14);
 
@@ -903,17 +902,18 @@ set(D.UI.fig,'Visible','On')
         tt_fld = D.D.ttFlds{bndl}{tt};
         
         % Pull out all depths for this tt
-        depths_all = [D.D.ttLogStruct.Depth];
-        depths_all = [depths_all(1:end-1).(tt_fld)];
-        depths_all_mm = depths_all/1000; % convert to mm
+        depths_old = [D.D.ttLogTable{1:end-1, [tt_fld,'_D']}];
+        depths_old_mm = depths_old/1000; % convert to mm
         
         % Append new depth if tt has been updated
         user_date = get(D.UI.h_btnTT(bndl,tt), 'UserData');
         state = user_date(3);
         if state == 1
-            depths_new = D.D.ttLogStruct(D.D.Ses).Depth.(tt_fld);
+            depths_new = D.D.ttLogTable{D.D.Ses+1, [tt_fld,'_D']};
             depths_new_mm = depths_new/1000;
-            depths_all_mm = [depths_all_mm, depths_new_mm];
+            depths_all_mm = [depths_old_mm; depths_new_mm];
+        else
+            depths_all_mm = depths_old_mm;
         end
         
         % Get position in bundle
@@ -938,7 +938,7 @@ set(D.UI.fig,'Visible','On')
         
         % Align x and y to bundle implant pos
         px = 100 * (x + xa);
-        py = 100 * (repmat(y, 1, length(px)));
+        py = 100 * (repmat(y, length(px), 1));
         pz = 100 * (z + abs(za)) * -1;
         
         % Delete existing plot
@@ -947,7 +947,7 @@ set(D.UI.fig,'Visible','On')
         
         % Create cylinder tt for each
         [D.UI.ttTrkLin(bndl,tt), D.UI.ttTrkMrk(bndl,tt,1:length(px))] = ...
-            Get3dTT([px', py', pz'], D.PAR.ttDiam*100, 20, state, D.UI.axe3D);
+            Get3dTT([px, py, pz], D.PAR.ttDiam*100, 20, state, D.UI.axe3D);
         
         % Set rod color
         set(D.UI.ttTrkLin(bndl,tt), ...
@@ -1103,21 +1103,21 @@ set(D.UI.fig,'Visible','On')
         D.PAR.ratLab = ... % ('r####')
             ['r',D.D.ratID(1:4)];
         
-        % Get rat index in D.SS_In_All
+        % Get rat index in D.TT_Log
         D.D.ratInd = ...
-            find(ismember(D.SS_In_All.Properties.RowNames, D.PAR.ratLab));
+            find(ismember(D.TT_Log.Properties.RowNames, D.PAR.ratLab));
         
         % Get implant coordinates
-        D.D.ttCoords = D.SS_In_All.Implant_Coordinates(D.D.ratInd,:);
+        D.D.ttCoords = D.TT_Log.Implant_Coordinates(D.D.ratInd,:);
         
         % Get number of bundles
         D.PAR.nBundles = ~any(isnan(D.D.ttCoords{2}))+1;
         
         % Get tt configs
-        D.D.ttConfig = D.SS_In_All.Implant_Configuration(D.D.ratInd,:);
+        D.D.ttConfig = D.TT_Log.Implant_Configuration(D.D.ratInd,:);
         
         % Get tt map
-        D.D.ttMap = D.SS_In_All.Tetrode_Mapping(D.D.ratInd,:);
+        D.D.ttMap = D.TT_Log.Tetrode_Mapping(D.D.ratInd,:);
         
         % Remove unused entries
         for z_b = 1:2
@@ -1129,29 +1129,17 @@ set(D.UI.fig,'Visible','On')
         end
         
         % Store current log
-        D.D.ttLogStruct = D.SS_In_All.Turn_Log{D.D.ratInd};
+        D.D.ttLogTable = D.TT_Log.Turn_Log{D.D.ratInd};
         
         % Get session number
-        D.D.Ses = size(D.D.ttLogStruct,1)+1;
-        
-        % Set first ses flag
-        D.D.isFirstSes = D.D.Ses == 2;
-        
-        % Handle first entry
-        if D.D.isFirstSes
-            flds = fieldnames(D.D.ttLogStruct(1).Depth);
-            % Set first entry depths to zero and notes to ''
-            for z_f = 1:length(flds)
-                D.D.ttLogStruct(1).Depth.(flds{z_f}) = 0;
-                D.D.ttLogStruct(1).Notes.(flds{z_f}) = '';
-            end
-        end
+        D.D.Ses = D.D.ttLogTable.Session(end)+1;
         
         % Copy last entry to new entry row
-        D.D.ttLogStruct = [D.D.ttLogStruct; D.D.ttLogStruct(end)];
+        D.D.ttLogTable = [D.D.ttLogTable; D.D.ttLogTable(end,:)];
         
         % Add new ses and date
-        D.D.ttLogStruct(D.D.Ses).Date = datestr(clock, 'yyyy-mm-dd_HH-MM-SS', 'local');
+        D.D.ttLogTable{D.D.Ses+1, 'Session'} = D.D.Ses;
+        D.D.ttLogTable{D.D.Ses+1, 'Date'}{:} = datestr(clock, 'yyyy-mm-dd_HH-MM-SS', 'local');
         
         % Initialize arrays
         D.D.ttFlds = cell(1,2);
@@ -1197,6 +1185,20 @@ set(D.UI.fig,'Visible','On')
             set(D.UI.axLeg(z_b), ...
                 'XLim', [D.D.ttConfig{z_b}(1)/2 - center+ 0.5, D.D.ttConfig{z_b}(1)/2 + center + 0.5], ...
                 'YLim', [D.D.ttConfig{z_b}(2)/2 - center+ 0.5, D.D.ttConfig{z_b}(2)/2 + center + 0.5])
+            
+            % Show implant A-P coordinates on x axes
+            set(D.UI.axLeg(z_b).XLabel, ...
+                'Units', 'Normalized', ...
+                'FontSize', 9, ...
+                'String', sprintf('A-P %0.2fmm', D.D.ttCoords{z_b}(1)));
+            D.UI.axLeg(z_b).XLabel.Position(2) = D.UI.axLeg(z_b).XLabel.Position(2)+0.05;
+            
+            % Show implant M-L coordinates on y axes
+            set(D.UI.axLeg(z_b).YLabel, ...
+                'Units', 'Normalized', ...
+                'FontSize', 9, ...
+                'String', sprintf('M-L %0.2fmm', D.D.ttCoords{z_b}(2)));
+            D.UI.axLeg(z_b).YLabel.Position(1) = D.UI.axLeg(z_b).YLabel.Position(1)+0.05;
             
             for z_tt = 1:D.D.nTT(z_b)
                 
@@ -1358,7 +1360,7 @@ set(D.UI.fig,'Visible','On')
         set(D.UI.editNewNoteTT,'String','');
         
         % Show last note
-        set(D.UI.editOldNoteTT,'String',D.D.ttLogStruct(D.D.Ses).Notes.(D.D.ttFldNow))
+        set(D.UI.editOldNoteTT,'String',D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']})
         
         % Get tt index
         D.D.ttIndNow = find(ismember([D.D.ttFlds{1};D.D.ttFlds{2}],D.D.ttFldNow));
@@ -1371,7 +1373,7 @@ set(D.UI.fig,'Visible','On')
         ShowActiveTT(true,bndl,tt);
         
         % Get last orientation
-        orientations_last = D.D.ttLogStruct(D.D.Ses).Orientation.(D.D.ttFldNow);
+        orientations_last = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_O']};
         
         % Handle first ses
         if isundefined(orientations_last)
@@ -1393,7 +1395,7 @@ set(D.UI.fig,'Visible','On')
         end
         
         % Get last depth
-        depths_last = D.D.ttLogStruct(D.D.Ses).Depth.(D.D.ttFldNow);
+        depths_last = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_D']};
         
         % Enable objects
         set(D.UI.txtPanTT(5), 'String', D.UI.ttStateStr{state});
@@ -1467,7 +1469,7 @@ set(D.UI.fig,'Visible','On')
         sph_arr_h = D.UI.ttTrkMrk(bndl_ind,isgraphics(D.UI.ttTrkMrk(bndl_ind,:,:)));
         
         % Set visibility
-        if get(hObject, 'Value') == 0
+        if get(hObject, 'Value') == 1
             set(rod_arr_h, 'Visible', 'on')
             set(sph_arr_h, 'Visible', 'on')
         else
@@ -1486,7 +1488,7 @@ set(D.UI.fig,'Visible','On')
         orientations_new = char(orientations_list(get(D.UI.popOr,'Value')));
         
         % Save orientation to struct
-        D.D.ttLogStruct(D.D.Ses).Orientation.(D.D.ttFldNow)(:) = orientations_new;
+        D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_O']}(:) = orientations_new;
         
         % Get total turns
         turn_list = get(D.UI.popTrn,'String');
@@ -1520,28 +1522,28 @@ set(D.UI.fig,'Visible','On')
         delta_depth = direction_new * (delta_orientation + turn_um);
         
         % Get last depth
-        depths_last = D.D.ttLogStruct(D.D.Ses).Depth.(D.D.ttFldNow);
+        depths_last = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_D']};
         
         % Compute total depth
         depth_new = delta_depth+depths_last;
         
         % Save depth to struct
-        D.D.ttLogStruct(D.D.Ses).Depth.(D.D.ttFldNow) = depth_new;
+        D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_D']} = depth_new;
         
         % Update Notes
         new_note = get(D.UI.editNewNoteTT,'String');
         if ~strcmp(new_note, '')
             new_note_str = ...
-                [D.D.ttLogStruct(D.D.Ses).Notes.(D.D.ttFldNow), ...
+                [D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']}, ...
                 sprintf('%s: %s\n', ...
                 datestr(clock, 'yyyy-mm-dd', 'local'), ...
                 get(D.UI.editNewNoteTT,'String'))];
         else
-            new_note_str = D.D.ttLogStruct(D.D.Ses).Notes.(D.D.ttFldNow);
+            new_note_str = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']};
         end
         
         % Save note to struct
-        D.D.ttLogStruct(D.D.Ses).Notes.(D.D.ttFldNow) = new_note_str;
+        D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']} = new_note_str;
         
         % Update tt select button vars
         x = get(D.UI.btnSaveTT, 'UserData');
@@ -1578,11 +1580,11 @@ set(D.UI.fig,'Visible','On')
     function BtnSaveAll(~, ~, ~)
         
         % Save back to table
-        D.SS_In_All.Turn_Log{D.D.ratInd} = D.D.ttLogStruct;
+        D.TT_Log.Turn_Log{D.D.ratInd} = D.D.ttLogTable;
         
         % Save out data
-        SS_In_All = D.SS_In_All; %#ok<NASGU>
-        save(D.DIR.ioSS_In_All, 'SS_In_All');
+        TT_Log = D.TT_Log; %#ok<NASGU>
+        save(D.DIR.ioTT_Log, 'TT_Log');
         
         % Set user data to 1
         set(gcbo, 'UserData', 1)

@@ -74,7 +74,7 @@ namespace ICR_Run
         }
         private static DB db = new DB(
             system_test: 0,
-            do_debug_mat: true,
+            do_debug_mat: false,
             break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -946,6 +946,10 @@ namespace ICR_Run
             // Hold for debugging or errors errors
             if (db.systemTest != 0 || db.do_debugMat || fc.isRunError)
             {
+                // Show Matlab window
+                com_Matlab.Visible = fc.isRunError ? 1 : 0;
+
+                // Run pause
                 fc.RunPauseForDB();
             }
 
@@ -3368,7 +3372,7 @@ namespace ICR_Run
                     }
 
                     // Max logs stored and end reachedd
-                    else 
+                    else
                     {
                         // Set to last entry in array
                         cnt_logsStored = _logList.Length;

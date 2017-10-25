@@ -7709,11 +7709,16 @@ fprintf('END OF RUN\n');
                 
                 % Attempt to store log
                 try
+                    % Print log being stored
+                    fprintf('Writing Log %d/%d: \"%s\"', z_l, cnt_stored, D.DB.logStr{z_l})
+                    
+                    % Store log
                     fprintf(fid, D.DB.logStr{z_l});
                     cnt_saved = cnt_saved+1;
                 catch ME
-                    Console_Write(sprintf('!!ERROR!! [EXIT] Error Storing Log %d/%d to \"%s\"', ...
-                        z_l, cnt_stored, D.DIR.logTempDir));
+                    % Print log store failure
+                    fprintf('!!ERROR!! [EXIT] Error Writing Log %d/%d to \"%s\"', ...
+                        z_l, cnt_stored, D.DIR.logTempDir);
                 end
                 
             end

@@ -116,6 +116,8 @@ T.Notes = cell(length(ratList),1);
 % Set variable units
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
 T.Properties.VariableUnits{'Pulse_Duration'} = 'ms';
+T.Properties.VariableUnits{'Implant_Coordinates'} = 'mm';
+T.Properties.VariableUnits{'Turn_Log'} = 'um';
 
 % Set variable descriptions
 T.Properties.VariableDescriptions{'Session_Manual_Training'} = session_number_description;
@@ -126,6 +128,9 @@ T.Properties.VariableDescriptions{'Rotations_Per_Session'} = rotations_per_sessi
 T.Properties.VariableDescriptions{'Laps_Per_Rotation'} = laps_per_rotation_description;
 T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
 T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
+T.Properties.VariableDescriptions{'Implant_Coordinates'} = implant_coordinates_description;
+T.Properties.VariableDescriptions{'Implant_Configuration'} = implant_configuration_description;
+T.Properties.VariableDescriptions{'Tetrode_Mapping'} = tetrode_mapping_description;
 
 % Load existing dataset
 if exist(fullfile(ioDir, 'SS_In_All.mat'), 'file')
