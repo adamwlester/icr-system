@@ -4560,8 +4560,8 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 	Peak Amp for 1.7 A stepper = 1.7*1.41 = 2397 mA
 	Peak Amp for 2.82 A stepper = 2.82*1.41 = 3.97 mA
 	*/
-	AD_R.setOCThreshold(OC_4875mA);
-	AD_F.setOCThreshold(OC_4875mA);
+	AD_R.setOCThreshold(OC_6000mA);
+	AD_F.setOCThreshold(OC_6000mA);
 
 	// Low speed compensation
 	/*
@@ -4681,7 +4681,9 @@ void AD_CheckOC(bool force_check)
 	ocd_f = GetAD_Status(adF_stat, "OCD");
 
 	// Check for overcurrent shut down
-	if (ocd_r == 0 || ocd_f == 0) {
+	// TEMP
+	if (ocd_r == 0) {
+	//if (ocd_r == 0 || ocd_f == 0) {
 
 		// Track events
 		cnt_errors++;

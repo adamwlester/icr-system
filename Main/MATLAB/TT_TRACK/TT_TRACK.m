@@ -6,7 +6,8 @@ function TT_TRACK
 D = struct;
 
 % Debugging
-D.DB.doAutoLoad = true;
+D.DB.doAutoLoad = false;
+D.DB.depthSet = 1; % (mm)
 
 % Top directory
 D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
@@ -33,9 +34,6 @@ D.PAR.canSp = 0.3175;
 
 % TT diameter (mm)
 D.PAR.ttDiam = 0.0254;
-
-% Turn to um conversion
-D.UI.umPerTurn = 320;
 
 % Track lines offset (mm)
 D.UI.linOfst = 0.025;
@@ -84,6 +82,7 @@ D.UI.stateCol = [...
 
 % Plot state settings
 D.UI.ttLegMrkWdth = [1,4];
+D.UI.ttFaceAlph = [0.05, 1];
 
 %==========================================================================
 
@@ -258,8 +257,8 @@ for z_view = 1:3
     tl{z_view}  = [repmat(blanks(3-size(tl{z_view} ,2)), size(tl{z_view} ,1), 1), tl{z_view}];
     
     % Label axes lims
-    tl{z_view}(1,:) = lm_str{z_view,1};
-    tl{z_view}(end,:) = lm_str{z_view,2};
+    tl{z_view}(tk{z_view}/100==min(D.UI.mmPlotLims(z_view,:)),:) = lm_str{z_view,1};
+    tl{z_view}(tk{z_view}/100==max(D.UI.mmPlotLims(z_view,:)),:) = lm_str{z_view,2};
 end
 
 % Create axis
@@ -316,7 +315,7 @@ for z_view = 1:3
             'Visible', 'off');
         
         % Set alpha
-        D.UI.h_paxImg{z_view}(z_img).AlphaData = 0.9;
+        D.UI.h_paxImg{z_view}(z_img).AlphaData = 0.75;
     end
 end
 
@@ -388,9 +387,9 @@ D.UI.axLegBack.Position = ...
 
 % Set titles
 set(D.UI.axLeg(1), 'Title', ...
-    text('String','Hipp Bundle','FontSize',15,'FontWeight','bold','Color','k'))
+    text('String','    Hipp Bundle','FontSize',12,'FontWeight','bold','Color','k'))
 set(D.UI.axLeg(2), 'Title', ...
-    text('String','MEC Bundle','FontSize',15,'FontWeight','bold','Color','k'))
+    text('String','    MEC Bundle','FontSize',12,'FontWeight','bold','Color','k'))
 
 % Orientation strings
 D.PAR.dirVec = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
@@ -601,9 +600,9 @@ D.UI.btnQuit = uicontrol('style','push', ...
     'FontSize',14);
 
 % area for tt buttons
-D.UI.ttBtnRng = (D.UI.figPos(4) - D.UI.posPopLoad(4) - D.UI.posBtnSave(4) - D.UI.dfltSp*3 - 2*D.UI.bordOff) * 0.4;
+D.UI.ttBtnRng = (D.UI.figPos(4) - D.UI.posPopLoad(4) - D.UI.posBtnSave(4) - D.UI.dfltSp - 2*D.UI.bordOff) * 0.425;
 % area for tt pannel
-D.UI.ttPanRng = (D.UI.figPos(4) - D.UI.posPopLoad(4) - D.UI.posBtnSave(4) - D.UI.dfltSp*3 - 2*D.UI.bordOff) * 0.6;
+D.UI.ttPanRng = (D.UI.figPos(4) - D.UI.posPopLoad(4) - D.UI.posBtnSave(4) - D.UI.dfltSp - 2*D.UI.bordOff) * 0.575;
 D.UI.ttPanPos = [D.UI.dfltLft, D.UI.bordOff+D.UI.posBtnSave(4)+D.UI.dfltSp, D.UI.dfltWd, D.UI.ttPanRng];
 
 % ------------------------- TT SELECT CONTROLS ----------------------------
@@ -613,7 +612,7 @@ ttBtnHead = [{'Hipp'}, {'MEC'}];
 % Panels left (pixel)
 ttGrpLft = [D.UI.dfltLft, D.UI.dfltLft+1+D.UI.dfltWd/2];
 % Panels bottom (pixel)
-ttGrpBtm = D.UI.bordOff+D.UI.posBtnSave(4)+D.UI.ttPanRng+2*D.UI.dfltSp;
+ttGrpBtm = D.UI.posPopLoad(2) - D.UI.ttBtnRng;
 
 % Loop through each bundle
 for z_bndl = 1:D.PAR.nBundles
@@ -639,14 +638,12 @@ end
 % ------------------------ TT HIDE SHOW TOGGLE ----------------------------
 
 % Get eye icon
-wtht = D.UI.bordOff*0.7;
+wtht = D.UI.bordOff/2;
 eye_icon = imread(fullfile(D.DIR.img, 'Icons', 'eyeicon.png'));
-eye_icon = imresize(eye_icon, [wtht-10, wtht-10]);
-% Add setview button
-D.UI.posBtnHideTT = [0, 0, wtht, wtht];
+eye_icon = imresize(eye_icon, [wtht-5, wtht-5]);
 D.UI.btnHideTT(1) = uicontrol('style','toggle', ...
     'Parent', D.UI.fig, ...
-    'Enable', 'On', ...
+    'Enable', 'Off', ...
     'Units','Pixels', ...
     'FontName',D.UI.btnFont,...
     'ForegroundColor', [1,1,1], ...
@@ -661,10 +658,10 @@ D.UI.btnHideTT(2) = copyobj(D.UI.btnHideTT(1), D.UI.fig);
 
 % Set values
 set(D.UI.btnHideTT(1), ...
-    'Position', [D.UI.leg_1_pos(1:2), wtht, wtht], ...
+    'Position', [D.UI.leg_1_pos(1), D.UI.leg_1_pos(2)+ D.UI.leg_1_pos(4), wtht, wtht], ...
     'UserData', 1);
 set(D.UI.btnHideTT(2), ...
-    'Position', [D.UI.leg_2_pos(1:2), wtht, wtht], ...
+    'Position', [D.UI.leg_2_pos(1), D.UI.leg_2_pos(2)+D.UI.leg_2_pos(4), wtht, wtht], ...
     'UserData', 2);
 
 % Set callback
@@ -922,6 +919,9 @@ set(D.UI.fig,'Visible','On')
         % Determine position relative to bundle center
         center = [ap, ml] - ceil(size(D.D.ttMap{bndl})/2);
         
+        % Flip A-P center
+        center(1) = center(1)*-1;
+        
         % Get x start pos with offset as a function of z pos
         x_offset = center(2)*D.UI.linOfst;
         x = D.D.ttCoords{bndl}(1) + center(1)*D.PAR.canSp + x_offset;
@@ -930,7 +930,7 @@ set(D.UI.fig,'Visible','On')
         y_offset = center(1)*D.UI.linOfst;
         y = D.D.ttCoords{bndl}(2) + center(2)*D.PAR.canSp + y_offset;
         
-        % Align y to bundle implant pos
+        % Align z to bundle implant pos
         z = D.D.ttCoords{bndl}(3);
         
         % Get implant pos based on bundle angle
@@ -951,12 +951,14 @@ set(D.UI.fig,'Visible','On')
         
         % Set rod color
         set(D.UI.ttTrkLin(bndl,tt), ...
-            'FaceColor', D.UI.ttLabCol{bndl, 1}(tt,:), ...
+            'FaceColor', D.UI.ttLabCol{bndl}(tt,:), ...
+            'FaceAlpha', D.UI.ttFaceAlph(2), ...
             'Visible', 'on')
         
         % Set sphere color
         set(D.UI.ttTrkMrk(bndl,tt,1:length(px)), ...
-            'FaceColor', D.UI.ttLabCol{bndl, 1}(tt,:), ...
+            'FaceColor', D.UI.ttLabCol{bndl}(tt,:), ...
+            'FaceAlpha', D.UI.ttFaceAlph(2), ...
             'Visible', 'on')
         
     end
@@ -1047,37 +1049,112 @@ set(D.UI.fig,'Visible','On')
     end
 
 % ------------------------- CREATE 3D TT GRAPHICS -------------------------
-    function [] = ShowActiveTT(do_dull, bndl, tt)
+    function [] = ShowActiveTT(bndl, tt)
         
-        % Handle inputs
-        if nargin < 2
-            do_on = false;
+        % Handle input args
+        if nargin == 0
+            do_set_all = true;
         else
-            do_on = true;
+            do_set_all = false;
         end
         
-        % Make all tt dull
+        % Set all back to default
         for z_b = 1:D.PAR.nBundles
             for z_tt = 1:D.D.nTT(z_b)
                 
                 % Set rod color
-                set(D.UI.ttTrkLin(z_b,z_tt), 'FaceColor', D.UI.ttLabCol{z_b, do_dull+1}(z_tt,:));
+                set(D.UI.ttTrkLin(z_b,z_tt), ...
+                    'FaceAlpha', D.UI.ttFaceAlph(do_set_all+1));
                 
                 % Set sphere color
                 inc_ind = isgraphics(D.UI.ttTrkMrk(z_b,z_tt,:));
-                set(D.UI.ttTrkMrk(z_b,z_tt,inc_ind), 'FaceColor', D.UI.ttLabCol{z_b, do_dull+1}(z_tt,:));
+                set(D.UI.ttTrkMrk(z_b,z_tt,inc_ind), ...
+                    'FaceAlpha', D.UI.ttFaceAlph(do_set_all+1));
+                
+                % Set legend marker
+                set(D.UI.ttLegMrk, ...
+                    'LineWidth', D.UI.ttLegMrkWdth(1))
             end
         end
         
-        % Change face of active tt
-        if do_on
-            % Set rod color
-            set(D.UI.ttTrkLin(bndl,tt), 'FaceColor', D.UI.ttLabCol{bndl, 1}(tt,:));
+        % Set current tt
+        if ~do_set_all
             
-            % Set sphere color
+            % Set active rod alpha
+            set(D.UI.ttTrkLin(bndl,tt), ...
+                'FaceAlpha', D.UI.ttFaceAlph(2));
+            
+            % Set active sphere alpha
             inc_ind = isgraphics(D.UI.ttTrkMrk(bndl,tt,:));
-            set(D.UI.ttTrkMrk(bndl,tt,inc_ind), 'FaceColor', D.UI.ttLabCol{bndl, 1}(tt,:));
+            set(D.UI.ttTrkMrk(bndl,tt,inc_ind), ...
+                'FaceAlpha', D.UI.ttFaceAlph(2));
+            
+            % Set active legend marker
+            set(D.UI.ttLegMrk(bndl,tt), ...
+                'LineWidth', D.UI.ttLegMrkWdth(2))
+            
         end
+        
+    end
+
+% ------------------- CENTER PAXINOS IMAGE ON CURRENT TT ------------------
+    function [] = SetPaxToTT(bndl, tt)
+        
+        % Get tt data
+        tt_fld = D.D.ttFlds{bndl}{tt};
+        
+        % Get position in bundle
+        [ap, ml] = find(ismember(D.D.ttMap{bndl}, tt_fld));
+        
+        % Determine position relative to bundle center
+        center = [ap, ml] - ceil(size(D.D.ttMap{bndl})/2);
+        
+        % Flip A-P center
+        center(1) = center(1)*-1;
+        
+        % Get x start pos with offset as a function of z pos
+        x = D.D.ttCoords{bndl}(1) + center(1)*D.PAR.canSp;
+        
+        % Get y pos
+        y = D.D.ttCoords{bndl}(2) + center(2)*D.PAR.canSp;
+        
+        % Align z to bundle implant pos
+        z = D.D.ttCoords{bndl}(3);
+        
+        % Get last depth
+        depth_mm = D.D.ttLogTable{D.D.Ses+1, [tt_fld,'_D']}/1000;
+        
+        % Get implant pos based on bundle angle
+        [xa, za] = pol2cart(D.UI.bndAng(bndl), depth_mm);
+        
+        % Align x and y to bundle implant pos
+        px = x + xa;
+        py = y;
+        pz = (z + abs(za)) * -1;
+        
+        % Set paxinos sag 
+        img_ind = find(D.D.imgCoor{1}' > py, 1, 'first');
+        if isempty(img_ind)
+            img_ind = length(D.D.imgCoor{1});
+        end
+        set(D.UI.sldSwtchImg(1), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(1));
+        
+        % Set paxinos cor 
+        img_ind = find(D.D.imgCoor{2}' < px, 1, 'last');
+        if isempty(img_ind)
+            img_ind = 1;
+        end
+        set(D.UI.sldSwtchImg(2), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(2));
+        
+        % Set hor to deepest tt in first bundle
+        img_ind = find(D.D.imgCoor{3}' < pz, 1, 'last');
+        if isempty(img_ind)
+            img_ind = 1;
+        end
+        set(D.UI.sldSwtchImg(3), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(3));
         
     end
 
@@ -1128,6 +1205,9 @@ set(D.UI.fig,'Visible','On')
             end
         end
         
+        % Get thread pitch
+        D.UI.umPerTurn = D.TT_Log.Thread_Pitch(D.D.ratInd)*1000;
+        
         % Store current log
         D.D.ttLogTable = D.TT_Log.Turn_Log{D.D.ratInd};
         
@@ -1145,7 +1225,7 @@ set(D.UI.fig,'Visible','On')
         D.D.ttFlds = cell(1,2);
         D.D.ttLabs = cell(1,2);
         D.D.nTT = zeros(1,2);
-        D.UI.ttLabCol = cell(2,2);
+        D.UI.ttLabCol = cell(1,2);
         
         % Get tt string info
         for z_b = 1:D.PAR.nBundles
@@ -1162,13 +1242,8 @@ set(D.UI.fig,'Visible','On')
             % Get number of tts in each bundle
             D.D.nTT(z_b) = length(D.D.ttFlds{z_b});
             
-            % Specify tt colors active colors
-            D.UI.ttLabCol{z_b,1} = hsv(D.D.nTT(z_b));
-            
-            % Specify tt inactive colors
-            D.UI.ttLabCol{z_b,2} = rgb2hsv(D.UI.ttLabCol{z_b,1});
-            D.UI.ttLabCol{z_b,2}(:,3) = D.UI.ttLabCol{z_b,2}(:,3)*0.5;
-            D.UI.ttLabCol{z_b,2} = hsv2rgb(D.UI.ttLabCol{z_b,2});
+            % Specify tt colors
+            D.UI.ttLabCol{z_b} = hsv(D.D.nTT(z_b));
         end
         
         % Create tt plot handles
@@ -1214,8 +1289,8 @@ set(D.UI.fig,'Visible','On')
                 % Plot tt marker
                 D.UI.ttLegMrk(z_b,z_tt) = ...
                     plot(x , y, 'o', 'Parent', D.UI.axLeg(z_b), ...
-                    'MarkerEdgeColor', D.UI.ttLabCol{z_b,1}(z_tt,:), ...
-                    'MarkerFaceColor', D.UI.ttLabCol{z_b,1}(z_tt,:)*0.5, ...
+                    'MarkerEdgeColor', D.UI.ttLabCol{z_b}(z_tt,:), ...
+                    'MarkerFaceColor', D.UI.ttLabCol{z_b}(z_tt,:)*0.5, ...
                     'LineWidth', D.UI.ttLegMrkWdth(1), ...
                     'MarkerSize', 16);
                 text(x , y, D.D.ttLabs{z_b}{z_tt}, 'Parent', D.UI.axLeg(z_b), ...
@@ -1246,36 +1321,36 @@ set(D.UI.fig,'Visible','On')
             for z_tt = 1:D.D.nTT(z_b)
                 
                 % Add tt button
-                pos = [ttBtnLft(1), ttBtnBtm(z_tt+1), ttBtnWd*1.75, ttBtnHt];
+                btn_pos = [ttBtnLft(1), ttBtnBtm(z_tt+1), ttBtnWd*1.75, ttBtnHt];
                 D.UI.h_btnTT(z_b,z_tt) = ...
                     uicontrol('style','toggle', ...
                     'Parent', D.UI.panBtnLoadTT(z_b), ...
                     'Enable', 'Off', ...
                     'BackgroundColor', D.UI.stateBtnCol(1,:), ...
-                    'ForegroundColor', D.UI.ttLabCol{z_b,1}(z_tt,:), ...
+                    'ForegroundColor', D.UI.ttLabCol{z_b}(z_tt,:), ...
                     'String',D.D.ttLabs{z_b}{z_tt},...
                     'Callback', {@BtnLoadTT},...
                     'UserData', [z_b,z_tt,0], ... % (bundle, tt, saved)
                     'Units','Pixels', ...
                     'Value', 0, ...
-                    'Position', pos, ...
+                    'Position', btn_pos, ...
                     'FontName',D.UI.btnFont,...
                     'FontWeight','Bold',...
                     'FontSize',12);
                 
                 % Add sound icon
-                pos = [ttBtnLft(2), ttBtnBtm(z_tt+1), ttBtnWd, ttBtnHt];
+                icon_pos = [ttBtnLft(2), ttBtnBtm(z_tt+1), ttBtnWd, ttBtnHt];
                 D.axSndIcn(z_b,z_tt) = ...
                     axes('Units', 'Pixels', ...
                     'Parent', D.UI.panBtnLoadTT(z_b), ...
-                    'Position', pos);
+                    'Position', icon_pos);
                 image(sndicon)
                 axis off
                 axis image
                 
                 % Add sound left/right radial button
                 for z_sn = 1:2
-                    pos = [ttBtnLft(z_sn+2), ttBtnBtm(z_tt+1), ttBtnWd, ttBtnHt];
+                    rad_pos = [ttBtnLft(z_sn+2), ttBtnBtm(z_tt+1), ttBtnWd, ttBtnHt];
                     D.UI.h_radSnd(z_b,z_tt,z_sn) = ...
                         uicontrol('Style','radiobutton',...
                         'Parent', D.UI.panBtnLoadTT(z_b), ...
@@ -1284,7 +1359,7 @@ set(D.UI.fig,'Visible','On')
                         'Callback', {@RadSnd},...
                         'UserData', [z_b,z_tt,z_sn], ...
                         'Units', 'Pixels', ...
-                        'Position', pos, ...
+                        'Position', rad_pos, ...
                         'BackgroundColor',[1,1,1],...
                         'FontWeight','Normal',...
                         'FontSize', 10,...
@@ -1304,9 +1379,38 @@ set(D.UI.fig,'Visible','On')
         set(D.UI.h_radSnd(isgraphics(D.UI.h_radSnd)), 'Enable', 'On')
         set(D.UI.panBtnLoadTT,'HighlightColor',D.UI.stateCol(1,:))
         set(D.UI.btnHideTT, 'Enable', 'On')
+        for z_b = 1:D.PAR.nBundles
+            set(D.UI.btnHideTT(z_b), 'Enable', 'On')
+        end
+        
+        % Set paxinos sag center of first bundle
+        img_ind = knnsearch(D.D.imgCoor{1}', D.D.ttCoords{1}(2));
+        set(D.UI.sldSwtchImg(1), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(1));
+        
+        % Set paxinos cor center of first bundle
+        img_ind = knnsearch(D.D.imgCoor{2}', D.D.ttCoords{1}(1));
+        set(D.UI.sldSwtchImg(2), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(2));
+        
+        % Set hor to deepest tt in first bundle
+        dpth_max = 0;
+        for z_tt = 1:D.D.nTT(1)
+            dpth_max = max(dpth_max, D.D.ttLogTable{D.D.Ses+1, [D.D.ttFlds{1}{z_tt},'_D']});
+        end
+        img_ind = knnsearch(D.D.imgCoor{3}', -1*dpth_max/1000);
+        set(D.UI.sldSwtchImg(3), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(3));
         
         % Auto run GUI
         if (D.DB.doAutoLoad)
+            
+            % Get number of full turns
+            turn_ind = ...
+                find(ismember(cellstr(get(D.UI.popTrn, 'Str')), num2str(round((D.DB.depthSet/(D.UI.umPerTurn/1000))))));
+            if isempty(turn_ind)
+                turn_ind = length(get(D.UI.popTrn,'String'));
+            end
             
             % Loop through each bundle
             for z_b = 1:D.PAR.nBundles
@@ -1315,19 +1419,20 @@ set(D.UI.fig,'Visible','On')
                 for z_tt = 1:D.D.nTT(z_b)
                     
                     % Load next TT
+                    set(D.UI.h_btnTT(z_b,z_tt), 'Value', 1);
                     BtnLoadTT(D.UI.h_btnTT(z_b,z_tt));
                     
                     % Pause
-                    pause(0.1);
+                    pause(0.05);
                     
                     % Set turns to max
-                    set(D.UI.popTrn, 'Value', length(get(D.UI.popTrn,'String')));
+                    set(D.UI.popTrn, 'Value', turn_ind);
                     
                     % Set to random orientation
-                    set(D.UI.popOr,'Value', ceil(rand(1,1)*length(get(D.UI.popOr,'String'))))
+                    %set(D.UI.popOr,'Value', ceil(rand(1,1)*length(get(D.UI.popOr,'String'))))
                     
                     % Pause
-                    pause(0.1);
+                    pause(0.05);
                     
                     % Save
                     BtnSaveTT();
@@ -1344,7 +1449,8 @@ set(D.UI.fig,'Visible','On')
 % ---------------- BUTTON PRESS TO LOAD TT DATA INTO PANEL ----------------
     function BtnLoadTT(hObject, ~, ~)
         
-        % Get stored values
+        % Get values
+        val = get(hObject, 'Value');
         x = get(hObject, 'UserData');
         bndl = x(1);
         tt = x(2);
@@ -1353,14 +1459,37 @@ set(D.UI.fig,'Visible','On')
         % Get tt field
         D.D.ttFldNow = D.D.ttFlds{bndl}{tt};
         
+        % Check if bunton disabled
+        if (val == 0)
+            
+            % Reinable all buttons
+            set(D.UI.h_btnTT, 'Enable', 'on');
+            
+            % Show all tts
+            ShowActiveTT();
+            
+            % Bail
+            return;
+        end
+        
+        % Disable all buttons
+        set(D.UI.h_btnTT, 'Enable', 'off');
+        
+        % Enable this button
+        set(D.UI.h_btnTT(bndl,tt), 'Enable', 'on');
+        
         % Reset objects
         set(D.UI.popTrn, 'Value', 1);
         set(D.UI.popOr, 'Value', 1);
         set(D.UI.popDir, 'Value', 1);
         set(D.UI.editNewNoteTT,'String','');
+        set(D.UI.h_btnTT, 'Value', 0);
+        
+        % Set current toggle button value
+        set(D.UI.h_btnTT(bndl,tt), 'Value', 1);
         
         % Show last note
-        set(D.UI.editOldNoteTT,'String',D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']})
+        set(D.UI.editOldNoteTT,'String',D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']}{:})
         
         % Get tt index
         D.D.ttIndNow = find(ismember([D.D.ttFlds{1};D.D.ttFlds{2}],D.D.ttFldNow));
@@ -1370,7 +1499,7 @@ set(D.UI.fig,'Visible','On')
         D.UI.pstTT = tt;
         
         % Show active tt
-        ShowActiveTT(true,bndl,tt);
+        ShowActiveTT(bndl,tt);
         
         % Get last orientation
         orientations_last = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_O']};
@@ -1427,6 +1556,9 @@ set(D.UI.fig,'Visible','On')
         % Update tt depth text object
         set(D.UI.txtPanTT(7), ...
             'String', sprintf('%d %sm', depths_last, char(181)));
+        
+        % Update pax view
+        SetPaxToTT(bndl, tt);
         
     end
 
@@ -1534,20 +1666,21 @@ set(D.UI.fig,'Visible','On')
         new_note = get(D.UI.editNewNoteTT,'String');
         if ~strcmp(new_note, '')
             new_note_str = ...
-                [D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']}, ...
-                sprintf('%s: %s\n', ...
+                [D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']}{:}, ...
+                sprintf('%s: %s\n\n', ...
                 datestr(clock, 'yyyy-mm-dd', 'local'), ...
                 get(D.UI.editNewNoteTT,'String'))];
         else
-            new_note_str = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']};
+            new_note_str = D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']}{:};
         end
         
         % Save note to struct
-        D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']} = new_note_str;
+        D.D.ttLogTable{D.D.Ses+1, [D.D.ttFldNow,'_N']}{:} = new_note_str;
         
         % Update tt select button vars
         x = get(D.UI.btnSaveTT, 'UserData');
-        bndl = x(1); tt = x(2);
+        bndl = x(1); 
+        tt = x(2);
         set(D.UI.h_btnTT(bndl,tt), ...
             'BackgroundColor', D.UI.stateBtnCol(2,:),...
             'UserData', [bndl, tt, 1])
@@ -1571,8 +1704,11 @@ set(D.UI.fig,'Visible','On')
         % Update track plot
         PlotTTPath(bndl,tt);
         
-        % Reset tt graphics
-        ShowActiveTT(false);
+        % Update pax view
+        SetPaxToTT(bndl, tt);
+        
+        % Reset buttons
+        BtnLoadTT(D.UI.h_btnTT(bndl,tt));
         
     end
 
@@ -1634,23 +1770,27 @@ set(D.UI.fig,'Visible','On')
             set(D.UI.sldPitch, 'Value', 0);
         elseif user_dat == 2
             % Set to corronal
-            set(D.UI.sldYaw, 'Value', -90);
+            set(D.UI.sldYaw, 'Value', 90);
             set(D.UI.sldPitch, 'Value', 0);
         elseif user_dat == 3
             % Set to horizontal
-            set(D.UI.sldYaw, 'Value', -90);
-            set(D.UI.sldPitch, 'Value', 90);
+            set(D.UI.sldYaw, 'Value', 90);
+            set(D.UI.sldPitch, 'Value', -90);
         elseif user_dat == 4
             % Set to orthoginal
-            set(D.UI.sldYaw, 'Value', -45);
-            set(D.UI.sldPitch, 'Value', 45);
+            set(D.UI.sldYaw, 'Value', 45);
+            set(D.UI.sldPitch, 'Value', -45);
         end
+        
+        % Get values
+        yaw = -1*get(D.UI.sldYaw, 'Value');
+        pitch = -1*get(D.UI.sldPitch, 'Value');
         
         % Set toggle
         set(D.UI.btnSetView(1:4 ~= user_dat), 'Value', 0);
         
         % Set axis view
-        view(D.UI.axe3D, [get(D.UI.sldYaw, 'Value'), get(D.UI.sldPitch, 'Value')]);
+        view(D.UI.axe3D, [yaw, pitch]);
     end
 
 %==========================================================================

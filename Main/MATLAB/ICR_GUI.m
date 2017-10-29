@@ -5,6 +5,7 @@ function[status] = ICR_GUI(sysTest, doDebug, isCheetahOpen, isMatSolo)
 %     	1: PID calibration
 %   	2: Halt error test
 %    	3: Simulated rat test
+%       4: Auto setup
 %   doDebug = [0,1]
 %     	0: Dont break on errors
 %       1: Break on errors
@@ -76,12 +77,12 @@ end
 % Session conditions
 D.DB.ratLab = 'r9999';
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
-D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
+D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'SW'; % [NE,SE,SW,NW];
+D.DB.Start_Quadrant = 'SE'; % [NE,SE,SW,NW];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
 
 % Simulated rat test
@@ -325,6 +326,9 @@ fprintf('END OF RUN\n');
             case 3
                 D.DB.isTestRun = true;
                 D.DB.doSimRatTest = true;
+                
+            case 4
+                D.DB.isTestRun = true;
                 
             otherwise
                 D.DB.isTestRun = false;
@@ -7898,7 +7902,8 @@ fprintf('END OF RUN\n');
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos, ...
-                        'Err');
+                        'Err', ...
+                        false);
                     
                 end
                 
@@ -7914,7 +7919,8 @@ fprintf('END OF RUN\n');
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos, ...
-                        'Err');
+                        'Err', ...
+                        false);
                     
                     % Set exit flag
                     doExit = true;

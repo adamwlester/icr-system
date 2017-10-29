@@ -23,6 +23,7 @@ namespace ICR_Run
                 1: PID calibration
                 2: Halt error test
                 3: Simulated rat test
+                4: Auto setup
             */
             public double systemTest;
 
@@ -73,7 +74,7 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 0,
+            system_test: 4,
             do_debug_mat: false,
             break_line: 0, // 0
             do_print_blocked_vt: false,
@@ -1846,7 +1847,8 @@ namespace ICR_Run
         {
             // Local vars
             long t_stream_str = sw_main.ElapsedMilliseconds;
-            long t_timeout = t_stream_str + timeoutImportLog;
+            long t_stream_timeout = t_stream_str + timeoutImportLog;
+            long dt_read_timeout = 10000;
             long t_read_last = t_stream_str;
             char[] c_arr = new char[3] { '\0', '\0', '\0' };
 
@@ -1867,10 +1869,10 @@ namespace ICR_Run
             {
 
                 // Check for run timeout
-                if (sw_main.ElapsedMilliseconds > t_timeout)
+                if (sw_main.ElapsedMilliseconds > t_stream_timeout)
                 {
                     // Check for dt read timeout
-                    if (sw_main.ElapsedMilliseconds - t_read_last > 5000)
+                    if (sw_main.ElapsedMilliseconds - t_read_last > dt_read_timeout)
                     {
                         dt_run = sw_main.ElapsedMilliseconds - t_stream_str;
                         dt_read = t_read_last == 0 ? 0 : sw_main.ElapsedMilliseconds - t_read_last;

@@ -1,4 +1,4 @@
-function ButtonName = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dlgType)
+function ButtonName = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dlgType,doWait)
 %QUESTDLG Question dialog box.
 %  ButtonName = QUESTDLG(Question) creates a modal dialog box that
 %  automatically wraps the cell array or string (vector or matrix)
@@ -89,8 +89,11 @@ needsLookup = false;
 if nargout > 1
     error(message('dlgAWL:WrongNumberOutputs'));
 end
-if nargin > 8
+if nargin > 9
     error(message('dlgAWL:TooManyInputs'));
+end
+if nargin < 9
+    doWait = true;
 end
 if nargin < 8
     dlgType = 'Ques'; % ['Dflt', 'Ques', 'Warn', 'Err']
@@ -413,10 +416,13 @@ if DefaultButton ~= 0
     uicontrol(BtnHandle{DefaultButton});
 end
 
-if ishghandle(QuestFig)
+% Set to wait for response
+if doWait
     % Go into uiwait if the figure handle is still valid.
-    % This is mostly the case during regular use.
-    uiwait(QuestFig);
+    if ishghandle(QuestFig)
+        
+        uiwait(QuestFig);
+    end
 end
 
 % Check handle validity again since we may be out of uiwait because the
