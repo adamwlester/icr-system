@@ -4681,9 +4681,7 @@ void AD_CheckOC(bool force_check)
 	ocd_f = GetAD_Status(adF_stat, "OCD");
 
 	// Check for overcurrent shut down
-	// TEMP
-	if (ocd_r == 0) {
-	//if (ocd_r == 0 || ocd_f == 0) {
+	if (ocd_r == 0 || ocd_f == 0) {
 
 		// Track events
 		cnt_errors++;
