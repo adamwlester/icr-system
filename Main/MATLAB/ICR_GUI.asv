@@ -76,9 +76,9 @@ end
 %---------------------SET DEBUG/TEST PARAMETERS----------------------------
 
 % Session conditions
-D.DB.ratLab = 'r0000';
+D.DB.ratLab = 'r9999';
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
-D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
+D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
@@ -691,20 +691,27 @@ fprintf('END OF RUN\n');
                                 % ----------CHECK IF MOVE READY------------
                                 
                                 % Wait till at least 2000 VT samples collected
-                                if D.P.Rob.cnt_vtRec > 2000
+                                if D.P.Rob.cnt_vtRec > 2000 
                                     continue;
                                 end
                                 
                                 % Send C# command to move robot to start quad or reward loc
-                                if D.PAR.sesCond ~= 'Manual_Training' %#ok<*STCMP>
-                                    SendM2C('M', D.PAR.strQuadBnds(1));
-                                else
+                                if D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
+                                    % Move to track reward zone
                                     SendM2C('M', D.UI.rewZoneRad(1));
+                                    Console_Write('[MainLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
+                                elseif D.PAR.sesTask == 'Forage'
+                                    % Move to forage reward targ
+                                    SendM2C('M', D.PAR.rfTargDegArr(D.I.targ_now));
+                                    Console_Write('[MainLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
+                                else
+                                    % Move to start quad
+                                    SendM2C('M', D.PAR.strQuadBnds(1));
+                                    Console_Write('[MainLoop] SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
                                 end
                                 
                                 % Set flag
                                 D.F.is_first_move_sent = true;
-                                Console_Write('[MainLoop] SENT STARTING MOVE COMMAND');
                                 
                             case 'CHECK IF RAT IN'
                                 % ------------CHECK IF RAT IN--------------
@@ -817,7 +824,7 @@ fprintf('END OF RUN\n');
             % random forrage radius (cm)
             D.UI.rfRad = 60;
             % rew zone width (cm)
-            D.UI.rfTargWdt = 15;
+            D.UI.rfTargWdt = 5; % TEMP
             % track roh limits
             D.P.trackRohBnd(1) = 1 - (D.UI.trkWdt/D.UI.arnRad);
             D.P.trackRohBnd(2) = 1;
@@ -837,6 +844,8 @@ fprintf('END OF RUN\n');
             
             % FORAGE TASK VARS
             
+            % reward block dt
+            D.PAR.rfRewBlock = 15; % (sec)
             % pos occ bins
             D.PAR.rfBins = (D.UI.arnRad*2)/2 + 1;
             % occ bin edges
@@ -957,13 +966,15 @@ fprintf('END OF RUN\n');
             % flag if halted
             D.F.is_halted = false;
             % track reward reset
-            D.F.flag_rew_confirmed = false;
+            D.F.rew_confirmed = false;
             % track reset crossing
-            D.F.flag_rew_send_crossed = false;
+            D.F.rew_send_crossed = false;
             % track reward crossing
-            D.F.flag_rew_zone_crossed = false;
+            D.F.rew_zone_crossed = false;
             % check for reward zone confirmaton
             D.F.check_rew_confirm = false;
+            % flag to move to new forage targ
+            D.F.move_to_targ = false;
             % track lap bounds
             D.F.check_inbound_lap = false(4,1);
             % track if pos should be plotted
@@ -1004,7 +1015,7 @@ fprintf('END OF RUN\n');
             % track lap times total
             D.T.lap_tim_sum = 0;
             % track manual reward sent time
-            D.T.manual_rew_sent = 0;
+            D.T.btn_rew_sent = 0;
             % track last reward time
             D.T.rew_last = Elapsed_Seconds(now);
             % track reward start
@@ -1013,6 +1024,8 @@ fprintf('END OF RUN\n');
             D.T.rew_end = 0;
             % track reward ts
             D.T.rew_nlx_ts = [0,0];
+            % forage reward time
+            D.T.rf_rew = 0;
             % start quad tim
             D.T.strqd_inbnd_t1 = 0;
             D.T.strqd_inbnd_t2 = 0;
@@ -1038,11 +1051,13 @@ fprintf('END OF RUN\n');
             % track last rewarded zone
             D.I.zone_active_ind = false(1,length(D.PAR.zoneLocs));
             % distrebution of reward zones
-            D.I.zoneArr = NaN(1,100);
+            D.I.zone_arr = NaN(1,100);
             % store reward zone for each reward event
-            D.I.zoneHist = NaN(1,100);
+            D.I.zone_hist = NaN(1,100);
             % current targ ind
-            D.I.targInd = 1;
+            D.I.targ_now = 1;
+            % last targ ind
+            D.I.targ_last = 1;
             
             %% DATA STORAGE VARIABLES
             
@@ -1350,13 +1365,7 @@ fprintf('END OF RUN\n');
             % Monitor positions
             sc = get(0,'MonitorPositions');
             [~, mon_ind] = sort(sc(:,1));
-            monPos(1,:) = sc(mon_ind(1),:);
-            if size(sc,1) == 2
-                monPos(2,:) = sc(mon_ind(2),:);
-            end
-            if size(sc,1) == 3
-                monPos(3,:) = sc(mon_ind(3),:);
-            end
+            monPos = sc(mon_ind,:);
             
             % Figure position
             fig_wh = [1240 1025];
@@ -2188,6 +2197,7 @@ fprintf('END OF RUN\n');
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
                 'FontSize', lrg_text_font(1), ...
+                'UserData', false, ...
                 'Value', 0);
             % bulldoze popup
             ht = pop_font(2);
@@ -2219,6 +2229,7 @@ fprintf('END OF RUN\n');
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
                 'FontSize', btn_text_font(1), ...
+                'UserData', false, ...
                 'Value', 0);
             % bulldoze speed field
             lft = lft+pos(3);
@@ -2360,7 +2371,7 @@ fprintf('END OF RUN\n');
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
                 'FontSize', btn_text_font(1), ...
-                'UserData', false, ...
+                'UserData', [false, false], ...
                 'Value', 0);
             % set to pan bottom
             botm = D.UI.spanRew.Position(2);
@@ -3295,16 +3306,21 @@ fprintf('END OF RUN\n');
             end
             
             % Determine which config file to load
-            if D.PAR.isImplanted
+            if ~D.PAR.isImplanted
+                
+                % Load behavior config
+                NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior.cfg');
+                
+            else
                 
                 % Load main ephys config file
-                %NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys.cfg'); TEMP
+                NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys.cfg');
                 
                 % Pair Cube headstage (Should be commented out unless router has been unpluged)
                 %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -InitWHSPairing 30')
                 
                 % Turn on Cube LEDs
-                %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -SetCube2TrackingLED AcqSystem1 "off"');
+                NlxSendCommand('-SendLynxSXCommand AcqSystem1 -SetCube2TrackingLED AcqSystem1 "off"');
                 %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1'); TEMP
                 
                 % Find last rec dir
@@ -3320,8 +3336,8 @@ fprintf('END OF RUN\n');
                     nlx_cfg_file_last = [];
                 end
                 
-                % TEMP Propt to load last configuration file
-                if ~isempty(nlx_cfg_file_last) && false
+                % Propt to load last configuration file
+                if ~isempty(nlx_cfg_file_last) && false % TEMP
                     load_last = dlgAWL(...
                         sprintf('Load last Cheetah config file\n"%s"?', nlx_cfg_file_last), ...
                         'END SESSION', ...
@@ -4026,8 +4042,10 @@ fprintf('END OF RUN\n');
             % ses cond
             if D.PAR.sesCond == 'Manual_Training'
                 d1 = 0;
-            else
+            elseif D.PAR.sesTask == 'Track'
                 d1 = 1;
+            elseif D.PAR.sesTask == 'Forage'
+                d1 = 2;
             end
             
             % sound cond
@@ -4182,11 +4200,11 @@ fprintf('END OF RUN\n');
             samp_dist = samp_hist'/max(samp_hist);
             
             % Reverse sign and store values
-            D.I.zoneArr = zone_arr*-1;
+            D.I.zone_arr = zone_arr*-1;
             
             % plot sample dist
             if D.PAR.cueFeed ~= 'None'
-                D.UI.zoneArrH = createPatches(...
+                D.UI.zone_arrH = createPatches(...
                     -1*D.PAR.zoneLocs, samp_dist, 2, ...
                     [0, 0, 0], ...
                     0.25, ...
@@ -4218,11 +4236,11 @@ fprintf('END OF RUN\n');
             
             %             % Print vals to console
             %             str = [];
-            %             for z_s = 1:7:length(D.I.zoneArr)
-            %                 if z_s+7 < length(D.I.zoneArr)
-            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
+            %             for z_s = 1:7:length(D.I.zone_arr)
+            %                 if z_s+7 < length(D.I.zone_arr)
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zone_arr(z_s:z_s+7)'))];
             %                 else
-            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zone_arr(z_s:end)'))];
             %                 end
             %             end
             %
@@ -4571,9 +4589,9 @@ fprintf('END OF RUN\n');
             set(D.UI.txtStQ, 'Visible', 'on');
             
             % Get first target set to 180 from start quad
-            D.I.targInd = ...
+            D.I.targ_now = ...
                 find(round(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi))) == D.PAR.rfTargDegArr);
-            set(D.UI.ptchRewTargBnds(D.I.targInd), ...
+            set(D.UI.ptchRewTargBnds(D.I.targ_now), ...
                 'FaceColor', D.UI.activeCol, ...
                 'EdgeColor', D.UI.activeCol, ...
                 'Visible', 'on');
@@ -4656,7 +4674,7 @@ fprintf('END OF RUN\n');
             end
             
             % Log/print
-            Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: OCC=%0.2fsec', ...
+            Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
                 inbndTim));
             
         end
@@ -4974,7 +4992,7 @@ fprintf('END OF RUN\n');
                     
                     % Compute and store scaled occ
                     non_zer_occ = D.P.rfOccMatRaw(D.P.rfOccMatRaw(:) > 0);
-                    scale = prctile(non_zer_occ,99);
+                    scale = prctile(non_zer_occ,95);
                     if scale == 0
                         scale = 1;
                     end
@@ -5576,16 +5594,16 @@ fprintf('END OF RUN\n');
                 D.T.rew_nlx_ts(1) = D.E.evtTS(ismember(D.E.evtStr, D.NLX.rew_on_str));
                 
                 % Store round trip time
-                if datenum(D.T.manual_rew_sent) > 0 && ...
-                        datenum(D.T.manual_rew_sent) < datenum(D.T.rew_start)
+                if datenum(D.T.btn_rew_sent) > 0 && ...
+                        datenum(D.T.btn_rew_sent) < datenum(D.T.rew_start)
                     % Save reward mesage round trip time
-                    D.DB.rew_round_trip(1) = (D.T.rew_start - D.T.manual_rew_sent) * 1000;
+                    D.DB.rew_round_trip(1) = (D.T.rew_start - D.T.btn_rew_sent) * 1000;
                     D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
                     D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
                     D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
                     D.DB.rew_round_trip(5) = D.DB.rew_round_trip(5) + 1;
                     % Reset time
-                    D.T.manual_rew_sent = 0;
+                    D.T.btn_rew_sent = 0;
                 end
                 
                 % Change feeder dish plot color and marker size
@@ -6058,7 +6076,7 @@ fprintf('END OF RUN\n');
             % BAIL IF MANUAL OR FORAGE TRAINING OR BOUNDS PASSED
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Forage' || ...
-                    D.F.flag_rew_send_crossed || ...
+                    D.F.rew_send_crossed || ...
                     all(isnan(D.P.Rat.rad))
                 return
             end
@@ -6103,14 +6121,14 @@ fprintf('END OF RUN\n');
             % selected
             if D.I.zone_select ~= 0 || ...
                     (get(D.UI.toggDoCue, 'Value') == 1 && ...
-                    (D.F.flag_rew_confirmed || D.C.rew_cross_cnt == 0))
+                    (D.F.rew_confirmed || D.C.rew_cross_cnt == 0))
                 
                 % Get new reward zone
                 if D.I.zone_select ~= 0
                     D.I.zone_now = D.I.zone_select;
                 else
                     D.I.zone_now = find(D.PAR.zoneLocs == ...
-                        D.I.zoneArr(sum([D.C.rew_cnt{:}])+1));
+                        D.I.zone_arr(sum([D.C.rew_cnt{:}])+1));
                 end
                 
                 % Get new reward duration
@@ -6166,10 +6184,10 @@ fprintf('END OF RUN\n');
             end
             
             % Set flags
-            D.F.flag_rew_send_crossed = true;
+            D.F.rew_send_crossed = true;
             D.F.check_rew_confirm = true;
-            D.F.flag_rew_zone_crossed = false;
-            D.F.flag_rew_confirmed = false;
+            D.F.rew_zone_crossed = false;
+            D.F.rew_confirmed = false;
             
             % Hide reset patch
             set(D.UI.ptchFdRstH(D.I.rot), ...
@@ -6192,8 +6210,8 @@ fprintf('END OF RUN\n');
             
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Forage' || ...
-                    D.F.flag_rew_zone_crossed || ...
-                    ~D.F.flag_rew_send_crossed
+                    D.F.rew_zone_crossed || ...
+                    ~D.F.rew_send_crossed
                 
                 return
             end
@@ -6203,7 +6221,7 @@ fprintf('END OF RUN\n');
             % Check if reward has been reset
             if  D.F.check_rew_confirm && ...
                     c2m.('Z').dat1 ~= 0 && ...
-                    ~D.F.flag_rew_confirmed
+                    ~D.F.rew_confirmed
                 
                 % Store rewarded zone ind
                 D.I.zone_now = c2m.('Z').dat1;
@@ -6224,13 +6242,15 @@ fprintf('END OF RUN\n');
                 
                 % Add to total reward count
                 if D.F.rotated
+                    % Add to rotation condition count
                     D.C.rew_cnt{D.I.rot}(end) = D.C.rew_cnt{D.I.rot}(end) + 1;
                 else
+                    % Add to standard count
                     D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
                 end
                 
                 % Store reward zone with range [-20,20]
-                D.I.zoneHist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
+                D.I.zone_hist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
                 
                 % Reset reward zone patches
                 set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
@@ -6285,29 +6305,29 @@ fprintf('END OF RUN\n');
                 
                 % Set/reset flags
                 c2m.('Z').dat1 = 0;
-                D.F.flag_rew_confirmed = true;
+                D.F.rew_confirmed = true;
                 D.F.check_rew_confirm = false;
                 
-                Console_Write(sprintf('[Track_Reward_Zone_Check] Rewarded: Zone=%d Vel=%0.2fcm/sec', ...
-                    D.I.zoneHist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
+                Console_Write(sprintf('[Track_Reward_Zone_Check] Rewarded: zone=%d vel=%0.2fcm/sec', ...
+                    D.I.zone_hist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
                 
             end
             
             %% CHECK IF ALL ZONES PASSED OR CONFIRMATION RECEIVED
             
             % Track reward crossing
-            if ~D.F.flag_rew_zone_crossed
+            if ~D.F.rew_zone_crossed
                 
                 % Check if rat has passed all zones or reward confirmed
                 check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.UI.rewPassBnds(D.I.rot,:));
                 
-                if ~(any(check_inbound) || D.F.flag_rew_confirmed)
+                if ~(any(check_inbound) || D.F.rew_confirmed)
                     return
                 end
                 
                 % Set flags
-                D.F.flag_rew_zone_crossed = true;
-                D.F.flag_rew_send_crossed = false;
+                D.F.rew_zone_crossed = true;
+                D.F.rew_send_crossed = false;
                 D.F.check_rew_confirm = false;
                 
                 % Itterate count
@@ -6323,7 +6343,7 @@ fprintf('END OF RUN\n');
                 end
                 
                 % Check for missed rewards
-                if ~D.F.flag_rew_confirmed
+                if ~D.F.rew_confirmed
                     
                     % Add to missed reward count
                     D.C.missed_rew_cnt(1) = D.C.missed_rew_cnt(1)+1;
@@ -6382,7 +6402,6 @@ fprintf('END OF RUN\n');
         function [] = Forage_Reward_Zone_Check()
             
             % BAIL IF MANUAL OR TRACK TRAINING
-            
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Track'
                 return
@@ -6393,15 +6412,41 @@ fprintf('END OF RUN\n');
                 return
             end
             
-            % Bail if waiting for targ select
-            if get(D.UI.toggPickRewPos, 'UserData')
+            % Bail if doing manual targ select
+            if D.UI.toggPickRewPos.UserData(2)
                 return
             end
             
-            % CHECK IF IN REWARD BOUNDS FOR MIN TIME
+            % CHECK IF ROBOT SHOULD BE MOVED
             
-            % Keep checking if rat is in the arena
-            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targInd,:));
+            % Check if rat still in last target bounds
+            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targ_last,:));
+            
+            % Move flaged, target updated and min time ellapsed or rat
+            % already moving from dish
+            if  D.F.move_to_targ && ...
+                    D.I.targ_now ~= D.I.targ_last && ...
+                    (Elapsed_Seconds(now) > D.T.rf_rew+D.PAR.rfRewBlock || ...
+                    ~any(check_inbound))
+                
+                % Send move command
+                targ_rad = deg2rad(D.PAR.rfTargDegArr(D.I.targ_now));
+                SendM2C('M', targ_rad);
+                
+                % Reset flag
+                D.F.move_to_targ = false;
+                
+                % Log/print
+                Console_Write(sprintf('[Forage_Reward_Zone_Check] Sent Moved Command: targ=%ddeg dt_rew=%0.2fs', ...
+                    targ_rad, Elapsed_Seconds(now) - D.T.rf_rew));
+            end
+            
+            % CHECK IF RAT SHOULD BE REWARDED
+            
+            % Check if rat in new target bounds
+            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targ_now,:));
+            
+            % Bail if not in bounds
             if ~any(check_inbound)
                 % Reinitialize
                 D.T.rf_rew_inbnd_t1 = 0;
@@ -6437,6 +6482,28 @@ fprintf('END OF RUN\n');
             % Update plot history
             VT_Plot_Hist()
             
+            % Send reward command
+            r_pos = 0;
+            r_cond = 1;
+            z_ind = get(D.UI.popReward, 'Value');
+            SendM2C('R', r_pos, r_cond, z_ind);
+            
+            % Add to reward count
+            D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
+            
+            % Store reward time
+            D.T.rf_rew = Elapsed_Seconds(now);
+            
+            % Flag to do move after time ellapsed
+            D.F.move_to_targ = true;
+            
+            % Store last targ
+            D.I.targ_last = D.I.targ_now;
+            
+            % Log/print
+            Console_Write(sprintf('[Forage_Reward_Zone_Check] Rewarded at %ddeg', ...
+                D.PAR.rfTargDegArr(D.I.targ_last)));
+            
             % GET NEXT REWARD TARGET
             
             % Handle manual selection
@@ -6447,7 +6514,7 @@ fprintf('END OF RUN\n');
                 D.PAR.rfPathSelectInd = find(ismember(D.PAR.rfPathDegArr, sub_path));
                 
                 % Get index of subset of targets;
-                sub_targ = wrapTo360(D.PAR.rfTargDegArr(D.I.targInd) + 180 + D.PAR.rfPathDegArr(D.PAR.rfPathSelectInd)*2);
+                sub_targ = wrapTo360(D.PAR.rfTargDegArr(D.I.targ_now) + 180 + D.PAR.rfPathDegArr(D.PAR.rfPathSelectInd)*2);
                 D.PAR.rfTargSelectInd = find(ismember(D.PAR.rfTargDegArr, sub_targ));
                 
                 % Sort paths to match targets
@@ -6465,53 +6532,52 @@ fprintf('END OF RUN\n');
                 D.P.pathNowMat = zeros(size(D.P.pathNowMat));
                 
                 % Set flag
-                set(D.UI.toggPickRewPos, 'UserData', true);
+                D.UI.toggPickRewPos.UserData(2) = true;
                 
-                % Bail
-                return
+                % Calculate optimal next target
+            else
+                
+                % Get binary map
+                inv_occ = abs(D.P.rfOccMatBinary-1);
+                occ_prod = ...
+                    squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targ_now) .* ...
+                    repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
+                
+                % Pull out optimal path
+                path_ind = find(occ_prod == max(occ_prod));
+                if length(path_ind) > 1
+                    path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
+                end
+                path_rad = wrapTo2Pi(deg2rad(D.PAR.rfPathDegArr(path_ind)*2));
+                
+                % Get new targ
+                rad_last_targ = deg2rad(D.PAR.rfTargDegArr(D.I.targ_now));
+                rad_new_targ = Rad_Sum(Rad_Sum(rad_last_targ,pi), path_rad);
+                targ_ind_new = ...
+                    find(round(rad2deg(rad_new_targ)) == D.PAR.rfTargDegArr);
+                
+                % Store path mat for plotting
+                D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
+                D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
+                
+                % Update patches
+                set(D.UI.ptchRewTargBnds(D.I.targ_now), ...
+                    'FaceColor', [0,0,0], ...
+                    'EdgeColor', [0,0,0], ...
+                    'Visible', 'off');
+                set(D.UI.ptchRewTargBnds(targ_ind_new), ...
+                    'FaceColor', D.UI.activeCol, ...
+                    'EdgeColor', D.UI.activeCol, ...
+                    'Visible', 'on');
+                
+                % Store new targ
+                D.I.targ_now = targ_ind_new;
+                
+                % Log/print
+                Console_Write(sprintf('[Forage_Reward_Zone_Check] Set New Forage Target: targ_last=%ddeg targ_new=%d', ...
+                    D.PAR.rfTargDegArr(D.I.targ_last), D.PAR.rfTargDegArr(D.I.targ_now)));
                 
             end
-            
-            % Get binary map
-            inv_occ = abs(D.P.rfOccMatBinary-1);
-            occ_prod = ...
-                squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd) .* ...
-                repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
-            
-            % Pull out optimal path
-            path_ind = find(occ_prod == max(occ_prod));
-            if length(path_ind) > 1
-                path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
-            end
-            path_rad = wrapTo2Pi(deg2rad(D.PAR.rfPathDegArr(path_ind)*2));
-            
-            % Get new targ
-            rad_last_targ = deg2rad(D.PAR.rfTargDegArr(D.I.targInd));
-            rad_new_targ = Rad_Sum(Rad_Sum(rad_last_targ,pi), path_rad);
-            targ_ind_new = ...
-                find(round(rad2deg(rad_new_targ)) == D.PAR.rfTargDegArr);
-            
-            % Store path mat for plotting
-            D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
-            D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
-            
-            % Update patches
-            set(D.UI.ptchRewTargBnds(D.I.targInd), ...
-                'FaceColor', [0,0,0], ...
-                'EdgeColor', [0,0,0], ...
-                'Visible', 'off');
-            set(D.UI.ptchRewTargBnds(targ_ind_new), ...
-                'FaceColor', D.UI.activeCol, ...
-                'EdgeColor', D.UI.activeCol, ...
-                'Visible', 'on');
-            
-            % Store new targ
-            targ_ind_last = D.I.targInd;
-            D.I.targInd = targ_ind_new;
-            
-            % Log/print
-            Console_Write(sprintf('[Forage_Reward_Zone_Check] Rewarded: Targ_Last=%ddeg Targ_New=%ddeg', ...
-                D.PAR.rfTargDegArr(targ_ind_last), D.PAR.rfTargDegArr(D.I.targInd)));
             
         end
         
@@ -6880,7 +6946,7 @@ fprintf('END OF RUN\n');
                         end
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] Halt Error Test: New Vel=%dcm/sec', ...
+                        Console_Write(sprintf('[Run_Test] Halt Error Test: new_vel=%dcm/sec', ...
                             D.DB.nowVel));
                         
                     end
@@ -6944,7 +7010,7 @@ fprintf('END OF RUN\n');
                             if D.PAR.sesTask == 'Forage'
                                 
                                 % Store current target
-                                D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targInd);
+                                D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
                                 
                                 % Compute angle between start pos and targ
                                 ang_str = rad2deg(mean(D.PAR.strQuadBnds));
@@ -7025,10 +7091,12 @@ fprintf('END OF RUN\n');
                         sld_vel = round(get(D.UI.sldSimVel, 'Value'));
                         set(D.UI.txtSimVel, 'String', num2str(sld_vel));
                         
-                        % Update vel if not halted or holding for 2 sec for setup
+                        % Update vel if not halted, holding for setup or
+                        % waiting for robot to move
                         if ...
                                 D.F.rat_in && ...
                                 ~D.F.is_halted && ...
+                                ~D.F.move_to_targ && ...
                                 Elapsed_Seconds(now) - D.T.run_str > 2
                             
                             % Check vel
@@ -7099,13 +7167,13 @@ fprintf('END OF RUN\n');
                             else
                                 
                                 % Check for changed targ
-                                if D.DB.simTargAng ~= D.PAR.rfTargDegArr(D.I.targInd)
+                                if D.DB.simTargAng ~= D.PAR.rfTargDegArr(D.I.targ_now)
                                     
                                     % Get current rad pos
                                     [rad_start, ~] = VT_2_Pol(D.DB.simXY);
                                     
                                     % Add some noise
-                                    ang_end = D.PAR.rfTargDegArr(D.I.targInd);
+                                    ang_end = D.PAR.rfTargDegArr(D.I.targ_now);
                                     noise = (rand(1) - 0.5) * ...
                                         (((2*D.UI.rfRad*pi) * (D.PAR.pathTargWdt/360)) * 0.5);
                                     ang_end = ang_end+noise;
@@ -7127,7 +7195,7 @@ fprintf('END OF RUN\n');
                                     D.DB.simRunRad = deg2rad(ang_new);
                                     
                                     % Store new target
-                                    D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targInd);
+                                    D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
                                     
                                     % Reset roh
                                     D.DB.simRohLast = 0;
@@ -7151,7 +7219,7 @@ fprintf('END OF RUN\n');
                                 end
                                 
                                 % Store current targ ang
-                                D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targInd);
+                                D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
                             end
                             
                         end
@@ -7777,7 +7845,7 @@ fprintf('END OF RUN\n');
             % Track reward zone select
             if D.PAR.sesTask == 'Track' && ...
                     get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    get(D.UI.toggPickRewPos, 'UserData')
+                    D.UI.toggPickRewPos.UserData(2)
                 
                 % Run sub function
                 doZoneSelect(mouse_rad, mouse_roh);
@@ -7786,7 +7854,7 @@ fprintf('END OF RUN\n');
             % Forage reward target select
             if D.PAR.sesTask == 'Forage' && ...
                     get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    get(D.UI.toggPickRewPos, 'UserData')
+                    D.UI.toggPickRewPos.UserData(2)
                 
                 % Run sub function
                 doTargSelect(mouse_rad, mouse_roh);
@@ -7857,7 +7925,7 @@ fprintf('END OF RUN\n');
                         set(D.UI.ptchRewTargBnds(targ_ind), 'FaceAlpha', 0.5);
                         
                         % Get path
-                        D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
+                        D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
                         D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
                         
                         % Plot path
@@ -7913,7 +7981,7 @@ fprintf('END OF RUN\n');
             % Bail if not checking for zone selection
             if ~(D.PAR.sesTask == 'Track' && ...
                     get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    get(D.UI.toggPickRewPos, 'UserData'))
+                    D.UI.toggPickRewPos.UserData(2))
                 return
             end
             
@@ -7945,7 +8013,7 @@ fprintf('END OF RUN\n');
             % Bail if not checking for target selection
             if ~(D.PAR.sesTask == 'Forage' && ...
                     get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    get(D.UI.toggPickRewPos, 'UserData'))
+                    D.UI.toggPickRewPos.UserData(2))
                 return
             end
             
@@ -7956,7 +8024,7 @@ fprintf('END OF RUN\n');
             path_ind = D.PAR.rfPathSelectInd(D.PAR.rfTargSelectInd == targ_ind_new);
             
             % Store path mat for plotting
-            D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
+            D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
             D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
             
             % Update patches
@@ -7974,7 +8042,11 @@ fprintf('END OF RUN\n');
             Set_Button_State(D.UI.toggPickRewPos, 'Disable');
             
             % Store new targ
-            D.I.targInd = targ_ind_new;
+            D.I.targ_now = targ_ind_new;
+            
+            % Log/print
+            Console_Write(sprintf('[MouseSelectRewTarg] Set New Forage Target: targ_last=%ddeg', ...
+                D.PAR.rfTargDegArr(D.I.targ_last), D.PAR.rfTargDegArr(D.I.targ_now)));
             
         end
         
@@ -8320,7 +8392,7 @@ fprintf('END OF RUN\n');
             SendM2C('R', r_pos, r_cond, z_ind);
             
             % Track round trip time
-            D.T.manual_rew_sent = Elapsed_Seconds(now);
+            D.T.btn_rew_sent = Elapsed_Seconds(now);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnReward', get(D.UI.btnReward,'Value')));
@@ -8418,7 +8490,7 @@ fprintf('END OF RUN\n');
         function [] = PickRewPos(~, ~, ~)
             
             % Dont run if reward sent
-            if get(D.UI.toggPickRewPos, 'UserData')
+            if D.UI.toggPickRewPos.UserData(2)
                 
                 % Set state stuff
                 Set_Button_State(D.UI.toggPickRewPos, 'Enable');
@@ -8818,8 +8890,7 @@ fprintf('END OF RUN\n');
                 elseif strcmp(setting, 'Disable')
                     
                     % Diable pick cue
-                    set(D.UI.toggPickRewPos, ...
-                        'Value', 0)
+                    set(D.UI.toggPickRewPos, 'Value', 0)
                     
                     % Set to 'disable'
                     Set_Button_State(D.UI.toggBlockCue, 'Disable');
@@ -8888,9 +8959,11 @@ fprintf('END OF RUN\n');
                         'ForegroundColor' , D.UI.enabledBtnFrgCol);
                 end
                 
-                % Set user_data to 'enable'
-                if islogical(get(hand(1),'UserData'))
-                    set(hand,'UserData',true)
+                % Set toggle user_data to 'enable'
+                if strcmp(get(hand(1), 'Style'), 'togglebutton')
+                    if islogical(hand(1).UserData(1))
+                        hand(1).UserData(1) = true;
+                    end
                 end
                 
             end
@@ -9073,7 +9146,7 @@ fprintf('END OF RUN\n');
             D.SS_Out_ICR.(D.PAR.ratLab).Start_Quadrant(rowInd) = D.PAR.ratStrQuad;
             D.SS_Out_ICR.(D.PAR.ratLab).Bulldozings(rowInd) = D.C.bull_cnt;
             D.SS_Out_ICR.(D.PAR.ratLab).Zones_Rewarded{rowInd} = ...
-                D.I.zoneHist(1:find(~isnan(D.I.zoneHist),1,'last'));
+                D.I.zone_hist(1:find(~isnan(D.I.zone_hist),1,'last'));
             D.SS_Out_ICR.(D.PAR.ratLab).Rewards_Standard{rowInd} = sum(D.C.rew_cnt{3});
             D.SS_Out_ICR.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
             D.SS_Out_ICR.(D.PAR.ratLab).Notes{rowInd} = '';
@@ -9138,7 +9211,7 @@ fprintf('END OF RUN\n');
             copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.nlxRecRat, D.DIR.recFi))
             
             % Log/print end
-            Console_Write(sprintf('[Save_Ses_Data] FINISHED: Copy Cheetah File: File=%s Size=%0.2fGB', ...
+            Console_Write(sprintf('[Save_Ses_Data] FINISHED: Copy Cheetah File: file=%s size=%0.2fGB', ...
                 D.DIR.recFi, fiGigs));
             
             % Set flags
@@ -9224,11 +9297,11 @@ fprintf('END OF RUN\n');
             
             % Close file and print status
             fclose(fid);
-            Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log: stored=%d saved=%d', ...
+            Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log: %d/%d to \"%s\"', ...
                 cnt_saved, cnt_stored, D.DIR.logTempDir));
         else
             % Print failure
-            Console_Write(sprintf('!!WARNING!! [ICR_GUI] FAILED: Save %d Logs to \"%s\"', ...
+            Console_Write(sprintf('!!WARNING!! [ICR_GUI] FAILED: Saving %d Logs to \"%s\"', ...
                 D.DB.logCount, D.DIR.logTempDir));
         end
         
@@ -9329,6 +9402,11 @@ fprintf('END OF RUN\n');
         % Flag new data
         m2c_pack(6) = 1;
         
+        % Dont print simulation pos data
+        if strcmp(id, 'p')
+            return
+        end
+        
         % Log/print
         Console_Write(sprintf('   [SENT] m2c: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
             id, dat1 ,dat2, dat3, m2c_pack(5)));
@@ -9385,7 +9463,7 @@ fprintf('END OF RUN\n');
                         id, c2m.(id).dat1), now);
                 end
                 
-                % Check for forced abort
+                % Check for save abort
                 if c2m.(id).dat1 == 2
                     
                     % Format err string
@@ -9402,7 +9480,7 @@ fprintf('END OF RUN\n');
                     
                 end
                 
-                % Check for save abort
+                % Check for forced abort
                 if c2m.(id).dat1 == 3
                     
                     % Format err string
@@ -9422,6 +9500,9 @@ fprintf('END OF RUN\n');
                     
                     % Write to console
                     Console_Write(err_str, now, true);
+                    
+                    % Pause for message to show
+                    pause(1);
                 end
             end
             

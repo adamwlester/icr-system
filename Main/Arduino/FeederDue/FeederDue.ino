@@ -1639,7 +1639,7 @@ MOVETO::MOVETO(uint32_t t)
 	this->t_init = t;
 }
 
-bool MOVETO::CompTarg(double now_pos, double targ_pos)
+bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 {
 
 	// Run only if targ not set
@@ -1654,7 +1654,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	double move_diff = 0;
-	int circ = 0;
+	int lap_cm = 0;
 	int pos = 0;
 
 	// Get abort timeout
@@ -1680,34 +1680,24 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	}
 
 	// Current absolute pos on track
-	circ = (int)(140 * PI * 100);
+	lap_cm = (int)(140 * PI * 100);
 	pos = (int)(now_pos * 100);
-	posAbs = (double)(pos % circ) / 100;
+	posAbs = (double)(pos % lap_cm) / 100;
+	posAbs = posAbs < 0 ? posAbs + (140 * PI) : posAbs;
 
 	// Diff and absolute distance
-	move_diff = targ_pos - posAbs;
-	move_diff = move_diff < 0 ? move_diff + (140 * PI) : move_diff;
+	move_diff = targ_pos_abs - posAbs;
 
-	// Allow for reverse move
-	if (fc.doAllowRevMove) {
+	// Get minimum distance to target
+	targDist = min((140 * PI) - abs(move_diff), abs(move_diff));
 
-		// Get minimum distance to target
-		targDist = min((140 * PI) - abs(move_diff), abs(move_diff));
-
-		// Set to negative for reverse move
-		if ((move_diff > 0 && abs(move_diff) == targDist) ||
-			(move_diff < 0 && abs(move_diff) != targDist)) {
-			moveDir = 'f';
-		}
-		else {
-			moveDir = 'r';
-		}
-	}
-
-	// Only move forward
-	else {
-		targDist = move_diff;
+	// Set to negative for reverse move
+	if ((move_diff > 0 && abs(move_diff) == targDist) ||
+		(move_diff < 0 && abs(move_diff) != targDist)) {
 		moveDir = 'f';
+	}
+	else {
+		moveDir = 'r';
 	}
 
 	// Set vars for later
@@ -1715,7 +1705,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos)
 	baseSpeed = 0;
 
 	// Copy to public vars
-	targPos = targ_pos;
+	targPos = targ_pos_abs;
 	posRelStart = now_pos;
 	posAbsStart = posAbs;
 
@@ -1861,14 +1851,19 @@ void REWARD::StartRew()
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
-	// Set to extend feeder arm 
-	ExtendFeedArm();
+	// Only run for non forage sessions
+	if (!fc.isForageTask) {
+
+		// Set to extend feeder arm for track session
+		ExtendFeedArm();
+
+		// Set hold time
+		BlockMotorTill(dt_rewBlock);
+
+	}
 
 	// Hard stop
 	HardStop("StartRew");
-
-	// Set hold time
-	BlockMotorTill(dt_rewBlock);
 
 	// Store and send packet imediately if coms setup
 	if (fc.isSesStarted) {
@@ -1877,8 +1872,8 @@ void REWARD::StartRew()
 	}
 
 	// Turn on reward LED
-	analogWrite(pin.RewLED_R, round(rewLEDduty * 1)); 
-	analogWrite(pin.RewLED_C, round(rewLEDduty * 0.5)); 
+	analogWrite(pin.RewLED_R, round(rewLEDduty * 1));
+	analogWrite(pin.RewLED_C, round(rewLEDduty * 0.5));
 
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
@@ -4858,6 +4853,7 @@ bool SetMotorControl(char set_to[], char agent[])
 #endif
 
 	// Local vars
+	bool pass = false;
 	bool do_change = false;
 	static char set_from[50]; set_from[0] = '\0';
 
@@ -4939,10 +4935,13 @@ bool SetMotorControl(char set_to[], char agent[])
 		sprintf(fc.motorControl, "%s", set_to);
 	}
 
-	// Log/print
-	DebugMotorControl(__FUNCTION__, __LINE__, do_change, set_from, set_to, agent);
+	// Check if set control set success
+	pass = strcmp(fc.motorControl, set_to) == 0;
 
-	return do_change;
+	// Log/print
+	DebugMotorControl(__FUNCTION__, __LINE__, pass, set_from, set_to, agent);
+
+	return pass;
 }
 
 // BLOCK MOTOR TILL TIME ELLAPESED
@@ -5103,8 +5102,9 @@ void InitializeTracking()
 	// Reset ekf
 	Pid.PID_ResetEKF("InitializeTracking");
 
-	// Don't start pid for manual sessions
-	if (!fc.isManualSes)
+	// Don't start pid for manual or forage sessions
+	if (!fc.isManualSes &&
+		!fc.isForageTask)
 	{
 		// Open up motor control
 		if (!SetMotorControl("Open", "InitializeTracking")) {
@@ -8239,7 +8239,6 @@ void setup() {
 
 	// SET DEFAULTS
 	fc.isManualSes = true;
-	fc.doAllowRevMove = true;
 
 	// PRINT SERIAL RING BUFFER SIZE
 	sprintf(str, "RING BUFFER SIZE: %dB", SERIAL_BUFFER_SIZE);
@@ -8584,16 +8583,29 @@ void loop() {
 		cmd.sesCond = (byte)c2r.dat[0];
 		cmd.soundCond = (byte)c2r.dat[1];
 		millis();
-		// Set condition
-		if (cmd.sesCond == 1) {
-			fc.isManualSes = false;
-			DebugFlow(__FUNCTION__, __LINE__, "DO TRACKING");
-		}
-		else {
+
+		// Set manual ses flag
+		if (cmd.sesCond == 0) {
+			DebugFlow(__FUNCTION__, __LINE__, "DO MANUAL SESSION");
 			fc.isManualSes = true;
-			DebugFlow(__FUNCTION__, __LINE__, "DONT DO TRACKING");
+			fc.isForageTask = false;
 		}
-		// Set reward tone
+
+		// Set forage task flag
+		else if (cmd.sesCond == 2) {
+			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE SESSION");
+			fc.isForageTask = true;
+			fc.isManualSes = false;
+		}
+
+		// Doing tracking ses
+		else {
+			DebugFlow(__FUNCTION__, __LINE__, "DO TRACKING SESSION");
+			fc.isForageTask = false;
+			fc.isManualSes = false;
+		}
+
+		// Set sound condition
 		if (cmd.soundCond == 0) {
 			// No sound
 			QueuePacket(&r2a, 's', 0);
@@ -8756,8 +8768,10 @@ void loop() {
 			// Hard stop
 			HardStop("MoveTo");
 
-			// Set motor cotrol to None
-			SetMotorControl("None", "MoveTo");
+			// Set motor cotrol to None if not a forage session
+			if (!fc.isForageTask) {
+				SetMotorControl("None", "MoveTo");
+			}
 
 			// Log/print error
 			if (Move.doAbortMove) {

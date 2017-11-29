@@ -155,7 +155,6 @@ struct FC
 {
 	char motorControl[25] = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
 	bool isSetup = false;
-	bool doAllowRevMove = false;
 	bool isBlockingTill = false;
 	bool doQuit = false;
 	bool isQuitConfirmed = false;
@@ -165,6 +164,7 @@ struct FC
 	bool isComsStarted = false;
 	bool doSendVCC = false;
 	bool isManualSes = false;
+	bool isForageTask = false;
 	bool isRatIn = false;
 	bool isTrackingEnabled = false;
 	bool doMove = false;
@@ -278,7 +278,7 @@ const float feedDist = 66;
 // Movement
 float moveToSpeed = 80; // (cm/sec)
 
-						// REWARD
+// REWARD
 const long armStepFreq = 1000; // (us)
 const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)

@@ -25,13 +25,12 @@ function[status] = ICR_GUI(sysTest, doDebug, isCheetahOpen, isMatSolo)
 % Matlab globals
 global ME; % error handeling
 global doExit; % exit flag
-global FigGroupH; % ui figure group
+global FigH; % ui figure handle
 global D; % main data struct
 global tcpIP; % tcp object
 global timer_c2m; % timer to check c2m
 global timer_save; % timer to indicate quit status
 global timer_quit; % timer to indicate quit status
-global isSS3DOpen; % SpikeSort3D.exe open flag
 
 % Matlab to CS communication
 global m2c; % local data struct
@@ -78,7 +77,7 @@ end
 % Session conditions
 D.DB.ratLab = 'r9999';
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
-D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
+D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 D.DB.Reward_Delay = '1.0';
 D.DB.Cue_Condition = 'Half';
 D.DB.Sound_Conditions = [1,1];
@@ -243,16 +242,13 @@ fprintf('END OF RUN\n');
         D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images','plot_images','wall_top_down.png');
         D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
         D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
-        D.DIR.ioTT_Log = fullfile(D.DIR.ioTop, 'SessionData', 'TT_Log.mat');
         D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
         D.DIR.ioRFPath = fullfile(D.DIR.ioTop, 'Operational', 'forage_path.mat');
         
         % Cheetah dirs
-        D.DIR.nlxCfg = 'C:\Users\Public\Documents\Cheetah\Configuration';
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
         D.DIR.nlxSaveTop = 'G:\BehaviorPilot';
         D.DIR.recFi = '0000-00-00_00-00-00';
-        D.DIR.nlxSS3DTop = 'C:\Program Files (x86)\Neuralynx\SpikeSort 3D';
         
         % Log dirs
         D.DIR.logFi = 'ICR_GUI_Log.csv';
@@ -315,7 +311,7 @@ fprintf('END OF RUN\n');
         D.DB.doPidCalibrationTest = false;
         D.DB.doHaltErrorTest = false;
         D.DB.doSimRatTest = false;
-        D.DB.is_force_close = false;
+        D.DB.isForceClose = false;
         
         % Get testing condition
         switch sysTest
@@ -453,8 +449,8 @@ fprintf('END OF RUN\n');
             return;
         end
         
-        % Generate figure tab group
-        FigGroupH = figure('Visible', 'Off', ...
+        % Open figure
+        FigH = figure('Visible', 'Off', ...
             'DeleteFcn', {@ForceClose});
         
     end
@@ -506,16 +502,13 @@ fprintf('END OF RUN\n');
                 D.T.loop = Elapsed_Seconds(now);
                 
                 % PLOT POSITION
-                new_vt = VT_Plot_New();
-                
-                % PLOT TT DATA
-                new_tt = TT_Plot();
+                update_ui = Plot_Pos_New();
                 
                 % PRINT SES INFO
                 Inf_Print();
                 
                 % UPDATE GUI
-                if new_vt || new_tt
+                if update_ui
                     Update_UI(0);
                 else
                     Update_UI(100);
@@ -646,9 +639,6 @@ fprintf('END OF RUN\n');
                             VT_Proc('Rat');
                         end
                         
-                        % PROCESS NLX TT DATA
-                        TT_Get();
-                        
                         % RUN TEST/DEBUG CODE
                         Run_Test();
                         
@@ -691,27 +681,20 @@ fprintf('END OF RUN\n');
                                 % ----------CHECK IF MOVE READY------------
                                 
                                 % Wait till at least 2000 VT samples collected
-                                if D.P.Rob.cnt_vtRec > 2000 
+                                if D.P.Rob.cnt_vtRec > 2000
                                     continue;
                                 end
                                 
                                 % Send C# command to move robot to start quad or reward loc
-                                if D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
-                                    % Move to track reward zone
-                                    SendM2C('M', D.UI.rewZoneRad(1));
-                                    Console_Write('[MainLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
-                                elseif D.PAR.sesTask == 'Forage'
-                                    % Move to forage reward targ
-                                    SendM2C('M', deg2rad(D.PAR.rfTargDegArr(D.I.targ_now)));
-                                    Console_Write('[MainLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
-                                else
-                                    % Move to start quad
+                                if D.PAR.sesCond ~= 'Manual_Training' %#ok<*STCMP>
                                     SendM2C('M', D.PAR.strQuadBnds(1));
-                                    Console_Write('[MainLoop] SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
+                                else
+                                    SendM2C('M', D.UI.rewZoneRad(1));
                                 end
                                 
                                 % Set flag
                                 D.F.is_first_move_sent = true;
+                                Console_Write('[MainLoop] SENT STARTING MOVE COMMAND');
                                 
                             case 'CHECK IF RAT IN'
                                 % ------------CHECK IF RAT IN--------------
@@ -753,7 +736,10 @@ fprintf('END OF RUN\n');
                                 if c2m.('Y').dat1 == 1
                                     
                                     % Enable save button
-                                    Set_Button_State(D.UI.btnSave, 'Enable', D.UI.activeCol);
+                                    set(D.UI.btnSave, ...
+                                        'Enable', 'on', ...
+                                        'ForegroundColor' , D.UI.enabledBtnFrgCol, ...
+                                        'BackgroundColor', D.UI.activeCol);
                                     
                                     % Reset flag
                                     c2m.('Y').dat1 = 0;
@@ -824,7 +810,7 @@ fprintf('END OF RUN\n');
             % random forrage radius (cm)
             D.UI.rfRad = 60;
             % rew zone width (cm)
-            D.UI.rfTargWdt = 15; 
+            D.UI.rfTargWdt = 15;
             % track roh limits
             D.P.trackRohBnd(1) = 1 - (D.UI.trkWdt/D.UI.arnRad);
             D.P.trackRohBnd(2) = 1;
@@ -835,17 +821,8 @@ fprintf('END OF RUN\n');
             D.P.rfRohBnd(1) = (D.UI.rfRad/D.UI.arnRad) - (D.UI.rfTargWdt/D.UI.arnRad);
             D.P.rfRohBnd(2) = D.UI.rfRad/D.UI.arnRad;
             
-            % TT VARS
-            % tt occ bins
-            D.PAR.ttBins = (D.UI.arnRad*2) + 1;
-            % tt occ bin edges
-            D.PAR.ttBinEdgeX = linspace(D.UI.lowLeft(1), D.UI.lowLeft(1)+D.UI.vtRes, D.PAR.ttBins+1);
-            D.PAR.ttBinEdgeY = linspace(D.UI.lowLeft(2), D.UI.lowLeft(2)+D.UI.vtRes, D.PAR.ttBins+1);
-            
             % FORAGE TASK VARS
             
-            % reward block dt
-            D.PAR.rfRewBlock = 5; % (sec) TEMP
             % pos occ bins
             D.PAR.rfBins = (D.UI.arnRad*2)/2 + 1;
             % occ bin edges
@@ -855,14 +832,8 @@ fprintf('END OF RUN\n');
             D.PAR.pathDegDist = 5;
             % target width
             D.PAR.pathTargWdt = 30;
-            % target angle array
-            D.PAR.rfTargDegArr = 0:D.PAR.pathDegDist:360-D.PAR.pathDegDist;
-            % path angle array
-            D.PAR.rfPathDegArr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
-            % target select subset
-            D.PAR.rfTargSelectInd = [];
-            % path select subset
-            D.PAR.rfPathSelectInd = [];
+            % target array
+            D.PAR.pathTargArr = 0:D.PAR.pathDegDist:360-D.PAR.pathDegDist;
             % number of posible paths from each targ
             D.PAR.nPaths = 45/D.PAR.pathDegDist*2 + 1;
             % path lenths
@@ -882,7 +853,7 @@ fprintf('END OF RUN\n');
             
             %% FLOW CONTROL VARIABLES
             
-            % LOAD DATA TABLES
+            % Load data tables
             T = load(D.DIR.ioSS_In_All);
             D.SS_In_All = T.SS_In_All;
             T = load(D.DIR.ioSS_Out_ICR);
@@ -954,27 +925,29 @@ fprintf('END OF RUN\n');
             % flag quit
             D.F.quit = false;
             % flag gui forced exit
-            D.DB.is_force_close = false;
+            D.DB.isForceClose = false;
             % flag gui closed
             D.F.close = false;
-            % do rotation
-            D.F.do_rotation = false;
             % rotation has occured
             D.F.rotated = false;
             % track if reward in progress
             D.F.is_rewarding = false;
+            % block any cueing
+            D.F.do_block_cue = false;
+            % cue every lap
+            D.F.do_all_cue = false;
+            % track if next lap should be cued for half cue cond
+            D.F.is_cued_rew = false;
             % flag if halted
             D.F.is_halted = false;
             % track reward reset
-            D.F.rew_confirmed = false;
+            D.F.flag_rew_confirmed = false;
             % track reset crossing
-            D.F.rew_send_crossed = false;
+            D.F.flag_rew_send_crossed = false;
             % track reward crossing
-            D.F.rew_zone_crossed = false;
+            D.F.flag_rew_zone_crossed = false;
             % check for reward zone confirmaton
             D.F.check_rew_confirm = false;
-            % flag to move to new forage targ
-            D.F.move_to_targ = false;
             % track lap bounds
             D.F.check_inbound_lap = false(4,1);
             % track if pos should be plotted
@@ -1015,7 +988,7 @@ fprintf('END OF RUN\n');
             % track lap times total
             D.T.lap_tim_sum = 0;
             % track manual reward sent time
-            D.T.btn_rew_sent = 0;
+            D.T.manual_rew_sent = 0;
             % track last reward time
             D.T.rew_last = Elapsed_Seconds(now);
             % track reward start
@@ -1024,8 +997,6 @@ fprintf('END OF RUN\n');
             D.T.rew_end = 0;
             % track reward ts
             D.T.rew_nlx_ts = [0,0];
-            % forage reward time
-            D.T.rf_rew = 0;
             % start quad tim
             D.T.strqd_inbnd_t1 = 0;
             D.T.strqd_inbnd_t2 = 0;
@@ -1045,27 +1016,20 @@ fprintf('END OF RUN\n');
             % current lap quadrant for lap track
             D.I.lap_hunt_ind = 1;
             % current reward zone
-            D.I.zone_now = ceil(length(D.PAR.zoneLocs)/2);
-            % next reward zone
-            D.I.zone_select = 0;
-            % track last rewarded zone
-            D.I.zone_active_ind = false(1,length(D.PAR.zoneLocs));
+            D.I.zone = ceil(length(D.PAR.zoneLocs)/2); % default max
             % distrebution of reward zones
-            D.I.zone_arr = NaN(1,100);
+            D.I.zoneArr = NaN(1,100);
             % store reward zone for each reward event
-            D.I.zone_hist = NaN(1,100);
+            D.I.zoneHist = NaN(1,100);
             % current targ ind
-            D.I.targ_now = 1;
-            % last targ ind
-            D.I.targ_last = 1;
+            D.I.targInd = 1;
             
             %% DATA STORAGE VARIABLES
             
             % VCC VARS
-            D.PAR.rob_vcc = 0;
-            D.PAR.rob_vcc_last = 0;
-            D.PAR.cube_vcc = 0;
-            D.PAR.cube_vcc_last = 0;
+            
+            D.PAR.vcc_now = 0;
+            D.PAR.vcc_last = 0;
             
             % EVENT DATA
             D.E.evtTS = NaN;
@@ -1074,6 +1038,7 @@ fprintf('END OF RUN\n');
             D.E.cnt_evtRec = 0;
             
             % POS DATA
+            
             % nlx input
             D.P.Rat.vtTS = NaN;
             D.P.Rat.vtPos = NaN;
@@ -1085,9 +1050,6 @@ fprintf('END OF RUN\n');
             D.P.Rob.vtHD = NaN;
             D.P.Rob.vtNRecs = 0;
             D.P.Rob.cnt_vtRec = 0;
-            % time stamps
-            D.P.Rat.ts = NaN;
-            D.P.Rob.ts = NaN;
             % cardinal pos now
             D.P.Rat.x = NaN;
             D.P.Rat.y = NaN;
@@ -1115,15 +1077,15 @@ fprintf('END OF RUN\n');
             D.P.Rob.vel_max_all = 0;
             D.P.Rat.vel_max_lap = 0;
             D.P.Rob.vel_max_lap = 0;
-            % store hostory of pos [x, y, ts]
-            D.P.Rat.pos_lap_hist = {[0,0], NaN(60*60*33,3)};
-            D.P.Rat.pos_all_hist = {[0,0], NaN(120*60*33,2)};
+            % store hostory of pos x by y
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.pos_all_hist = NaN(120*60*33,2);
             % store history of vel by roh
-            D.P.Rat.vel_cart_lap_hist = {0, NaN(60*60*33,2)};
-            D.P.Rob.vel_cart_lap_hist = {0, NaN(60*60*33,2)};
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
             % store history of vel by roh
-            D.P.Rat.vel_pol_lap_hist = {0, NaN(60*60*33,2)};
-            D.P.Rob.vel_pol_lap_hist = {0, NaN(60*60*33,2)};
+            D.P.Rat.vel_pol_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_pol_lap_hist = NaN(60*60*33,2);
             % store 1 lap of vel by roh
             D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
             D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
@@ -1133,21 +1095,15 @@ fprintf('END OF RUN\n');
             D.P.velMin = 0;
             D.P.velMax = 100;
             % random forage
-            D.P.rfOccMatRaw =  zeros(D.PAR.rfBins,D.PAR.rfBins);
-            D.P.rfOccMatScale = D.P.rfOccMatRaw;
-            D.P.rfOccMatBinary = D.P.rfOccMatRaw;
-            D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,length(D.PAR.rfTargDegArr));
-            D.P.pathNowMat = D.P.rfOccMatScale;
-            
-            % SPIKE DATA
-            D.S.nClust = zeros(18);
-            D.S.pos_clust = cell(18,32);
-            D.S.stream_clust = false(18,32);
-            D.S.active_clust = false(18,32);
-            D.S.plot_clust = false(18,32);
+            D.P.occMatRaw =  zeros(D.PAR.rfBins,D.PAR.rfBins);
+            D.P.occMatScale = D.P.occMatRaw;
+            D.P.occMatBinary = D.P.occMatRaw;
+            D.P.pathMat = zeros(D.PAR.rfBins,D.PAR.rfBins,D.PAR.nPaths,length(D.PAR.pathTargArr));
+            D.P.pathNowMat = D.P.occMatScale;
             
             
             % DEBUG VARS
+            
             % track reward duration [now, min, max, sum, count]
             D.DB.rew_duration = [0, inf, 0, 0, 0];
             % track reward round trip [now, min, max, sum, count]
@@ -1161,14 +1117,10 @@ fprintf('END OF RUN\n');
             % simulated rat forage data
             D.DB.simRatPathMat = D.P.pathMat;
             
-            % OTHER
-            % rotaion pos
-            D.PAR.rotPosActual = [];
-            
             %% UI HANDLES
             
             % AXIS HANDLES
-            D.UI.axH = gobjects(7,1);
+            D.UI.axH = gobjects(4,1);
             
             % TRACK TASK HANDLES
             
@@ -1182,13 +1134,9 @@ fprintf('END OF RUN\n');
             % start quad text
             D.UI.txtStQ = [];
             % reward zone patch
-            D.UI.ptchRewZoneBnds = gobjects(2, length(D.PAR.zoneLocs));
+            D.UI.ptchFdZineH = gobjects(length(D.PAR.zoneLocs),2);
             % reward duration text
-            D.UI.txtFdDurH = gobjects(2, length(D.PAR.zoneLocs));
-            % reward zone plot
-            D.UI.zoneAllH = gobjects(2, length(D.PAR.zoneLocs));
-            D.UI.zoneNowH = gobjects(1,1);
-            D.UI.zoneAvgH = gobjects(1,1);
+            D.UI.txtFdDurH = gobjects(length(D.PAR.zoneLocs),2);
             % lap bounds patch
             D.UI.ptchLapBnds = gobjects(1,4);
             % reward reset patch
@@ -1203,15 +1151,9 @@ fprintf('END OF RUN\n');
             % rf bound mask
             D.UI.imgMaskRFH = [];
             % rf targ patch
-            D.UI.ptchRewTargBnds = gobjects(360/D.PAR.pathDegDist,1);
+            D.UI.ptchRFTarg = gobjects(360/D.PAR.pathDegDist,1);
             % rf occ mat
-            D.UI.imgrfOcc = gobjects(1,1);
-            
-            % SPIKE DATA
-            % cell plot handles
-            D.UI.clustH = gobjects(18,32);
-            D.UI.imgttOcc = gobjects(1,1);
-            D.UI.colBarH = gobjects(1,10);
+            D.UI.imgRFOCC = [];
             
             % POS DATA
             
@@ -1227,6 +1169,11 @@ fprintf('END OF RUN\n');
             D.UI.Rat.pltHposAll = gobjects(1,1); % rat
             D.UI.Rat.pltHvelAll = gobjects(1,1); % rat
             D.UI.Rob.pltHvelAll = gobjects(1,1); % rob
+            % reward zone
+            D.UI.zoneAllH = gobjects(length(D.PAR.zoneLocs),2);
+            D.UI.zoneNowH = gobjects(1,1);
+            D.UI.zoneAvgH = gobjects(1,1);
+            D.UI.txtFdDurH = gobjects(1,1);
             
             %% UI APPERANCE
             
@@ -1270,11 +1217,13 @@ fprintf('END OF RUN\n');
             D.UI.warningCol = [1 0 0];
             
             % UI FONTS
+            
             D.UI.btnFont = 'MS Sans Serif';
             D.UI.popFont = 'MS Sans Serif';
             D.UI.txtFont = 'Courier New';
             
             % UI OBJECT FEATURES
+            
             % btnFillFd
             % color
             D.UI.btnFlcol = [0.75 0 0; 0 0.75 0];
@@ -1331,7 +1280,11 @@ fprintf('END OF RUN\n');
             D.PAR.bullSpeed = 10;
             D.UI.bullLastVal = 0;
             
-            % toggICR
+            % btnAcq and btnRec
+            % run Btn_Col function
+            [D.UI.radBtnCmap] = Btn_Col();
+            
+            % btnICR
             % string
             D.UI.btnICRstr = cell(2,1);
             
@@ -1354,108 +1307,74 @@ fprintf('END OF RUN\n');
         
         % -------------------------------UI SETUP--------------------------
         
-        
         function[] = UI_Setup()
             
-            %% ===================== SETUP FIGURE AND AXES ==========================
+            %% GENERATE FIGURE AND AXES
             
-            % Specify figure monitor
-            D.UI.figMon = 2;
-            
-            % Monitor positions
+            % Get screen dimensions
             sc = get(0,'MonitorPositions');
-            [~, mon_ind] = sort(sc(:,1));
-            monPos = sc(mon_ind,:);
+            D.UI.sc1 = sc(1,:);
+            D.UI.sc2 = sc(2,:);
             
-            % Figure position
-            fig_wh = [1240 1025];
-            fig_btm = monPos(D.UI.figMon,2) + (monPos(D.UI.figMon,4)-fig_wh(2))/2;
-            fig_lft = monPos(D.UI.figMon,1) + (monPos(D.UI.figMon,3)-fig_wh(1))/2;
-            D.UI.figGrpPos = [fig_lft, fig_btm, fig_wh(1), fig_wh(2)];
-            
-            % Specify non reserved range
-            fig_rng = fig_wh - [0, 200];
-            
-            % Create figure tab group
-            D.UI.tabgp = ...
-                uitabgroup(FigGroupH, ...
-                'Units', 'Normalized', ...
-                'Position',[0,0,1,1]);
-            
-            % Set figure stuff
-            set(FigGroupH,...
+            % Set figure
+            set(FigH,...
                 'Name', 'ICR Behavior Pilot', ...
-                'Position', D.UI.figGrpPos, ...
                 'MenuBar', 'none', ...
                 'Color', [1, 1, 1], ...
                 'Visible', 'off');
             
-            % Add figure tab
-            D.UI.figICR = uitab(D.UI.tabgp, ...
-                'Title', 'ICR', ...
-                'BackgroundColor', [1, 1, 1]);
-            
-            % Store pos
-            set(D.UI.figICR, 'Units', 'Pixels');
-            D.UI.figICRPos = get(D.UI.figICR, 'Position');
-            
-            % Wall image
-            % Note: used for wall images
-            D.UI.axH(1)= axes(...
-                'Units', 'Normalized', ...
-                'Visible', 'off', ...
-                'Parent', D.UI.figICR);
-            hold on;
-            
             % Ongoing data
             % Note: used for pos/vel history
-            D.UI.axH(2) = copyobj(D.UI.axH(1), D.UI.figICR);
+            D.UI.axH(1) = axes(...
+                'Units', 'Normalized', ...
+                'Visible', 'off');
             hold on;
             
             % Real time data
             % Note: used for path and other dynamic features
-            D.UI.axH(3) = copyobj(D.UI.axH(1), D.UI.figICR);
-            hold on;
-            
-            % Arena features
-            % Note: used for feeder pos
-            D.UI.axH(4) = copyobj(D.UI.axH(1), D.UI.figICR);
-            hold on;
-            
-            % RF Mask
-            % Note: mask for imagesc occ plot
-            D.UI.axH(5) = copyobj(D.UI.axH(1), D.UI.figICR);
+            D.UI.axH(2) = axes(...
+                'Units', 'Normalized', ...
+                'Visible', 'off');
             hold on;
             
             % Random forage occ data
             % Note: used for occ imagesc
-            D.UI.axH(6) = copyobj(D.UI.axH(1), D.UI.figICR);
+            D.UI.axH(3) = axes(...
+                'Units', 'Normalized', ...
+                'Visible', 'off');
             hold on;
             
-            % Real time tt markers
-            D.UI.axH(7) = copyobj(D.UI.axH(1), D.UI.figICR);
+            % RF Mask
+            % Note: mask for imagesc occ plot
+            D.UI.axH(4) = axes(...
+                'Units', 'Normalized', ...
+                'Visible', 'off');
             hold on;
             
-            % Selectable items
-            D.UI.axH(8) = copyobj(D.UI.axH(1), D.UI.figICR);
-            hold on;
-            
-            % Zone plot axes
-            D.UI.axZoneH(1) = copyobj(D.UI.axH(1), D.UI.figICR);
-            hold on;
-            D.UI.axZoneH(2) = copyobj(D.UI.axH(1), D.UI.figICR);
+            % Wall image
+            % Note: used for wall images
+            D.UI.axH(5) = axes(...
+                'Units', 'Normalized', ...
+                'Visible', 'off');
             hold on;
             
             % Specify stack order
-            uistack(D.UI.axH(6),'top');
-            uistack(D.UI.axH(2),'top');
-            uistack(D.UI.axH(5),'top');
-            uistack(D.UI.axH(3),'top');
-            uistack(D.UI.axZoneH, 'top');
-            uistack(D.UI.axH(1),'top');
+            uistack(D.UI.axH(1),'bottom');
+            uistack(D.UI.axH(3),'bottom');
             uistack(D.UI.axH(4),'top');
-            uistack(D.UI.axH(7),'top');
-            uistack(D.UI.axH(8),'top');
+            uistack(D.UI.axH(5),'top');
+            uistack(D.UI.axH(2),'top');
+            
+            % Specigy figure width/hight
+            fg_wh = [1240 800];
+            
+            % Set figure pos
+            D.UI.fg_pos = [ ...
+                D.UI.sc1(3) + (D.UI.sc2(3)-fg_wh(1))/2, ...
+                (D.UI.sc2(4) - fg_wh(2))/2, ...
+                fg_wh(1), ...
+                fg_wh(2)];
+            set(FigH,'Position',D.UI.fg_pos);
             
             % Set axis limits
             axis(D.UI.axH, [ ...
@@ -1465,16 +1384,12 @@ fprintf('END OF RUN\n');
                 D.UI.lowLeft(2)+D.UI.vtRes]);
             
             % Set axis pos
-            ax_btm = 1 - fig_rng(2)/fig_wh(2);
-            D.UI.axPos = [ ...
-                (1 - (0.9/(fig_rng(1)/fig_rng(2)))) / 2, ...
-                0.05 + ax_btm, ...
-                0.9/(fig_rng(1)/fig_rng(2)), ...
-                0.9 - ax_btm];
-            set(D.UI.axH, 'Position', D.UI.axPos);
-            
-            % Make sure axes square
-            axis(D.UI.axH, 'square');
+            D.UI.ax_pos = [ ...
+                (1 - (0.9/(fg_wh(1)/fg_wh(2)))) / 2, ...
+                0.05, ...
+                0.9/(fg_wh(1)/fg_wh(2)), ...
+                0.9];
+            set(D.UI.axH, 'Position', D.UI.ax_pos);
             
             % ADD CARDINAL COORDINATES
             
@@ -1488,10 +1403,10 @@ fprintf('END OF RUN\n');
             offset = 7;
             
             % Add cardinal coordinates text
-            t_h(1) = text(xy_max(1)+offset, xy_mid(2), 'E', 'Parent', D.UI.axH(4));
-            t_h(2) = text(xy_mid(1), xy_min(2)+2-offset, 'S', 'Parent', D.UI.axH(4));
-            t_h(3) = text(xy_min(1)-offset, xy_mid(2), 'W', 'Parent', D.UI.axH(4));
-            t_h(4) = text(xy_mid(1), xy_max(2)+offset, 'N', 'Parent', D.UI.axH(4));
+            t_h(1) = text(xy_max(1)+offset, xy_mid(2), 'E', 'Parent', D.UI.axH(2));
+            t_h(2) = text(xy_mid(1), xy_min(2)+2-offset, 'S', 'Parent', D.UI.axH(2));
+            t_h(3) = text(xy_min(1)-offset, xy_mid(2), 'W', 'Parent', D.UI.axH(2));
+            t_h(4) = text(xy_mid(1), xy_max(2)+offset, 'N', 'Parent', D.UI.axH(2));
             set(t_h, ...
                 'FontName','Monospaced', ...
                 'FontSize', 20, ...
@@ -1500,7 +1415,7 @@ fprintf('END OF RUN\n');
                 'Color', [1,1,1], ...
                 'HorizontalAlignment','center', ...
                 'VerticalAlignment','middle')
-            t2_h = copyobj(t_h, D.UI.axH(4));
+            t2_h = copyobj(t_h, D.UI.axH(2));
             set(t2_h, ...
                 'Color', D.UI.activeCol, ...
                 'FontWeight', 'light', ...
@@ -1522,7 +1437,7 @@ fprintf('END OF RUN\n');
             D.UI.linTrckH(1) = plot(xout, yout, ...
                 'color', [0.5 0.5 0.5], ...
                 'LineWidth', 2, ...
-                'Parent', D.UI.axH(3), ...
+                'Parent', D.UI.axH(2), ...
                 'Visible', 'off');
             
             % Plot inner track
@@ -1532,7 +1447,7 @@ fprintf('END OF RUN\n');
             D.UI.linTrckH(2) = plot(xin, yin, ...
                 'color', [0.5 0.5 0.5], ...
                 'LineWidth', 2, ...
-                'Parent', D.UI.axH(3), ...
+                'Parent', D.UI.axH(2), ...
                 'Visible', 'off');
             
             % Clear vars
@@ -1559,7 +1474,7 @@ fprintf('END OF RUN\n');
                     'color', col, ...
                     'LineWidth', lin_wdth, ...
                     'LineStyle', lin_style, ...
-                    'Parent', D.UI.axH(4), ...
+                    'Parent', D.UI.axH(2), ...
                     'Visible', 'off');
             end
             
@@ -1575,7 +1490,7 @@ fprintf('END OF RUN\n');
             D.UI.linRFH(1) = plot(xout, yout, ...
                 'color', [0.5 0.5 0.5], ...
                 'LineWidth', 2, ...
-                'Parent', D.UI.axH(4), ...
+                'Parent', D.UI.axH(2), ...
                 'Visible', 'off');
             
             % Plot inner bounds
@@ -1585,7 +1500,7 @@ fprintf('END OF RUN\n');
             D.UI.linRFH(2) = plot(xin, yin, ...
                 'color', [0.5 0.5 0.5], ...
                 'LineWidth', 2, ...
-                'Parent', D.UI.axH(4), ...
+                'Parent', D.UI.axH(2), ...
                 'Visible', 'off');
             
             % Clear vars
@@ -1593,82 +1508,43 @@ fprintf('END OF RUN\n');
             
             % GUI OBJECT POSITIONS
             
-            % Pixel to normalzied unit conversion factor
-            D.UI.pxl2norm_x = 1/fig_wh(1);
-            D.UI.pxl2norm_y = 1/fig_wh(2);
-            
-            % Dialogue box
-            D.UI.dlgPos = [monPos(D.UI.figMon,1) + monPos(D.UI.figMon,3)/2, monPos(D.UI.figMon,4)/2];
+            % Questions dialogue pos
+            D.UI.dlgPos = [D.UI.sc1(3) + D.UI.sc2(3)/2, D.UI.sc2(4)/2];
             
             % Bounds of plot space
             D.UI.main_ax_bounds = [ ...
-                D.UI.axPos(1) - 0.05, ...
-                D.UI.axPos(2) - 0.05, ...
-                D.UI.axPos(3) + 0.1, ...
-                D.UI.axPos(4) + 0.1];
+                D.UI.ax_pos(1) - 0.05, ...
+                D.UI.ax_pos(2) - 0.05, ...
+                D.UI.ax_pos(3) + 0.1, ...
+                D.UI.ax_pos(4) + 0.1];
             
-            % Panel setup
-            pan_ht = 0.48 * D.UI.main_ax_bounds(4);
+            % Panel positions
+            % setup
             D.UI.stup_pan_pos = ...
                 [0,  ...
-                1 - pan_ht, ...
+                1 - 0.46, ...
                 D.UI.main_ax_bounds(1), ...
-                pan_ht];
-            
-            % Panel recording
-            pan_ht = 1 - D.UI.stup_pan_pos(4) - 0.045 - 0.01;
+                0.46];
+            % recording
             D.UI.rec_pan_pos = ...
                 [0, ...
-                0.045 + 0.01, ...
+                D.UI.stup_pan_pos(2) - 0.01 - 0.215, ...
                 D.UI.main_ax_bounds(1), ...
-                pan_ht];
-            
-            % Panel ses info
-            pan_lft = (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3));
-            pan_wd = 1 - (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3));
-            pan_ht = 0.29 * D.UI.main_ax_bounds(4);
-            D.UI.ses_inf_pan_pos = [...
-                pan_lft, ...
-                1 - pan_ht, ...
-                pan_wd, ...
-                pan_ht];
-            
-            % Panel performance info
-            pan_ht = 0.51 * D.UI.main_ax_bounds(4);
-            D.UI.perf_inf_pan_pos = [...
-                pan_lft, ...
-                D.UI.ses_inf_pan_pos(2) - pan_ht - D.UI.pxl2norm_y, ...
-                pan_wd, ...
-                pan_ht];
-            
-            % Panel console
-            pan_ht = 1 - fig_rng(2)/fig_wh(2);
+                0.215];
+            % console
+            cnsl_pan_ht = 1 - ...
+                D.UI.stup_pan_pos(4) - 0.01 - ...
+                D.UI.rec_pan_pos(4) - 0.01 - ...
+                0.05 - 0.01;
             D.UI.cnsl_pan_pos = ...
-                [D.UI.main_ax_bounds(1)+0.005, ...
-                0, ...
-                D.UI.main_ax_bounds(3) - pan_wd*0.75 - 0.01, ...
-                pan_ht];
+                [0, ...
+                0.05 + 0.01, ...
+                D.UI.main_ax_bounds(1)+0.05, ...
+                cnsl_pan_ht];
             
-            % Panel time info
-            pan_ht = 0.15;
-            D.UI.tim_inf_pan_pos = [...
-                sum(D.UI.cnsl_pan_pos([1,3])) + 0.005, ...
-                0, ...
-                pan_lft - sum(D.UI.cnsl_pan_pos([1,3])) - 0.01, ...
-                pan_ht];
-            
-            % Panel tt select
-            pan_ht = D.UI.perf_inf_pan_pos(2)-0.02;
-            D.UI.tt_select_pan_copy_pos(1,:) = [...
-                pan_lft, ...
-                D.UI.cnsl_pan_pos(2)+0.02, ...
-                pan_wd/2, ...
-                pan_ht];
-            D.UI.tt_select_pan_copy_pos(2,:) = [...
-                pan_lft+pan_wd/2, ...
-                D.UI.cnsl_pan_pos(2)+0.02, ...
-                pan_wd/2, ...
-                pan_ht];
+            % Pixel to normalzied unit conversion factor
+            D.UI.pxl2norm_x = 1/fg_wh(1);
+            D.UI.pxl2norm_y = 1/fg_wh(2);
             
             % Get scaled up pixel vals
             rad_pxl = ceil(D.UI.rfRad*D.UI.cm2pxl)*4;
@@ -1682,14 +1558,14 @@ fprintf('END OF RUN\n');
             D.PAR.rfMask = ~padarray(D.PAR.rfMask, [pad_pxl, pad_pxl]);
             
             % Set lims
-            set(D.UI.axH(5), ...
+            set(D.UI.axH(4), ...
                 'XLim', [1,size(D.PAR.rfMask,1)],...
                 'YLim', [1,size(D.PAR.rfMask,2)]);
             
             % Show mask
             D.UI.imgMaskRFH = ...
                 imshow(ones(size(D.PAR.rfMask,1),size(D.PAR.rfMask,2)), ...
-                'Parent',D.UI.axH(5));
+                'Parent',D.UI.axH(4));
             set(D.UI.imgMaskRFH, ...
                 'AlphaData', D.PAR.rfMask, ...
                 'Visible', 'off');
@@ -1701,20 +1577,17 @@ fprintf('END OF RUN\n');
             clear rad_pxl lim_pxl pad_pxl mask;
             
             % MAKE WALL IMAGES
+            img_ax_pos = [D.UI.ax_pos(1) - D.UI.ax_pos(3)*0.035, ...
+                D.UI.ax_pos(2) - D.UI.ax_pos(4)*0.035, ...
+                D.UI.ax_pos(3) * 1.07, ...
+                D.UI.ax_pos(4) * 1.07];
             
-            % Enlarge wall image axis
-            set(D.UI.axH(1), 'Units', 'Pixels');
-            img_ax_pos = get(D.UI.axH(1), 'Position');
-            img_ax_pos = [img_ax_pos(1) - 27, ...
-                img_ax_pos(2) - 27, ...
-                img_ax_pos(3) + 54, ...
-                img_ax_pos(4) + 54];
-            set(D.UI.axH(1), 'Position', img_ax_pos);
-            set(D.UI.axH(1), 'Units', 'Normalized');
+            % Wall image axis
+            set(D.UI.axH(5), 'Position', img_ax_pos);
             
             % Read in image
             [img{1}, ~, alph] = imread(D.DIR.ioWallImage);
-            set(D.UI.axH(1), 'XLim', [0,size(img{1},2)], 'YLim', [0,size(img{1},1)]);
+            set(D.UI.axH(5), 'XLim', [0,size(img{1},2)], 'YLim', [0,size(img{1},1)]);
             img{1} = flip(img{1}, 1);
             mask = true(size(img{1}));
             % -40 deg
@@ -1727,9 +1600,9 @@ fprintf('END OF RUN\n');
             img{3}(maskR) = 255;
             
             % Store for later
-            D.UI.wallImgH(1) = image(img{1}, 'Parent', D.UI.axH(1), 'Visible', 'on');
-            D.UI.wallImgH(2) = image(img{2}, 'Parent', D.UI.axH(1), 'Visible', 'off');
-            D.UI.wallImgH(3) = image(img{3}, 'Parent', D.UI.axH(1), 'Visible', 'off');
+            D.UI.wallImgH(1) = image(img{1}, 'Parent', D.UI.axH(5), 'Visible', 'on');
+            D.UI.wallImgH(2) = image(img{2}, 'Parent', D.UI.axH(5), 'Visible', 'off');
+            D.UI.wallImgH(3) = image(img{3}, 'Parent', D.UI.axH(5), 'Visible', 'off');
             % set alpha
             set(D.UI.wallImgH, 'AlphaData', alph);
             
@@ -1741,47 +1614,41 @@ fprintf('END OF RUN\n');
             %% ---------------------------SETUP PANEL----------------------------------
             
             % Position settings
-            pos_lft_dflt = 0.005;
-            pos_wd_dflt = D.UI.stup_pan_pos(3)-0.01;
-            obj_gap = 0.01;
+            obj_gap_ht = 0.025;
+            pos_ht_dflt = (1 - 2*obj_gap_ht) / 8;
+            pos_lft_dflt = 0.05;
+            pos_wd_dflt = 1-pos_lft_dflt*2;
             
             % Font settings
-            lrg_text_font = ...
-                [12, 16*D.UI.pxl2norm_y*1.25];
-            med_text_font = ...
-                [10, 13*D.UI.pxl2norm_y*1.25];
-            btn_text_font = ...
-                [9, 12*D.UI.pxl2norm_y*1.5] ;
-            pop_font = ...
-                [10, 0.025];
+            head_font_sz = ...
+                [10, 13/(D.UI.fg_pos(4)*D.UI.stup_pan_pos(4))*1.15] ;
+            text1_font_sz = ....
+                [9, 12/(D.UI.fg_pos(4)*D.UI.stup_pan_pos(4))] ;
+            text2_font_sz = ...
+                [9, 12/(D.UI.fg_pos(4)*D.UI.stup_pan_pos(4))] ;
             
             % SETUP PANEL
             D.UI.panStup = uipanel(...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'BorderType','line', ...
                 'BorderWidth',4, ...
                 'BackgroundColor', D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.disabledBckCol, ...
-                'HighlightColor', D.UI.disabledBckCol, ...
-                'FontSize',12, ...
+                'HighlightColor',D.UI.disabledBckCol, ...
+                'FontSize',15, ...
                 'FontWeight','Bold', ...
                 'Title','Setup', ...
                 'TitlePosition','centertop', ...
                 'Clipping','on', ...
                 'Position', D.UI.stup_pan_pos);
             
-            % BOTTOM START
-            botm = D.UI.stup_pan_pos(2) + ...
-                D.UI.stup_pan_pos(4) - ...
-                lrg_text_font(2) - obj_gap;
-            
             % RAT SELECTION
             % text
-            botm = botm - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+            botm = 1 - obj_gap_ht - head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtRat = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'String','Rat Number', ...
                 'Units','Normalized', ...
                 'Position', pos, ...
@@ -1790,12 +1657,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontWeight','Bold', ...
                 'FontName','MS Sans Serif', ...
-                'FontSize', med_text_font(1));
+                'FontSize', head_font_sz(1));
             % popupmenu
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+            botm = botm - pos_ht_dflt + head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)*1.9];
             D.UI.popRat = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback', {@PopRat}, ...
                 'Units','Normalized', ...
@@ -1803,17 +1670,17 @@ fprintf('END OF RUN\n');
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName',D.UI.popFont, ...
-                'FontSize',pop_font(1), ...
+                'FontSize',text1_font_sz(1), ...
                 'FontWeight','Bold', ...
                 'String',D.UI.ratList, ...
                 'Value',1);
             
             % ICR CONDITION
             % text
-            botm = botm - 2*obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+            botm = botm - head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtCond = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'String','Condition', ...
                 'Units','Normalized', ...
                 'Position', pos, ...
@@ -1822,12 +1689,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontWeight','Bold', ...
                 'FontName','MS Sans Serif', ...
-                'FontSize', med_text_font(1));
+                'FontSize', head_font_sz(1));
             % popupmenu
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+            botm = botm - pos_ht_dflt + head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)*1.9];
             D.UI.popCond = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback', {@PopCond}, ...
                 'Units','Normalized', ...
@@ -1835,17 +1702,17 @@ fprintf('END OF RUN\n');
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName',D.UI.popFont, ...
-                'FontSize',pop_font(1), ...
+                'FontSize',text1_font_sz(1), ...
                 'FontWeight','Bold', ...
                 'String',D.UI.condList, ...
                 'Value',1);
             
             % ICR TASK
             % text
-            botm = botm - 2*obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+            botm = botm - head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtTask = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'String','Task', ...
                 'Units','Normalized', ...
                 'Position', pos, ...
@@ -1854,12 +1721,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontWeight','Bold', ...
                 'FontName','MS Sans Serif', ...
-                'FontSize', med_text_font(1));
+                'FontSize', head_font_sz(1));
             % popupmenu
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+            botm = botm - pos_ht_dflt + head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)*1.9];
             D.UI.popTask = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback', {@PopTask}, ...
                 'Units','Normalized', ...
@@ -1867,17 +1734,17 @@ fprintf('END OF RUN\n');
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName',D.UI.popFont, ...
-                'FontSize',pop_font(1), ...
+                'FontSize',text1_font_sz(1), ...
                 'FontWeight','Bold', ...
                 'String',D.UI.taskList, ...
                 'Value',1);
             
             % REWARD DELAY
             % text
-            botm = botm - 2*obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+            botm = botm - head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtRwDl = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'String','Reward Delay', ...
                 'Units','Normalized', ...
                 'Position', pos, ...
@@ -1886,12 +1753,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontWeight','Bold', ...
                 'FontName','MS Sans Serif', ...
-                'FontSize', med_text_font(1));
+                'FontSize', head_font_sz(1));
             % popupmenu
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+            botm = botm - pos_ht_dflt + head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)*1.9];
             D.UI.popRewDel = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback', {@PopRewDel}, ...
                 'Units','Normalized', ...
@@ -1899,17 +1766,17 @@ fprintf('END OF RUN\n');
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName',D.UI.popFont, ...
-                'FontSize',pop_font(1), ...
+                'FontSize',text1_font_sz(1), ...
                 'FontWeight','Bold', ...
                 'String',D.UI.delList, ...
                 'Value',1);
             
             % CUE BUTTON PANEL
-            ht =  btn_text_font(2) + 2.5*obj_gap;
-            botm = botm - ht - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, ht];
+            offset = 0.05;
+            botm = botm - pos_ht_dflt - obj_gap_ht;
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, pos_ht_dflt];
             D.UI.spanCue = uibuttongroup(...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor', D.UI.figBckCol, ...
@@ -1918,17 +1785,15 @@ fprintf('END OF RUN\n');
                 'Title','Cue Condition', ...
                 'TitlePosition','centertop', ...
                 'FontWeight','Bold', ...
-                'FontSize',med_text_font(1), ...
+                'FontSize',head_font_sz(1), ...
                 'Clipping','off');
             % CUE CONDITION
-            wdth = (pos(3)-2*pos_lft_dflt)/3;
-            lft = pos_lft_dflt*2;
-            ht =  btn_text_font(2);
-            botm = pos(2)+pos(4) - ht - 2*obj_gap;
             % all
-            pos = [lft, botm, wdth, btn_text_font(2)];
+            botm = botm + text2_font_sz(2)*0.5;
+            wdth = (pos_wd_dflt-(offset*2)) / 3;
+            pos = [pos_lft_dflt + offset, botm, wdth, text2_font_sz(2)*1.5];
             D.UI.toggCue(1) = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback',{@ToggCue}, ...
                 'String','All', ...
@@ -1939,13 +1804,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
+                'FontSize', text2_font_sz(1), ...
                 'Value',0);
             % half
-            lft = lft+wdth;
-            pos = [lft, botm, wdth, btn_text_font(2)];
+            pos = [pos_lft_dflt + offset + wdth, botm, wdth, pos(4)];
             D.UI.toggCue(2) = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback',{@ToggCue}, ...
                 'String','Half', ...
@@ -1956,13 +1820,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
+                'FontSize', text2_font_sz(1), ...
                 'Value',0);
             % none
-            lft = lft+wdth;
-            pos = [lft, botm, wdth, btn_text_font(2)];
+            pos = [pos_lft_dflt + offset + wdth*2, botm, wdth, pos(4)];
             D.UI.toggCue(3) = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback',{@ToggCue}, ...
                 'String','None', ...
@@ -1973,16 +1836,16 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
+                'FontSize', text2_font_sz(1), ...
                 'Value',0);
             
             % SOUND BUTTON PANEL
-            ht =  btn_text_font(2) + 2.5*obj_gap;
-            botm = botm - ht - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, ht];
+            offset = 0.05;
+            botm = botm - pos_ht_dflt - obj_gap_ht;
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, pos_ht_dflt];
             % panel
             D.UI.spanSnd = uibuttongroup(...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor', D.UI.figBckCol, ...
@@ -1991,17 +1854,15 @@ fprintf('END OF RUN\n');
                 'Title','Sound', ...
                 'TitlePosition','centertop', ...
                 'FontWeight','Bold', ...
-                'FontSize',med_text_font(1), ...
+                'FontSize',head_font_sz(1), ...
                 'Clipping','off');
             % SOUND CONDITION
-            wdth = (pos(3)-2*pos_lft_dflt)/2;
-            lft = pos_lft_dflt*2;
-            ht =  btn_text_font(2);
-            botm = pos(2)+pos(4) - ht - 2*obj_gap;
             % white
-            pos = [lft, botm, wdth, btn_text_font(2)];
+            botm = botm + text2_font_sz(2)*0.5;
+            wdth = (pos_wd_dflt-(offset*3)) / 2;
+            pos = [pos_lft_dflt + offset, botm, wdth, text2_font_sz(2)*1.5];
             D.UI.toggSnd(1) = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback',{@ToggSnd}, ...
                 'UserData', 1, ...
@@ -2012,13 +1873,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
+                'FontSize', text2_font_sz(1), ...
                 'Value',0);
             % reward
-            lft = lft+wdth;
-            pos = [lft, botm, wdth, btn_text_font(2)];
+            pos = [pos_lft_dflt + offset*2 + wdth, botm, wdth, pos(4)];
             D.UI.toggSnd(2) = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panStup, ...
                 'Enable', 'off', ...
                 'Callback',{@ToggSnd}, ...
                 'UserData', 2, ...
@@ -2029,16 +1889,15 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
+                'FontSize', text2_font_sz(1), ...
                 'Value',0);
             
             % SETUP DONE
-            ht = 0.04;
-            wdth = D.UI.stup_pan_pos(3)/2;
-            botm = D.UI.stup_pan_pos(2) + 0.01;
-            pos = [wdth/2, botm, wdth, ht];
+            ht = 0.05 * 1/D.UI.stup_pan_pos(4);
+            botm = botm/2 - ht/2;
+            pos = [0.25, botm, 0.5, ht];
             D.UI.btnSetupDone = uicontrol('Style','togglebutton', ...
-                'Parent', D.UI.figICR, ...
+                'Parent', D.UI.panStup, ...
                 'Enable', 'off', ...
                 'String','DONE', ...
                 'Callback', {@BtnSetupDone}, ...
@@ -2049,53 +1908,45 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize',lrg_text_font(1), ...
+                'FontSize',12, ...
                 'Value',0);
             
             %% --------------------------RECORD PANEL----------------------------------
             
             % Position settings
-            pos_lft_dflt = 0.005;
-            pos_wd_dflt = D.UI.rec_pan_pos(3)-0.01;
-            obj_gap = 0.01;
+            obj_gap_ht = 0.025;
+            pos_ht_dflt = (1 - 2*obj_gap_ht) / 3;
+            pos_lft_dflt = 0.1;
+            pos_wd_dflt = 1-pos_lft_dflt*2;
             
             % Font settings
-            lrg_text_font = ...
-                [12, 16*D.UI.pxl2norm_y*1.25];
-            med_text_font = ...
-                [10, 13*D.UI.pxl2norm_y*1.25];
-            btn_text_font = ...
-                [10, 13*D.UI.pxl2norm_y*1.5];
-            pop_font = ...
-                [10, 0.025];
+            head_font_sz = ...
+                [12, 16/(D.UI.fg_pos(4)* D.UI.rec_pan_pos(4))*1.15];
+            text1_font_sz = ...
+                [12, 16/(D.UI.fg_pos(4)* D.UI.rec_pan_pos(4))];
+            btn_rot_px_ht = 40/(D.UI.fg_pos(4)* D.UI.rec_pan_pos(4));
             
             % RECORD PANEL
             D.UI.panRec = uipanel(...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'BorderType','line', ...
                 'BorderWidth',4, ...
                 'BackgroundColor', D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.disabledBckCol, ...
                 'HighlightColor', D.UI.disabledBckCol, ...
-                'FontSize',12, ...
+                'FontSize',15, ...
                 'FontWeight','Bold', ...
                 'Title','Record', ...
                 'TitlePosition','centertop', ...
                 'Clipping','on', ...
                 'Position',  D.UI.rec_pan_pos);
             
-            % BOTTOM START
-            botm = D.UI.rec_pan_pos(2) + ...
-                D.UI.rec_pan_pos(4) - ...
-                lrg_text_font(2) - obj_gap;
-            
-            % NEURALYNX SUBPANEL
-            ht =  btn_text_font(2) + btn_text_font(2) + 3.5*obj_gap;
-            botm = botm - ht - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, ht];
+            % NEURALYNX BUTTON PANEL
+            botm = 1 - obj_gap_ht - pos_ht_dflt;
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, pos_ht_dflt];
             D.UI.spanNLX = uibuttongroup(...
-                'Parent',D.UI.figICR, ...
+                'Parent',D.UI.panRec, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor', D.UI.figBckCol, ...
@@ -2104,349 +1955,72 @@ fprintf('END OF RUN\n');
                 'Title','Cheetah', ...
                 'TitlePosition','centertop', ...
                 'FontWeight','Bold', ...
-                'FontSize',med_text_font(1), ...
+                'FontSize',head_font_sz(1), ...
                 'Clipping','off');
-            % acquire
-            wdth = (pos_wd_dflt-2*pos_lft_dflt)/2;
-            lft = pos_lft_dflt*2;
-            ht =  btn_text_font(2);
-            botm = pos(2)+pos(4) - ht - 2*obj_gap;
-            pos = [lft, botm, wdth, ht];
-            D.UI.toggAcq = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'Enable', 'off', ...
-                'Callback',{@BtnAcq}, ...
-                'UserData', 1, ...
+            
+            % ACQ BUTTON
+            offst = 0.1;
+            ht = pos_ht_dflt*0.5;
+            botm = botm + 0.025;
+            wdth = pos_wd_dflt*0.45;
+            pos = [pos_lft_dflt + offst*0.3, botm, wdth, ht];
+            D.UI.btnAcq = uicontrol('Style','radiobutton', ...
+                'Parent',D.UI.panRec, ...
+                'UserData', 0, ...
+                'Enable', 'on', ...
+                'Visible', 'on', ...
+                'Callback', {@BtnAcq}, ...
+                'UserData', 0, ...
+                'Units','Normalized', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol, ...
                 'String','ACQ', ...
+                'CData',D.UI.radBtnCmap{1}, ...
+                'FontWeight','Bold', ...
+                'FontWeight','Bold', ...
+                'FontSize', text1_font_sz(1), ...
+                'Value',0);
+            % REC BUTTON
+            pos = [pos_lft_dflt + wdth + offst*0.4, botm, wdth, ht];
+            D.UI.btnRec = uicontrol('Style','radiobutton', ...
+                'Parent',D.UI.panRec, ...
+                'Enable', 'on', ...
+                'Visible', 'on', ...
+                'Callback', {@BtnRec}, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'Value',0);
-            % record
-            lft = lft+wdth;
-            pos = [lft, botm, wdth, btn_text_font(2)];
-            D.UI.toggRec = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'Enable', 'off', ...
-                'Callback',{@BtnRec}, ...
-                'UserData', 2, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol, ...
                 'String','REC', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
+                'CData',D.UI.radBtnCmap{1}, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'Value',0);
-            % cells cut toggle
-            ht = btn_text_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            wdth = pos_wd_dflt-2*pos_lft_dflt;
-            lft = pos_lft_dflt*2;
-            pos = [lft, botm, wdth, ht];
-            D.UI.toggCellsCut = uicontrol('Style','toggle', ...
-                'Parent',D.UI.figICR, ...
-                'String','Cells Cut', ...
-                'Callback', {@ToggCellsCut}, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
+                'FontSize', text1_font_sz(1), ...
                 'Value',0);
             
-            % ROBOT SUBPANEL
-            ht =  2*btn_text_font(2) + pop_font(2) + 3*obj_gap;
-            botm = botm - ht - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, ht];
-            D.UI.spanRob = uibuttongroup(...
-                'Parent',D.UI.figICR, ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'HighlightColor', D.UI.enabledCol, ...
-                'ForegroundColor', D.UI.enabledCol, ...
-                'Title','Robot', ...
-                'TitlePosition','centertop', ...
-                'FontWeight','Bold', ...
-                'FontSize',med_text_font(1), ...
-                'Clipping','off');
-            % halt
-            wdth = pos(3)-2*pos_lft_dflt;
-            lft = pos_lft_dflt*2;
-            ht =  2*btn_text_font(2);
-            botm = pos(2)+pos(4) - ht - 2*obj_gap;
-            pos = [lft, botm, wdth, ht];
-            D.UI.toggHaltRob = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'String','Halt Robot', ...
-                'Callback', {@BtnHaltRob}, ...
+            % ICR BUTTON
+            botm = botm - obj_gap_ht - btn_rot_px_ht;
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, btn_rot_px_ht];
+            D.UI.btnICR = uicontrol('Style','push', ...
+                'Parent',D.UI.panRec, ...
                 'Enable', 'off', ...
+                'Callback', {@BtnICR}, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor', D.UI.disabledBckCol, ...
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize', lrg_text_font(1), ...
-                'UserData', false, ...
-                'Value', 0);
-            % bulldoze popup
-            ht = pop_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            pos = [lft, botm, wdth, ht];
-            D.UI.popBulldoze = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
-                'Callback', {@Bulldoze}, ...
-                'Units','Normalized', ...
-                'Enable', 'off', ...
-                'Position', pos, ...
-                'BackgroundColor',D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledCol, ...
-                'FontName',D.UI.popFont, ...
-                'FontSize',pop_font(1), ...
-                'FontWeight','Bold', ...
-                'String',D.UI.bullList);
-            % bulldoze toggle
-            pos = [lft, pos(2), wdth-0.0425, pos(4)];
-            D.UI.toggBulldoze = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'String','Bulldoze', ...
-                'Callback', {@Bulldoze}, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'UserData', false, ...
-                'Value', 0);
-            % bulldoze speed field
-            lft = lft+pos(3);
-            pos = [lft, pos(2), 0.03, pos(4)];
-            D.UI.editBulldoze = uicontrol(...
-                'Parent',D.UI.figICR, ...
-                'Units','Normalized',...
-                'Position',pos,...
-                'Style','edit',...
-                'HorizontalAlignment', 'Left', ...
-                'FontSize', btn_text_font(1), ...
-                'FontName','Monospaced', ...
-                'Max', 1, ...
-                'Enable','on',...
-                'Visible', 'on', ... % TEMP
-                'String',num2str(D.PAR.bullSpeed));
-            % set to pan bottom
-            botm = D.UI.spanRob.Position(2);
-            
-            % REWARD SUBPANEL
-            ht =  3*btn_text_font(2) + pop_font(2) + 5*obj_gap;
-            botm = botm - ht - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, ht];
-            D.UI.spanRew = uibuttongroup(...
-                'Parent',D.UI.figICR, ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'HighlightColor', D.UI.enabledCol, ...
-                'ForegroundColor', D.UI.enabledCol, ...
-                'Title','Reward', ...
-                'TitlePosition','centertop', ...
-                'FontWeight','Bold', ...
-                'FontSize',med_text_font(1), ...
-                'Clipping','off');
-            % reward duration popup
-            wdth = pos(3)-2*pos_lft_dflt;
-            lft = pos_lft_dflt*2;
-            ht = pop_font(2);
-            botm = pos(2)+pos(4) - ht - 2*obj_gap;
-            pos = [lft, botm, wdth, ht];
-            D.UI.popReward = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
-                'Units','Normalized', ...
-                'Enable', 'off', ...
-                'Position', pos, ...
-                'BackgroundColor',D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledCol, ...
-                'FontName',D.UI.popFont, ...
-                'FontSize',btn_text_font(1), ...
-                'FontWeight','Bold', ...
-                'String',cellstr(num2str(D.PAR.zoneRewDur')), ...
-                'Value', D.I.zone_now);
-            % reward toggle
-            pos = [pos(1), pos(2), wdth-0.0125, pos(4)];
-            D.UI.btnReward = uicontrol('Style','push', ...
-                'Parent',D.UI.figICR, ...
-                'String','Reward', ...
-                'Callback', {@BtnReward}, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'Value',0);
-            % cue reward
-            ht = btn_text_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            wdth = (pos_wd_dflt-2*pos_lft_dflt);
-            pos = [pos(1), botm, wdth, ht];
-            D.UI.toggDoCue = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'String','Cue Reward', ...
-                'Callback', {@DoCue}, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'UserData', true, ...
-                'Value', 0);
-            % block cue
-            ht = btn_text_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            wdth = (pos_wd_dflt-2*pos_lft_dflt)/2;
-            pos = [pos(1), botm, wdth, ht];
-            D.UI.toggBlockCue = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'String','Block Cue', ...
-                'Callback', {@BlockCue}, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'UserData', true, ...
-                'Value', 0);
-            % force cue
-            lft = lft+wdth;
-            pos = [lft, pos(2), pos(3), pos(4)];
-            D.UI.toggForceCue = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'String','Force Cue', ...
-                'Callback', {@ForceCue}, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'UserData', true, ...
-                'Value', 0);
-            % pick reward pos
-            ht = btn_text_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            wdth = pos_wd_dflt-2*pos_lft_dflt;
-            lft = pos_lft_dflt*2;
-            pos = [lft, botm, wdth, ht];
-            D.UI.toggPickRewPos = uicontrol('Style','togglebutton', ...
-                'Parent',D.UI.figICR, ...
-                'String','Select Reward Zone', ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'Callback', {@PickRewPos}, ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', btn_text_font(1), ...
-                'UserData', [false, false], ...
-                'Value', 0);
-            % set to pan bottom
-            botm = D.UI.spanRew.Position(2);
-            
-            % TASK SUBPANEL
-            ht =  4*lrg_text_font(2) + 4*obj_gap;
-            botm = botm - ht - obj_gap;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, ht];
-            D.UI.spanTask = uibuttongroup(...
-                'Parent',D.UI.figICR, ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'HighlightColor', D.UI.enabledCol, ...
-                'ForegroundColor', D.UI.enabledCol, ...
-                'Title','Task', ...
-                'TitlePosition','centertop', ...
-                'FontWeight','Bold', ...
-                'FontSize',med_text_font(1), ...
-                'Clipping','off');
-            % sleep 1 button
-            wdth = pos_wd_dflt - 2*pos_lft_dflt;
-            lft = 2*pos_lft_dflt;
-            ht = lrg_text_font(2);
-            botm = pos(2)+pos(4) - ht - 2*obj_gap;
-            pos = [lft, botm, wdth, ht];
-            D.UI.btnSleep(1) = uicontrol('Style','push', ...
-                'Parent',D.UI.figICR, ...
-                'Enable', 'off', ...
-                'Callback', {@BtnSleep}, ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'String', 'Sleep 1', ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', lrg_text_font(1), ...
-                'UserData', 1);
-            % icr buttons
-            ht = 2*lrg_text_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            pos = [lft, botm, wdth/2, ht];
-            D.UI.toggICR(1) = uicontrol('Style','toggle', ...
-                'Parent',D.UI.figICR, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'BackgroundColor',  D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', lrg_text_font(1), ...
+                'FontSize',12, ...
                 'UserData', false);
-            D.UI.toggICR(2) = copyobj(D.UI.toggICR(1), D.UI.figICR);
-            pos = [lft+wdth/2, botm, wdth/2, 2*lrg_text_font(2)];
-            set(D.UI.toggICR(2), 'Position', pos);
-            set(D.UI.toggICR, 'Callback', {@BtnICR})
-            % sleep 2 button
-            D.UI.btnSleep(2) = copyobj(D.UI.btnSleep(1), D.UI.figICR);
-            ht = lrg_text_font(2);
-            botm = botm - ht - 0.5*obj_gap;
-            pos = [lft, botm, wdth, ht];
-            set(D.UI.btnSleep(2), ...
-                'String', 'Sleep 2', ...
-                'UserData', 2, ...
-                'Position', pos);
             
             % RECORDING DONE
-            ht = 0.04;
-            wdth = D.UI.rec_pan_pos(3)/2;
-            botm = D.UI.rec_pan_pos(2) + 0.01;
-            pos = [wdth/2, botm, wdth, ht];
-            D.UI.toggRecDone = uicontrol('Style','togglebutton', ...
-                'Parent', D.UI.figICR, ...
+            ht = 0.05 * 1/D.UI.rec_pan_pos(4);
+            botm = botm/2 - ht/2;
+            pos = [0.25, botm, 0.5, ht];
+            D.UI.btnRecDone = uicontrol('Style','togglebutton', ...
+                'Parent', D.UI.panRec, ...
                 'Enable', 'off', ...
                 'String','DONE', ...
                 'Callback', {@BtnRecDone}, ...
@@ -2457,20 +2031,20 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
                 'FontName', D.UI.btnFont, ...
                 'FontWeight','Bold', ...
-                'FontSize',lrg_text_font(1));
+                'FontSize',12);
             
             %% --------------------------CONSOLE PANEL--------------------------------
             
             % CONSOLE PANEL
             D.UI.panConsole = uipanel(...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'BorderType','line', ...
                 'BorderWidth',4, ...
                 'BackgroundColor', D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.disabledBckCol, ...
                 'HighlightColor', D.UI.disabledBckCol, ...
-                'FontSize',12, ...
+                'FontSize',15, ...
                 'FontWeight','Bold', ...
                 'Title','Console', ...
                 'TitlePosition','centertop', ...
@@ -2484,21 +2058,17 @@ fprintf('END OF RUN\n');
                 'Units','normalized',...
                 'Position',[0,0,1,1],...
                 'HorizontalAlignment', 'Left', ...
-                'FontSize', 9, ...
+                'FontSize', 7, ...
                 'FontName','Monospaced', ...
                 'Max', 1000, ...
                 'Enable','inactive',...
                 'String',D.DB.consoleStr);
             
-            %% ---------------------------OTHER STUFF---------------------------------
+            %% --------------------------OTHER BUTTONS---------------------------------
             
-            % SAVE & AND QUIT SESSION
-            ht = 0.04;
-            wdth = (D.UI.main_ax_bounds(1) - 0.015) / 2;
-            % save
-            pos = [0.005, 0.005, wdth, ht];
+            % SAVE SESSION DATA
+            pos = [0, D.UI.main_ax_bounds(2), D.UI.main_ax_bounds(1)/2, 0.05];
             D.UI.btnSave = uicontrol('Style','push', ...
-                'Parent',D.UI.figICR, ...
                 'Enable', 'off', ...
                 'String','SAVE', ...
                 'Callback', {@BtnSave}, ...
@@ -2508,10 +2078,10 @@ fprintf('END OF RUN\n');
                 'FontSize',14, ...
                 'UserData', 0, ...
                 'Value',0);
-            % quit
-            pos = [wdth + 0.01, pos(2), pos(3), pos(4)];
+            
+            % QUIT ALL
+            pos = [D.UI.main_ax_bounds(1)/2, D.UI.main_ax_bounds(2), D.UI.main_ax_bounds(1)/2, 0.05];
             D.UI.btnQuit = uicontrol('Style','push', ...
-                'Parent',D.UI.figICR, ...
                 'Enable', 'off', ...
                 'String','QUIT', ...
                 'Callback', {@BtnQuit}, ...
@@ -2521,14 +2091,136 @@ fprintf('END OF RUN\n');
                 'UserData', 0, ...
                 'FontSize',14);
             
+            % HALT ROBOT
+            wdth = 0.1;
+            pos = [D.UI.main_ax_bounds(1)+0.01, D.UI.main_ax_bounds(4)-0.01-0.06, 0.1, 0.06];
+            D.UI.btnHaltRob = uicontrol('Style','togglebutton', ...
+                'Parent',FigH, ...
+                'String','Halt Robot', ...
+                'Callback', {@BtnHaltRob}, ...
+                'Enable', 'off', ...
+                'Units','Normalized', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.disabledBckCol, ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
+                'FontName', D.UI.btnFont, ...
+                'FontWeight','Bold', ...
+                'FontSize', 12, ...
+                'Value', 0);
+            
+            % BULLDOZE RAT
+            % popup
+            pos = [pos(1), pos(2)-0.03-0.01, wdth, 0.03];
+            D.UI.popBulldoze = uicontrol('Style','popupmenu', ...
+                'Parent',FigH, ...
+                'Callback', {@Bulldoze}, ...
+                'Units','Normalized', ...
+                'Enable', 'off', ...
+                'Position', pos, ...
+                'BackgroundColor',D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol, ...
+                'FontName',D.UI.popFont, ...
+                'FontSize',10, ...
+                'FontWeight','Bold', ...
+                'String',D.UI.bullList);
+            % toggle
+            pos = [pos(1), pos(2), wdth-wdth*0.125, 0.03];
+            D.UI.btnBulldoze = uicontrol('Style','togglebutton', ...
+                'Parent',FigH, ...
+                'String','Bulldoze', ...
+                'Callback', {@Bulldoze}, ...
+                'Enable', 'off', ...
+                'Units','Normalized', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.disabledBckCol, ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
+                'FontName', D.UI.btnFont, ...
+                'FontWeight','Bold', ...
+                'FontSize', 10, ...
+                'Value', 0);
+            % secret speed field
+            D.UI.editBulldoze = uicontrol(...
+                'Parent',FigH, ...
+                'Units','Normalized',...
+                'Position',[pos(1)+wdth, pos(2), wdth*0.3, pos(4)],...
+                'Style','edit',...
+                'HorizontalAlignment', 'Left', ...
+                'FontSize', 12, ...
+                'FontName','Monospaced', ...
+                'Max', 1, ...
+                'Enable','on',...
+                'Visible', 'on', ... % TEMP
+                'String',num2str(D.PAR.bullSpeed));
+            
+            % REWARD BUTTON
+            % popup
+            pos = [pos(1), pos(2)-0.03-0.01, wdth, 0.03];
+            D.UI.popReward = uicontrol('Style','popupmenu', ...
+                'Parent',FigH, ...
+                'Units','Normalized', ...
+                'Enable', 'off', ...
+                'Position', pos, ...
+                'BackgroundColor',D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol, ...
+                'FontName',D.UI.popFont, ...
+                'FontSize',10, ...
+                'FontWeight','Bold', ...
+                'String',cellstr(num2str(D.PAR.zoneRewDur')), ...
+                'Value', D.I.zone);
+            % toggle
+            pos = [pos(1), pos(2), wdth-wdth*0.125, 0.03];
+            D.UI.btnReward = uicontrol('Style','push', ...
+                'Parent',FigH, ...
+                'String','Reward', ...
+                'Callback', {@BtnReward}, ...
+                'Enable', 'off', ...
+                'Units','Normalized', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.disabledBckCol, ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
+                'FontName', D.UI.btnFont, ...
+                'FontWeight','Bold', ...
+                'FontSize', 10, ...
+                'Value',0);
+            
+            % BLOCK CUE
+            pos = [pos(1), pos(2)-0.03-0.01, wdth*0.7, 0.03];
+            D.UI.btnBlockCue = uicontrol('Style','togglebutton', ...
+                'Parent',FigH, ...
+                'String','Block Cue', ...
+                'Callback', {@BlockCue}, ...
+                'Enable', 'off', ...
+                'Units','Normalized', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.disabledBckCol, ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
+                'FontName', D.UI.btnFont, ...
+                'FontWeight','Bold', ...
+                'FontSize', 10, ...
+                'UserData', 1, ...
+                'Value', 0);
+            
+            % ALL CUE
+            pos = [pos(1), pos(2)-0.03-0.01, wdth*0.7, 0.03];
+            D.UI.btnAllCue = uicontrol('Style','togglebutton', ...
+                'Parent',FigH, ...
+                'String','All Cue', ...
+                'Callback', {@AllCue}, ...
+                'Enable', 'off', ...
+                'Units','Normalized', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.disabledBckCol, ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
+                'FontName', D.UI.btnFont, ...
+                'FontWeight','Bold', ...
+                'FontSize', 10, ...
+                'UserData', 1, ...
+                'Value', 0);
+            
             % CLEAR VT BUTTON
-            ht = 0.02;
-            lft = D.UI.tim_inf_pan_pos(1);
-            botm = D.UI.cnsl_pan_pos(4) - ht*1.5;
-            wdth = D.UI.tim_inf_pan_pos(3);
-            pos = [lft, botm, wdth, ht];
+            pos = [pos(1), 0.01, 0.1, 0.03];
             D.UI.btnClrVT = uicontrol('Style','push', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Enable', 'off', ...
                 'Callback', {@BtnClrVT}, ...
                 'Units','Normalized', ...
@@ -2541,82 +2233,56 @@ fprintf('END OF RUN\n');
                 'FontSize', 10, ...
                 'Value',0);
             
-            % CLEAR TT BUTTON
-            pos = [pos(1), pos(2)-ht, pos(3), pos(4)];
-            D.UI.btnClrTT = uicontrol('Style','push', ...
-                'Parent',D.UI.figICR, ...
-                'Enable', 'off', ...
-                'Callback', {@BtnClrTT}, ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'String','Clear TT Data', ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', 10, ...
-                'Visible', 'off', ...
-                'Value',0);
-            
-            % SELECT TT PLOT TYPE
-            pos = [D.UI.tt_select_pan_copy_pos(1,1), 0, D.UI.tt_select_pan_copy_pos(1,3), D.UI.tt_select_pan_copy_pos(1,2)];
-            D.UI.toggTTplotType(1) = uicontrol('Style','toggle', ...
-                'Parent',D.UI.figICR, ...
-                'Enable', 'off', ...
-                'Units','Normalized', ...
-                'Position', pos, ...
-                'String','Plot Spike', ...
-                'BackgroundColor', D.UI.disabledBckCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol - 0.01, ...
-                'FontName', D.UI.btnFont, ...
-                'FontWeight','Bold', ...
-                'FontSize', 10, ...
-                'UserData', 1, ...
-                'Visible', 'off', ...
-                'Value',0);
-            D.UI.toggTTplotType(2) = copy(D.UI.toggTTplotType(1), D.UI.figICR);
-            D.UI.toggTTplotType(2).Position(1) = pos(1)+pos(3);
-            set(D.UI.toggTTplotType(2), ...
-                'String', 'Plot Occ', ...
-                'UserData', 2);
-            set(D.UI.toggTTplotType, 'Callback', {@ToggTTplotType});
-            
-            % MOUSE ACTIONS
-            set(FigGroupH, 'WindowButtonMotionFcn', @MouseTrack)
-            
             %% --------------------------PRINTED INFO----------------------------------
             
             % Position settings
             pos_lft_dflt = (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3)) + 0.005;
             pos_wd_dflt = 1 - (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3)) - 2*0.005;
+            pan_lft = (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3));
+            pan_wd = 1 - (D.UI.main_ax_bounds(1)+D.UI.main_ax_bounds(3));
             
             % Font settings
-            lrg_text_font = ...
+            head_font_sz = ...
                 [12, 16*D.UI.pxl2norm_y*1.25];
-            med_text_font = ...
+            text_font_sz = ...
                 [10, 13*D.UI.pxl2norm_y*1.25];
-            pop_font = ...
-                [10, 0.025];
+            dd_font_sz = ...
+                [10, 22*D.UI.pxl2norm_y];
             
             % RAT INFO
             
-            % Pannel
+            % Number of text lines not including header
+            nlines(1) = 12;
+            
+            % pannel
+            D.UI.sesInfPanHt = ...
+                (nlines(1)-2)*text_font_sz(2) + ...
+                2*dd_font_sz(2) + ...
+                head_font_sz(2) + ...
+                4*D.UI.pxl2norm_y*2;
+            D.UI.sesInfPanBtm = ...
+                1 - D.UI.sesInfPanHt;
+            D.UI.sesInfPanPos = [...
+                pan_lft, ...
+                D.UI.sesInfPanBtm, ...
+                pan_wd, ...
+                D.UI.sesInfPanHt];
             D.UI.panSesInf = uipanel(...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'BorderType','line', ...
                 'BorderWidth',4, ...
                 'BackgroundColor', D.UI.figBckCol, ...
                 'HighlightColor', D.UI.disabledBckCol, ...
-                'Position',  D.UI.ses_inf_pan_pos);
-            % Heading
-            botm = D.UI.ses_inf_pan_pos(2) + ...
-                D.UI.ses_inf_pan_pos(4) - ...
-                lrg_text_font(2) - ...
-                5*D.UI.pxl2norm_y;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, lrg_text_font(2)];
+                'Position',  D.UI.sesInfPanPos);
+            % heading
+            botm = D.UI.sesInfPanBtm + ...
+                D.UI.sesInfPanHt - ...
+                head_font_sz(2) - ...
+                4*D.UI.pxl2norm_y;
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtSesInfHed = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','Session Info', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2625,13 +2291,13 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', lrg_text_font(1));
+                'FontSize', head_font_sz(1));
             
             % ICR ses info
-            botm = botm - 6.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)*6];
+            botm = botm - 7*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)*6];
             D.UI.txtSesInf(1) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2640,13 +2306,13 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Light', ...
-                'FontSize', med_text_font(1));
+                'FontSize', text_font_sz(1));
             
             % Rotation ses info
-            botm = botm - 2.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)*2];
+            botm = botm - 3*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)*2];
             D.UI.txtSesInf(2) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2655,55 +2321,72 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Light', ...
-                'FontSize', med_text_font(1));
-            % Laps per dropdown
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+                'FontSize', text_font_sz(1));
+            % laps per dropdown
+            botm = botm - dd_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, dd_font_sz(2)];
             D.UI.popLapsPerRot = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
-                'FontSize',pop_font(1), ...
+                'FontSize',dd_font_sz(1), ...
                 'FontWeight','Light', ...
                 'Visible','off', ...
                 'Value',1);
-            % Rotation position dropdown
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+            % rotation position dropdown
+            botm = botm - dd_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, dd_font_sz(2)];
             D.UI.popRotPos = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
-                'FontSize',pop_font(1), ...
+                'FontSize',dd_font_sz(1), ...
                 'FontWeight','Light', ...
                 'Visible','off', ...
                 'Value',1);
             
             % PERFORMANCE INFO
             
-            % Pannel
+            % Number of text lines not including header
+            nlines(2) = 19;
+            
+            % pannel
+            D.UI.perfInfPanHt = ...
+                (nlines(2)-1)*text_font_sz(2) + ...
+                2*dd_font_sz(2) + ...
+                head_font_sz(2) + ...
+                4*D.UI.pxl2norm_y*2;
+            D.UI.perfInfPanBtm = ...
+                D.UI.sesInfPanBtm - ...
+                D.UI.perfInfPanHt - ...
+                2*D.UI.pxl2norm_y;
+            D.UI.perfInfPanPos = [...
+                pan_lft, ...
+                D.UI.perfInfPanBtm, ...
+                pan_wd, ...
+                D.UI.perfInfPanHt];
             D.UI.panPerfInf = uipanel(...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'Units','Normalized', ...
                 'BorderType','line', ...
                 'BorderWidth',4, ...
                 'BackgroundColor', D.UI.figBckCol, ...
                 'HighlightColor', D.UI.disabledBckCol, ...
-                'Position',  D.UI.perf_inf_pan_pos);
-            % Heading
-            botm = D.UI.perf_inf_pan_pos(2) + ...
-                D.UI.perf_inf_pan_pos(4) - ...
-                lrg_text_font(2) - ...
-                5*D.UI.pxl2norm_y;
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, lrg_text_font(2)];
+                'Position',  D.UI.perfInfPanPos);
+            % heading
+            botm = D.UI.perfInfPanBtm + ...
+                D.UI.perfInfPanHt - ...
+                head_font_sz(2) - ...
+                4*D.UI.pxl2norm_y;
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
             D.UI.txtPerfInfHed = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','Performance Info', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2712,13 +2395,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', lrg_text_font(1));
-            
-            % Totals
-            botm = botm - 5.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)*5];
+                'FontSize', head_font_sz(1));
+            % total
+            botm = botm - 6*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)*5];
             D.UI.txtPerfInf(4) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2727,45 +2409,42 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
-            
-            % Lap time dropdown
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+                'FontSize', text_font_sz(1));
+            % lap time dropdown
+            botm = botm - dd_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, dd_font_sz(2)];
             D.UI.popLapTim = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','Lap Times', ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
-                'FontSize',pop_font(1), ...
+                'FontSize',dd_font_sz(1), ...
                 'FontWeight','Light', ...
                 'Visible','off', ...
                 'Value',1);
-            
-            % Reward info dropdown
-            botm = botm - pop_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, pop_font(2)];
+            % reward info dropdown
+            botm = botm - dd_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, dd_font_sz(2)];
             D.UI.popRewInfo = uicontrol('Style','popupmenu', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','Reward Info', ...
                 'Units','Normalized', ...
                 'Position', pos, ...
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
-                'FontSize',pop_font(1), ...
+                'FontSize',dd_font_sz(1), ...
                 'FontWeight','Light', ...
                 'Visible','off', ...
                 'Value',1);
-            
-            % Standard laps/reward
-            botm = botm - 2.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)*2];
+            % standard
+            botm = botm - 3*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)*2];
             D.UI.txtPerfInf(1) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2774,13 +2453,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', [0.5,0.5,0.5], ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
-            
-            % 40 deg laps/reward
-            botm = botm - 2*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)*2];
+                'FontSize', text_font_sz(1));
+            % 40 deg
+            botm = botm - 2*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)*2];
             D.UI.txtPerfInf(2) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2789,13 +2467,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.rotCol(2,:), ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
-            
-            % 0 deg laps/reward
-            botm = botm - 2*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)*2];
+                'FontSize', text_font_sz(1));
+            % 0 deg
+            botm = botm - 2*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)*2];
             D.UI.txtPerfInf(3) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2804,13 +2481,13 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.rotCol(1,:), ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
+                'FontSize', text_font_sz(1));
             
-            % Rat velocity
-            botm = botm - 1.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+            % rat velocity
+            botm = botm - 2*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)];
             D.UI.txtPerfInf(5) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2819,13 +2496,12 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.ratNowCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
-            
-            % Robot velocity
-            botm = botm - med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+                'FontSize', text_font_sz(1));
+            % robot velocity
+            botm = botm - text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)];
             D.UI.txtPerfInf(6) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2834,13 +2510,13 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.robNowCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
+                'FontSize', text_font_sz(1));
             
-            % Robot battery voltage
-            botm = botm - 1.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
+            % battery voltage
+            botm = botm - 2*text_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, text_font_sz(2)];
             D.UI.txtPerfInf(7) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2849,13 +2525,50 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
+                'FontSize', text_font_sz(1));
             
-            % Cube battery voltage
-            botm = botm - med_text_font(2);
-            pos = [pos_lft_dflt, botm, pos_wd_dflt, med_text_font(2)];
-            D.UI.txtPerfInf(8) = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+            % TIMER INFO
+            
+            % Number of text lines not including header
+            nlines(3) = 10;
+            
+            % pannel
+            D.UI.timInfPanHt = ...
+                D.UI.sesInfPanBtm - D.UI.perfInfPanHt - 4*D.UI.pxl2norm_y;
+            D.UI.timInfPanBtm = 0;
+            D.UI.timInfPanPos = [...
+                pan_lft, ...
+                D.UI.timInfPanBtm, ...
+                pan_wd, ...
+                D.UI.timInfPanHt];
+            D.UI.panTimInf = uipanel(...
+                'Parent',FigH, ...
+                'Units','Normalized', ...
+                'BorderType','line', ...
+                'BorderWidth',4, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'HighlightColor', D.UI.disabledBckCol, ...
+                'Position',  D.UI.timInfPanPos);
+            % heading
+            botm = D.UI.timInfPanHt - 4*D.UI.pxl2norm_y - head_font_sz(2);
+            pos = [pos_lft_dflt, botm, pos_wd_dflt, head_font_sz(2)];
+            D.UI.txtTimInfHed = uicontrol('Style','text', ...
+                'Parent',FigH, ...
+                'String','Timer Info', ...
+                'Units','Normalized', ...
+                'HorizontalAlignment', 'Left', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol, ...
+                'FontName','Courier New', ...
+                'FontWeight','Bold', ...
+                'FontSize', head_font_sz(1));
+            % time elapsed info
+            botm = botm - text_font_sz(2)*5;
+            pos = [pos_lft_dflt, botm, ...
+                pos_wd_dflt, text_font_sz(2)*4];
+            D.UI.txtTimElspInf = uicontrol('Style','text', ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2864,14 +2577,69 @@ fprintf('END OF RUN\n');
                 'ForegroundColor', D.UI.enabledPrintFrgCol, ...
                 'FontName','Courier New', ...
                 'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
+                'FontSize', text_font_sz(1));
+            
+            % time start info
+            botm = botm - text_font_sz(2);
+            pos = [pos_lft_dflt, botm, ...
+                pos_wd_dflt, text_font_sz(2)*1];
+            D.UI.txtTimStrInf = uicontrol('Style','text', ...
+                'Parent',FigH, ...
+                'String','', ...
+                'Units','Normalized', ...
+                'HorizontalAlignment', 'Left', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledPrintFrgCol, ...
+                'FontName','Courier New', ...
+                'FontWeight','Light', ...
+                'FontSize', text_font_sz(1));
+            pos = [pos(1)+pos_wd_dflt/2, pos(2), (pos_wd_dflt/2)*0.75, pos(4)];
+            D.UI.editTimStrInf = uicontrol(...
+                'Parent',FigH,...
+                'Units','normalized',...
+                'Position',pos,...
+                'Style','edit',...
+                'HorizontalAlignment', 'Center', ...
+                'FontSize', text_font_sz(1), ...
+                'FontName','Monospaced', ...
+                'Max', 1, ...
+                'Enable','on', ...
+                'Visible', 'off');
+            % time stop info
+            botm = botm - text_font_sz(2);
+            pos = [pos_lft_dflt, botm, ...
+                pos_wd_dflt, text_font_sz(2)*1];
+            D.UI.txtTimEndInf = uicontrol('Style','text', ...
+                'Parent',FigH, ...
+                'String','', ...
+                'Units','Normalized', ...
+                'HorizontalAlignment', 'Left', ...
+                'Position', pos, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledPrintFrgCol, ...
+                'FontName','Courier New', ...
+                'FontWeight','Light', ...
+                'FontSize', text_font_sz(1));
+            pos = [pos(1)+pos_wd_dflt/2, pos(2), (pos_wd_dflt/2)*0.75, pos(4)];
+            D.UI.editTimEndInf = uicontrol(...
+                'Parent',FigH,...
+                'Units','normalized',...
+                'Position',pos,...
+                'Style','edit',...
+                'HorizontalAlignment', 'Center', ...
+                'FontSize', text_font_sz(1), ...
+                'FontName','Monospaced', ...
+                'Max', 1, ...
+                'Enable','on', ...
+                'Visible', 'off');
             
             % Debug info
-            botm = botm - 3*med_text_font(2);
+            botm = botm - text_font_sz(2)*3;
             pos = [pos_lft_dflt, botm, ...
-                pos_wd_dflt, med_text_font(2)*2.35];
+                pos_wd_dflt, text_font_sz(2)*2.35];
             D.UI.txtTimDebug = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
+                'Parent',FigH, ...
                 'String','', ...
                 'Units','Normalized', ...
                 'HorizontalAlignment', 'Left', ...
@@ -2882,113 +2650,16 @@ fprintf('END OF RUN\n');
                 'FontWeight','Light', ...
                 'FontSize', 6);
             
-            % TIMER INFO
-            pos_lft_dflt = D.UI.tim_inf_pan_pos(1) + 0.005;
-            pos_wd_dflt = D.UI.tim_inf_pan_pos(3) - 0.01;
-            
-            % Pannel
-            D.UI.panTimInf = uipanel(...
-                'Parent',D.UI.figICR, ...
-                'Units','Normalized', ...
-                'BorderType','line', ...
-                'BorderWidth',4, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.disabledBckCol, ...
-                'HighlightColor', D.UI.disabledBckCol, ...
-                'FontSize',12, ...
-                'FontWeight','Bold', ...
-                'Title','Timers', ...
-                'TitlePosition','centertop', ...
-                'Clipping','on', ...
-                'Position',  D.UI.tim_inf_pan_pos);
-            
-            % Time elapsed info
-            botm = D.UI.tim_inf_pan_pos(2) + ...
-                D.UI.tim_inf_pan_pos(4) - ...
-                5.5*med_text_font(2) - ...
-                0.01;
-            pos = [pos_lft_dflt, botm, ...
-                pos_wd_dflt, med_text_font(2)*4];
-            D.UI.txtTimElspInf = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
-                'String','', ...
-                'Units','Normalized', ...
-                'HorizontalAlignment', 'Left', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledPrintFrgCol, ...
-                'FontName','Courier New', ...
-                'FontWeight','Bold', ...
-                'FontSize', med_text_font(1));
-            
-            % Time start info
-            botm = botm - 1.5*med_text_font(2);
-            pos = [pos_lft_dflt, botm, ...
-                pos_wd_dflt, med_text_font(2)*1];
-            D.UI.txtTimStrInf = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
-                'String','', ...
-                'Units','Normalized', ...
-                'HorizontalAlignment', 'Left', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledPrintFrgCol, ...
-                'FontName','Courier New', ...
-                'FontWeight','Light', ...
-                'FontSize', med_text_font(1));
-            pos = [pos(1)+ pos_wd_dflt*0.4, pos(2), ...
-                pos_wd_dflt*0.55, pos(4)];
-            D.UI.editTimStrInf = uicontrol(...
-                'Parent',D.UI.figICR,...
-                'Units','normalized',...
-                'Position',pos,...
-                'Style','edit',...
-                'HorizontalAlignment', 'Center', ...
-                'FontSize', med_text_font(1), ...
-                'FontName','Monospaced', ...
-                'Max', 1, ...
-                'Enable','on', ...
-                'Visible', 'off');
-            
-            % Time stop info
-            botm = botm - med_text_font(2);
-            pos = [pos_lft_dflt, botm, ...
-                pos_wd_dflt, med_text_font(2)*1];
-            D.UI.txtTimEndInf = uicontrol('Style','text', ...
-                'Parent',D.UI.figICR, ...
-                'String','', ...
-                'Units','Normalized', ...
-                'HorizontalAlignment', 'Left', ...
-                'Position', pos, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledPrintFrgCol, ...
-                'FontName','Courier New', ...
-                'FontWeight','Light', ...
-                'FontSize', med_text_font(1));
-            pos = [pos(1)+pos_wd_dflt*0.4, pos(2), ...
-                pos_wd_dflt*0.55, pos(4)];
-            D.UI.editTimEndInf = uicontrol(...
-                'Parent',D.UI.figICR,...
-                'Units','normalized',...
-                'Position',pos,...
-                'Style','edit',...
-                'HorizontalAlignment', 'Center', ...
-                'FontSize', med_text_font(1), ...
-                'FontName','Monospaced', ...
-                'Max', 1, ...
-                'Enable','on', ...
-                'Visible', 'off');
-            
             %% ========================================================================
             
-            %% ====================== MAKE FIGURE VISIBLE =============================
+            %% MAKE FIGURE VISIBLE
             
             % Set position
-            %movegui(FigGroupH, 'center')
+            movegui(FigH, 'center')
             % Bring UI to top
-            uistack(FigGroupH, 'top')
+            uistack(FigH, 'top')
             % Make visible
-            set(FigGroupH, 'Visible', 'on');
+            set(FigH, 'Visible', 'on');
             
             % Log/print
             Console_Write('[UI_Setup] FINISHED: UI Setup');
@@ -2996,7 +2667,6 @@ fprintf('END OF RUN\n');
         end
         
         % ------------------------------NLX SETUP--------------------------
-        
         function[] = NLX_Setup()
             
             %% DEFINE IO PARAMETERS
@@ -3005,13 +2675,7 @@ fprintf('END OF RUN\n');
             % Each event has a unique bit associated with it
             
             % DygitalLynx server IP
-            if strcmp('ICRCHEETAH', getenv('computername'))
-                % Recording room computer
-                D.NLX.IP = '192.168.3.100';
-            else
-                % Analysis computer
-                D.NLX.IP = '127.0.0.1';
-            end
+            D.NLX.IP = '192.168.3.100'; %the server we are going to connect with to get streaming data
             
             % Aquisition ent names
             D.NLX.vt_rat_ent = 'VT1';
@@ -3107,19 +2771,13 @@ fprintf('END OF RUN\n');
             if ~isCheetahOpen
                 
                 % Keep checking
-                tic
                 while ~isCheetahOpen && ...
-                        ~doExit
+                        ~doExit && ...
+                        strcmp('ICRCHEETAH', getenv('computername'))
                     
                     % Check EXE status
                     [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
                     isCheetahOpen = any(strfind(result, 'Cheetah.exe'));
-                    
-                    % Bail if 5 sec ellapsed and not on recording computer
-                    if toc >= 5 && ...
-                            ~strcmp('ICRCHEETAH', getenv('computername'))
-                        break
-                    end
                 end
                 
                 % Log/print status
@@ -3161,9 +2819,9 @@ fprintf('END OF RUN\n');
             if NlxAreWeConnected() ~= 1
                 
                 % Keep attempting till success
-                while isCheetahOpen && ...
-                        ~D.NLX.connected && ...
-                        ~doExit
+                while ~D.NLX.connected && ...
+                        ~doExit && ...
+                        strcmp('ICRCHEETAH', getenv('computername'))
                     
                     % Attempt connection
                     D.NLX.connected = NlxConnectToServer(D.NLX.IP) == 1;
@@ -3240,36 +2898,30 @@ fprintf('END OF RUN\n');
                 Console_Write('[NLX_Setup] FINISHED: Configure NLX');
             end
             
-            %% Get NLX recording directory
-            
-            % Find current recording directory
-            dirs = dir(D.DIR.nlxTempTop);
-            dirs = dirs(3:end);
-            fi_dat_num = ...
-                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
-            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
-            
             %% ENABLE SETUP PANEL ONCE CONNECTED
             
             % Log/print
             Console_Write('[NLX_Setup] RUNNING: Enable Setup Panel...');
             
-            % Enable all setup stuff
-            Set_Panel_State(D.UI.panStup, 'Enable');
+            % Enable all setup buttons
+            set(D.UI.panStup, 'ForegroundColor', D.UI.enabledCol, ...
+                'HighlightColor',D.UI.enabledCol)
             set(D.UI.popRat, 'Enable', 'on')
             set(D.UI.popCond, 'Enable', 'on')
             set(D.UI.popTask, 'Enable', 'on')
             set(D.UI.popRewDel, 'Enable', 'on')
-            Set_Button_State(D.UI.toggCue, 'Enable');
-            Set_Button_State(D.UI.toggSnd, 'Enable');
-            Set_Button_State(D.UI.toggSnd, 'Enable');
-            Set_Button_State(D.UI.btnSetupDone, 'Enable');
-            Set_Button_State(D.UI.btnSetupDone, 'Enable');
-            Set_Panel_State(D.UI.panConsole, 'Enable');
-            Set_Panel_State(D.UI.panTimInf, 'Enable');
+            set(D.UI.toggCue, 'Enable', 'on', ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol, ...
+                'BackgroundColor', D.UI.enabledCol)
+            set(D.UI.toggSnd, 'Enable', 'on', ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol, ...
+                'BackgroundColor', D.UI.enabledCol)
+            set(D.UI.btnSetupDone, 'Enable', 'on', ...
+                'ForegroundColor', D.UI.enabledBtnFrgCol, ...
+                'BackgroundColor', D.UI.enabledCol)
             
             % Enable Quit
-            set(D.UI.btnQuit, 'Enable', 'on')
+            set( D.UI.btnQuit, 'Enable', 'on');
             
             % Log/print
             Console_Write('[NLX_Setup] FINISHED: Enable Setup Panel')
@@ -3277,7 +2929,6 @@ fprintf('END OF RUN\n');
         end
         
         % ----------------------------FINISH SETUP-------------------------
-        
         function [] = Finish_Setup()
             
             %% Finish Cheetah setup
@@ -3285,77 +2936,21 @@ fprintf('END OF RUN\n');
             % Log/print
             Console_Write('[Finish_Setup] RUNNING: Finalize NLX Setup...');
             
-            % Find current NLX recording directory
-            dirs = dir(D.DIR.nlxTempTop);
-            dirs = dirs(3:end);
-            fi_dat_num = ...
-                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
-            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
-            
-            % Save directory var
-            % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
-            D.DIR.nlxRecRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
-            
-            % Save to global for CS
-            m2c_dir = fullfile(D.DIR.nlxRecRat, D.DIR.recFi);
-            
-            % Make directory if none exists
-            if exist(D.DIR.nlxRecRat, 'dir') == 0 && ...
-                    exist(D.DIR.nlxSaveTop, 'dir') == 1
-                mkdir(D.DIR.nlxRecRat);
-            end
-            
             % Determine which config file to load
-            if ~D.PAR.isImplanted
+            if D.PAR.sesCond == 'Implant_Training'
                 
-                % Load behavior config
-                NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior.cfg');
-                
-            else
-                
-                % Load main ephys config file
+                % Implant ephys recording
                 NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys.cfg');
                 
                 % Pair Cube headstage (Should be commented out unless router has been unpluged)
                 %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -InitWHSPairing 30')
                 
                 % Turn on Cube LEDs
-                NlxSendCommand('-SendLynxSXCommand AcqSystem1 -SetCube2TrackingLED AcqSystem1 "off"');
-                %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1'); TEMP
+                NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1');
                 
-                % Find last rec dir
-                if exist(D.DIR.nlxSaveTop, 'dir') == 1
-                    dirs = dir(D.DIR.nlxRecRat);
-                    dirs = sort({dirs(3:end).name});
-                    nlx_rec_dir_last = fullfile(D.DIR.nlxRecRat,dirs{end});
-                    dirs = dir(nlx_rec_dir_last);
-                    dirs = sort({dirs(3:end).name});
-                    nlx_cfg_file_last = regexp([dirs{:}], '.*.cfg', 'match');
-                    nlx_cfg_file_last = [nlx_cfg_file_last{:}];
-                else
-                    nlx_cfg_file_last = [];
-                end
-                
-                % Propt to load last configuration file
-                if ~isempty(nlx_cfg_file_last) && false % TEMP
-                    load_last = dlgAWL(...
-                        sprintf('Load last Cheetah config file\n"%s"?', nlx_cfg_file_last), ...
-                        'END SESSION', ...
-                        'Yes', 'No', [], 'No', ...
-                        D.UI.dlgPos, ...
-                        'Ques');
-                else
-                    load_last = 'No';
-                end
-                
-                % Implant ephys recording
-                if strcmp(load_last, 'Yes')
-                    
-                    % Send command to load
-                    nlc_cfg_path = fullfile(nlx_rec_dir_last,nlx_cfg_file_last);
-                    NlxSendCommand(sprintf('-ProcessConfigurationFile "%s"', nlc_cfg_path));
-                end
-                
+            else
+                % Behavior tracking
+                NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior.cfg');
             end
             
             % Open the data stream for the VT acquisition entities
@@ -3363,136 +2958,16 @@ fprintf('END OF RUN\n');
             s2 = NlxOpenStream(D.NLX.vt_rob_ent);
             s3 = NlxOpenStream(D.NLX.event_ent);
             
+            % Start acquisition
+            set(D.UI.btnAcq, 'Value', 1)
+            BtnAcq(D.UI.btnAcq);
+            
             % Bail if exit initiated
             if doExit
                 return
             else
                 Console_Write(sprintf('[Finish_Setup] FINISHED: Finalize NLX Setup: Stream Status: vt1=%d vt2=%d evt=%d', s1, s2, s3));
                 clear s1 s2 s3;
-            end
-            
-            %% Run Ephys specific opperations
-            
-            % Run TT_Track
-            if D.PAR.isImplanted
-                Console_Write('[Finish_Setup] RUNNING: Load "TT_TRACK()"...');
-                D = TT_TRACK(D);
-                Console_Write('[Finish_Setup] FINISHED: Load "TT_TRACK()"');
-            end
-            
-            % Run SpikeSort3D.exe
-            if D.PAR.isImplanted
-                Console_Write('[Finish_Setup] RUNNING: Open SpikeSort3D.exe...');
-                
-                % Check if already open
-                [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
-                isSS3DOpen = any(strfind(result, 'SpikeSort3D.exe'));
-                
-                % Run
-                if ~isSS3DOpen
-                    curdir = pwd;
-                    cd(D.DIR.nlxSS3DTop);
-                    system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
-                    cd(curdir);
-                    Console_Write('[Finish_Setup] FINISHED: Open SpikeSort3D.exe');
-                else
-                    Console_Write('[NLX_Setup] FINISHED: SpikeSort3D.exe Already Running');
-                end
-                
-                % Wait for SpikeSort3D to open
-                tic
-                while D.PAR.isImplanted && ...
-                        ~isSS3DOpen && ...
-                        ~doExit
-                    
-                    % Check EXE status
-                    [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
-                    isSS3DOpen = any(strfind(result, 'SpikeSort3D.exe'));
-                    
-                    % Bail if 5 sec ellapsed and not on recording computer
-                    if toc >= 5 && ...
-                            ~strcmp('ICRCHEETAH', getenv('computername'))
-                        break
-                    end
-                end
-                
-                % Log/print status
-                if isSS3DOpen
-                    Console_Write('[Finish_Setup] FINISHED: Open SpikeSort3D.exe');
-                else
-                    Console_Write('**WARNING** [Finish_Setup] ABORTED: Confirm Cheetah.exe Running');
-                end
-                
-            end
-            
-            % Create occ plot axes
-            if D.PAR.isImplanted
-                
-                % TT occ data
-                % Note: used for TT oc imagesc
-                for z_c = 1:10
-                    
-                    % Actual plot axis
-                    D.UI.axClstH(z_c,1) = ...
-                        copyobj(D.UI.axH(5), D.UI.figICR);
-                    hold on;
-                    uistack(D.UI.axClstH(z_c,1), 'bottom')
-                    
-                    % Colorbar axis
-                    D.UI.axClstH(z_c,2) = ...
-                        copyobj(D.UI.axH(5), D.UI.figICR);
-                    hold on;
-                end
-                
-                % Set other axes back to bottom
-                uistack(D.UI.axH(2),'bottom');
-                uistack(D.UI.axH(6),'bottom');
-                
-                % Set axis lims
-                set(D.UI.axClstH, ...
-                    'CLim',[0,1], ...
-                    'XLim', [0,D.PAR.ttBins], ...
-                    'YLim', [0,D.PAR.ttBins]);
-                
-                % Colorbar pos
-                ht = 0.01;
-                lft = D.UI.tim_inf_pan_pos(1);
-                botm = D.UI.cnsl_pan_pos(4) + ht*9;
-                wdth = D.UI.tim_inf_pan_pos(3);
-                pos = [lft, botm, wdth, ht];
-                
-                % Create clust specific maps
-                for z_c = 1:10
-                    
-                    % Get clust specific color map
-                    if z_c==1
-                        col_map = flip(gray(25),1);
-                    else
-                        hsv_col = rgb2hsv(D.UI.clustCol(z_c,:));
-                        hsv_col = repmat(hsv_col,25,1);
-                        hsv_col(:,2) = linspace(0.1, 1, 25)';
-                        col_map = hsv2rgb(hsv_col);
-                    end
-                    
-                    % Set axis colormap
-                    colormap(D.UI.axClstH(z_c,1), col_map)
-                    colormap(D.UI.axClstH(z_c,2), col_map)
-                    
-                    % Add colorbar
-                    D.UI.colBarH(z_c) = ...
-                        colorbar(...
-                        D.UI.axClstH(z_c,2), ...
-                        'Location', 'southoutside', ...
-                        'Position', pos, ...
-                        'TickLabels', [], ...
-                        'Visible', 'off', ...
-                        'Ticks', []);
-                    
-                    % Shift down
-                    pos(2) = pos(2)-ht;
-                end
-                
-                
             end
             
             %% Update session specific vars
@@ -3536,7 +3011,7 @@ fprintf('END OF RUN\n');
                 str2double(char(D.SS_In_All.Rotations_Per_Session{D.PAR.ratInd}(D.PAR.sesNum,:)));
             
             % Rotations position
-            D.PAR.rotPosList = ... % [90,180,270]
+            D.PAR.rotPos = ... % [90,180,270]
                 D.SS_In_All.Rotation_Positions{D.PAR.ratInd}(D.PAR.sesNum,:)';
             
             % Laps per session
@@ -3553,21 +3028,21 @@ fprintf('END OF RUN\n');
             % Make rew per ses list
             txt = [{'Laps Per Rotation'}; ...
                 cellfun(@(x,y) sprintf('%d:    %s', x, y), ...
-                num2cell(1:length(D.PAR.rotPosList))', ...
+                num2cell(1:length(D.PAR.rotPos))', ...
                 cellstr(char(D.PAR.lapsPerRot)), 'Uni', false)];
             set(D.UI.popLapsPerRot, 'String', txt);
             
             % Make rot pos list
             txt = [{'Rotation Positions'}; ...
                 cellfun(@(x,y) sprintf('%d:    %s', x, y), ...
-                num2cell(1:length(D.PAR.rotPosList))', ...
-                cellstr(char(D.PAR.rotPosList)), 'Uni', false)];
+                num2cell(1:length(D.PAR.rotPos))', ...
+                cellstr(char(D.PAR.rotPos)), 'Uni', false)];
             set(D.UI.popRotPos, 'String', txt);
             
-            % Generate rotation button string
+            % Genertate rotation button string
             D.UI.btnICRstr = ...
-                [{sprintf('40%c %s', char(176), char(D.PAR.catRotDrc(D.PAR.catRotDrc ~= D.PAR.ratRotDrc)))}; ...
-                {sprintf('40%c %s', char(176), char(D.PAR.ratRotDrc))}];
+                [{sprintf('ROTATE 40%c %s', char(176), char(D.PAR.catRotDrc(D.PAR.catRotDrc ~= D.PAR.ratRotDrc)))}; ...
+                {sprintf('ROTATE 40%c %s', char(176), char(D.PAR.ratRotDrc))}];
             
             % Modify vars based on rot dir
             if D.PAR.ratRotDrc == 'CCW'
@@ -3589,146 +3064,88 @@ fprintf('END OF RUN\n');
             
             %% Update UI objects
             
-            % DISABLE SETUP BUTTONS
-            Set_Panel_State(D.UI.panStup, 'Disable');
+            % Disable all setup buttons
+            set(D.UI.panStup, 'ForegroundColor', D.UI.disabledBckCol, ...
+                'HighlightColor',D.UI.disabledBckCol)
             set(D.UI.popRat, 'Enable', 'off')
             set(D.UI.popCond, 'Enable', 'off')
             set(D.UI.popTask, 'Enable', 'off')
             set(D.UI.popRewDel, 'Enable', 'off')
-            Set_Button_State(D.UI.toggCue, 'Unenable');
-            Set_Button_State(D.UI.toggSnd, 'Unenable');
+            set(D.UI.toggCue, 'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol)
+            set(D.UI.toggSnd, 'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol)
             
-            % ENABLE RECORD PANEL
-            Set_Panel_State(D.UI.panRec, 'Enable');
+            % Enable other buttons
             
-            % ENABLE ROBOT BUTTONS
             if D.PAR.sesCond ~= 'Manual_Training'
                 
                 % Halt Robot
-                Set_Button_State(D.UI.toggHaltRob, 'Enable');
+                set(D.UI.btnHaltRob, ...
+                    'Enable', 'on', ...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'ForegroundColor' , D.UI.enabledBtnFrgCol);
                 
-                % Bulldoze objects
-                if (D.PAR.sesTask == 'Track')
-                    
-                    % Bulldoze pop menue
-                    set(D.UI.popBulldoze, 'Enable', 'on')
-                    Set_Button_State(D.UI.toggBulldoze, 'Enable');
-                    
-                    % Bulldoze default
-                    val = find(ismember(D.UI.bullList, [num2str(D.PAR.bullDel), ' sec']));
-                    set(D.UI.popBulldoze, 'Value', val);
-                    set(D.UI.toggBulldoze, 'Value', 1);
-                    Bulldoze();
-                    
+                % Bulldoze
+                set(D.UI.popBulldoze, ...
+                    'Enable', 'on')
+                set(D.UI.btnBulldoze, ...
+                    'Enable', 'on', ...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'ForegroundColor' , D.UI.enabledBtnFrgCol, ...
+                    'Value', 1);
+                % bulldoze delay default
+                val = find(ismember(D.UI.bullList, [num2str(D.PAR.bullDel), ' sec']));
+                set(D.UI.popBulldoze, ...
+                    'Value', val);
+                Bulldoze();
+                
+                if D.PAR.cueFeed == 'Half' || D.PAR.cueFeed == 'None'
+                    % Block Cue
+                    set(D.UI.btnBlockCue, ...
+                        'Enable', 'on', ...
+                        'BackgroundColor', D.UI.enabledCol, ...
+                        'ForegroundColor' , D.UI.enabledBtnFrgCol);
+                    % All Cue
+                    set(D.UI.btnAllCue, ...
+                        'Enable', 'on', ...
+                        'BackgroundColor', D.UI.enabledCol, ...
+                        'ForegroundColor' , D.UI.enabledBtnFrgCol);
                 end
                 
             end
             
-            % ENABLE REWARD BUTTONS
-            
-            % Reward trigger button
+            % Reward button
             set(D.UI.popReward, ...
                 'Enable', 'on', ...
                 'BackgroundColor', D.UI.enabledCol);
-            Set_Button_State(D.UI.btnReward, 'Enable');
+            set(D.UI.btnReward, ...
+                'Enable', 'on', ...
+                'BackgroundColor', D.UI.enabledCol);
             
-            % Other reward buttons
-            if D.PAR.sesCond ~= 'Manual_Training'
-                
-                % For track runs
-                if (D.PAR.sesTask == 'Track')
-                    
-                    if D.PAR.cueFeed == 'Half' || ...
-                            D.PAR.cueFeed == 'None'
-                        
-                        % Cue reward
-                        Set_Button_State(D.UI.toggDoCue, 'Enable');
-                        
-                        % Block Cue
-                        Set_Button_State(D.UI.toggBlockCue, 'Enable');
-                        
-                        % Force Cue
-                        Set_Button_State(D.UI.toggForceCue, 'Enable');
-                        
-                    end
-                    
-                end
-                
-                % Pick Reward Pos
-                Set_Button_State(D.UI.toggPickRewPos, 'Enable');
-                
-            end
+            % Clear VT
+            set(D.UI.btnClrVT, ...
+                'Enable', 'on', ...
+                'BackgroundColor', D.UI.enabledCol);
             
-            % CHEETAH BUTTONS
-            Set_Button_State(D.UI.toggAcq, 'Enable');
-            Set_Button_State(D.UI.toggRec, 'Enable');
+            % Enable acq record buttons
+            set(D.UI.panRec, ...
+                'ForegroundColor', D.UI.enabledCol, ...
+                'HighlightColor', D.UI.enabledCol)
+            set(D.UI.btnRec, ...
+                'Enable', 'on', ...
+                'Visible', 'on')
             
+            % Enable inf panels
+            set(D.UI.panSesInf, 'HighlightColor', D.UI.enabledCol)
+            set(D.UI.panPerfInf, 'HighlightColor', D.UI.enabledCol)
+            set(D.UI.panTimInf, 'HighlightColor', D.UI.enabledCol)
             
-            % SETUP TASK OBJECTS
-            if D.PAR.sesCond == 'Rotation'
-                
-                % Set strings
-                set(D.UI.toggICR(1), ...
-                    'String', D.UI.btnICRstr{1});
-                set(D.UI.toggICR(2), ...
-                    'String', D.UI.btnICRstr{2});
-                
-                % Enable first button
-                Set_Button_State(D.UI.toggICR(1), 'Disable');
-                
-                % Make second button active
-                Set_Button_State(D.UI.toggICR(2), 'Enable', D.UI.rotCol(2,:));
-                
-                
-                % Enable rot bound patch HitTest
-                set(D.UI.ptchRtBnds, 'HitTest', 'on')
-                
-            end
-            
-            % SETUP IMPLANT RELATED BUTTONS
-            if D.PAR.isImplanted
-                
-                % Enable cell cut toggle
-                Set_Button_State(D.UI.toggCellsCut, 'Enable');
-                
-                % Clear TT
-                Set_Button_State(D.UI.btnClrTT, 'Enable');
-                
-                % TT plot type
-                Set_Button_State(D.UI.toggTTplotType, 'Enable');
-                
-                % Show tt select panels
-                Set_Panel_State(D.UI.panSelectTT, 'Enable');
-                set(D.UI.panSelectTT(1,2), ...
-                    'Units', 'Normalized', ...
-                    'Position', D.UI.tt_select_pan_copy_pos(1,:), ...
-                    'Visible', 'on')
-                set(D.UI.panSelectTT(2,2), ...
-                    'Units', 'Normalized', ...
-                    'Position', D.UI.tt_select_pan_copy_pos(2,:), ...
-                    'Visible', 'on')
-                set(D.UI.toggSubTT(:,:,2), ...
-                    'Visible', 'on')
-                
-                % Color bars
-                set(D.UI.colBarH, 'Visible', 'on')
-                
-            end
-            
-            % ENABLE TEXT ETC
-            
-            % Text panels
-            Set_Panel_State(D.UI.panSesInf, 'Enable');
-            Set_Panel_State(D.UI.panPerfInf, 'Enable');
-            
-            % Other popup menues
+            % Enable other popup menues
             set(D.UI.popLapsPerRot, 'Visible', 'on');
             set(D.UI.popRotPos, 'Visible', 'on');
             set(D.UI.popLapTim, 'Visible', 'on');
             set(D.UI.popRewInfo, 'Visible', 'on');
-            
-            % Clear VT
-            Set_Button_State(D.UI.btnClrVT, 'Enable');
             
             %% Print session and performance and time info
             
@@ -3811,31 +3228,31 @@ fprintf('END OF RUN\n');
             set(D.UI.txtPerfInf(6), 'String', infstr)
             
             % bat volt
-            infstr = sprintf('Rob_Battery_:_%0.1fV', 0);
+            infstr = sprintf('Battery:_%0.1fV', 0);
             set(D.UI.txtPerfInf(7), 'String', infstr)
-            infstr = sprintf('Cube_Battery:_%d%%', 0);
-            set(D.UI.txtPerfInf(8), 'String', infstr)
             
             % Print time info
             % elapsed
             infstr = sprintf([ ...
-                'SES:%s%s\n', ...
-                'REC:%s%s\n', ...
-                'LAP:%s%s\n', ...
-                'RUN:%s%s\n'], ...
-                repmat('_',1,1), datestr(0, 'HH:MM:SS'), ...
-                repmat('_',1,1), datestr(0, 'HH:MM:SS'), ...
-                repmat('_',1,1), datestr(0, 'HH:MM:SS'), ...
-                repmat('_',1,1), datestr(0, 'HH:MM:SS'));
+                '(SES):%s%s\n', ...
+                '(REC):%s%s\n', ...
+                '(LAP):%s%s\n', ...
+                '(RUN):%s%s\n'], ...
+                repmat('_',1,6), datestr(0, 'HH:MM:SS'), ...
+                repmat('_',1,6), datestr(0, 'HH:MM:SS'), ...
+                repmat('_',1,6), datestr(0, 'HH:MM:SS'), ...
+                repmat('_',1,6), datestr(0, 'HH:MM:SS'));
             set(D.UI.txtTimElspInf, 'String', infstr)
             % start
-            infstr = sprintf('Start: ');
+            infstr = sprintf( ...
+                'Start:%s', repmat('_',1,6));
             set(D.UI.txtTimStrInf, 'String', infstr)
             infstr = datestr(startTime, 'HH:MM:SS');
             set(D.UI.editTimStrInf, 'String', infstr, ...
                 'Visible', 'on')
             % end
-            infstr = sprintf('Stop_: ');
+            infstr = sprintf( ...
+                'Stop_:%s\n', repmat('_',1,6));
             set(D.UI.txtTimEndInf, 'String', infstr)
             infstr = datestr(0, 'HH:MM:SS');
             set(D.UI.editTimEndInf, 'String', infstr, ...
@@ -3907,8 +3324,8 @@ fprintf('END OF RUN\n');
             D.PAR.rewZoneBnds = wrapTo2Pi(D.PAR.rewZoneBnds);
             
             % REWARD RESET BOUNDS
-            D.UI.rewRstBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(0),deg2rad(30)];
-            D.UI.rewRstBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(0),deg2rad(30)];
+            D.UI.rewRstBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(10),deg2rad(40)];
+            D.UI.rewRstBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(10),deg2rad(40)];
             D.UI.rewRstBnds = wrapTo2Pi(D.UI.rewRstBnds);
             
             % REWARD PASS BOUNDS
@@ -3919,26 +3336,22 @@ fprintf('END OF RUN\n');
             % ROTATION BOUNDS
             
             % Calculate crossing points for 90 180 and 270 deg from rew feeders
-            bnd_space = 20;
-            bnd_wdth = 30;
-            D.PAR.rotDistDeg = 110:bnd_space:290;
             D.UI.rotLocs = [...
-                fdLocs(D.UI.rewFeed(1)) + D.PAR.trigDist + D.PAR.rotDistDeg', ...
-                fdLocs(D.UI.rewFeed(2)) + D.PAR.trigDist + D.PAR.rotDistDeg'];
+                (fdLocs(D.UI.rewFeed(1))-90:-90:fdLocs(D.UI.rewFeed(1))-270)', ...
+                (fdLocs(D.UI.rewFeed(2))-90:-90:fdLocs(D.UI.rewFeed(2))-270)'];
             
             % Calculate 30 deg wide bounds for each rotation pos
-            rot_bnds = arrayfun(@(x,y) cat(3, [x-bnd_space, x], [y-bnd_space, y]), ...
+            D.UI.rotBnds = arrayfun(@(x,y) cat(3, [x, x-30], [y, y-30]), ...
                 D.UI.rotLocs(:,1), D.UI.rotLocs(:,2), 'Uni', false);
-            rot_bnds = cell2mat(rot_bnds);
+            D.UI.rotBnds = cell2mat(D.UI.rotBnds);
             % set range to [0, 360]
-            rot_bnds = wrapTo360(rot_bnds);
+            D.UI.rotBnds = wrapTo360(D.UI.rotBnds);
             % convert to radians
-            rot_bnds = deg2rad(rot_bnds);
-            rot_bnds = wrapTo2Pi(rot_bnds);
-            D.UI.rotBnds = rot_bnds;
-            D.PAR.rotBnds = rot_bnds;
-            D.PAR.rotBnds(:,1,:) = wrapTo2Pi(rot_bnds(:,1,:)-deg2rad(bnd_wdth-bnd_space));
-            D.UI.rotCatInd = knnsearch([90,180,270]', D.PAR.rotDistDeg');
+            D.UI.rotBnds = deg2rad(D.UI.rotBnds);
+            % Flip direction
+            D.UI.rotBnds = flip(D.UI.rotBnds, 1);
+            D.UI.rotBnds = flip(D.UI.rotBnds, 2);
+            D.UI.rotBnds = wrapTo2Pi(D.UI.rotBnds);
             
             % LAP BOUNDS
             
@@ -3970,16 +3383,37 @@ fprintf('END OF RUN\n');
             D.PAR.strQuadBnds = wrapTo2Pi(D.PAR.strQuadBnds);
             
             % FORAGE REWARD TARGET BOUNDS
-            D.PAR.rewTargBnds = NaN(length(D.PAR.rfTargDegArr),2);
-            for z_targ = 1:length(D.PAR.rfTargDegArr)
+            D.PAR.rewTargBnds = NaN(length(D.PAR.pathTargArr),2);
+            for z_targ = 1:length(D.PAR.pathTargArr)
                 D.PAR.rewTargBnds(z_targ,:) = [...
-                    Rad_Diff(deg2rad(D.PAR.rfTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2)), ...
-                    Rad_Sum(deg2rad(D.PAR.rfTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2))];
+                    Rad_Diff(deg2rad(D.PAR.pathTargArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2)), ...
+                    Rad_Sum(deg2rad(D.PAR.pathTargArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2))];
             end
             % [zone,min_max,rot_cond]
             D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
             
             %% Plot UI features
+            
+            % Plot start quadrant
+            [xbnd, ybnd] =  Get_Cart_Bnds(D.PAR.strQuadBnds);
+            D.UI.ptchStQ = ...
+                patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                [0.5,0.5,0.5], ...
+                'FaceAlpha',0.5, ...
+                'Visible', 'off', ...
+                'Parent',D.UI.axH(2));
+            % add start text
+            D.UI.txtStQ = ...
+                text(mean(xbnd(:,round(size(xbnd,2)/2))), ...
+                mean(ybnd(:,round(size(ybnd,2)/2))), ...
+                'Start', ...
+                'FontSize', 12, ...
+                'FontWeight', 'Bold', ...
+                'Color', D.UI.enabledCol, ...
+                'HorizontalAlignment', 'Center', ...
+                'Visible', 'off', ...
+                'Parent',D.UI.axH(2));
             
             % Plot all feeders
             D.UI.fdAllH = plot(D.UI.fd_x, D.UI.fd_y, 'o', ...
@@ -3987,7 +3421,7 @@ fprintf('END OF RUN\n');
                 'MarkerEdgeColor', [0.1,0.1,0.1], ...
                 'MarkerSize', 20, ...
                 'Visible', 'on', ...
-                'Parent', D.UI.axH(4));
+                'Parent', D.UI.axH(2));
             
             % Plot feeder pos in rad and cm
             fd_cm = (140*pi)-(140*pi)/36/2:-(140*pi)/36:(140*pi)/36/2;
@@ -4002,50 +3436,21 @@ fprintf('END OF RUN\n');
                     'FontSize', 6, ...
                     'FontWeight', 'bold', ...
                     'Visible', 'on', ...
-                    'Parent', D.UI.axH(4));
-                
-                % Plot start quadrant
-                [xbnd, ybnd] =  Get_Cart_Bnds(D.PAR.strQuadBnds);
-                D.UI.ptchStQ = ...
-                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                    [0.5,0.5,0.5], ...
-                    'FaceAlpha',0.5, ...
-                    'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
-                % add start text
-                D.UI.txtStQ = ...
-                    text(mean(xbnd(:,round(size(xbnd,2)/2))), ...
-                    mean(ybnd(:,round(size(ybnd,2)/2))), ...
-                    'Start', ...
-                    'FontSize', 12, ...
-                    'FontWeight', 'Bold', ...
-                    'Color', D.UI.enabledCol, ...
-                    'HorizontalAlignment', 'Center', ...
-                    'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
+                    'Parent', D.UI.axH(2));
             end
             
-            %% Start recording
-            
-            % Start acquisition
-            set(D.UI.toggAcq, 'Value', 1)
-            BtnAcq(D.UI.toggAcq);
+            %% Start recording a
             
             % Run BtnRec
-            set(D.UI.toggRec,'Value', 1);
-            BtnRec(D.UI.toggRec);
+            set(D.UI.btnRec,'Value', 1);
+            BtnRec(D.UI.btnRec);
             
             %% Send setup command to robot
             % ses cond
             if D.PAR.sesCond == 'Manual_Training'
                 d1 = 0;
-            elseif D.PAR.sesTask == 'Track'
+            else
                 d1 = 1;
-            elseif D.PAR.sesTask == 'Forage'
-                d1 = 2;
             end
             
             % sound cond
@@ -4076,29 +3481,27 @@ fprintf('END OF RUN\n');
             
             % Setup axes
             wdth = 0.23;
-            ht = 0.2*D.UI.main_ax_bounds(4);
+            ht = 0.2;
             lft = (D.UI.main_ax_bounds(1)+(D.UI.main_ax_bounds(3)/2)) - wdth/2;
-            botm = D.UI.main_ax_bounds(2) + D.UI.main_ax_bounds(4)/2 - ht/2;
+            botm = 0.5 - ht/2;
             zone_ax_pos = [...
                 lft, ...
                 botm, ...
                 wdth, ...
                 ht ...
                 ];
-            set(D.UI.axZoneH(1), ...
+            D.UI.axZoneH(1) = axes( ...
                 'Color', 'none', ...
                 'Position',zone_ax_pos, ...
                 'XLim',[min(x_long)+sub_samp/2-1,max(x_long)-sub_samp/2], ...
-                'Visible','off', ...
-                'Parent', D.UI.figICR);
+                'Visible','off');
             hold on;
-            set(D.UI.axZoneH(2), ...
+            D.UI.axZoneH(2) = axes( ...
                 'Color','none', ...
                 'Position',zone_ax_pos, ...
                 'XLim',[min(zone_short)+2.5, max(zone_short)-2.5], ...
                 'XTick',zone_short, ...
-                'Visible','off', ...
-                'Parent', D.UI.figICR);
+                'Visible','off');
             box on;
             hold on
             set(D.UI.axZoneH, ...
@@ -4200,11 +3603,11 @@ fprintf('END OF RUN\n');
             samp_dist = samp_hist'/max(samp_hist);
             
             % Reverse sign and store values
-            D.I.zone_arr = zone_arr*-1;
+            D.I.zoneArr = zone_arr*-1;
             
             % plot sample dist
             if D.PAR.cueFeed ~= 'None'
-                D.UI.zone_arrH = createPatches(...
+                D.UI.zoneArrH = createPatches(...
                     -1*D.PAR.zoneLocs, samp_dist, 2, ...
                     [0, 0, 0], ...
                     0.25, ...
@@ -4236,11 +3639,11 @@ fprintf('END OF RUN\n');
             
             %             % Print vals to console
             %             str = [];
-            %             for z_s = 1:7:length(D.I.zone_arr)
-            %                 if z_s+7 < length(D.I.zone_arr)
-            %                     str = [str, sprintf('%s\r', num2str(D.I.zone_arr(z_s:z_s+7)'))];
+            %             for z_s = 1:7:length(D.I.zoneArr)
+            %                 if z_s+7 < length(D.I.zoneArr)
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:z_s+7)'))];
             %                 else
-            %                     str = [str, sprintf('%s\r', num2str(D.I.zone_arr(z_s:end)'))];
+            %                     str = [str, sprintf('%s\r', num2str(D.I.zoneArr(z_s:end)'))];
             %                 end
             %             end
             %
@@ -4250,61 +3653,54 @@ fprintf('END OF RUN\n');
             %% SETUP UI OBJECTS
             
             % Plot reward bounds
-            for z_rot = 1:2
+            for z_fd = 1:2
                 for z_zone = 1:length(D.PAR.zoneLocs)
                     
                     % reward bounds
                     [xbnd, ybnd] =  ...
-                        Get_Cart_Bnds(D.PAR.rewZoneBnds(z_zone,:,z_rot));
-                    D.UI.ptchRewZoneBnds(z_rot,z_zone) = ...
+                        Get_Cart_Bnds(D.PAR.rewZoneBnds(z_zone,:,z_fd));
+                    D.UI.ptchFdZineH(z_zone,z_fd) = ...
                         patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
                         [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                        D.UI.rotCol(z_rot,:), ...
-                        'ButtonDownFcn', {@MouseSelectRewZone}, ...
+                        D.UI.rotCol(z_fd,:), ...
                         'EdgeColor', [0, 0, 0], ...
                         'EdgeAlpha', 0.025, ...
-                        'FaceAlpha', 0.025, ...
+                        'FaceAlpha', 0.05, ...
                         'LineWidth', 1, ...
                         'Visible', 'off', ...
-                        'UserData', [z_rot, z_zone], ...
-                        'Parent', D.UI.axH(8));
+                        'Parent', D.UI.axH(2));
                     
                     % Add reward duration text
                     str = ...
                         sprintf('%d%c\n%d ms', -1*D.PAR.zoneLocs(z_zone), char(176), D.PAR.zoneRewDur(z_zone));
-                    D.UI.txtFdDurH(z_rot,z_zone) = text(...
+                    D.UI.txtFdDurH(z_zone,z_fd) = text(...
                         mean(mean(xbnd)), mean(mean(ybnd)), ...
                         str, ...
                         'Color', [1, 1, 1], ...
-                        'ButtonDownFcn', {@MouseSelectRewZone}, ...
                         'HorizontalAlignment', 'center', ...
                         'FontSize', 8, ...
                         'FontWeight', 'bold', ...
                         'Visible', 'off', ...
-                        'UserData', [z_rot, z_zone], ...
-                        'Parent', D.UI.axH(8));
+                        'Parent', D.UI.axH(2));
                 end
             end
             % bring text to top of stack
-            uistack(D.UI.txtFdDurH(:),'top');
+            uistack(reshape(D.UI.txtFdDurH,1,[]),'top');
             % make 0 bounds visible
-            set(D.UI.ptchRewZoneBnds(1,:), ...
-                'EdgeAlpha', 0.1, ...
-                'FaceAlpha', 0.1);
+            set(D.UI.ptchFdZineH(:,1), 'EdgeAlpha', 0.05, 'FaceAlpha', 0.15);
             
             % Plot reward reset bounds
-            for z_rot = 1:2
+            for z_fd = 1:2
                 [xbnd, ybnd] =  ...
-                    Get_Cart_Bnds(D.UI.rewRstBnds(z_rot,:));
-                D.UI.ptchFdRstH(z_rot) = ...
+                    Get_Cart_Bnds(D.UI.rewRstBnds(z_fd,:));
+                D.UI.ptchFdRstH(z_fd) = ...
                     patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
                     [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                    D.UI.rotCol(z_rot,:), ...
+                    D.UI.rotCol(z_fd,:), ...
                     'FaceAlpha', 0.5, ...
                     'EdgeAlpha', 0.5, ...
                     'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent', D.UI.axH(3));
+                    'Parent', D.UI.axH(2));
             end
             
             % Plot lap bounds
@@ -4319,41 +3715,37 @@ fprintf('END OF RUN\n');
                     'FaceAlpha', 0.1, ...
                     'EdgeAlpha', 0, ...
                     'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent', D.UI.axH(3));
+                    'Parent', D.UI.axH(2));
             end
             
             % Feeder reward feeder marker
-            for z_rot = 1:2
+            for z_fd = 1:2
                 [xbnd, ybnd] =  ...
-                    Get_Cart_Bnds([D.UI.rewZoneRad(z_rot), ...
-                    D.UI.rewZoneRad(z_rot) + deg2rad(D.PAR.trigDist)]);
+                    Get_Cart_Bnds([D.UI.rewZoneRad(z_fd), ...
+                    D.UI.rewZoneRad(z_fd) + deg2rad(D.PAR.trigDist)]);
                 % setpoint zone line
-                D.UI.mixFdNow(1,z_rot) = ...
+                D.UI.mixFdNow(1,z_fd) = ...
                     plot(xbnd(:,end), ybnd(:,end), ...
-                    'Color', D.UI.rotCol(z_rot,:), ...
+                    'Color', D.UI.rotCol(z_fd,:), ...
                     'LineWidth', 2, ...
                     'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
+                    'Parent',D.UI.axH(2));
                 % distance line
-                D.UI.mixFdNow(2,z_rot) = ...
+                D.UI.mixFdNow(2,z_fd) = ...
                     plot(xbnd(2,:), ybnd(2,:), ...
-                    'Color', D.UI.rotCol(z_rot,:), ...
-                    'LineWidth', 5, ...
+                    'Color', D.UI.rotCol(z_fd,:), ...
+                    'LineWidth', 3, ...
                     'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
+                    'Parent',D.UI.axH(2));
                 % marker
-                D.UI.mixFdNow(3,z_rot) = ...
-                    plot(D.UI.fd_x(D.UI.rewFeed(z_rot)), ...
-                    D.UI.fd_y(D.UI.rewFeed(z_rot)), 'o', ...
-                    'MarkerFaceColor', D.UI.rotCol(z_rot,:), ...
+                D.UI.mixFdNow(3,z_fd) = ...
+                    plot(D.UI.fd_x(D.UI.rewFeed(z_fd)), ...
+                    D.UI.fd_y(D.UI.rewFeed(z_fd)), 'o', ...
+                    'MarkerFaceColor', D.UI.rotCol(z_fd,:), ...
                     'MarkerEdgeColor', [0.1,0.1,0.1], ...
                     'MarkerSize', 20, ...
                     'Visible', 'off', ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(4));
+                    'Parent',D.UI.axH(2));
             end
             
             % Plot opposite unrewarded feeders darker
@@ -4361,46 +3753,14 @@ fprintf('END OF RUN\n');
                 'MarkerFaceColor', [0.25 0.25 0.25], ...
                 'MarkerEdgeColor', [0.1,0.1,0.1], ...
                 'MarkerSize', 20, ...
-                'Parent',D.UI.axH(4));
-            
-            % Plot all rot bounds
-            for z_rot = 1:2
-                for z_pos = 1:size(D.UI.rotBnds,1)
-                    [xbnd, ybnd] =  Get_Cart_Bnds(D.UI.rotBnds(z_pos,:,z_rot));
-                    D.UI.ptchRtBnds(z_rot, z_pos) = ...
-                        patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                        [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                        D.UI.rotCol(z_rot,:), ...
-                        'FaceAlpha', 0.1, ...
-                        'EdgeAlpha', 0.5, ...
-                        'LineWidth', 1, ...
-                        'Visible', 'off', ...
-                        'UserData', [z_rot, z_pos], ...
-                        'ButtonDownFcn', {@MouseSelectRot}, ...
-                        'HitTest', 'off', ...
-                        'Parent', D.UI.axH(8));
-                    
-                    str = ...
-                        sprintf('%d%c', D.PAR.rotDistDeg(z_pos), char(176));
-                    D.UI.txtRtBnds(z_rot, z_pos) = text(...
-                        mean(mean(xbnd)), mean(mean(ybnd)), ...
-                        str, ...
-                        'Color', [1, 1, 1], ...
-                        'HorizontalAlignment', 'center', ...
-                        'FontSize', 8, ...
-                        'FontWeight', 'bold', ...
-                        'Visible', 'off', ...
-                        'HitTest', 'off', ...
-                        'Parent', D.UI.axH(8));
-                end
-            end
+                'Parent',D.UI.axH(2));
             
             %% MAKE UI OBJECTS VISIBLE
             
             % Set other plot features to visible
             set(D.UI.linTrckH, 'Visible', 'on');
             set(D.UI.linVelH, 'Visible', 'on');
-            set(D.UI.ptchRewZoneBnds, 'Visible', 'on');
+            set(D.UI.ptchFdZineH, 'Visible', 'on');
             set(D.UI.ptchStQ, 'Visible', 'on');
             set(D.UI.txtStQ, 'Visible', 'on');
             
@@ -4425,7 +3785,7 @@ fprintf('END OF RUN\n');
         function[] = Forage_Task_Setup()
             
             % Set axis lims
-            set(D.UI.axH(6), ...
+            set(D.UI.axH(3), ...
                 'YDir', 'reverse', ...
                 'XLim', [0,D.PAR.rfBins], ...
                 'YLim', [0,D.PAR.rfBins]);
@@ -4525,16 +3885,16 @@ fprintf('END OF RUN\n');
                 D.DB.simRatPathMat(D.DB.simRatPathMat>0) = 1;
                 
                 % Plot path averages
-                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
+                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
                 pause(1);
                 delete(ih);
                 
                 % Plot accross pos and paths
-                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
+                ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(3));
                 pause(1);
                 delete(ih);
                 for i = 1:D.PAR.nPaths
-                    ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(6));
+                    ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(3));
                     pause(0.1);
                     delete(ih);
                 end
@@ -4556,31 +3916,29 @@ fprintf('END OF RUN\n');
             end
             
             % Create target patches
-            for z_targ = 1:length(D.PAR.rfTargDegArr)
+            for z_targ = 1:length(D.PAR.pathTargArr)
                 
-                % random forage reward bounds
+                % reward bounds
                 [xbnd, ybnd] =  ...
                     Get_Cart_Bnds(D.PAR.rewTargBnds(z_targ,:));
-                D.UI.ptchRewTargBnds(z_targ) = ...
+                D.UI.ptchRFTarg(z_targ) = ...
                     patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
                     [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                    [0,0,0], ...
-                    'ButtonDownFcn', {@MouseSelectRewTarg}, ...
-                    'EdgeColor', [0,0,0], ...
-                    'EdgeAlpha', 0.5, ...
+                    D.UI.activeCol, ...
+                    'EdgeColor', [0, 0, 0], ...
+                    'EdgeAlpha', 0.025, ...
                     'FaceAlpha', 0.5, ...
                     'LineWidth', 1, ...
-                    'UserData', z_targ, ...
                     'Visible', 'off', ...
-                    'Parent', D.UI.axH(8));
+                    'Parent', D.UI.axH(2));
             end
             
             % Set color lims
-            set(D.UI.axH(6), 'CLim', [0,1]);
+            set(D.UI.axH(3), 'CLim', [0,1]);
             
             % Plot occ
-            D.UI.imgrfOcc = imagesc(D.P.rfOccMatScale+D.P.pathNowMat, ...
-                'Parent', D.UI.axH(6));
+            D.UI.imgRFOCC = imagesc(D.P.occMatScale+D.P.pathNowMat, ...
+                'Parent', D.UI.axH(3));
             
             % Set other plot features to visible
             set(D.UI.linRFH, 'Visible', 'on');
@@ -4589,12 +3947,9 @@ fprintf('END OF RUN\n');
             set(D.UI.txtStQ, 'Visible', 'on');
             
             % Get first target set to 180 from start quad
-            D.I.targ_now = ...
-                find(round(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi))) == D.PAR.rfTargDegArr);
-            set(D.UI.ptchRewTargBnds(D.I.targ_now), ...
-                'FaceColor', D.UI.activeCol, ...
-                'EdgeColor', D.UI.activeCol, ...
-                'Visible', 'on');
+            D.I.targInd = ...
+                find(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi)) == D.PAR.pathTargArr);
+            set(D.UI.ptchRFTarg(D.I.targInd), 'Visible', 'on');
             
         end
         
@@ -4674,7 +4029,7 @@ fprintf('END OF RUN\n');
             end
             
             % Log/print
-            Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
+            Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: OCC=%0.2fsec', ...
                 inbndTim));
             
         end
@@ -4771,12 +4126,11 @@ fprintf('END OF RUN\n');
                 D.DB.simVelLast = NaN;
                 D.DB.simTSStart = NaN;
                 D.DB.simTSLast = NaN;
-                D.DB.simSwayDir = -1;
                 D.F.initVals = true;
                 
-                pos = [D.UI.ses_inf_pan_pos(1)-0.185, 1-0.025, 0.175, 0.02];
+                pos = [D.UI.sesInfPanPos(1)-0.18, 0.01, 0.175,0.02];
                 D.UI.sldSimVel = uicontrol('Style', 'slider',...
-                    'Parent',D.UI.figICR, ...
+                    'Parent',FigH, ...
                     'Units', 'Normalized', ...
                     'Min',0,'Max',100, ...
                     'Value',D.DB.ratVelStart,...
@@ -4787,7 +4141,7 @@ fprintf('END OF RUN\n');
                 % Vel text
                 pos = [pos(1)-0.03, pos(2), 0.03, pos(4)];
                 D.UI.txtSimVel = uicontrol('Style', 'text',...
-                    'Parent',D.UI.figICR, ...
+                    'Parent',FigH, ...
                     'Units', 'Normalized', ...
                     'BackgroundColor', D.UI.figBckCol, ...
                     'ForegroundColor', D.UI.enabledCol, ...
@@ -4878,11 +4232,11 @@ fprintf('END OF RUN\n');
                 
                 % convdert to [r = samp, c = dim]
                 xy_pos = reshape(double(D.P.(fld).vtPos),2,[])';
-                ts = D.P.(fld).vtTS';
+                ts = double(D.P.(fld).vtTS)';
                 recs = D.P.(fld).vtNRecs;
                 
                 % Convert to normalized polar vals
-                [rad, roh] = VT_2_Pol(xy_pos);
+                [rad, roh] = VT_2_Rad(xy_pos);
                 
                 % Exclude outlyer values > || < track bounds plus 5 cm
                 if ~(D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat'))
@@ -4967,15 +4321,12 @@ fprintf('END OF RUN\n');
                 if strcmp(fld, 'Rat')
                     
                     % Get next indces
-                    ind_str = D.P.Rat.pos_lap_hist{1}(2) + 1;
-                    ind_end = ind_str+length(x)-1;
-                    D.P.Rat.pos_lap_hist{1}(1) = ind_str;
-                    D.P.Rat.pos_lap_hist{1}(2) = ind_end;
+                    ind(1) = find(isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'first');
+                    ind(2) = ind(1)+length(x)-1;
                     
                     % Store pos data
-                    D.P.Rat.pos_lap_hist{2}(ind_str:ind_end, 1) = x;
-                    D.P.Rat.pos_lap_hist{2}(ind_str:ind_end, 2) = y;
-                    D.P.Rat.pos_lap_hist{2}(ind_str:ind_end, 3) = ts;
+                    D.P.Rat.pos_lap_hist(ind(1):ind(2), 1) = x;
+                    D.P.Rat.pos_lap_hist(ind(1):ind(2), 2) = y;
                 end
                 
                 %% HANDLE RAT FORAGE DATA
@@ -4988,19 +4339,19 @@ fprintf('END OF RUN\n');
                     occ_now = flip(occ_now,1);
                     
                     % Store raw values
-                    D.P.rfOccMatRaw = D.P.rfOccMatRaw + occ_now;
+                    D.P.occMatRaw = D.P.occMatRaw + occ_now;
                     
                     % Compute and store scaled occ
-                    non_zer_occ = D.P.rfOccMatRaw(D.P.rfOccMatRaw(:) > 0);
-                    scale = prctile(non_zer_occ,95);
+                    non_zer_occ = D.P.occMatRaw(D.P.occMatRaw(:) > 0);
+                    scale = prctile(non_zer_occ,99);
                     if scale == 0
                         scale = 1;
                     end
-                    D.P.rfOccMatScale = D.P.rfOccMatRaw/scale;
+                    D.P.occMatScale = D.P.occMatRaw/scale;
                     
                     % Compute binary value
-                    D.P.rfOccMatBinary = D.P.rfOccMatBinary  + occ_now;
-                    D.P.rfOccMatBinary = ceil(D.P.rfOccMatBinary/max(D.P.rfOccMatBinary(:)));
+                    D.P.occMatBinary = D.P.occMatBinary  + occ_now;
+                    D.P.occMatBinary = ceil(D.P.occMatBinary/max(D.P.occMatBinary(:)));
                     
                     return
                 end
@@ -5040,6 +4391,9 @@ fprintf('END OF RUN\n');
                 % Get radian value for vel plot
                 set_vel_nan = false;
                 
+                % Get next vel hisory ind
+                vel_ind = find(isnan(D.P.(fld).vel_cart_lap_hist(:,1)), 1, 'first');
+                
                 % Check what rob vel plot should be aligned to
                 if strcmp(fld, 'Rob') && ~D.F.rat_in
                     % Use setpoint pos
@@ -5061,7 +4415,7 @@ fprintf('END OF RUN\n');
                 if nDat >= D.P.vel_nsmp
                     nDat = D.P.vel_nsmp;
                     D.P.(fld).rad_samples = rad(1:nDat);
-                    D.P.(fld).ts_samples = double(ts(1:nDat));
+                    D.P.(fld).ts_samples = ts(1:nDat);
                     % Combine new and old vals
                 else
                     % combine rad
@@ -5071,7 +4425,7 @@ fprintf('END OF RUN\n');
                         old_dat(nDat+1:end);
                     % combine ts
                     old_dat = D.P.(fld).ts_samples;
-                    D.P.(fld).ts_samples(end-nDat+1:end) = double(ts);
+                    D.P.(fld).ts_samples(end-nDat+1:end) = ts;
                     D.P.(fld).ts_samples(1:end-nDat) = ...
                         old_dat(nDat+1:end);
                 end
@@ -5091,18 +4445,14 @@ fprintf('END OF RUN\n');
                     vel = cm./dt;
                 end
                 
-                % Get next vel hisory ind
-                vel_ind = D.P.(fld).vel_cart_lap_hist{1} + 1;
-                D.P.(fld).vel_cart_lap_hist{1} = vel_ind;
-                
                 % Check if we have usable data
                 if isempty(vel) || isempty(D.P.(fld).velRad)
                     
                     % Set not to plot this vel
                     D.F.(fld).plot_vel = false;
                     
-                    % Set to NaN to avoid jumps in plot
-                    D.P.(fld).vel_cart_lap_hist{2}(vel_ind,:) = NaN;
+                    % Set to zero (later to NaN) to avoid jumps in plot
+                    D.P.(fld).vel_cart_lap_hist(vel_ind,:) = 0;
                     
                 else
                     
@@ -5139,13 +4489,13 @@ fprintf('END OF RUN\n');
                     % Store plot values
                     if ~set_vel_nan
                         % Convert to cart
-                        [D.P.(fld).vel_cart_lap_hist{2}(vel_ind, 1), D.P.(fld).vel_cart_lap_hist{2}(vel_ind, 2)] = ...
+                        [D.P.(fld).vel_cart_lap_hist(vel_ind, 1), D.P.(fld).vel_cart_lap_hist(vel_ind, 2)] = ...
                             pol2cart(D.P.(fld).velRad, velRoh);
-                        D.P.(fld).vel_cart_lap_hist{2}(vel_ind, 1) =  D.P.(fld).vel_cart_lap_hist{2}(vel_ind, 1).*D.PAR.R + D.PAR.XC;
-                        D.P.(fld).vel_cart_lap_hist{2}(vel_ind, 2) =  D.P.(fld).vel_cart_lap_hist{2}(vel_ind, 2).*D.PAR.R + D.PAR.YC;
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, 1) =  D.P.(fld).vel_cart_lap_hist(vel_ind, 1).*D.PAR.R + D.PAR.XC;
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, 2) =  D.P.(fld).vel_cart_lap_hist(vel_ind, 2).*D.PAR.R + D.PAR.YC;
                     else
-                        % Set to NaN because rad diff to large
-                        D.P.(fld).vel_cart_lap_hist{2}(vel_ind, :) = NaN;
+                        % Set to zero (later to NaN) because rad diff to large
+                        D.P.(fld).vel_cart_lap_hist(vel_ind, :) = 0;
                         D.P.(fld).velRad = NaN;
                         velRoh = NaN;
                         
@@ -5154,10 +4504,9 @@ fprintf('END OF RUN\n');
                     end
                     
                     % Save pol history
-                    ind = D.P.(fld).vel_pol_lap_hist{1} + 1;
-                    D.P.(fld).vel_pol_lap_hist{2}(ind, 1) = D.P.(fld).velRad;
-                    D.P.(fld).vel_pol_lap_hist{2}(ind, 2) = velRoh;
-                    D.P.(fld).vel_pol_lap_hist{1} = ind;
+                    ind = find(isnan(D.P.(fld).vel_pol_lap_hist(:,1)), 1, 'first');
+                    D.P.(fld).vel_pol_lap_hist(ind, 1) = D.P.(fld).velRad;
+                    D.P.(fld).vel_pol_lap_hist(ind, 2) = velRoh;
                     
                 end
                 
@@ -5187,372 +4536,6 @@ fprintf('END OF RUN\n');
             
         end
         
-        % ----------------------PLOT CURRENT POSITION----------------------
-        
-        function [update_ui] = VT_Plot_New()
-            
-            % BAIL IF SETUP NOT FINISHED
-            update_ui = false;
-            if ~D.F.setup_done
-                return;
-            end
-            
-            %% ROBOT POS
-            
-            if D.F.Rob.plot_pos
-                
-                % Plot rob patch
-                if isfield(D.UI, 'ptchRobPos')
-                    delete(D.UI.ptchRobPos);
-                end
-                [xbnd, ybnd] =  Get_Cart_Bnds( [D.P.Rob.guardRad, D.P.Rob.buttRad], D.P.trackRohBnd);
-                D.UI.ptchRobPos = ...
-                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                    D.UI.robNowCol, ...
-                    'EdgeColor', D.UI.robNowCol, ...
-                    'LineWidth', 2, ...
-                    'FaceAlpha',0.75, ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
-                
-                % Plot current rob tracker pos
-                if isfield(D.UI, 'vtRobPltNow')
-                    delete(D.UI.vtRobPltNow);
-                end
-                D.UI.vtRobPltNow = ...
-                    plot(D.P.Rob.x(end), D.P.Rob.y(end), 'o', ...
-                    'MarkerFaceColor', D.UI.robNowCol, ...
-                    'MarkerEdgeColor', D.UI.robNowCol, ...
-                    'MarkerSize', 10, ...
-                    'HitTest', 'off', ...
-                    'Parent', D.UI.axH(3));
-                
-                % Plot rob arm
-                if isfield(D.UI, 'armPltNow')
-                    delete(D.UI.armPltNow);
-                end
-                [xbnd, ybnd] =  Get_Cart_Bnds([D.P.Rob.feedRad, D.P.Rob.buttRad], D.P.trackRohBnd);
-                D.UI.armPltNow = ...
-                    plot(xbnd(1,:), ybnd(1,:), ...
-                    'Color', D.UI.robNowCol, ...
-                    'LineWidth', 5, ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
-                uistack(D.UI.armPltNow, 'top');
-                
-                % Plot guard pos
-                if isfield(D.UI, 'quardPltNow')
-                    delete(D.UI.quardPltNow);
-                end
-                [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.guardRad, D.P.trackRohBnd);
-                D.UI.quardPltNow = ...
-                    plot(xbnd, ybnd, ...
-                    'Color', D.UI.guardPosCol, ...
-                    'LineWidth', D.UI.guardPosLineWidth, ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
-                
-                % Plot set pos
-                if isfield(D.UI, 'setPltNow')
-                    delete(D.UI.setPltNow);
-                end
-                [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.setRad, D.P.trackRohBnd);
-                D.UI.setPltNow = ...
-                    plot(xbnd, ybnd, ...
-                    'Color', D.UI.setPosCol, ...
-                    'LineWidth', D.UI.setPosLineWidth, ...
-                    'HitTest', 'off', ...
-                    'Parent',D.UI.axH(3));
-                
-                % Plot feeder pos feed in cond color
-                if isfield(D.UI, 'feedPltNow')
-                    delete(D.UI.feedPltNow);
-                end
-                [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.feedRad, D.P.trackRohBnd);
-                D.UI.feedPltNow = ...
-                    plot(xbnd(1), ybnd(1), 'o', ...
-                    'MarkerFaceColor', D.UI.feedPosCol, ...
-                    'MarkerEdgeColor', D.UI.robNowCol, ...
-                    'LineWidth', 2, ...
-                    'MarkerSize', D.UI.feedPosMarkSize, ...
-                    'HitTest', 'off', ...
-                    'Parent', D.UI.axH(3));
-                uistack(D.UI.feedPltNow, 'top');
-                
-            end
-            
-            %% RAT POS
-            
-            if D.F.Rat.plot_pos
-                
-                % Plot all VT data for this lap
-                delete(D.UI.ratPltH);
-                x = D.P.Rat.pos_lap_hist{2}(:,1);
-                y = D.P.Rat.pos_lap_hist{2}(:,2);
-                D.UI.ratPltH = ...
-                    plot(x, y, '.', ...
-                    'MarkerFaceColor', D.UI.ratPosAllCol, ...
-                    'MarkerEdgeColor', D.UI.ratPosAllCol, ...
-                    'MarkerSize', 6, ...
-                    'HitTest', 'off', ...
-                    'Parent', D.UI.axH(2));
-                
-                % Plot occ
-                if D.PAR.sesTask == 'Forage'
-                    delete(D.UI.imgrfOcc);
-                    D.UI.imgrfOcc = imagesc(D.P.rfOccMatScale+D.P.pathNowMat, ...
-                        'Parent', D.UI.axH(6));
-                end
-                
-                % Plot current rat position with larger marker
-                if isfield(D.UI, 'vtRatPltNow')
-                    delete(D.UI.vtRatPltNow);
-                end
-                D.UI.vtRatPltNow = ...
-                    plot(D.P.Rat.x(end), D.P.Rat.y(end), 'o', ...
-                    'MarkerFaceColor', D.UI.ratNowCol, ...
-                    'MarkerEdgeColor', [0, 0, 0], ...
-                    'MarkerSize', 10, ...
-                    'HitTest', 'off', ...
-                    'Parent', D.UI.axH(3));
-                
-                
-            end
-            
-            %% VELOCITY
-            
-            % ROB
-            if D.F.Rob.plot_vel
-                % Get non-zero vals to plot
-                ind_end = D.P.Rob.vel_cart_lap_hist{1};
-                x = D.P.Rob.vel_cart_lap_hist{2}(1:ind_end, 1);
-                y = D.P.Rob.vel_cart_lap_hist{2}(1:ind_end, 2);
-                % Store handle and plot
-                delete(D.UI.robPltHvel);
-                D.UI.robPltHvel = ...
-                    plot(x, y, '-', ...
-                    'Color', D.UI.robNowCol, ...
-                    'LineWidth', 2, ...
-                    'Parent', D.UI.axH(2));
-            end
-            
-            % RAT
-            if D.F.Rat.plot_vel
-                % Get non-zero vals to plot
-                ind_end = D.P.Rat.vel_cart_lap_hist{1};
-                x = D.P.Rat.vel_cart_lap_hist{2}(1:ind_end, 1);
-                y = D.P.Rat.vel_cart_lap_hist{2}(1:ind_end, 2);
-                % Store handle and plot
-                delete(D.UI.ratPltHvel);
-                D.UI.ratPltHvel = ...
-                    plot(x, y, '-', ...
-                    'Color', D.UI.ratNowCol, ...
-                    'LineWidth', 2, ...
-                    'Parent', D.UI.axH(2));
-            end
-            
-            %% HEADING
-            
-            % Plot arrow
-            if D.F.plot_hd && D.F.Rat.plot_pos
-                
-                % Delete plot object
-                if isfield(D.UI, 'vtPltHD')
-                    delete(D.UI.ratPltHD(:));
-                end
-                
-                % Get current heading
-                hd_deg = rad2deg(D.P.Rat.hd_rad(end));
-                
-                % Calculate coordinates for line
-                % x start/end
-                xs = D.P.Rat.x(1,end);
-                xe = cos(deg2rad(hd_deg))*10 + D.P.Rat.x(1,end);
-                x = [xs, xe, ...
-                    cos(deg2rad(hd_deg-90))*2 + xe, ...
-                    cos(deg2rad(hd_deg))*4 + xe, ...
-                    cos(deg2rad(hd_deg+90))*2 + xe, ...
-                    xe];
-                % y start/end
-                ys = D.P.Rat.y(end);
-                ye = sin(deg2rad(hd_deg))*10 + D.P.Rat.y(end);
-                y = [ys, ye, ...
-                    sin(deg2rad(hd_deg-90))*2 + ye, ...
-                    sin(deg2rad(hd_deg))*4 + ye, ...
-                    sin(deg2rad(hd_deg+90))*2 + ye, ...
-                    ye];
-                
-                % Plot thick backround line
-                D.UI.ratPltHD(1) = ...
-                    plot(x, y, '-', ...
-                    'Color', [0.5, 0.5, 0.5], ...
-                    'LineWidth', 3, ...
-                    'Parent', D.UI.axH(3));
-                
-                % Plot thin foreground line
-                D.UI.ratPltHD(2) = ...
-                    plot(D.UI.axH(3), x, y, '-', ...
-                    'Color', D.UI.ratPosAllCol, ....
-                    'LineWidth', 1, ...
-                    'Parent', D.UI.axH(3));
-            end
-            
-            % Check if ui updated
-            if ...
-                    D.F.Rob.plot_pos ||...
-                    D.F.Rat.plot_pos ||...
-                    D.F.Rob.plot_vel ||...
-                    D.F.Rat.plot_vel
-                update_ui = true;
-            end
-            
-            % Reset flags
-            D.F.Rob.plot_pos = false;
-            D.F.Rat.plot_pos = false;
-            D.F.Rob.plot_vel = false;
-            D.F.Rat.plot_vel = false;
-            
-        end
-        
-        % ----------------------PLOT POSITION HISTORY----------------------
-        
-        function [] = VT_Plot_Hist()
-            
-            % Delete all tracker data from this lap
-            delete(D.UI.ratPltH)
-            delete(D.UI.ratPltHvel)
-            delete(D.UI.robPltHvel)
-            
-            % Add lap data to all hist data
-            lap_hist_lng = D.P.Rat.pos_lap_hist{1}(2);
-            ind_str = D.P.Rat.pos_all_hist{1}(2) + 1;
-            ind_end = ind_str+lap_hist_lng-1;
-            D.P.Rat.pos_all_hist{1}(1) = ind_str;
-            D.P.Rat.pos_all_hist{1}(2) = ind_end;
-            
-            % Store pos data
-            D.P.Rat.pos_all_hist{2}(ind_str:ind_end, 1) = D.P.Rat.pos_lap_hist{2}(1:lap_hist_lng, 1);
-            D.P.Rat.pos_all_hist{2}(ind_str:ind_end, 2) = D.P.Rat.pos_lap_hist{2}(1:lap_hist_lng, 2);
-            
-            % Reset lap level values
-            D.P.Rat.pos_lap_hist = {[0,0], NaN(60*60*33,3)};
-            D.P.Rat.vel_cart_lap_hist = {0, NaN(60*60*33,2)};
-            D.P.Rob.vel_cart_lap_hist = {0, NaN(60*60*33,2)};
-            D.P.Rat.vel_max_lap = 0;
-            D.P.Rob.vel_max_lap = 0;
-            
-            % Rat pos
-            delete(D.UI.Rat.pltHposAll);
-            x = D.P.Rat.pos_all_hist{2}(:,1);
-            y = D.P.Rat.pos_all_hist{2}(:,2);
-            % set big jumps to NaN
-            exc = find(diff(x)/D.UI.cm2pxl > 10 | diff(y)/D.UI.cm2pxl > 10 == 1) + 1;
-            x(exc) = NaN;
-            y(exc) = NaN;
-            D.UI.Rat.pltHposAll = ...
-                plot(x, y, '-', ...
-                'Color', D.UI.ratPosHistCol, ...
-                'LineWidth', 1, ...
-                'Parent', D.UI.axH(2));
-            
-            % Bail if not a 'Track' session
-            if D.PAR.sesTask == 'Forage'
-                return
-            end
-            
-            % Plot vel all
-            cols = [D.UI.ratHistCol; D.UI.robHistCol];
-            flds = [{'Rat'},{'Rob'}];
-            for i = [2,1]
-                fld = flds{i};
-                
-                % Get lap data
-                ind_end = D.P.(fld).vel_pol_lap_hist{1};
-                vel_rad = D.P.(fld).vel_pol_lap_hist{2}(1:ind_end, 1);
-                vel_roh = D.P.(fld).vel_pol_lap_hist{2}(1:ind_end, 2);
-                
-                % Sort by rad
-                [vel_rad, s_ind] = sort(vel_rad);
-                vel_roh = vel_roh(s_ind);
-                
-                % Interpolate missing values
-                rad_bins = linspace(0, 2*pi, 101);
-                if length(vel_rad)<10 || ...
-                        max(diff(rad2deg(vel_rad))) > 45 || ...
-                        max(diff(rad2deg(vel_rad))) == 0
-                    
-                    % Set to nan if insuficient samples or big jumps
-                    roh_interp = nan(1,101);
-                    
-                else
-                    
-                    % Histogram
-                    [~,h_inds]= histc(vel_rad, rad_bins);
-                    roh_interp = cell2mat(arrayfun(@(x) nanmean(vel_roh(h_inds==x)), ...
-                        1:101, 'Uni', false));
-                    
-                    % Interpolate missing vals
-                    ind = ~isnan(roh_interp);
-                    roh_interp = interp1(rad_bins(ind), roh_interp(ind), rad_bins);
-                    roh_interp(end) = roh_interp(1);
-                    
-                    % Keep in bounds
-                    roh_interp(roh_interp>D.P.velRohMax) = D.P.velRohMax;
-                    roh_interp(roh_interp<D.P.velRohMin) = D.P.velRohMin;
-                end
-                
-                % Add to history
-                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
-                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
-                
-                % Reset polar data
-                D.P.(fld).vel_pol_lap_hist = {0, NaN(60*60*33,2)};
-                
-                % Get history as 1D array
-                vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
-                vel_roh = reshape(D.P.(fld).vel_pol_all_hist(:,:,2)',1,[]);
-                ind = ~isnan(vel_rad);
-                
-                % Convert to cart
-                delete(D.UI.(fld).pltHvelAll);
-                [x, y] = pol2cart(vel_rad(ind), vel_roh(ind));
-                x =  x.*D.PAR.R + D.PAR.XC;
-                y =  y.*D.PAR.R + D.PAR.YC;
-                % Plot
-                D.UI.(fld).pltHvelAll = ...
-                    plot(x, y, '-', ...
-                    'Color', cols(i,:), ...
-                    'LineWidth', 1, ...
-                    'Parent', D.UI.axH(2));
-            end
-            
-            % Plot vel avg
-            cols = [D.UI.ratAvgCol; D.UI.robAvgCol];
-            flds = [{'Rat'},{'Rob'}];
-            for i = [2,1]
-                fld = flds{i};
-                
-                % Get accross lap average
-                vel_rad = D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),:,1);
-                roh_avg = nanmean(D.P.(fld).vel_pol_all_hist(:,:,2),1);
-                
-                % Convert to cart
-                [x, y] = pol2cart(vel_rad, roh_avg);
-                x =  x.*D.PAR.R + D.PAR.XC;
-                y =  y.*D.PAR.R + D.PAR.YC;
-                
-                % Plot
-                delete(D.UI.(fld).pltHvelAvg)
-                D.UI.(fld).pltHvelAvg = ...
-                    plot(x, y, '-', ...
-                    'Color', cols(i,:), ...
-                    'LineWidth', 4, ...
-                    'Parent', D.UI.axH(2));
-            end
-            
-        end
-        
         % -------------------------GET NLX EVENTS--------------------------
         
         function [] = Evt_Get()
@@ -5572,7 +4555,6 @@ fprintf('END OF RUN\n');
         end
         
         % ------------------------PROCESS NLX EVENTS-----------------------
-        
         
         function [] = Evt_Proc()
             
@@ -5596,16 +4578,16 @@ fprintf('END OF RUN\n');
                 D.T.rew_nlx_ts(1) = D.E.evtTS(ismember(D.E.evtStr, D.NLX.rew_on_str));
                 
                 % Store round trip time
-                if datenum(D.T.btn_rew_sent) > 0 && ...
-                        datenum(D.T.btn_rew_sent) < datenum(D.T.rew_start)
+                if datenum(D.T.manual_rew_sent) > 0 && ...
+                        datenum(D.T.manual_rew_sent) < datenum(D.T.rew_start)
                     % Save reward mesage round trip time
-                    D.DB.rew_round_trip(1) = (D.T.rew_start - D.T.btn_rew_sent) * 1000;
+                    D.DB.rew_round_trip(1) = (D.T.rew_start - D.T.manual_rew_sent) * 1000;
                     D.DB.rew_round_trip(2) = min(D.DB.rew_round_trip(1), D.DB.rew_round_trip(2));
                     D.DB.rew_round_trip(3) = max(D.DB.rew_round_trip(1), D.DB.rew_round_trip(3));
                     D.DB.rew_round_trip(4) = D.DB.rew_round_trip(1) + D.DB.rew_round_trip(4);
                     D.DB.rew_round_trip(5) = D.DB.rew_round_trip(5) + 1;
                     % Reset time
-                    D.T.btn_rew_sent = 0;
+                    D.T.manual_rew_sent = 0;
                 end
                 
                 % Change feeder dish plot color and marker size
@@ -5662,8 +4644,8 @@ fprintf('END OF RUN\n');
                 end
                 
                 % Save halt error
-                if D.I.zone_now ~= 0
-                    halt_err = D.PAR.rewZoneBnds(D.I.zone_now,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
+                if ~isempty(D.I.zone)
+                    halt_err = D.PAR.rewZoneBnds(D.I.zone,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPoint);
                     % Save reward duration
                     D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
                     D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
@@ -5725,239 +4707,6 @@ fprintf('END OF RUN\n');
             
         end
         
-        % ------------------------GET NLX CELL DATA------------------------
-        
-        function [] = TT_Get()
-            
-            % Bail if cells not cut
-            if get(D.UI.toggCellsCut, 'Value') == 0
-                return
-            end
-            
-            % Bail if not connected
-            if ~D.NLX.connected
-                return
-            end
-            
-            % Get list of tts to stream
-            tt_stream = find(any(D.S.stream_clust, 2));
-            
-            % Bail if nothing to stream
-            if isempty(tt_stream)
-                return
-            end
-            
-            % Loop through and check for new tt data
-            for z_tt = 1:length(tt_stream)
-                
-                % Store tt label and ind
-                tt_ind = tt_stream(z_tt);
-                tt_lab = D.TT.ttList{tt_ind};
-                
-                % Get new data
-                [~, ~, D.S.ttTS, ~, D.S.ttCell, ~, D.S.ttRecs, ~ ] = ...
-                    NlxGetNewTTData(tt_lab);
-                
-                % Bail if no data
-                if D.S.ttRecs < 1
-                    continue
-                end
-                
-                % Get set values
-                id_clust = D.S.ttCell;
-                ts_clust = D.S.ttTS;
-                
-                % Get most recent pos data
-                ind_end = D.P.Rat.pos_lap_hist{1}(2);
-                
-                % Bail if no suitable pos data found
-                if ind_end == 0
-                    continue
-                end
-                
-                % Pull out most recent pos data
-                x_last = D.P.Rat.pos_lap_hist{2}(ind_end,1);
-                y_last = D.P.Rat.pos_lap_hist{2}(ind_end,2);
-                
-                % Get clusters
-                clusts = unique(id_clust);
-                
-                % Store cluster pos info
-                for z_c = 1:length(clusts)
-                    
-                    % Get cluster ind
-                    clust_ind = clusts(z_c)+1;
-                    clust_ind_arr = id_clust == clusts(z_c);
-                    
-                    % Get number of samples
-                    n_samp = sum(clust_ind_arr);
-                    
-                    % Get store start ind
-                    ind_str = D.S.pos_clust{tt_ind, clust_ind}{1}(2) + 1;
-                    D.S.pos_clust{tt_ind, clust_ind}{1}(1) = ind_str;
-                    
-                    % Dont store first set of data
-                    if ind_str == 1
-                        D.S.pos_clust{tt_ind, clust_ind}{1}(2) = ind_str+1;
-                        return
-                    end
-                    
-                    % Get store end ind
-                    ind_end = ind_str + n_samp-1;
-                    D.S.pos_clust{tt_ind, clust_ind}{1}(2) = ind_end;
-                    
-                    % Check for overflow
-                    if isempty(ind_str)
-                        
-                        % Shift values back
-                        shft = round(size(D.S.pos_clust{tt_ind, clust_ind}{2}, 1)/2);
-                        D.S.pos_clust{tt_ind, clust_ind}{2} = ...
-                            circshift(D.S.pos_clust{tt_ind, clust_ind}{2}, -1*shft, 1);
-                        
-                        % Set half of history to NaN
-                        ind_str = shft;
-                        ind_end = ind_str + n_samp-1;
-                        D.S.pos_clust{tt_ind, clust_ind}{2}(ind_str:end,:) = NaN;
-                    end
-                    
-                    % Update values
-                    D.S.pos_clust{tt_ind, clust_ind}{2}(ind_str:ind_end, 1) = x_last;
-                    D.S.pos_clust{tt_ind, clust_ind}{2}(ind_str:ind_end, 2) = y_last;
-                    D.S.pos_clust{tt_ind, clust_ind}{2}(ind_str:ind_end, 3) = ts_clust(clust_ind_arr)';
-                    
-                    % Set flag
-                    D.S.plot_clust(tt_ind, clust_ind) = D.S.stream_clust(tt_ind, clust_ind);
-                    
-                end
-                
-            end
-            
-            
-            
-            
-        end
-        
-        % ----------------------PLOT CURRENT POSITION----------------------
-        
-        function [update_ui] = TT_Plot()
-            
-            % Initialize flag
-            update_ui = false;
-            
-            % Bail if cells not cut
-            if get(D.UI.toggCellsCut, 'Value') == 0
-                return
-            end
-            
-            % Bail if not connected
-            if ~D.NLX.connected
-                return
-            end
-            
-            % Get list of tts to plot
-            tt_plot = find(any(D.S.plot_clust, 2));
-            
-            % Bail if nothing to plot
-            if isempty(tt_plot)
-                return
-            end
-            
-            % Plot cell
-            for z_tt = 1:length(tt_plot)
-                
-                % Get tt label and ind
-                tt_ind = tt_plot(z_tt);
-                
-                % Plot new or unplotted data
-                if get(D.UI.toggTTplotType(1),'Value') == 1
-                    
-                    % Plot pos
-                    D.S.plot_clust = D.S.plot_clust | ...
-                        (~isgraphics(D.UI.clustH) & D.S.active_clust);
-                    
-                elseif get(D.UI.toggTTplotType(2),'Value') == 1 && ...
-                        ~isgraphics(D.UI.imgttOcc)
-                    
-                    % Plot rate
-                    D.S.plot_clust(D.S.active_clust) = true;
-                end
-                
-                % Get clusters to plot
-                clust_plot = find(D.S.plot_clust(tt_ind,:));
-                
-                % Check each clust button
-                for z_c = 1:length(clust_plot)
-                    
-                    % Get clust ind
-                    clust_ind = clust_plot(z_c);
-                    
-                    % Get data to plot
-                    ind_end = D.S.pos_clust{tt_ind, clust_ind}{1}(2);
-                    
-                    % Bail if no data to plot
-                    if ind_end == 0
-                        continue
-                    end
-                    
-                    % Pull out values
-                    x = D.S.pos_clust{tt_ind, clust_ind}{2}(1:ind_end,1);
-                    y = D.S.pos_clust{tt_ind, clust_ind}{2}(1:ind_end,2);
-                    
-                    % Do plot type
-                    if get(D.UI.toggTTplotType(1),'Value') == 1
-                        
-                        % Delete existing plots
-                        if isgraphics(D.UI.clustH(tt_ind,clust_ind))
-                            delete(D.UI.clustH(tt_ind,clust_ind))
-                        end
-                        
-                        % Plot marker
-                        D.UI.clustH(tt_ind, clust_ind) = ...
-                            plot(x, y, 'o', ...
-                            'MarkerFaceColor', D.UI.clustCol(clust_ind,:), ...
-                            'MarkerEdgeColor', 'none', ...
-                            'MarkerSize', 5, ...
-                            'Parent', D.UI.axH(7));
-                        
-                    elseif get(D.UI.toggTTplotType(2),'Value') == 1
-                        
-                        % Compute inbound occ bin counts
-                        occ_now = histcounts2(y, x, D.PAR.ttBinEdgeY, D.PAR.ttBinEdgeX);
-                        occ_now = flip(occ_now,1);
-                        
-                        % Compute and store scaled occ
-                        non_zer_occ = occ_now(occ_now(:) > 0);
-                        scale = prctile(non_zer_occ,95);
-                        if scale == 0
-                            scale = 1;
-                        end
-                        
-                        % Scale to percentile
-                        occ_scale = occ_now/scale;
-                        
-                        % Get alpha mask
-                        alph = (occ_scale~=0) * 0.9 + 0.1;
-                        
-                        % Show occ
-                        delete(D.UI.imgttOcc);
-                        D.UI.imgttOcc = imagesc(occ_scale, ...
-                            'AlphaData', alph, ...
-                            'Parent', D.UI.axClstH(clust_ind,1));
-                        
-                    end
-                    
-                    % Reset flag
-                    D.S.plot_clust(tt_ind, clust_ind) = false;
-                    
-                    % Set update ui flag
-                    update_ui = true;
-                    
-                end
-                
-            end
-            
-        end
-        
         % ----------------------ROTATION TRIGGER CHECK---------------------
         
         function [] = Rotation_Trig_Check()
@@ -5967,8 +4716,8 @@ fprintf('END OF RUN\n');
                 return
             end
             
-            % Bail if not flagged
-            if ~D.F.do_rotation
+            % Bail if button not active
+            if ~get(D.UI.btnICR, 'UserData')
                 return
             end
             
@@ -5978,9 +4727,8 @@ fprintf('END OF RUN\n');
                 return
             end
             
-            % Set flags
+            % Set flag
             D.F.rotated = true;
-            D.F.do_rotation = false;
             
             % Save current image
             rotLast = D.I.rot;
@@ -6003,41 +4751,33 @@ fprintf('END OF RUN\n');
             set(D.UI.mixFdNow(3, [1, 2] ~=  D.I.rot), ...
                 'MarkerSize', 20)
             
-            % Reset rot bounds
-            set(D.UI.txtRtBnds(:), ...
-                'Visible', 'off');
-            set(D.UI.ptchRtBnds(:), ...
-                'FaceAlpha', 0.1, ...
-                'Visible', 'off', ...
-                'EdgeColor', [0,0,0]);
+            % Delete old patches
+            if isfield(D.UI, 'ptchRtTrgH')
+                delete(D.UI.ptchRtTrgH)
+            end
             
             % Plot rotation pos mark
             r = D.P.Rat.rad(check_inbound);
-            [xbnd,ybnd] = Get_Cart_Bnds([r(1), r(1)+deg2rad(1)]);
-            patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                D.UI.robNowCol, ...
-                'EdgeColor', D.UI.rotCol(D.I.rot,:),...
-                'FaceColor', D.UI.rotCol(D.I.rot,:),...
-                'LineWidth', 4, ...
-                'FaceAlpha',0.5, ...
-                'EdgeAlpha',0.5, ...
-                'HitTest', 'off', ...
-                'Parent',D.UI.axH(3));
+            [x,y] = Get_Cart_Bnds(r(1));
+            plot(x,y, ...
+                'Color', D.UI.rotCol(D.I.rot,:), ...
+                'LineWidth', 3, ...
+                'Parent',D.UI.axH(2));
             
             % Reset reward bounds patch feeder
-            set(D.UI.ptchRewZoneBnds, ...
+            set(D.UI.ptchFdZineH, ...
                 'EdgeColor', [0, 0, 0], ...
-                'FaceAlpha', 0.025, ...
+                'FaceAlpha', 0.05, ...
                 'EdgeAlpha',0.025)
             % active feeder
-            set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
-                'FaceAlpha', 0.1, ...
-                'EdgeAlpha',0.1)
+            set(D.UI.ptchFdZineH(:, D.I.rot), ...
+                'FaceAlpha', 0.15, ...
+                'EdgeAlpha',0.025)
             
-            % Change button settings
-            Set_Button_State(D.UI.toggICR(D.I.rot), 'Disable');
-            Set_Button_State(D.UI.toggICR(rotLast), 'Enable');
+            % Change button features
+            set(D.UI.btnICR,'string', D.UI.btnICRstr{rotLast}, ...
+                'BackgroundColor', D.UI.rotCol(rotLast,:), ...
+                'UserData', false);
             
             % Change wall image
             set(D.UI.wallImgH(D.I.img_ind(rotLast)), 'Visible', 'off');
@@ -6078,7 +4818,7 @@ fprintf('END OF RUN\n');
             % BAIL IF MANUAL OR FORAGE TRAINING OR BOUNDS PASSED
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Forage' || ...
-                    D.F.rew_send_crossed || ...
+                    D.F.flag_rew_send_crossed || ...
                     all(isnan(D.P.Rat.rad))
                 return
             end
@@ -6092,82 +4832,65 @@ fprintf('END OF RUN\n');
             % Print reset bounds crossed
             Console_Write('[Track_Reward_Send_Check] Crossed Reset Bounds');
             
+            % Check if next reward is cued
+            D.F.is_cued_rew = ...
+                D.PAR.cueFeed == 'All' || ...
+                (D.PAR.cueFeed == 'Half' && D.C.rew_cross_cnt == 0) || ...
+                (D.PAR.cueFeed == 'Half' && ~D.F.is_cued_rew);
             
             % Check if cue should be forced
-            if get(D.UI.toggForceCue, 'Value') == 1
-                set(D.UI.toggDoCue, 'Value', 1);
-                DoCue();
-            elseif get(D.UI.toggBlockCue, 'Value') == 1
-                set(D.UI.toggDoCue, 'Value', 0);
-                DoCue();
-            else
-                
-                % Check if next reward is cued
-                if ...
-                        D.PAR.cueFeed == 'All' || ...
-                        (D.PAR.cueFeed == 'Half' && D.C.rew_cross_cnt == 0) || ...
-                        (D.PAR.cueFeed == 'Half' && ~get(D.UI.toggDoCue, 'Value') == 0)
-                    set(D.UI.toggDoCue, 'Value', 1);
-                    DoCue();
-                else
-                    set(D.UI.toggDoCue, 'Value', 0);
-                    DoCue();
-                end
-                
+            if D.F.do_all_cue && D.F.is_cued_rew == false
+                D.F.is_cued_rew = true;
+            elseif D.F.do_block_cue && D.F.is_cued_rew == true
+                D.F.is_cued_rew = false;
             end
             
             % Disable cue buttons
             Set_Cue_Buttons('Disable');
             
-            % Get new new cue pos if rat was rewarded or zone manually
-            % selected
-            if D.I.zone_select ~= 0 || ...
-                    (get(D.UI.toggDoCue, 'Value') == 1 && ...
-                    (D.F.rew_confirmed || D.C.rew_cross_cnt == 0))
+            % Get new reward data if rat triggered reward on last lap
+            if D.F.is_cued_rew && ...
+                    (D.F.flag_rew_confirmed || D.C.rew_cross_cnt == 0)
                 
                 % Get new reward zone
-                if D.I.zone_select ~= 0
-                    D.I.zone_now = D.I.zone_select;
-                else
-                    D.I.zone_now = find(D.PAR.zoneLocs == ...
-                        D.I.zone_arr(sum([D.C.rew_cnt{:}])+1));
-                end
+                D.I.zone = find(D.PAR.zoneLocs == ...
+                    D.I.zoneArr(sum([D.C.rew_cnt{:}])+1));
                 
                 % Get new reward duration
-                D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone_now);
+                D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone);
                 
                 % Post NLX event: cue on
                 NlxSendCommand(D.NLX.cue_on_evt);
             end
             
             % Reset patches
-            set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
+            set(D.UI.ptchFdZineH(:, D.I.rot), ...
                 'EdgeColor', [0, 0, 0], ...
-                'FaceAlpha', 0.1, ...
-                'EdgeAlpha', 0.1);
+                'FaceAlpha', 0.15, ...
+                'EdgeAlpha', 0.05);
             % Clear last duration
-            set(D.UI.txtFdDurH(:), ...
+            set(D.UI.txtFdDurH(:, :), ...
                 'Visible', 'off');
             
-            % Handle cued reward
-            if get(D.UI.toggDoCue, 'Value') == 1
+            % Check if this is cued reward
+            if D.F.is_cued_rew
                 
                 % Will send CS command with pos and zone
                 r_pos = D.UI.rewRatHead(D.I.rot);
-                z_ind = D.I.zone_now;
+                z_ind = D.I.zone;
                 r_cond = 2;
                 
                 % Send free reward command
                 SendM2C('R', r_pos, r_cond, z_ind);
                 
                 % Show new reward taget patch
-                set(D.UI.ptchRewZoneBnds(D.I.rot,D.I.zone_now), ...
+                set(D.UI.ptchFdZineH(D.I.zone, D.I.rot), ...
                     'EdgeColor', D.UI.activeCol, ...
                     'FaceAlpha', 0.75, ...
-                    'EdgeAlpha', 0.75);
+                    'EdgeAlpha', 1);
                 
                 % Print new duration
-                set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
+                set(D.UI.txtFdDurH(D.I.zone, D.I.rot), ...
                     'Visible', 'on');
             else
                 
@@ -6180,25 +4903,24 @@ fprintf('END OF RUN\n');
                 SendM2C('R', r_pos, r_cond, r_del);
                 
                 % Darken all zone patches
-                set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
-                    'FaceAlpha', 0.75, ...
-                    'EdgeAlpha', 0.75)
+                set(D.UI.ptchFdZineH(:, D.I.rot), ...
+                    'FaceAlpha', 0.75)
             end
             
             % Set flags
-            D.F.rew_send_crossed = true;
+            D.F.flag_rew_send_crossed = true;
             D.F.check_rew_confirm = true;
-            D.F.rew_zone_crossed = false;
-            D.F.rew_confirmed = false;
+            D.F.flag_rew_zone_crossed = false;
+            D.F.flag_rew_confirmed = false;
             
             % Hide reset patch
             set(D.UI.ptchFdRstH(D.I.rot), ...
                 'FaceAlpha', 0.05);
             
             % Stop bulldozer if active
-            D.UI.bullLastVal = get(D.UI.toggBulldoze, 'Value');
+            D.UI.bullLastVal = get(D.UI.btnBulldoze, 'Value');
             if D.UI.bullLastVal == 1
-                set(D.UI.toggBulldoze, 'Value', 0);
+                set(D.UI.btnBulldoze, 'Value', 0);
                 Bulldoze();
             end
             
@@ -6212,8 +4934,8 @@ fprintf('END OF RUN\n');
             
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Forage' || ...
-                    D.F.rew_zone_crossed || ...
-                    ~D.F.rew_send_crossed
+                    D.F.flag_rew_zone_crossed || ...
+                    ~D.F.flag_rew_send_crossed
                 
                 return
             end
@@ -6223,64 +4945,57 @@ fprintf('END OF RUN\n');
             % Check if reward has been reset
             if  D.F.check_rew_confirm && ...
                     c2m.('Z').dat1 ~= 0 && ...
-                    ~D.F.rew_confirmed
+                    ~D.F.flag_rew_confirmed
                 
-                % Store rewarded zone ind
-                D.I.zone_now = c2m.('Z').dat1;
-                D.I.zone_active_ind(:) = false;
-                D.I.zone_active_ind(D.I.zone_now) = true;
-                
-                % Reset next zone
-                D.I.zone_select = 0;
+                % Get rewarded zone ind
+                D.I.zone = c2m.('Z').dat1;
                 
                 % Post NLX event: cue off
-                if get(D.UI.toggDoCue, 'Value') == 1
+                if D.F.is_cued_rew
                     NlxSendCommand(D.NLX.cue_off_evt);
                 end
                 
                 % Post NLX event: reward info
                 NlxSendCommand(...
-                    sprintf(D.NLX.rew_evt, D.PAR.zoneLocs(D.I.zone_now), D.PAR.zoneRewDur(D.I.zone_now)));
+                    sprintf(D.NLX.rew_evt, D.PAR.zoneLocs(D.I.zone), D.PAR.zoneRewDur(D.I.zone)));
                 
                 % Add to total reward count
                 if D.F.rotated
-                    % Add to rotation condition count
                     D.C.rew_cnt{D.I.rot}(end) = D.C.rew_cnt{D.I.rot}(end) + 1;
                 else
-                    % Add to standard count
                     D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
                 end
                 
                 % Store reward zone with range [-20,20]
-                D.I.zone_hist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
+                D.I.zoneHist(sum([D.C.rew_cnt{:}])) = -1*D.PAR.zoneLocs(D.I.zone);
                 
                 % Reset reward zone patches
-                set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
+                set(D.UI.ptchFdZineH(:, D.I.rot), ...
                     'EdgeColor', [0, 0, 0], ...
-                    'FaceAlpha', 0.1, ...
-                    'EdgeAlpha', 0.1);
-                % Set rewarded zone darker
-                set(D.UI.ptchRewZoneBnds(D.I.rot,D.I.zone_now), ...
+                    'FaceAlpha', 0.15, ...
+                    'EdgeAlpha', 0.05);
+                % Lighten rewarded zone
+                set(D.UI.ptchFdZineH(D.I.zone, D.I.rot), ...
                     'FaceAlpha', 0.5, ...
                     'EdgeAlpha', 0.5);
                 % Print new duration
-                set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
+                set(D.UI.txtFdDurH(D.I.zone, D.I.rot), ...
                     'Visible', 'on');
                 
                 % Update zone dist plot
-                D.C.zone(D.I.rot,D.I.zone_now) = D.C.zone(D.I.rot,D.I.zone_now)+1;
+                D.C.zone(D.I.rot,D.I.zone) = D.C.zone(D.I.rot,D.I.zone)+1;
                 x = -1*D.PAR.zoneLocs;
                 y = D.C.zone(D.I.rot,:) / sum(D.C.zone(D.I.rot,:));
                 y = y/max(y);
-                delete(D.UI.zoneAllH(D.I.rot,:));
-                D.UI.zoneAllH(D.I.rot,:) = createPatches(...
+                delete(D.UI.zoneAllH(:,D.I.rot));
+                D.UI.zoneAllH(:,D.I.rot) = createPatches(...
                     x, y, 2, ...
                     D.UI.rotCol(D.I.rot,:), ...
                     0.25, ...
                     D.UI.axZoneH(2));
                 delete(D.UI.zoneNowH);
                 D.UI.zoneNowH = createPatches(...
-                    x(D.I.zone_now), y(D.I.zone_now), 2, ...
+                    x(D.I.zone), y(D.I.zone), 2, ...
                     D.UI.rotCol(D.I.rot,:), ...
                     0.75, ...
                     D.UI.axZoneH(2));
@@ -6302,34 +5017,34 @@ fprintf('END OF RUN\n');
                     'Color', D.UI.rotCol(D.I.rot,:), ...
                     'LineStyle', '-', ...
                     'LineWidth', 1, ...
-                    'Parent',D.UI.axH(3));
+                    'Parent',D.UI.axH(2));
                 uistack(D.UI.zoneAvgH, 'bottom');
                 
                 % Set/reset flags
                 c2m.('Z').dat1 = 0;
-                D.F.rew_confirmed = true;
+                D.F.flag_rew_confirmed = true;
                 D.F.check_rew_confirm = false;
                 
-                Console_Write(sprintf('[Track_Reward_Zone_Check] Rewarded: zone=%d vel=%0.2fcm/sec', ...
-                    D.I.zone_hist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
+                Console_Write(sprintf('[Track_Reward_Zone_Check] Rewarded: Zone=%d Vel=%0.2fcm/sec', ...
+                    D.I.zoneHist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
                 
             end
             
             %% CHECK IF ALL ZONES PASSED OR CONFIRMATION RECEIVED
             
             % Track reward crossing
-            if ~D.F.rew_zone_crossed
+            if ~D.F.flag_rew_zone_crossed
                 
                 % Check if rat has passed all zones or reward confirmed
                 check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.UI.rewPassBnds(D.I.rot,:));
                 
-                if ~(any(check_inbound) || D.F.rew_confirmed)
+                if ~(any(check_inbound) || D.F.flag_rew_confirmed)
                     return
                 end
                 
                 % Set flags
-                D.F.rew_zone_crossed = true;
-                D.F.rew_send_crossed = false;
+                D.F.flag_rew_zone_crossed = true;
+                D.F.flag_rew_send_crossed = false;
                 D.F.check_rew_confirm = false;
                 
                 % Itterate count
@@ -6340,29 +5055,27 @@ fprintf('END OF RUN\n');
                 
                 % Restart bulldozer if was active
                 if D.UI.bullLastVal == 1
-                    set(D.UI.toggBulldoze, 'Value', 1);
+                    set(D.UI.btnBulldoze, 'Value', 1);
                     Bulldoze();
                 end
                 
                 % Check for missed rewards
-                if ~D.F.rew_confirmed
+                if ~D.F.flag_rew_confirmed
                     
                     % Add to missed reward count
                     D.C.missed_rew_cnt(1) = D.C.missed_rew_cnt(1)+1;
                     
                     % Cue next lap
-                    if D.PAR.cueFeed == 'Half' && ...
-                            get(D.UI.toggBlockCue, 'Value') == 0
-                        set(D.UI.toggDoCue, 'Value', 1)
-                        DoCue();
+                    if D.PAR.cueFeed == 'Half'
+                        D.F.is_cued_rew = true;
                     end
                     
                     % Reset reward zone patches
-                    set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
+                    set(D.UI.ptchFdZineH(:, D.I.rot), ...
                         'EdgeColor', [0, 0, 0], ...
-                        'FaceAlpha', 0.1, ...
-                        'EdgeAlpha', 0.1);
-                    set(D.UI.txtFdDurH(D.I.rot,:), ...
+                        'FaceAlpha', 0.15, ...
+                        'EdgeAlpha', 0.05);
+                    set(D.UI.txtFdDurH(:, D.I.rot), ...
                         'Visible', 'off');
                     
                     % Print missed reward
@@ -6383,7 +5096,7 @@ fprintf('END OF RUN\n');
                     {sprintf('%d: T:%0.2f Z:%d M:%d', ...
                     sum([D.C.rew_cnt{:}])+1, ...
                     rew_ellapsed, ...
-                    D.PAR.zoneLocs(D.I.zone_now)*-1, ...
+                    D.PAR.zoneLocs(D.I.zone)*-1, ...
                     sum(D.C.missed_rew_cnt)) ...
                     }];
                 rew_percent = ...
@@ -6404,6 +5117,7 @@ fprintf('END OF RUN\n');
         function [] = Forage_Reward_Zone_Check()
             
             % BAIL IF MANUAL OR TRACK TRAINING
+            
             if D.PAR.sesCond == 'Manual_Training' || ...
                     D.PAR.sesTask == 'Track'
                 return
@@ -6414,41 +5128,10 @@ fprintf('END OF RUN\n');
                 return
             end
             
-            % Bail if doing manual targ select
-            if D.UI.toggPickRewPos.UserData(2)
-                return
-            end
+            % CHECK IF IN REWARD BOUNDS FOR MIN TIME
             
-            % CHECK IF ROBOT SHOULD BE MOVED
-            
-            % Check if rat still in last target bounds
-            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targ_last,:));
-            
-            % Move flaged, target updated and min time ellapsed or rat
-            % already moving from dish
-            if  D.F.move_to_targ && ...
-                    D.I.targ_now ~= D.I.targ_last && ...
-                    (Elapsed_Seconds(now) > D.T.rf_rew+D.PAR.rfRewBlock || ...
-                    ~any(check_inbound))
-                
-                % Send move command
-                targ_rad = deg2rad(D.PAR.rfTargDegArr(D.I.targ_now));
-                SendM2C('M', targ_rad);
-                
-                % Reset flag
-                D.F.move_to_targ = false;
-                
-                % Log/print
-                Console_Write(sprintf('[Forage_Reward_Zone_Check] Sent Moved Command: targ=%ddeg dt_rew=%0.2fs', ...
-                    targ_rad, Elapsed_Seconds(now) - D.T.rf_rew));
-            end
-            
-            % CHECK IF RAT SHOULD BE REWARDED
-            
-            % Check if rat in new target bounds
-            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targ_now,:));
-            
-            % Bail if not in bounds
+            % Keep checking if rat is in the arena
+            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targInd,:));
             if ~any(check_inbound)
                 % Reinitialize
                 D.T.rf_rew_inbnd_t1 = 0;
@@ -6470,116 +5153,78 @@ fprintf('END OF RUN\n');
                 return
             end
             
-            % Reinitialize inbound time
-            D.T.rf_rew_inbnd_t1 = 0;
+            % Get path deg array
+            path_arr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
             
             % GET OPTIMAL NEW PATH
             
             % Reset occ once 50% of area covered
-            if sum(D.P.rfOccMatBinary(:))/sum(D.PAR.rfMask(:)) >= 0.5
+            if sum(D.P.occMatBinary(:))/sum(D.PAR.rfMask(:)) >= 0.5
                 % Set all to zero
-                D.P.rfOccMatBinary(:) = 0;
+                D.P.occMatBinary(:) = 0;
             end
             
             % Update plot history
-            VT_Plot_Hist()
+            Plot_Pos_Hist()
             
-            % Send reward command
-            r_pos = 0;
-            r_cond = 1;
-            z_ind = get(D.UI.popReward, 'Value');
-            SendM2C('R', r_pos, r_cond, z_ind);
+            % USE BINARY OCC
             
-            % Add to reward count
-            D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
+            % Get binary map
+            inv_occ = abs(D.P.occMatBinary-1);
+            occ_prod = ...
+                squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd) .* ...
+                repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
             
-            % Store reward time
-            D.T.rf_rew = Elapsed_Seconds(now);
+            %             % USE NOMALIZED DIST SCALED VALUE
+            %
+            %             % Invert occ values and get sum of product of occ and possible paths
+            %             inv_occ = abs(D.P.occMatScale-max(D.P.occMatScale(:)));
+            %             occ_prod = ...
+            %                 squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targInd) .* ...
+            %                 repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
+            %
+            %             % Normalize
+            %             occ_prod = occ_prod/sum(occ_prod);
+            %
+            %             % Weight by path length normalized to occ prod range
+            %             occ_scale = abs(D.PAR.pathLengthArr - max(D.PAR.pathLengthArr));
+            %             occ_scale = occ_scale/sum(occ_scale);
+            %
+            %             %occ_scale = 1 + occ_scale'*((max(occ_prod)-min(occ_prod))/max(occ_scale));
+            %             occ_scale = 1 + occ_scale';
+            %             occ_prod = occ_prod.*occ_scale;
             
-            % Flag to do move after time ellapsed
-            D.F.move_to_targ = true;
+            % Pull out optimal path
+            path_ind = find(occ_prod == max(occ_prod));
+            if length(path_ind) > 1
+                path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
+            end
+            path_rad = wrapTo2Pi(deg2rad(path_arr(path_ind)*2));
             
-            % Store last targ
-            D.I.targ_last = D.I.targ_now;
+            % Get new targ
+            rad_last_targ = deg2rad(D.PAR.pathTargArr(D.I.targInd));
+            rad_new_targ = Rad_Sum(Rad_Sum(rad_last_targ,pi), path_rad);
+            targ_ind_last = D.I.targInd;
+            targ_ind_new = ...
+                find(round(rad2deg(rad_new_targ)) == D.PAR.pathTargArr);
+            
+            % Store path mat for plotting
+            D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targInd);
+            D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
+            
+            % Update patches
+            set(D.UI.ptchRFTarg(targ_ind_last), 'Visible', 'off');
+            set(D.UI.ptchRFTarg(targ_ind_new), 'Visible', 'on');
+            
+            % Reinitialize
+            D.T.rf_rew_inbnd_t1 = 0;
+            
+            % Store new targ
+            D.I.targInd = targ_ind_new;
             
             % Log/print
-            Console_Write(sprintf('[Forage_Reward_Zone_Check] Rewarded at %ddeg', ...
-                D.PAR.rfTargDegArr(D.I.targ_last)));
-            
-            % GET NEXT REWARD TARGET
-            
-            % Handle manual selection
-            if (get(D.UI.toggPickRewPos, 'Value') == 1)
-                
-                % Get sorted index of subset of coresponding paths;
-                sub_path = D.PAR.rfPathDegArr(1:D.PAR.pathTargWdt/D.PAR.pathDegDist/2:end);
-                D.PAR.rfPathSelectInd = find(ismember(D.PAR.rfPathDegArr, sub_path));
-                
-                % Get index of subset of targets;
-                sub_targ = wrapTo360(D.PAR.rfTargDegArr(D.I.targ_now) + 180 + D.PAR.rfPathDegArr(D.PAR.rfPathSelectInd)*2);
-                D.PAR.rfTargSelectInd = find(ismember(D.PAR.rfTargDegArr, sub_targ));
-                
-                % Sort paths to match targets
-                path_sort = cell2mat(arrayfun(@(x) find(sub_targ == x), D.PAR.rfTargDegArr(D.PAR.rfTargSelectInd), 'uni', false));
-                D.PAR.rfPathSelectInd = D.PAR.rfPathSelectInd(path_sort);
-                
-                % Make subset of targets visible
-                set(D.UI.ptchRewTargBnds(D.PAR.rfTargSelectInd), ...
-                    'FaceColor', [0,0,0], ...
-                    'EdgeColor', [0,0,0], ...
-                    'FaceAlpha', 0.1, ...
-                    'Visible', 'on')
-                
-                % Reset path mat
-                D.P.pathNowMat = zeros(size(D.P.pathNowMat));
-                
-                % Set flag
-                D.UI.toggPickRewPos.UserData(2) = true;
-                
-                % Calculate optimal next target
-            else
-                
-                % Get binary map
-                inv_occ = abs(D.P.rfOccMatBinary-1);
-                occ_prod = ...
-                    squeeze(sum(sum(D.P.pathMat(:,:,:,D.I.targ_now) .* ...
-                    repmat(inv_occ,[1,1,size(D.P.pathMat,3)]),1),2));
-                
-                % Pull out optimal path
-                path_ind = find(occ_prod == max(occ_prod));
-                if length(path_ind) > 1
-                    path_ind = path_ind(ceil(rand(1,1)*length(path_ind)));
-                end
-                path_rad = wrapTo2Pi(deg2rad(D.PAR.rfPathDegArr(path_ind)*2));
-                
-                % Get new targ
-                rad_last_targ = deg2rad(D.PAR.rfTargDegArr(D.I.targ_now));
-                rad_new_targ = Rad_Sum(Rad_Sum(rad_last_targ,pi), path_rad);
-                targ_ind_new = ...
-                    find(round(rad2deg(rad_new_targ)) == D.PAR.rfTargDegArr);
-                
-                % Store path mat for plotting
-                D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
-                D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
-                
-                % Update patches
-                set(D.UI.ptchRewTargBnds(D.I.targ_now), ...
-                    'FaceColor', [0,0,0], ...
-                    'EdgeColor', [0,0,0], ...
-                    'Visible', 'off');
-                set(D.UI.ptchRewTargBnds(targ_ind_new), ...
-                    'FaceColor', D.UI.activeCol, ...
-                    'EdgeColor', D.UI.activeCol, ...
-                    'Visible', 'on');
-                
-                % Store new targ
-                D.I.targ_now = targ_ind_new;
-                
-                % Log/print
-                Console_Write(sprintf('[Forage_Reward_Zone_Check] Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
-                    D.PAR.rfTargDegArr(D.I.targ_last), D.PAR.rfTargDegArr(D.I.targ_now)));
-                
-            end
+            Console_Write(sprintf('[Forage_Reward_Zone_Check] Rewarded: Targ_Last=%ddeg Targ_New=%ddeg', ...
+                D.PAR.pathTargArr(targ_ind_last), D.PAR.pathTargArr(D.I.targInd)));
             
         end
         
@@ -6645,7 +5290,7 @@ fprintf('END OF RUN\n');
             %% UPDATE PLOT HISTORY AND PRINT LAP TIME INFO
             
             % Update plot history
-            VT_Plot_Hist()
+            Plot_Pos_Hist()
             
             % Save time
             lap_tim_ellapsed = Elapsed_Seconds(now) - D.T.lap_tim;
@@ -6668,6 +5313,360 @@ fprintf('END OF RUN\n');
             
             % reset timer
             D.T.lap_tim = Elapsed_Seconds(now);
+            
+        end
+        
+        % ----------------------PLOT CURRENT POSITION----------------------
+        
+        function [update_ui] = Plot_Pos_New()
+            
+            % BAIL IF SETUP NOT FINISHED
+            update_ui = false;
+            if ~D.F.setup_done
+                return;
+            end
+            
+            %% ROBOT POS
+            
+            if D.F.Rob.plot_pos
+                
+                % Plot rob patch
+                if isfield(D.UI, 'ptchRobPos')
+                    delete(D.UI.ptchRobPos);
+                end
+                [xbnd, ybnd] =  Get_Cart_Bnds( [D.P.Rob.guardRad, D.P.Rob.buttRad], D.P.trackRohBnd);
+                D.UI.ptchRobPos = ...
+                    patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                    [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                    D.UI.robNowCol, ...
+                    'EdgeColor', D.UI.robNowCol, ...
+                    'LineWidth', 2, ...
+                    'FaceAlpha',0.75, ...
+                    'Parent',D.UI.axH(2));
+                
+                % Plot current rob tracker pos
+                if isfield(D.UI, 'vtRobPltNow')
+                    delete(D.UI.vtRobPltNow);
+                end
+                D.UI.vtRobPltNow = ...
+                    plot(D.P.Rob.x(end), D.P.Rob.y(end), 'o', ...
+                    'MarkerFaceColor', D.UI.robNowCol, ...
+                    'MarkerEdgeColor', D.UI.robNowCol, ...
+                    'MarkerSize', 10, ...
+                    'Parent', D.UI.axH(2));
+                
+                % Plot rob arm
+                if isfield(D.UI, 'armPltNow')
+                    delete(D.UI.armPltNow);
+                end
+                [xbnd, ybnd] =  Get_Cart_Bnds([D.P.Rob.feedRad, D.P.Rob.buttRad], D.P.trackRohBnd);
+                D.UI.armPltNow = ...
+                    plot(xbnd(1,:), ybnd(1,:), ...
+                    'Color', D.UI.robNowCol, ...
+                    'LineWidth', 5, ...
+                    'Parent',D.UI.axH(2));
+                
+                % Plot guard pos
+                if isfield(D.UI, 'quardPltNow')
+                    delete(D.UI.quardPltNow);
+                end
+                [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.guardRad, D.P.trackRohBnd);
+                D.UI.quardPltNow = ...
+                    plot(xbnd, ybnd, ...
+                    'Color', D.UI.guardPosCol, ...
+                    'LineWidth', D.UI.guardPosLineWidth, ...
+                    'Parent',D.UI.axH(2));
+                
+                % Plot set pos
+                if isfield(D.UI, 'setPltNow')
+                    delete(D.UI.setPltNow);
+                end
+                [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.setRad, D.P.trackRohBnd);
+                D.UI.setPltNow = ...
+                    plot(xbnd, ybnd, ...
+                    'Color', D.UI.setPosCol, ...
+                    'LineWidth', D.UI.setPosLineWidth, ...
+                    'Parent',D.UI.axH(2));
+                
+                % Plot feeder pos feed in cond color
+                if isfield(D.UI, 'feedPltNow')
+                    delete(D.UI.feedPltNow);
+                end
+                [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.feedRad, D.P.trackRohBnd);
+                D.UI.feedPltNow = ...
+                    plot(xbnd(1), ybnd(1), 'o', ...
+                    'MarkerFaceColor', D.UI.feedPosCol, ...
+                    'MarkerEdgeColor', D.UI.robNowCol, ...
+                    'LineWidth', 2, ...
+                    'MarkerSize', D.UI.feedPosMarkSize, ...
+                    'Parent', D.UI.axH(2));
+                
+            end
+            
+            %% RAT POS
+            
+            if D.F.Rat.plot_pos
+                
+                % Plot all VT data for this lap
+                delete(D.UI.ratPltH);
+                x = D.P.Rat.pos_lap_hist(:,1);
+                y = D.P.Rat.pos_lap_hist(:,2);
+                D.UI.ratPltH = ...
+                    plot(x, y, '.', ...
+                    'MarkerFaceColor', D.UI.ratPosAllCol, ...
+                    'MarkerEdgeColor', D.UI.ratPosAllCol, ...
+                    'MarkerSize', 6, ...
+                    'Parent', D.UI.axH(1));
+                
+                % Plot occ
+                if D.PAR.sesTask == 'Forage'
+                    delete(D.UI.imgRFOCC);
+                    D.UI.imgRFOCC = imagesc(D.P.occMatScale+D.P.pathNowMat, ...
+                        'Parent', D.UI.axH(3));
+                end
+                
+                % Plot current rat position with larger marker
+                if isfield(D.UI, 'vtRatPltNow')
+                    delete(D.UI.vtRatPltNow);
+                end
+                D.UI.vtRatPltNow = ...
+                    plot(D.P.Rat.x(end), D.P.Rat.y(end), 'o', ...
+                    'MarkerFaceColor', D.UI.ratNowCol, ...
+                    'MarkerEdgeColor', [0, 0, 0], ...
+                    'MarkerSize', 10, ...
+                    'Parent', D.UI.axH(2));
+                
+                
+            end
+            
+            %% VELOCITY
+            
+            % ROB
+            if D.F.Rob.plot_vel
+                % Get non-zero vals to plot
+                inc = D.P.Rob.vel_cart_lap_hist(:,1) > 0 | D.P.Rob.vel_cart_lap_hist(:,2) > 0;
+                x = D.P.Rob.vel_cart_lap_hist(inc, 1);
+                y = D.P.Rob.vel_cart_lap_hist(inc, 2);
+                % Store handle and plot
+                delete(D.UI.robPltHvel);
+                D.UI.robPltHvel = ...
+                    plot(x, y, '-', ...
+                    'Color', D.UI.robNowCol, ...
+                    'LineWidth', 2, ...
+                    'Parent', D.UI.axH(1));
+            end
+            
+            % RAT
+            if D.F.Rat.plot_vel
+                % Get non-zero vals to plot
+                inc = D.P.Rat.vel_cart_lap_hist(:,1) > 0 | D.P.Rat.vel_cart_lap_hist(:,2) > 0;
+                x = D.P.Rat.vel_cart_lap_hist(inc, 1);
+                y = D.P.Rat.vel_cart_lap_hist(inc, 2);
+                % Store handle and plot
+                delete(D.UI.ratPltHvel);
+                D.UI.ratPltHvel = ...
+                    plot(x, y, '-', ...
+                    'Color', D.UI.ratNowCol, ...
+                    'LineWidth', 2, ...
+                    'Parent', D.UI.axH(1));
+            end
+            
+            %% HEADING
+            
+            % Plot arrow
+            if D.F.plot_hd && D.F.Rat.plot_pos
+                
+                % Delete plot object
+                if isfield(D.UI, 'vtPltHD')
+                    delete(D.UI.ratPltHD(:));
+                end
+                
+                % Get current heading
+                hd_deg = rad2deg(D.P.Rat.hd_rad(end));
+                
+                % Calculate coordinates for line
+                % x start/end
+                xs = D.P.Rat.x(1,end);
+                xe = cos(deg2rad(hd_deg))*10 + D.P.Rat.x(1,end);
+                x = [xs, xe, ...
+                    cos(deg2rad(hd_deg-90))*2 + xe, ...
+                    cos(deg2rad(hd_deg))*4 + xe, ...
+                    cos(deg2rad(hd_deg+90))*2 + xe, ...
+                    xe];
+                % y start/end
+                ys = D.P.Rat.y(end);
+                ye = sin(deg2rad(hd_deg))*10 + D.P.Rat.y(end);
+                y = [ys, ye, ...
+                    sin(deg2rad(hd_deg-90))*2 + ye, ...
+                    sin(deg2rad(hd_deg))*4 + ye, ...
+                    sin(deg2rad(hd_deg+90))*2 + ye, ...
+                    ye];
+                
+                % Plot thick backround line
+                D.UI.ratPltHD(1) = ...
+                    plot(x, y, '-', ...
+                    'Color', [0.5, 0.5, 0.5], ...
+                    'LineWidth', 3, ...
+                    'Parent', D.UI.axH(2));
+                
+                % Plot thin foreground line
+                D.UI.ratPltHD(2) = ...
+                    plot(D.UI.axH(2), x, y, '-', ...
+                    'Color', D.UI.ratPosAllCol, ....
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.axH(2));
+            end
+            
+            % Check if ui updated
+            if ...
+                    D.F.Rob.plot_pos ||...
+                    D.F.Rat.plot_pos ||...
+                    D.F.Rob.plot_vel ||...
+                    D.F.Rat.plot_vel
+                update_ui = true;
+            end
+            
+            % Reset flags
+            D.F.Rob.plot_pos = false;
+            D.F.Rat.plot_pos = false;
+            D.F.Rob.plot_vel = false;
+            D.F.Rat.plot_vel = false;
+            
+        end
+        
+        % ----------------------PLOT POSITION HISTORY----------------------
+        
+        function [] = Plot_Pos_Hist()
+            
+            % Delete all tracker data from this lap
+            delete(D.UI.ratPltH)
+            delete(D.UI.ratPltHvel)
+            delete(D.UI.robPltHvel)
+            
+            % Add lap data to all hist data
+            lap_hist_lng = find(~isnan(D.P.Rat.pos_lap_hist(:,1)), 1, 'last');
+            ind(1) = find(isnan(D.P.Rat.pos_all_hist(:,1)), 1, 'first');
+            ind(2) = ind(1)+lap_hist_lng-1;
+            
+            % Store pos data
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 1) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 1);
+            D.P.Rat.pos_all_hist(ind(1):ind(2), 2) = D.P.Rat.pos_lap_hist(1:lap_hist_lng, 2);
+            
+            % Reset lap level values
+            D.P.Rat.pos_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rat.vel_max_lap = 0;
+            D.P.Rob.vel_max_lap = 0;
+            
+            % Rat pos
+            delete(D.UI.Rat.pltHposAll);
+            x = D.P.Rat.pos_all_hist(:,1);
+            y = D.P.Rat.pos_all_hist(:,2);
+            % set big jumps to NaN
+            exc = find(diff(x)/D.UI.cm2pxl > 10 | diff(y)/D.UI.cm2pxl > 10 == 1) + 1;
+            x(exc) = NaN;
+            y(exc) = NaN;
+            D.UI.Rat.pltHposAll = ...
+                plot(x, y, '-', ...
+                'Color', D.UI.ratPosHistCol, ...
+                'LineWidth', 1, ...
+                'Parent', D.UI.axH(1));
+            
+            % Bail if not a 'Track' session
+            if D.PAR.sesTask == 'Forage'
+                return
+            end
+            
+            % Plot vel all
+            cols = [D.UI.ratHistCol; D.UI.robHistCol];
+            flds = [{'Rat'},{'Rob'}];
+            for i = [2,1]
+                fld = flds{i};
+                
+                % Get lap data
+                ind = ~isnan(D.P.(fld).vel_pol_lap_hist(:, 1));
+                vel_rad = D.P.(fld).vel_pol_lap_hist(ind, 1);
+                vel_roh = D.P.(fld).vel_pol_lap_hist(ind, 2);
+                
+                % Sort by rad
+                [vel_rad, s_ind] = sort(vel_rad);
+                vel_roh = vel_roh(s_ind);
+                
+                % Interpolate missing values
+                rad_bins = linspace(0, 2*pi, 101);
+                if length(vel_rad)<10 || ...
+                        max(diff(rad2deg(vel_rad))) > 45 || ...
+                        max(diff(rad2deg(vel_rad))) == 0
+                    
+                    % Set to nan if insuficient samples or big jumps
+                    roh_interp = nan(1,101);
+                    
+                else
+                    
+                    % Histogram
+                    [~,h_inds]= histc(vel_rad, rad_bins);
+                    roh_interp = cell2mat(arrayfun(@(x) nanmean(vel_roh(h_inds==x)), ...
+                        1:101, 'Uni', false));
+                    
+                    % Interpolate missing vals
+                    ind = ~isnan(roh_interp);
+                    roh_interp = interp1(rad_bins(ind), roh_interp(ind), rad_bins);
+                    roh_interp(end) = roh_interp(1);
+                    
+                    % Keep in bounds
+                    roh_interp(roh_interp>D.P.velRohMax) = D.P.velRohMax;
+                    roh_interp(roh_interp<D.P.velRohMin) = D.P.velRohMin;
+                end
+                
+                % Add to history
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,1) = rad_bins;
+                D.P.(fld).vel_pol_all_hist(sum(cell2mat(D.C.lap_cnt)),1:101,2) = roh_interp;
+                
+                % Reset polar data
+                D.P.(fld).vel_pol_lap_hist = NaN(60*60*33,2);
+                
+                % Get history as 1D array
+                vel_rad = reshape(D.P.(fld).vel_pol_all_hist(:,:,1)',1,[]);
+                vel_roh = reshape(D.P.(fld).vel_pol_all_hist(:,:,2)',1,[]);
+                ind = ~isnan(vel_rad);
+                
+                % Convert to cart
+                delete(D.UI.(fld).pltHvelAll);
+                [x, y] = pol2cart(vel_rad(ind), vel_roh(ind));
+                x =  x.*D.PAR.R + D.PAR.XC;
+                y =  y.*D.PAR.R + D.PAR.YC;
+                % Plot
+                D.UI.(fld).pltHvelAll = ...
+                    plot(x, y, '-', ...
+                    'Color', cols(i,:), ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.axH(1));
+            end
+            
+            % Plot vel avg
+            cols = [D.UI.ratAvgCol; D.UI.robAvgCol];
+            flds = [{'Rat'},{'Rob'}];
+            for i = [2,1]
+                fld = flds{i};
+                
+                % Get accross lap average
+                vel_rad = D.P.(fld).vel_pol_all_hist(1,:,1);
+                roh_avg = nanmean(D.P.(fld).vel_pol_all_hist(:,:,2),1);
+                
+                % Convert to cart
+                [x, y] = pol2cart(vel_rad, roh_avg);
+                x =  x.*D.PAR.R + D.PAR.XC;
+                y =  y.*D.PAR.R + D.PAR.YC;
+                
+                % Plot
+                delete(D.UI.(fld).pltHvelAvg)
+                D.UI.(fld).pltHvelAvg = ...
+                    plot(x, y, '-', ...
+                    'Color', cols(i,:), ...
+                    'LineWidth', 4, ...
+                    'Parent', D.UI.axH(1));
+            end
             
         end
         
@@ -6732,13 +5731,13 @@ fprintf('END OF RUN\n');
                 D.P.Rob.vel, D.P.Rob.vel_max_lap, D.P.Rob.vel_max_all);
             set(D.UI.txtPerfInf(6), 'String', infstr)
             
-            % Robot battery voltage
+            % Bat volt
             if c2m.('J').dat1 ~= 0
-                D.PAR.rob_vcc_last = D.PAR.rob_vcc;
-                D.PAR.rob_vcc = c2m.('J').dat1;
+                D.PAR.vcc_last = D.PAR.vcc_now;
+                D.PAR.vcc_now = c2m.('J').dat1;
                 
                 % Check if voltage low
-                if D.PAR.rob_vcc <= D.PAR.batVoltWarning && D.PAR.rob_vcc > 0
+                if D.PAR.vcc_now <= D.PAR.batVoltWarning && D.PAR.vcc_now > 0
                     set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
                     
                     % Turn red and flicker if bellow 12 V
@@ -6756,66 +5755,8 @@ fprintf('END OF RUN\n');
                         set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledPrintFrgCol);
                     end
                 end
-                infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
+                infstr = sprintf('Battery:_%0.2fV', D.PAR.vcc_now);
                 set(D.UI.txtPerfInf(7), 'String', infstr)
-            end
-            
-            % Cube battery voltage
-            if D.PAR.isImplanted
-                D.PAR.cube_vcc_last = D.PAR.cube_vcc;
-                D.PAR.cube_vcc = NlxSendCommand('-GetBatteryRemaining AcqSystem1');
-                
-                % Check if voltage low
-                if D.PAR.cube_vcc <= D.PAR.batVoltWarning && D.PAR.cube_vcc > 0
-                    set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
-                    
-                    % Turn red and flicker if bellow 12 V
-                    if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
-                        set(D.UI.txtPerfInf(7), 'Visible', 'off')
-                    else
-                        set(D.UI.txtPerfInf(7), 'Visible', 'on')
-                    end
-                else
-                    
-                    % Check if printing a new value is new
-                    if Elapsed_Seconds(now) - c2m.('J').t_rcvd < 5
-                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.activeCol);
-                    else
-                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledPrintFrgCol);
-                    end
-                end
-                infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
-                set(D.UI.txtPerfInf(8), 'String', infstr)
-                
-                % TEMP
-                persistent print_75
-                persistent print_50
-                persistent print_10
-                if isempty(print_50)
-                    print_50 = false;
-                end
-                if isempty(print_75)
-                    print_75 = false;
-                end
-                if isempty(print_10)
-                    print_10 = false;
-                end
-                disp(D.PAR.cube_vcc)
-                if D.PAR.cube_vcc<75 && print_75
-                    load handel.mat;
-                    sound(y*2, 2*Fs);
-                    print_75 = false;
-                end
-                if D.PAR.cube_vcc<50 && print_50
-                    load handel.mat;
-                    sound(y*2, 2*Fs);
-                    print_50 = false;
-                end
-                if D.PAR.cube_vcc<10 && print_10
-                    load handel.mat;
-                    sound(y*2, 2*Fs);
-                    print_10 = false;
-                end
             end
             
             %% PRINT TIME INFO
@@ -6845,14 +5786,14 @@ fprintf('END OF RUN\n');
             
             % Make string
             infstr = sprintf([ ...
-                'SES:%s%s\n', ...
-                'REC:%s%s\n', ...
-                'LAP:%s%s\n'...
-                'RUN:%s%s\n'], ...
-                repmat('_',1,1), datestr(nowTim(1)/(24*60*60), 'HH:MM:SS'), ...
-                repmat('_',1,1), datestr(nowTim(2)/(24*60*60), 'HH:MM:SS'), ...
-                repmat('_',1,1), datestr(nowTim(3)/(24*60*60), 'HH:MM:SS'), ...
-                repmat('_',1,1), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
+                '(SES):%s%s\n', ...
+                '(REC):%s%s\n', ...
+                '(LAP):%s%s\n'...
+                '(RUN):%s%s\n'], ...
+                repmat('_',1,6), datestr(nowTim(1)/(24*60*60), 'HH:MM:SS'), ...
+                repmat('_',1,6), datestr(nowTim(2)/(24*60*60), 'HH:MM:SS'), ...
+                repmat('_',1,6), datestr(nowTim(3)/(24*60*60), 'HH:MM:SS'), ...
+                repmat('_',1,6), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
             
             % Print time
             set(D.UI.txtTimElspInf, 'String', infstr)
@@ -6948,7 +5889,7 @@ fprintf('END OF RUN\n');
                         end
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] Halt Error Test: new_vel=%dcm/sec', ...
+                        Console_Write(sprintf('[Run_Test] Halt Error Test: New Vel=%dcm/sec', ...
                             D.DB.nowVel));
                         
                     end
@@ -7012,7 +5953,7 @@ fprintf('END OF RUN\n');
                             if D.PAR.sesTask == 'Forage'
                                 
                                 % Store current target
-                                D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
+                                D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
                                 
                                 % Compute angle between start pos and targ
                                 ang_str = rad2deg(mean(D.PAR.strQuadBnds));
@@ -7037,17 +5978,13 @@ fprintf('END OF RUN\n');
                                 roh = mean(D.P.trackRohBnd);
                             end
                             D.DB.simRadLast = mean(D.PAR.strQuadBnds);
-                            if D.PAR.sesTask == 'Track'
-                                D.DB.simRohLast = mean(D.P.trackRohBnd);
-                            else
-                                D.DB.simRohLast = 0;
-                            end
+                            D.DB.simRohLast = 0;
                             D.DB.simVelLast = 0;
                             D.DB.simTSStart = Elapsed_Seconds(now);
                             D.DB.simTSLast = 0;
                             
                             % Get inital x/y
-                            xy_pos = Pol_2_VT(wrapTo2Pi(D.DB.simRadLast), roh);
+                            xy_pos = Rad_2_VT(wrapTo2Pi(D.DB.simRadLast), roh);
                             D.DB.simXY = reshape(xy_pos', 1, []);
                             
                             % Make UI stuff visible
@@ -7064,41 +6001,19 @@ fprintf('END OF RUN\n');
                             D.F.initVals = false;
                         end
                         
-                        % Get Cheetah time stamp
-                        if isCheetahOpen
-                            
-                            % Send event to get back ts
-                            NlxSendCommand('-PostEvent Get_Sim_TS 0 0');
-                            
-                            % Check for ts event
-                            nlx_ts_evt_ind = ismember(D.E.evtStr, 'Get_Sim_TS');
-                            
-                            % Get ts
-                            if any(nlx_ts_evt_ind)
-                                ts_now = D.E.evtTS(find(nlx_ts_evt_ind,1,'last'));
-                            else
-                                return
-                            end
-                            
-                        else
-                            % Get TS from MATLAB lock
-                            ts_now = ceil((Elapsed_Seconds(now) - D.DB.simTSStart)*10^6);
-                        end
-                        
                         % Compute ts(us) from dt(s)
-                        dt_sec = double(ts_now - D.DB.simTSLast) / 10^6;
+                        ts_now = ceil((Elapsed_Seconds(now) - D.DB.simTSStart)*10^6);
+                        dt_sec = (ts_now - D.DB.simTSLast) / 10^6;
                         D.DB.simTSLast = ts_now;
                         
                         % Get slider val
                         sld_vel = round(get(D.UI.sldSimVel, 'Value'));
                         set(D.UI.txtSimVel, 'String', num2str(sld_vel));
                         
-                        % Update vel if not halted, holding for setup or
-                        % waiting for robot to move
+                        % Update vel if not halted or holding for 2 sec for setup
                         if ...
                                 D.F.rat_in && ...
                                 ~D.F.is_halted && ...
-                                Elapsed_Seconds(now) > D.T.rf_rew+D.PAR.rfRewBlock+2.5 && ...
                                 Elapsed_Seconds(now) - D.T.run_str > 2
                             
                             % Check vel
@@ -7139,43 +6054,20 @@ fprintf('END OF RUN\n');
                                 rad_now = Rad_Diff(D.DB.simRadLast, rad_diff);
                                 D.DB.simRadLast = rad_now;
                                 
-                                % Get roh 'sway'
-                                roh_diff = cm/D.UI.arnRad * D.DB.simSwayDir;
-                                scale = abs(cos((D.DB.simRohLast-mean(D.P.trackRohBnd)) / (D.P.trackRohBnd(2)-mean(D.P.trackRohBnd))));
-                                if scale>1 || ...
-                                        D.DB.simRohLast > D.P.trackRohBnd(2) || ...
-                                        D.DB.simRohLast < D.P.trackRohBnd(1)
-                                    
-                                    scale = 1;
-                                elseif scale <=0
-                                    scale = 0.001;
-                                end
-                                roh_diff = roh_diff*scale;
-                                roh_now = D.DB.simRohLast + roh_diff;
-                                
-                                % Keep in bounds
-                                thresh = rand(1,1)*0.5;
-                                if roh_now > D.P.trackRohBnd(2) - (D.P.trackRohBnd(2)-D.P.trackRohBnd(1))*thresh
-                                    D.DB.simSwayDir = -1;
-                                elseif   roh_now < D.P.trackRohBnd(1) + (D.P.trackRohBnd(2)-D.P.trackRohBnd(1))*thresh
-                                    D.DB.simSwayDir = 1;
-                                end
-                                D.DB.simRohLast = roh_now;
-                                
                                 % Convert rad back to cart
-                                xy_pos = Pol_2_VT(wrapTo2Pi(rad_now), roh_now);
+                                xy_pos = Rad_2_VT(wrapTo2Pi(rad_now), mean(D.P.trackRohBnd));
                                 D.DB.simXY = reshape(xy_pos', 1, []);
                                 
                             else
                                 
                                 % Check for changed targ
-                                if D.DB.simTargAng ~= D.PAR.rfTargDegArr(D.I.targ_now)
+                                if D.DB.simTargAng ~= D.PAR.pathTargArr(D.I.targInd)
                                     
                                     % Get current rad pos
-                                    [rad_start, ~] = VT_2_Pol(D.DB.simXY);
+                                    [rad_start, ~] = VT_2_Rad(D.DB.simXY);
                                     
                                     % Add some noise
-                                    ang_end = D.PAR.rfTargDegArr(D.I.targ_now);
+                                    ang_end = D.PAR.pathTargArr(D.I.targInd);
                                     noise = (rand(1) - 0.5) * ...
                                         (((2*D.UI.rfRad*pi) * (D.PAR.pathTargWdt/360)) * 0.5);
                                     ang_end = ang_end+noise;
@@ -7197,7 +6089,7 @@ fprintf('END OF RUN\n');
                                     D.DB.simRunRad = deg2rad(ang_new);
                                     
                                     % Store new target
-                                    D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
+                                    D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
                                     
                                     % Reset roh
                                     D.DB.simRohLast = 0;
@@ -7215,13 +6107,13 @@ fprintf('END OF RUN\n');
                                 [x_diff,y_diff] = pol2cart(rad, roh_now);
                                 
                                 % Check if out of bounds
-                                [~, roh] = VT_2_Pol([D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff]);
+                                [~, roh] = VT_2_Rad([D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff]);
                                 if roh < D.P.rfRohBnd(2)
                                     D.DB.simXY = [D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff];
                                 end
                                 
                                 % Store current targ ang
-                                D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
+                                D.DB.simTargAng = D.PAR.pathTargArr(D.I.targInd);
                             end
                             
                         end
@@ -7231,7 +6123,7 @@ fprintf('END OF RUN\n');
                         
                         % Update simulated rat data
                         D.DB.simVelLast = vel_now;
-                        D.P.Rat.vtTS = uint64(ts_now);
+                        D.P.Rat.vtTS = single(ts_now);
                         D.P.Rat.vtPos = single(D.DB.simXY);
                         D.P.Rat.vtNRecs = single(1);
                         
@@ -7274,9 +6166,6 @@ fprintf('END OF RUN\n');
                 % Get rat index in D.SS_In_All
                 D.PAR.ratInd = ...
                     find(ismember(D.SS_In_All.Properties.RowNames, D.PAR.ratLab));
-                
-                % Get rat implant status
-                D.PAR.isImplanted = D.SS_In_All.Implanted(D.PAR.ratInd);
                 
                 % Get rat age
                 D.PAR.ratAgeGrp = ... % [Young,Old]
@@ -7449,14 +6338,14 @@ fprintf('END OF RUN\n');
         end
         
         % CUE CONDITION
-        function [] = ToggCue(hObject, ~, ~)
+        function [] = ToggCue(~, ~, ~)
             
             % Get trigger button
             cue_cond = find(cell2mat(get(D.UI.toggCue, 'Value')) == 1);
             
             % Switching buttons
             if length(cue_cond)>1
-                cue_cond = get(hObject, 'UserData');
+                cue_cond = get(gcbo, 'UserData');
             end
             
             % Change to active
@@ -7466,19 +6355,22 @@ fprintf('END OF RUN\n');
                 cue_str = get(D.UI.toggCue(cue_cond), 'String');
                 
                 % Activate current button
-                Set_Button_State(D.UI.toggCue(cue_cond), 'Enable');
+                set(D.UI.toggCue(cue_cond), ...
+                    'BackgroundColor', D.UI.activeCol);
                 
                 % Inactivate other buttons
-                set(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Value',0);
-                Set_Button_State(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Enable');
+                set(D.UI.toggCue(([1,2,3] ~= cue_cond)), ...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'Value',0);
                 
                 % Save data
                 D.PAR.cueFeed(:) = cue_str;
                 
                 % Change to inactive
             else
-                set(D.UI.toggCue(cue_cond), 'Value',0);
-                Set_Button_State(D.UI.toggCue(cue_cond), 'Enable');
+                set(D.UI.toggCue(cue_cond), ...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'Value',0);
             end
             
             % Log/print
@@ -7497,12 +6389,16 @@ fprintf('END OF RUN\n');
             %         {'Reward'}
             
             for z_sa = 1:2
-                
                 % Get button ID and state value
                 D.UI.sndVal = get(D.UI.toggSnd(z_sa), 'Value');
                 D.UI.sndID = get(D.UI.toggSnd(z_sa), 'UserData');
-                
-                % Store logical
+                if D.UI.sndVal == 1
+                    set(D.UI.toggSnd(z_sa), ...
+                        'BackgroundColor', D.UI.activeCol);
+                else
+                    set(D.UI.toggSnd(z_sa), ...
+                        'BackgroundColor', D.UI.enabledCol);
+                end
                 if D.UI.sndVal == 1
                     D.UI.snd(z_sa) = true;
                 else
@@ -7514,10 +6410,9 @@ fprintf('END OF RUN\n');
             if D.UI.snd(1) == false
                 D.UI.snd(2) = false;
                 set(D.UI.toggSnd(2), 'Value', 0);
+                set(D.UI.toggSnd(2), ...
+                    'BackgroundColor', D.UI.enabledCol);
             end
-            
-            % Set state stuff
-            Set_Button_State(D.UI.toggSnd, 'Enable');
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\" \"%d\"', 'ToggSnd', ...
@@ -7532,7 +6427,8 @@ fprintf('END OF RUN\n');
         function [] = BtnSetupDone(~, ~, ~)
             
             % Disable button so only pressed once
-            Set_Button_State(D.UI.btnSetupDone, 'Unenable');
+            set(D.UI.btnSetupDone, 'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
             
             % Confirm UI entries
             if ...
@@ -7595,66 +6491,48 @@ fprintf('END OF RUN\n');
         % ACQ BUTTON
         function [] = BtnAcq(~, ~, ~)
             
-            % Bail if recording
-            if get(D.UI.toggRec,'Value') == 1
+            % Run only if not recording
+            if get(D.UI.btnRec,'Value') ~= 1
                 
-                % Bail if aqc active
-                if get(D.UI.toggAcq,'Value') == 1
-                    return
+                % Start aquisition
+                if get(D.UI.btnAcq,'Value') == 1
+                    NlxSendCommand('-StartAcquisition');
+                    set(D.UI.btnAcq,'CData',D.UI.radBtnCmap{2})
+                else
+                    NlxSendCommand('-StopAcquisition');
+                    set(D.UI.btnAcq,'CData',D.UI.radBtnCmap{1})
                 end
                 
-                % Enable acq
-                set(D.UI.toggAcq,'Value',1)
+                % Set time tracking variables
+                if D.F.acq
+                    % save out time before stopping
+                    D.T.acq_tot_tim = (Elapsed_Seconds(now) - D.T.acq_tim) + D.T.acq_tot_tim;
+                end
+                
+                % Change aquiring status
+                D.F.acq = ~D.F.acq;
+                
+                % Reset temp now
+                D.T.acq_tim = Elapsed_Seconds(now);
+                
             end
-            
-            % Start aquisition
-            if get(D.UI.toggAcq,'Value') == 1
-                NlxSendCommand('-StartAcquisition');
-            else
-                NlxSendCommand('-StopAcquisition');
-            end
-            
-            % Set state stuff
-            Set_Button_State(D.UI.toggAcq, 'Enable');
-            
-            % Set time tracking variables
-            if D.F.acq
-                % save out time before stopping
-                D.T.acq_tot_tim = (Elapsed_Seconds(now) - D.T.acq_tim) + D.T.acq_tot_tim;
-            end
-            
-            % Change aquiring status
-            D.F.acq = ~D.F.acq;
-            
-            % Reset temp now
-            D.T.acq_tim = Elapsed_Seconds(now);
             
             % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnAcq', get(D.UI.toggAcq,'Value')));
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnAcq', get(D.UI.btnAcq,'Value')));
             Update_UI(10);
         end
         
         % REC BUTTON
         function [] = BtnRec(~, ~, ~)
             
-            % Start acq if not running
-            if get(D.UI.toggRec,'Value') == 1 && ...
-                    get(D.UI.toggAcq,'Value') == 0
-                
-                % run BtnAcq
-                BtnAcq(D.UI.toggAcq);
-                
-            end
-            
-            % Start recording
-            if get(D.UI.toggRec,'Value') == 1
+            % Start aquisition
+            if get(D.UI.btnRec,'Value') == 1
                 NlxSendCommand('-StartRecording');
+                set(D.UI.btnRec,'CData',D.UI.radBtnCmap{3});
             else
                 NlxSendCommand('-StopRecording');
+                set(D.UI.btnRec,'CData',D.UI.radBtnCmap{1});
             end
-            
-            % Set state stuff
-            Set_Button_State(D.UI.toggRec, 'Enable');
             
             % Set time tracking variables
             if  D.F.rec
@@ -7664,431 +6542,71 @@ fprintf('END OF RUN\n');
             D.F.rec = ~ D.F.rec;
             D.T.rec_tim = Elapsed_Seconds(now);
             
+            % Enable icr button
+            if strcmp(get(D.UI.btnICR, 'Enable'), 'off')
+                if D.PAR.sesCond == 'Rotation'
+                    set(D.UI.btnICR, ...
+                        'Enable', 'on', ...
+                        'String', D.UI.btnICRstr{2}, ...
+                        'BackgroundColor', D.UI.rotCol(2,:));
+                end
+            end
+            
             % Enable recording done button
-            if strcmp(get(D.UI.toggRecDone, 'Enable'), 'off') && ...
+            if strcmp(get(D.UI.btnRecDone, 'Enable'), 'off') && ...
                     ~D.F.rec_done
-                Set_Button_State(D.UI.toggRecDone, 'Enable');
+                set(D.UI.btnRecDone, ...
+                    'Enable', 'on', ...
+                    'ForegroundColor', D.UI.enabledBtnFrgCol, ...
+                    'BackgroundColor', D.UI.enabledCol)
+            end
+            
+            % Start acq if not running
+            if get(D.UI.btnRec,'Value') == 1 && ...
+                    get(D.UI.btnAcq,'Value') == 0
+                
+                % Set aquire button value to 1
+                set(D.UI.btnAcq,'Value', 1)
+                % run BtnAcq
+                BtnAcq(D.UI.btnAcq);
+                
             end
             
             % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRec', get(D.UI.toggRec,'Value')));
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRec', get(D.UI.btnRec,'Value')));
             Update_UI(10);
-        end
-        
-        % CELLS CUT BUTTON
-        function [] = ToggCellsCut(~, ~, ~)
-            
-            % Disable button
-            Set_Button_State(D.UI.toggCellsCut, 'Unenable');
-            
-            % Parse cluster file
-            clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
-            clust_files = dir(clust_fi_dir);
-            clust_files = {clust_files.name};
-            clust_files = regexp(clust_files,'TT\d\d.ncf','match');
-            clust_files = [clust_files{:}];
-            for z_tt = 1:length(clust_files)
-                
-                % Read in file text
-                file_id = fopen(fullfile(clust_fi_dir,clust_files{z_tt}));
-                file_str = fread(file_id,'*char')';
-                fclose(file_id);
-                
-                % Parse file for number of clusters
-                tt_lab = clust_files{z_tt}(1:4);
-                clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
-                tt_list_ind = ismember(D.TT.ttList,tt_lab);
-                D.S.nClust(tt_list_ind) = max(str2double([clusts{:}]));
-                
-                % Include cluster 0
-                D.S.nClust(tt_list_ind) = D.S.nClust(tt_list_ind)+1;
-                
-                % Get tt button ind
-                [b_ind, tt_ind] = find(ismember(D.TT.ttFlds, tt_lab));
-                
-                % Enable tt buttun
-                set(D.UI.toggSubTT(b_ind, tt_ind,:), 'Enable', 'on', ...
-                    'ForegroundColor', D.UI.ttCol(b_ind,tt_ind,:));
-                
-                % Enable clust buttons
-                set(D.UI.btnSubClust(b_ind,tt_ind,1:D.S.nClust(tt_list_ind),:), 'Enable', 'on')
-                for z_c = 1:D.S.nClust(tt_list_ind)
-                    set(D.UI.btnSubClust(b_ind,tt_ind,z_c,:), ...
-                        'ForegroundColor', D.UI.clustCol(z_c,:));
-                end
-                
-                % Attempt open
-                succeeded = NlxOpenStream(tt_lab);
-                
-                % Set flag
-                D.S.stream_clust(tt_list_ind, 1:D.S.nClust(tt_list_ind)) =  true;
-                
-                % Print status
-                if (succeeded)
-                    Console_Write(sprintf('[ToggCellsCut] FINISHED: Open \"%s\" Stream', tt_lab));
-                else
-                    Console_Write(sprintf('**WARNING** [ToggCellsCut] FAILED: Open \"%s\" Stream', tt_lab));
-                end
-            end
-            
-            % Set callback
-            set(D.UI.btnSubClust(isgraphics(D.UI.btnSubClust(:,:,:,:))), ...
-                'Callback', {@ToggClust})
-            
-            % Initialize clust pos vals
-            [D.S.pos_clust{:, :}] =  deal({[0,0], NaN(60*60*100,3)});
-            
-        end
-        
-        % SHOW CLUSTER
-        function [] = ToggClust(hObject, ~, ~)
-            
-            % Get user data
-            user_dat = get(hObject, 'UserData');
-            bndl_ind = user_dat(1);
-            tt_ind = user_dat(2);
-            clust_ind = user_dat(3);
-            val = get(hObject, 'Value');
-            
-            % Set both buttons
-            set(D.UI.btnSubClust(bndl_ind,tt_ind,clust_ind,:), ...
-                'Value', val);
-            
-            % Set plot flag
-            tt_list_ind = ...
-                ismember(D.TT.ttList,D.TT.ttFlds{bndl_ind,tt_ind});
-            D.S.active_clust(tt_list_ind, clust_ind) = logical(val);
-            
-            % Delete existing plots
-            if isgraphics(D.UI.clustH(tt_list_ind,clust_ind))
-                delete(D.UI.clustH(tt_list_ind,clust_ind))
-            end
-            
-        end
-        
-        % SLEEP BUTTON
-        function [] = BtnSleep(~, ~, ~)
         end
         
         % ROTATION BUTTON
-        function [] = BtnICR(hObject, ~, ~)
+        function [] = BtnICR(~, ~, ~)
             
-            % Get user data and value
-            enabled = get(hObject, 'UserData');
-            val = get(hObject, 'Value');
-            
-            % Bail if not 'enabled'
-            if ~enabled
-                set(hObject, 'Value', 0);
-                return;
-            end
-            
-            % Get next rot ind
+            % get image and color for post rotation feeder
             rotNext = [1, 2] ~=  D.I.rot;
             
-            % Enable rot pos select
-            if (val==1)
-                
-                % Show rot pos options
-                set(D.UI.ptchRtBnds(rotNext, :), 'Visible', 'on');
-                set(D.UI.txtRtBnds(rotNext, :), 'Visible', 'on');
-                
-                % Make line width of preffered pos thicker
-                set(D.UI.ptchRtBnds(rotNext, D.UI.rotCatInd == str2double(char(D.PAR.rotPosList(D.C.rot_cnt+1)))), ...
-                    'LineWidth', 3);
-                
-                % Change button color
-                Set_Button_State(D.UI.toggICR(rotNext), 'Enable');
-                
-            else
-                
-                % Hide rot pos options
-                set(D.UI.ptchRtBnds(rotNext, :), ...
-                    'Visible', 'off');
-                set(D.UI.txtRtBnds(rotNext, :), ...
-                    'Visible', 'off');
-                
-                % Change button color back to default
-                Set_Button_State(D.UI.toggICR(rotNext), 'Enable', D.UI.rotCol(rotNext,:));
-                
-            end
+            % Determine rotation trigger bounds for this event
+            D.UI.rotBndNext = D.UI.rotBnds(...
+                D.PAR.catRotPos == D.PAR.rotPos(D.C.rot_cnt+1), ...
+                :, rotNext);
+            
+            % Plot selected rotation trigger bounds
+            [xbnd, ybnd] =  Get_Cart_Bnds(D.UI.rotBndNext);
+            D.UI.ptchRtTrgH = ...
+                patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                D.UI.rotCol(rotNext,:), ...
+                'EdgeColor', D.UI.activeCol, ...
+                'LineWidth', 2, ...
+                'FaceAlpha',0.75, ...
+                'Parent', D.UI.axH(2));
+            
+            % Make button red and set user data to true
+            set(D.UI.btnICR,'string', 'Rotation Ready', ...
+                'BackgroundColor', D.UI.activeCol, ...
+                'UserData', true);
             
             % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d"', 'BtnICR', val));
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnICR', get(D.UI.btnICR,'Value')));
             Update_UI(10);
-        end
-        
-        % GET MOUSE POSITION
-        function [] = MouseTrack(~, ~, ~)
-            
-            % Block callback re-entry
-            s = dbstack();
-            if sum(cell2mat(cellfun(@(x) any(strfind(x, 'MouseTrack')), {s.name}, 'uni', false))) > 1
-                return;
-            end
-            
-            % Get new mouse data
-            C = get (D.UI.axH(3), 'CurrentPoint');
-            
-            % Get cart coord
-            x = C(1,1);
-            y = C(1,2);
-            
-            % Get normalized pos data
-            x_norm = (x-D.PAR.XC)./D.PAR.R;
-            y_norm = (y-D.PAR.YC)./D.PAR.R;
-            
-            % Get position in radians
-            [mouse_rad,mouse_roh] = cart2pol(x_norm, y_norm);
-            
-            % Convert radians between [0, 2*pi]
-            mouse_rad = wrapTo2Pi(mouse_rad);
-            
-            % Track reward zone select
-            if D.PAR.sesTask == 'Track' && ...
-                    get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    D.UI.toggPickRewPos.UserData(2)
-                
-                % Run sub function
-                doZoneSelect(mouse_rad, mouse_roh);
-            end
-            
-            % Forage reward target select
-            if D.PAR.sesTask == 'Forage' && ...
-                    get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    D.UI.toggPickRewPos.UserData(2)
-                
-                % Run sub function
-                doTargSelect(mouse_rad, mouse_roh);
-            end
-            
-            % Rotation select
-            if D.PAR.sesTask == 'Track' && ...
-                    any(cell2mat(get(D.UI.toggICR, 'Value')) == 1 & ...
-                    cell2mat(get(D.UI.toggICR, 'UserData')))
-                
-                % Run sub function
-                doRotSelect(mouse_rad, mouse_roh);
-            end
-            
-            % Select track reward zone
-            function [] = doZoneSelect(rad, roh)
-                
-                % Check if mouse over any targ
-                if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
-                    set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active_ind), 'Visible', 'off');
-                    set(D.UI.ptchRewZoneBnds(D.I.rot, ~D.I.zone_active_ind), 'FaceAlpha', 0.25);
-                    return
-                end
-                
-                % Check each zone bounds
-                for z_ptch = 1:size(D.PAR.rewZoneBnds,1)
-                    if any(Check_Pol_Bnds(rad, roh, D.PAR.rewZoneBnds(z_ptch,:,D.I.rot)))
-                        
-                        % Darken patch
-                        set(D.UI.ptchRewZoneBnds(D.I.rot, ~D.I.zone_active_ind), 'FaceAlpha', 0.1);
-                        set(D.UI.ptchRewZoneBnds(D.I.rot, z_ptch), 'FaceAlpha', 0.5);
-                        
-                        % Show text
-                        set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active_ind), 'Visible', 'off');
-                        set(D.UI.txtFdDurH(D.I.rot, z_ptch), 'Visible', 'on');
-                        
-                        % Bail
-                        break
-                        
-                    else
-                        set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active_ind), 'Visible', 'off');
-                        set(D.UI.ptchRewZoneBnds(D.I.rot, ~D.I.zone_active_ind), 'FaceAlpha', 0.25);
-                    end
-                end
-                
-            end
-            
-            % Select forrage reward target
-            function [] = doTargSelect(rad, roh)
-                
-                % Check if mouse over any targ
-                if ~(roh > D.P.rfRohBnd(1) && roh < D.P.rfRohBnd(2))
-                    set(D.UI.ptchRewTargBnds(D.PAR.rfTargSelectInd), 'FaceAlpha', 0.1);
-                    return
-                end
-                
-                % Check each bound
-                for z_ptch = 1:length(D.PAR.rfTargSelectInd)
-                    
-                    % Get current targ and path ind
-                    path_ind = D.PAR.rfPathSelectInd(z_ptch);
-                    targ_ind = D.PAR.rfTargSelectInd(z_ptch);
-                    
-                    if any(Check_Pol_Bnds(rad, roh, D.PAR.rewTargBnds(targ_ind,:)))
-                        
-                        % Darken patch
-                        set(D.UI.ptchRewTargBnds(D.PAR.rfTargSelectInd), 'FaceAlpha', 0.1);
-                        set(D.UI.ptchRewTargBnds(targ_ind), 'FaceAlpha', 0.5);
-                        
-                        % Get path
-                        D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
-                        D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
-                        
-                        % Plot path
-                        delete(D.UI.imgrfOcc);
-                        D.UI.imgrfOcc = imagesc(D.P.rfOccMatScale+D.P.pathNowMat, ...
-                            'Parent', D.UI.axH(6));
-                        
-                        % Bail
-                        break
-                        
-                    else
-                        set(D.UI.ptchRewTargBnds(ind), 'FaceAlpha', 0.1);
-                    end
-                end
-                
-                
-            end
-            
-            % Select rot pos
-            function [] = doRotSelect(rad, roh)
-                
-                % Get next rot ind
-                rotNext = [1, 2] ~=  D.I.rot;
-                
-                % Check if mouse over track
-                if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
-                    set(D.UI.ptchRtBnds(rotNext, :), 'FaceAlpha', 0.1);
-                    return
-                end
-                
-                % Check each rot bounds
-                for z_ptch = 1:size(D.UI.rotBnds,1)
-                    if any(Check_Pol_Bnds(rad, roh, D.UI.rotBnds(z_ptch,:,rotNext)))
-                        
-                        % Darken patch
-                        set(D.UI.ptchRtBnds(rotNext, :), 'FaceAlpha', 0.1);
-                        set(D.UI.ptchRtBnds(rotNext, z_ptch), 'FaceAlpha', 0.5);
-                        
-                        % Bail
-                        break
-                    else
-                        set(D.UI.ptchRtBnds(rotNext, :), 'FaceAlpha', 0.1);
-                    end
-                end
-                
-            end
-            
-        end
-        
-        % MOUSE CLICK TRACK REW ZONE SELECT
-        function [] = MouseSelectRewZone(hObject, ~, ~)
-            
-            % Bail if not checking for zone selection
-            if ~(D.PAR.sesTask == 'Track' && ...
-                    get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    D.UI.toggPickRewPos.UserData(2))
-                return
-            end
-            
-            % Get patch user data
-            user_data = get(hObject, 'UserData');
-            D.I.zone_select = user_data(2);
-            
-            % Update active zone
-            D.I.zone_active_ind(D.I.zone_select) = true;
-            
-            % Update graphics
-            set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active_ind), 'Visible', 'off');
-            set(D.UI.ptchRewZoneBnds(D.I.rot, ~D.I.zone_active_ind), 'FaceAlpha', 0.1);
-            set(D.UI.txtFdDurH(D.I.rot, D.I.zone_select), 'Visible', 'on');
-            set(D.UI.ptchRewZoneBnds(D.I.rot, D.I.zone_select), ...
-                'EdgeColor', D.UI.activeCol, ...
-                'FaceAlpha', 0.75, ...
-                'EdgeAlpha', 0.75);
-            
-            % Reset button
-            set(D.UI.toggPickRewPos, 'Value', 0)
-            Set_Button_State(D.UI.toggPickRewPos, 'Disable');
-            
-        end
-        
-        % MOUSE CLICK FORAGE REW ZONE SELECT
-        function [] = MouseSelectRewTarg(hObject, ~, ~)
-            
-            % Bail if not checking for target selection
-            if ~(D.PAR.sesTask == 'Forage' && ...
-                    get(D.UI.toggPickRewPos, 'Value') == 1 && ...
-                    D.UI.toggPickRewPos.UserData(2))
-                return
-            end
-            
-            % Get patch user data
-            targ_ind_new = get(hObject, 'UserData');
-            
-            % Get current targ and path ind
-            path_ind = D.PAR.rfPathSelectInd(D.PAR.rfTargSelectInd == targ_ind_new);
-            
-            % Store path mat for plotting
-            D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
-            D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
-            
-            % Update patches
-            set(D.UI.ptchRewTargBnds, ...
-                'FaceColor', [0,0,0], ...
-                'EdgeColor', [0,0,0], ...
-                'Visible', 'off');
-            set(D.UI.ptchRewTargBnds(targ_ind_new), ...
-                'FaceColor', D.UI.activeCol, ...
-                'EdgeColor', D.UI.activeCol, ...
-                'Visible', 'on');
-            
-            % Reset button
-            set(D.UI.toggPickRewPos, 'Value', 0)
-            Set_Button_State(D.UI.toggPickRewPos, 'Disable');
-            
-            % Store new targ
-            D.I.targ_now = targ_ind_new;
-            
-            % Log/print
-            Console_Write(sprintf('[MouseSelectRewTarg] Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
-                D.PAR.rfTargDegArr(D.I.targ_last), D.PAR.rfTargDegArr(D.I.targ_now)));
-            
-        end
-        
-        % MOUSE CLICK ROT POS SELECT
-        function [] = MouseSelectRot(hObject, ~, ~)
-            
-            % Bail if not checking for rotaion
-            if ~(D.PAR.sesTask == 'Track' && ...
-                    any(cell2mat(get(D.UI.toggICR, 'Value')) == 1 & ...
-                    cell2mat(get(D.UI.toggICR, 'UserData'))))
-                return
-            end
-            
-            % Get patch user data
-            user_data = get(hObject, 'UserData');
-            rot_ind = user_data(1);
-            pos_ind = user_data(2);
-            
-            % Store next rotaion bounds
-            D.UI.rotBndNext = D.PAR.rotBnds(pos_ind, :, rot_ind);
-            
-            % Store rot pos
-            D.PAR.rotPosActual = [D.PAR.rotPosActual, D.PAR.rotDistDeg(pos_ind)];
-            
-            % Set flag
-            D.F.do_rotation = true;
-            
-            % Show active rote bounds
-            set(D.UI.txtRtBnds(:,:), 'Visible', 'off');
-            set(D.UI.ptchRtBnds(:,:), 'Visible', 'off');
-            set(D.UI.txtRtBnds(rot_ind, pos_ind), ...
-                'Visible', 'on');
-            set(D.UI.ptchRtBnds(rot_ind, pos_ind), ...
-                'FaceAlpha', 0.75, ...
-                'Visible', 'on', ...
-                'EdgeColor', D.UI.activeCol);
-            
-            % Disable button
-            set(D.UI.toggICR(rot_ind), 'UserData', false);
-            
         end
         
         % RECORDING DONE
@@ -8112,7 +6630,9 @@ fprintf('END OF RUN\n');
             end
             
             % Disable button so only pressed once
-            Set_Button_State(D.UI.toggRecDone, 'Unenable');
+            set(D.UI.btnRecDone, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
             
             % Set flag
             D.F.rec_done = true;
@@ -8125,9 +6645,9 @@ fprintf('END OF RUN\n');
             set(D.UI.editTimEndInf, 'String', infstr)
             
             % Halt robot if not already halted
-            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
+            if strcmp(get(D.UI.btnHaltRob, 'Enable'), 'on')
                 if (~D.F.is_halted)
-                    set(D.UI.toggHaltRob, 'Value', 1);
+                    set(D.UI.btnHaltRob, 'Value', 1);
                     BtnHaltRob();
                 end
             end
@@ -8145,13 +6665,13 @@ fprintf('END OF RUN\n');
             
             % Stop halt if still active
             if (D.F.is_halted)
-                set(D.UI.toggHaltRob, 'Value', 0);
+                set(D.UI.btnHaltRob, 'Value', 0);
                 BtnHaltRob();
             end
             
             % Stop bulldoze if still active
-            if (get(D.UI.toggBulldoze, 'Value') == 1)
-                set(D.UI.toggBulldoze, 'Value', 0);
+            if (get(D.UI.btnBulldoze, 'Value') == 1)
+                set(D.UI.btnBulldoze, 'Value', 0);
                 Bulldoze();
             end
             
@@ -8161,37 +6681,57 @@ fprintf('END OF RUN\n');
             
             % Stop recording
             if D.F.rec
-                set(D.UI.toggRec,'Value', 0)
-                BtnRec(D.UI.toggRec);
+                set(D.UI.btnRec,'Value', 0)
+                BtnRec(D.UI.btnRec);
             end
             
             % Disable all recording buttons
-            Set_Panel_State(D.UI.panRec, 'Disable');
-            Set_Button_State(D.UI.toggAcq, 'Unenable');
-            Set_Button_State(D.UI.toggRec, 'Unenable');
-            Set_Button_State(D.UI.toggICR, 'Unenable');
-            % Disable other buttons
-            Set_Button_State(D.UI.toggCellsCut, 'Unenable');
-            Set_Button_State(D.UI.toggHaltRob, 'Unenable');
-            set(D.UI.popBulldoze, 'Enable', 'off')
-            Set_Button_State(D.UI.toggBulldoze, 'Unenable');
-            Set_Button_State(D.UI.toggDoCue, 'Unenable');
-            Set_Button_State(D.UI.toggBlockCue, 'Unenable');
-            Set_Button_State(D.UI.toggForceCue, 'Unenable');
-            Set_Button_State(D.UI.toggPickRewPos, 'Unenable');
-            Set_Button_State(D.UI.btnReward, 'Unenable');
-            set(D.UI.popReward, 'Enable', 'off');
-            Set_Button_State(D.UI.btnClrVT, 'Unenable');
-            Set_Button_State(D.UI.btnClrTT, 'Unenable');
-            Set_Button_State(D.UI.toggTTplotType, 'Unenable');
+            set(D.UI.panRec, ...
+                'ForegroundColor', D.UI.disabledBckCol, ...
+                'HighlightColor', D.UI.disabledBckCol)
+            set(D.UI.btnAcq, ...
+                'Enable', 'off', ...
+                'Visible', 'off')
+            set(D.UI.btnRec, ...
+                'Enable', 'off', ...
+                'Visible', 'off')
+            set(D.UI.btnICR, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            % Disable extra buttons
+            set(D.UI.btnHaltRob, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.popBulldoze, ...
+                'Enable', 'off')
+            set(D.UI.btnBulldoze, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.btnBlockCue, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.btnAllCue, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.btnReward, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.popReward, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            set(D.UI.btnClrVT, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
+            % Disable toggSnd buttons
+            set(D.UI.toggSnd, 'Enable', 'off')
             
             % Disable inf panels
-            Set_Panel_State(D.UI.panSesInf, 'Disable');
-            Set_Panel_State(D.UI.panPerfInf, 'Disable');
-            Set_Panel_State(D.UI.panTimInf, 'Disable');
+            set(D.UI.panSesInf, 'HighlightColor', D.UI.disabledBckCol)
+            set(D.UI.panPerfInf, 'HighlightColor', D.UI.disabledBckCol)
+            set(D.UI.panTimInf, 'HighlightColor', D.UI.disabledBckCol)
             
             % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRecDone', get(D.UI.toggRecDone,'Value')));
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRecDone', get(D.UI.btnRecDone,'Value')));
             Update_UI(10);
         end
         
@@ -8267,13 +6807,13 @@ fprintf('END OF RUN\n');
             
             % Stop halt if still active
             if (D.F.is_halted)
-                set(D.UI.toggHaltRob, 'Value', 0);
+                set(D.UI.btnHaltRob, 'Value', 0);
                 BtnHaltRob();
             end
             
             % Stop bulldoze if still active
-            if (get(D.UI.toggBulldoze, 'Value') == 1)
-                set(D.UI.toggBulldoze, 'Value', 0);
+            if (get(D.UI.btnBulldoze, 'Value') == 1)
+                set(D.UI.btnBulldoze, 'Value', 0);
                 Bulldoze();
             end
             
@@ -8285,8 +6825,8 @@ fprintf('END OF RUN\n');
             
             % Stop recording
             if D.F.rec
-                set(D.UI.toggRec,'Value', 0)
-                BtnRec(D.UI.toggRec);
+                set(D.UI.btnRec,'Value', 0)
+                BtnRec(D.UI.btnRec);
             end
             
             % Check if battery should be replaced
@@ -8323,18 +6863,20 @@ fprintf('END OF RUN\n');
         
         % HALT ROBOT
         function [] = BtnHaltRob(~, ~, ~)
-            if (get(D.UI.toggHaltRob, 'Value') == 1)
+            if (get(D.UI.btnHaltRob, 'Value') == 1)
                 % Change backround color and text
-                set(D.UI.toggHaltRob, 'String', 'Halted...');
-                Set_Button_State(D.UI.toggHaltRob, 'Enable');
+                set(D.UI.btnHaltRob, ...
+                    'String', 'Halted...', ...
+                    'BackgroundColor', D.UI.activeCol);
                 % Tell CS to Halt Robot
                 SendM2C('H', 1);
                 % Set flag
                 D.F.is_halted = true;
             else
                 % Change backround color and text
-                set(D.UI.toggHaltRob, 'String', 'Halt Robot')
-                Set_Button_State(D.UI.toggHaltRob, 'Enable');
+                set(D.UI.btnHaltRob, ...
+                    'String', 'Halt Robot', ...
+                    'BackgroundColor', D.UI.enabledCol);
                 % Tell CS to stop halting
                 SendM2C('H', 0);
                 % Set flag
@@ -8342,14 +6884,14 @@ fprintf('END OF RUN\n');
             end
             
             % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnHaltRob', get(D.UI.toggHaltRob,'Value')));
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnHaltRob', get(D.UI.btnHaltRob,'Value')));
             Update_UI(10);
         end
         
         % BULLDOZE RAT
         function [] = Bulldoze(~, ~, ~)
             
-            if (get(D.UI.toggBulldoze, 'Value') == 1)
+            if (get(D.UI.btnBulldoze, 'Value') == 1)
                 
                 % Get bulldoze delay
                 delStr = D.UI.bullList(get(D.UI.popBulldoze, 'Value'));
@@ -8358,8 +6900,9 @@ fprintf('END OF RUN\n');
                 D.PAR.bullSpeed = str2double(get(D.UI.editBulldoze, 'String'));
                 
                 % Change backround color and text
-                set(D.UI.toggBulldoze, 'String', sprintf('Bulldoze (%ds)', D.PAR.bullDel));
-                Set_Button_State(D.UI.toggBulldoze, 'Enable');
+                set(D.UI.btnBulldoze, ...
+                    'String', sprintf('Bulldoze (%ds)', D.PAR.bullDel), ...
+                    'BackgroundColor', D.UI.activeCol);
                 
                 % Tell CS to bulldoze
                 SendM2C('B', D.PAR.bullDel, D.PAR.bullSpeed);
@@ -8367,8 +6910,9 @@ fprintf('END OF RUN\n');
             else
                 
                 % Change backround color and text
-                set(D.UI.toggBulldoze, 'String', 'Ceasefire');
-                Set_Button_State(D.UI.toggBulldoze, 'Enable');
+                set(D.UI.btnBulldoze, ...
+                    'String', 'Ceasefire', ...
+                    'BackgroundColor', D.UI.enabledCol);
                 
                 % Tell CS to stop bulldozing
                 SendM2C('B', 0, 0);
@@ -8394,38 +6938,10 @@ fprintf('END OF RUN\n');
             SendM2C('R', r_pos, r_cond, z_ind);
             
             % Track round trip time
-            D.T.btn_rew_sent = Elapsed_Seconds(now);
+            D.T.manual_rew_sent = Elapsed_Seconds(now);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnReward', get(D.UI.btnReward,'Value')));
-            Update_UI(10);
-        end
-        
-        % Do CUE
-        function [] = DoCue(~, ~, ~)
-            
-            % Dont run if reward sent
-            if get(D.UI.toggDoCue, 'UserData')
-                
-                % Change backround color and text
-                Set_Button_State(D.UI.toggDoCue, 'Enable');
-                
-                % Unset force/block
-                if get(D.UI.toggDoCue, 'Value') == 1
-                    set(D.UI.toggBlockCue, 'Value',0);
-                    BlockCue();
-                else
-                    set(D.UI.toggForceCue, 'Value',0);
-                    ForceCue();
-                end
-                
-            else
-                % Set back to what previous state
-                set(D.UI.toggDoCue, 'Value', ~get(D.UI.toggDoCue, 'Value'))
-            end
-            
-            % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnBlockCue', get(D.UI.toggDoCue,'Value')));
             Update_UI(10);
         end
         
@@ -8433,102 +6949,88 @@ fprintf('END OF RUN\n');
         function [] = BlockCue(~, ~, ~)
             
             % Dont run if reward sent
-            if get(D.UI.toggBlockCue, 'UserData')
+            if get(D.UI.btnBlockCue, 'UserData') == 1
                 
-                % Set state stuff
-                Set_Button_State(D.UI.toggBlockCue, 'Enable');
-                
-                if (get(D.UI.toggBlockCue, 'Value') == 1)
+                if (get(D.UI.btnBlockCue, 'Value') == 1)
                     
-                    % Reset zone patches
-                    set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
-                        'EdgeColor', [0, 0, 0], ...
-                        'FaceAlpha', 0.1, ...
-                        'EdgeAlpha', 0.1);
+                    % Change backround color and text
+                    set(D.UI.btnBlockCue, ...
+                        'BackgroundColor', D.UI.activeCol);
                     
-                    % Set button to not cue
-                    set(D.UI.toggDoCue, 'Value', 0);
-                    DoCue();
+                    % Set main flag
+                    D.F.do_block_cue = true;
+                    
+                    % Set cue maker to not visible
+                    set(reshape(D.UI.ptchFdZineH,1,[]), ...
+                        'EdgeColor', [0, 0, 0]);
+                    
+                    % Set flag to false
+                    D.F.is_cued_rew = false;
+                    
+                    % Make sure other button is inactivated
+                    if  D.F.do_all_cue
+                        set(D.UI.btnAllCue, 'Value',0);
+                        AllCue();
+                    end
+                else
+                    % Change backround color and text
+                    set(D.UI.btnBlockCue, ...
+                        'BackgroundColor', D.UI.enabledCol);
+                    
+                    % Unset main flag
+                    D.F.do_block_cue = false;
                 end
                 
             else
                 % Set back to what previous state
-                set(D.UI.toggBlockCue, 'Value', ~get(D.UI.toggBlockCue, 'Value'))
+                set(D.UI.btnBlockCue, 'Value', ~get(D.UI.btnBlockCue, 'Value'))
             end
             
             % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnBlockCue', get(D.UI.toggBlockCue,'Value')));
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnBlockCue', get(D.UI.btnBlockCue,'Value')));
             Update_UI(10);
         end
         
-        % Force Cue
-        function [] = ForceCue(~, ~, ~)
+        % ALL CUE
+        function [] = AllCue(~, ~, ~)
             
             % Dont run if reward sent
-            if get(D.UI.toggForceCue, 'UserData')
+            if get(D.UI.btnAllCue, 'UserData') == 1
                 
-                % Set state stuff
-                Set_Button_State(D.UI.toggForceCue, 'Enable');
-                
-                if (get(D.UI.toggForceCue, 'Value') == 1)
+                if (get(D.UI.btnAllCue, 'Value') == 1)
+                    % Change backround color and text
+                    set(D.UI.btnAllCue, ...
+                        'BackgroundColor', D.UI.activeCol);
                     
-                    % Set button to cue
-                    set(D.UI.toggDoCue, 'Value', 1);
-                    DoCue();
+                    % Set main flag
+                    D.F.do_all_cue = true;
                     
-                end
-                
-            else
-                % Set back to what previous state
-                set(D.UI.toggForceCue, 'Value', ~get(D.UI.toggForceCue, 'Value'))
-            end
-            
-            % Log/print
-            Console_Write(sprintf('[%s] Set to \"%d\"', 'toggForceCue', get(D.UI.toggForceCue,'Value')));
-            Update_UI(10);
-        end
-        
-        % Pick Reward Pos
-        function [] = PickRewPos(~, ~, ~)
-            
-            % Dont run if reward sent
-            if D.UI.toggPickRewPos.UserData(2)
-                
-                % Set state stuff
-                Set_Button_State(D.UI.toggPickRewPos, 'Enable');
-                
-                if (get(D.UI.toggPickRewPos, 'Value') == 1)
+                    % Set flag to true
+                    D.F.is_cued_rew = true;
                     
-                    % Darken zone patches
-                    if D.PAR.sesTask == 'Track'
-                        set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
-                            'EdgeColor', [0, 0, 0], ...
-                            'FaceAlpha', 0.25, ...
-                            'EdgeAlpha', 0.25);
-                        
-                        % Bring to top
-                        uistack(D.UI.ptchRewZoneBnds(D.I.rot, :), 'top');
-                        uistack(D.UI.txtFdDurH(D.I.rot, :), 'top');
-                        
+                    % Make sure other button is inactivated
+                    if D.F.do_block_cue
+                        set(D.UI.btnBlockCue, 'Value',0);
+                        BlockCue();
                     end
                     
                 else
+                    % Change backround color and text
+                    set(D.UI.btnAllCue, ...
+                        'BackgroundColor', D.UI.enabledCol);
                     
-                    % Lighten zone patches
-                    if D.PAR.sesTask == 'Track'
-                        set(D.UI.ptchRewZoneBnds(D.I.rot,:), ...
-                            'EdgeColor', [0, 0, 0], ...
-                            'FaceAlpha', 0.1, ...
-                            'EdgeAlpha', 0.1);
-                    end
-                    
+                    % Unset flag
+                    D.F.do_all_cue = false;
                 end
                 
             else
                 % Set back to what previous state
-                set(D.UI.toggPickRewPos, 'Value', ~get(D.UI.toggPickRewPos, 'Value'))
+                set(D.UI.btnAllCue, 'Value', ~get(D.UI.btnAllCue, 'Value'))
             end
             
+            % Log/print
+            Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnAllCue', get(D.UI.btnAllCue,'Value')));
+            Update_UI(10);
         end
         
         % CLEAR VT BUTTON
@@ -8544,182 +7046,16 @@ fprintf('END OF RUN\n');
             delete(D.UI.Rat.pltHvelAvg);
             delete(D.UI.Rob.pltHvelAvg);
             % Reset pos history data to nan
-            D.P.Rat.pos_lap_hist = {[0,0], NaN(60*60*33,3)};
-            D.P.Rat.pos_all_hist = {[0,0], NaN(120*60*33,2)};
-            D.P.Rat.vel_cart_lap_hist = {0, NaN(60*60*33,2)};
-            D.P.Rob.vel_cart_lap_hist = {0, NaN(60*60*33,2)};
+            D.P.Rat.pos_all_hist = NaN(60*60*33,2);
+            D.P.Rat.pos_all_hist = NaN(120*60*33,2);
             D.P.Rat.vel_pol_all_hist = NaN(500,101,2);
             D.P.Rob.vel_pol_all_hist = NaN(500,101,2);
+            D.P.Rat.vel_cart_lap_hist = NaN(60*60*33,2);
+            D.P.Rob.vel_cart_lap_hist = NaN(60*60*33,2);
             
             % Log/print
             Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnClrVT', get(D.UI.btnClrVT,'Value')));
             Update_UI(10);
-        end
-        
-        % CLEAR VT BUTTON
-        function [] = BtnClrTT(~, ~, ~)
-            
-            % Reset data for active buttons
-            D.S.pos_clust(D.S.active_clust) = {[0,0], NaN(60*60*100,3)};
-        end
-        
-        % Toggle select tt plot type
-        function [] = ToggTTplotType(hObject, ~, ~)
-            
-            % Get user data
-            user_data = get(hObject, 'UserData');
-            val = get(hObject, 'Value');
-            
-            % Unset other button
-            if (val == 1)
-                D.UI.toggTTplotType([1,2] ~= user_data).Value = 0;
-            end
-            
-            % Delete pos plots
-            if get(D.UI.toggTTplotType(1), 'Value') == 0
-                delete(D.UI.clustH(isgraphics(D.UI.clustH(:))))
-            end
-            
-            % Clear rate plot
-            if get(D.UI.toggTTplotType(2), 'Value') == 0
-                delete(D.UI.imgttOcc)
-            end
-            
-        end
-        
-        
-        
-        
-        
-        
-        %% ========================== MINOR FUNCTIONS =====================
-        
-        % CONVERT VT POS TO RAD POS
-        function [rad, roh] = VT_2_Pol(xy_pos)
-            
-            % Save x/y pos samples in seperate vars
-            x = xy_pos(:,1);
-            y = xy_pos(:,2);
-            
-            % Rescale y as VT data is compressed in y axis
-            y = y*11/10;
-            
-            % Get normalized pos data
-            x_norm = (x-D.PAR.XC)./D.PAR.R;
-            y_norm = (y-D.PAR.YC)./D.PAR.R;
-            
-            % Get position in radians
-            [rad,roh] = cart2pol(x_norm, y_norm);
-            
-            % Convert radians between [0, 2*pi]
-            rad = wrapTo2Pi(rad);
-            
-            % Flip radian values to acount for inverted y values from Cheetah
-            rad = abs(rad - 2*pi);
-        end
-        
-        % CONVERT RAD POS TO VT POS
-        function [xy_pos] = Pol_2_VT(rad, roh)
-            
-            % Flip values for inverted vt y
-            rad = wrapTo2Pi(rad);
-            rad = abs(rad - 2*pi);
-            rad = wrapToPi(rad);
-            
-            % Convert to cart
-            [x_norm,y_norm] = pol2cart(rad, roh);
-            
-            % Translate and scale to pixel space
-            x = (x_norm.*D.PAR.R) + D.PAR.XC;
-            y = (y_norm.*D.PAR.R) + D.PAR.YC;
-            
-            % Rescale y value
-            y = y*(10/11);
-            
-            % Store values
-            xy_pos(:,1) = x;
-            xy_pos(:,2) = y;
-        end
-        
-        % COMPUTE RAD DIFF
-        function [rad_diff] = Rad_Diff(rad1, rad2)
-            rad_diff = rad1-rad2;
-            if rad_diff < 0
-                rad_diff = rad_diff + 2*pi;
-            end
-        end
-        
-        % COMPUTE RAD SUM
-        function [rad_sum] = Rad_Sum(rad1, rad2)
-            rad_sum = rad1+rad2;
-            if rad_sum > 2*pi
-                rad_sum = rad_sum - 2*pi;
-            end
-        end
-        
-        % GET CARTESIAN BOUNDS
-        function [xbnd, ybnd] = Get_Cart_Bnds(radbnds, rohbnds)
-            
-            % Handle inputs
-            if nargin < 2
-                if D.PAR.sesTask == 'Track'
-                    rohbnds = D.P.trackRohBnd;
-                else
-                    rohbnds = D.P.rfRohBnd;
-                end
-            end
-            
-            % Convert roh to cm
-            in_cm_lim = rohbnds(1)*D.UI.arnRad;
-            out_cm_lim = rohbnds(2)*D.UI.arnRad;
-            
-            % Convert to rad array
-            if (length(radbnds) == 2)
-                if radbnds(1) > radbnds(2)
-                    radbnds = wrapToPi(radbnds);
-                end
-                radDist = min(2*pi - abs(radbnds(2)-radbnds(1)), abs(radbnds(2)-radbnds(1)));
-                nPoints =  round(360 * (radDist/(2*pi))); % 360 pnts per 2*pi
-                radbnds = linspace(radbnds(1), radbnds(2), nPoints);
-            end
-            
-            % Compute inner bounds
-            [x(1,:),y(1,:)] = pol2cart(radbnds, ones(1,length(radbnds)) * in_cm_lim);
-            xbnd(1,:) = x(1,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
-            ybnd(1,:) = y(1,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
-            
-            % Compute outer bounds
-            [x(2,:),y(2,:)] = pol2cart(radbnds, ones(1,length(radbnds)) * out_cm_lim);
-            xbnd(2,:) = x(2,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
-            ybnd(2,:) = y(2,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
-            
-        end
-        
-        % CHECK POS BOUNDS
-        function [bool_arr] = Check_Pol_Bnds(rad_arr, roh_arr, rad_bnds, roh_bnds)
-            
-            % Handle defaults
-            if nargin<4
-                if D.PAR.sesTask == 'Track'
-                    roh_bnds =  D.P.trackRohBnd;
-                else
-                    roh_bnds =  D.P.rfRohBnd;
-                end
-            end
-            
-            % Get logical array of inbound value inds
-            if all(isnan(rad_arr))
-                bool_arr = false(size(rad_arr));
-            else
-                if rad_bnds(1) > rad_bnds(2)
-                    rad_bnds = wrapToPi(rad_bnds);
-                    rad_arr = wrapToPi(rad_arr);
-                end
-                bool_arr = ...
-                    (rad_arr > rad_bnds(1) & rad_arr < rad_bnds(2)) & ...
-                    (roh_arr > roh_bnds(1) & roh_arr < roh_bnds(2));
-            end
-            
         end
         
         % CHECK DEFAULTS
@@ -8874,7 +7210,197 @@ fprintf('END OF RUN\n');
             
         end
         
-        % ENABLE DISABLE CUE BUTTONS
+        
+        
+        
+        
+        
+        %% ========================== MINOR FUNCTIONS =====================
+        
+        % -----------------------CONVERT VT POS TO RAD POS-----------------
+        function [rad, roh] = VT_2_Rad(xy_pos)
+            
+            % Save x/y pos samples in seperate vars
+            x = xy_pos(:,1);
+            y = xy_pos(:,2);
+            
+            % Rescale y as VT data is compressed in y axis
+            y = y*11/10;
+            
+            % Get normalized pos data
+            x_norm = (x-D.PAR.XC)./D.PAR.R;
+            y_norm = (y-D.PAR.YC)./D.PAR.R;
+            
+            % Get position in radians
+            [rad,roh] = cart2pol(x_norm, y_norm);
+            
+            % Convert radians between [0, 2*pi]
+            rad = wrapTo2Pi(rad);
+            
+            % Flip radian values to acount for inverted y values from Cheetah
+            rad = abs(rad - 2*pi);
+        end
+        
+        % -----------------------CONVERT RAD POS TO VT POS-----------------
+        function [xy_pos] = Rad_2_VT(rad, roh)
+            
+            % Flip values for inverted vt y
+            rad = wrapTo2Pi(rad);
+            rad = abs(rad - 2*pi);
+            rad = wrapToPi(rad);
+            
+            % Convert to cart
+            [x_norm,y_norm] = pol2cart(rad, roh);
+            
+            % Translate and scale to pixel space
+            x = (x_norm.*D.PAR.R) + D.PAR.XC;
+            y = (y_norm.*D.PAR.R) + D.PAR.YC;
+            
+            % Rescale y value
+            y = y*(10/11);
+            
+            % Store values
+            xy_pos(:,1) = x;
+            xy_pos(:,2) = y;
+        end
+        
+        % ---------------------------COMPUTE RAD DIFF----------------------
+        function [rad_diff] = Rad_Diff(rad1, rad2)
+            rad_diff = rad1-rad2;
+            if rad_diff < 0
+                rad_diff = rad_diff + 2*pi;
+            end
+        end
+        
+        % ---------------------------COMPUTE RAD SUM-----------------------
+        function [rad_sum] = Rad_Sum(rad1, rad2)
+            rad_sum = rad1+rad2;
+            if rad_sum > 2*pi
+                rad_sum = rad_sum - 2*pi;
+            end
+        end
+        
+        % -------------------------GET CARTESIAN BOUNDS--------------------
+        function [xbnd, ybnd] = Get_Cart_Bnds(radbnds, rohbnds)
+            
+            % Handle inputs
+            if nargin < 2
+                if D.PAR.sesTask == 'Track'
+                    rohbnds = D.P.trackRohBnd;
+                else
+                    rohbnds = D.P.rfRohBnd;
+                end
+            end
+            
+            % Convert roh to cm
+            in_cm_lim = rohbnds(1)*D.UI.arnRad;
+            out_cm_lim = rohbnds(2)*D.UI.arnRad;
+            
+            % Convert to rad array
+            if (length(radbnds) == 2)
+                if radbnds(1) > radbnds(2)
+                    radbnds = wrapToPi(radbnds);
+                end
+                radDist = min(2*pi - abs(radbnds(2)-radbnds(1)), abs(radbnds(2)-radbnds(1)));
+                nPoints =  round(360 * (radDist/(2*pi))); % 360 pnts per 2*pi
+                radbnds = linspace(radbnds(1), radbnds(2), nPoints);
+            end
+            
+            % Compute inner bounds
+            [x(1,:),y(1,:)] = pol2cart(radbnds, ones(1,length(radbnds)) * in_cm_lim);
+            xbnd(1,:) = x(1,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            ybnd(1,:) = y(1,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            
+            % Compute outer bounds
+            [x(2,:),y(2,:)] = pol2cart(radbnds, ones(1,length(radbnds)) * out_cm_lim);
+            xbnd(2,:) = x(2,:)*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+            ybnd(2,:) = y(2,:)*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+            
+        end
+        
+        % ---------------------------CHECK POS BOUNDS----------------------
+        function [bool_arr] = Check_Pol_Bnds(rad_arr, roh_arr, rad_bnds, roh_bnds)
+            
+            % Handle defaults
+            if nargin<4
+                if D.PAR.sesTask == 'Track'
+                    roh_bnds =  D.P.trackRohBnd;
+                else
+                    roh_bnds =  D.P.rfRohBnd;
+                end
+            end
+            
+            % Get logical array of inbound value inds
+            if all(isnan(rad_arr))
+                bool_arr = false(size(rad_arr));
+            else
+                if rad_bnds(1) > rad_bnds(2)
+                    rad_bnds = wrapToPi(rad_bnds);
+                    rad_arr = wrapToPi(rad_arr);
+                end
+                bool_arr = ...
+                    (rad_arr > rad_bnds(1) & rad_arr < rad_bnds(2)) & ...
+                    (roh_arr > roh_bnds(1) & roh_arr < roh_bnds(2));
+            end
+            
+        end
+        
+        % ---------------------------GET BUTTON COLLOR---------------------
+        function [C] = Btn_Col()
+            
+            [X,Y] = meshgrid(linspace(-(2*pi),(2*pi),25));
+            R = sqrt(X.^2 + Y.^2);
+            Z = sin(R)./R;
+            mask = R > (2*pi)*0.75;
+            %Z = abs(R-max(max(R)));
+            
+            
+            % Hi = Z + abs(min(min(Z)));
+            % Hi = Hi/max(max(Hi));
+            % Hi(1,:) = 0.1;
+            % Hi(end,:) = 0.1;
+            % Hi(:,1) = 0.1;
+            % Hi(:,end) = 0.1;
+            % Lo = abs(Hi - 1);
+            
+            % Scale so edges are equal to backround color
+            Hi = Z + abs(min(min(Z)));
+            Hi = Hi/(max(max(Hi))*1);
+            Hi(Hi>1) = 1;
+            Lo = abs(Hi -1);
+            D.UI.scl = (1 - D.UI.figBckCol(1)) / (1 - Hi(1,1));
+            Hi = 1 - D.UI.scl*(1 - Hi);
+            Hi(mask) = D.UI.figBckCol(1);
+            Lo = Lo * (D.UI.figBckCol(1)/Lo(1,1));
+            D.UI.scl = (1 - D.UI.figBckCol(1)) / (1 - Lo(1,1));
+            Lo = 1 - D.UI.scl*(1 - Lo);
+            Lo(mask) = D.UI.figBckCol(1);
+            % remove NaN and set max to 1
+            Hi(isnan(Hi) | Hi>1) = 1;
+            Lo(isnan(Lo)) = 0;
+            Lo(Lo>1) = 1;
+            Hi(Hi<0) = 0;
+            Lo(Lo<0) = 0;
+            
+            % Gray
+            C{1}(:,:,1) = Hi;
+            C{1}(:,:,2) = Hi;
+            C{1}(:,:,3) = Hi;
+            
+            % Green
+            C{2}(:,:,1) = Lo;
+            C{2}(:,:,2) = Hi;
+            C{2}(:,:,3) = Lo;
+            
+            % Red
+            C{3}(:,:,1) = Hi;
+            C{3}(:,:,2) = Lo;
+            C{3}(:,:,3) = Lo;
+            
+            C = C';
+        end
+        
+        % --------------------ENABLE DISABLE CUE BUTTONS-------------------
         function [] = Set_Cue_Buttons(setting)
             
             if D.PAR.cueFeed == 'Half' || D.PAR.cueFeed == 'None'
@@ -8882,141 +7408,38 @@ fprintf('END OF RUN\n');
                 % Set to enabled color and change user data
                 if strcmp(setting, 'Enable')
                     
-                    % Set to 'enabled'
-                    Set_Button_State(D.UI.toggBlockCue, 'Enable');
-                    Set_Button_State(D.UI.toggForceCue, 'Enable');
-                    Set_Button_State(D.UI.toggDoCue, 'Enable');
-                    Set_Button_State(D.UI.toggPickRewPos, 'Enable');
+                    % Set user data
+                    set(D.UI.btnBlockCue, 'UserData', 1);
+                    set(D.UI.btnAllCue,  'UserData', 1);
+                    
+                    % Set button color
+                    if get(D.UI.btnBlockCue, 'Value') == 1
+                        set(D.UI.btnBlockCue,  'BackgroundColor', D.UI.activeCol);
+                    else
+                        set(D.UI.btnBlockCue, 'BackgroundColor', D.UI.enabledCol);
+                    end
+                    if get(D.UI.btnAllCue, 'Value') == 1
+                        set(D.UI.btnAllCue,  'BackgroundColor', D.UI.activeCol);
+                    else
+                        set(D.UI.btnAllCue, 'BackgroundColor', D.UI.enabledCol);
+                    end
                     
                     % Set to disabled color
                 elseif strcmp(setting, 'Disable')
                     
-                    % Diable pick cue
-                    set(D.UI.toggPickRewPos, 'Value', 0)
+                    % Set user data
+                    set(D.UI.btnBlockCue, 'UserData', 0);
+                    set(D.UI.btnAllCue,  'UserData', 0);
                     
-                    % Set to 'disable'
-                    Set_Button_State(D.UI.toggBlockCue, 'Disable');
-                    Set_Button_State(D.UI.toggForceCue, 'Disable');
-                    Set_Button_State(D.UI.toggDoCue, 'Disable');
-                    Set_Button_State(D.UI.toggPickRewPos, 'Disable');
+                    % Set button color
+                    set(D.UI.btnBlockCue, 'BackgroundColor',  D.UI.disabledBckCol);
+                    set(D.UI.btnAllCue, 'BackgroundColor',  D.UI.disabledBckCol);
                     
                 end
                 
                 % Log/print
                 Console_Write(sprintf('[Cue_Buttons] Set Cue Buttons to \"%s\"', setting));
             end
-        end
-        
-        % SET BUTTON STATE
-        function [] = Set_Button_State(hand, setting, col)
-            
-            % Handle inputs
-            if nargin < 3
-                col = [];
-            end
-            
-            % Enable
-            if ~strcmp(setting, 'Unenable') && ...
-                    strcmp(get(hand(1), 'Enable'), 'off')
-                
-                set(hand,  'Enable', 'on')
-            end
-            
-            % Do true Disable
-            if strcmp(setting, 'Unenable')
-                
-                % Disable
-                set(hand,  'Enable', 'off')
-                
-                % Set string to run below
-                setting = 'Disable';
-            end
-            
-            % Set to 'Enabled'
-            if strcmp(setting, 'Enable')
-                
-                % Set button color
-                if get(hand(1), 'Value') == 1
-                    
-                    % Get color
-                    if isempty(col)
-                        col = D.UI.activeCol;
-                    end
-                    
-                    % Set values
-                    set(hand,  ...
-                        'Visible', 'on', ...
-                        'BackgroundColor', col, ...
-                        'ForegroundColor' , D.UI.enabledBtnFrgCol);
-                    
-                else
-                    % Get color
-                    if isempty(col)
-                        col = D.UI.enabledCol;
-                    end
-                    
-                    % Set values
-                    set(hand, ...
-                        'BackgroundColor', col, ...
-                        'ForegroundColor' , D.UI.enabledBtnFrgCol);
-                end
-                
-                % Set toggle user_data to 'enable'
-                if strcmp(get(hand(1), 'Style'), 'togglebutton')
-                    if islogical(hand(1).UserData(1))
-                        hand(1).UserData(1) = true;
-                    end
-                end
-                
-            end
-            
-            % Set 'Disabled'
-            if strcmp(setting, 'Disable')
-                
-                % Get color
-                if isempty(col)
-                    col = D.UI.disabledBckCol;
-                end
-                
-                % Set values
-                set(hand, ...
-                    'BackgroundColor',  col, ...
-                    'ForegroundColor' , D.UI.enabledBtnFrgCol);
-                
-                % Set user_data to 'enable'
-                if islogical(get(hand(1),'UserData'))
-                    set(hand,'UserData',false)
-                end
-                
-            end
-            
-        end
-        
-        % SET PANEL STATE
-        function [] = Set_Panel_State(hand, setting)
-            
-            % Set to 'Enabled'
-            if strcmp(setting, 'Enable')
-                
-                % Set values
-                set(hand, ...
-                    'ForegroundColor', D.UI.enabledCol, ...
-                    'HighlightColor', D.UI.enabledCol)
-                
-                
-            end
-            
-            % Set 'Disabled'
-            if strcmp(setting, 'Disable')
-                
-                % Set values
-                set(hand, ...
-                    'BackgroundColor', D.UI.figBckCol, ...
-                    'ForegroundColor', D.UI.disabledBckCol, ...
-                    'HighlightColor',D.UI.disabledBckCol)
-                
-            end
-            
         end
         
         
@@ -9037,17 +7460,6 @@ fprintf('END OF RUN\n');
             
             % Log/print
             Console_Write('[Save_Ses_Data] RUNNING: Wait for Cheetah Close...');
-            
-            % Prompt to save config file
-            if D.PAR.isImplanted
-                
-                % Confirm that Cheetah is closed
-                dlgAWL('Save Cheetah Config File', ...
-                    'SAVE CFG', ...
-                    'OK', [], [], 'OK', ...
-                    D.UI.dlgPos, ...
-                    'Dflt');
-            end
             
             % Confirm that Cheetah is closed
             dlgAWL('Close Cheetah', ...
@@ -9108,10 +7520,31 @@ fprintf('END OF RUN\n');
                 return
             end
             
-            %% Save MATLAB Data
+            %% Change NLX recording directory
+            
+            % Save directory var
+            % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
+            D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
+            
+            % Get current Cheetah recording dir
+            dirs = dir(D.DIR.nlxTempTop);
+            dirs = dirs(3:end);
+            fi_dat_num = ...
+                cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
+            D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
+            
+            % Save to global for CS
+            m2c_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.recFi);
+            
+            % Make directory if none exists
+            if exist(D.DIR.nlxSaveRat, 'dir') == 0
+                mkdir(D.DIR.nlxSaveRat);
+            end
             
             % Save GUI window image
-            export_fig(FigGroupH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.jpg'));
+            export_fig(FigH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.jpg'));
+            
+            %% Save Table Data
             
             % Get row ind
             % determine if this is first entry
@@ -9126,7 +7559,6 @@ fprintf('END OF RUN\n');
             end
             
             % Add entries
-            D.SS_Out_ICR.(D.PAR.ratLab).Implanted(rowInd) = D.PAR.isImplanted;
             D.SS_Out_ICR.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
             D.SS_Out_ICR.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
             D.SS_Out_ICR.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
@@ -9148,7 +7580,7 @@ fprintf('END OF RUN\n');
             D.SS_Out_ICR.(D.PAR.ratLab).Start_Quadrant(rowInd) = D.PAR.ratStrQuad;
             D.SS_Out_ICR.(D.PAR.ratLab).Bulldozings(rowInd) = D.C.bull_cnt;
             D.SS_Out_ICR.(D.PAR.ratLab).Zones_Rewarded{rowInd} = ...
-                D.I.zone_hist(1:find(~isnan(D.I.zone_hist),1,'last'));
+                D.I.zoneHist(1:find(~isnan(D.I.zoneHist),1,'last'));
             D.SS_Out_ICR.(D.PAR.ratLab).Rewards_Standard{rowInd} = sum(D.C.rew_cnt{3});
             D.SS_Out_ICR.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
             D.SS_Out_ICR.(D.PAR.ratLab).Notes{rowInd} = '';
@@ -9156,7 +7588,8 @@ fprintf('END OF RUN\n');
             % Rotation session specific vars
             if D.PAR.sesCond == 'Rotation'
                 D.SS_Out_ICR.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = D.C.rot_cnt;
-                D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions{rowInd} = D.PAR.rotPosActual;
+                D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions{rowInd} = ...
+                    cell2mat(cellfun(@(x) str2double(x), cellstr(D.PAR.rotPos(1:D.C.rot_cnt)), 'uni', false))';
                 if length(D.C.lap_cnt{1}) < length(D.C.lap_cnt{2})
                     D.C.lap_cnt{1} = [D.C.lap_cnt{1},NaN];
                 elseif length(D.C.lap_cnt{1}) > length(D.C.lap_cnt{2})
@@ -9210,10 +7643,10 @@ fprintf('END OF RUN\n');
             Console_Write(sprintf('[Save_Ses_Data] RUNNING: Copy Cheetah File...: File=%s Size=%0.2fGB', ...
                 D.DIR.recFi, fiGigs));
             
-            copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.nlxRecRat, D.DIR.recFi))
+            copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.nlxSaveRat, D.DIR.recFi))
             
             % Log/print end
-            Console_Write(sprintf('[Save_Ses_Data] FINISHED: Copy Cheetah File: file=%s size=%0.2fGB', ...
+            Console_Write(sprintf('[Save_Ses_Data] FINISHED: Copy Cheetah File: File=%s Size=%0.2fGB', ...
                 D.DIR.recFi, fiGigs));
             
             % Set flags
@@ -9223,7 +7656,9 @@ fprintf('END OF RUN\n');
             SendM2C('F');
             
             % Highlight Quit button
-            Set_Button_State(D.UI.btnQuit, 'Enable', D.UI.activeCol);
+            set(D.UI.btnQuit, ...
+                'ForegroundColor' , D.UI.enabledBtnFrgCol, ...
+                'BackgroundColor', D.UI.activeCol);
             
             % Stop status timer
             stop(timer_save);
@@ -9246,7 +7681,7 @@ fprintf('END OF RUN\n');
         Console_Write('[ICR_GUI] RUNNING: Exit ICR_GUI...');
         
         % Check if GUI was forced close
-        if ~D.DB.is_force_close
+        if ~D.DB.isForceClose
             
             % Log/print
             Console_Write('[ICR_GUI] RUNNING: Normal Exit Procedure...');
@@ -9299,19 +7734,19 @@ fprintf('END OF RUN\n');
             
             % Close file and print status
             fclose(fid);
-            Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log: %d/%d to \"%s\"', ...
+            Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log: stored=%d saved=%d', ...
                 cnt_saved, cnt_stored, D.DIR.logTempDir));
         else
             % Print failure
-            Console_Write(sprintf('!!WARNING!! [ICR_GUI] FAILED: Saving %d Logs to \"%s\"', ...
+            Console_Write(sprintf('!!WARNING!! [ICR_GUI] FAILED: Save %d Logs to \"%s\"', ...
                 D.DB.logCount, D.DIR.logTempDir));
         end
         
         % Close figure
-        if ~D.DB.is_force_close
+        if ~D.DB.isForceClose
             D.F.close = true;
-            close(FigGroupH)
-            delete(FigGroupH)
+            close(FigH)
+            delete(FigH)
         end
         
         % Confirm GUI closed
@@ -9404,11 +7839,6 @@ fprintf('END OF RUN\n');
         % Flag new data
         m2c_pack(6) = 1;
         
-        % Dont print simulation pos data
-        if strcmp(id, 'p')
-            return
-        end
-        
         % Log/print
         Console_Write(sprintf('   [SENT] m2c: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
             id, dat1 ,dat2, dat3, m2c_pack(5)));
@@ -9465,7 +7895,7 @@ fprintf('END OF RUN\n');
                         id, c2m.(id).dat1), now);
                 end
                 
-                % Check for save abort
+                % Check for forced abort
                 if c2m.(id).dat1 == 2
                     
                     % Format err string
@@ -9482,7 +7912,7 @@ fprintf('END OF RUN\n');
                     
                 end
                 
-                % Check for forced abort
+                % Check for save abort
                 if c2m.(id).dat1 == 3
                     
                     % Format err string
@@ -9502,9 +7932,6 @@ fprintf('END OF RUN\n');
                     
                     % Write to console
                     Console_Write(err_str, now, true);
-                    
-                    % Pause for message to show
-                    pause(1);
                 end
             end
             
@@ -9636,12 +8063,12 @@ fprintf('END OF RUN\n');
         end
         
         % Bail if figure closed
-        if ~ishandle(FigGroupH)
+        if ~ishandle(FigH)
             return
         end
         
         % Change button string
-        bnt_str = sprintf('%s%s%s',btn_str,repmat('.',1,cnt_dot),blanks(4-cnt_dot));
+        bnt_str = sprintf("%s%s%s",btn_str,repmat('.',1,cnt_dot),blanks(4-cnt_dot));
         if (strcmp(btn_str,'Quit'))
             set(D.UI.btnQuit, ...
                 'String', bnt_str);
@@ -9659,37 +8086,18 @@ fprintf('END OF RUN\n');
 % -----------------------BUTTON STATUS STOP TIMER--------------------------
     function [] = StopBtnStatus(~, ~, btn_str)
         
-        % Bail if globals cleared
-        if ~exist('D', 'var')
-            return
-        end
-        
-        % Bail if figure closed
-        if ~ishandle(FigGroupH)
-            return
-        end
-        
-        % Bail if UI field not exist
-        if ~isfield(D, 'UI')
-            return
-        end
-        
         if (strcmp(btn_str,'Quit'))
             % Disable quit button
-            if ~isfield(D.UI, 'btnQuit')
-                if ishandle(D.UI.btnQuit)
-                    set(D.UI.btnQuit, 'String', btn_str);
-                    Set_Button_State(D.UI.btnQuit, 'Unenable');
-                end
-            end
+            set(D.UI.btnQuit, ...
+                'String', btn_str, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
         else
             % Disable save button
-            if ~isfield(D.UI, 'btnSave')
-                if ishandle(D.UI.btnSave)
-                    set(D.UI.btnSave, 'String', btn_str);
-                    Set_Button_State(D.UI.btnSave, 'Unenable');
-                end
-            end
+            set(D.UI.btnSave, ...
+                'String', btn_str, ...
+                'Enable', 'off', ...
+                'BackgroundColor', D.UI.disabledBckCol);
         end
         
     end
@@ -9831,7 +8239,7 @@ fprintf('END OF RUN\n');
         
         % Set flags
         doExit = true;
-        D.DB.is_force_close = true;
+        D.DB.isForceClose = true;
         
         % Send force close signal to CS
         SendM2C('X', 2);

@@ -74,9 +74,9 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 0,
+            system_test: 3,
             do_debug_mat: false,
-            break_line: 0, // 0
+            break_line: 706, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
             do_print_sent_rob_vt: false,
@@ -668,6 +668,7 @@ namespace ICR_Run
             // Stay in loop till rat is out or error
             while (
                 com_netComClient.AreWeConnected() &&
+                !fc.isGUIfinished &&
                 !fc.isRecDone &&
                 !fc.doAbort
                 ) ;
@@ -841,10 +842,10 @@ namespace ICR_Run
 
             // Wait for quit command
             LogEvent("[Exit] RUNNING: Wait for ICR_GUI Quit command...");
-            if (!fc.isGUIquit)
+            if (!fc.isGUIquit && !fc.isGUIfinished)
                 pass = WaitForMCOM(id: 'X', chk_rcv: true, do_abort: true);
             else
-                pass = true;
+                pass = fc.isGUIquit;
             if (pass)
                 LogEvent("[Exit] SUCCEEDED: Wait for ICR_GUI Quit command");
             else
