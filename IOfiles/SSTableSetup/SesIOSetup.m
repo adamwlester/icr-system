@@ -329,6 +329,7 @@ end
 % Store variables
 T = table;
 T.Include_Analysis = true;
+T.Implanted = false;
 T.Date = {''};
 T.Start_Time = {''};
 T.Total_Time = NaN;

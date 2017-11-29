@@ -102,13 +102,12 @@ namespace ICR_Run
         static readonly object lock_isConf = new object();
         static readonly object lock_isDone = new object();
 
-
-        // Initialize vt blocking object
-        private static VT_Handler vtHandler = new VT_Handler(_stop_watch: sw_main);
-
         // Initialize FC to track program flow
         private static Flow_Control fc = new Flow_Control();
 
+        // Initialize vt blocking object
+        private static VT_Handler vtHandler = new VT_Handler(_stop_watch: sw_main);
+        
         // Initialize callback object
         private static MNetCom.MNC_VTCallback deligate_netComCallback;
 

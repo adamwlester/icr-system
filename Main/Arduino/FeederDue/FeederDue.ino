@@ -1159,7 +1159,7 @@ void PID::DebugPID(const char *fun, int line, char msg[], char called_from[])
 	}
 
 	// Format string
-	sprintf(str, "[%s:%d] %s: mode=\"%s\" mot_ctrl=\"%s\" [%s]", 
+	sprintf(str, "[%s:%d] %s: mode=\"%s\" mot_ctrl=\"%s\" [%s]",
 		fun, line - 23, msg, modePID, fc.motorControl, called_from);
 
 	// Add to print queue
@@ -1370,7 +1370,7 @@ void BULLDOZE::UpdateBull()
 
 	// Check time
 	isTimeUp = millis() > t_bullNext ? true : false;
-	
+
 	// Check if has not moved in time
 	if (!isMoved) {
 
@@ -1387,7 +1387,7 @@ void BULLDOZE::UpdateBull()
 		posCheck = posRel;
 
 		// Reset bull next
-		t_bullNext = millis() + bullDelay; 
+		t_bullNext = millis() + bullDelay;
 
 		// Stop bulldoze if rat ahead of set point and not 0 delay
 		if (isPassedReset &&
@@ -1617,7 +1617,7 @@ void BULLDOZE::DebugBull(const char *fun, int line, char msg[], char called_from
 	}
 
 	// Format string
-	sprintf(str, "[%s:%d] %s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\" [%s]", 
+	sprintf(str, "[%s:%d] %s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\" [%s]",
 		fun, line - 23, msg, stateBull, modeBull, fc.motorControl, called_from);
 
 	// Add to print queue
@@ -1877,8 +1877,8 @@ void REWARD::StartRew()
 	}
 
 	// Turn on reward LED
-	analogWrite(pin.RewLED_R, round(rewLEDduty*0.75));
-	analogWrite(pin.RewLED_C, rewLEDduty);
+	analogWrite(pin.RewLED_R, round(rewLEDduty * 1)); 
+	analogWrite(pin.RewLED_C, round(rewLEDduty * 0.5)); 
 
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
@@ -6866,7 +6866,7 @@ void DebugError(const char *fun, int line, char msg[], bool is_error, uint32_t t
 	}
 
 	// Add error type, function and line number
-	sprintf(err_str, "%s [%s:%d] %s", 
+	sprintf(err_str, "%s [%s:%d] %s",
 		is_error ? "!!ERROR!!" : "**WARNING**", fun, line - 23, msg);
 
 	// Add to print queue
@@ -8014,6 +8014,7 @@ void setup() {
 	}
 
 	// TURN ON POWER
+	delay(1000);
 	digitalWrite(pin.PWR_OFF, LOW);
 	delayMicroseconds(100);
 	digitalWrite(pin.PWR_ON, HIGH);
@@ -8273,6 +8274,7 @@ void setup() {
 
 	// Flag setup done
 	fc.isSetup = true;
+
 
 	// TEMP
 	//Log.TestLoad(0, "LOG00035.CSV");

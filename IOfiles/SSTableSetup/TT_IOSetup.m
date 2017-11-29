@@ -7,7 +7,7 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0000'} ...
+    {'r0001'} ...
     {'r0278'} ...
     {'r9999'} ...
     ];
@@ -25,7 +25,7 @@ turn_orientation = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'
 % Variable descriptions
 implant_coordinates_description = '[Hipp{A-P, M-L, D-V}, MEC{A-P, M-L, D-V}]';
 implant_configuration_description = '[Hipp{A-P, M-L}, MEC{A-P, M-L}]';
-tetrode_mapping_description = '[Hipp{TT_x by TT_y}, MEC{TT_x by TT_y}]';
+tetrode_mapping_description = '[Hipp{A-P, M-L}, MEC{A-P, M-L}]';
 
 % Initialize table
 T = table('RowNames',ratList);
