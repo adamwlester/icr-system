@@ -76,7 +76,7 @@ namespace ICR_Run
         private static DB db = new DB(
             system_test: 3,
             do_debug_mat: false,
-            break_line: 706, // 0
+            break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
             do_print_sent_rob_vt: false,
@@ -150,7 +150,6 @@ namespace ICR_Run
 
         // Matlab to CS
         private static Com_Track m2c = new Com_Track(
-            _stop_watch: sw_main,
             _lock_is_conf: new object(),
             _lock_is_done: new object(),
             _id:
@@ -176,7 +175,6 @@ namespace ICR_Run
 
         // CS to Matlab
         private static Com_Track c2m = new Com_Track(
-            _stop_watch: sw_main,
             _lock_is_conf: new object(),
             _lock_is_done: new object(),
             _id:
@@ -195,7 +193,6 @@ namespace ICR_Run
 
         // CS to Robot
         private static Com_Track c2r = new Com_Track(
-            _stop_watch: sw_main,
             _lock_is_conf: lock_isConf,
             _lock_is_done: lock_isDone,
             _id:
@@ -224,7 +221,6 @@ namespace ICR_Run
 
         // Robot to CS
         private static Com_Track r2c = new Com_Track(
-            _stop_watch: sw_main,
             _lock_is_conf: lock_isConf,
             _lock_is_done: lock_isDone,
             _id:
@@ -253,7 +249,6 @@ namespace ICR_Run
 
         // Robot to Ard
         private static Com_Track r2a = new Com_Track(
-            _stop_watch: sw_main,
             _lock_is_conf: new object(),
             _lock_is_done: new object(),
             _id:
@@ -271,7 +266,6 @@ namespace ICR_Run
 
         // Robot to Ard
         private static Com_Track a2c = new Com_Track(
-            _stop_watch: sw_main,
             _lock_is_conf: new object(),
             _lock_is_done: new object(),
             _id:
@@ -716,6 +710,9 @@ namespace ICR_Run
             {
                 LogEvent("[Exit] RUNNING: MoveTo South...");
                 double move_to = CalcMove(4.7124 - feedDist);
+
+                // Clear check state from previous 'M' message
+                WaitForSerial(id: 'M', chk_send: true, chk_conf: true, chk_done: true, timeout: 1);
 
                 // Send move command on seperate thread and wait for done reply
                 RepeatSendPack_Thread(id: 'M', dat1: move_to, do_check_done: true);
@@ -1322,8 +1319,9 @@ namespace ICR_Run
                 // Check if done
                 if (chk_done)
                 {
-                    wait_4_done = wait_4_done ? !c2r.GetMsgState(id: id, get_done: true) : wait_4_done;
-                    status_now[4] = wait_4_done;
+                    
+                        wait_4_done = wait_4_done ? !c2r.GetMsgState(id: id, get_done: true) : wait_4_done;
+                        status_now[4] = wait_4_done;
                 }
 
                 // Check if all conditions confirmed
@@ -3061,7 +3059,6 @@ namespace ICR_Run
     class Com_Track
     {
         // Private vars
-        private static Stopwatch _sw = new Stopwatch();
         private object _lock_isSentRcv = new object();
         private object _lock_isConf = new object();
         private object _lock_isDone = new object();
@@ -3086,7 +3083,6 @@ namespace ICR_Run
 
         // Constructor
         public Com_Track(
-            Stopwatch _stop_watch,
             object _lock_is_conf,
             object _lock_is_done,
             char[] _id,
@@ -3094,7 +3090,6 @@ namespace ICR_Run
             byte _foot = 0
             )
         {
-            _sw = _stop_watch;
             _lock_isConf = _lock_is_conf;
             _lock_isDone = _lock_is_done;
             id = _id;
@@ -3122,7 +3117,7 @@ namespace ICR_Run
         }
 
         // Set check status
-        public void SetMsgState(char id = ' ', UInt16 pack = 0, bool set_sent_rcvd = false, bool set_conf = false, bool set_done = false)
+        public void SetMsgState(char id = ' ', UInt16 pack = 0, bool set_sent_rcvd = false, bool set_conf = false, bool set_done = false, bool state = true)
         {
             // Local vars
             int id_ind = id != ' ' ? ID_Ind(id) : ID_Ind(PackID(pack));
@@ -3131,21 +3126,21 @@ namespace ICR_Run
             if (set_sent_rcvd)
             {
                 lock (_lock_isSentRcv)
-                    _isSentRcv[id_ind] = true;
+                    _isSentRcv[id_ind] = state;
             }
 
             // Set received check flag
             else if (set_conf)
             {
                 lock (_lock_isConf)
-                    _isConf[id_ind] = true;
+                    _isConf[id_ind] = state;
             }
 
             // Set done check flag
             else if (set_done)
             {
                 lock (_lock_isDone)
-                    _isDone[id_ind] = true;
+                    _isDone[id_ind] = state;
             }
         }
 
