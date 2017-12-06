@@ -1,4 +1,4 @@
-function [] = SesIOReformat()
+function [] = SS_IO_Reformat()
 
 % Directory containing tables
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
@@ -6,7 +6,7 @@ ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
 ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData'); 
 
 %% =========================== LOAD TABLES ================================
-[SS_In_All, SS_Out_ICR] = LoadTables(ioDir);
+[SS_IO_1, SS_IO_2] = LoadTables(ioDir);
 
 %% ========================== WHAT TO CHANGE ==============================
 
@@ -30,8 +30,8 @@ Implanted = false;
 %                     {'Date', 'Orientation', 'Depth', 'Notes'})};
 
 % Add new variable
-%                SS_In_All = AddNewVar(SS_In_All, Implant_Coordinates, 'Days_Till_Rotation',implant_coordinates_description,'um');
-SS_Out_ICR = AddNewVar(SS_Out_ICR, Implanted, 'Include_Analysis');
+%                SS_IO_1 = AddNewVar(SS_IO_1, Implant_Coordinates, 'Days_Till_Rotation',implant_coordinates_description,'um');
+SS_IO_2 = AddNewVar(SS_IO_2, Implanted, 'Include_Analysis');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
@@ -44,7 +44,7 @@ SS_Out_ICR = AddNewVar(SS_Out_ICR, Implanted, 'Include_Analysis');
 
 
 % Make changes
-%SS_Out_ICR = ChangeVarEntries(SS_Out_ICR, var_change, new_val, preserve_val);
+%SS_IO_2 = ChangeVarEntries(SS_IO_2, var_change, new_val, preserve_val);
 
 % ------------------------ MOVE DELETE VAR ENTRY --------------------------
 
@@ -54,12 +54,12 @@ SS_Out_ICR = AddNewVar(SS_Out_ICR, Implanted, 'Include_Analysis');
 % remove = true;
 
 % Make changes
-%SS_In_All = MoveVarEntries(SS_In_All, var_move, var_before, remove);
+%SS_IO_1 = MoveVarEntries(SS_IO_1, var_move, var_before, remove);
 
 %% =========================== SAVE TABLES ================================
 
-save(fullfile(ioDir,'SS_In_All'), 'SS_In_All');
-save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
+save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1');
+save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
 
 %% ============================ FUNCTIONS =================================
 
@@ -88,12 +88,12 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         end
         
         % Determine what table is being changed
-        if strcmp(table_name, 'SS_Out_ICR')
+        if strcmp(table_name, 'SS_IO_2')
             
             % Add for each field (rat) entry
             T2 = structfun(@(x) AddV(x, new_var, var_name, var_before, description_str, unit_str), T, 'uni', false);
             
-        elseif strcmp(table_name, 'SS_In_All')
+        elseif strcmp(table_name, 'SS_IO_1')
             
             % Add single instance
             T2 = AddV(T, new_var, var_name, var_before, description_str, unit_str);
@@ -160,12 +160,12 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         table_name = inputname(1);
         
         % Determine what table is being changed
-        if strcmp(table_name, 'SS_Out_ICR')
+        if strcmp(table_name, 'SS_IO_2')
             
             % Add for each field (rat) entry
             T2 = structfun(@(x) ChngV(x, var_change, new_val, preserve_val, description_str, unit_str), T, 'uni', false);
             
-        elseif strcmp(table_name, 'SS_In_All')
+        elseif strcmp(table_name, 'SS_IO_1')
             
             % Add single instance
             T2 = ChngV(T, var_change, new_val, preserve_val, description_str, unit_str);
@@ -264,12 +264,12 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         table_name = inputname(1);
         
         % Determine what table is being changed
-        if strcmp(table_name, 'SS_Out_ICR')
+        if strcmp(table_name, 'SS_IO_2')
             
             % Add for each field (rat) entry
             T2 = structfun(@(x) MoveV(x, var_move, var_before, remove_var), T, 'uni', false);
             
-        elseif strcmp(table_name, 'SS_In_All')
+        elseif strcmp(table_name, 'SS_IO_1')
             
             % Add single instance
             T2 = MoveV(T, var_move, var_before, remove_var);
@@ -315,10 +315,10 @@ save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR');
         end
         
         % Import session data
-        s = load('SS_In_All.mat');
-        ss_all = s.SS_In_All;
-        s = load('SS_Out_ICR.mat');
-        ss_icr = s.SS_Out_ICR;
+        s = load('SS_IO_1.mat');
+        ss_all = s.SS_IO_1;
+        s = load('SS_IO_2.mat');
+        ss_icr = s.SS_IO_2;
         
     end
 

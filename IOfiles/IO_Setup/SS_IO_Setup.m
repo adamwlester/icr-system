@@ -1,4 +1,4 @@
-function[] = SesIOSetup()
+function[] = SS_IO_Setup()
 
 %% =========================== Set paramiters ============================= 
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
@@ -56,7 +56,7 @@ rotations_per_session_description = '{[2,4,6]}';
 laps_per_rotation_description = '{[5:10]}';
 days_till_rotation_description = '{[1:4]}';
 
-%% ======================== SS_In_All =====================================
+%% ======================== SS_IO_1 =====================================
 
 % Initialize variables
 T = table('RowNames',ratList);
@@ -128,16 +128,16 @@ T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_des
 T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
 
 % Load existing dataset
-if exist(fullfile(ioDir, 'SS_In_All.mat'), 'file')
-    S = load(fullfile(ioDir, 'SS_In_All.mat'));
-    SS_In_All = S.SS_In_All;
+if exist(fullfile(ioDir, 'SS_IO_1.mat'), 'file')
+    S = load(fullfile(ioDir, 'SS_IO_1.mat'));
+    SS_IO_1 = S.SS_IO_1;
     
     % Exclude rats already in table
-    exc_rats = ratList(ismember(ratList,SS_In_All.Properties.RowNames));
+    exc_rats = ratList(ismember(ratList,SS_IO_1.Properties.RowNames));
     if size(exc_rats,1) > 0
         fprintf('WARNING Rats %s Already in List\n', exc_rats{:});
     end
-    T(ismember(T.Properties.RowNames,SS_In_All.Properties.RowNames), :) = [];
+    T(ismember(T.Properties.RowNames,SS_IO_1.Properties.RowNames), :) = [];
     
     % Check if nothing changed
     if size(T,1) == 0
@@ -146,11 +146,11 @@ if exist(fullfile(ioDir, 'SS_In_All.mat'), 'file')
     end
     
     % Add into main table
-    T = [SS_In_All; T];
+    T = [SS_IO_1; T];
 end
 
 % Copy sorted rat data
-SS_In_All = sortrows(T, 'RowNames');
+SS_IO_1 = sortrows(T, 'RowNames');
 
 %% ========================== GENERATE VALUES =============================
 
@@ -158,17 +158,17 @@ SS_In_All = sortrows(T, 'RowNames');
 
 % Find rats going into icr
 icrRats = ... 
-    SS_In_All.Session_Condition == 'Manual_Training';
+    SS_IO_1.Session_Condition == 'Manual_Training';
 
 % Find rats that have not already been updated
 unmod = ...
-    isundefined(SS_In_All.Feeder_Condition);
+    isundefined(SS_IO_1.Feeder_Condition);
 newRats = icrRats & unmod; 
-ratList = categorical(SS_In_All.Properties.RowNames(newRats));
+ratList = categorical(SS_IO_1.Properties.RowNames(newRats));
 
 % Set Yoke_Mate to 'None' if '<undefined>'
-SS_In_All.Yoke_Mate(isundefined(SS_In_All.Yoke_Mate)) = 'None';
-yokeList = SS_In_All{newRats, {'Yoke_Mate'}};
+SS_IO_1.Yoke_Mate(isundefined(SS_IO_1.Yoke_Mate)) = 'None';
+yokeList = SS_IO_1{newRats, {'Yoke_Mate'}};
 % set yokeList to rat if no yoke mate
 yokeList(yokeList == 'None') = ratList(yokeList == 'None');
 
@@ -301,29 +301,29 @@ ndays = ndays(1:nses,:); % remove unneaded entries
 
 % Add to main data sets
 for i = 1:length(ratList)
-    SS_In_All{char(ratList(i)), {'Feeder_Condition'}} = ...
+    SS_IO_1{char(ratList(i)), {'Feeder_Condition'}} = ...
         fdcnd(yokeInd(i)); 
-    SS_In_All{char(ratList(i)), {'Reward_Delay'}} = {'0.0'};
-    SS_In_All{char(ratList(i)), {'Cue_Condition'}} = {'All'};
-    SS_In_All{char(ratList(i)), {'Start_Quadrant'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Reward_Delay'}} = {'0.0'};
+    SS_IO_1{char(ratList(i)), {'Cue_Condition'}} = {'All'};
+    SS_IO_1{char(ratList(i)), {'Start_Quadrant'}}{:} = ...
         categorical(strqd(:,yokeInd(i)), start_quadrant); 
-        SS_In_All{char(ratList(i)), {'Rotation_Direction'}}{:} = ...
+        SS_IO_1{char(ratList(i)), {'Rotation_Direction'}}{:} = ...
         categorical(rtdir(:,yokeInd(i)), rotation_direction);
-    SS_In_All{char(ratList(i)), {'Rotation_Positions'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Rotation_Positions'}}{:} = ...
         categorical(rotps(:,:,yokeInd(i)), rotation_positions); 
-    SS_In_All{char(ratList(i)), {'Rotations_Per_Session'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Rotations_Per_Session'}}{:} = ...
         categorical(nrot(:,yokeInd(i)), rotations_per_session); 
-    SS_In_All{char(ratList(i)), {'Laps_Per_Rotation'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Laps_Per_Rotation'}}{:} = ...
         categorical(nlap(:,:,yokeInd(i)), laps_per_rotation);
-    SS_In_All{char(ratList(i)), {'Days_Till_Rotation'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Days_Till_Rotation'}}{:} = ...
         categorical(ndays(:,yokeInd(i)), days_till_rotation); 
 end
 
-%% ==================== Add entries to SS_Out_ICR =========================
+%% ==================== Add entries to SS_IO_2 =========================
 % Load existing dataset
-if exist(fullfile(ioDir, 'SS_Out_ICR.mat'), 'file')
-    S = load(fullfile(ioDir, 'SS_Out_ICR.mat'));
-    SS_Out_ICR = S.SS_Out_ICR;
+if exist(fullfile(ioDir, 'SS_IO_2.mat'), 'file')
+    S = load(fullfile(ioDir, 'SS_IO_2.mat'));
+    SS_IO_2 = S.SS_IO_2;
 end
 
 % Store variables
@@ -389,18 +389,18 @@ T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_des
 % Loop through and create a field for each rat
 ratList = categories(ratList);
 for z_rat = 1:length(ratList)
-    SS_Out_ICR.(ratList{z_rat}) = T;
+    SS_IO_2.(ratList{z_rat}) = T;
 end
 
 % Sort fields by rat
-[~, ind] = sort(fieldnames(SS_Out_ICR));
-SS_Out_ICR = orderfields(SS_Out_ICR, ind);
+[~, ind] = sort(fieldnames(SS_IO_2));
+SS_IO_2 = orderfields(SS_IO_2, ind);
 
 %% =========================== Save =======================================
 
 % Save out table
-save(fullfile(ioDir,'SS_In_All'), 'SS_In_All')
-save(fullfile(ioDir,'SS_Out_ICR'), 'SS_Out_ICR')
+save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1')
+save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2')
 
 % Print saved changes
 for i = 1:length(ratList)
@@ -409,18 +409,18 @@ end
 
 
 
-% % Check SS_In_All field class
-% flds = SS_In_All.Properties.VariableNames;
+% % Check SS_IO_1 field class
+% flds = SS_IO_1.Properties.VariableNames;
 % for i = 1:length(flds)
-%     sprintf('%s %s', flds{i}, class(SS_In_All.(flds{i})))
+%     sprintf('%s %s', flds{i}, class(SS_IO_1.(flds{i})))
 %     pause
 % end
-% % Check SS_Out_ICR field class
-% rats = fieldnames(SS_Out_ICR);
+% % Check SS_IO_2 field class
+% rats = fieldnames(SS_IO_2);
 % rat = 1;
-% flds = SS_Out_ICR.(rats{rat}).Properties.VariableNames;
+% flds = SS_IO_2.(rats{rat}).Properties.VariableNames;
 % for i = 1:length(flds)
-%     sprintf('%s %s', flds{i}, class(SS_Out_ICR.(rats{rat}).(flds{i})))
+%     sprintf('%s %s', flds{i}, class(SS_IO_2.(rats{rat}).(flds{i})))
 %     pause
 % end
 

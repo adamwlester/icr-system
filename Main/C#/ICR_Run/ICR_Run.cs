@@ -74,7 +74,7 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 3,
+            system_test: 0,
             do_debug_mat: false,
             break_line: 0, // 0
             do_print_blocked_vt: false,

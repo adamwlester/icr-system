@@ -238,8 +238,8 @@ fprintf('END OF RUN\n');
         D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
         D.DIR.ioTestOut = fullfile(D.DIR.top,'Testing','Output');
         D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images','plot_images','wall_top_down.png');
-        D.DIR.ioSS_In_All = fullfile(D.DIR.ioTop, 'SessionData', 'SS_In_All.mat');
-        D.DIR.ioSS_Out_ICR = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Out_ICR.mat');
+        D.DIR.ioSS_IO_1 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_1.mat');
+        D.DIR.ioSS_Tab_2 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_Tab_2.mat');
         D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds(new_cam).mat');
         D.DIR.ioRFPath = fullfile(D.DIR.ioTop, 'Operational', 'forrage_path.mat');
         
@@ -828,28 +828,28 @@ fprintf('END OF RUN\n');
             %% FLOW CONTROL VARIABLES
             
             % Load data tables
-            T = load(D.DIR.ioSS_In_All);
-            D.SS_In_All = T.SS_In_All;
-            T = load(D.DIR.ioSS_Out_ICR);
-            D.SS_Out_ICR = T.SS_Out_ICR;
+            T = load(D.DIR.ioSS_IO_1);
+            D.SS_IO_1 = T.SS_IO_1;
+            T = load(D.DIR.ioSS_Tab_2);
+            D.SS_Tab_2 = T.SS_Tab_2;
             clear T;
             
             % CATEGORICAL VARS
             
             % age group
-            D.PAR.catAgeGrp = categories(D.SS_In_All.Age_Group); % [Young,Old];
+            D.PAR.catAgeGrp = categories(D.SS_IO_1.Age_Group); % [Young,Old];
             % session condition
-            D.PAR.catSesCond = categories(D.SS_In_All.Session_Condition); % [M,B,I,R];
+            D.PAR.catSesCond = categories(D.SS_IO_1.Session_Condition); % [M,B,I,R];
             % feeder condition
-            D.PAR.catFeedCnd = categories(D.SS_In_All.Feeder_Condition); % [C1,C2];
+            D.PAR.catFeedCnd = categories(D.SS_IO_1.Feeder_Condition); % [C1,C2];
             % cue condition
-            D.PAR.catCueCond = categories(D.SS_In_All.Cue_Condition); % [All, Half, None]
+            D.PAR.catCueCond = categories(D.SS_IO_1.Cue_Condition); % [All, Half, None]
             % start qauadrant
-            D.PAR.catStrQuad = categories(D.SS_In_All.Start_Quadrant{1}); % [NE,SE,SW,NW];
+            D.PAR.catStrQuad = categories(D.SS_IO_1.Start_Quadrant{1}); % [NE,SE,SW,NW];
             % rotation direction
-            D.PAR.catRotDrc = categories(D.SS_In_All.Rotation_Direction{1}); % [CCW,CW];
+            D.PAR.catRotDrc = categories(D.SS_IO_1.Rotation_Direction{1}); % [CCW,CW];
             % rotation position
-            D.PAR.catRotPos = categories(D.SS_In_All.Rotation_Positions{1}); % [90,180,270];
+            D.PAR.catRotPos = categories(D.SS_IO_1.Rotation_Positions{1}); % [90,180,270];
             
             % COUNTERS
             
@@ -1220,11 +1220,11 @@ fprintf('END OF RUN\n');
             
             % popRat
             % make rat list
-            ind = D.SS_In_All.Include_Run & ...
-                ~isundefined(D.SS_In_All.Session_Condition);
+            ind = D.SS_IO_1.Include_Run & ...
+                ~isundefined(D.SS_IO_1.Session_Condition);
             D.UI.ratList = ...
-                [D.SS_In_All.Properties.RowNames(ind), ...
-                cellstr(char(D.SS_In_All.Yoke_Mate(ind)))];
+                [D.SS_IO_1.Properties.RowNames(ind), ...
+                cellstr(char(D.SS_IO_1.Yoke_Mate(ind)))];
             % remove 'r'
             D.UI.ratList = regexprep(D.UI.ratList, 'r', '');
             % add space
@@ -2934,25 +2934,25 @@ fprintf('END OF RUN\n');
             
             % Get session number
             var_ind = ...
-                ismember(D.SS_In_All.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
+                ismember(D.SS_IO_1.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
             col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
             D.PAR.sesNum = ...
-                D.SS_In_All{D.PAR.ratInd, var_ind}(col_ind) + 1;
+                D.SS_IO_1{D.PAR.ratInd, var_ind}(col_ind) + 1;
             
-            % Save new session number back to SS_In_All
-            D.SS_In_All{D.PAR.ratInd, var_ind}(col_ind) = D.PAR.sesNum;
+            % Save new session number back to SS_IO_1
+            D.SS_IO_1{D.PAR.ratInd, var_ind}(col_ind) = D.PAR.sesNum;
             
             % Get session total
-            D.PAR.sesNumAll = D.SS_In_All{D.PAR.ratInd, 'Session_Manual_Training'}(col_ind) + ...;
-                D.SS_In_All{D.PAR.ratInd, 'Session_Behavior_Training'}(col_ind) + ...
-                D.SS_In_All{D.PAR.ratInd, 'Session_Implant_Training'}(col_ind) + ...
-                D.SS_In_All{D.PAR.ratInd, 'Session_Rotation'};
+            D.PAR.sesNumAll = D.SS_IO_1{D.PAR.ratInd, 'Session_Manual_Training'}(col_ind) + ...;
+                D.SS_IO_1{D.PAR.ratInd, 'Session_Behavior_Training'}(col_ind) + ...
+                D.SS_IO_1{D.PAR.ratInd, 'Session_Implant_Training'}(col_ind) + ...
+                D.SS_IO_1{D.PAR.ratInd, 'Session_Rotation'};
             
             % start quadrant
             D.PAR.ratStrQuad = categorical({'<undefined>'}, D.PAR.catStrQuad);
             if D.PAR.sesCond ~= 'Manual_Training'
                 D.PAR.ratStrQuad = ... % [NE,SE,SW,NW]
-                    D.SS_In_All.Start_Quadrant{D.PAR.ratInd}(D.PAR.sesNumAll);
+                    D.SS_IO_1.Start_Quadrant{D.PAR.ratInd}(D.PAR.sesNumAll);
             else
                 % set start quad to feeder pos
                 if D.PAR.ratFeedCnd == 'C1'
@@ -2964,23 +2964,23 @@ fprintf('END OF RUN\n');
             
             % Direction of rotation string
             D.PAR.ratRotDrc = ... % [CCW,CW]
-                D.SS_In_All.Rotation_Direction{D.PAR.ratInd}(D.PAR.sesNum);
+                D.SS_IO_1.Rotation_Direction{D.PAR.ratInd}(D.PAR.sesNum);
             
             % Rotations per session
             D.PAR.rotPerSes = ... % [2,4,6]
-                str2double(char(D.SS_In_All.Rotations_Per_Session{D.PAR.ratInd}(D.PAR.sesNum,:)));
+                str2double(char(D.SS_IO_1.Rotations_Per_Session{D.PAR.ratInd}(D.PAR.sesNum,:)));
             
             % Rotations position
             D.PAR.rotPos = ... % [90,180,270]
-                D.SS_In_All.Rotation_Positions{D.PAR.ratInd}(D.PAR.sesNum,:)';
+                D.SS_IO_1.Rotation_Positions{D.PAR.ratInd}(D.PAR.sesNum,:)';
             
             % Laps per session
             D.PAR.lapsPerRot = ... % [5:8,6:9,7:10]
-                D.SS_In_All.Laps_Per_Rotation{D.PAR.ratInd}(D.PAR.sesNum,:)';
+                D.SS_IO_1.Laps_Per_Rotation{D.PAR.ratInd}(D.PAR.sesNum,:)';
             
             % Days till rotation
             D.PAR.daysTilRot = ... % [5:8,6:9,7:10]
-                D.SS_In_All.Days_Till_Rotation{D.PAR.ratInd}(D.PAR.sesNum);
+                D.SS_IO_1.Days_Till_Rotation{D.PAR.ratInd}(D.PAR.sesNum);
             
             % Seed random number generator based on session number
             rng(D.PAR.sesNumAll)
@@ -4009,22 +4009,22 @@ fprintf('END OF RUN\n');
             
             % Change data table entries which will be loaded later
             ratInd = ...
-                find(ismember(D.SS_In_All.Properties.RowNames, D.DB.ratLab));
+                find(ismember(D.SS_IO_1.Properties.RowNames, D.DB.ratLab));
             
             % Set condition
-            D.SS_In_All.Session_Condition(ratInd) = D.DB.Session_Condition;
+            D.SS_IO_1.Session_Condition(ratInd) = D.DB.Session_Condition;
             % Set task
-            D.SS_In_All.Session_Task(ratInd) = D.DB.Session_Task;
+            D.SS_IO_1.Session_Task(ratInd) = D.DB.Session_Task;
             % Set reward delay
-            D.SS_In_All.Reward_Delay(ratInd)= D.DB.Reward_Delay;
+            D.SS_IO_1.Reward_Delay(ratInd)= D.DB.Reward_Delay;
             % Set cue condition
-            D.SS_In_All.Cue_Condition(ratInd) = D.DB.Cue_Condition;
+            D.SS_IO_1.Cue_Condition(ratInd) = D.DB.Cue_Condition;
             % Set sound conditions
-            D.SS_In_All.Sound_Conditions(ratInd,1:2) = D.DB.Sound_Conditions;
+            D.SS_IO_1.Sound_Conditions(ratInd,1:2) = D.DB.Sound_Conditions;
             
             % Get session number
             var_ind = ...
-                ismember(D.SS_In_All.Properties.VariableNames, ...
+                ismember(D.SS_IO_1.Properties.VariableNames, ...
                 ['Session_',char(D.DB.Session_Condition)]);
             if strcmp(D.DB.Session_Condition, 'Rotation')
                 col_ind = 1;
@@ -4032,20 +4032,20 @@ fprintf('END OF RUN\n');
                 col_ind = ismember([{'Track'},{'Forage'}], D.DB.Session_Task);
             end
             ses_next = ...
-                D.SS_In_All{ratInd, var_ind}(col_ind) + 1;
+                D.SS_IO_1{ratInd, var_ind}(col_ind) + 1;
             % Get session total
-            ses_all_next = D.SS_In_All{ratInd, 'Session_Manual_Training'}(col_ind) + ...;
-                D.SS_In_All{ratInd, 'Session_Behavior_Training'}(col_ind) + ...
-                D.SS_In_All{ratInd, 'Session_Implant_Training'}(col_ind) + ...
-                D.SS_In_All{ratInd, 'Session_Rotation'} + 1;
+            ses_all_next = D.SS_IO_1{ratInd, 'Session_Manual_Training'}(col_ind) + ...;
+                D.SS_IO_1{ratInd, 'Session_Behavior_Training'}(col_ind) + ...
+                D.SS_IO_1{ratInd, 'Session_Implant_Training'}(col_ind) + ...
+                D.SS_IO_1{ratInd, 'Session_Rotation'} + 1;
             
             % Set start quad
-            D.SS_In_All.Start_Quadrant{ratInd}(ses_all_next) = D.DB.Start_Quadrant;
+            D.SS_IO_1.Start_Quadrant{ratInd}(ses_all_next) = D.DB.Start_Quadrant;
             % Set rot dir
-            D.SS_In_All.Rotation_Direction{ratInd}(ses_next) = D.DB.Rotation_Direction;
+            D.SS_IO_1.Rotation_Direction{ratInd}(ses_next) = D.DB.Rotation_Direction;
             % Set rot pos
-            for i = 1:length(D.SS_In_All.Rotation_Positions{ratInd}(ses_next,:))
-                D.SS_In_All.Rotation_Positions{ratInd}(ses_next,i) = num2str(D.DB.Rotation_Positions(i));
+            for i = 1:length(D.SS_IO_1.Rotation_Positions{ratInd}(ses_next,:))
+                D.SS_IO_1.Rotation_Positions{ratInd}(ses_next,i) = num2str(D.DB.Rotation_Positions(i));
             end
             
             % Run PopRat
@@ -6063,21 +6063,21 @@ fprintf('END OF RUN\n');
                 D.PAR.ratNum = ... % (####)
                     str2double(D.PAR.ratLab(2:end));
                 
-                % Get rat index in D.SS_In_All
+                % Get rat index in D.SS_IO_1
                 D.PAR.ratInd = ...
-                    find(ismember(D.SS_In_All.Properties.RowNames, D.PAR.ratLab));
+                    find(ismember(D.SS_IO_1.Properties.RowNames, D.PAR.ratLab));
                 
                 % Get rat age
                 D.PAR.ratAgeGrp = ... % [Young,Old]
-                    D.SS_In_All.Age_Group(D.PAR.ratInd);
+                    D.SS_IO_1.Age_Group(D.PAR.ratInd);
                 
                 % Get rat dob
                 D.PAR.ratDOB = ...
-                    D.SS_In_All.DOB(D.PAR.ratInd);
+                    D.SS_IO_1.DOB(D.PAR.ratInd);
                 
                 % Get feeder condition
                 D.PAR.ratFeedCnd = ... % [C1,C2]
-                    D.SS_In_All.Feeder_Condition(D.PAR.ratInd);
+                    D.SS_IO_1.Feeder_Condition(D.PAR.ratInd);
                 
                 % Get feeder condition number
                 D.PAR.ratFeedCnd_Num = ... % [1,2]
@@ -6087,7 +6087,7 @@ fprintf('END OF RUN\n');
                 
                 % Set Session Condition
                 D.PAR.sesCond = ...
-                    D.SS_In_All.Session_Condition(D.PAR.ratInd);
+                    D.SS_IO_1.Session_Condition(D.PAR.ratInd);
                 set(D.UI.popCond, 'Value', ...
                     find(ismember(D.UI.condList, D.PAR.sesCond)));
                 % run callback
@@ -6095,7 +6095,7 @@ fprintf('END OF RUN\n');
                 
                 % Set Session Task
                 D.PAR.sesTask = ...
-                    D.SS_In_All.Session_Task(D.PAR.ratInd);
+                    D.SS_IO_1.Session_Task(D.PAR.ratInd);
                 set(D.UI.popTask, 'Value', ...
                     find(ismember(D.UI.taskList, D.PAR.sesTask)));
                 % run callback
@@ -6103,7 +6103,7 @@ fprintf('END OF RUN\n');
                 
                 % Set cue condition
                 D.PAR.cueFeed = ...
-                    D.SS_In_All.Cue_Condition(D.PAR.ratInd);
+                    D.SS_IO_1.Cue_Condition(D.PAR.ratInd);
                 set(D.UI.toggCue( ...
                     ismember(D.PAR.catCueCond, D.PAR.cueFeed)), 'Value', 1);
                 % Set all others to off
@@ -6113,7 +6113,7 @@ fprintf('END OF RUN\n');
                 
                 % Set reward delay
                 D.PAR.rewDel = ...
-                    D.SS_In_All.Reward_Delay(D.PAR.ratInd);
+                    D.SS_IO_1.Reward_Delay(D.PAR.ratInd);
                 set(D.UI.popRewDel, 'Value', ...
                     find(ismember(D.UI.delList, D.PAR.rewDel)));
                 % run callback
@@ -6121,7 +6121,7 @@ fprintf('END OF RUN\n');
                 
                 % Set sound conditions
                 D.UI.snd(1:2) = logical(...
-                    D.SS_In_All.Sound_Conditions(D.PAR.ratInd,1:2));
+                    D.SS_IO_1.Sound_Conditions(D.PAR.ratInd,1:2));
                 set(D.UI.toggSnd(D.UI.snd(1:2)), 'Value', 1);
                 ToggSnd();
                 
@@ -7379,83 +7379,83 @@ fprintf('END OF RUN\n');
             
             % Get row ind
             % determine if this is first entry
-            if strcmp(D.SS_Out_ICR.(D.PAR.ratLab).Date{1}, '');
+            if strcmp(D.SS_Tab_2.(D.PAR.ratLab).Date{1}, '');
                 % is first entry
                 rowInd = 1;
             else
-                rowInd = size(D.SS_Out_ICR.(D.PAR.ratLab), 1) + 1;
+                rowInd = size(D.SS_Tab_2.(D.PAR.ratLab), 1) + 1;
                 % add new row at end of table
-                D.SS_Out_ICR.(D.PAR.ratLab) = ...
-                    [D.SS_Out_ICR.(D.PAR.ratLab); D.SS_Out_ICR.(D.PAR.ratLab)(end,:)];
+                D.SS_Tab_2.(D.PAR.ratLab) = ...
+                    [D.SS_Tab_2.(D.PAR.ratLab); D.SS_Tab_2.(D.PAR.ratLab)(end,:)];
             end
             
             % Add entries
-            D.SS_Out_ICR.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
-            D.SS_Out_ICR.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
-            D.SS_Out_ICR.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
-            D.SS_Out_ICR.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end_tim - D.T.ses_str_tim) / 60;
-            D.SS_Out_ICR.(D.PAR.ratLab).Session_Condition(rowInd) = char(D.PAR.sesCond);
-            D.SS_Out_ICR.(D.PAR.ratLab).Session_Task(rowInd) = char(D.PAR.sesTask);
+            D.SS_Tab_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
+            D.SS_Tab_2.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
+            D.SS_Tab_2.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
+            D.SS_Tab_2.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end_tim - D.T.ses_str_tim) / 60;
+            D.SS_Tab_2.(D.PAR.ratLab).Session_Condition(rowInd) = char(D.PAR.sesCond);
+            D.SS_Tab_2.(D.PAR.ratLab).Session_Task(rowInd) = char(D.PAR.sesTask);
             % save session number of this condition
             var_ind = ...
-                ismember(D.SS_Out_ICR.(D.PAR.ratLab).Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
+                ismember(D.SS_Tab_2.(D.PAR.ratLab).Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
             col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
-            D.SS_Out_ICR.(D.PAR.ratLab){rowInd, var_ind}(col_ind) = D.PAR.sesNum;
+            D.SS_Tab_2.(D.PAR.ratLab){rowInd, var_ind}(col_ind) = D.PAR.sesNum;
             % save other entries
-            D.SS_Out_ICR.(D.PAR.ratLab).Feeder_Condition(rowInd) = D.PAR.ratFeedCnd;
-            D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Direction(rowInd) = D.PAR.ratRotDrc;
-            D.SS_Out_ICR.(D.PAR.ratLab).Reward_Delay(rowInd) = sprintf('%1.1f', D.PAR.rewDel);
-            D.SS_Out_ICR.(D.PAR.ratLab).Cue_Condition(rowInd) = char(D.PAR.cueFeed);
-            D.SS_Out_ICR.(D.PAR.ratLab).Pulse_Duration(rowInd) = D.PAR.rewDur;
-            D.SS_Out_ICR.(D.PAR.ratLab).Sound_Conditions(rowInd,:) = D.UI.snd;
-            D.SS_Out_ICR.(D.PAR.ratLab).Start_Quadrant(rowInd) = D.PAR.ratStrQuad;
-            D.SS_Out_ICR.(D.PAR.ratLab).Bulldozings(rowInd) = D.C.bull_cnt;
-            D.SS_Out_ICR.(D.PAR.ratLab).Zones_Rewarded{rowInd} = ...
+            D.SS_Tab_2.(D.PAR.ratLab).Feeder_Condition(rowInd) = D.PAR.ratFeedCnd;
+            D.SS_Tab_2.(D.PAR.ratLab).Rotation_Direction(rowInd) = D.PAR.ratRotDrc;
+            D.SS_Tab_2.(D.PAR.ratLab).Reward_Delay(rowInd) = sprintf('%1.1f', D.PAR.rewDel);
+            D.SS_Tab_2.(D.PAR.ratLab).Cue_Condition(rowInd) = char(D.PAR.cueFeed);
+            D.SS_Tab_2.(D.PAR.ratLab).Pulse_Duration(rowInd) = D.PAR.rewDur;
+            D.SS_Tab_2.(D.PAR.ratLab).Sound_Conditions(rowInd,:) = D.UI.snd;
+            D.SS_Tab_2.(D.PAR.ratLab).Start_Quadrant(rowInd) = D.PAR.ratStrQuad;
+            D.SS_Tab_2.(D.PAR.ratLab).Bulldozings(rowInd) = D.C.bull_cnt;
+            D.SS_Tab_2.(D.PAR.ratLab).Zones_Rewarded{rowInd} = ...
                 D.I.zoneHist(1:find(~isnan(D.I.zoneHist),1,'last'));
-            D.SS_Out_ICR.(D.PAR.ratLab).Rewards_Standard{rowInd} = sum(D.C.rew_cnt{3});
-            D.SS_Out_ICR.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
-            D.SS_Out_ICR.(D.PAR.ratLab).Notes{rowInd} = '';
+            D.SS_Tab_2.(D.PAR.ratLab).Rewards_Standard{rowInd} = sum(D.C.rew_cnt{3});
+            D.SS_Tab_2.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
+            D.SS_Tab_2.(D.PAR.ratLab).Notes{rowInd} = '';
             
             % Rotation session specific vars
             if D.PAR.sesCond == 'Rotation'
-                D.SS_Out_ICR.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = D.C.rot_cnt;
-                D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions{rowInd} = ...
+                D.SS_Tab_2.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = D.C.rot_cnt;
+                D.SS_Tab_2.(D.PAR.ratLab).Rotation_Positions{rowInd} = ...
                     cell2mat(cellfun(@(x) str2double(x), cellstr(D.PAR.rotPos(1:D.C.rot_cnt)), 'uni', false))';
                 if length(D.C.lap_cnt{1}) < length(D.C.lap_cnt{2});
                     D.C.lap_cnt{1} = [D.C.lap_cnt{1},NaN];
                 elseif length(D.C.lap_cnt{1}) > length(D.C.lap_cnt{2});
                     D.C.lap_cnt{2} = [D.C.lap_cnt{2},NaN];
                 end
-                D.SS_Out_ICR.(D.PAR.ratLab).Laps_Per_Rotation{rowInd} = ...
+                D.SS_Tab_2.(D.PAR.ratLab).Laps_Per_Rotation{rowInd} = ...
                     [D.C.lap_cnt{3}, reshape([[D.C.lap_cnt{2}]; [D.C.lap_cnt{1}]], 1, [])];
-                D.SS_Out_ICR.(D.PAR.ratLab).Days_Till_Rotation(rowInd) = D.PAR.daysTilRot;
-                D.SS_Out_ICR.(D.PAR.ratLab).Rewards_40_Deg{rowInd} = D.C.rew_cnt{2};
-                D.SS_Out_ICR.(D.PAR.ratLab).Laps_40_Deg{rowInd} = D.C.lap_cnt{2};
-                D.SS_Out_ICR.(D.PAR.ratLab).Rewards_0_Deg{rowInd} = D.C.rew_cnt{1};
-                D.SS_Out_ICR.(D.PAR.ratLab).Laps_0_Deg{rowInd} = D.C.lap_cnt{1};
+                D.SS_Tab_2.(D.PAR.ratLab).Days_Till_Rotation(rowInd) = D.PAR.daysTilRot;
+                D.SS_Tab_2.(D.PAR.ratLab).Rewards_40_Deg{rowInd} = D.C.rew_cnt{2};
+                D.SS_Tab_2.(D.PAR.ratLab).Laps_40_Deg{rowInd} = D.C.lap_cnt{2};
+                D.SS_Tab_2.(D.PAR.ratLab).Rewards_0_Deg{rowInd} = D.C.rew_cnt{1};
+                D.SS_Tab_2.(D.PAR.ratLab).Laps_0_Deg{rowInd} = D.C.lap_cnt{1};
             else
-                D.SS_Out_ICR.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = NaN;
-                D.SS_Out_ICR.(D.PAR.ratLab).Rotation_Positions{rowInd} = {[]};
-                D.SS_Out_ICR.(D.PAR.ratLab).Laps_Per_Rotation(rowInd) = {[]};
-                D.SS_Out_ICR.(D.PAR.ratLab).Days_Till_Rotation(rowInd) = '<undefined>';
-                D.SS_Out_ICR.(D.PAR.ratLab).Rewards_40_Deg{rowInd} = 0;
-                D.SS_Out_ICR.(D.PAR.ratLab).Rewards_0_Deg{rowInd} = 0;
-                D.SS_Out_ICR.(D.PAR.ratLab).Laps_40_Deg{rowInd} = 0;
-                D.SS_Out_ICR.(D.PAR.ratLab).Laps_0_Deg{rowInd} = 0;
+                D.SS_Tab_2.(D.PAR.ratLab).Rotations_Per_Session(rowInd) = NaN;
+                D.SS_Tab_2.(D.PAR.ratLab).Rotation_Positions{rowInd} = {[]};
+                D.SS_Tab_2.(D.PAR.ratLab).Laps_Per_Rotation(rowInd) = {[]};
+                D.SS_Tab_2.(D.PAR.ratLab).Days_Till_Rotation(rowInd) = '<undefined>';
+                D.SS_Tab_2.(D.PAR.ratLab).Rewards_40_Deg{rowInd} = 0;
+                D.SS_Tab_2.(D.PAR.ratLab).Rewards_0_Deg{rowInd} = 0;
+                D.SS_Tab_2.(D.PAR.ratLab).Laps_40_Deg{rowInd} = 0;
+                D.SS_Tab_2.(D.PAR.ratLab).Laps_0_Deg{rowInd} = 0;
             end
             
-            % Update SS_In_All
-            D.SS_In_All.Session_Condition(D.PAR.ratInd) = char(D.PAR.sesCond);
-            D.SS_In_All.Reward_Delay(D.PAR.ratInd) = sprintf('%1.1f', D.PAR.rewDel);
-            D.SS_In_All.Cue_Condition(D.PAR.ratInd) = char(D.PAR.cueFeed);
-            D.SS_In_All.Pulse_Duration(D.PAR.ratInd) = D.PAR.rewDur;
-            D.SS_In_All.Sound_Conditions(D.PAR.ratInd,:) = D.UI.snd;
+            % Update SS_IO_1
+            D.SS_IO_1.Session_Condition(D.PAR.ratInd) = char(D.PAR.sesCond);
+            D.SS_IO_1.Reward_Delay(D.PAR.ratInd) = sprintf('%1.1f', D.PAR.rewDel);
+            D.SS_IO_1.Cue_Condition(D.PAR.ratInd) = char(D.PAR.cueFeed);
+            D.SS_IO_1.Pulse_Duration(D.PAR.ratInd) = D.PAR.rewDur;
+            D.SS_IO_1.Sound_Conditions(D.PAR.ratInd,:) = D.UI.snd;
             
             % Save out data
-            SS_Out_ICR = D.SS_Out_ICR; %#ok<NASGU>
-            save(D.DIR.ioSS_Out_ICR, 'SS_Out_ICR');
-            SS_In_All = D.SS_In_All; %#ok<NASGU>
-            save(D.DIR.ioSS_In_All, 'SS_In_All');
+            SS_Tab_2 = D.SS_Tab_2; %#ok<NASGU>
+            save(D.DIR.ioSS_Tab_2, 'SS_Tab_2');
+            SS_IO_1 = D.SS_IO_1; %#ok<NASGU>
+            save(D.DIR.ioSS_IO_1, 'SS_IO_1');
             
             
             % Print saved table data
