@@ -48,7 +48,7 @@ startTime = now;
 % ------------------------- SETUP ERROR HANDELING -------------------------
 
 % Preset status abort flag
-status = 'failed'; 
+status = 'failed';
 doExit = false;
 
 % Handle input args
@@ -238,7 +238,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Min time in rf target (sec)
         D.PAR.rfRewDel = 0.5;
         % Warning battery voltage level(V)
-        D.PAR.robVccWarning = 11.6; 
+        D.PAR.robVccWarning = 11.6;
         % Replace battery voltage level (C)
         D.PAR.robVccReplace = 11.8;
         % Warning battery voltage level (%)
@@ -251,6 +251,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.buttDist = 18 * ((2 * pi)/(140 * pi));
         % Feeder dist from rob tracker
         D.PAR.feedDist = 66 * ((2 * pi)/(140 * pi));
+        % Sleep 1/2 duration
+        D.PAR.sleepDur = [15, 15]*60; % min
         
         % DIRECTORIES
         
@@ -500,6 +502,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Setup] FINISHED: "NLX_Setup()"');
         SendM2C('N');
         
+        % Enable Setup UI objects
+        Set_Object_Group('Setup_Objects', 'Enable')
+        
         % Run testing setup
         Console_Write('[Setup] RUNNING: "Run_Test_Setup()"...');
         Run_Test_Setup();
@@ -517,7 +522,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Run] BEGIN Run()');
         
         % ---------------------------SETUP & RUN----------------------------------
-       
+        
         while ~doExit
             
             % TRACK LOOP TIME
@@ -560,15 +565,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.main_what = 'WAIT FOR UI SETUP';
                 
             elseif ~D.F.tt_track_setup_done
-                D.F.main_what = 'SETUP TT_TRACK';
+                D.F.main_what = 'SETUP TT TRACK';
                 
-            elseif ~D.F.final_setup_done
-                D.F.main_what = 'FINISH SETUP';
+            elseif ~D.F.session_setup_done
+                D.F.main_what = 'FINISH SESSION SETUP';
                 
-            elseif D.F.poll_nlx && ...
+            elseif D.F.implant_session && ~D.F.sleep_1_done
+                D.F.main_what = 'WAIT FOR SLEEP 1';
+                
+            elseif ~D.F.run_task
+                D.F.main_what = 'SETUP TASK';
+                
+            elseif D.F.run_task && ...
                     (Elapsed_Seconds(now) - D.T.poll_last) >= D.PAR.polRate && ...
                     ~isTTtrackSolo
-                D.F.main_what = 'POLL NLX';
+                D.F.main_what = 'RUN TASK';
                 
             else
                 continue;
@@ -588,8 +599,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     %% ---------------WAIT FOR UI SETUP----------------
                     continue;
                     
-                case 'SETUP TT_TRACK'
-                    %% ---------------SETUP TT_TRACK----------------
+                case 'SETUP TT TRACK'
+                    %% ---------------SETUP TT TRACK----------------
                     % Run TT_Track
                     if D.F.implant_session || isTTtrackSolo
                         Console_Write('[MainLoop] RUNNING: Load "TT_Track_Setup()"...');
@@ -597,25 +608,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Console_Write('[MainLoop] FINISHED: Load "TT_Track_Setup()"');
                     end
                     
-                    % Disable tab 1
-                    if isTTtrackSolo
-                        
-                        % Make tab active
-                        D.UI.tabgp.SelectedTab = D.UI.tabTT;
-                        
-                        % Disable main tab
-                        %set(get(D.UI.tabTT, 'Children'), 'Enable', 'off')
-                        
-                    end
-                    
                     % Set flag
                     D.F.tt_track_setup_done =  true;
                     
-                case 'FINISH SETUP'
-                    %% -----------------FINISH SETUP-------------------
+                case 'FINISH SESSION SETUP'
+                    %% -----------------FINISH SESSION SETUP-------------------
                     
                     % Flag setup done
-                    D.F.final_setup_done = true;
+                    D.F.session_setup_done = true;
+                    
+                    % Run Finish NLX setup code
+                    Console_Write('[MainLoop] RUNNING: "Finish_NLX_Setup()"...');
+                    Finish_NLX_Setup();
+                    Console_Write('[MainLoop] FINISHED: "Finish_NLX_Setup()"');
                     
                     % Run Finish Ephys setup code
                     Console_Write('[MainLoop] RUNNING: "Finish_Ephys_Setup()"...');
@@ -627,10 +632,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         continue;
                     end
                     
+                    % Run Finish AC setup code
+                    Console_Write('[MainLoop] RUNNING: "Finish_AC_Setup()"...');
+                    Finish_AC_Setup();
+                    Console_Write('[MainLoop] FINISHED: "Finish_AC_Setup()"');
+                    
                     % Run Finish GUI setup code
                     Console_Write('[MainLoop] RUNNING: "Finish_GUI_Setup()"...');
                     Finish_GUI_Setup();
                     Console_Write('[MainLoop] FINISHED: "Finish_GUI_Setup()"');
+                    
+                case 'SETUP TASK'
+                    %% ------------------SETUP TASK--------------------
+                    
+                    % Enable Recording objects
+                    Set_Object_Group('Recording_Objects', 'Enable');
                     
                     % Run 'Track' task setup code
                     if D.PAR.sesTask == 'Track'
@@ -665,7 +681,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Set to start polling NLX
-                    D.F.poll_nlx = true;
+                    D.F.run_task = true;
                     
                     % Dump initial vt recs
                     Console_Write('[MainLoop] RUNNING: Dump VT Recs...');
@@ -687,9 +703,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Begin main loop
                     Console_Write('[MainLoop] READY TO ROCK!');
-                    
-                    
-                case 'POLL NLX'
+                                        
+                case 'RUN TASK'
                     %% ------------------POLL NETCOM-------------------
                     
                     % STORE POLL TIME
@@ -1096,14 +1111,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % switch case poll
         D.F.poll_what = 'NULL';
         D.F.poll_last = 'NULL';
+        % sleep 1 done
+        D.F.sleep_1_done = false;
+        % sleep 2 done
+        D.F.sleep_2_done = false;
         % rat data loaded
         D.F.rat_loaded = false;
         % tt track setup
         D.F.tt_track_setup_done = false;
         % setup finished
-        D.F.final_setup_done = false;
+        D.F.session_setup_done = false;
         % polling nlx
-        D.F.poll_nlx = false;
+        D.F.run_task = false;
         % polling nlx
         D.F.first_move_sent = false;
         % acquiring nlx
@@ -1166,7 +1185,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % last text info update
         D.T.info_txt_update = Elapsed_Seconds(now);
         % time session starts
-        D.T.ses_str_tim = Elapsed_Seconds(now);
+        D.T.ses_str = Elapsed_Seconds(now);
+        % sleep 1/2 start
+        D.T.sleep_str = [0,0];
         % total acq time
         D.T.acq_tot_tim = 0;
         % acq restart time
@@ -1204,7 +1225,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % rf reward target tim
         D.T.rf_rew_inbnd_t1 = 0;
         D.T.rf_rew_inbnd_t2 = 0;
-        % cube check 
+        % cube check
         D.T.cube_vcc_update = 0;
         
         % INDEXING
@@ -1586,6 +1607,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tabgp = ...
             uitabgroup(FigGroupH, ...
             'Units', 'Normalized', ...
+            'SelectionChangedFcn', {@TabGrpChange}, ...
+            'UserData', 'TT', ...
             'Position',[0,0,1,1]);
         
         % Set figure stuff
@@ -1861,12 +1884,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Panel tt select
         pan_ht = D.UI.perf_inf_pan_pos(2)-0.04;
-        D.UI.tt_select_pan_copy_pos(1,:) = [...
+        D.UI.tt_tab_1_select_pan_pos(1,:) = [...
             pan_lft, ...
             0.04, ...
             pan_wd/2, ...
             pan_ht];
-        D.UI.tt_select_pan_copy_pos(2,:) = [...
+        D.UI.tt_tab_1_select_pan_pos(2,:) = [...
             pan_lft+pan_wd/2, ...
             0.04, ...
             pan_wd/2, ...
@@ -1947,7 +1970,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pos_wd_dflt = D.UI.stup_pan_pos(3)-0.01;
         obj_gap = 0.01;
         
+        % Bottom start
+        btm = D.UI.stup_pan_pos(2) + ...
+            D.UI.stup_pan_pos(4) - ...
+            D.UI.fontSzTxtLrg(2) - obj_gap;
+        
         % SETUP PANEL
+        
+        % Panel
         D.UI.panStup = uipanel(...
             'Parent',D.UI.tabICR, ...
             'Units','Normalized', ...
@@ -1965,13 +1995,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','on', ...
             'Position', D.UI.stup_pan_pos);
         
-        % BOTTOM START
-        btm = D.UI.stup_pan_pos(2) + ...
-            D.UI.stup_pan_pos(4) - ...
-            D.UI.fontSzTxtLrg(2) - obj_gap;
-        
         % RAT SELECTION
-        % text
+        
+        % Header text
         btm = btm - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzTxtMed(2)];
         D.UI.txtRat = uicontrol('Style','text', ...
@@ -1985,7 +2011,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontName','MS Sans Serif', ...
             'FontSize', D.UI.fontSzTxtMed(1));
-        % popupmenu
+        
+        % Popupmenu
         btm = btm - D.UI.fontSzPop(2);
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPop(2)];
         D.UI.popRat = uicontrol('Style','popupmenu', ...
@@ -2003,7 +2030,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',1);
         
         % ICR CONDITION
-        % text
+        
+        % Header text
         btm = btm - 2*obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzTxtMed(2)];
         D.UI.txtCond = uicontrol('Style','text', ...
@@ -2017,7 +2045,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontName','MS Sans Serif', ...
             'FontSize', D.UI.fontSzTxtMed(1));
-        % popupmenu
+        
+        % Popupmenu
         btm = btm - D.UI.fontSzPop(2);
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPop(2)];
         D.UI.popCond = uicontrol('Style','popupmenu', ...
@@ -2035,7 +2064,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',1);
         
         % ICR TASK
-        % text
+        
+        % Header text
         btm = btm - 2*obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzTxtMed(2)];
         D.UI.txtTask = uicontrol('Style','text', ...
@@ -2049,7 +2079,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontName','MS Sans Serif', ...
             'FontSize', D.UI.fontSzTxtMed(1));
-        % popupmenu
+        
+        % Popupmenu
         btm = btm - D.UI.fontSzPop(2);
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPop(2)];
         D.UI.popTask = uicontrol('Style','popupmenu', ...
@@ -2067,7 +2098,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',1);
         
         % REWARD DELAY
-        % text
+        % Header text
         btm = btm - 2*obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzTxtMed(2)];
         D.UI.txtRwDl = uicontrol('Style','text', ...
@@ -2081,7 +2112,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontName','MS Sans Serif', ...
             'FontSize', D.UI.fontSzTxtMed(1));
-        % popupmenu
+        
+        % Popupmenu
         btm = btm - D.UI.fontSzPop(2);
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPop(2)];
         D.UI.popRewDel = uicontrol('Style','popupmenu', ...
@@ -2098,7 +2130,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String',D.UI.delList, ...
             'Value',1);
         
-        % CUE BUTTON PANEL
+        % CUE CONDITION
+        
+        % Buttongroup
         ht =  D.UI.fontSzBtnMed(2) + 2.5*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
@@ -2114,12 +2148,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
-        % CUE CONDITION
+        
+        % All
         wd = (pos(3)-2*pos_lft_dflt)/3;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnMed(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
-        % all
         pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
         D.UI.toggCue(1) = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
@@ -2135,7 +2169,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnMed(1), ...
             'Value',0);
-        % half
+        
+        % Half
         lft = lft+wd;
         pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
         D.UI.toggCue(2) = uicontrol('Style','togglebutton', ...
@@ -2152,7 +2187,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnMed(1), ...
             'Value',0);
-        % none
+        
+        % None
         lft = lft+wd;
         pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
         D.UI.toggCue(3) = uicontrol('Style','togglebutton', ...
@@ -2170,7 +2206,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnMed(1), ...
             'Value',0);
         
-        % SOUND BUTTON PANEL
+        % SOUND CONDITION
+        
+        % Buttongroup
         ht =  D.UI.fontSzBtnMed(2) + 2.5*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
@@ -2187,12 +2225,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
-        % SOUND CONDITION
+        
+        % White Noise
         wd = (pos(3)-2*pos_lft_dflt)/2;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnMed(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
-        % white
         pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
         D.UI.toggSnd(1) = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
@@ -2208,7 +2246,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnMed(1), ...
             'Value',0);
-        % reward
+        
+        % Reward Tone
         lft = lft+wd;
         pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
         D.UI.toggSnd(2) = uicontrol('Style','togglebutton', ...
@@ -2231,11 +2270,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         wd = D.UI.stup_pan_pos(3)/2;
         btm = D.UI.stup_pan_pos(2) + 0.01;
         pos = [wd/2, btm, wd, ht];
-        D.UI.btnSetupDone = uicontrol('Style','togglebutton', ...
+        D.UI.toggSetupDone = uicontrol('Style','togglebutton', ...
             'Parent', D.UI.tabICR, ...
             'Enable', 'off', ...
             'String','DONE', ...
-            'Callback', {@BtnSetupDone}, ...
+            'Callback', {@ToggSetupDone}, ...
             'UserData', 0, ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -2252,6 +2291,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pos_lft_dflt = 0.005;
         pos_wd_dflt = D.UI.rec_pan_pos(3)-0.01;
         obj_gap = 0.01;
+        
+        % Bottom start
+        btm = D.UI.rec_pan_pos(2) + ...
+            D.UI.rec_pan_pos(4) - ...
+            D.UI.fontSzTxtLrg(2) - obj_gap;
         
         % RECORD PANEL
         D.UI.panRec = uipanel(...
@@ -2270,12 +2314,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','on', ...
             'Position',  D.UI.rec_pan_pos);
         
-        % BOTTOM START
-        btm = D.UI.rec_pan_pos(2) + ...
-            D.UI.rec_pan_pos(4) - ...
-            D.UI.fontSzTxtLrg(2) - obj_gap;
-        
         % NEURALYNX SUBPANEL
+        
+        % Bottongorup
         ht =  D.UI.fontSzBtnLrg(2) + D.UI.fontSzBtnLrg(2) + 3.5*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
@@ -2291,7 +2332,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
-        % acquire
+        
+        % Acquire
         wd = (pos_wd_dflt-2*pos_lft_dflt)/2;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnLrg(2);
@@ -2311,7 +2353,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'Value',0);
-        % record
+        
+        % Record
         lft = lft+wd;
         pos = [lft, btm, wd, D.UI.fontSzBtnLrg(2)];
         D.UI.toggRec = uicontrol('Style','togglebutton', ...
@@ -2328,7 +2371,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'Value',0);
-        % cells cut toggle
+        
+        % Cells cut toggle
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
         wd = pos_wd_dflt-2*pos_lft_dflt;
@@ -2349,7 +2393,83 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'UserData', false, ...
             'Value',0);
         
+        % Set to pan bottom
+        btm = D.UI.spanNLX.Position(2);
+        
+        % TASK SUBPANEL
+        
+        % Buttongroup
+        ht =  4*D.UI.fontSzTxtLrg(2) + 4*obj_gap;
+        btm = btm - ht - obj_gap;
+        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
+        D.UI.spanTask = uibuttongroup(...
+            'Parent',D.UI.tabICR, ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'HighlightColor', D.UI.enabledCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'Title','Task', ...
+            'TitlePosition','centertop', ...
+            'FontWeight','Bold', ...
+            'FontSize',D.UI.fontSzTxtMed(1), ...
+            'Clipping','off');
+        
+        % Sleep 1 button
+        wd = pos_wd_dflt - 2*pos_lft_dflt;
+        lft = 2*pos_lft_dflt;
+        ht = D.UI.fontSzTxtLrg(2);
+        btm = pos(2)+pos(4) - ht - 2*obj_gap;
+        pos = [lft, btm, wd, ht];
+        D.UI.toggSleep(1) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'String', ['Sleep 1: ', datestr(D.PAR.sleepDur(2)/(24*60*60), 'MM:SS')], ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzTxtLrg(1), ...
+            'UserData', 1);
+        
+        % ICR buttons
+        ht = 2*D.UI.fontSzTxtLrg(2);
+        btm = btm - ht - 0.5*obj_gap;
+        pos = [lft, btm, wd/2, ht];
+        D.UI.toggICR(1) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor',  D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzTxtLrg(1), ...
+            'UserData', false);
+        D.UI.toggICR(2) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
+        pos = [lft+wd/2, btm, wd/2, 2*D.UI.fontSzTxtLrg(2)];
+        set(D.UI.toggICR(2), 'Position', pos);
+        set(D.UI.toggICR, 'Callback', {@BtnICR})
+        
+        % Sleep 2 button
+        D.UI.toggSleep(2) = copyobj(D.UI.toggSleep(1), D.UI.tabICR);
+        ht = D.UI.fontSzTxtLrg(2);
+        btm = btm - ht - 0.5*obj_gap;
+        pos = [lft, btm, wd, ht];
+        set(D.UI.toggSleep(2), ...
+            'String', ['Sleep 2: ', datestr(D.PAR.sleepDur(2)/(24*60*60), 'MM:SS')], ...
+            'UserData', 2, ...
+            'Position', pos);
+        set(D.UI.toggSleep, 'Callback', {@ToggSleep})
+        % set to pan bottom
+        btm = D.UI.spanTask.Position(2);
+        
         % ROBOT SUBPANEL
+        
+        % Buttongroup
         ht =  2*D.UI.fontSzBtnLrg(2) + D.UI.fontSzPop(2) + 3*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
@@ -2365,7 +2485,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
-        % halt
+        
+        % Halt
         wd = pos(3)-2*pos_lft_dflt;
         lft = pos_lft_dflt*2;
         ht =  2*D.UI.fontSzBtnLrg(2);
@@ -2385,7 +2506,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtLrg(1), ...
             'UserData', false, ...
             'Value', 0);
-        % bulldoze popup
+        
+        % Bulldoze popup
         ht = D.UI.fontSzPop(2);
         btm = btm - ht - 0.5*obj_gap;
         pos = [lft, btm, wd, ht];
@@ -2401,7 +2523,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize',D.UI.fontSzPop(1), ...
             'FontWeight','Bold', ...
             'String',D.UI.bullList);
-        % bulldoze toggle
+        
+        % Bulldoze toggle
         pos = [lft, pos(2), wd-0.0425, pos(4)];
         D.UI.toggBulldoze = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
@@ -2417,7 +2540,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'UserData', false, ...
             'Value', 0);
-        % bulldoze speed field
+        
+        % Bulldoze speed field
         lft = lft+pos(3);
         pos = [lft, pos(2), 0.03, pos(4)];
         D.UI.editBulldoze = uicontrol(...
@@ -2429,13 +2553,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'FontName','Monospaced', ...
             'Max', 1, ...
-            'Enable','on',...
-            'Visible', 'on', ... % TEMP
+            'Enable','off',...
+            'Visible', 'on', ...
             'String',num2str(D.PAR.bullSpeed));
-        % set to pan bottom
+        
+        % Set to pan bottom
         btm = D.UI.spanRob.Position(2);
         
         % REWARD SUBPANEL
+        
+        % Buttongroup
         ht =  3*D.UI.fontSzBtnLrg(2) + D.UI.fontSzPop(2) + 5*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
@@ -2451,7 +2578,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
-        % reward duration popup
+        
+        % Reward duration popup
         wd = pos(3)-2*pos_lft_dflt;
         lft = pos_lft_dflt*2;
         ht = D.UI.fontSzPop(2);
@@ -2469,7 +2597,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'String',cellstr(num2str(D.PAR.zoneRewDur')), ...
             'Value', D.I.zone_now);
-        % reward toggle
+        
+        % Reward toggle
         pos = [pos(1), pos(2), wd-0.0125, pos(4)];
         D.UI.btnReward = uicontrol('Style','push', ...
             'Parent',D.UI.tabICR, ...
@@ -2484,7 +2613,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'Value',0);
-        % cue reward
+        
+        % Cue reward
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
         wd = (pos_wd_dflt-2*pos_lft_dflt);
@@ -2503,7 +2633,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'UserData', true, ...
             'Value', 0);
-        % block cue
+        
+        % Block cue
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
         wd = (pos_wd_dflt-2*pos_lft_dflt)/2;
@@ -2522,7 +2653,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'UserData', true, ...
             'Value', 0);
-        % force cue
+        
+        % Force cue
         lft = lft+wd;
         pos = [lft, pos(2), pos(3), pos(4)];
         D.UI.toggForceCue = uicontrol('Style','togglebutton', ...
@@ -2539,7 +2671,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'UserData', true, ...
             'Value', 0);
-        % pick reward pos
+        
+        % Pick reward pos
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
         wd = pos_wd_dflt-2*pos_lft_dflt;
@@ -2559,72 +2692,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'UserData', false, ...
             'Value', 0);
-        % set to pan bottom
-        btm = D.UI.spanRew.Position(2);
-        
-        % TASK SUBPANEL
-        ht =  4*D.UI.fontSzTxtLrg(2) + 4*obj_gap;
-        btm = btm - ht - obj_gap;
-        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
-        D.UI.spanTask = uibuttongroup(...
-            'Parent',D.UI.tabICR, ...
-            'Units','Normalized', ...
-            'Position', pos, ...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'HighlightColor', D.UI.enabledCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'Title','Task', ...
-            'TitlePosition','centertop', ...
-            'FontWeight','Bold', ...
-            'FontSize',D.UI.fontSzTxtMed(1), ...
-            'Clipping','off');
-        % sleep 1 button
-        wd = pos_wd_dflt - 2*pos_lft_dflt;
-        lft = 2*pos_lft_dflt;
-        ht = D.UI.fontSzTxtLrg(2);
-        btm = pos(2)+pos(4) - ht - 2*obj_gap;
-        pos = [lft, btm, wd, ht];
-        D.UI.btnSleep(1) = uicontrol('Style','push', ...
-            'Parent',D.UI.tabICR, ...
-            'Enable', 'off', ...
-            'Callback', {@BtnSleep}, ...
-            'Units','Normalized', ...
-            'Position', pos, ...
-            'String', 'Sleep 1', ...
-            'BackgroundColor', D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontName', D.UI.btnFont, ...
-            'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzTxtLrg(1), ...
-            'UserData', 1);
-        % icr buttons
-        ht = 2*D.UI.fontSzTxtLrg(2);
-        btm = btm - ht - 0.5*obj_gap;
-        pos = [lft, btm, wd/2, ht];
-        D.UI.toggICR(1) = uicontrol('Style','togglebutton', ...
-            'Parent',D.UI.tabICR, ...
-            'Enable', 'off', ...
-            'Units','Normalized', ...
-            'Position', pos, ...
-            'BackgroundColor',  D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontName', D.UI.btnFont, ...
-            'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzTxtLrg(1), ...
-            'UserData', false);
-        D.UI.toggICR(2) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
-        pos = [lft+wd/2, btm, wd/2, 2*D.UI.fontSzTxtLrg(2)];
-        set(D.UI.toggICR(2), 'Position', pos);
-        set(D.UI.toggICR, 'Callback', {@BtnICR})
-        % sleep 2 button
-        D.UI.btnSleep(2) = copyobj(D.UI.btnSleep(1), D.UI.tabICR);
-        ht = D.UI.fontSzTxtLrg(2);
-        btm = btm - ht - 0.5*obj_gap;
-        pos = [lft, btm, wd, ht];
-        set(D.UI.btnSleep(2), ...
-            'String', 'Sleep 2', ...
-            'UserData', 2, ...
-            'Position', pos);
         
         % RECORDING DONE
         ht = 0.04;
@@ -2635,7 +2702,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Parent', D.UI.tabICR, ...
             'Enable', 'off', ...
             'String','DONE', ...
-            'Callback', {@BtnRecDone}, ...
+            'Callback', {@ToggRecDone}, ...
             'UserData', 0, ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -2682,7 +2749,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % SAVE & AND QUIT SESSION
         ht = 0.04;
         wd = (D.UI.main_ax_bounds(1) - 0.015) / 2;
-        % save
+        
+        % Save button
         pos = [0.005, 0.005, wd, ht];
         D.UI.btnSaveSes = uicontrol('Style','push', ...
             'Parent',D.UI.tabICR, ...
@@ -2695,7 +2763,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize',D.UI.fontSzBtnHuge(1), ...
             'UserData', 0, ...
             'Value',0);
-        % quit
+        
+        % Quit button
         pos = [wd + 0.01, pos(2), pos(3), pos(4)];
         D.UI.btnQuitSes(1) = uicontrol('Style','push', ...
             'Parent',D.UI.tabICR, ...
@@ -2766,6 +2835,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor', D.UI.figBckCol, ...
             'HighlightColor', D.UI.disabledCol, ...
             'Position',  D.UI.ses_inf_pan_pos);
+        
         % Heading
         btm = D.UI.ses_inf_pan_pos(2) + ...
             D.UI.ses_inf_pan_pos(4) - ...
@@ -2797,6 +2867,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Light', ...
+            'Visible', 'off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Rotation ses info
@@ -2812,7 +2883,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Light', ...
+            'Visible', 'off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
+        
         % Laps per dropdown
         btm = btm - D.UI.fontSzPop(2);
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPop(2)];
@@ -2827,6 +2900,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Light', ...
             'Visible','off', ...
             'Value',1);
+        
         % Rotation position dropdown
         btm = btm - D.UI.fontSzPop(2);
         pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPop(2)];
@@ -2853,6 +2927,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor', D.UI.figBckCol, ...
             'HighlightColor', D.UI.disabledCol, ...
             'Position',  D.UI.perf_inf_pan_pos);
+        
         % Heading
         btm = D.UI.perf_inf_pan_pos(2) + ...
             D.UI.perf_inf_pan_pos(4) - ...
@@ -2884,6 +2959,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible', 'off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Lap time dropdown
@@ -2931,6 +3007,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', [0.5,0.5,0.5], ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % 40 deg laps/reward
@@ -2946,6 +3023,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.rotCol(2,:), ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % 0 deg laps/reward
@@ -2961,6 +3039,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.rotCol(1,:), ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Rat velocity
@@ -2976,6 +3055,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.ratNowCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Robot velocity
@@ -2991,6 +3071,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.robNowCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Robot battery voltage
@@ -3006,6 +3087,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Cube battery voltage
@@ -3021,13 +3103,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Debug info
         btm = btm - 3*D.UI.fontSzTxtSml(2);
         pos = [pos_lft_dflt, btm, ...
             pos_wd_dflt, D.UI.fontSzTxtSml(2)*2.35];
-        D.UI.txtTimDebug = uicontrol('Style','text', ...
+        D.UI.txtPerfInf(9) = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','', ...
             'Units','Normalized', ...
@@ -3037,6 +3120,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Light', ...
+            'Visible','off', ...
             'FontSize', 6);
         
         % TIMER INFO
@@ -3067,7 +3151,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             0.01;
         pos = [pos_lft_dflt, btm, ...
             pos_wd_dflt, D.UI.fontSzTxtSml(2)*4];
-        D.UI.txtTimElspInf = uicontrol('Style','text', ...
+        D.UI.txtTimeInf(1) = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','', ...
             'Units','Normalized', ...
@@ -3077,13 +3161,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
+            'Visible','off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         
-        % Time start info
+        % Time start text
         btm = btm - 1.5*D.UI.fontSzTxtSml(2);
         pos = [pos_lft_dflt, btm, ...
             pos_wd_dflt, D.UI.fontSzTxtSml(2)*1];
-        D.UI.txtTimStrInf = uicontrol('Style','text', ...
+        D.UI.txtTimeInf(2) = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','', ...
             'Units','Normalized', ...
@@ -3093,10 +3178,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Light', ...
+            'Visible', 'off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
+        
+        % Time start edit
         pos = [pos(1)+ pos_wd_dflt*0.4, pos(2), ...
             pos_wd_dflt*0.55, pos(4)];
-        D.UI.editTimStrInf = uicontrol(...
+        D.UI.editTimeInf(1) = uicontrol(...
             'Parent',D.UI.tabICR,...
             'Units','normalized',...
             'Position',pos,...
@@ -3105,14 +3193,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtSml(1), ...
             'FontName','Monospaced', ...
             'Max', 1, ...
-            'Enable','on', ...
-            'Visible', 'off');
+            'Visible', 'off', ...
+            'Enable','on');
         
-        % Time stop info
+        % Time stop text
         btm = btm - D.UI.fontSzTxtSml(2);
         pos = [pos_lft_dflt, btm, ...
             pos_wd_dflt, D.UI.fontSzTxtSml(2)*1];
-        D.UI.txtTimEndInf = uicontrol('Style','text', ...
+        D.UI.txtTimeInf(3) = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','', ...
             'Units','Normalized', ...
@@ -3122,10 +3210,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName','Courier New', ...
             'FontWeight','Light', ...
+            'Visible', 'off', ...
             'FontSize', D.UI.fontSzTxtSml(1));
         pos = [pos(1)+pos_wd_dflt*0.4, pos(2), ...
             pos_wd_dflt*0.55, pos(4)];
-        D.UI.editTimEndInf = uicontrol(...
+        
+        % Time stop edit
+        D.UI.editTimeInf(2) = uicontrol(...
             'Parent',D.UI.tabICR,...
             'Units','normalized',...
             'Position',pos,...
@@ -3134,8 +3225,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtSml(1), ...
             'FontName','Monospaced', ...
             'Max', 1, ...
-            'Enable','on', ...
-            'Visible', 'off');
+            'Visible', 'off', ...
+            'Enable','on');
         
         %% ========================================================================
         
@@ -3252,11 +3343,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.NLX.rot_evt{1} = '-PostEvent Post_Rotation_0_Deg 205 0';
         D.NLX.rot_evt{2} = '-PostEvent Post_Rotation_40_Deg 206 0';
         
+        % Sleep 1
+        D.NLX.sleep_start_evt{1} = '-PostEvent Sleep_1_Start 207 0';
+        D.NLX.sleep_end_evt{1} = '-PostEvent Sleep_1_End 208 0';
+        
+        % Sleep 2
+        D.NLX.sleep_start_evt{2} = '-PostEvent Sleep_2_Start 209 0';
+        D.NLX.sleep_end_evt{2} = '-PostEvent Sleep_2_End 210 0';
+        
         % Reward Zoneet and Duration
         D.NLX.rew_evt = '-PostEvent Post_Reward_Zone:%d_Duration:%d 211 0';
         
         % Session end command string
-        D.NLX.ses_end_evt = '-PostEvent Post_Session_End 211 0';
+        D.NLX.ses_end_evt = '-PostEvent Post_Session_End 212 0';
         
         %% CONNECT TO NETCOM
         
@@ -3407,39 +3506,981 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
         D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
         
-        %% ENABLE SETUP PANEL ONCE CONNECTED
+    end
+
+% --------------------------TT TRACKING SETUP----------------------
+
+    function[] = TT_Track_Setup()
         
-        % Log/print
-        Console_Write('[NLX_Setup] RUNNING: Enable Setup Panel...');
+        %% ======================== SET PARAMETERS ========================
         
-        % Enable all setup stuff
-        Set_Panel_State(D.UI.panStup, 'Enable');
-        set(D.UI.popRat, 'Enable', 'on')
-        set(D.UI.popCond, 'Enable', 'on')
-        set(D.UI.popTask, 'Enable', 'on')
-        set(D.UI.popRewDel, 'Enable', 'on')
-        Set_Button_State(D.UI.toggCue, 'Enable');
-        Set_Button_State(D.UI.toggSnd, 'Enable');
-        Set_Button_State(D.UI.btnSetupDone, 'Enable');
-        Set_Panel_State(D.UI.panConsole, 'Enable');
-        Set_Panel_State(D.UI.panTimInf, 'Enable');
+        % Debugging
+        D.DB.doAutoSetTT = false;
+        D.DB.depthSet = 1; % (mm)
         
-        % Enable Quit
-        set(D.UI.btnQuitSes, 'Enable', 'on')
+        % Top directory
+        D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
         
-        % Log/print
-        Console_Write('[NLX_Setup] FINISHED: Enable Setup Panel')
+        % IO dirs
+        D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
+        D.DIR.log = fullfile(D.DIR.top,'IOfiles');
+        D.DIR.ioTT_IO = fullfile(D.DIR.ioTop, 'SessionData', 'TT_IO.mat');
+        % Image directory
+        D.DIR.img = fullfile(D.DIR.ioTop,'Images');
+        D.DIR.matFile = fullfile(D.DIR.img, 'Paxinos', 'procPax.mat');
+        D.DIR.pax{1} = fullfile(D.DIR.img, 'Paxinos', 'sag_lab');
+        D.DIR.pax{2} = fullfile(D.DIR.img, 'Paxinos', 'cor_lab');
+        D.DIR.pax{3} = fullfile(D.DIR.img, 'Paxinos', 'hor_lab');
+        
+        % Number of bundles
+        D.TT.nBundles = 2;
+        
+        % Cannula spacing (mm)
+        D.PAR.canSp = 0.3175;
+        
+        % TT diameter (mm)
+        D.PAR.ttDiam = 0.0254;
+        
+        % Track lines offset (mm)
+        D.UI.linOfst = 0.025;
+        
+        % Set plot lims [A-P,M-L,D-V] (mm)
+        D.UI.mmPlotLims = [...
+            3, -12; ...
+            0, 8; ...
+            0, -10];
+        
+        % Paxinos image dims [y_mm, x_mm]
+        D.PAR.mmPaxSize{1} = [11,21];
+        D.PAR.mmPaxSize{2} = [11,8];
+        D.PAR.mmPaxSize{3} = [8,21];
+        
+        % Paxinos image lims [x_min, x_max; y_min, y_max]
+        D.PAR.pxlPalLims{1} = [243, 3854; 420, 2311]; % sag
+        D.PAR.pxlPalLims{2} = [243, 2136; 247, 2842]; % cor
+        D.PAR.pxlPalLims{3} = [243, 3854; 250, 1631]; % hor
+        
+        % Strange sized pax cor images
+        D.PAR.pxlPalLims{4} = [206, 2099; 210, 2812]; % cor dumb
+        
+        % Image axis limits [A-P,M-L,D-V] (mm)
+        D.UI.mmPaxLims = [...
+            6, -15; ...
+            0, 8; ...
+            0, -11];
+        
+        % Paxinos view colors
+        D.UI.paxViewCol = [...
+            255, 198, 198; ... % red
+            198, 200, 255; ... % blue
+            198, 255, 201] / 255; % green
+        
+        % Plot state settings
+        D.UI.ttLegMrkWdth = [1,4];
+        D.UI.ttFaceAlph = [0.05, 1];
+        
+        %==========================================================================
+        
+        %% ================== IMPORT/FORMAT PAXINOS IMAGES ================
+        
+        % Load session data
+        T = load(D.DIR.ioTT_IO);
+        D.TT_IO = T.TT_IO;
+        clear T;
+        
+        % Get rat list
+        ind = D.TT_IO.Include_Run;
+        D.PAR.ratList = D.TT_IO.Properties.RowNames(ind);
+        D.PAR.ratList = regexprep(D.PAR.ratList, 'r', '');
+        D.PAR.ratList = [{'Select Rat'};D.PAR.ratList];
+        
+        % Get image stuff
+        for z_view = 1:3
+            
+            % Get image list
+            D.PAR.paxFiLabs{z_view} = dir(D.DIR.pax{z_view});
+            D.PAR.paxFiLabs{z_view} = {D.PAR.paxFiLabs{z_view}(:).name};
+            D.PAR.paxFiLabs{z_view} = ...
+                D.PAR.paxFiLabs{z_view}(cell2mat(cellfun(@(x) ~isempty(x), strfind(D.PAR.paxFiLabs{z_view}, 'img'), 'uni', false)));
+            
+            % Setup image matrix [m, n, 3]
+            D.UI.paxMat{z_view} = cell(1, length(D.PAR.paxFiLabs{z_view}));
+            
+            % Setup image handles
+            D.UI.h_paxImg{z_view} = gobjects(1,length(D.PAR.paxFiLabs{z_view}));
+            
+            % Setup image coordinates
+            D.TT.imgCoor{z_view} = NaN(1,length(D.PAR.paxFiLabs{z_view}));
+        end
+        
+        % Check if we already have processed image data
+        if exist(D.DIR.matFile, 'file')
+            load(D.DIR.matFile);
+            D.UI.paxMat = IMG_MAT; %#ok<NODEF>
+            D.TT.imgCoor = IMG_COORD; %#ok<NODEF>
+            
+        else
+            % Loop through paxinos directories
+            for z_view = 1:3
+                
+                % Loop through each image
+                for z_pax = 1:length(D.PAR.paxFiLabs{z_view})
+                    
+                    % Store
+                    D.UI.paxMat{z_view}{z_pax} = ...
+                        imread(fullfile(D.DIR.pax{z_view}, D.PAR.paxFiLabs{z_view}{z_pax}));
+                    
+                    % Handle stupid fucking pax bullshit
+                    if z_view == 2 && size(D.UI.paxMat{z_view}{z_pax},1) == 3300
+                        
+                        inc_x = D.PAR.pxlPalLims{4}(2,1):D.PAR.pxlPalLims{4}(2,2);
+                        inc_y = D.PAR.pxlPalLims{4}(1,1):D.PAR.pxlPalLims{4}(1,2);
+                        
+                    else
+                        inc_x = D.PAR.pxlPalLims{z_view}(2,1):D.PAR.pxlPalLims{z_view}(2,2);
+                        inc_y = D.PAR.pxlPalLims{z_view}(1,1):D.PAR.pxlPalLims{z_view}(1,2);
+                    end
+                    
+                    % Clip image
+                    D.UI.paxMat{z_view}{z_pax} = D.UI.paxMat{z_view}{z_pax}(inc_x, inc_y, :);
+                    
+                    % Get colored pixels
+                    color_ind = mean(diff(D.UI.paxMat{z_view}{z_pax},1,3),3) > 50;
+                    mono_ind = mean(D.UI.paxMat{z_view}{z_pax},3) < 250 & ~color_ind;
+                    
+                    % Create ind for each rgb colored pixels
+                    red_pxls = padarray(color_ind, [0,0,2], 'post');
+                    green_pxls = padarray(color_ind, [0,0,1], 'both');
+                    blue_pxls = padarray(color_ind, [0,0,2], 'pre');
+                    
+                    % Set monochrome cols to gray
+                    D.UI.paxMat{z_view}{z_pax}(repmat(mono_ind,[1,1,3])) = 127;
+                    
+                    % Set outline color
+                    D.UI.paxMat{z_view}{z_pax}(red_pxls) = D.UI.paxViewCol(z_view, 1)*255;
+                    D.UI.paxMat{z_view}{z_pax}(green_pxls) = D.UI.paxViewCol(z_view, 2)*255;
+                    D.UI.paxMat{z_view}{z_pax}(blue_pxls) = D.UI.paxViewCol(z_view, 3)*255;
+                    
+                    % Reseize image to 1pxl per 10 um
+                    D.UI.paxMat{z_view}{z_pax} = ...
+                        imresize(D.UI.paxMat{z_view}{z_pax}, D.PAR.mmPaxSize{z_view}*100);
+                    
+                    % Get coordinate info
+                    num_str = regexp(D.PAR.paxFiLabs{z_view}{z_pax}, 'lab_(-?\d?\d.\d\d).png', 'tokens');
+                    D.TT.imgCoor{z_view}(z_pax) = str2double(num_str{:});
+                    
+                    % Flip images
+                    D.UI.paxMat{z_view}{z_pax} = flip(D.UI.paxMat{z_view}{z_pax},1);
+                    D.UI.paxMat{z_view}{z_pax} = flip(D.UI.paxMat{z_view}{z_pax},2);
+                    
+                end
+                
+                % Sort
+                [D.TT.imgCoor{z_view}, sort_ind] = sort(D.TT.imgCoor{z_view});
+                D.UI.paxMat{z_view} = D.UI.paxMat{z_view}(sort_ind);
+            end
+            
+            % Save coordinate and image matrix
+            IMG_MAT = D.UI.paxMat; %#ok<NASGU>
+            IMG_COORD = D.TT.imgCoor; %#ok<NASGU>
+            save(D.DIR.matFile,  'IMG_MAT', 'IMG_COORD');
+            
+        end
+        
+        %==========================================================================
+        
+        %% ======================= SETUP TT TAB FIGURE ====================
+        
+        % Monitor positions
+        sc = get(0,'MonitorPositions');
+        [~, mon_ind] = sort(sc(:,1));
+        D.UI.monPos(1,:) = sc(mon_ind(1),:);
+        D.UI.monPos(2,:) = sc(mon_ind(2),:);
+        if size(sc,1) == 3
+            D.UI.monPos(3,:) = sc(mon_ind(3),:);
+        end
+        
+        % Add TT Track tab
+        D.UI.tabTT = uitab(D.UI.tabgp, ...
+            'Title', 'TT', ...
+            'BackgroundColor', [1, 1, 1]);
+        
+        % Switch tab
+        D.UI.tabgp.SelectedTab = D.UI.tabTT;
+        
+        % Figure position
+        D.UI.tabTTNormPos = get(D.UI.tabTT, 'Position');
+        set(D.UI.tabTT,'Units','Pixels');
+        D.UI.wdScale = (D.UI.tabTT.Position(4)/D.UI.tabTT.Position(3));
+        set(D.UI.tabTT,'Units','Normalized');
+        
+        % Border offset for all GUI features
+        D.UI.bordOffHt = 0.02;
+        D.UI.bordOffWd = D.UI.bordOffHt*D.UI.wdScale;
+        
+        % Main axis reserved space
+        ax_lfg_lim = D.UI.main_ax_bounds(1)+0.005;
+        
+        % Main axis actual pos
+        ax_lft = ax_lfg_lim + 2*D.UI.bordOffWd;
+        ax_wd = D.UI.tabTTNormPos(3) - ax_lft;
+        ax_ht = D.UI.tabTTNormPos(4) - 2*D.UI.bordOffHt;
+        ax_btm = 2*D.UI.bordOffHt;
+        D.UI.axe3dPos =  ...
+            [ax_lft, ax_btm, ax_wd, ax_ht];
+        
+        % Label axes lims
+        lm_str = {...
+            '|P|', '|A|'; ...
+            '|M|', '|L|'; ...
+            '|D|', '|V|'};
+        lm = NaN(3,2);
+        tk = cell(3,1);
+        tl = cell(3,1);
+        
+        % Get axis stuff
+        for z_view = 1:3
+            
+            % Get axis limits
+            lm(z_view,:) = [min(D.UI.mmPaxLims(z_view,:)), max(D.UI.mmPaxLims(z_view,:))]*100;
+            
+            % Get axis ticks
+            tk{z_view} = linspace(lm(z_view,1),lm(z_view,2),sum(abs(D.UI.mmPaxLims(z_view,:)))+1)';
+            
+            % Make axis tick labels
+            tl{z_view} = num2str(tk{z_view}/100);
+            tl{z_view}  = [repmat(blanks(3-size(tl{z_view} ,2)), size(tl{z_view} ,1), 1), tl{z_view}];
+            
+            % Label axes lims
+            tl{z_view}(tk{z_view}/100==min(D.UI.mmPlotLims(z_view,:)),:) = lm_str{z_view,1};
+            tl{z_view}(tk{z_view}/100==max(D.UI.mmPlotLims(z_view,:)),:) = lm_str{z_view,2};
+        end
+        
+        % Create axis
+        D.UI.axe3dH = axes(...
+            'Parent', D.UI.tabTT,...
+            'Units','Normalized',...
+            'Position',D.UI.axe3dPos,...
+            'XDir', 'Reverse', ...
+            'XLim', lm(1,:), ...
+            'YLim', lm(2,:), ...
+            'ZLim', lm(3,:), ...
+            'XTick', tk{1}, ...
+            'YTick', tk{2}, ...
+            'ZTick', tk{3}, ...
+            'XTickLabel', tl{1}, ...
+            'YTickLabel', tl{2}, ...
+            'ZTickLabel', tl{3}, ...
+            'Color', 'None', ...
+            'Visible', 'on');
+        hold on
+        box on
+        
+        % Specify rotation mat
+        img_rot = [ ...
+            deg2rad(90), 0, 0; ...
+            deg2rad(90), deg2rad(90), 0;
+            0, 0, 0
+            ];
+        
+        % Specify direction of translation
+        img_trans_x = [D.UI.mmPaxLims(1,2), 0, D.UI.mmPaxLims(1,2)] * 100;
+        img_trans_y = [D.UI.mmPaxLims(3,2), D.UI.mmPaxLims(3,2), 0] * 100;
+        img_trans_z = [-1, 1, 1];
+        
+        % Show each image on correct plane
+        for z_view = 1:3
+            for z_img = 1:length(D.PAR.paxFiLabs{z_view})
+                
+                % Get transform
+                zt = D.TT.imgCoor{z_view}(z_img) * 100 * img_trans_z(z_view);
+                p = hgtransform('Parent',D.UI.axe3dH);
+                rt = makehgtform(...
+                    'xrotate', img_rot(z_view,1), ...
+                    'yrotate', img_rot(z_view,2), ...
+                    'zrotate', img_rot(z_view,3), ...
+                    'translate',[img_trans_x(z_view), img_trans_y(z_view), zt]);
+                h = hgtransform('Matrix',rt);
+                set(h,'Parent',p)
+                
+                % Show image
+                D.UI.h_paxImg{z_view}(z_img) =  ...
+                    image(D.UI.paxMat{z_view}{z_img}, ...
+                    'Parent', h, ...
+                    'Visible', 'off');
+                
+                % Set alpha
+                D.UI.h_paxImg{z_view}(z_img).AlphaData = 0.75;
+            end
+        end
+        
+        % Set final plot lims
+        axis equal
+        set(D.UI.axe3dH, ...
+            'XLim',  100*[min(D.UI.mmPlotLims(1,:)), max(D.UI.mmPlotLims(1,:))], ...
+            'YLim',  100*[min(D.UI.mmPlotLims(2,:)), max(D.UI.mmPlotLims(2,:))], ...
+            'ZLim',  100*[min(D.UI.mmPlotLims(3,:)), max(D.UI.mmPlotLims(3,:))])
+        
+        % Remove unused images
+        exc_sag = D.TT.imgCoor{1}<min(D.UI.mmPlotLims(2,:)) | ...
+            D.TT.imgCoor{1}>max(D.UI.mmPlotLims(2,:));
+        exc_cor = D.TT.imgCoor{2}<min(D.UI.mmPlotLims(1,:)) | ...
+            D.TT.imgCoor{2}>max(D.UI.mmPlotLims(1,:));
+        exc_hor = D.TT.imgCoor{3}<min(D.UI.mmPlotLims(3,:)) | ...
+            D.TT.imgCoor{3}>max(D.UI.mmPlotLims(3,:));
+        D.TT.imgCoor{1}(exc_sag) = [];
+        D.TT.imgCoor{2}(exc_cor) = [];
+        D.TT.imgCoor{3}(exc_hor) = [];
+        D.UI.h_paxImg{1}(exc_sag) = [];
+        D.UI.h_paxImg{2}(exc_cor) = [];
+        D.UI.h_paxImg{3}(exc_hor) = [];
+        
+        light_pos = [max(D.UI.axe3dH.XLim), max(D.UI.axe3dH.YLim), max(D.UI.axe3dH.ZLim)];
+        D.UI.h_light(1) = light(D.UI.axe3dH, ...
+            'Style', 'local', ...
+            'Position', light_pos);
+        light_pos = [min(D.UI.axe3dH.XLim), min(D.UI.axe3dH.YLim), min(D.UI.axe3dH.ZLim)];
+        D.UI.h_light(2) = light(D.UI.axe3dH, ...
+            'Style', 'local', ...
+            'Position', light_pos);
+        
+        % Legend pos
+        ht = 0.125; % height of axis
+        wd = ht*D.UI.wdScale;
+        lft = sum(D.UI.axe3dPos([1,3])) - wd*2 - 2*D.UI.bordOffWd;
+        btm = D.UI.axe3dPos(2)+D.UI.bordOffHt;
+        D.UI.leg_1_pos = [lft , btm, wd, ht];
+        D.UI.leg_2_pos = D.UI.leg_1_pos;
+        D.UI.leg_2_pos(1) = sum(D.UI.leg_1_pos([1,3])) + D.UI.bordOffWd/2;
+        
+        % Create Bndle 1 legend axis
+        D.UI.axLeg(1) = axes(...
+            'Parent', D.UI.tabTT,...
+            'Units', 'Normalized',...
+            'Position', D.UI.leg_1_pos,...
+            'Color', [1 1 1],...
+            'XTick', [], ...
+            'YTick', [], ...
+            'Visible', 'on');
+        box on
+        hold on
+        
+        % Create Bundle 2 legend axis
+        D.UI.axLeg(2) = axes(...
+            'Parent', D.UI.tabTT,...
+            'Units', 'Normalized',...
+            'Position', D.UI.leg_2_pos,...
+            'Color', [1 1 1],...
+            'XTick', [], ...
+            'YTick', [], ...
+            'Visible', 'on');
+        box on
+        hold on
+        
+        % Create a backround axis
+        lft = D.UI.leg_1_pos(1)-D.UI.bordOffWd;
+        btm = D.UI.axe3dPos(2);
+        wd = wd*2 + D.UI.bordOffWd*2.5;
+        ht = ht + D.UI.bordOffHt*3;
+        D.UI.axLegBack = copyobj(D.UI.axLeg(1),D.UI.tabTT);
+        D.UI.axLegBack.Position = [lft , btm, wd, ht];
+        
+        % Orientation strings
+        D.PAR.dirVec = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
+            {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
+        
+        % Move legend to top
+        uistack(D.UI.axLeg,'top')
+        
+        %==========================================================================
+        
+        %% ======================= SETUP TT TAB OBJECTS ===================
+        
+        % ------------------------------ DEFAULTS ---------------------------------
+        
+        % default width pos
+        D.UI.dfltPanWd = D.UI.main_ax_bounds(1);
+        % default object spacing
+        D.UI.dfltSp = 0.01;
+        
+        % ------------------------ PAXINOS VIEW CONTROLS --------------------------
+        
+        % Add Yaw (z axis) slider along bottom
+        wd = D.UI.axe3dPos(3) - D.UI.bordOffWd;
+        ht = D.UI.bordOffHt;
+        lft = ax_lfg_lim + 2*D.UI.bordOffWd;
+        btm = 0;
+        pos = [lft, btm, wd, ht];
+        D.UI.sldYaw = uicontrol('Style', 'slider',...
+            'Parent', D.UI.tabTT, ...
+            'Units', 'Normalized', ...
+            'Callback', {@Set3dView},...
+            'UserData', 0, ...
+            'Min',-90,'Max',90, ...
+            'Value',0,...
+            'SliderStep', [1/180,45/180], ...
+            'Visible', 'on',...
+            'Enable', 'on',...
+            'Position',  pos);
+        
+        % Add Pitch (x axis) slider along left
+        wd = D.UI.bordOffWd;
+        ht = D.UI.axe3dPos(4) - D.UI.bordOffHt;
+        btm = D.UI.bordOffHt*2;
+        lft = ax_lfg_lim;
+        pos = [lft, btm, wd, ht];
+        D.UI.sldPitch = uicontrol('Style', 'slider',...
+            'Parent', D.UI.tabTT, ...
+            'Units', 'Normalized', ...
+            'Callback', {@Set3dView},...
+            'UserData', 0, ...
+            'Min',-90,'Max',90, ...
+            'Value',0,...
+            'SliderStep', [1/180,45/180], ...
+            'Visible', 'on',...
+            'Enable', 'on',...
+            'Position',  pos);
+        
+        % Add rotate option
+        D.UI.mouseRotView = rotate3d(D.UI.axe3dH);
+        set(D.UI.mouseRotView, ...
+            'ActionPostCallback', {@Set3dView},...
+            'Enable', 'on')
+        
+        % Add setview button
+        D.UI.btnSetView(1) = uicontrol('style','togglebutton', ...
+            'Parent', D.UI.tabTT, ...
+            'Enable', 'On', ...
+            'UserData', 1, ...
+            'Units', 'Normalized', ...
+            'FontName',D.UI.btnFont(1),...
+            'ForegroundColor', [0.1,0.1,0.1], ...
+            'FontWeight','Bold',...
+            'FontSize',D.UI.fontSzBtnLrg(1));
+        
+        % Create additional set view buttons
+        D.UI.btnSetView(2) = copyobj(D.UI.btnSetView(1),D.UI.tabTT);
+        D.UI.btnSetView(3) = copyobj(D.UI.btnSetView(1),D.UI.tabTT);
+        D.UI.btnSetView(4) = copyobj(D.UI.btnSetView(1),D.UI.tabTT);
+        
+        % Change string and user data
+        set(D.UI.btnSetView(1), 'String', 'S', 'UserData', 1, 'BackgroundColor', D.UI.paxViewCol(1,:));
+        set(D.UI.btnSetView(2), 'String', 'C', 'UserData', 2, 'BackgroundColor', D.UI.paxViewCol(2,:));
+        set(D.UI.btnSetView(3), 'String', 'H', 'UserData', 3, 'BackgroundColor', D.UI.paxViewCol(3,:));
+        set(D.UI.btnSetView(4), 'String', 'O', 'UserData', 4, 'BackgroundColor', [0.8,0.8,0.8]);
+        
+        % Change pos
+        ht = D.UI.bordOffHt;
+        wd = D.UI.bordOffWd;
+        lft = ax_lfg_lim;
+        btm = 0;
+        pos = [lft, btm, wd, ht];
+        set(D.UI.btnSetView, 'Position', pos);
+        D.UI.btnSetView(1).Position(1) = pos(1)+pos(3);
+        D.UI.btnSetView(3).Position(2) = pos(2)+pos(4);
+        D.UI.btnSetView(4).Position(1:2) = [D.UI.btnSetView(1).Position(1), D.UI.btnSetView(3).Position(2)];
+        
+        % Set callback
+        set(D.UI.btnSetView, 'Callback', {@Set3dView});
+        
+        % Set view
+        Set3dView(D.UI.btnSetView(4));
+        
+        % ----------------------- PAXINOS IMAGE CONTROLS --------------------------
+        
+        % Switch image button
+        swtch_txt_wdth = 0.0625;
+        swtch_sld_wdth = 0.16;
+        swtch_ht = 0.025;
+        swtch_lft = ax_lfg_lim + D.UI.bordOffHt*2;
+        swtch_btm = D.UI.axe3dPos(2)+D.UI.bordOffHt/2 + 0.025*2 + swtch_ht;
+        
+        % Switch image text
+        pos = [swtch_lft , swtch_btm, swtch_txt_wdth, swtch_ht];
+        D.UI.txtImgCorr(1) = uicontrol('Style','text', ...
+            'Parent', D.UI.tabTT, ...
+            'String', ' ', ...
+            'Units', 'Normalized', ...
+            'Position', pos, ...
+            'HorizontalAlignment', 'Left',...
+            'ForegroundColor', [0.1,0.1,0.1], ...
+            'FontName', D.UI.txtFont,...
+            'FontWeight', 'Bold',...
+            'FontSize', D.UI.fontSzTxtHuge(1));
+        
+        % Switch image slider
+        pos = [pos(1)+pos(3), pos(2), swtch_sld_wdth, swtch_ht];
+        D.UI.sldSwtchImg(1) = uicontrol('Style', 'slider',...
+            'Parent', D.UI.tabTT, ...
+            'Units', 'Normalized', ...
+            'Callback', {@Set3dView},...
+            'Min', 1, ...
+            'Visible', 'on',...
+            'Enable', 'on',...
+            'Position',  pos);
+        
+        % Create slider and text copies
+        D.UI.txtImgCorr(2) = copyobj(D.UI.txtImgCorr(1),D.UI.tabTT);
+        D.UI.txtImgCorr(3) = copyobj(D.UI.txtImgCorr(1),D.UI.tabTT);
+        D.UI.sldSwtchImg(2) = copyobj(D.UI.sldSwtchImg(1),D.UI.tabTT);
+        D.UI.sldSwtchImg(3) = copyobj(D.UI.sldSwtchImg(1),D.UI.tabTT);
+        
+        % Change slider and text positions
+        D.UI.txtImgCorr(2).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2);
+        D.UI.sldSwtchImg(2).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2);
+        D.UI.txtImgCorr(3).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2)*2;
+        D.UI.sldSwtchImg(3).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2)*2;
+        
+        % Loop through each view
+        for z_v = 1:3
+            
+            % Change text backround color
+            set(D.UI.txtImgCorr(z_v), 'BackgroundColor', D.UI.paxViewCol(z_v,:))
+            
+            % Set user data
+            set(D.UI.sldSwtchImg(z_v), 'UserData', z_v);
+            
+            % Set slider steps
+            n_img = length(D.TT.imgCoor{z_v});
+            set(D.UI.sldSwtchImg(z_v), ...
+                'Max', n_img, ...
+                'SliderStep', [1/n_img, 5*(1/n_img)], ...
+                'Value', floor(n_img/2));
+        end
+        
+        % Set callback
+        set(D.UI.sldSwtchImg, 'Callback', {@SldSwtchImg});
+        
+        % Set to first image
+        SldSwtchImg(D.UI.sldSwtchImg(1));
+        SldSwtchImg(D.UI.sldSwtchImg(2));
+        SldSwtchImg(D.UI.sldSwtchImg(3));
+        
+        % --------------------- SETUP, SAVE, QUIT CONTROLS ------------------------
+        
+        % Load popup
+        D.UI.posPopLoad = [0, D.UI.tabTTNormPos(4)-D.UI.bordOffHt-0.005, D.UI.dfltPanWd, D.UI.bordOffHt];
+        D.UI.popLoadRatTTInf = uicontrol('Style','popupmenu', ...
+            'Parent', D.UI.tabTT, ...
+            'Enable', 'On', ...
+            'String', D.PAR.ratList,...
+            'Callback', {@PopLoadRatTTInf},...
+            'FontName', D.UI.popFont,...
+            'UserData', 1, ...
+            'Units', 'Normalized', ...
+            'Position', D.UI.posPopLoad, ...
+            'FontWeight', 'Bold',...
+            'FontSize', D.UI.fontSzPop(1));
+        
+        % Save button copy
+        D.UI.btnSaveLogTT =  copyobj(D.UI.btnSaveSes, D.UI.tabTT);
+        set(D.UI.btnSaveLogTT, 'Callback', {@BtnSaveLogTT});
+        
+        % Quit button copy
+        D.UI.btnQuitSes(2) =  copyobj(D.UI.btnQuitSes(1), D.UI.tabTT);
+        set(D.UI.btnQuitSes(2), 'Callback', {@BtnQuitSes});
+        
+        % ------------------------ TT HIDE SHOW TOGGLE ----------------------------
+        
+        % Get eye icon
+        wd = D.UI.bordOffWd;
+        ht = D.UI.bordOffHt;
+        %eye_icon = imread(fullfile(D.DIR.img, 'Icons', 'eyeicon.png'));
+        %eye_icon = imresize(eye_icon, [FigGroupH.Position(3)*wd*0.625, FigGroupH.Position(4)*ht*0.625]);
+        D.UI.toggHideTT(1) = uicontrol('style','togglebutton', ...
+            'Parent', D.UI.tabTT, ...
+            'Units', 'Normalized', ...
+            'String', sprintf('%c', char(216)),...
+            'FontName', D.UI.btnFont,...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontWeight', 'Bold',...
+            'FontSize',  D.UI.fontSzBtnMed(1), ...
+            'Enable', 'off', ...
+            'UserData', false, ...
+            'Value', 0);
+        
+        % Copy button
+        D.UI.toggHideTT(2) = copyobj(D.UI.toggHideTT(1), D.UI.tabTT);
+        
+        % Set values
+        set(D.UI.toggHideTT(1), ...
+            'Position', [D.UI.leg_1_pos(1), D.UI.leg_1_pos(2)+ D.UI.leg_1_pos(4), wd, ht], ...
+            'UserData', 1);
+        set(D.UI.toggHideTT(2), ...
+            'Position', [D.UI.leg_2_pos(1), D.UI.leg_2_pos(2)+D.UI.leg_2_pos(4), wd, ht], ...
+            'UserData', 2);
+        
+        % Set callback
+        set(D.UI.toggHideTT, 'Callback', {@ToggHideShowBndl});
+        
+        % -------------------------- PANEL POSITIONS ------------------------------
+        
+        % Panel tt select
+        pan_ht = 0.385 - D.UI.bordOffHt;
+        D.UI.tt_tab_2_select_pan_pos(1,:) = ...
+            [0,  ...
+            D.UI.posPopLoad(2) - pan_ht - D.UI.dfltSp, ...
+            D.UI.dfltPanWd/2, ...
+            pan_ht];
+        D.UI.tt_tab_2_select_pan_pos(2,:) = D.UI.tt_tab_2_select_pan_pos(1,:);
+        D.UI.tt_tab_2_select_pan_pos(2,1) = D.UI.tt_tab_2_select_pan_pos(1,3);
+        
+        % Panel tt track
+        pan_ht = D.UI.tt_tab_2_select_pan_pos(1,2) - 2*D.UI.bordOffHt - D.UI.dfltSp*2 - 0.045;
+        D.UI.tt_track_pan_pos = ...
+            [0,  ...
+            0.045 + 0.01, ...
+            D.UI.dfltPanWd, ...
+            pan_ht];
+        
+        % ------------------------- TT SELECT CONTROLS ----------------------------
+        
+        % Create TT select pannel
+        for z_bndl = 1:D.TT.nBundles
+            
+            % Add bundle pannel
+            D.UI.panSelectTT(z_bndl) = uipanel(...
+                'Parent', D.UI.tabTT,...
+                'Units', 'Normalized',...
+                'BorderType', 'line',...
+                'BorderWidth', 4,...
+                'FontSize', D.UI.fontSzTxtLrg(1),...
+                'FontWeight','Bold', ...
+                'FontName', D.UI.titleFont, ...
+                'BackgroundColor', D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.disabledCol, ...
+                'HighlightColor', D.UI.disabledCol, ...
+                'TitlePosition', 'centertop',...
+                'UserData', [],...
+                'Clipping', 'on',...
+                'Position', D.UI.tt_tab_2_select_pan_pos(z_bndl,:));
+        end
+        
+        % Add action buttons
+        ht = D.UI.bordOffHt;
+        lft = 0;
+        btm = D.UI.tt_tab_2_select_pan_pos(1,2) - ht;
+        wd = D.UI.dfltPanWd/2;
+        pos = [lft, btm, wd, ht];
+        D.UI.toggActionTT(1) = uicontrol('style','togglebutton', ...
+            'Parent', D.UI.tabTT, ...
+            'Units', 'Normalized', ...
+            'Enable', 'off', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight', 'Bold', ...
+            'FontSize', D.UI.fontSzBtnLrg(1), ...
+            'Value', 0);
+        
+        % Copy main button
+        D.UI.toggActionTT(2) = copyobj(D.UI.toggActionTT(1), D.UI.tabTT);
+        
+        % Set main position
+        D.UI.toggActionTT(2).Position(2) = D.UI.toggActionTT(1).Position(2) - ht;
+        
+        % Set main stuff
+        set(D.UI.toggActionTT(1), ...
+            'UserData', 1, ...
+            'String', 'Track TTs')
+        set(D.UI.toggActionTT(2), ...
+            'UserData', 2, ...
+            'String', 'Plot Spikes')
+        
+        % Set callback
+        set(D.UI.toggActionTT, 'Callback', {@ToggActionTT})
+        
+        % Copy for sub buttons
+        D.UI.toggSubActionTT(1,1) = copyobj(D.UI.toggActionTT(1), D.UI.tabTT);
+        D.UI.toggSubActionTT(1,2) = copyobj(D.UI.toggActionTT(1), D.UI.tabTT);
+        D.UI.toggSubActionTT(2,1) = copyobj(D.UI.toggActionTT(2), D.UI.tabTT);
+        D.UI.toggSubActionTT(2,2) = copyobj(D.UI.toggActionTT(2), D.UI.tabTT);
+        
+        % Set user data
+        set(D.UI.toggSubActionTT(:,1), 'UserData', 1);
+        set(D.UI.toggSubActionTT(:,2), 'UserData', 2);
+        
+        % Set postions and strings for 'Track TTs' sub button
+        D.UI.toggSubActionTT(1,1).String = 'Spkr';
+        D.UI.toggSubActionTT(1,1).Position(1) = D.UI.toggSubActionTT(1,1).Position(1) + wd;
+        D.UI.toggSubActionTT(1,1).Position(3) = wd/2;
+        D.UI.toggSubActionTT(1,2).String = 'Head';
+        D.UI.toggSubActionTT(1,2).Position(1) = D.UI.toggSubActionTT(1,2).Position(1) + 1.5*wd;
+        D.UI.toggSubActionTT(1,2).Position(3) = wd/2;
+        
+        % Set postions and strings for 'Track TTs' sub button
+        D.UI.toggSubActionTT(2,1).String = 'Clust';
+        D.UI.toggSubActionTT(2,1).Position(1) = D.UI.toggSubActionTT(2,1).Position(1) + wd;
+        D.UI.toggSubActionTT(2,1).Position(3) = wd/2;
+        D.UI.toggSubActionTT(2,2).String = 'Occ';
+        D.UI.toggSubActionTT(2,2).Position(1) = D.UI.toggSubActionTT(2,2).Position(1) + 1.5*wd;
+        D.UI.toggSubActionTT(2,2).Position(3) = wd/2;
+        
+        % Set callback
+        set(D.UI.toggSubActionTT(1,:), 'Callback', {@ToggHearTT})
+        set(D.UI.toggSubActionTT(2,:), 'Callback', {@ToggPlotTypeTT});
+        
+        % --------------------------- TT TURN CONTROLS ----------------------------
+        
+        % TT settings pannel
+        D.UI.panTrackTT = uipanel(...
+            'Parent', D.UI.tabTT,...
+            'Units', 'Normalized',...
+            'BorderType', 'line',...
+            'BorderWidth', 4,...
+            'FontSize', D.UI.fontSzTxtLrg(1),...
+            'FontWeight','Bold', ...
+            'FontName', D.UI.titleFont, ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.disabledCol, ...
+            'HighlightColor', D.UI.disabledCol, ...
+            'Title','TTxx', ...
+            'TitlePosition', 'centertop',...
+            'Clipping', 'on',...
+            'Position', D.UI.tt_track_pan_pos);
+        
+        % TT save state
+        D.UI.ttStateStr{1} = 'Prior Orientation & Depth';
+        D.UI.ttStateStr{2} = 'New Orientation & Depth';
+        
+        % Plot default hight
+        dflt_ht = ((1-0.001)/10)*0.8;
+        % Plot defualt left from pan
+        dflt_lf = [0.001, 0.5];
+        % Plot defualt width
+        dflt_wd = 1/2-0.002;
+        % Plot default bottom ps vector
+        dflt_btm = linspace(1-dflt_ht*0.25, dflt_ht*0.25, 11);
+        
+        % Create orientation text
+        ps = [dflt_lf(1), dflt_btm(2), dflt_wd, dflt_ht];
+        D.UI.txtPanTT(1) = uicontrol(...
+            'Style', 'text', ...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontName', D.UI.txtFont,...
+            'FontSize', D.UI.fontSzTxtSml(1),...
+            'FontWeight', 'Bold',...
+            'HorizontalAlignment', 'left',...
+            'Position', ps, ...
+            'String', sprintf('New Screw\r\nOrientation'),...
+            'Visible', 'off');
+        
+        % Create enter orientation popup-menue object
+        ps = [dflt_lf(2), dflt_btm(2), dflt_wd, dflt_ht];
+        D.UI.popOr = uicontrol(...
+            'Style', 'popupmenu',...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'FontName', D.UI.popFont,...
+            'BackgroundColor', [1 1 1],...
+            'FontSize', D.UI.fontSzPop(1),...
+            'Position', ps,...
+            'String', D.PAR.dirVec,...
+            'Enable', 'off', ...
+            'Visible', 'off', ...
+            'Value', 1);
+        
+        % Create enter number of rotations text
+        ps = [dflt_lf(1), dflt_btm(3), dflt_wd, dflt_ht];
+        D.UI.txtPanTT(2) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
+        set(D.UI.txtPanTT(2), ...
+            'Position', ps,...
+            'String', sprintf('Number of\r\nFull Turns'))
+        % Create number of rotations popup-menue object
+        ps = [dflt_lf(2), dflt_btm(3), dflt_wd, dflt_ht];
+        D.UI.popTrn = uicontrol(...
+            'Style', 'popupmenu',...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'FontName', D.UI.popFont,...
+            'BackgroundColor', [1 1 1],...
+            'FontSize', D.UI.fontSzPop(1),...
+            'Position', ps,...
+            'String', num2cell((0:20)'),...
+            'Enable', 'off', ...
+            'Visible', 'off', ...
+            'Value', 1);
+        
+        % Create direction text
+        ps = [dflt_lf(1), dflt_btm(4), dflt_wd, dflt_ht];
+        D.UI.txtPanTT(3) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
+        set(D.UI.txtPanTT(3), ...
+            'Position', ps,...
+            'String', sprintf('TT Lowering\r\nDirection'))
+        % Create direction popup-menue object
+        ps = [dflt_lf(2), dflt_btm(4), dflt_wd, dflt_ht];
+        D.UI.popDir = uicontrol(...
+            'Style', 'popupmenu',...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'FontName', D.UI.popFont,...
+            'BackgroundColor', [1 1 1],...
+            'FontSize', D.UI.fontSzPop(1),...
+            'Position', ps,...
+            'String', {'Down'; 'Up'},...
+            'Enable', 'off', ...
+            'Visible', 'off', ...
+            'Value', 1);
+        
+        % Create ref text
+        ps = [dflt_lf(1), dflt_btm(5), dflt_wd, dflt_ht];
+        D.UI.txtPanTT(4) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
+        set(D.UI.txtPanTT(4), ...
+            'Position', ps,...
+            'String', sprintf('TT\r\nReference'))
+        % Create ref popup-menue object
+        ps = [dflt_lf(2), dflt_btm(5), dflt_wd, dflt_ht];
+        D.UI.popRefTT = uicontrol(...
+            'Style', 'popupmenu',...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'FontName', D.UI.popFont,...
+            'BackgroundColor', [1 1 1],...
+            'FontSize', D.UI.fontSzPop(1),...
+            'Position', ps,...
+            'String', {'Down'; 'Up'},...
+            'Enable', 'off', ...
+            'Visible', 'off', ...
+            'Value', 1);
+        
+        % Create new notes text box object
+        ps = [dflt_lf(1), dflt_btm(8), dflt_wd*2, dflt_ht*1.5];
+        D.UI.editNewNoteTT = uicontrol(...
+            'Style', 'edit',...
+            'Max', 100, ...
+            'Parent', D.UI.panTrackTT,...
+            'BackgroundColor', [1 1 1],...
+            'HorizontalAlignment', 'left',...
+            'Units', 'Normalized',...
+            'FontSize', D.UI.fontSzTxtSml(1),...
+            'Visible', 'off', ...
+            'Position', ps);
+        
+        % Create old notes text box object
+        ps = [dflt_lf(1), ps(2)+ps(4), dflt_wd*2, dflt_ht*1.5];
+        D.UI.editOldNoteTT = uicontrol(...
+            'Style','edit',...
+            'Max', 100, ...
+            'Parent', D.UI.panTrackTT,...
+            'BackgroundColor', [1 1 1],...
+            'ForegroundColor', [0.5,0.5,0.5], ...
+            'HorizontalAlignment', 'left',...
+            'Enable', 'inactive', ...
+            'Units', 'Normalized',...
+            'FontSize', D.UI.fontSzTxtSml(1),...
+            'Visible', 'off', ...
+            'Position', ps);
+        
+        % Create notes heading
+        ps = [dflt_lf(1), ps(2)+ps(4), dflt_wd, dflt_ht/2];
+        D.UI.txtPanTT(5) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
+        set(D.UI.txtPanTT(5), ...
+            'Position', ps,...
+            'String', 'Notes')
+        
+        % Create save TT data button object
+        ps = [0.25, dflt_btm(9), 0.5, dflt_ht];
+        D.UI.btnSaveTT = uicontrol(...
+            'Style','push', ...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'Callback',{@BtnSaveTT},...
+            'UserData', [0,0],...
+            'FontSize', D.UI.fontSzBtnLrg(1),...
+            'FontWeight', 'Bold',...
+            'Position', ps,...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'Enable', 'off', ...
+            'Visible', 'off', ...
+            'String', 'Save xx');
+        
+        % Create bottom sub-pannel
+        lft = 0.05;
+        wd = dflt_wd*2 - lft*2;
+        ps = [lft, dflt_btm(end), wd, dflt_ht*2];
+        D.UI.spanTT = uibuttongroup(...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'FontSize', D.UI.fontSzTxtSml(1),...
+            'HighlightColor', D.UI.disabledCol,...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ShadowColor', [0.5,0.5,0.5],...
+            'FontWeight', 'Bold',...
+            'Title', D.UI.ttStateStr{1},...
+            'Clipping', 'off',...
+            'Position', ps,...
+            'Visible', 'off');
+        
+        % Create TT depth text object
+        lft = lft*2;
+        wd = dflt_wd*2 - lft*2;
+        btm = dflt_btm(end)+0.01;
+        ps = [lft, btm, wd, dflt_ht*0.5];
+        D.UI.txtPanTT(7) = uicontrol(...
+            'Style', 'text', ...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontName', D.UI.txtFont,...
+            'FontSize', D.UI.fontSzTxtHuge(1),...
+            'FontWeight', 'Bold',...
+            'HorizontalAlignment', 'center',...
+            'Position', ps,...
+            'String', 'XX',...
+            'Visible', 'off');
+        
+        % Create TT orientation text object
+        ps = [ps(1), btm+dflt_ht*0.75, ps(3), dflt_ht*0.5];
+        D.UI.txtPanTT(6) = uicontrol(...
+            'Style', 'text', ...
+            'Parent', D.UI.panTrackTT,...
+            'Units', 'Normalized',...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontName', D.UI.txtFont,...
+            'FontSize', D.UI.fontSzTxtHuge(1),...
+            'FontWeight', 'Bold',...
+            'HorizontalAlignment', 'center',...
+            'Position', ps,...
+            'String', 'XX',...
+            'Visible', 'off');
+        
+        % Set text colors
+        set(D.UI.txtPanTT, 'ForegroundColor', D.UI.disabledCol)
+        
+        % Handle stand alone run
+        if ~isTTtrackSolo
+            
+            % Load rat
+            D.UI.popLoadRatTTInf.Value = find(ismember(D.PAR.ratList, D.PAR.ratLab(2:end)));
+            PopLoadRatTTInf(D.UI.popLoadRatTTInf);
+            
+            % Switch tab back
+            D.UI.tabgp.SelectedTab = D.UI.tabICR;
+            
+            % Move tt select panel stuff
+            TabGrpChange();
+        end
+        
+        
+        
+        %==========================================================================
         
     end
 
 % --------------------------FINISH NLX SETUP------------------------
 
-    function Finish_Ephys_Setup()
-        
-        %% Finish Cheetah Setup
+    function Finish_NLX_Setup()
         
         % Log/print
-        Console_Write('[Finish_Ephys_Setup] RUNNING: Finalize NLX Setup...');
+        Console_Write('[Finish_NLX_Setup] RUNNING: Finalize NLX Setup...');
         
         % Find current NLX recording directory
         dirs = dir(D.DIR.nlxTempTop);
@@ -3464,10 +4505,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Determine which config file to load
         if ~D.F.implant_session && ~isTTtrackSolo
             
-            % Load behavior config
-            SendM2NLX('-ProcessConfigurationFile AWL-ICR_Behavior.cfg');
+            % Load behavior tracking config
+            SendM2NLX('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
             
         else
+            
+            % Load implant tracking config
+            SendM2NLX('-ProcessConfigurationFile AWL-ICR_Implant_Tracking.cfg');
             
             % Load main ephys config file if not loaded
             [~, ~, das_types] = NlxGetDASObjectsAndTypes;
@@ -3530,15 +4574,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if doExit
             return
         else
-            Console_Write(sprintf('[Finish_Ephys_Setup] FINISHED: Finalize NLX Setup: Stream Status: vt1=%d vt2=%d evt=%d', s1, s2, s3));
+            Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Finalize NLX Setup: Stream Status: vt1=%d vt2=%d evt=%d', s1, s2, s3));
             clear s1 s2 s3;
         end
         
-        %% Run Ephys Specific Opperations
+    end
+
+% --------------------------FINISH EPHYS SETUP------------------------
+
+    function Finish_Ephys_Setup()
         
-        % Run SpikeSort3D.exe
+        %% Run SpikeSort3D.exe
         if D.F.implant_session
-            Console_Write('[Finish_Ephys_Setup] RUNNING: Open SpikeSort3D.exe...');
+            Console_Write('[Finish_NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
             
             % Check if already open
             [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
@@ -3573,100 +4621,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Log/print status
             if isSS3DOpen
-                Console_Write('[Finish_Ephys_Setup] FINISHED: Open SpikeSort3D.exe');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Open SpikeSort3D.exe');
             else
-                Console_Write('**WARNING** [Finish_Ephys_Setup] ABORTED: Confirm Cheetah.exe Running');
+                Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Confirm Cheetah.exe Running');
             end
             
         end
+        
+        %% Setup Ephys Plots
         
         % Create occ plot axes
         if D.F.implant_session
             
             % Log/print
-            Console_Write('[Finish_Ephys_Setup] RUNNING: Setup Cluster Objects...');
+            Console_Write('[TT_Track_Setup] RUNNING: Setup Cluster Objects...');
             
-            % Copy tt pan entries entries
-            D.UI.toggTT(:,:,2) = gobjects(size(D.UI.toggTT(:,:)));
-            D.UI.btnSubClust(:,:,:,2) = gobjects(size(D.UI.btnSubClust(:,:,:)));
-            D.UI.panSelectTT(1,2) = copyobj(D.UI.panSelectTT(1,1), D.UI.tabICR);
-            D.UI.panSelectTT(2,2) = copyobj(D.UI.panSelectTT(2,1), D.UI.tabICR);
-            D.UI.toggHearSide(:,:,:,2) = gobjects(size(D.UI.toggHearSide(:,:,:)));
-            D.UI.toggHearChan(:,:,:,:,2) = gobjects(size(D.UI.toggHearChan(:,:,:,:)));
-            
-            % Loop through each bundle
-            for z_b = 1:D.TT.nBundles
-                
-                % Set panel position
-                set(D.UI.panSelectTT(z_b,2), ...
-                    'Position', D.UI.tt_select_pan_copy_pos(z_b,:))
-                
-                % Looop through each TT
-                for z_tt = 1:D.TT.nTT(z_b)
-                    
-                    % Copy button
-                    D.UI.toggTT(z_b,z_tt,2) = ...
-                        copyobj(D.UI.toggTT(z_b,z_tt,1), D.UI.panSelectTT(z_b,2));
-                    
-                    % Bail if ref
-                    if ~isempty(strfind(D.TT.ttFlds{z_b,z_tt}, 'R'))
-                        continue
-                    end
-                    
-                    % Copy togg clust for ICR_GUI
-                    for z_c = 1:10
-                        D.UI.btnSubClust(z_b,z_tt,z_c,2) = ...
-                            copyobj(D.UI.btnSubClust(z_b,z_tt,z_c,1), D.UI.tabICR);
-                        set(D.UI.btnSubClust(z_b,z_tt,z_c,2), 'Parent', D.UI.panSelectTT(z_b,2));
-                    end
-                    
-                    % Copy hear toggles
-                    for z_sn = 1:2
-                        
-                        % Copy hear side toggles
-                        D.UI.toggHearSide(z_b,z_tt,z_sn,2) = ...
-                            copyobj(D.UI.toggHearSide(z_b,z_tt,z_sn,1), D.UI.panSelectTT(z_b,2));
-                        
-                        % Copy hear chan toggles
-                        for z_chan = 1:4
-                            D.UI.toggHearChan(z_b,z_tt,z_chan,z_sn,2) = ...
-                                copyobj(D.UI.toggHearChan(z_b,z_tt,z_chan,z_sn,1), D.UI.panSelectTT(z_b,2));
-                        end
-                        
-                    end
-                    
-                end
-                
-            end
-            
-            % Copy action buttons
-            D.UI.toggActionTT(:,2) = gobjects(size(D.UI.toggActionTT));
-            D.UI.toggActionTT(1,2) = copyobj(D.UI.toggActionTT(1,1), D.UI.tabICR);
-            D.UI.toggActionTT(2,2) = copyobj(D.UI.toggActionTT(2,1), D.UI.tabICR);
-            D.UI.toggSubActionTT(:,:,2) = gobjects(size(D.UI.toggSubActionTT));
-            D.UI.toggSubActionTT(1,1,2) = copyobj(D.UI.toggSubActionTT(1,1,1), D.UI.tabICR);
-            D.UI.toggSubActionTT(1,2,2) = copyobj(D.UI.toggSubActionTT(1,2,1), D.UI.tabICR);
-            D.UI.toggSubActionTT(2,1,2) = copyobj(D.UI.toggSubActionTT(2,1,1), D.UI.tabICR);
-            D.UI.toggSubActionTT(2,2,2) = copyobj(D.UI.toggSubActionTT(2,2,1), D.UI.tabICR);
-            
-            % Set ephys button positions
-            lft_shft = D.UI.panSelectTT(1,2).Position(1) - D.UI.panSelectTT(1,1).Position(1);
-            btm_shft = D.UI.panSelectTT(1,2).Position(2) - D.UI.panSelectTT(1,1).Position(2);
-            D.UI.toggActionTT(1,2).Position([1,2]) = D.UI.toggActionTT(1,2).Position([1,2]) + [lft_shft, btm_shft];
-            D.UI.toggActionTT(2,2).Position([1,2]) = D.UI.toggActionTT(2,2).Position([1,2]) + [lft_shft, btm_shft];
-            D.UI.toggSubActionTT(1,1,2).Position([1,2]) = D.UI.toggSubActionTT(1,1,2).Position([1,2]) + [lft_shft, btm_shft];
-            D.UI.toggSubActionTT(1,2,2).Position([1,2]) = D.UI.toggSubActionTT(1,2,2).Position([1,2]) + [lft_shft, btm_shft];
-            D.UI.toggSubActionTT(2,1,2).Position([1,2]) = D.UI.toggSubActionTT(2,1,2).Position([1,2]) + [lft_shft, btm_shft];
-            D.UI.toggSubActionTT(2,2,2).Position([1,2]) = D.UI.toggSubActionTT(2,2,2).Position([1,2]) + [lft_shft, btm_shft];
-            
-            % Set callback
-            set(D.UI.toggActionTT, 'Callback', {@ToggActionTT})
-            set(D.UI.toggSubActionTT(1,:,:), 'Callback', {@ToggHearTT})
-            set(D.UI.toggSubActionTT(2,:,:), 'Callback', {@ToggPlotTypeTT});
-            set(D.UI.toggHearSide, 'Callback', {@ToggHearTT});
-            set(D.UI.toggHearChan, 'Callback', {@ToggHearTT});
-            
-            % Set all to visible
+            % TEMP Set all to visible
             Set_Panel_State(D.UI.panSelectTT, 'Disable');
             set(D.UI.toggTT, 'Visible', 'on');
             
@@ -3734,47 +4704,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 pos(2) = pos(2)-ht;
             end
             
-             % Log/print
-            Console_Write('[Finish_Ephys_Setup] FINISHED: Setup Cluster Objects');
+            % Log/print
+            Console_Write('[TT_Track_Setup] FINISHED: Setup Cluster Objects');
             
         end
         
-        %% Enable TT_Track and Other Objects
+        %% Enable Ephys Objects
         
         if D.F.implant_session || isTTtrackSolo
-            
-            % Enable main tt panel
-            Set_Panel_State(D.UI.panSelectTT, 'Enable');
-            
-            % Anable associated buttons
-            Set_Button_State(D.UI.toggTT, 'Enable');
-            Set_Button_State(D.UI.toggIncludeTT, 'Enable');
-            Set_Button_State(D.UI.toggActionTT, 'Enable');
-            set(D.UI.btnSaveLogTT, 'Enable', 'on');
-            set(D.UI.toggHearSide, 'Enable', 'on');
-            set(D.UI.toggHearChan, 'Enable', 'on');
-            
-            % Enable show/hide tt track buttons
-            Set_Button_State(D.UI.toggHideTT, 'Enable');
-            
-            % Enable cell cut toggle
-            Set_Button_State(D.UI.toggCellsCut, 'Enable');
-            
-            % Clear TT
-            Set_Button_State(D.UI.btnClrTT, 'Enable');
-            
-            % TT plot type
-            Set_Button_State(D.UI.toggActionTT, 'Enable');
-            
-            % Color bars
-            set(D.UI.colBarH, 'Visible', 'on')
-            
+            Set_Object_Group('Ephys_Objects', 'Enable')
         end
         
-        %% Start Acquisition
+    end
+
+% --------------------------FINISH AC SETUP------------------------
+
+    function Finish_AC_Setup()
         
-        set(D.UI.toggAcq, 'Value', 1)
-        BtnAcq(D.UI.toggAcq);
+        % Display image
+        D.AC.data(2) = 1;
+        
+        % Sound stimuli (start without sound)
+        D.AC.data(3) = single(D.UI.snd(1));
+        
+        % Post to AC computer
+        SendM2AC();
         
     end
 
@@ -3862,68 +4816,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         elseif D.PAR.ratRotDrc == 'CW'
             D.I.img_ind(2) = 3;
         end
-        
-        %% Update and Send AC.data Values
-        
-        % Display image
-        D.AC.data(2) = 1;
-        
-        % Sound stimuli (start without sound)
-        D.AC.data(3) = single(D.UI.snd(1));
-        
-        % Post to AC computer
-        SendM2AC();
-        
-        %% Update UI Objects
-        
-        % DISABLE SETUP BUTTONS
-        Set_Panel_State(D.UI.panStup, 'Disable');
-        set(D.UI.popRat, 'Enable', 'off')
-        set(D.UI.popCond, 'Enable', 'off')
-        set(D.UI.popTask, 'Enable', 'off')
-        set(D.UI.popRewDel, 'Enable', 'off')
-        Set_Button_State(D.UI.toggCue, 'Unenable');
-        Set_Button_State(D.UI.toggSnd, 'Unenable');
-        
-        % Enable record panel
-        Set_Panel_State(D.UI.panRec, 'Enable');
-        
-        % Enable robot buttons
-        if D.PAR.sesCond ~= 'Manual_Training'
-            
-            % Halt Robot
-            Set_Button_State(D.UI.toggHaltRob, 'Enable');
-        end
-        
-        % Enable Reward trigger button
-        set(D.UI.popReward, ...
-            'Enable', 'on', ...
-            'BackgroundColor', D.UI.enabledCol);
-        Set_Button_State(D.UI.btnReward, 'Enable');
-        
-        % Enable Cheetah buttons
-        Set_Button_State(D.UI.toggAcq, 'Enable');
-        Set_Button_State(D.UI.toggRec, 'Enable');
-        
-        % Text panels
-        Set_Panel_State(D.UI.panSesInf, 'Enable');
-        Set_Panel_State(D.UI.panPerfInf, 'Enable');
-        
-        % Text panel stuff
-        set(D.UI.popLapsPerRot, 'Visible', 'on');
-        set(D.UI.popRotPos, 'Visible', 'on');
-        set(D.UI.popLapTim, 'Visible', 'on');
-        set(D.UI.popRewInfo, 'Visible', 'on');
-        
-        % Clear VT
-        Set_Button_State(D.UI.btnClrVT, 'Enable');
-        
-        % Start timer
-        start(timer_graphics);
-        
+           
         %% Print Session and Performance and Time Info
         
-        % Print session info
+        % SESSION INFO
         dobNum = datenum(D.PAR.ratDOB, 'yyyy/mm/dd');
         agemnth = num2str(floor((now - dobNum)/365*12));
         ses = num2str(D.PAR.sesNum);
@@ -3943,13 +4839,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat('_',1,4), char(D.PAR.ratStrQuad));
         set(D.UI.txtSesInf(1),'String', infstr)
         
-        % Rot cond specific info
+        % ROTATION INFO
         if D.PAR.sesCond == 'Rotation'
             rots = num2str(D.PAR.rotPerSes);
         else
             rots = 'NA';
-            set(D.UI.popLapsPerRot, 'Enable', 'off');
-            set(D.UI.popRotPos, 'Enable', 'off');
         end
         infstr = sprintf([...
             'Rotation Info\n', ...
@@ -3957,8 +4851,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat('_',1,5), rots);
         set(D.UI.txtSesInf(2),'String', infstr)
         
-        % Print performance info
-        % total
+        % PERFORMANCE INFO
+        
+        % Totals
         infstr = sprintf([...
             'Laps______All:%s%d\n', ...
             'Rewards___All:%s%d\n', ...
@@ -3971,21 +4866,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat('_',1,1), 0,0, ...
             repmat('_',1,1), 0);
         set(D.UI.txtPerfInf(4), 'String', infstr)
-        % standard
+        
+        % Standard laps
         infstr = sprintf([...
             'Laps______Stand:%s%d\n', ...
             'Rewards___Stand:%s%d'], ...
             repmat('_',1,1), 0, ...
             repmat('_',1,1), 0);
         set(D.UI.txtPerfInf(1), 'String', infstr)
-        % 40 deg
+        
+        % 40 deg laps
         infstr = sprintf([...
             'Laps______40%c:%s%d|%d\n', ...
             'Rewards___40%c:%s%d|%d'], ...
             char(176), repmat('_',1,3), 0,0, ...
             char(176), repmat('_',1,3), 0,0);
         set(D.UI.txtPerfInf(2), 'String', infstr)
-        % 0 deg
+        
+        % 0 deg laps
         infstr = sprintf([...
             'Laps______0%c:%s%d|%d\n', ...
             'Rewards___0%c:%s%d|%d'], ...
@@ -3993,23 +4891,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             char(176), repmat('_',1,4), 0,0);
         set(D.UI.txtPerfInf(3), 'String', infstr)
         
-        % rat vel
+        % Rat vel
         infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', 0, 0, 0);
         set(D.UI.txtPerfInf(5), 'String', infstr)
-        % rob vel
+        
+        % Rob vel
         infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', 0, 0, 0);
         set(D.UI.txtPerfInf(6), 'String', infstr)
         
-        % robot bat volt
+        % Robot bat volt
         infstr = sprintf('Rob_Battery_:_%0.1fV', 0);
         set(D.UI.txtPerfInf(7), 'String', infstr)
         
-        % cube bat volt percent
+        % Cube bat volt percent
         infstr = sprintf('Cube_Battery:_%d%%', 0);
         set(D.UI.txtPerfInf(8), 'String', infstr)
         
-        % Print time info
-        % elapsed
+        % TIMER INFO
+        
+        % Elapsed time
         infstr = sprintf([ ...
             'SES:%s%s\n', ...
             'REC:%s%s\n', ...
@@ -4019,20 +4919,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat('_',1,1), datestr(0, 'HH:MM:SS'), ...
             repmat('_',1,1), datestr(0, 'HH:MM:SS'), ...
             repmat('_',1,1), datestr(0, 'HH:MM:SS'));
-        set(D.UI.txtTimElspInf, 'String', infstr)
-        % start
+        set(D.UI.txtTimeInf(1), 'String', infstr)
+        
+        % Start time
         infstr = sprintf('Start: ');
-        set(D.UI.txtTimStrInf, 'String', infstr)
+        set(D.UI.txtTimeInf(2), 'String', infstr)
         infstr = datestr(startTime, 'HH:MM:SS');
-        set(D.UI.editTimStrInf, 'String', infstr, ...
-            'Visible', 'on')
-        % end
+        set(D.UI.editTimeInf(1), 'String', infstr)
+        
+        % End time
         infstr = sprintf('Stop_: ');
-        set(D.UI.txtTimEndInf, 'String', infstr)
+        set(D.UI.txtTimeInf(3), 'String', infstr)
         infstr = datestr(0, 'HH:MM:SS');
-        set(D.UI.editTimEndInf, 'String', infstr, ...
-            'Visible', 'on')
-        % loop
+        set(D.UI.editTimeInf(2), 'String', infstr)
+        
+        % DB timers
         infstr = sprintf( ...
             [...
             'RD: %4.0f  mn:%4.0f  mx:%4.0f av:%4.0f\n', ...
@@ -4045,7 +4946,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             0, 0, 0, 0, ...
             0, 0, 0, 0 ...
             );
-        set(D.UI.txtTimDebug, 'String', infstr)
+        set(D.UI.txtPerfInf(9), 'String', infstr)
         
         %% Compute Bounds for Various Opperations
         
@@ -4171,7 +5072,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % [zone,min_max,rot_cond]
         D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
         
-        %% Plot UI Features
+        %% Plot Main UI Features
         
         % Plot all feeders
         D.UI.fdAllH = plot(D.UI.fd_x, D.UI.fd_y, 'o', ...
@@ -4220,14 +5121,34 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'HitTest', 'off', ...
                 'Parent',D.UI.axH(3));
         end
+            
+        %% Update UI Objects
         
-        %% Start Recording
+        % Enable recording panel stuff
+        if ~D.F.implant_session
+            Set_Object_Group('Recording_Objects', 'Enable')
+        else
+            Set_Object_Group('Sleep1_Objects', 'Enable')
+        end
         
-        % Run BtnRec
+        % Enable text info
+        Set_Object_Group('Text_Objects', 'Enable')
+        
+        % Start timer
+        start(timer_graphics);
+        
+        %% Start Cheetah Acquisition and Recording
+        
+        % Start Acquisition
+        set(D.UI.toggAcq, 'Value', 1)
+        BtnAcq(D.UI.toggAcq);
+        
+        % Start Recording
         set(D.UI.toggRec,'Value', 1);
         BtnRec(D.UI.toggRec);
         
-        %% Send setup command to robot
+        %% Send Setup Command to Robot
+        
         % ses cond
         if D.PAR.sesCond == 'Manual_Training'
             d1 = 0;
@@ -4584,7 +5505,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        %% EBABLE OBJECTS
+        %% SET UI OBJECTS
         
         % Set other plot features to visible
         set(D.UI.linTrckH, 'Visible', 'on');
@@ -4611,40 +5532,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set reward zone axes
         set(D.UI.axZoneH, 'Visible', 'on');
         
-        % Bulldoze pop menue
-        set(D.UI.popBulldoze, 'Enable', 'on')
-        Set_Button_State(D.UI.toggBulldoze, 'Enable');
-        
         % Bulldoze default
         val = find(ismember(D.UI.bullList, [num2str(D.PAR.bullDel), ' sec']));
         set(D.UI.popBulldoze, 'Value', val);
         set(D.UI.toggBulldoze, 'Value', 1);
         Bulldoze();
         
-        % Cue buttons
-        if D.PAR.sesCond ~= 'Manual_Training'
+        % Cue setup
+        if D.PAR.sesCond ~= 'Manual_Training' && ...
+                D.PAR.cueFeed == 'Half'
             
-            if D.PAR.cueFeed == 'Half' || ...
-                    D.PAR.cueFeed == 'None'
-                
-                % Cue reward
-                Set_Button_State(D.UI.toggDoCue, 'Enable');
-                
-                % Block Cue
-                Set_Button_State(D.UI.toggBlockCue, 'Enable');
-                
-                % Force Cue
-                Set_Button_State(D.UI.toggForceCue, 'Enable');
-                
-                % Cue first reward for 'Half' cond
-                if D.PAR.cueFeed == 'Half'
-                    
-                    % Set cue button on
-                    set(D.UI.toggDoCue, 'Value', 1);
-                    ToggDoCue();
-                end
-                
-            end
+            % Set cue button on
+            set(D.UI.toggDoCue, 'Value', 1);
+            ToggDoCue();
             
         end
         
@@ -4657,19 +5557,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             set(D.UI.toggICR(2), ...
                 'String', D.UI.btnICRstr{2});
             
-            % Enable first button
-            Set_Button_State(D.UI.toggICR(1), 'Disable');
-            
-            % Make second button active
-            Set_Button_State(D.UI.toggICR(2), 'Enable', D.UI.rotCol(2,:));
-            
-            % Enable rot bound patch HitTest
+            % Set rot bound patch HitTest
             set(D.UI.ptchRtBnds, 'HitTest', 'on')
             
         end
-        
-        % Enable target select button
-        Set_Button_State(D.UI.toggPickRewPos, 'Enable');
         
     end
 
@@ -4849,962 +5740,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% --------------------------TT TRACKING SETUP----------------------
-
-    function[] = TT_Track_Setup()
-        
-        %% ======================== SET PARAMETERS ================================
-        
-        % Debugging
-        D.DB.doAutoSetTT = false;
-        D.DB.depthSet = 1; % (mm)
-        
-        % Top directory
-        D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
-        
-        % IO dirs
-        D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
-        D.DIR.log = fullfile(D.DIR.top,'IOfiles');
-        D.DIR.ioTT_IO = fullfile(D.DIR.ioTop, 'SessionData', 'TT_IO.mat');
-        % Image directory
-        D.DIR.img = fullfile(D.DIR.ioTop,'Images');
-        D.DIR.matFile = fullfile(D.DIR.img, 'Paxinos', 'procPax.mat');
-        D.DIR.pax{1} = fullfile(D.DIR.img, 'Paxinos', 'sag_lab');
-        D.DIR.pax{2} = fullfile(D.DIR.img, 'Paxinos', 'cor_lab');
-        D.DIR.pax{3} = fullfile(D.DIR.img, 'Paxinos', 'hor_lab');
-        
-        % Number of bundles
-        D.TT.nBundles = 2;
-        
-        % Cannula spacing (mm)
-        D.PAR.canSp = 0.3175;
-        
-        % TT diameter (mm)
-        D.PAR.ttDiam = 0.0254;
-        
-        % Track lines offset (mm)
-        D.UI.linOfst = 0.025;
-        
-        % Set plot lims [A-P,M-L,D-V] (mm)
-        D.UI.mmPlotLims = [...
-            3, -12; ...
-            0, 8; ...
-            0, -10];
-        
-        % Paxinos image dims [y_mm, x_mm]
-        D.PAR.mmPaxSize{1} = [11,21];
-        D.PAR.mmPaxSize{2} = [11,8];
-        D.PAR.mmPaxSize{3} = [8,21];
-        
-        % Paxinos image lims [x_min, x_max; y_min, y_max]
-        D.PAR.pxlPalLims{1} = [243, 3854; 420, 2311]; % sag
-        D.PAR.pxlPalLims{2} = [243, 2136; 247, 2842]; % cor
-        D.PAR.pxlPalLims{3} = [243, 3854; 250, 1631]; % hor
-        
-        % Strange sized pax cor images
-        D.PAR.pxlPalLims{4} = [206, 2099; 210, 2812]; % cor dumb
-        
-        % Image axis limits [A-P,M-L,D-V] (mm)
-        D.UI.mmPaxLims = [...
-            6, -15; ...
-            0, 8; ...
-            0, -11];
-        
-        % Paxinos view colors
-        D.UI.paxViewCol = [...
-            255, 198, 198; ... % red
-            198, 200, 255; ... % blue
-            198, 255, 201] / 255; % green
-        
-        % Plot state settings
-        D.UI.ttLegMrkWdth = [1,4];
-        D.UI.ttFaceAlph = [0.05, 1];
-        
-        %==========================================================================
-        
-        %% ================== IMPORT/FORMAT PAXINOS IMAGES ========================
-        
-        % Load session data
-        T = load(D.DIR.ioTT_IO);
-        D.TT_IO = T.TT_IO;
-        clear T;
-        
-        % Get rat list
-        ind = D.TT_IO.Include_Run;
-        D.PAR.ratList = D.TT_IO.Properties.RowNames(ind);
-        D.PAR.ratList = regexprep(D.PAR.ratList, 'r', '');
-        D.PAR.ratList = [{'Select Rat'};D.PAR.ratList];
-        
-        % Get image stuff
-        for z_view = 1:3
-            
-            % Get image list
-            D.PAR.paxFiLabs{z_view} = dir(D.DIR.pax{z_view});
-            D.PAR.paxFiLabs{z_view} = {D.PAR.paxFiLabs{z_view}(:).name};
-            D.PAR.paxFiLabs{z_view} = ...
-                D.PAR.paxFiLabs{z_view}(cell2mat(cellfun(@(x) ~isempty(x), strfind(D.PAR.paxFiLabs{z_view}, 'img'), 'uni', false)));
-            
-            % Setup image matrix [m, n, 3]
-            D.UI.paxMat{z_view} = cell(1, length(D.PAR.paxFiLabs{z_view}));
-            
-            % Setup image handles
-            D.UI.h_paxImg{z_view} = gobjects(1,length(D.PAR.paxFiLabs{z_view}));
-            
-            % Setup image coordinates
-            D.TT.imgCoor{z_view} = NaN(1,length(D.PAR.paxFiLabs{z_view}));
-        end
-        
-        % Check if we already have processed image data
-        if exist(D.DIR.matFile, 'file')
-            load(D.DIR.matFile);
-            D.UI.paxMat = IMG_MAT; %#ok<NODEF>
-            D.TT.imgCoor = IMG_COORD; %#ok<NODEF>
-            
-        else
-            % Loop through paxinos directories
-            for z_view = 1:3
-                
-                % Loop through each image
-                for z_pax = 1:length(D.PAR.paxFiLabs{z_view})
-                    
-                    % Store
-                    D.UI.paxMat{z_view}{z_pax} = ...
-                        imread(fullfile(D.DIR.pax{z_view}, D.PAR.paxFiLabs{z_view}{z_pax}));
-                    
-                    % Handle stupid fucking pax bullshit
-                    if z_view == 2 && size(D.UI.paxMat{z_view}{z_pax},1) == 3300
-                        
-                        inc_x = D.PAR.pxlPalLims{4}(2,1):D.PAR.pxlPalLims{4}(2,2);
-                        inc_y = D.PAR.pxlPalLims{4}(1,1):D.PAR.pxlPalLims{4}(1,2);
-                        
-                    else
-                        inc_x = D.PAR.pxlPalLims{z_view}(2,1):D.PAR.pxlPalLims{z_view}(2,2);
-                        inc_y = D.PAR.pxlPalLims{z_view}(1,1):D.PAR.pxlPalLims{z_view}(1,2);
-                    end
-                    
-                    % Clip image
-                    D.UI.paxMat{z_view}{z_pax} = D.UI.paxMat{z_view}{z_pax}(inc_x, inc_y, :);
-                    
-                    % Get colored pixels
-                    color_ind = mean(diff(D.UI.paxMat{z_view}{z_pax},1,3),3) > 50;
-                    mono_ind = mean(D.UI.paxMat{z_view}{z_pax},3) < 250 & ~color_ind;
-                    
-                    % Create ind for each rgb colored pixels
-                    red_pxls = padarray(color_ind, [0,0,2], 'post');
-                    green_pxls = padarray(color_ind, [0,0,1], 'both');
-                    blue_pxls = padarray(color_ind, [0,0,2], 'pre');
-                    
-                    % Set monochrome cols to gray
-                    D.UI.paxMat{z_view}{z_pax}(repmat(mono_ind,[1,1,3])) = 127;
-                    
-                    % Set outline color
-                    D.UI.paxMat{z_view}{z_pax}(red_pxls) = D.UI.paxViewCol(z_view, 1)*255;
-                    D.UI.paxMat{z_view}{z_pax}(green_pxls) = D.UI.paxViewCol(z_view, 2)*255;
-                    D.UI.paxMat{z_view}{z_pax}(blue_pxls) = D.UI.paxViewCol(z_view, 3)*255;
-                    
-                    % Reseize image to 1pxl per 10 um
-                    D.UI.paxMat{z_view}{z_pax} = ...
-                        imresize(D.UI.paxMat{z_view}{z_pax}, D.PAR.mmPaxSize{z_view}*100);
-                    
-                    % Get coordinate info
-                    num_str = regexp(D.PAR.paxFiLabs{z_view}{z_pax}, 'lab_(-?\d?\d.\d\d).png', 'tokens');
-                    D.TT.imgCoor{z_view}(z_pax) = str2double(num_str{:});
-                    
-                    % Flip images
-                    D.UI.paxMat{z_view}{z_pax} = flip(D.UI.paxMat{z_view}{z_pax},1);
-                    D.UI.paxMat{z_view}{z_pax} = flip(D.UI.paxMat{z_view}{z_pax},2);
-                    
-                end
-                
-                % Sort
-                [D.TT.imgCoor{z_view}, sort_ind] = sort(D.TT.imgCoor{z_view});
-                D.UI.paxMat{z_view} = D.UI.paxMat{z_view}(sort_ind);
-            end
-            
-            % Save coordinate and image matrix
-            IMG_MAT = D.UI.paxMat; %#ok<NASGU>
-            IMG_COORD = D.TT.imgCoor; %#ok<NASGU>
-            save(D.DIR.matFile,  'IMG_MAT', 'IMG_COORD');
-            
-        end
-        
-        %==========================================================================
-        
-        %% ======================= SETUP UI FIGURE ===============================
-        
-        % Monitor positions
-        sc = get(0,'MonitorPositions');
-        [~, mon_ind] = sort(sc(:,1));
-        D.UI.monPos(1,:) = sc(mon_ind(1),:);
-        D.UI.monPos(2,:) = sc(mon_ind(2),:);
-        if size(sc,1) == 3
-            D.UI.monPos(3,:) = sc(mon_ind(3),:);
-        end
-        
-        % Add TT Track tab
-        D.UI.tabTT = uitab(D.UI.tabgp, ...
-            'Title', 'TT', ...
-            'BackgroundColor', [1, 1, 1]);
-        
-        % Figure position
-        D.UI.tabTTNormPos = get(D.UI.tabTT, 'Position');
-        set(D.UI.tabTT,'Units','Pixels');
-        D.UI.wdScale = (D.UI.tabTT.Position(4)/D.UI.tabTT.Position(3));
-        set(D.UI.tabTT,'Units','Normalized');
-        
-        % Border offset for all GUI features
-        D.UI.bordOffHt = 0.02;
-        D.UI.bordOffWd = D.UI.bordOffHt*D.UI.wdScale;
-        
-        % Main axis reserved space
-        ax_lfg_lim = D.UI.main_ax_bounds(1)+0.005;
-        
-        % Main axis actual pos
-        ax_lft = ax_lfg_lim + 2*D.UI.bordOffWd;
-        ax_wd = D.UI.tabTTNormPos(3) - ax_lft;
-        ax_ht = D.UI.tabTTNormPos(4) - 2*D.UI.bordOffHt;
-        ax_btm = 2*D.UI.bordOffHt;
-        D.UI.axe3dPos =  ...
-            [ax_lft, ax_btm, ax_wd, ax_ht];
-        
-        % Label axes lims
-        lm_str = {...
-            '|P|', '|A|'; ...
-            '|M|', '|L|'; ...
-            '|D|', '|V|'};
-        lm = NaN(3,2);
-        tk = cell(3,1);
-        tl = cell(3,1);
-        
-        % Get axis stuff
-        for z_view = 1:3
-            
-            % Get axis limits
-            lm(z_view,:) = [min(D.UI.mmPaxLims(z_view,:)), max(D.UI.mmPaxLims(z_view,:))]*100;
-            
-            % Get axis ticks
-            tk{z_view} = linspace(lm(z_view,1),lm(z_view,2),sum(abs(D.UI.mmPaxLims(z_view,:)))+1)';
-            
-            % Make axis tick labels
-            tl{z_view} = num2str(tk{z_view}/100);
-            tl{z_view}  = [repmat(blanks(3-size(tl{z_view} ,2)), size(tl{z_view} ,1), 1), tl{z_view}];
-            
-            % Label axes lims
-            tl{z_view}(tk{z_view}/100==min(D.UI.mmPlotLims(z_view,:)),:) = lm_str{z_view,1};
-            tl{z_view}(tk{z_view}/100==max(D.UI.mmPlotLims(z_view,:)),:) = lm_str{z_view,2};
-        end
-        
-        % Create axis
-        D.UI.axe3dH = axes(...
-            'Parent', D.UI.tabTT,...
-            'Units','Normalized',...
-            'Position',D.UI.axe3dPos,...
-            'XDir', 'Reverse', ...
-            'XLim', lm(1,:), ...
-            'YLim', lm(2,:), ...
-            'ZLim', lm(3,:), ...
-            'XTick', tk{1}, ...
-            'YTick', tk{2}, ...
-            'ZTick', tk{3}, ...
-            'XTickLabel', tl{1}, ...
-            'YTickLabel', tl{2}, ...
-            'ZTickLabel', tl{3}, ...
-            'Color', 'None', ...
-            'Visible', 'on');
-        hold on
-        box on
-        
-        % Specify rotation mat
-        img_rot = [ ...
-            deg2rad(90), 0, 0; ...
-            deg2rad(90), deg2rad(90), 0;
-            0, 0, 0
-            ];
-        
-        % Specify direction of translation
-        img_trans_x = [D.UI.mmPaxLims(1,2), 0, D.UI.mmPaxLims(1,2)] * 100;
-        img_trans_y = [D.UI.mmPaxLims(3,2), D.UI.mmPaxLims(3,2), 0] * 100;
-        img_trans_z = [-1, 1, 1];
-        
-        % Show each image on correct plane
-        for z_view = 1:3
-            for z_img = 1:length(D.PAR.paxFiLabs{z_view})
-                
-                % Get transform
-                zt = D.TT.imgCoor{z_view}(z_img) * 100 * img_trans_z(z_view);
-                p = hgtransform('Parent',D.UI.axe3dH);
-                rt = makehgtform(...
-                    'xrotate', img_rot(z_view,1), ...
-                    'yrotate', img_rot(z_view,2), ...
-                    'zrotate', img_rot(z_view,3), ...
-                    'translate',[img_trans_x(z_view), img_trans_y(z_view), zt]);
-                h = hgtransform('Matrix',rt);
-                set(h,'Parent',p)
-                
-                % Show image
-                D.UI.h_paxImg{z_view}(z_img) =  ...
-                    image(D.UI.paxMat{z_view}{z_img}, ...
-                    'Parent', h, ...
-                    'Visible', 'off');
-                
-                % Set alpha
-                D.UI.h_paxImg{z_view}(z_img).AlphaData = 0.75;
-            end
-        end
-        
-        % Set final plot lims
-        axis equal
-        set(D.UI.axe3dH, ...
-            'XLim',  100*[min(D.UI.mmPlotLims(1,:)), max(D.UI.mmPlotLims(1,:))], ...
-            'YLim',  100*[min(D.UI.mmPlotLims(2,:)), max(D.UI.mmPlotLims(2,:))], ...
-            'ZLim',  100*[min(D.UI.mmPlotLims(3,:)), max(D.UI.mmPlotLims(3,:))])
-        
-        % Remove unused images
-        exc_sag = D.TT.imgCoor{1}<min(D.UI.mmPlotLims(2,:)) | ...
-            D.TT.imgCoor{1}>max(D.UI.mmPlotLims(2,:));
-        exc_cor = D.TT.imgCoor{2}<min(D.UI.mmPlotLims(1,:)) | ...
-            D.TT.imgCoor{2}>max(D.UI.mmPlotLims(1,:));
-        exc_hor = D.TT.imgCoor{3}<min(D.UI.mmPlotLims(3,:)) | ...
-            D.TT.imgCoor{3}>max(D.UI.mmPlotLims(3,:));
-        D.TT.imgCoor{1}(exc_sag) = [];
-        D.TT.imgCoor{2}(exc_cor) = [];
-        D.TT.imgCoor{3}(exc_hor) = [];
-        D.UI.h_paxImg{1}(exc_sag) = [];
-        D.UI.h_paxImg{2}(exc_cor) = [];
-        D.UI.h_paxImg{3}(exc_hor) = [];
-        
-        light_pos = [max(D.UI.axe3dH.XLim), max(D.UI.axe3dH.YLim), max(D.UI.axe3dH.ZLim)];
-        D.UI.h_light(1) = light(D.UI.axe3dH, ...
-            'Style', 'local', ...
-            'Position', light_pos);
-        light_pos = [min(D.UI.axe3dH.XLim), min(D.UI.axe3dH.YLim), min(D.UI.axe3dH.ZLim)];
-        D.UI.h_light(2) = light(D.UI.axe3dH, ...
-            'Style', 'local', ...
-            'Position', light_pos);
-        
-        % Legend pos
-        ht = 0.125; % height of axis
-        wd = ht*D.UI.wdScale;
-        lft = sum(D.UI.axe3dPos([1,3])) - wd*2 - 2*D.UI.bordOffWd;
-        btm = D.UI.axe3dPos(2)+D.UI.bordOffHt;
-        D.UI.leg_1_pos = [lft , btm, wd, ht];
-        D.UI.leg_2_pos = D.UI.leg_1_pos;
-        D.UI.leg_2_pos(1) = sum(D.UI.leg_1_pos([1,3])) + D.UI.bordOffWd/2;
-        
-        % Create Bndle 1 legend axis
-        D.UI.axLeg(1) = axes(...
-            'Parent', D.UI.tabTT,...
-            'Units', 'Normalized',...
-            'Position', D.UI.leg_1_pos,...
-            'Color', [1 1 1],...
-            'XTick', [], ...
-            'YTick', [], ...
-            'Visible', 'on');
-        box on
-        hold on
-        
-        % Create Bundle 2 legend axis
-        D.UI.axLeg(2) = axes(...
-            'Parent', D.UI.tabTT,...
-            'Units', 'Normalized',...
-            'Position', D.UI.leg_2_pos,...
-            'Color', [1 1 1],...
-            'XTick', [], ...
-            'YTick', [], ...
-            'Visible', 'on');
-        box on
-        hold on
-        
-        % Create a backround axis
-        lft = D.UI.leg_1_pos(1)-D.UI.bordOffWd;
-        btm = D.UI.axe3dPos(2);
-        wd = wd*2 + D.UI.bordOffWd*2.5;
-        ht = ht + D.UI.bordOffHt*3;
-        D.UI.axLegBack = copyobj(D.UI.axLeg(1),D.UI.tabTT);
-        D.UI.axLegBack.Position = [lft , btm, wd, ht];
-        
-        % Orientation strings
-        D.PAR.dirVec = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
-            {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
-        
-        % Move legend to top
-        uistack(D.UI.axLeg,'top')
-        
-        %==========================================================================
-        
-        %% ======================= SETUP UI OBJECTS ===============================
-        
-        % ------------------------------ DEFAULTS ---------------------------------
-        
-        % default width pos
-        D.UI.dfltPanWd = D.UI.main_ax_bounds(1);
-        % default object spacing
-        D.UI.dfltSp = 0.01;
-        
-        % ------------------------ PAXINOS VIEW CONTROLS --------------------------
-        
-        % Add Yaw (z axis) slider along bottom
-        wd = D.UI.axe3dPos(3) - D.UI.bordOffWd;
-        ht = D.UI.bordOffHt;
-        lft = ax_lfg_lim + 2*D.UI.bordOffWd;
-        btm = 0;
-        pos = [lft, btm, wd, ht];
-        D.UI.sldYaw = uicontrol('Style', 'slider',...
-            'Parent', D.UI.tabTT, ...
-            'Units', 'Normalized', ...
-            'Callback', {@Set3dView},...
-            'UserData', 0, ...
-            'Min',-90,'Max',90, ...
-            'Value',0,...
-            'SliderStep', [1/180,45/180], ...
-            'Visible', 'on',...
-            'Enable', 'on',...
-            'Position',  pos);
-        
-        % Add Pitch (x axis) slider along left
-        wd = D.UI.bordOffWd;
-        ht = D.UI.axe3dPos(4) - D.UI.bordOffHt;
-        btm = D.UI.bordOffHt*2;
-        lft = ax_lfg_lim;
-        pos = [lft, btm, wd, ht];
-        D.UI.sldPitch = uicontrol('Style', 'slider',...
-            'Parent', D.UI.tabTT, ...
-            'Units', 'Normalized', ...
-            'Callback', {@Set3dView},...
-            'UserData', 0, ...
-            'Min',-90,'Max',90, ...
-            'Value',0,...
-            'SliderStep', [1/180,45/180], ...
-            'Visible', 'on',...
-            'Enable', 'on',...
-            'Position',  pos);
-        
-        % Add rotate option
-        D.UI.mouseRotView = rotate3d(D.UI.axe3dH);
-        set(D.UI.mouseRotView, ...
-            'ActionPostCallback', {@Set3dView},...
-            'Enable', 'on')
-        
-        % Add setview button
-        D.UI.btnSetView(1) = uicontrol('style','togglebutton', ...
-            'Parent', D.UI.tabTT, ...
-            'Enable', 'On', ...
-            'UserData', 1, ...
-            'Units', 'Normalized', ...
-            'FontName',D.UI.btnFont(1),...
-            'ForegroundColor', [0.1,0.1,0.1], ...
-            'FontWeight','Bold',...
-            'FontSize',D.UI.fontSzBtnLrg(1));
-        
-        % Create additional set view buttons
-        D.UI.btnSetView(2) = copyobj(D.UI.btnSetView(1),D.UI.tabTT);
-        D.UI.btnSetView(3) = copyobj(D.UI.btnSetView(1),D.UI.tabTT);
-        D.UI.btnSetView(4) = copyobj(D.UI.btnSetView(1),D.UI.tabTT);
-        
-        % Change string and user data
-        set(D.UI.btnSetView(1), 'String', 'S', 'UserData', 1, 'BackgroundColor', D.UI.paxViewCol(1,:));
-        set(D.UI.btnSetView(2), 'String', 'C', 'UserData', 2, 'BackgroundColor', D.UI.paxViewCol(2,:));
-        set(D.UI.btnSetView(3), 'String', 'H', 'UserData', 3, 'BackgroundColor', D.UI.paxViewCol(3,:));
-        set(D.UI.btnSetView(4), 'String', 'O', 'UserData', 4, 'BackgroundColor', [0.8,0.8,0.8]);
-        
-        % Change pos
-        ht = D.UI.bordOffHt;
-        wd = D.UI.bordOffWd;
-        lft = ax_lfg_lim;
-        btm = 0;
-        pos = [lft, btm, wd, ht];
-        set(D.UI.btnSetView, 'Position', pos);
-        D.UI.btnSetView(1).Position(1) = pos(1)+pos(3);
-        D.UI.btnSetView(3).Position(2) = pos(2)+pos(4);
-        D.UI.btnSetView(4).Position(1:2) = [D.UI.btnSetView(1).Position(1), D.UI.btnSetView(3).Position(2)];
-        
-        % Set callback
-        set(D.UI.btnSetView, 'Callback', {@Set3dView});
-        
-        % Set view
-        Set3dView(D.UI.btnSetView(4));
-        
-        % ----------------------- PAXINOS IMAGE CONTROLS --------------------------
-        
-        % Switch image button
-        swtch_txt_wdth = 0.0625;
-        swtch_sld_wdth = 0.16;
-        swtch_ht = 0.025;
-        swtch_lft = ax_lfg_lim + D.UI.bordOffHt*2;
-        swtch_btm = D.UI.axe3dPos(2)+D.UI.bordOffHt/2 + 0.025*2 + swtch_ht;
-        
-        % Switch image text
-        pos = [swtch_lft , swtch_btm, swtch_txt_wdth, swtch_ht];
-        D.UI.txtImgCorr(1) = uicontrol('Style','text', ...
-            'Parent', D.UI.tabTT, ...
-            'String', ' ', ...
-            'Units', 'Normalized', ...
-            'Position', pos, ...
-            'HorizontalAlignment', 'Left',...
-            'ForegroundColor', [0.1,0.1,0.1], ...
-            'FontName', D.UI.txtFont,...
-            'FontWeight', 'Bold',...
-            'FontSize', D.UI.fontSzTxtHuge(1));
-        
-        % Switch image slider
-        pos = [pos(1)+pos(3), pos(2), swtch_sld_wdth, swtch_ht];
-        D.UI.sldSwtchImg(1) = uicontrol('Style', 'slider',...
-            'Parent', D.UI.tabTT, ...
-            'Units', 'Normalized', ...
-            'Callback', {@Set3dView},...
-            'Min', 1, ...
-            'Visible', 'on',...
-            'Enable', 'on',...
-            'Position',  pos);
-        
-        % Create slider and text copies
-        D.UI.txtImgCorr(2) = copyobj(D.UI.txtImgCorr(1),D.UI.tabTT);
-        D.UI.txtImgCorr(3) = copyobj(D.UI.txtImgCorr(1),D.UI.tabTT);
-        D.UI.sldSwtchImg(2) = copyobj(D.UI.sldSwtchImg(1),D.UI.tabTT);
-        D.UI.sldSwtchImg(3) = copyobj(D.UI.sldSwtchImg(1),D.UI.tabTT);
-        
-        % Change slider and text positions
-        D.UI.txtImgCorr(2).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2);
-        D.UI.sldSwtchImg(2).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2);
-        D.UI.txtImgCorr(3).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2)*2;
-        D.UI.sldSwtchImg(3).Position(2) = swtch_btm - (swtch_ht + swtch_ht/2)*2;
-        
-        % Loop through each view
-        for z_v = 1:3
-            
-            % Change text backround color
-            set(D.UI.txtImgCorr(z_v), 'BackgroundColor', D.UI.paxViewCol(z_v,:))
-            
-            % Set user data
-            set(D.UI.sldSwtchImg(z_v), 'UserData', z_v);
-            
-            % Set slider steps
-            n_img = length(D.TT.imgCoor{z_v});
-            set(D.UI.sldSwtchImg(z_v), ...
-                'Max', n_img, ...
-                'SliderStep', [1/n_img, 5*(1/n_img)], ...
-                'Value', floor(n_img/2));
-        end
-        
-        % Set callback
-        set(D.UI.sldSwtchImg, 'Callback', {@SldSwtchImg});
-        
-        % Set to first image
-        SldSwtchImg(D.UI.sldSwtchImg(1));
-        SldSwtchImg(D.UI.sldSwtchImg(2));
-        SldSwtchImg(D.UI.sldSwtchImg(3));
-        
-        % --------------------- SETUP, SAVE, QUIT CONTROLS ------------------------
-        
-        % Load popup
-        D.UI.posPopLoad = [0, D.UI.tabTTNormPos(4)-D.UI.bordOffHt-0.005, D.UI.dfltPanWd, D.UI.bordOffHt];
-        D.UI.popLoadRatTTInf = uicontrol('Style','popupmenu', ...
-            'Parent', D.UI.tabTT, ...
-            'Enable', 'On', ...
-            'String', D.PAR.ratList,...
-            'Callback', {@PopLoadRatTTInf},...
-            'FontName', D.UI.popFont,...
-            'UserData', 1, ...
-            'Units', 'Normalized', ...
-            'Position', D.UI.posPopLoad, ...
-            'FontWeight', 'Bold',...
-            'FontSize', D.UI.fontSzPop(1));
-        
-        % Save button copy
-        D.UI.btnSaveLogTT =  copyobj(D.UI.btnSaveSes, D.UI.tabTT);
-        set(D.UI.btnSaveLogTT, 'Callback', {@BtnSaveLogTT});
-        
-        % Quit button copy
-        D.UI.btnQuitSes(2) =  copyobj(D.UI.btnQuitSes(1), D.UI.tabTT);
-        set(D.UI.btnQuitSes(2), 'Callback', {@BtnQuitSes});
-        
-        % ------------------------ TT HIDE SHOW TOGGLE ----------------------------
-        
-        % Get eye icon
-        wd = D.UI.bordOffWd;
-        ht = D.UI.bordOffHt;
-        %eye_icon = imread(fullfile(D.DIR.img, 'Icons', 'eyeicon.png'));
-        %eye_icon = imresize(eye_icon, [FigGroupH.Position(3)*wd*0.625, FigGroupH.Position(4)*ht*0.625]);
-        D.UI.toggHideTT(1) = uicontrol('style','togglebutton', ...
-            'Parent', D.UI.tabTT, ...
-            'Units', 'Normalized', ...
-            'String', sprintf('%c', char(216)),...
-            'FontName', D.UI.btnFont,...
-            'BackgroundColor', D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontWeight', 'Bold',...
-            'FontSize',  D.UI.fontSzBtnMed(1), ...
-            'Enable', 'off', ...
-            'UserData', false, ...
-            'Value', 0);
-        
-        % Copy button
-        D.UI.toggHideTT(2) = copyobj(D.UI.toggHideTT(1), D.UI.tabTT);
-        
-        % Set values
-        set(D.UI.toggHideTT(1), ...
-            'Position', [D.UI.leg_1_pos(1), D.UI.leg_1_pos(2)+ D.UI.leg_1_pos(4), wd, ht], ...
-            'UserData', 1);
-        set(D.UI.toggHideTT(2), ...
-            'Position', [D.UI.leg_2_pos(1), D.UI.leg_2_pos(2)+D.UI.leg_2_pos(4), wd, ht], ...
-            'UserData', 2);
-        
-        % Set callback
-        set(D.UI.toggHideTT, 'Callback', {@ToggHideShowBndl});
-        
-        % -------------------------- PANEL POSITIONS ------------------------------
-        
-        % Panel tt select
-        pan_ht = 0.385 - D.UI.bordOffHt;
-        D.UI.tt_select_pan_pos(1,:) = ...
-            [0,  ...
-            D.UI.posPopLoad(2) - pan_ht - D.UI.dfltSp, ...
-            D.UI.dfltPanWd/2, ...
-            pan_ht];
-        D.UI.tt_select_pan_pos(2,:) = D.UI.tt_select_pan_pos(1,:);
-        D.UI.tt_select_pan_pos(2,1) = D.UI.tt_select_pan_pos(1,3);
-        
-        % Panel tt track
-        pan_ht = D.UI.tt_select_pan_pos(1,2) - 2*D.UI.bordOffHt - D.UI.dfltSp*2 - 0.045;
-        D.UI.tt_track_pan_pos = ...
-            [0,  ...
-            0.045 + 0.01, ...
-            D.UI.dfltPanWd, ...
-            pan_ht];
-        
-        % ------------------------- TT SELECT CONTROLS ----------------------------
-        
-        % Create TT select pannel
-        for z_bndl = 1:D.TT.nBundles
-            
-            % Add bundle pannel
-            D.UI.panSelectTT(z_bndl,1) = uipanel(...
-                'Parent', D.UI.tabTT,...
-                'Units', 'Normalized',...
-                'BorderType', 'line',...
-                'BorderWidth', 4,...
-                'FontSize', D.UI.fontSzTxtLrg(1),...
-                'FontWeight','Bold', ...
-                'FontName', D.UI.titleFont, ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.disabledCol, ...
-                'HighlightColor', D.UI.disabledCol, ...
-                'TitlePosition', 'centertop',...
-                'UserData', [],...
-                'Clipping', 'on',...
-                'Position', D.UI.tt_select_pan_pos(z_bndl,:));
-        end
-        
-        % Add action buttons
-        ht = D.UI.bordOffHt;
-        lft = 0;
-        btm = D.UI.tt_select_pan_pos(1,2) - ht;
-        wd = D.UI.dfltPanWd/2;
-        pos = [lft, btm, wd, ht];
-        D.UI.toggActionTT(1,1) = uicontrol('style','togglebutton', ...
-            'Parent', D.UI.tabTT, ...
-            'Units', 'Normalized', ...
-            'Enable', 'off', ...
-            'Position', pos, ...
-            'BackgroundColor', D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontName', D.UI.btnFont, ...
-            'FontWeight', 'Bold', ...
-            'FontSize', D.UI.fontSzBtnLrg(1), ...
-            'Value', 0);
-        
-        % Copy main button
-        D.UI.toggActionTT(2,1) = copyobj(D.UI.toggActionTT(1,1), D.UI.tabTT);
-        
-        % Set main position
-        D.UI.toggActionTT(2).Position(2) = D.UI.toggActionTT(1).Position(2) - ht;
-        
-        % Set main stuff
-        set(D.UI.toggActionTT(1), ...
-            'UserData', 1, ...
-            'String', 'Track TTs')
-        set(D.UI.toggActionTT(2), ...
-            'UserData', 2, ...
-            'String', 'Plot Spikes')
-        
-        % Set callback
-        set(D.UI.toggActionTT, 'Callback', {@ToggActionTT})
-        
-        % Copy for sub buttons
-        D.UI.toggSubActionTT(1,1) = copyobj(D.UI.toggActionTT(1), D.UI.tabTT);
-        D.UI.toggSubActionTT(1,2) = copyobj(D.UI.toggActionTT(1), D.UI.tabTT);
-        D.UI.toggSubActionTT(2,1) = copyobj(D.UI.toggActionTT(2), D.UI.tabTT);
-        D.UI.toggSubActionTT(2,2) = copyobj(D.UI.toggActionTT(2), D.UI.tabTT);
-        
-        % Set user data
-        set(D.UI.toggSubActionTT(:,1), 'UserData', 1);
-        set(D.UI.toggSubActionTT(:,2), 'UserData', 2);
-        
-        % Set postions and strings for 'Track TTs' sub button
-        D.UI.toggSubActionTT(1,1).String = 'Spkr';
-        D.UI.toggSubActionTT(1,1).Position(1) = D.UI.toggSubActionTT(1,1).Position(1) + wd;
-        D.UI.toggSubActionTT(1,1).Position(3) = wd/2;
-        D.UI.toggSubActionTT(1,2).String = 'Head';
-        D.UI.toggSubActionTT(1,2).Position(1) = D.UI.toggSubActionTT(1,2).Position(1) + 1.5*wd;
-        D.UI.toggSubActionTT(1,2).Position(3) = wd/2;
-        
-        % Set postions and strings for 'Track TTs' sub button
-        D.UI.toggSubActionTT(2,1).String = 'Clust';
-        D.UI.toggSubActionTT(2,1).Position(1) = D.UI.toggSubActionTT(2,1).Position(1) + wd;
-        D.UI.toggSubActionTT(2,1).Position(3) = wd/2;
-        D.UI.toggSubActionTT(2,2).String = 'Occ';
-        D.UI.toggSubActionTT(2,2).Position(1) = D.UI.toggSubActionTT(2,2).Position(1) + 1.5*wd;
-        D.UI.toggSubActionTT(2,2).Position(3) = wd/2;
-        
-        % Set callback
-        set(D.UI.toggSubActionTT(1,:), 'Callback', {@ToggHearTT})
-        set(D.UI.toggSubActionTT(2,:), 'Callback', {@ToggPlotTypeTT});
-        
-        % --------------------------- TT TURN CONTROLS ----------------------------
-        
-        % TT settings pannel
-        D.UI.panTrackTT = uipanel(...
-            'Parent', D.UI.tabTT,...
-            'Units', 'Normalized',...
-            'BorderType', 'line',...
-            'BorderWidth', 4,...
-            'FontSize', D.UI.fontSzTxtLrg(1),...
-            'FontWeight','Bold', ...
-            'FontName', D.UI.titleFont, ...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.disabledCol, ...
-            'HighlightColor', D.UI.disabledCol, ...
-            'Title','TTxx', ...
-            'TitlePosition', 'centertop',...
-            'Clipping', 'on',...
-            'Position', D.UI.tt_track_pan_pos);
-        
-        % TT save state
-        D.UI.ttStateStr{1} = 'Prior Orientation & Depth';
-        D.UI.ttStateStr{2} = 'New Orientation & Depth';
-        
-        % Plot default hight
-        dflt_ht = ((1-0.001)/10)*0.8;
-        % Plot defualt left from pan
-        dflt_lf = [0.001, 0.5];
-        % Plot defualt width
-        dflt_wd = 1/2-0.002;
-        % Plot default bottom ps vector
-        dflt_btm = linspace(1-dflt_ht*0.25, dflt_ht*0.25, 11);
-        
-        % Create orientation text
-        ps = [dflt_lf(1), dflt_btm(2), dflt_wd, dflt_ht];
-        D.UI.txtPanTT(1) = uicontrol(...
-            'Style', 'text', ...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'FontName', D.UI.txtFont,...
-            'FontSize', D.UI.fontSzTxtSml(1),...
-            'FontWeight', 'Bold',...
-            'HorizontalAlignment', 'left',...
-            'Position', ps, ...
-            'String', sprintf('New Screw\r\nOrientation'),...
-            'Visible', 'off');
-        
-        % Create enter orientation popup-menue object
-        ps = [dflt_lf(2), dflt_btm(2), dflt_wd, dflt_ht];
-        D.UI.popOr = uicontrol(...
-            'Style', 'popupmenu',...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'FontName', D.UI.popFont,...
-            'BackgroundColor', [1 1 1],...
-            'FontSize', D.UI.fontSzPop(1),...
-            'Position', ps,...
-            'String', D.PAR.dirVec,...
-            'Enable', 'off', ...
-            'Visible', 'off', ...
-            'Value', 1);
-        
-        % Create enter number of rotations text
-        ps = [dflt_lf(1), dflt_btm(3), dflt_wd, dflt_ht];
-        D.UI.txtPanTT(2) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
-        set(D.UI.txtPanTT(2), ...
-            'Position', ps,...
-            'String', sprintf('Number of\r\nFull Turns'))
-        % Create number of rotations popup-menue object
-        ps = [dflt_lf(2), dflt_btm(3), dflt_wd, dflt_ht];
-        D.UI.popTrn = uicontrol(...
-            'Style', 'popupmenu',...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'FontName', D.UI.popFont,...
-            'BackgroundColor', [1 1 1],...
-            'FontSize', D.UI.fontSzPop(1),...
-            'Position', ps,...
-            'String', num2cell((0:20)'),...
-            'Enable', 'off', ...
-            'Visible', 'off', ...
-            'Value', 1);
-        
-        % Create direction text
-        ps = [dflt_lf(1), dflt_btm(4), dflt_wd, dflt_ht];
-        D.UI.txtPanTT(3) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
-        set(D.UI.txtPanTT(3), ...
-            'Position', ps,...
-            'String', sprintf('TT Lowering\r\nDirection'))
-        % Create direction popup-menue object
-        ps = [dflt_lf(2), dflt_btm(4), dflt_wd, dflt_ht];
-        D.UI.popDir = uicontrol(...
-            'Style', 'popupmenu',...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'FontName', D.UI.popFont,...
-            'BackgroundColor', [1 1 1],...
-            'FontSize', D.UI.fontSzPop(1),...
-            'Position', ps,...
-            'String', {'Down'; 'Up'},...
-            'Enable', 'off', ...
-            'Visible', 'off', ...
-            'Value', 1);
-        
-        % Create ref text
-        ps = [dflt_lf(1), dflt_btm(5), dflt_wd, dflt_ht];
-        D.UI.txtPanTT(4) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
-        set(D.UI.txtPanTT(4), ...
-            'Position', ps,...
-            'String', sprintf('TT\r\nReference'))
-        % Create ref popup-menue object
-        ps = [dflt_lf(2), dflt_btm(5), dflt_wd, dflt_ht];
-        D.UI.popRefTT = uicontrol(...
-            'Style', 'popupmenu',...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'FontName', D.UI.popFont,...
-            'BackgroundColor', [1 1 1],...
-            'FontSize', D.UI.fontSzPop(1),...
-            'Position', ps,...
-            'String', {'Down'; 'Up'},...
-            'Enable', 'off', ...
-            'Visible', 'off', ...
-            'Value', 1);
-        
-        % Create new notes text box object
-        ps = [dflt_lf(1), dflt_btm(8), dflt_wd*2, dflt_ht*1.5];
-        D.UI.editNewNoteTT = uicontrol(...
-            'Style', 'edit',...
-            'Max', 100, ...
-            'Parent', D.UI.panTrackTT,...
-            'BackgroundColor', [1 1 1],...
-            'HorizontalAlignment', 'left',...
-            'Units', 'Normalized',...
-            'FontSize', D.UI.fontSzTxtSml(1),...
-            'Visible', 'off', ...
-            'Position', ps);
-        
-        % Create old notes text box object
-        ps = [dflt_lf(1), ps(2)+ps(4), dflt_wd*2, dflt_ht*1.5];
-        D.UI.editOldNoteTT = uicontrol(...
-            'Style','edit',...
-            'Max', 100, ...
-            'Parent', D.UI.panTrackTT,...
-            'BackgroundColor', [1 1 1],...
-            'ForegroundColor', [0.5,0.5,0.5], ...
-            'HorizontalAlignment', 'left',...
-            'Enable', 'inactive', ...
-            'Units', 'Normalized',...
-            'FontSize', D.UI.fontSzTxtSml(1),...
-            'Visible', 'off', ...
-            'Position', ps);
-        
-        % Create notes heading
-        ps = [dflt_lf(1), ps(2)+ps(4), dflt_wd, dflt_ht/2];
-        D.UI.txtPanTT(5) = copyobj(D.UI.txtPanTT(1), D.UI.panTrackTT);
-        set(D.UI.txtPanTT(5), ...
-            'Position', ps,...
-            'String', 'Notes')
-        
-        % Create save TT data button object
-        ps = [0.25, dflt_btm(9), 0.5, dflt_ht];
-        D.UI.btnSaveTT = uicontrol(...
-            'Style','push', ...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'Callback',{@BtnSaveTT},...
-            'UserData', [0,0],...
-            'FontSize', D.UI.fontSzBtnLrg(1),...
-            'FontWeight', 'Bold',...
-            'Position', ps,...
-            'BackgroundColor', D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'Enable', 'off', ...
-            'Visible', 'off', ...
-            'String', 'Save xx');
-        
-        % Create bottom sub-pannel
-        lft = 0.05;
-        wd = dflt_wd*2 - lft*2;
-        ps = [lft, dflt_btm(end), wd, dflt_ht*2];
-        D.UI.spanTT = uibuttongroup(...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'FontSize', D.UI.fontSzTxtSml(1),...
-            'HighlightColor', D.UI.disabledCol,...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ShadowColor', [0.5,0.5,0.5],...
-            'FontWeight', 'Bold',...
-            'Title', D.UI.ttStateStr{1},...
-            'Clipping', 'off',...
-            'Position', ps,...
-            'Visible', 'off');
-        
-        % Create TT depth text object
-        lft = lft*2;
-        wd = dflt_wd*2 - lft*2;
-        btm = dflt_btm(end)+0.01;
-        ps = [lft, btm, wd, dflt_ht*0.5];
-        D.UI.txtPanTT(7) = uicontrol(...
-            'Style', 'text', ...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'FontName', D.UI.txtFont,...
-            'FontSize', D.UI.fontSzTxtHuge(1),...
-            'FontWeight', 'Bold',...
-            'HorizontalAlignment', 'center',...
-            'Position', ps,...
-            'String', 'XX',...
-            'Visible', 'off');
-        
-        % Create TT orientation text object
-        ps = [ps(1), btm+dflt_ht*0.75, ps(3), dflt_ht*0.5];
-        D.UI.txtPanTT(6) = uicontrol(...
-            'Style', 'text', ...
-            'Parent', D.UI.panTrackTT,...
-            'Units', 'Normalized',...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'FontName', D.UI.txtFont,...
-            'FontSize', D.UI.fontSzTxtHuge(1),...
-            'FontWeight', 'Bold',...
-            'HorizontalAlignment', 'center',...
-            'Position', ps,...
-            'String', 'XX',...
-            'Visible', 'off');
-        
-        % Set text colors
-        set(D.UI.txtPanTT, 'ForegroundColor', D.UI.disabledCol)
-        
-        % Handle stand alone run
-        if ~isTTtrackSolo
-            
-            % Load rat
-            D.UI.popLoadRatTTInf.Value = find(ismember(D.PAR.ratList, D.PAR.ratLab(2:end)));
-            PopLoadRatTTInf(D.UI.popLoadRatTTInf);
-        end
-        
-        %==========================================================================
-        
-    end
-
 % ----------------------------RAT IN CHECK-------------------------
 
     function Rat_In_Check()
@@ -5944,8 +5879,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             PopRat();
             
             % TRIGGER SETUP DONE
-            set(D.UI.btnSetupDone, 'Value', 1);
-            BtnSetupDone();
+            set(D.UI.toggSetupDone, 'Value', 1);
+            ToggSetupDone();
             
         end
         
@@ -6058,16 +5993,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
-        % Get NLX vt data and reformat data with samples in column vectors
-        if strcmp(fld, 'Rat')
-            % Get rat vt data
+        % Include head direction for implant sessions
+        if D.F.implant_session && strcmp(fld, 'Rat')
+            
+            % Get vt data including head direction
             [~, D.P.(fld).vtTS, D.P.(fld).vtPos, D.P.(fld).vtHD, D.P.(fld).vtNRecs, ~] = ...
                 NlxGetNewVTData(D.NLX.vt_rat_ent);
-            D.P.(fld).hd_deg = D.P.(fld).vtHD';
+            
         else
-            % Get robot vt data
+            
+            % Dont include head direction
             [~, D.P.(fld).vtTS, D.P.(fld).vtPos, ~, D.P.(fld).vtNRecs, ~] = ...
                 NlxGetNewVTData(D.NLX.vt_rob_ent);
+            
         end
         
         % Add to count
@@ -6371,7 +6309,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             %% TRANSFORM HD
             
             % Run only for rat data
-            if  D.F.plot_hd && strcmp(fld, 'Rat')
+            if  D.F.implant_session && strcmp(fld, 'Rat')
+                
+                % Copy over data
+                D.P.(fld).hd_deg = D.P.(fld).vtHD';
                 
                 % Exclude values
                 D.P.Rat.hd_deg(exc_ind) = NaN;
@@ -6388,6 +6329,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Convert HD to radians
                 D.P.Rat.hd_rad = deg2rad(D.P.Rat.hd_deg);
                 
+                % Set flag
+                D.F.plot_hd = any(~isnan(D.P.Rat.hd_rad));
+                
             end
             
         end
@@ -6400,7 +6344,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % BAIL IF SETUP NOT FINISHED
         update_ui = false;
-        if ~D.F.final_setup_done
+        if ~D.F.session_setup_done
             return;
         end
         
@@ -7076,13 +7020,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             tt_ind = tt_plot(z_tt);
             
             % Plot new or unplotted data
-            if get(D.UI.toggSubActionTT(2,1,1),'Value') == 1
+            if get(D.UI.toggSubActionTT(2,1),'Value') == 1
                 
                 % Plot pos
                 D.S.plot_clust = D.S.plot_clust | ...
                     (~isgraphics(D.UI.clustH) & D.S.active_clust);
                 
-            elseif get(D.UI.toggSubActionTT(2,2,1),'Value') == 1 && ...
+            elseif get(D.UI.toggSubActionTT(2,2),'Value') == 1 && ...
                     ~isgraphics(D.UI.imgttOcc)
                 
                 % Plot rate
@@ -7111,7 +7055,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 y = D.S.pos_clust{tt_ind, clust_ind}{2}(1:ind_end,2);
                 
                 % Do plot type
-                if get(D.UI.toggSubActionTT(2,1,1),'Value') == 1
+                if get(D.UI.toggSubActionTT(2,1),'Value') == 1
                     
                     % Delete existing plots
                     if isgraphics(D.UI.clustH(tt_ind,clust_ind))
@@ -7126,7 +7070,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         'MarkerSize', 5, ...
                         'Parent', D.UI.axH(7));
                     
-                elseif get(D.UI.toggSubActionTT(2,2,1),'Value') == 1
+                elseif get(D.UI.toggSubActionTT(2,2),'Value') == 1
                     
                     % Compute inbound occ bin counts
                     occ_now = histcounts2(y, x, D.PAR.ttBinEdgeY, D.PAR.ttBinEdgeX);
@@ -7845,7 +7789,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% BAIL IF SETUP NOT FINISHED OR DT NOT REACEHD
         if ...
-                ~D.F.final_setup_done || ...
+                ~D.F.session_setup_done || ...
                 Elapsed_Seconds(now) - D.T.info_txt_update < 0.1
             return
         end
@@ -7908,7 +7852,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.rob_vcc = c2m.('J').dat1;
             
             % Format string
-                    infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
+            infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
             set(D.UI.txtPerfInf(7), 'String', infstr)
         end
         
@@ -7938,6 +7882,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 pass = false;
             end
             
+            
             % Make sure arg returned
             if pass
                 
@@ -7947,6 +7892,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Format string
                 infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
                 set(D.UI.txtPerfInf(8), 'String', infstr)
+                
+                % Log/print
+                
                 
                 % TEMP
                 %                 persistent print_75
@@ -7985,7 +7933,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% PRINT TIME INFO
         
         % Get session time
-        nowTim(1) =  Elapsed_Seconds(now) - D.T.ses_str_tim;
+        nowTim(1) =  Elapsed_Seconds(now) - D.T.ses_str;
         
         % Get recording elapsed time plus saved time
         if  D.F.rec
@@ -8019,10 +7967,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat('_',1,1), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
         
         % Print time
-        set(D.UI.txtTimElspInf, 'String', infstr)
+        set(D.UI.txtTimeInf(1), 'String', infstr)
         
         % Save current time to UserData
-        set(D.UI.txtTimElspInf, 'UserData', nowTim)
+        set(D.UI.txtTimeInf(1), 'UserData', nowTim)
         
         % Loop and reward times
         infstr = sprintf( ...
@@ -8037,7 +7985,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DB.draw(1), D.DB.draw(2), D.DB.draw(3), D.DB.draw(4)/D.DB.draw(5), ...
             D.DB.loop(1), D.DB.loop(2), D.DB.loop(3), D.DB.loop(4)/D.DB.loop(5) ...
             );
-        set(D.UI.txtTimDebug, 'String', infstr)
+        set(D.UI.txtPerfInf(9), 'String', infstr)
         
     end
 
@@ -8523,7 +8471,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
         D.SS_IO_2.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
         D.SS_IO_2.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
-        D.SS_IO_2.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end_tim - D.T.ses_str_tim) / 60;
+        D.SS_IO_2.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end_tim - D.T.ses_str) / 60;
         D.SS_IO_2.(D.PAR.ratLab).Session_Condition(rowInd) = char(D.PAR.sesCond);
         D.SS_IO_2.(D.PAR.ratLab).Session_Task(rowInd) = char(D.PAR.sesTask);
         % save session number of this condition
@@ -8631,7 +8579,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Disconnect_NLX()
         
         % End NLX polling
-        D.F.poll_nlx = false;
+        D.F.run_task = false;
         
         if isfield(D, 'NLX')
             if ~isempty(D.NLX)
@@ -8852,6 +8800,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         clear(Vars{:});
         
     end
+
 
 
 
@@ -9154,10 +9103,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -------------------------------SETUP DONE--------------------------------
-    function BtnSetupDone(~, ~, ~)
+    function ToggSetupDone(~, ~, ~)
         
-        % Disable button so only pressed once
-        Set_Button_State(D.UI.btnSetupDone, 'Unenable');
+        % Disable Setup panel objects
+        Set_Button_State(D.UI.toggSetupDone, 'Update');
+        Set_Object_Group('Setup_Objects', 'Disable')
         
         % Confirm UI entries
         if ...
@@ -9213,7 +9163,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.rat_loaded = true;
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnSetupDone', get(D.UI.btnSetupDone,'Value')));
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggSetupDone', get(D.UI.toggSetupDone,'Value')));
         Update_UI(10);
     end
 
@@ -9332,9 +9282,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             [b_ind, tt_ind] = find(ismember(D.TT.ttFlds, tt_lab));
             
             % Enable clust buttons
-            set(D.UI.btnSubClust(b_ind,tt_ind,1:D.S.nClust(tt_list_ind),:), 'Enable', 'on')
+            set(D.UI.btnSubClust(b_ind,tt_ind,1:D.S.nClust(tt_list_ind)), 'Enable', 'on')
             for z_c = 1:D.S.nClust(tt_list_ind)
-                set(D.UI.btnSubClust(b_ind,tt_ind,z_c,:), ...
+                set(D.UI.btnSubClust(b_ind,tt_ind,z_c), ...
                     'ForegroundColor', D.UI.clustCol(z_c,:));
             end
             
@@ -9353,7 +9303,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Set callback
-        set(D.UI.btnSubClust(isgraphics(D.UI.btnSubClust(:,:,:,:))), ...
+        set(D.UI.btnSubClust(isgraphics(D.UI.btnSubClust(:,:,:))), ...
             'Callback', {@ToggClust})
         
         % Initialize clust pos vals
@@ -9372,7 +9322,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         val = get(hObject, 'Value');
         
         % Set both buttons
-        set(D.UI.btnSubClust(bndl_ind,tt_ind,clust_ind,:), ...
+        set(D.UI.btnSubClust(bndl_ind,tt_ind,clust_ind), ...
             'Value', val);
         
         % Set plot flag
@@ -9388,7 +9338,91 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -----------------------------SLEEP BUTTON--------------------------------
-    function BtnSleep(~, ~, ~)
+    function ToggSleep(hObject, ~, ~)
+        
+        % Get user data and value
+        sleep_phase = get(hObject, 'UserData');
+        val = get(hObject, 'Value');
+        
+        % Bail if unsetting
+        if val == 0
+            return;
+        end
+        
+        % Start sleep phase
+        if val == 1
+            
+            % Update button
+            Set_Button_State(D.UI.toggSleep(sleep_phase), 'Update');
+            
+            % Store sleep start time
+            D.T.sleep_str(sleep_phase) = Elapsed_Seconds(now);
+            
+            % Send NLX start event
+            SendM2NLX(D.NLX.sleep_start_evt{sleep_phase});
+            
+            % Get sleep left
+            sleep_left = D.PAR.sleepDur(sleep_phase);
+            
+            % Wait till time ellapsed
+            while (sleep_left > 0)
+                
+                % Check time left
+                sleep_left = ...
+                    D.PAR.sleepDur(sleep_phase) - (Elapsed_Seconds(now) - D.T.sleep_str(sleep_phase));
+                
+                % Change button string
+                btn_str = ...
+                    sprintf('Sleep %d: %s', sleep_phase, datestr(sleep_left/(24*60*60), 'MM:SS'));
+                D.UI.toggSleep(sleep_phase).String = btn_str;
+                
+                % Pause before next loop
+                pause(0.1);
+                
+                % Check if button unset
+                if get(D.UI.toggSleep(sleep_phase), 'Value') == 0
+                    
+                    % Bail
+                    break;
+                    
+                end
+                
+            end
+            
+            % Send NLX end event
+            SendM2NLX(D.NLX.sleep_end_evt{sleep_phase});
+            
+            % Make sure button unset
+            set(D.UI.toggSleep(sleep_phase), 'Value', 0)
+            
+            % Handle Sleep 1
+            if sleep_phase == 1
+                
+                % Set flag
+                D.F.sleep_1_done = true;
+                
+                % Disable Sleep 1 stuff
+                Set_Object_Group('Sleep1_Objects', 'Disable');
+                
+            end
+            
+            % Handle Sleep 2
+            if sleep_phase == 2
+                
+                % Set flag
+                D.F.sleep_1_done = true;
+                
+                % Disable Sleep 2 stuff
+                Set_Object_Group('Sleep1_Objects', 'Disable');
+                
+                % Stop recording
+                if D.F.rec
+                    set(D.UI.toggRec,'Value', 0)
+                    BtnRec(D.UI.toggRec);
+                end
+            end
+            
+        end
     end
 
 % ---------------------------ROTATION BUTTON-------------------------------
@@ -9723,7 +9757,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ---------------------------RECORDING DONE--------------------------------
-    function BtnRecDone(~, ~, ~)
+    function ToggRecDone(~, ~, ~)
         
         % Check if session is done
         choice = dlgAWL(...
@@ -9742,18 +9776,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
         end
         
-        % Disable button so only pressed once
-        Set_Button_State(D.UI.toggRecDone, 'Unenable');
-        
         % Set flag
         D.F.rec_done = true;
         
-        % Save end time
-        D.T.ses_end_tim = Elapsed_Seconds(now);
-        
         % Print end time
         infstr = datestr(now, 'HH:MM:SS');
-        set(D.UI.editTimEndInf, 'String', infstr)
+        set(D.UI.editTimeInf(2), 'String', infstr)
         
         % Halt robot if not already halted
         if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
@@ -9790,41 +9818,32 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         SendM2C('I', 0)
         D.F.rat_in = false;
         
-        % Stop recording
-        if D.F.rec
-            set(D.UI.toggRec,'Value', 0)
-            BtnRec(D.UI.toggRec);
+        % Disable all recording objects
+        Set_Object_Group('Recording_Objects', 'Disable')
+        
+        % Save end time
+        D.T.ses_end_tim = Elapsed_Seconds(now);
+        
+        % Disable Recording objects
+        Set_Object_Group('Recording_Objects', 'Disable')
+        
+        % Disable Track and Forage task objects
+        Set_Object_Group('Track_Task_Objects', 'Disable')
+        Set_Object_Group('Forage_Task_Objects', 'Disable')
+        
+        % Enable sleep objects
+        if D.F.implant_session
+            Set_Button_State(D.UI.toggSleep(2), 'Enable');
+        else
+            % Stop recording
+            if D.F.rec
+                set(D.UI.toggRec,'Value', 0)
+                BtnRec(D.UI.toggRec);
+            end
         end
         
-        % Disable all recording buttons
-        Set_Panel_State(D.UI.panRec, 'Disable');
-        Set_Button_State(D.UI.toggAcq, 'Unenable');
-        Set_Button_State(D.UI.toggRec, 'Unenable');
-        Set_Button_State(D.UI.toggICR, 'Unenable');
-        
-        % Disable other buttons
-        Set_Button_State(D.UI.toggHaltRob, 'Unenable');
-        set(D.UI.popBulldoze, 'Enable', 'off')
-        Set_Button_State(D.UI.toggBulldoze, 'Unenable');
-        Set_Button_State(D.UI.toggDoCue, 'Unenable');
-        Set_Button_State(D.UI.toggBlockCue, 'Unenable');
-        Set_Button_State(D.UI.toggForceCue, 'Unenable');
-        Set_Button_State(D.UI.toggPickRewPos, 'Unenable');
-        Set_Button_State(D.UI.btnReward, 'Unenable');
-        set(D.UI.popReward, 'Enable', 'off');
-        Set_Button_State(D.UI.btnClrVT, 'Unenable');
-        Set_Button_State(D.UI.btnClrTT, 'Unenable');
-        Set_Button_State(D.UI.toggCellsCut, 'Unenable');
-        Set_Button_State(D.UI.toggActionTT(2,:), 'Unenable');
-        Set_Button_State(D.UI.toggSubActionTT(2,:,:), 'Unenable');
-        
-        % Disable inf panels
-        Set_Panel_State(D.UI.panSesInf, 'Disable');
-        Set_Panel_State(D.UI.panPerfInf, 'Disable');
-        Set_Panel_State(D.UI.panTimInf, 'Disable');
-        
         % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnRecDone', get(D.UI.toggRecDone,'Value')));
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggRecDone', get(D.UI.toggRecDone,'Value')));
         Update_UI(10);
     end
 
@@ -10352,7 +10371,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         for z_b = 1:D.TT.nBundles
             
             % Add bundle title
-            set(D.UI.panSelectTT(z_b,:), 'Title', D.TT.bndlLab{z_b})
+            set(D.UI.panSelectTT(z_b), 'Title', D.TT.bndlLab{z_b})
             set(D.UI.axLeg(z_b), 'Title', ...
                 text(...
                 'String', sprintf('    %s Bundle', D.TT.bndlLab{z_b}), ...
@@ -10412,9 +10431,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         ht_norm = 1/max(D.TT.nTT) * 0.85;
         btm_norm = linspace(1-ht_norm*1.25, 0.005, max(D.TT.nTT));
         
-        % Create hangle array
-        D.UI.toggTT = gobjects(D.TT.nBundles,max(D.TT.nTT),1);
-        D.UI.btnSubClust = gobjects(D.TT.nBundles,max(D.TT.nTT)-1,10,1);
+        % Create handle array
+        D.UI.toggTT = gobjects(D.TT.nBundles,max(D.TT.nTT));
+        D.UI.btnSubClust = gobjects(D.TT.nBundles,max(D.TT.nTT)-1,10);
         D.UI.toggHearChan = gobjects(D.TT.nBundles,max(D.TT.nTT)-1,4,2);
         D.UI.toggHearSide = gobjects(D.TT.nBundles,max(D.TT.nTT)-1,2);
         
@@ -10430,9 +10449,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Add main tt button
                 btn_tt_pos = [lft_norm(1), btm_norm(z_tt), wdth_norm, ht_norm];
-                D.UI.toggTT(z_b,z_tt,1) = ...
+                D.UI.toggTT(z_b,z_tt) = ...
                     uicontrol('style','togglebutton', ...
-                    'Parent', D.UI.panSelectTT(z_b,1), ...
+                    'Parent', D.UI.panSelectTT(z_b), ...
                     'Enable', 'Off', ...
                     'BackgroundColor', D.UI.enabledCol, ...
                     'String', tt_lab,...
@@ -10447,7 +10466,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Visible', 'off');
                 
                 % Enable button
-                set(D.UI.toggTT(z_b,z_tt,1), 'Enable', 'on', ...
+                set(D.UI.toggTT(z_b,z_tt), 'Enable', 'on', ...
                     'ForegroundColor', D.UI.ttCol(z_b,z_tt,:));
                 
                 % Add disable TT buttons
@@ -10459,7 +10478,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 val = ...
                     ~D.TT.ttInclude(ismember(D.TT.ttList, tt_fld));
                 D.UI.toggIncludeTT(z_b,z_tt) = uicontrol('style','togglebutton', ...
-                    'Parent', D.UI.panSelectTT(z_b,1), ...
+                    'Parent', D.UI.panSelectTT(z_b), ...
                     'Units', 'Normalized', ...
                     'String', sprintf('%c', char(216)),...
                     'Callback', {@ToggIncludeTT},...
@@ -10476,7 +10495,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Disable button if not set to active
                 if val == 1
-                    set(D.UI.toggTT(z_b,z_tt,:), 'Enable', 'off')
+                    set(D.UI.toggTT(z_b,z_tt), 'Enable', 'off')
                 end
                 
                 % Plot tt track
@@ -10498,9 +10517,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Create cluster button
                     btn_c_pos = [lft_sub_btn_arr(z_c), btm_sub_btn_arr(z_c), wdth_sub_btn, ht_sub_btn];
-                    D.UI.btnSubClust(z_b,z_tt,z_c,1) = ...
+                    D.UI.btnSubClust(z_b,z_tt,z_c) = ...
                         uicontrol('style','togglebutton', ...
-                        'Parent', D.UI.panSelectTT(z_b,1), ...
+                        'Parent', D.UI.panSelectTT(z_b), ...
                         'Enable', 'Off', ...
                         'BackgroundColor', D.UI.enabledCol, ...
                         'ForegroundColor', D.UI.clustCol(z_c,:), ...
@@ -10518,10 +10537,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Copy cluster buttons
-                D.UI.toggHearSide(z_b,z_tt,1) = copyobj(D.UI.btnSubClust(z_b,z_tt,1,1), D.UI.panSelectTT(z_b,1));
-                D.UI.toggHearSide(z_b,z_tt,2) = copyobj(D.UI.btnSubClust(z_b,z_tt,6,1), D.UI.panSelectTT(z_b,1));
-                D.UI.toggHearChan(z_b,z_tt,:,1) = copyobj(D.UI.btnSubClust(z_b,z_tt,2:5,1), D.UI.panSelectTT(z_b,1));
-                D.UI.toggHearChan(z_b,z_tt,:,2) = copyobj(D.UI.btnSubClust(z_b,z_tt,7:end,1), D.UI.panSelectTT(z_b,1));
+                D.UI.toggHearSide(z_b,z_tt,1) = copyobj(D.UI.btnSubClust(z_b,z_tt,1), D.UI.panSelectTT(z_b));
+                D.UI.toggHearSide(z_b,z_tt,2) = copyobj(D.UI.btnSubClust(z_b,z_tt,6), D.UI.panSelectTT(z_b));
+                D.UI.toggHearChan(z_b,z_tt,:,1) = copyobj(D.UI.btnSubClust(z_b,z_tt,2:5), D.UI.panSelectTT(z_b));
+                D.UI.toggHearChan(z_b,z_tt,:,2) = copyobj(D.UI.btnSubClust(z_b,z_tt,7:end), D.UI.panSelectTT(z_b));
                 
                 % Set properties
                 sn_lab = {'L','R'};
@@ -10591,8 +10610,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Load next TT
                     if isTTtrackSolo
-                        set(D.UI.toggTT(z_b,z_tt,:), 'Value', 1);
-                        ToggLoadTT(D.UI.toggTT(z_b,z_tt,1));
+                        set(D.UI.toggTT(z_b,z_tt), 'Value', 1);
+                        ToggLoadTT(D.UI.toggTT(z_b,z_tt));
                     end
                     
                     % Pause
@@ -10632,14 +10651,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set plot button
         if val == 1
             % TEMP
-            ind = ismember({D.UI.toggActionTT(:,1).String}, 'Plot Spikes');
+            ind = ismember({D.UI.toggActionTT(:).String}, 'Plot Spikes');
             D.UI.toggActionTT(ind,:).Value = 1;
-            ToggActionTT(D.UI.toggActionTT(ind,1));
+            ToggActionTT(D.UI.toggActionTT(ind));
         end
         
         % Update buttons
-        set(D.UI.toggSubActionTT(2,~btn_ind,:), 'Value', 0);
-        Set_Button_State(D.UI.toggSubActionTT(2,:,:), 'Update');
+        set(D.UI.toggSubActionTT(2,~btn_ind), 'Value', 0);
+        Set_Button_State(D.UI.toggSubActionTT(2,:), 'Update');
         
     end
 
@@ -10684,16 +10703,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Set_Button_State(D.UI.toggHearSide, 'Update');
             set(D.UI.toggHearChan, 'Value', 0)
             Set_Button_State(D.UI.toggHearChan, 'Update');
-            Set_Button_State(D.UI.toggSubActionTT(1,:,:), 'Update');
+            Set_Button_State(D.UI.toggSubActionTT(1,:), 'Update');
             
             % Make sure one button set
-            set(D.UI.toggSubActionTT(1,btn_ind,:), 'Value', val);
             if val == 1
-                set(D.UI.toggSubActionTT(1,[1,2]~=btn_ind,:), 'Value', 0);
+                set(D.UI.toggSubActionTT(1,[1,2]~=btn_ind), 'Value', 0);
             else
-                set(D.UI.toggSubActionTT(1,[1,2]~=btn_ind,:), 'Value', 1);
+                set(D.UI.toggSubActionTT(1,[1,2]~=btn_ind), 'Value', 1);
             end
-            Set_Button_State(D.UI.toggSubActionTT(1,:,:), 'Update');
+            Set_Button_State(D.UI.toggSubActionTT(1,:), 'Update');
             
             % Disable headphone
             SendM2NLX('-SetAudioSource "AcqSystem1_Audio1" Left None');
@@ -10708,12 +10726,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Check what audio device to use
-        if D.UI.toggSubActionTT(1,1,1).Value == 1
+        if D.UI.toggSubActionTT(1,1).Value == 1
             
             % Set device to speaker
             dev_str = '"Primary Sound Driver"';
             
-        elseif D.UI.toggSubActionTT(1,2,1).Value == 1
+        elseif D.UI.toggSubActionTT(1,2).Value == 1
             
             % Set device to headphone
             dev_str = '"AcqSystem1_Audio1"';
@@ -10729,8 +10747,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get button values on this side
-        val_mat = [D.UI.toggHearChan(:,:,:,side_ind,1).Value];
-        val_mat = reshape(val_mat, size(D.UI.toggHearChan(:,:,:,side_ind,1)));
+        val_mat = [D.UI.toggHearChan(:,:,:,side_ind).Value];
+        val_mat = reshape(val_mat, size(D.UI.toggHearChan(:,:,:,side_ind)));
         
         % Get on chanels
         [b_on_ind, tt_on_ind, chan_on_ind] = ind2sub(size(val_mat), find(val_mat==1));
@@ -10752,8 +10770,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Unset all chanel buttons on this side
-                set(D.UI.toggHearSide(:,:,side_ind,:),'Value',0)
-                set(D.UI.toggHearChan(:,:,:,side_ind,:),'Value',0)
+                set(D.UI.toggHearSide(:,:,side_ind),'Value',0)
+                set(D.UI.toggHearChan(:,:,:,side_ind),'Value',0)
                 
             elseif val == 1
                 
@@ -10773,7 +10791,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Check if all chan on this side off
                 if isempty(chan_on_ind)
-                    set(D.UI.toggHearSide(:,:,side_ind,:),'Value',0)
+                    set(D.UI.toggHearSide(:,:,side_ind),'Value',0)
                     ent_set = 'None';
                 end
                 
@@ -10787,17 +10805,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     chan_set_arr(chan_ind) = true;
                     
                     % Unset side select button
-                    set(D.UI.toggHearSide(:,:,side_ind,:),'Value',0)
+                    set(D.UI.toggHearSide(:,:,side_ind),'Value',0)
                     
                     % Unset all chanels on this side that arent on this tt
-                    off_ind = true(size(D.UI.toggHearChan(:,:,:,:,1)));
+                    off_ind = true(size(D.UI.toggHearChan(:,:,:,:)));
                     off_ind(:,:,:,[1,2]~=side_ind) = false;
                     off_ind(b_ind,tt_ind,:,side_ind) = false;
-                    off_ind = cat(5,off_ind,off_ind);
                     set(D.UI.toggHearChan(off_ind),'Value',0)
                     
                     % Reset active side select button
-                    set(D.UI.toggHearSide(b_ind,tt_ind,side_ind,:),'Value',1)
+                    set(D.UI.toggHearSide(b_ind,tt_ind,side_ind),'Value',1)
                     
                 end
                 
@@ -10857,7 +10874,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bail if not in 'Track TTs' mode
-        if D.UI.toggActionTT(ismember({D.UI.toggActionTT(:,1).String}, 'Track TTs'), 1).Value == 0
+        if D.UI.toggActionTT(ismember({D.UI.toggActionTT(:).String}, 'Track TTs'), 1).Value == 0
             set(hObject, 'Value', 0)
             return;
         end
@@ -10866,7 +10883,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         set(D.UI.toggTT, 'Enable', 'off');
         
         % Enable this button
-        set(D.UI.toggTT(b_ind,tt_ind,:), 'Enable', 'on');
+        set(D.UI.toggTT(b_ind,tt_ind), 'Enable', 'on');
         
         % Reset objects
         set(D.UI.popTrn, 'Value', 1);
@@ -10877,7 +10894,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         set(D.UI.toggTT, 'Value', 0);
         
         % Set current toggle button value
-        set(D.UI.toggTT(b_ind,tt_ind,:), 'Value', 1);
+        set(D.UI.toggTT(b_ind,tt_ind), 'Value', 1);
         
         % Show last note
         set(D.UI.editOldNoteTT,'String',D.TT.ttLogTable{D.TT.Ses+1, [D.TT.ttFldNow,'_N']}{:})
@@ -10999,21 +11016,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Endable/Disable button if not set to active
         if val == 1
-            set(D.UI.toggTT(b_ind,tt_ind,:), 'Enable', 'off')
-            set(D.UI.btnSubClust(b_ind,tt_ind,:,:), ...
+            set(D.UI.toggTT(b_ind,tt_ind), 'Enable', 'off')
+            set(D.UI.btnSubClust(b_ind,tt_ind,:), ...
                 'Value', 0, ...
                 'Enable', 'off')
-            set(D.UI.toggHearSide(b_ind,tt_ind,:,:), ...
+            set(D.UI.toggHearSide(b_ind,tt_ind,:), ...
                 'Value', 0, ...
                 'Enable', 'off')
-            set(D.UI.toggHearChan(b_ind,tt_ind,:,:,:), ...
+            set(D.UI.toggHearChan(b_ind,tt_ind,:,:), ...
                 'Value', 0, ...
                 'Enable', 'off')
         else
-            set(D.UI.toggTT(b_ind,tt_ind,:), 'Enable', 'on')
-            set(D.UI.btnSubClust(b_ind,tt_ind,:,:), 'Enable', 'on')
-            set(D.UI.toggHearSide(b_ind,tt_ind,:,:), 'Enable', 'on')
-            set(D.UI.toggHearChan(b_ind,tt_ind,:,:,:), 'Enable', 'on')
+            set(D.UI.toggTT(b_ind,tt_ind), 'Enable', 'on')
+            set(D.UI.btnSubClust(b_ind,tt_ind,:), 'Enable', 'on')
+            set(D.UI.toggHearSide(b_ind,tt_ind,:), 'Enable', 'on')
+            set(D.UI.toggHearChan(b_ind,tt_ind,:,:), 'Enable', 'on')
         end
         
         % Store value
@@ -11039,7 +11056,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get button ind
-        btn_ind = ismember({D.UI.toggActionTT(:,1).String}, action_str);
+        btn_ind = ismember({D.UI.toggActionTT(:).String}, action_str);
         
         % Enable/dissable button and turn objects
         if strcmp('Track TTs', action_str)
@@ -11062,8 +11079,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update buttons
-        set(D.UI.toggActionTT(btn_ind,:), 'Value', val);
-        set(D.UI.toggActionTT(~btn_ind,:), 'Value', 0);
+        set(D.UI.toggActionTT(btn_ind), 'Value', val);
+        set(D.UI.toggActionTT(~btn_ind), 'Value', 0);
         Set_Button_State(D.UI.toggActionTT, 'Update');
         
     end
@@ -11179,7 +11196,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update tt select button vars
-        set(D.UI.toggTT(b_ind,tt_ind,:), ...
+        set(D.UI.toggTT(b_ind,tt_ind), ...
             'BackgroundColor', D.UI.disabledCol, ...
             'UserData', [b_ind, tt_ind, 1])
         
@@ -11206,7 +11223,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         SetPaxToTT(b_ind, tt_ind);
         
         % Reset buttons
-        ToggLoadTT(D.UI.toggTT(b_ind,tt_ind,1));
+        ToggLoadTT(D.UI.toggTT(b_ind,tt_ind));
         
     end
 
@@ -11427,11 +11444,378 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
+% -----------------------BUTTON STATUS STOP TIMER--------------------------
+
+    function TabGrpChange(~, ~, ~)
+        
+        % Bail if panels not setup
+        if ~isfield(D.UI, 'tt_tab_1_select_pan_pos') || ...
+                ~isfield(D.UI, 'tt_tab_2_select_pan_pos')
+            return;
+        end
+        
+        % Get new tab
+        tab_str = D.UI.tabgp.SelectedTab.Title;
+        
+        % Bail if tab already active
+        if strcmp(get(D.UI.tabgp, 'UserData'), tab_str)
+            return;
+        else
+            set(D.UI.tabgp, 'UserData', tab_str)
+        end
+        
+        % Get button position and new parent
+        if strcmp(tab_str, 'ICR')
+            tab_parent = D.UI.tabICR;
+            new_pos = D.UI.tt_tab_1_select_pan_pos;
+            old_pos = D.UI.tt_tab_2_select_pan_pos;
+            
+        else
+            tab_parent = D.UI.tabTT;
+            new_pos = D.UI.tt_tab_2_select_pan_pos;
+            old_pos = D.UI.tt_tab_1_select_pan_pos;
+        end
+        
+        % Move panel
+        for z_b = 1:2
+            D.UI.panSelectTT(z_b).Position = new_pos(z_b,:);
+        end
+        
+        % Button shift
+        lft_shft = new_pos(1,1) - old_pos(1,1);
+        btm_shft = new_pos(1,2) - old_pos(1,2);
+        
+        % Move button
+        for z_r = 1:size(D.UI.toggActionTT,2)
+            D.UI.toggActionTT(z_r).Position([1,2]) = ...
+                D.UI.toggActionTT(z_r).Position([1,2]) + [lft_shft, btm_shft];
+        end
+        
+        for z_r = 1:size(D.UI.toggSubActionTT,1)
+            for z_c = 1:size(D.UI.toggSubActionTT,2)
+                D.UI.toggSubActionTT(z_r,z_c).Position([1,2]) = ...
+                    D.UI.toggSubActionTT(z_r,z_c).Position([1,2]) + [lft_shft, btm_shft];
+            end
+        end
+        
+        % Change parent
+        set(D.UI.panSelectTT, 'Parent', tab_parent)
+        set(D.UI.toggActionTT, 'Parent', tab_parent)
+        set(D.UI.toggSubActionTT, 'Parent', tab_parent)
+    end
+
+
 
 
 
 
 %% ============================ GRAPHICS FUNCTIONS ========================
+
+% ------------------------SET CUE BUTTONS----------------------------------
+    function Set_Object_Group(set_what, setting_str)
+        % Note:
+        %   set_what = ['Setup_Objects', 'Recording_Objects' 'Text_Objects'
+        %               'Ephys_Objects', 'Sleep1_Objects', 'Sleep2_Objects'
+        %               'Track_Task_Objects', 'Forage_Task_Objects']
+        %   setting_str = ['Enable', 'Disable']
+        
+        %% SETUP OBJECTS
+        if strcmp(set_what, 'Setup_Objects')
+            
+            % Set to 'Enable
+            if strcmp(setting_str, 'Enable')
+                
+                % Enable all setup stuff
+                Set_Panel_State(D.UI.panStup, 'Enable');
+                set(D.UI.popRat, 'Enable', 'on')
+                set(D.UI.popCond, 'Enable', 'on')
+                set(D.UI.popTask, 'Enable', 'on')
+                set(D.UI.popRewDel, 'Enable', 'on')
+                Set_Button_State(D.UI.toggCue, 'Enable');
+                Set_Button_State(D.UI.toggSnd, 'Enable');
+                Set_Panel_State(D.UI.panConsole, 'Enable');
+                Set_Button_State(D.UI.toggSetupDone, 'Enable');
+                
+                % Enable Quit
+                set(D.UI.btnQuitSes, 'Enable', 'on')
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Disable all setup stuff
+                Set_Panel_State(D.UI.panStup, 'Disable');
+                set(D.UI.popRat, 'Enable', 'off')
+                set(D.UI.popCond, 'Enable', 'off')
+                set(D.UI.popTask, 'Enable', 'off')
+                set(D.UI.popRewDel, 'Enable', 'off')
+                Set_Button_State(D.UI.toggCue, 'Unenable');
+                Set_Button_State(D.UI.toggSnd, 'Unenable');
+                Set_Button_State(D.UI.toggSetupDone, 'Unenable');
+                
+            end
+            
+        end
+        
+        %% SLEEP 1 OBJECTS
+        if strcmp(set_what, 'Sleep1_Objects')
+            
+            % Set to 'Enable'
+            if strcmp(setting_str, 'Enable')
+                
+                 % Enable record panel
+                Set_Panel_State(D.UI.panRec, 'Enable');
+                
+                % Enable Cheetah buttons
+                Set_Button_State(D.UI.toggAcq, 'Enable');
+                Set_Button_State(D.UI.toggRec, 'Enable');
+                
+                % Enable sleep button
+                Set_Button_State(D.UI.toggSleep(1), 'Enable');
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Unenable sleep button
+                Set_Button_State(D.UI.toggSleep(1), 'Unenable');
+                
+            end
+            
+        end
+        
+        %% SLEEP 2 OBJECTS
+        if strcmp(set_what, 'Sleep2_Objects')
+            
+            % Set to 'Enable'
+            if strcmp(setting_str, 'Enable')
+                
+                 % Enable record panel
+                Set_Panel_State(D.UI.panRec, 'Enable');
+                
+                % Enable Cheetah buttons
+                Set_Button_State(D.UI.toggAcq, 'Enable');
+                Set_Button_State(D.UI.toggRec, 'Enable');
+                
+                % Enable sleep button
+                Set_Button_State(D.UI.toggSleep(2), 'Enable');
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Unenable sleep button
+                Set_Button_State(D.UI.toggSleep(2), 'Unenable');
+                
+            end
+            
+        end
+        
+        %% RECORDING OBJECTS
+        if strcmp(set_what, 'Recording_Objects')
+            
+            % Set to 'Enable
+            if strcmp(setting_str, 'Enable')
+                
+                % Enable record panel
+                Set_Panel_State(D.UI.panRec, 'Enable');
+                
+                % Enable Halt robot
+                if D.PAR.sesCond ~= 'Manual_Training'
+                    Set_Button_State(D.UI.toggHaltRob, 'Enable');
+                end
+                
+                % Enable Reward button
+                set(D.UI.popReward, ...
+                    'Enable', 'on', ...
+                    'BackgroundColor', D.UI.enabledCol);
+                Set_Button_State(D.UI.btnReward, 'Enable');
+                
+                % Enable Cheetah buttons
+                Set_Button_State(D.UI.toggAcq, 'Enable');
+                Set_Button_State(D.UI.toggRec, 'Enable');
+                
+                % Clear VT
+                Set_Button_State(D.UI.btnClrVT, 'Enable');
+                
+                % Enable Track Task objects
+                if D.PAR.sesTask == 'Track'
+                    
+                    % Enable bulldoze pop menue
+                    set(D.UI.popBulldoze, 'Enable', 'on')
+                    Set_Button_State(D.UI.toggBulldoze, 'Enable');
+                    set(D.UI.editBulldoze, 'Enable', 'on')
+                    
+                    % Enable rotation buttons
+                    if D.PAR.sesCond == 'Rotation'
+                        
+                        % Make second button active
+                        Set_Button_State(D.UI.toggICR(1), 'Disable');
+                        Set_Button_State(D.UI.toggICR(2), 'Enable', D.UI.rotCol(2,:));
+                        
+                    end
+                    
+                    % Enable target select button
+                    Set_Button_State(D.UI.toggPickRewPos, 'Enable');
+                    
+                    % Enable cue buttons
+                    if D.PAR.sesCond ~= 'Manual_Training' && ...
+                            D.PAR.sesCond ~= 'Rotation'
+                        
+                        Set_Button_State(D.UI.toggDoCue, 'Enable');
+                        Set_Button_State(D.UI.toggBlockCue, 'Enable');
+                        Set_Button_State(D.UI.toggForceCue, 'Enable');
+                        
+                    end
+                    
+                end
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Panel
+                Set_Panel_State(D.UI.panRec, 'Disable');
+                
+                Set_Button_State(D.UI.toggRecDone, 'Unenable');
+                
+                % Cheetah objects
+                Set_Button_State(D.UI.toggAcq, 'Unenable');
+                Set_Button_State(D.UI.toggRec, 'Unenable');
+                Set_Button_State(D.UI.toggICR, 'Unenable');
+                
+                % Robot objects
+                Set_Button_State(D.UI.toggHaltRob, 'Unenable');
+                set(D.UI.popBulldoze, 'Enable', 'off')
+                Set_Button_State(D.UI.toggBulldoze, 'Unenable');
+                set(D.UI.editBulldoze, 'Enable', 'off')
+                
+                % Reward buttons
+                Set_Button_State(D.UI.btnReward, 'Unenable');
+                set(D.UI.popReward, 'Enable', 'off');
+                Set_Button_State(D.UI.toggDoCue, 'Unenable');
+                Set_Button_State(D.UI.toggBlockCue, 'Unenable');
+                Set_Button_State(D.UI.toggForceCue, 'Unenable');
+                Set_Button_State(D.UI.toggPickRewPos, 'Unenable');
+                
+                % Other
+                Set_Button_State(D.UI.btnClrTT, 'Unenable');
+                Set_Button_State(D.UI.toggCellsCut, 'Unenable');
+                
+            end
+            
+        end
+        
+        %% TEXT INFO
+        if strcmp(set_what, 'Text_Objects')
+            
+            % Set to 'Enable'
+            if strcmp(setting_str, 'Enable')
+                
+                % Text panels
+                Set_Panel_State(D.UI.panSesInf, 'Enable');
+                Set_Panel_State(D.UI.panPerfInf, 'Enable');
+                Set_Panel_State(D.UI.panTimInf, 'Enable');
+                
+                % Session info
+                set(D.UI.txtSesInf, 'Visible', 'on')
+                set(D.UI.popLapsPerRot, 'Visible', 'on');
+                set(D.UI.popRotPos, 'Visible', 'on');
+                if D.PAR.sesCond ~= 'Rotation'
+                    set(D.UI.popLapsPerRot, 'Enable', 'off');
+                    set(D.UI.popRotPos, 'Enable', 'off');
+                end
+                
+                % Performance info
+                set(D.UI.txtPerfInf, 'Visible', 'on')
+                set(D.UI.popLapTim, 'Visible', 'on')
+                set(D.UI.popRewInfo, 'Visible', 'on')
+                
+                % Timer info
+                set(D.UI.txtTimeInf, 'Visible', 'on')
+                set(D.UI.editTimeInf, 'Visible', 'on')
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Text panels
+                Set_Panel_State(D.UI.panSesInf, 'Disable');
+                Set_Panel_State(D.UI.panPerfInf, 'Disable');
+                Set_Panel_State(D.UI.panTimInf, 'Disable');
+                
+            end
+        end
+        
+        %% SET EPHYS OBJECTS
+        if strcmp(set_what, 'Ephys_Objects')
+            
+            % Set to 'Enable
+            if strcmp(setting_str, 'Enable')
+                
+                % Enable main tt panel objects
+                Set_Panel_State(D.UI.panSelectTT, 'Enable');
+                Set_Button_State(D.UI.toggTT, 'Enable');
+                Set_Button_State(D.UI.toggIncludeTT, 'Enable');
+                Set_Button_State(D.UI.toggActionTT, 'Enable');
+                set(D.UI.btnSaveLogTT, 'Enable', 'on');
+                set(D.UI.toggHearSide, 'Enable', 'on');
+                set(D.UI.toggHearChan, 'Enable', 'on');
+                
+                % Enable show/hide tt track buttons
+                Set_Button_State(D.UI.toggHideTT, 'Enable');
+                
+                % Enable cell cut toggle
+                Set_Button_State(D.UI.toggCellsCut, 'Enable');
+                
+                % Clear TT
+                Set_Button_State(D.UI.btnClrTT, 'Enable');
+                
+                % TT plot type
+                Set_Button_State(D.UI.toggActionTT, 'Enable');
+                
+                % Color bars
+                set(D.UI.colBarH, 'Visible', 'on')
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Unenable main tt panel objects
+                Set_Panel_State(D.UI.panSelectTT, 'Unenable');
+                Set_Button_State(D.UI.toggTT, 'Unenable');
+                Set_Button_State(D.UI.toggIncludeTT, 'Unenable');
+                Set_Button_State(D.UI.toggActionTT, 'Unenable');
+                set(D.UI.btnSaveLogTT, 'Enable', 'off');
+                set(D.UI.toggHearSide, 'Enable', 'off');
+                set(D.UI.toggHearChan, 'Enable', 'off');
+                
+                % Unenable show/hide tt track buttons
+                Set_Button_State(D.UI.toggHideTT, 'Unenable');
+                
+                % Unenable cell cut toggle
+                Set_Button_State(D.UI.toggCellsCut, 'Unenable');
+                
+                % Clear TT
+                Set_Button_State(D.UI.btnClrTT, 'Unenable');
+                
+                % TT plot type
+                Set_Button_State(D.UI.toggActionTT, 'Unenable');
+                
+                % Color bars
+                set(D.UI.colBarH, 'Visible', 'off')
+                
+            end
+            
+        end
+        
+    end
 
 % ------------------------SET CUE BUTTONS----------------------------------
     function Set_Cue_Buttons(setting_str)
@@ -11489,8 +11873,27 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Do true Disable
             if strcmp(setting_str, 'Unenable')
                 
-                % Disable
-                set(hand(z_h),  'Enable', 'off')
+                % Get backround color
+                if hand(z_h).Value == 1
+                    col_bck = D.UI.activeCol + mean(D.UI.disabledCol);
+                    col_bck(col_bck>1) = 1;
+                else
+                    col_bck = D.UI.disabledCol;
+                end
+                
+                % Set Enable = 'off'
+                set(hand(z_h), ...
+                    'BackgroundColor', col_bck, ...
+                    'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+                    'Enable', 'off')
+            end
+            
+            % Set Enable = 'on'
+            if ~strcmp(setting_str, 'Unenable') && ...
+                    ~strcmp(setting_str, 'Update') && ...
+                    strcmp(get(hand(z_h), 'Enable'), 'off')
+                
+                set(hand(z_h),  'Enable', 'on')
             end
             
             % Set to 'Enable' or 'Update'
@@ -11502,8 +11905,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Get backround color
                     if isempty(col_bck_in)
                         col_bck = D.UI.activeCol;
-                    elseif size(col_bck_in,1) > 1
-                        col_bck = col_bck_in(1,:);
+                    else
+                        col_bck = col_bck_in;
                     end
                     
                     % Get foreground color
@@ -11524,8 +11927,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Get backround color
                     if isempty(col_bck_in)
                         col_bck = D.UI.enabledCol;
-                    elseif size(col_bck_in,1) > 1
-                        col_bck = col_bck_in(2,:);
+                    else
+                        col_bck = col_bck_in;
                     end
                     
                     % Get foreground color
@@ -11553,12 +11956,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Set 'Disable'
-            if strcmp(setting_str, 'Disable') || ...
-                    strcmp(setting_str, 'Unenable')
+            if strcmp(setting_str, 'Disable')
                 
                 % Get backround color
                 if isempty(col_bck_in)
                     col_bck = D.UI.disabledCol;
+                else
+                    col_bck = col_bck_in;
                 end
                 
                 % Get foreground color
@@ -11579,13 +11983,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     hand(z_h).UserData(1) = false;
                 end
                 
-            end
-            
-            % Enable
-            if ~strcmp(setting_str, 'Unenable') && ...
-                    strcmp(get(hand(z_h), 'Enable'), 'off')
-                
-                set(hand(z_h),  'Enable', 'on')
             end
             
         end
@@ -11737,12 +12134,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Enable and show hear tt stuff
                 Set_Button_State(D.UI.toggHearSide, 'Enable');
                 set(D.UI.toggHearChan, 'Visible', 'on')
-                set(D.UI.toggSubActionTT(1,1,:), 'Value', 1)
-                set(D.UI.toggSubActionTT(1,2,:), 'Value', 0)
-                Set_Button_State(D.UI.toggSubActionTT(1,:,:), 'Enable');
+                set(D.UI.toggSubActionTT(1,1), 'Value', 1)
+                set(D.UI.toggSubActionTT(1,2), 'Value', 0)
+                Set_Button_State(D.UI.toggSubActionTT(1,:), 'Enable');
                 
                 % Run callback
-                ToggHearTT(D.UI.toggSubActionTT(1,1,1));
+                ToggHearTT(D.UI.toggSubActionTT(1,1));
                 
             end
             
@@ -11751,7 +12148,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Reset buttons
                 set(D.UI.toggTT, 'Value', 0)
-                ToggLoadTT(D.UI.toggTT(1,1,1));
+                ToggLoadTT(D.UI.toggTT(1,1));
                 
                 % Disable and hide TT panel stuff
                 Set_Panel_State(D.UI.panTrackTT, 'Disable');
@@ -11771,8 +12168,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 set(D.UI.toggHearSide, 'Value', 0)
                 Set_Button_State(D.UI.toggHearSide, 'Update');
                 set(D.UI.toggHearSide, 'Visible', 'off')
-                set(D.UI.toggSubActionTT(1,:,:), 'Value', 0)
-                Set_Button_State(D.UI.toggSubActionTT(1,:,:), 'Unenable');
+                set(D.UI.toggSubActionTT(1,:), 'Value', 0)
+                Set_Button_State(D.UI.toggSubActionTT(1,:), 'Unenable');
                 
             end
             
@@ -11789,9 +12186,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Visible', 'on')
                 
                 % Enable plot type toggles
-                set(D.UI.toggSubActionTT(2,1,:), 'Value', 1)
-                set(D.UI.toggSubActionTT(2,2,:), 'Value', 0)
-                Set_Button_State(D.UI.toggSubActionTT(2,:,:), 'Enable');
+                set(D.UI.toggSubActionTT(2,1), 'Value', 1)
+                set(D.UI.toggSubActionTT(2,2), 'Value', 0)
+                Set_Button_State(D.UI.toggSubActionTT(2,:), 'Enable');
             end
             
             % Set to 'Hide'
@@ -11803,8 +12200,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Visible', 'off')
                 
                 % Disable plot type toggles
-                set(D.UI.toggSubActionTT(2,:,:), 'Value', 0)
-                Set_Button_State(D.UI.toggSubActionTT(2,:,:), 'Unenable');
+                set(D.UI.toggSubActionTT(2,:), 'Value', 0)
+                Set_Button_State(D.UI.toggSubActionTT(2,:), 'Unenable');
             end
             
         end
@@ -11822,7 +12219,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         depths_old_mm = depths_old/1000; % convert to mm
         
         % Append new depth if tt has been updated
-        user_date = get(D.UI.toggTT(bndl,tt,1), 'UserData');
+        user_date = get(D.UI.toggTT(bndl,tt), 'UserData');
         state = user_date(3);
         if state == 1
             depths_new = D.TT.ttLogTable{D.TT.Ses+1, [tt_fld,'_D']};
@@ -12324,7 +12721,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if nargin == 1
             do_print = true;
         end
-            
+        
         % Store start time
         t_start = Elapsed_Seconds(now);
         

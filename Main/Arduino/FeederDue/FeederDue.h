@@ -150,7 +150,7 @@ int cal_nMeasPerSteps = 10;
 
 #pragma region ============= VARIABLE SETUP ============
 
-// Flow/state control
+// FLOW/STATE FLAGS
 struct FC
 {
 	char motorControl[25] = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
@@ -189,7 +189,7 @@ struct FC
 // Initialize
 fc;
 
-// Debugging general
+// DEBUGGING GENERAL
 uint32_t cnt_loop_tot = 0;
 uint16_t cnt_loop_short = 0;
 uint16_t cnt_warn = 0;
@@ -201,13 +201,13 @@ float dt_pingRoundTrip[2] = { 0 };
 const uint16_t maxStoreStrLng = 300;
 const uint16_t maxMsgStrLng = maxStoreStrLng - 50;
 
-// Print debugging
+// PRINT DEBUGGING
 const int printQueueSize = 30;
 char printQueue[printQueueSize][maxStoreStrLng] = { { 0 } };
 int printQueueIndStore = 0;
 int printQueueIndRead = 0;
 
-// Serial com general
+// SERIAL COM GENERAL
 const int sendQueueSize = 10;
 const int sendQueueBytes = 18;
 const int resendMax = 5;
@@ -218,11 +218,11 @@ int cnt_packBytesRead = 0;
 int cnt_packBytesSent = 0;
 int cnt_packBytesDiscarded = 0;
 
-// Start/Quit
+// START/QUIT
 uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
-// Pixy
+// PIXY
 const double pixyCoeff[5] = {
 	0.000000043550534,
 	-0.000023239535204,
@@ -232,7 +232,7 @@ const double pixyCoeff[5] = {
 };
 const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 
-// AutoDriver
+// AUTODRIVER
 const double cm2stp = 200 / (9 * PI);
 const double stp2cm = (9 * PI) / 200;
 const float maxSpeed = 100; // (cm) 
@@ -258,7 +258,7 @@ const double frontMotCoeff[5] = {
 	0.021557249590414,
 };
 
-// Kalman model measures
+// KALMAN MODEL
 struct KAL
 {
 	double RatPos = 0;
@@ -270,12 +270,12 @@ struct KAL
 }
 kal;
 
-// Pid Settings
+// PID SETTINGS
 const float pidSetPoint = 50; // (cm)
 const float guardDist = 4.5;
 const float feedDist = 66;
 
-// Movement
+// MOVEMENT
 float moveToSpeed = 80; // (cm/sec)
 
 // REWARD
@@ -284,7 +284,7 @@ const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 
-// Solonoids
+// SOLONOIDS
 /*
 EtOH run after min time or distance
 */
@@ -293,7 +293,7 @@ const int dt_delEtOH[2] = { 30000, 60000 }; // (ms)
 uint32_t t_solOpen = 0;
 uint32_t t_solClose = 0;
 
-// Battery tracking
+// BATTERY
 /*
 Updated when EtOH relay opened
 */
@@ -310,15 +310,15 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-const int trackLEDduty[2] = { 20, 75 }; // value between 0 and 255
+const int trackLEDduty[2] = { 128, 255 }; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
-						 // LCD
+// LCD
 extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 
-// Interrupts 
+// INTERUPTS
 volatile uint32_t t_sync = 0; // (ms)
 volatile uint32_t v_t_irSyncLast = 0; // (ms)
 volatile int v_dt_ir = 0;

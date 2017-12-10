@@ -8274,7 +8274,6 @@ void setup() {
 	// Flag setup done
 	fc.isSetup = true;
 
-
 	// TEMP
 	//Log.TestLoad(0, "LOG00035.CSV");
 	//Log.TestLoad(2500);
