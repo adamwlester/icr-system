@@ -241,7 +241,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Replace battery voltage level (C)
         D.PAR.robVccReplace = 11.8;
         % Warning battery voltage level (%)
-        D.PAR.cubeVccWarning = 30;
+        D.PAR.cubeVccWarning = 85;
         % Robot guard dist
         D.PAR.guardDist = 4.5 * ((2 * pi)/(140 * pi));
         % PID setPoint
@@ -2874,7 +2874,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             val = z_m == D.UI.monDefault;
             D.UI.toggMon(z_m) = uicontrol('Style','togglebutton', ...
                 'Parent', D.UI.tabICR, ...
-                'Enable', 'on', ...
+                'Enable', 'off', ...
                 'String', sprintf('M%d', z_m), ...
                 'Callback', {@ToggMon}, ...
                 'Units', 'Normalized', ...
@@ -11232,7 +11232,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     if val == 0
                         
-                        % Check if chanels need to be turned off
+                        % Get list of all 'on' chanels for this side
                         if ~isempty(b_on_ind) && ~isempty(tt_on_ind)
                             ent_set = 'None';
                         end
@@ -11243,12 +11243,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         
                     elseif val == 1
                         
-                        % Set all 'off' chanel buttons for this tt
-                        set(D.UI.toggHearChan(bndl_ind,tt_ind,:,side_ind),'Value',1)
-                        
-                        % Flag to turn on all chanels
-                        ent_set = D.TT.ttFlds{bndl_ind,tt_ind};
-                        chan_set_arr(:) = true;
+                        % Set all 'off' chanel buttons for this side
+                        set(D.UI.toggHearSide(:,:,side_ind),'Value',1)
+                        set(D.UI.toggHearChan(:,:,:,side_ind),'Value',1)
                         
                     end
                     
@@ -11300,10 +11297,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Set device
                 Send_M2NLX(['-SetAudioSource ', msg_str]);
                 
-                % Check if any channels need setting
+                % Set channels
                 if ~strcmp(ent_set, 'None')
-                    
-                    % Set each channel for this tt
                     for z_chn = 1:4
                         
                         % Create chan setting string
@@ -11314,7 +11309,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Send_M2NLX(['-SetAudioStreamEnabled ', msg_str]);
                         
                     end
-                    
                 end
                 
             end
@@ -12175,6 +12169,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set to 'Enable
             if strcmp(setting_str, 'Enable')
+                
+                % Enable monitor pos buttons
+                Set_Button_State(D.UI.toggMon, 'Enable');
                 
                 % Enable all setup stuff
                 Set_Panel_State(D.UI.panStup, 'Enable');

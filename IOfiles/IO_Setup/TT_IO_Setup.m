@@ -7,10 +7,9 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0000'} ...
+    {'r0203'} ...
     {'r0499'} ...
     {'r0278'} ...
-    {'r9999'} ...
     ];
 
 %% =========================== Setup vars =================================
@@ -123,6 +122,7 @@ TT_IO = sortrows(T, 'RowNames');
 save(fullfile(ioDir,'TT_IO'), 'TT_IO')
 
 % Print saved changes
+ratList = ratList(~ismember(ratList, exc_rats));
 for i = 1:length(ratList)
     fprintf('FINISHED Adding Rat %s\n', char(ratList(i)));
 end

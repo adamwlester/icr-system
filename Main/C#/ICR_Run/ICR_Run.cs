@@ -74,8 +74,8 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 0,
-            do_debug_mat: false,
+            system_test: 0, // 0
+            do_debug_mat: true, // false
             break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -107,7 +107,7 @@ namespace ICR_Run
 
         // Initialize vt blocking object
         private static VT_Handler vtHandler = new VT_Handler(_stop_watch: sw_main);
-        
+
         // Initialize callback object
         private static MNetCom.MNC_VTCallback deligate_netComCallback;
 
@@ -129,9 +129,9 @@ namespace ICR_Run
         // Define NetCom vars
         private static MNetComClient com_netComClient = new MNetComClient();
         private static string NETCOM_APP_ID = "ICR_Run"; // string displayed in Cheetah when connected
-        private static string NETCOM_ACQ_ENT_1 = "VT1"; // aquisition entity to stream
-        private static string NETCOM_ACQ_ENT_2 = "VT2"; // aquisition entity to stream
-        private static string NETCOM_IP = "127.0.0.1"; // host computer IP
+        private static string NETCOM_ACQ_ENT_VT1 = "VT1"; // aquisition entity to stream
+        private static string NETCOM_ACQ_ENT_VT2 = "VT2"; // aquisition entity to stream
+        private static string NETCOM_ServerIP = "192.168.3.100"; // host computer IP 9"127.0.0.1")
 
         // Create logging objects
         private static DB_Logger robLogger = new DB_Logger(_stop_watch: sw_main);
@@ -169,7 +169,7 @@ namespace ICR_Run
             'H', // halt movement [halt_state]
             'B', // bulldoze rat [bull_delay, bull_speed]
             'I', // rat in/out [in/out]
-            'O'  // confirm rat out [NA]
+            'O'  // confirm task done [NA]
              }
             );
 
@@ -185,7 +185,7 @@ namespace ICR_Run
             'Z', // reward zone
             'V', // robot streaming
             'K', // robot in place
-            'Y', // enable save
+            'Y', // task done
             'E', // enable exit
             'C', // confirm close
              }
@@ -578,8 +578,11 @@ namespace ICR_Run
 
             // Setup and begin NetCom streaming
             LogEvent("[Setup] RUNNING: Connect to NLX...");
-            if (!(com_netComClient.AreWeConnected()))
-                fc.isNlxConnected = com_netComClient.ConnectToServer(NETCOM_IP);
+            fc.isNlxConnected = com_netComClient.AreWeConnected();
+            while (!fc.isNlxConnected)
+            {
+                fc.isNlxConnected = com_netComClient.ConnectToServer(NETCOM_ServerIP);
+            }
             if (fc.isNlxConnected)
                 LogEvent("[Setup] SUCCEEDED: Connect to NLX");
             else
@@ -596,19 +599,25 @@ namespace ICR_Run
             // Stream rat vt
             if (db.systemTest != 3)
             {
-                LogEvent("[Run] STARTING: VT1 Stream");
-                com_netComClient.OpenStream(NETCOM_ACQ_ENT_1);
+                LogEvent("[Run] RUNNING: Open VT1 Stream...");
+                bool is_vt1_streaming = false;
+                while (!is_vt1_streaming)
+                    is_vt1_streaming = com_netComClient.OpenStream(NETCOM_ACQ_ENT_VT1);
+                LogEvent("[Run] FINISHED: Open VT1 Stream");
             }
 
             // Stream rob vt
-            LogEvent("[Run] STARTING: VT2 Stream");
-            com_netComClient.OpenStream(NETCOM_ACQ_ENT_2);
+            LogEvent("[Run] RUNNING: Open VT2 Stream...");
+            bool is_vt2_streaming = false;
+            while (!is_vt2_streaming)
+                is_vt2_streaming = com_netComClient.OpenStream(NETCOM_ACQ_ENT_VT2);
+            LogEvent("[Run] FINISHED: Open VT2 Stream");
 
             // Send streaming check request on seperate thread
             LogEvent("[Run] RUNNING: Confirm Robot Streaming...");
             RepeatSendPack_Thread(id: 'V', do_check_done: true);
             // Wait for confirmation from robot
-            pass = WaitForSerial(id: 'V', chk_send: true, chk_conf: true, chk_done: true, do_abort: true, timeout: 5000);
+            pass = WaitForSerial(id: 'V', chk_send: true, chk_conf: true, chk_done: true, do_abort: true);
             if (pass)
             {
                 // Send confirm stream to Matlbab
@@ -659,11 +668,11 @@ namespace ICR_Run
 
             // Main holding loop
             LogEvent("[Run] RUNNING: Main Session Loop...");
-            // Stay in loop till rat is out or error
+            // Stay in loop till task is done or error
             while (
                 com_netComClient.AreWeConnected() &&
                 !fc.isGUIfinished &&
-                !fc.isRecDone &&
+                !fc.isTaskDone &&
                 !fc.doAbort
                 ) ;
             if (!fc.doAbort)
@@ -690,19 +699,19 @@ namespace ICR_Run
             // Local vars
             bool pass;
 
-            // Check if we have confirmed rat is out and recording is done
-            if (fc.isRatIn && !fc.isRecDone)
+            // Check if we have confirmation task is done
+            if (fc.isRatIn && !fc.isTaskDone)
             {
-                LogEvent("[Run] RUNNING: Wait for Confirmation Rat is Out...");
+                LogEvent("[Run] RUNNING: Wait for Confirmation Task Finished...");
                 pass = WaitForMCOM(id: 'O', chk_rcv: true, timeout: fc.isSaveAbortRunning ? 30000 : 10000);
                 if (pass)
                 {
                     // Wait for all the other crap to be relayed from Matlab
                     Thread.Sleep(1000);
-                    LogEvent("[Exit] SUCCEEDED: Wait for Confirmation Rat is Out");
+                    LogEvent("[Exit] SUCCEEDED: Wait for Confirmation Task Finished");
                 }
                 else
-                    LogEvent("**WARNING** [Exit] ABORTED: Wait for Confirmation Rat is Out", is_warning: true);
+                    LogEvent("**WARNING** [Exit] ABORTED: Wait for Confirmation Task Finished", is_warning: true);
             }
 
             // MoveTo defualt pos
@@ -730,45 +739,15 @@ namespace ICR_Run
             // Wait 1 second to see move to plot
             Thread.Sleep(1000);
 
-            // Shut down NetCom
-            if (IsProcessOpen("Cheetah"))
-            {
-                LogEvent("[Exit] RUNNING: NetCom Disconnect...");
-                //// Stop recording aquisition
-                string reply = " ";
-                com_netComClient.SendCommand("-StopRecording", ref reply);
-                com_netComClient.SendCommand("-StopAcquisition", ref reply);
-
-                // Close NetCom sreams
-                com_netComClient.CloseStream(NETCOM_ACQ_ENT_1);
-                com_netComClient.CloseStream(NETCOM_ACQ_ENT_2);
-
-                // Disconnect from NetCom
-                do { com_netComClient.DisconnectFromServer(); }
-                while (com_netComClient.AreWeConnected() && !fc.doAbort);
-
-                // Check if disconnect succesful
-                if (!com_netComClient.AreWeConnected())
-                {
-                    fc.isNlxConnected = false;
-                    LogEvent("[Exit] SUCCEEDED: NetCom Disconnect");
-                }
-                else
-                {
-                    LogEvent("!!ERROR!! [Exit] FAILED: NetCom Disconnect", is_error: true);
-                    fc.isRunError = true;
-                }
-            }
-
-            // Enable ICR_GUI save button
-            if (fc.isRecDone && !fc.isGUIquit)
+            // Send task done confirmation
+            if (fc.isTaskDone && !fc.isGUIquit)
             {
                 SendMCOM_Thread(id: 'Y', dat_num: 1);
-                LogEvent("[Exit] SUCCEEDED: Save Enabled");
+                LogEvent("[Exit] SUCCEEDED: Send Task Done Confirmation");
                 fc.isSaveEnabled = true;
             }
             else
-                LogEvent("**WARNING** [Exit] ABORTED: Save Enabled", is_warning: true);
+                LogEvent("**WARNING** [Exit] ABORTED: Send Task Done Confirmation", is_warning: true);
 
             // Send initial robot log request
             LogEvent("[Exit] RUNNING: Request Robot Log...");
@@ -847,6 +826,36 @@ namespace ICR_Run
                 LogEvent("[Exit] SUCCEEDED: Wait for ICR_GUI Quit command");
             else
                 LogEvent("**WARNING** [Exit] ABORTED: Wait for ICR_GUI Quit command", is_warning: true);
+
+            // Shut down NetCom
+            if (IsProcessOpen("Cheetah"))
+            {
+                LogEvent("[Exit] RUNNING: NetCom Disconnect...");
+                //// Stop recording aquisition
+                string reply = " ";
+                com_netComClient.SendCommand("-StopRecording", ref reply);
+                com_netComClient.SendCommand("-StopAcquisition", ref reply);
+
+                // Close NetCom sreams
+                com_netComClient.CloseStream(NETCOM_ACQ_ENT_VT1);
+                com_netComClient.CloseStream(NETCOM_ACQ_ENT_VT2);
+
+                // Disconnect from NetCom
+                do { com_netComClient.DisconnectFromServer(); }
+                while (com_netComClient.AreWeConnected() && !fc.doAbort);
+
+                // Check if disconnect succesful
+                if (!com_netComClient.AreWeConnected())
+                {
+                    fc.isNlxConnected = false;
+                    LogEvent("[Exit] SUCCEEDED: NetCom Disconnect");
+                }
+                else
+                {
+                    LogEvent("!!ERROR!! [Exit] FAILED: NetCom Disconnect", is_error: true);
+                    fc.isRunError = true;
+                }
+            }
 
             // Wait for robot log save to complete
             LogEvent("[Exit] RUNNING: Wait for Robot Log Save...");
@@ -1319,9 +1328,9 @@ namespace ICR_Run
                 // Check if done
                 if (chk_done)
                 {
-                    
-                        wait_4_done = wait_4_done ? !c2r.GetMsgState(id: id, get_done: true) : wait_4_done;
-                        status_now[4] = wait_4_done;
+
+                    wait_4_done = wait_4_done ? !c2r.GetMsgState(id: id, get_done: true) : wait_4_done;
+                    status_now[4] = wait_4_done;
                 }
 
                 // Check if all conditions confirmed
@@ -2115,7 +2124,7 @@ namespace ICR_Run
 
             // Run ICR_GUI.m
             LogEvent_Thread("[DoWork_RunGUI] RUNNING: ICR_GUI.m...");
-            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, db.is_cheetahAlreadyOpen, false);
+            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, false);
 
             // Get status
             object[] res = icr_gui_result as object[];
@@ -2233,7 +2242,7 @@ namespace ICR_Run
                     worker.ReportProgress(0, new System.Tuple<char, double, double, double, UInt16>(id, dat1, dat2, dat3, pack));
 
                     // Set flag back to zero
-                    SendMCOM(msg: "m2c_pack(6) = 0;");
+                    SendMCOM(msg: "m2c_pack(6) = 0;", do_print: false);
 
                 }
             }
@@ -2319,10 +2328,10 @@ namespace ICR_Run
                 LogEvent_Thread("[ProgressChanged_MatCOM] ICR_GUI Confirmed Rat Taken Into ICR");
             }
 
-            // Check for Recording done command
+            // Check for task done command
             else if (id == 'O')
             {
-                fc.isRecDone = true;
+                fc.isTaskDone = true;
                 LogEvent_Thread("[ProgressChanged_MatCOM] ICR_GUI Confirmed Recording Done and Rat Out");
             }
 
@@ -2912,7 +2921,7 @@ namespace ICR_Run
         public bool isArdComActive = false;
         public bool isMovedToStart = false;
         public bool isRatIn = false;
-        public bool isRecDone = false;
+        public bool isTaskDone = false;
         public bool isSaveEnabled = false;
         public bool isSesSaved = false;
         public bool isGUIquit = false;

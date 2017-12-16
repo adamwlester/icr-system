@@ -1,13 +1,13 @@
 function[] = SS_IO_Setup()
 
-%% =========================== Set paramiters ============================= 
+%% ========================= Set Paramiters =============================== 
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
 ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
 ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData'); 
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0001'}; ...
+    {'r0002'}; ...
     {'r9998'} ...
     ];
 
@@ -29,7 +29,7 @@ nses = 200; % number of total sessions
 % Max ICR events per session
 rots = 9;
 
-%% =========================== Setup vars =================================
+%% =========================== Setup Vars =================================
 
 % convert to yy/mm/dd format
 DOBstr = cellstr(datestr(DOBstr, 'yyyy/mm/dd'));
@@ -56,7 +56,7 @@ rotations_per_session_description = '{[2,4,6]}';
 laps_per_rotation_description = '{[5:10]}';
 days_till_rotation_description = '{[1:4]}';
 
-%% ======================== SS_IO_1 =====================================
+%% ============================= SS_IO_1 ==================================
 
 % Initialize variables
 T = table('RowNames',ratList);
@@ -152,7 +152,7 @@ end
 % Copy sorted rat data
 SS_IO_1 = sortrows(T, 'RowNames');
 
-%% ========================== GENERATE VALUES =============================
+%% ========================== Generate Values =============================
 
 %  ------------------  Create condition paramiters ------------------------
 
@@ -319,7 +319,8 @@ for i = 1:length(ratList)
         categorical(ndays(:,yokeInd(i)), days_till_rotation); 
 end
 
-%% ==================== Add entries to SS_IO_2 =========================
+%% ============================= SS_IO_2 ==================================
+
 % Load existing dataset
 if exist(fullfile(ioDir, 'SS_IO_2.mat'), 'file')
     S = load(fullfile(ioDir, 'SS_IO_2.mat'));
@@ -333,6 +334,7 @@ T.Implanted = false;
 T.Date = {''};
 T.Start_Time = {''};
 T.Total_Time = NaN;
+T.Sleep_Time = {nan, nan};
 T.Session_Condition = categorical({'<undefined>'}, ...
     session_condition);
 T.Session_Task = categorical({'<undefined>'}, session_task);
@@ -396,7 +398,7 @@ end
 [~, ind] = sort(fieldnames(SS_IO_2));
 SS_IO_2 = orderfields(SS_IO_2, ind);
 
-%% =========================== Save =======================================
+%% ============================== Save ====================================
 
 % Save out table
 save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1')
@@ -407,21 +409,4 @@ for i = 1:length(ratList)
     fprintf('FINISHED Adding Rat %s\n', char(ratList(i)));
 end
 
-
-
-% % Check SS_IO_1 field class
-% flds = SS_IO_1.Properties.VariableNames;
-% for i = 1:length(flds)
-%     sprintf('%s %s', flds{i}, class(SS_IO_1.(flds{i})))
-%     pause
-% end
-% % Check SS_IO_2 field class
-% rats = fieldnames(SS_IO_2);
-% rat = 1;
-% flds = SS_IO_2.(rats{rat}).Properties.VariableNames;
-% for i = 1:length(flds)
-%     sprintf('%s %s', flds{i}, class(SS_IO_2.(rats{rat}).(flds{i})))
-%     pause
-% end
-
-
+end

@@ -44,7 +44,8 @@ if ~isequal(class(frame_java), 'javax.swing.JFrame') || ...
     label = javax.swing.JLabel(icon_java);
     frame_java.getContentPane.add(label);
     gds(1).setFullScreenWindow(frame_java);
-    frame_java.setLocation(1600, 0);
+    %frame_java.setLocation(1600, 0);
+    frame_java.setLocation(1280, 0);
     %frame_java.setVisible(true)
     %frame_java.setAlwaysOnTop(true)
 else

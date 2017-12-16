@@ -1,12 +1,27 @@
 %% PARAMETERS
 
 % DygitalLynx server IP
-D.NLX.IP = '192.168.3.100';
+D.NLX.ServerIP = '192.168.3.100';
 
 % Aquisition ent names
 D.NLX.vt_rat_ent = 'VT1';
 D.NLX.vt_rob_ent = 'VT2';
 D.NLX.event_ent = 'Events';
+
+%% START CHEETAH
+   
+% NLX setup
+%top_cfg_fi = 'Cheetah.cfg';
+top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
+
+% Open Cheetah
+curdir = pwd;
+[~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+not_running = strfind(result, 'INFO');
+if not_running == 1
+    cd('C:\Program Files\Neuralynx\Cheetah');
+    system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
+end
 
 %% CONNECT AND LOAD CFG
 
@@ -18,7 +33,7 @@ if NlxAreWeConnected() ~= 1
     while ~D.NLX.connected
         
         % Attempt connection
-        D.NLX.connected = NlxConnectToServer(D.NLX.IP) == 1;
+        D.NLX.connected = NlxConnectToServer(D.NLX.ServerIP) == 1;
         
         % Identify id to server
         if D.NLX.connected
@@ -32,7 +47,7 @@ end
 %NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
 
 % Load implant tracking config
-NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Implant_Tracking.cfg');
+%NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Implant_Tracking.cfg');
 
 % Load main ephys config file if not loaded
 %NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys.cfg');
@@ -70,19 +85,23 @@ NlxSendCommand('-StartAcquisition');
 
 %% GET CUBE VCC
 
-% % Set Cube battery type
-% %   Note:
-% %       "C": Small (green dot)
-% %       "A": Medium (blue dot)
-% NlxSendCommand('-SetBatteryType AcqSystem1 "C"');
-% 
-% [a,b] = NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1');
-% 
-% while true
-%     pause(1);
-%     [a,b] = NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1');
-%     disp(b)
-% end
+% Set Cube battery type
+%   Note:
+%       "C": Small (green dot)
+%       "A": Medium (blue dot)
+NlxSendCommand('-SetBatteryType AcqSystem1 "A"');
+
+[a,b] = NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1');
+disp(b)
+
+while true
+    pause(1);
+    [a,b] = NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1');
+    disp(b)
+end
+
+%% Disconnect from the NLX server
+NlxDisconnectFromServer();
 
 %% AUDIO
 % 

@@ -30,8 +30,9 @@ Implanted = false;
 %                     {'Date', 'Orientation', 'Depth', 'Notes'})};
 
 % Add new variable
-%                SS_IO_1 = AddNewVar(SS_IO_1, Implant_Coordinates, 'Days_Till_Rotation',implant_coordinates_description,'um');
-SS_IO_2 = AddNewVar(SS_IO_2, Implanted, 'Include_Analysis');
+%                SS_IO_1 = AddNewVar(SS_IO_1, Implant_Coordinates, 'Days_Till_Rotation', implant_coordinates_description, 'um');
+Sleep_Time = {nan, nan};
+SS_IO_2 = AddNewVar(SS_IO_2, Sleep_Time, 'Total_Time', '', 'min')
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
