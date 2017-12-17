@@ -33,6 +33,14 @@ namespace ICR_Run
                 false: Break on errors
             */
             public bool do_debugMat;
+
+            // Autoload rat data
+            /*
+                true: Load rat data based on ICR_GUI hardcoded values
+                false: Start normally
+            */
+            public bool do_autoloadUI;
+
             // Breakpoint line for matlab debugging
             public int breakLine;
 
@@ -49,11 +57,14 @@ namespace ICR_Run
             public bool do_printDueLog;
             // Is Cheetah already running
             public bool is_cheetahAlreadyOpen;
+            // Flag if doing any debugging
+            public bool is_debugRun;
 
             // Constructor:
             public DB(
                 double system_test,
                 bool do_debug_mat,
+                bool do_autoload_ui,
                 int break_line,
                 bool do_print_blocked_vt,
                 bool do_print_sent_rat_vt,
@@ -64,6 +75,7 @@ namespace ICR_Run
             {
                 systemTest = system_test;
                 do_debugMat = do_debug_mat;
+                do_autoloadUI = do_autoload_ui;
                 breakLine = break_line;
                 do_printBlockedVt = do_print_blocked_vt;
                 do_printSentRatVT = do_print_sent_rat_vt;
@@ -71,11 +83,13 @@ namespace ICR_Run
                 do_printRobLog = do_print_rob_log;
                 do_printDueLog = do_print_due_log;
                 is_cheetahAlreadyOpen = false;
+                is_debugRun = system_test != 0 || do_debug_mat || do_autoload_ui;
             }
         }
         private static DB db = new DB(
-            system_test: 0, // 0
+            system_test: 3, // 0
             do_debug_mat: true, // false
+            do_autoload_ui: false, // false
             break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -424,7 +438,7 @@ namespace ICR_Run
             LogEvent("[Setup] FINISHED: Setup Xbee Serial Coms");
 
             // Setup debugging
-            if (db.systemTest != 0 || db.do_debugMat)
+            if (db.is_debugRun)
             {
                 LogEvent("[Setup] RUNNING: Setup Debugging...");
 
@@ -438,8 +452,8 @@ namespace ICR_Run
                 LogEvent("[Setup] FINISHED: Setup Debugging");
 
                 // Log/print db settings
-                LogEvent(String.Format("[Setup] RUNNING IN DEBUG MODE: systemTest={0} do_debugMat={1}",
-                    db.systemTest, db.do_debugMat));
+                LogEvent(String.Format("[Setup] RUNNING IN DEBUG MODE: systemTest={0} do_debugMat={1} do_autoloadUI={2}",
+                    db.systemTest, db.do_debugMat, db.do_autoloadUI));
             }
             else
                 com_Matlab.Visible = 0;
@@ -464,34 +478,34 @@ namespace ICR_Run
             LogEvent("[Setup] FINISHED: Start MatCOM Worker...");
 
             // Wait for ICR_GUI to connect to AC computer
-            LogEvent("[Setup] RUNNING: Wait for AC Connect...");
+            LogEvent("[Setup] RUNNING WAIT FOR...: AC Connect...");
             pass = WaitForMCOM(id: 'A', chk_rcv: true, do_abort: true, timeout: timeoutConnectAC);
             if (pass)
-                LogEvent("[Setup] SUCCEEDED: Wait for AC Connect");
+                LogEvent("[Setup] SUCCEEDED WAIT FOR: AC Connect");
             else
             {
                 // Program timed out because matlab was hanging on connect
-                LogEvent("**WARNING** [Setup] ABORTED: Wait for AC Connect", is_warning: true);
+                LogEvent("**WARNING** [Setup] ABORTED WAIT FOR: AC Connect", is_warning: true);
                 fc.isMAThanging = true;
                 return false;
             }
 
             // Wait for matlab handshake request
-            LogEvent("[Setup] RUNNING: Wait for ICR_GUI Handshake...");
+            LogEvent("[Setup] RUNNING WAIT FOR...: ICR_GUI Handshake...");
             pass = WaitForMCOM(id: 'i', chk_rcv: true, do_abort: true, timeout: 15000);
             if (pass)
             {
-                LogEvent("[Setup] SUCCEEDED: Wait for ICR_GUI Handshake...");
+                LogEvent("[Setup] SUCCEEDED WAIT FOR: ICR_GUI Handshake...");
                 fc.isMatComActive = true;
             }
             else
             {
-                LogEvent("**WARNING** [Setup] ABORTED: Wait for ICR_GUI Handshake...", is_warning: true);
+                LogEvent("**WARNING** [Setup] ABORTED WAIT FOR: ICR_GUI Handshake...", is_warning: true);
                 return false;
             }
 
             // Send CheetahDue handshake request
-            LogEvent("[Setup] RUNNING: Wait for Robot Handshake...");
+            LogEvent("[Setup] RUNNING WAIT FOR...: Robot Handshake...");
             byte[] out_byte = new byte[1] { (byte)'i' };
             sp_cheetahDue.Write(out_byte, 0, 1);
 
@@ -512,15 +526,15 @@ namespace ICR_Run
                 LogEvent("[Setup] RUNNING: Hardware Test...");
 
                 // Wait for x pings
-                pass = WaitForSerial(id: 't', dat: r2c.dat[r2c.ID_Ind('h')][0] + 1, chk_rcv: true, do_abort: true, timeout: 20000);
+                pass = WaitForSerial(id: 't', dat: r2c.datMat[r2c.ID_Ind('h')][0] + 1, chk_rcv: true, do_abort: true, timeout: 20000);
                 if (pass)
                 {
                     // Log/print success
                     LogEvent("[Setup] FINISHED: Hardware Test");
 
                     // Log/print average ping time
-                    double dt_ping_r2c = r2c.dat[r2c.ID_Ind('t')][1];
-                    double dt_ping_r2a = r2c.dat[r2c.ID_Ind('t')][2];
+                    double dt_ping_r2c = r2c.datMat[r2c.ID_Ind('t')][1];
+                    double dt_ping_r2a = r2c.datMat[r2c.ID_Ind('t')][2];
                     LogEvent(String.Format("PING TIMES: r2c={0:0.00}ms r2a={1:0.00}ms", dt_ping_r2c, dt_ping_r2a));
                 }
                 else
@@ -540,26 +554,26 @@ namespace ICR_Run
             com_netComClient.SetCallbackFunctionVT(deligate_netComCallback, new ICR_Run());
 
             // Wait for ICR_GUI to load 
-            LogEvent("[Setup] RUNNING: Wait for ICR_GUI to Load...");
+            LogEvent("[Setup] RUNNING WAIT FOR...: ICR_GUI to Load...");
             pass = WaitForMCOM(id: 'G', chk_rcv: true, timeout: timeoutLoadGUI);
             if (pass)
             {
-                LogEvent("[Setup] SUCCEEDED: Wait for ICR_GUI to Load");
+                LogEvent("[Setup] SUCCEEDED WAIT FOR: ICR_GUI to Load");
             }
             else
             {
-                LogEvent("**WARNING** [Setup] ABORTED: Wait for ICR_GUI to Load", is_warning: true);
+                LogEvent("**WARNING** [Setup] ABORTED WAIT FOR: ICR_GUI to Load", is_warning: true);
                 return false;
             }
 
             // Wait for ICR_GUI to connect to NLX
-            LogEvent("[Setup] RUNNING: Wait for ICR_GUI NLX Setup...");
+            LogEvent("[Setup] RUNNING WAIT FOR...: ICR_GUI NLX Setup...");
             pass = WaitForMCOM(id: 'N', chk_rcv: true, do_abort: true, timeout: timeoutConnectMatNLX);
             if (pass)
-                LogEvent("[Setup] SUCCEEDED: Wait for ICR_GUI NLX Setup");
+                LogEvent("[Setup] SUCCEEDED WAIT FOR: ICR_GUI NLX Setup");
             else
             {
-                LogEvent("**WARNING** [Setup] ABORTED: Wait for ICR_GUI NLX Setup", is_warning: true);
+                LogEvent("**WARNING** [Setup] ABORTED WAIT FOR: ICR_GUI NLX Setup", is_warning: true);
                 return false;
             }
 
@@ -642,13 +656,13 @@ namespace ICR_Run
             bool pass;
 
             // Wait for initial move to command to complete
-            LogEvent("[Run] RUNNING: Wait for MoveTo Start Command from MATLAB...");
+            LogEvent("[Run] RUNNING WAIT FOR...: MoveTo Start Command from MATLAB...");
             // Wait for matlab
             pass = WaitForMCOM(id: 'M', chk_rcv: true, do_abort: true);
             // Wait for move done
             if (pass)
             {
-                LogEvent("[Run] RUNNING: Wait for MoveTo Start...");
+                LogEvent("[Run] RUNNING WAIT FOR...: MoveTo Start...");
                 pass = WaitForSerial(id: 'M', chk_send: true, chk_conf: true, chk_done: true, do_abort: true);
                 if (pass)
                 {
@@ -664,7 +678,7 @@ namespace ICR_Run
                 }
             }
             else
-                LogEvent("**WARNING** [Run] ABORTED: Wait for MoveTo Start Command from MATLAB");
+                LogEvent("**WARNING** [Run] ABORTED WAIT FOR: MoveTo Start Command from MATLAB");
 
             // Main holding loop
             LogEvent("[Run] RUNNING: Main Session Loop...");
@@ -702,16 +716,16 @@ namespace ICR_Run
             // Check if we have confirmation task is done
             if (fc.isRatIn && !fc.isTaskDone)
             {
-                LogEvent("[Run] RUNNING: Wait for Confirmation Task Finished...");
+                LogEvent("[Run] RUNNING WAIT FOR...: Confirmation Task Finished...");
                 pass = WaitForMCOM(id: 'O', chk_rcv: true, timeout: fc.isSaveAbortRunning ? 30000 : 10000);
                 if (pass)
                 {
                     // Wait for all the other crap to be relayed from Matlab
                     Thread.Sleep(1000);
-                    LogEvent("[Exit] SUCCEEDED: Wait for Confirmation Task Finished");
+                    LogEvent("[Exit] SUCCEEDED WAIT FOR: Confirmation Task Finished");
                 }
                 else
-                    LogEvent("**WARNING** [Exit] ABORTED: Wait for Confirmation Task Finished", is_warning: true);
+                    LogEvent("**WARNING** [Exit] ABORTED WAIT FOR: Confirmation Task Finished", is_warning: true);
             }
 
             // MoveTo defualt pos
@@ -756,13 +770,13 @@ namespace ICR_Run
             if (pass)
             {
                 // Wait for bytes to receive messages to be received
-                LogEvent("[Exit] RUNNING: Wait for Robot Log Bytes...");
+                LogEvent("[Exit] RUNNING WAIT FOR...: Robot Log Bytes...");
                 pass = WaitForSerial(id: 'U', chk_rcv: true, timeout: 5000);
                 if (pass)
                 {
                     // Store data byte
-                    robLogger.UpdateBytesToRcv(r2c.dat[r2c.ID_Ind('U')]);
-                    LogEvent(String.Format("[Exit] SUCCEEDED: Wait for Robot Log Bytes: bytes_expected={0}", robLogger.bytesToRcv));
+                    robLogger.UpdateBytesToRcv(r2c.datMat[r2c.ID_Ind('U')]);
+                    LogEvent(String.Format("[Exit] SUCCEEDED WAIT FOR: Robot Log Bytes: bytes_expected={0}", robLogger.bytesToRcv));
 
                     // Flag logging started and block ParserR2C()
                     robLogger.isLogging = true;
@@ -782,7 +796,7 @@ namespace ICR_Run
                 }
                 else
                 {
-                    LogEvent(String.Format("[Exit] !!ERROR!! ABORTED: Wait for Robot Log Bytes: bytes_expected={0}", robLogger.bytesToRcv), is_error: true);
+                    LogEvent(String.Format("[Exit] !!ERROR!! ABORTED WAIT FOR: Robot Log Bytes: bytes_expected={0}", robLogger.bytesToRcv), is_error: true);
                     fc.isRunError = true;
                 }
             }
@@ -796,11 +810,11 @@ namespace ICR_Run
             // Wait for save complete
             if (fc.isSaveEnabled && !fc.isGUIquit)
             {
-                LogEvent("[Exit] RUNNING: Wait for ICR_GUI to Save...");
+                LogEvent("[Exit] RUNNING WAIT FOR...: ICR_GUI to Save...");
                 pass = WaitForMCOM(id: 'F', chk_rcv: true, do_abort: true);
                 if (pass)
                 {
-                    LogEvent("[Exit] SUCCEEDED: Wait for ICR_GUI to Save");
+                    LogEvent("[Exit] SUCCEEDED WAIT FOR: ICR_GUI to Save");
 
                     // Get NLX dir
                     dynamic nlx_rec_dir = GetMCOM(msg: "m2c_dir");
@@ -812,20 +826,20 @@ namespace ICR_Run
                 }
                 else
                 {
-                    LogEvent("**WARNING** [Exit] ABORTED: Wait for ICR_GUI to Save", is_warning: true);
+                    LogEvent("**WARNING** [Exit] ABORTED WAIT FOR: ICR_GUI to Save", is_warning: true);
                 }
             }
 
             // Wait for quit command
-            LogEvent("[Exit] RUNNING: Wait for ICR_GUI Quit command...");
+            LogEvent("[Exit] RUNNING WAIT FOR...: ICR_GUI Quit command...");
             if (!fc.isGUIquit && !fc.isGUIfinished)
                 pass = WaitForMCOM(id: 'X', chk_rcv: true, do_abort: true);
             else
                 pass = fc.isGUIquit;
             if (pass)
-                LogEvent("[Exit] SUCCEEDED: Wait for ICR_GUI Quit command");
+                LogEvent("[Exit] SUCCEEDED WAIT FOR: ICR_GUI Quit command");
             else
-                LogEvent("**WARNING** [Exit] ABORTED: Wait for ICR_GUI Quit command", is_warning: true);
+                LogEvent("**WARNING** [Exit] ABORTED WAIT FOR: ICR_GUI Quit command", is_warning: true);
 
             // Shut down NetCom
             if (IsProcessOpen("Cheetah"))
@@ -858,20 +872,20 @@ namespace ICR_Run
             }
 
             // Wait for robot log save to complete
-            LogEvent("[Exit] RUNNING: Wait for Robot Log Save...");
+            LogEvent("[Exit] RUNNING WAIT FOR...: Robot Log Save...");
             while (!robLogger.isFinished && !robLogger.isImportTimedout)
                 Thread.Sleep(10);
 
             // Check if complete log was imported
             if (robLogger.isLogComplete)
-                LogEvent(String.Format("[Exit] SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
+                LogEvent(String.Format("[Exit] SUCCEEDED WAIT FOR: Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
                     robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT));
             else if (robLogger.cnt_logsStored > 0)
-                LogEvent(String.Format("**WARNING** [Exit] PARTIALLY SUCCEEDED: Wait for Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
+                LogEvent(String.Format("**WARNING** [Exit] PARTIALLY SUCCEEDED WAIT FOR: Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
                     robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_warning: true);
             else
             {
-                LogEvent(String.Format("!!ERROR!! [Exit] FAILED: Wait for Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
+                LogEvent(String.Format("!!ERROR!! [Exit] FAILED WAIT FOR: Robot Log Save: logged={0} dropped={1} b_read={2} bytes_expected={3} dt_run={4}",
                     robLogger.cnt_logsStored, robLogger.cnt_dropped[1], robLogger.bytesRead, robLogger.bytesToRcv, robLogger.logDT), is_error: true);
                 fc.isRunError = true;
             }
@@ -951,13 +965,33 @@ namespace ICR_Run
             LogEvent("[Exit] FINISHED: Clear MatCom Globals");
 
             // Hold for debugging or errors errors
-            if (db.systemTest != 0 || db.do_debugMat || fc.isRunError)
+            if (db.is_debugRun || fc.isRunError)
             {
                 // Show Matlab window
                 com_Matlab.Visible = fc.isRunError ? 1 : 0;
 
-                // Run pause
-                fc.RunPauseForDB();
+                // Pause to let printing finish
+                Thread.Sleep(5000);
+
+                // Print messeage with error
+                Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                if (fc.isRunError)
+                {
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    // Print all errors
+                    for (int i = 0; i < fc.cnt_err; i++)
+                        Console.WriteLine(fc.err_list[i]);
+                }
+                else
+                {
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                }
+
+                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+
+                // Wait for key press
+                Console.ReadKey();
             }
 
             // Quit MatCOM
@@ -1156,7 +1190,7 @@ namespace ICR_Run
 
                     // Log/print
                     LogEvent_Thread(String.Format("**WARNING** [SendPack] c2r Queue |{0}{1}: {2}",
-                        is_hanging ? "Hanging|" : "", is_clogged ? "Clogged|" : "", dat_str + buff_str), is_warning: true);
+                        is_hanging ? "HANGING|" : "", is_clogged ? "CLOGGED|" : "", dat_str + buff_str), is_warning: true);
 
                     // Bail if this is pos data
                     if (id == 'P')
@@ -1228,7 +1262,7 @@ namespace ICR_Run
                 if (id != 'P')
                 {
                     // Check for resend
-                    if (pack != c2r.packLast[c2r.ID_Ind(id)])
+                    if (pack != c2r.packLastArr[c2r.ID_Ind(id)])
                         LogEvent_Thread("   [SENT] c2r: " + dat_str + buff_str, t: c2r.t_new);
                     else
                     {
@@ -1307,7 +1341,7 @@ namespace ICR_Run
                 // Check if recieved dat after message recieved
                 if (chk_dat)
                 {
-                    wait_4_dat = wait_4_dat ? wait_4_rcv || r2c.dat[r2c.ID_Ind(id)][0] != dat : wait_4_dat;
+                    wait_4_dat = wait_4_dat ? wait_4_rcv || r2c.datMat[r2c.ID_Ind(id)][0] != dat : wait_4_dat;
                     status_now[1] = wait_4_dat;
                 }
 
@@ -1337,20 +1371,17 @@ namespace ICR_Run
                 pass = !wait_4_rcv && !wait_4_send && !wait_4_conf && !wait_4_done;
 
                 // Format check for string
-                if (first_loop)
-                {
-                    wait_str = String.Format("|{0}{1}{2}{3}{4}",
-                        wait_4_rcv ? "Rcv|" : "", wait_4_dat ? String.Format("Dat={0:0.00}|", dat) : "", wait_4_send ? "Send|" : "", wait_4_conf ? "Conf|" : "", wait_4_done ? "Done|" : "");
-                }
+                wait_str = String.Format("|{0}{1}{2}{3}{4}",
+                    wait_4_rcv ? "Rcv|" : "", wait_4_dat ? String.Format("Dat={0:0.00}|", dat) : "", wait_4_send ? "Send|" : "", wait_4_conf ? "Conf|" : "", wait_4_done ? "Done|" : "");
 
                 // Get current status string
-                string dat_str = String.Format("Wait for {0}: id=\'{1}\' dat={2:0.00} pack={3}  chk_rcv={4} chk_send={5} chk_conf={6} chk_done={7} do_abort={8} timeout={9} dt_wait={10}",
-                        wait_str, id, dat, c2r.pack[c2r.ID_Ind(id)], chk_rcv, chk_send, chk_conf, chk_done, do_abort, timeout == long.MaxValue ? 0 : timeout, sw_main.ElapsedMilliseconds - t_start);
+                string dat_str = String.Format("{0}: id=\'{1}\' dat={2:0.00} pack={3}  chk_rcv={4} chk_send={5} chk_conf={6} chk_done={7} do_abort={8} timeout={9} dt_wait={10}",
+                        wait_str, id, dat, c2r.packArr[c2r.ID_Ind(id)], chk_rcv, chk_send, chk_conf, chk_done, do_abort, timeout == long.MaxValue ? 0 : timeout, sw_main.ElapsedMilliseconds - t_start);
 
                 // Print what we are waiting on
                 if (first_loop)
                 {
-                    LogEvent(String.Format("[WaitForSerial] RUNNING: {0}", dat_str));
+                    LogEvent(String.Format("[WaitForSerial] RUNNING WAIT FOR...: {0}", dat_str));
                     first_loop = false;
                 }
 
@@ -1359,7 +1390,7 @@ namespace ICR_Run
                 {
                     if (status_now[i] != status_last[i])
                     {
-                        LogEvent(String.Format("   [WaitForSerial] Done waiting for \'{0}\' \"{1}\"",
+                        LogEvent(String.Format("   [WaitForSerial] DONE WAITING FOR: \'{0}\' \"{1}\"",
                             id, i == 0 ? "Rcv" : i == 1 ? String.Format("Dat={0:0.00}", dat) : i == 2 ? "Send" : i == 3 ? "Conf" : i == 4 ? "Done" : ""));
                     }
                     status_last[i] = status_now[i];
@@ -1368,7 +1399,7 @@ namespace ICR_Run
                 // Check if all confirmed
                 if (pass)
                 {
-                    LogEvent(String.Format("[WaitForSerial] SUCCEEDED: {0}", dat_str));
+                    LogEvent(String.Format("[WaitForSerial] SUCCEEDED WAIT FOR: {0}", dat_str));
                     return true;
                 }
 
@@ -1382,16 +1413,16 @@ namespace ICR_Run
 
                     // External forced abort
                     if (do_abort && fc.doAbort)
-                        LogEvent(String.Format("**WARNING** [WaitForSerial] Forced Abort: {0}", dat_str), is_warning: true);
+                        LogEvent(String.Format("**WARNING** [WaitForSerial] ABORTED WAIT FOR: FORCED ABORT: {0}", dat_str), is_warning: true);
                     else
                     {
                         // Coms failed
                         if (!fc.ContinueRobCom())
-                            LogEvent(String.Format("!!ERROR!! [WaitForSerial] Lost Comms: {0}", dat_str), is_error: true);
+                            LogEvent(String.Format("!!ERROR!! [WaitForSerial] ABORTED WAIT FOR: LOST COMS: {0}", dat_str), is_error: true);
 
                         // Timedout
                         else if (sw_main.ElapsedMilliseconds > t_timeout)
-                            LogEvent(String.Format("!!ERROR!! [WaitForSerial] Timedout: {0}", dat_str), is_error: true);
+                            LogEvent(String.Format("!!ERROR!! [WaitForSerial] ABORTED WAIT FOR: TIMEDOUT: {0}", dat_str), is_error: true);
 
                         // Set error flag
                         fc.isRunError = true;
@@ -1486,9 +1517,9 @@ namespace ICR_Run
                         id = U.c_0;
 
                         // Check for r2c id 
-                        for (int i = 0; i < r2c.id.Length; i++)
+                        for (int i = 0; i < r2c.idArr.Length; i++)
                         {
-                            if (id == r2c.id[i])
+                            if (id == r2c.idArr[i])
                             {
                                 r2c_id_found = true;
                                 break;
@@ -1573,7 +1604,7 @@ namespace ICR_Run
 
                     // Check for repeat packet
                     string msg_str;
-                    if (pack != r2c.packLast[r2c.ID_Ind(id)])
+                    if (pack != r2c.packLastArr[r2c.ID_Ind(id)])
                     {
                         msg_str = "   [RCVD] r2c: ";
                     }
@@ -1670,7 +1701,7 @@ namespace ICR_Run
             // Check if hanging
             if (sw_main.ElapsedMilliseconds > t_str + 25)
             {
-                LogEvent_Thread("**WARNING** [XbeeBuffReady] XBee Read Hanging: " + dat_str, is_warning: true);
+                LogEvent_Thread("**WARNING** [XbeeBuffReady] XBee Read HANGING: " + dat_str, is_warning: true);
             }
 
             // Check if timedout
@@ -1839,7 +1870,7 @@ namespace ICR_Run
             {
                 // Timedout
                 if (sw_main.ElapsedMilliseconds > t_timeout)
-                    LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] a2c Hanging: dt_chk={0} rx={1} tx={2}",
+                    LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] a2c HANGING: dt_chk={0} rx={1} tx={2}",
                       (sw_main.ElapsedMilliseconds - t_timeout) + timeout, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite), is_warning: true);
                 else
                     LogEvent_Thread(String.Format("**WARNING** [ArdBuffReady] ABORTED: dt_chk={0} rx={1} tx={2}",
@@ -2124,7 +2155,7 @@ namespace ICR_Run
 
             // Run ICR_GUI.m
             LogEvent_Thread("[DoWork_RunGUI] RUNNING: ICR_GUI.m...");
-            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, false);
+            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, db.do_autoloadUI);
 
             // Get status
             object[] res = icr_gui_result as object[];
@@ -2298,7 +2329,7 @@ namespace ICR_Run
 
             // Check for repeat packet
             string msg_str;
-            if (pack != m2c.packLast[m2c.ID_Ind(id)])
+            if (pack != m2c.packLastArr[m2c.ID_Ind(id)])
             {
                 // Print received data
                 msg_str = "   [RCVD] m2c: ";
@@ -2381,9 +2412,9 @@ namespace ICR_Run
             }
 
             // Check if mesage should be relayed to rob
-            for (int i = 0; i < c2r.id.Length - 1; i++)
+            for (int i = 0; i < c2r.idArr.Length - 1; i++)
             {
-                if (id == c2r.id[i])
+                if (id == c2r.idArr[i])
                 {
                     bool do_check_done = false;
 
@@ -2466,7 +2497,7 @@ namespace ICR_Run
 
             // Check if queue backed up
             if (queue_sendMCOM >= 3)
-                LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Clogged: msg=\"{0}\" queued={1} dt_q={2}",
+                LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue CLOGGED: msg=\"{0}\" queued={1} dt_q={2}",
                                 msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued), is_warning: true);
 
             // Add to queue
@@ -2477,7 +2508,7 @@ namespace ICR_Run
                 // Check if queue hanging
                 if (sw_main.ElapsedMilliseconds > t_queued + 100)
                     // Log/print error
-                    LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue Hanging: msg=\"{0}\" queued={1} dt_q={2}",
+                    LogEvent_Thread(String.Format("**WARNING** [SendMCOM_Thread] c2m Queue HANGING: msg=\"{0}\" queued={1} dt_q={2}",
                                     msg, queue_sendMCOM, sw_main.ElapsedMilliseconds - t_queued), is_warning: true);
 
 
@@ -2575,20 +2606,20 @@ namespace ICR_Run
                        wait_4_rcv ? "Rcv|" : "", wait_4_send ? "Send|" : "");
 
                 // Get current status string
-                string dat_str = String.Format("Wait for {0}: id=\'{1}\' chk_rcv={2} chk_send={3} do_abort={4} timeout={5} wait_4_send={6} wait_4_rcv={7} dt_wait={8}",
+                string dat_str = String.Format("{0}: id=\'{1}\' chk_rcv={2} chk_send={3} do_abort={4} timeout={5} wait_4_send={6} wait_4_rcv={7} dt_wait={8}",
                          wait_str, id, chk_rcv, chk_send, do_abort, timeout == long.MaxValue ? 0 : timeout, wait_4_send, wait_4_rcv, sw_main.ElapsedMilliseconds - t_start);
 
                 // Print what we are waiting on
                 if (first_loop)
                 {
-                    LogEvent(String.Format("[WaitForMCOM] RUNNING: {0}", dat_str));
+                    LogEvent(String.Format("[WaitForMCOM] RUNNING WAIT FOR...: {0}", dat_str));
                     first_loop = false;
                 }
 
                 // Check if sent/rcvd confirmed
                 if (pass)
                 {
-                    LogEvent(String.Format("[WaitForMCOM] SUCCEEDED: {0}", dat_str));
+                    LogEvent(String.Format("[WaitForMCOM] SUCCEEDED WAIT FOR: {0}", dat_str));
                     return true;
                 }
 
@@ -2602,16 +2633,16 @@ namespace ICR_Run
 
                     // External forced abort
                     if (do_abort && fc.doAbort)
-                        LogEvent(String.Format("**WARNING** [WaitForMCOM] Forced Abort: {0}", dat_str), is_warning: true);
+                        LogEvent(String.Format("**WARNING** [WaitForMCOM] ABORTED WAIT FOR: FORCED ABORT: {0}", dat_str), is_warning: true);
                     else
                     {
                         // Coms failed
                         if (!fc.ContinueMatCom())
-                            LogEvent(String.Format("!!ERROR!! [WaitForMCOM] Lost Comms: {0}", dat_str), is_error: true);
+                            LogEvent(String.Format("!!ERROR!! [WaitForMCOM] ABORTED WAIT FOR: LOST COMS: {0}", dat_str), is_error: true);
 
                         // Timedout
                         else if (sw_main.ElapsedMilliseconds > t_timeout)
-                            LogEvent(String.Format("!!ERROR!! [WaitForMCOM] Timedout: {0}", dat_str), is_error: true);
+                            LogEvent(String.Format("!!ERROR!! [WaitForMCOM] ABORTED WAIT FOR: TIMEDOUT: {0}", dat_str), is_error: true);
 
                         // Check if this is first packet
                         if (m2c.packTot == 0)
@@ -2912,8 +2943,6 @@ namespace ICR_Run
         private static bool _doMatHardAbort = false;
         private static bool _wasMatAbortRead = false;
         private static bool _isMAThanging = false;
-        private static int _cnt_err = 0;
-        private string[] _err_list = new string[100];
         // Public vars
         public bool isNlxConnected = false;
         public bool isMatComActive = false;
@@ -2928,12 +2957,14 @@ namespace ICR_Run
         public bool isGUIfinished = false;
         public bool isSaveAbortRunning = false;
         public bool doExit = false;
+        public int cnt_err = 0;
+        public string[] err_list = new string[100];
         public string errStr
         {
             set
             {
                 // Store current error string
-                _err_list[_cnt_err++] = value;
+                err_list[cnt_err++] = value;
             }
         }
         public bool isRunError
@@ -3017,33 +3048,6 @@ namespace ICR_Run
             get { return _isMAThanging; }
         }
 
-        // Run erro hold
-        public void RunPauseForDB()
-        {
-            // Pause to let printing finish
-            Thread.Sleep(1000);
-
-            // Print messeage with error
-            Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            if (isRunError)
-            {
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                // Print all errors
-                for (int i = 0; i < _cnt_err; i++)
-                    Console.WriteLine(_err_list[i]);
-            }
-            else
-            {
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            }
-
-            Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
-
-            // Wait for key press
-            Console.ReadKey();
-        }
-
         // Check if Matlab coms are active
         public bool ContinueMatCom()
         {
@@ -3075,12 +3079,12 @@ namespace ICR_Run
         private bool[] _isConf;
         private bool[] _isDone;
         // Public vars
-        public char[] id;
+        public char[] idArr;
         public byte[] head = new byte[1] { 0 };
         public byte[] foot = new byte[1] { 0 };
-        public double[][] dat;
-        public UInt16[] pack;
-        public UInt16[] packLast;
+        public double[][] datMat;
+        public UInt16[] packArr;
+        public UInt16[] packLastArr;
         public UInt16 packTot = 0;
         public UInt16 cnt_pack = 0;
         public int[] cnt_dropped = new int[2] { 0, 0 };
@@ -3101,12 +3105,12 @@ namespace ICR_Run
         {
             _lock_isConf = _lock_is_conf;
             _lock_isDone = _lock_is_done;
-            id = _id;
+            idArr = _id;
             head[0] = _head;
             foot[0] = _foot;
-            dat = new double[_id.Length][];
-            pack = new UInt16[_id.Length];
-            packLast = new UInt16[_id.Length];
+            datMat = new double[_id.Length][];
+            packArr = new UInt16[_id.Length];
+            packLastArr = new UInt16[_id.Length];
             t_sentRcvd = new long[_id.Length];
             _isSentRcv = new bool[_id.Length];
             _isConf = new bool[_id.Length];
@@ -3115,9 +3119,9 @@ namespace ICR_Run
             // Initialize values to zero
             for (int i = 0; i < _id.Length; i++)
             {
-                pack[i] = 0;
-                dat[i] = new double[3] { 0, 0, 0 };
-                packLast[i] = 0;
+                packArr[i] = 0;
+                datMat[i] = new double[3] { 0, 0, 0 };
+                packLastArr[i] = 0;
                 t_sentRcvd[i] = 0;
                 _isSentRcv[i] = false;
                 _isConf[i] = false;
@@ -3129,28 +3133,45 @@ namespace ICR_Run
         public void SetMsgState(char id = ' ', UInt16 pack = 0, bool set_sent_rcvd = false, bool set_conf = false, bool set_done = false, bool state = true)
         {
             // Local vars
-            int id_ind = id != ' ' ? ID_Ind(id) : ID_Ind(PackID(pack));
+            int[] id_ind;
 
-            // Set sent/received check flag
-            if (set_sent_rcvd)
+            // Store id ind array
+            if (id != ' ')
             {
-                lock (_lock_isSentRcv)
-                    _isSentRcv[id_ind] = state;
+                id_ind = new int[1] { ID_Ind(id) };
+            }
+            else
+            {
+                id_ind = PackID_Ind(pack);
             }
 
-            // Set received check flag
-            else if (set_conf)
+            // Loop
+            for (int i = 0; i < id_ind.Length; i++)
             {
-                lock (_lock_isConf)
-                    _isConf[id_ind] = state;
+
+                // Set sent/received check flag
+                if (set_sent_rcvd)
+                {
+                    lock (_lock_isSentRcv)
+                        _isSentRcv[id_ind[i]] = state;
+                }
+
+                // Set received check flag
+                else if (set_conf)
+                {
+                    lock (_lock_isConf)
+                        _isConf[id_ind[i]] = state;
+                }
+
+                // Set done check flag
+                else if (set_done)
+                {
+                    lock (_lock_isDone)
+                        _isDone[id_ind[i]] = state;
+                }
+
             }
 
-            // Set done check flag
-            else if (set_done)
-            {
-                lock (_lock_isDone)
-                    _isDone[id_ind] = state;
-            }
         }
 
         public bool GetMsgState(char id = ' ', bool get_sent_rcvd = false, bool get_conf = false, bool get_done = false)
@@ -3200,14 +3221,14 @@ namespace ICR_Run
             int id_ind = ID_Ind(id);
 
             // Update data
-            this.dat[id_ind][0] = dat[0];
-            this.dat[id_ind][1] = dat[1];
-            this.dat[id_ind][2] = dat[2];
+            this.datMat[id_ind][0] = dat[0];
+            this.datMat[id_ind][1] = dat[1];
+            this.datMat[id_ind][2] = dat[2];
 
             // Update packet number
             packTot = pack;
-            packLast[id_ind] = this.pack[id_ind];
-            this.pack[id_ind] = pack;
+            packLastArr[id_ind] = this.packArr[id_ind];
+            this.packArr[id_ind] = pack;
 
             // Update timers
             t_last = t_new;
@@ -3242,22 +3263,51 @@ namespace ICR_Run
         public int ID_Ind(char id)
         {
             int ind = -1;
-            for (int i = 0; i < this.id.Length; i++)
+            for (int i = 0; i < this.idArr.Length; i++)
             {
-                if (id == this.id[i]) ind = i;
+                if (id == this.idArr[i])
+                {
+                    ind = i;
+                }
             }
             return ind;
         }
 
         // Find packet index
-        public char PackID(UInt16 pack)
+        public int[] PackID_Ind(UInt16 pack)
         {
-            int ind = -1;
-            for (int i = 0; i < this.pack.Length; i++)
+            // Local vars
+            int[] flag_arr = new int[this.packArr.Length];
+            int cnt = 0;
+
+            // Get matching packets
+            for (int i = 0; i < this.packArr.Length; i++)
             {
-                if (pack == this.pack[i]) ind = i;
+                if (pack == this.packArr[i])
+                {
+                    flag_arr[i] = i;
+                    cnt++;
+                }
+                else
+                {
+                    flag_arr[i] = 0;
+                }
             }
-            return id[ind];
+
+            // Store matching ids
+            int[] id_ind_arr = new int[cnt];
+            cnt = 0;
+            for (int i = 0; i < flag_arr.Length; i++)
+            {
+                if (flag_arr[i] != 0)
+                {
+                    id_ind_arr[cnt] = i;
+                    cnt++;
+                }
+            }
+
+            // Return array
+            return id_ind_arr;
         }
 
     }

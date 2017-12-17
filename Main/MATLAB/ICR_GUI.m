@@ -1,4 +1,4 @@
-function[status] = ICR_GUI(sysTest, doDebug, isMatSolo, isTTtrackSolo, doAutoLoad)
+function[status] = ICR_GUI(sysTest, doDebug, doAutoloadUI, isMatSolo, isTTtrackSolo)
 % INPUT:
 %	sysTest = [0,1,2,3]
 %    	0: No test
@@ -6,9 +6,12 @@ function[status] = ICR_GUI(sysTest, doDebug, isMatSolo, isTTtrackSolo, doAutoLoa
 %   	2: Halt error test
 %    	3: Simulated rat test
 %       4: Auto setup
-%   doDebug = [0,1]
-%     	0: Dont break on errors
-%       1: Break on errors
+%   doDebug = [true,false]
+%     	true: Break on errors
+%       false: Dont break on errors
+%   doAutoloadUI = [true,false]
+%     	true: Load rat data based on ICR_GUI hardcoded values
+%       false: Start normally
 %   isMatSolo = [true,false]
 %     	true: Matlab running alone
 %       false: Matlab running with other programs
@@ -55,13 +58,13 @@ doExit = false;
 
 % Handle input args
 if nargin < 5
-    doAutoLoad = false;
-end
-if nargin < 4
     isTTtrackSolo = false;
 end
+if nargin < 4
+    isMatSolo = false;
+end
 if nargin < 3
-    isMatSolo = true;
+    doAutoloadUI = false;
 end
 if nargin < 2
     doDebug = true;
@@ -361,7 +364,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.isTestRun = true;
                 
             otherwise
-                D.DB.isTestRun = doAutoLoad;
+                D.DB.isTestRun = doAutoloadUI;
                 D.DB.doPidCalibrationTest = false;
                 D.DB.doHaltErrorTest = false;
                 D.DB.doSimRatTest = false;
@@ -579,7 +582,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.main_what = 'FINISH SESSION SETUP';
                 
             elseif D.F.implant_session && ~D.F.sleep_done(1)
-                D.F.main_what = 'WAIT FOR SLEEP 1';
+                D.F.main_what = 'RUN SLEEP 1';
                 
             elseif ~D.F.poll_nlx && ~D.F.task_done
                 D.F.main_what = 'SETUP TASK';
@@ -588,6 +591,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     (Elapsed_Seconds(now) - D.T.poll_last) >= D.PAR.polRate && ...
                     ~isTTtrackSolo
                 D.F.main_what = 'RUN TASK';
+                
+            elseif D.F.implant_session && ~D.F.sleep_done(2)
+                D.F.main_what = 'RUN SLEEP 2';
                 
             elseif D.F.task_done_confirmed && ...
                     (~D.F.implant_session || all(D.F.sleep_done))
@@ -639,6 +645,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Finish_Ephys_Setup();
                     Console_Write('[MainLoop] FINISHED: "Finish_Ephys_Setup()"');
                     
+                    % Enable TT_Track Objects
+                    Set_Object_Group('TT_Track_Objects', 'Enable')
+                    
                     % Start Cheetah Acquisition
                     set(D.UI.toggAcq, 'Value', 1)
                     ToggAcq(D.UI.toggAcq);
@@ -658,9 +667,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Finish_GUI_Setup();
                     Console_Write('[MainLoop] FINISHED: "Finish_GUI_Setup()"');
                     
+                    % Enable Run panel stuff
+                    if D.F.implant_session
+                        Set_Object_Group('Sleep1_Objects', 'Enable')
+                    else
+                        Set_Object_Group('Run_Objects', 'Enable')
+                    end
+                    
+                    % Enable text info
+                    Set_Object_Group('Text_Objects', 'Enable')
+                    
                     % Start Cheetah Recording
                     set(D.UI.toggRec,'Value', 1);
                     ToggRec(D.UI.toggRec);
+                    
+                case 'RUN SLEEP 1'
+                    %% ------------------RUN SLEEP 1-------------------
+                    
+                    % Check sleep status
+                    Sleep_Check(1);
                     
                 case 'SETUP TASK'
                     %% ------------------SETUP TASK--------------------
@@ -725,7 +750,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Console_Write('[MainLoop] READY TO ROCK!');
                     
                 case 'RUN TASK'
-                    %% ------------------POLL NETCOM-------------------
+                    %% ------------------RUN TASK-------------------
                     
                     % STORE POLL TIME
                     D.T.poll_last = Elapsed_Seconds(now);
@@ -840,7 +865,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.F.rat_out = true;
                             Console_Write('[MainLoop] SENT TASK DONE CONFIRMATION');
                             
-                            
                         case 'CHECK FOR TASK DONE CONFIRMATION'
                             % -------------CHECK FOR TASK DONE CONFIRMATION---------------
                             
@@ -850,6 +874,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 % Set flags
                                 D.F.poll_nlx = false;
                                 D.F.task_done_confirmed = true;
+                                
+                                % Enable Sleep 2 objects
+                                if D.F.implant_session
+                                    Set_Object_Group('Sleep2_Objects', 'Enable');
+                                end
                                 
                                 % Reset c2m flag
                                 c2m.('Y').dat1 = 0;
@@ -861,8 +890,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                     end
                     
+                case 'RUN SLEEP 2'
+                    %% ------------------RUN SLEEP 2-------------------
+                    
+                    % Check sleep status
+                    Sleep_Check(2);
+                    
                 case 'WAIT FOR SAVE'
-                    % -------------WAIT FOR SAVE---------------
+                    %% -------------WAIT FOR SAVE---------------
                     
                     % Enable save button
                     if ~D.F.do_save && strcmp(D.UI.btnSaveSes.Enable, 'off')
@@ -1147,8 +1182,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.tt_track_setup = false;
         % setup finished
         D.F.session_setup = false;
-        % ephys setup
-        D.F.ephys_setup = false;
         % polling nlx
         D.F.poll_nlx = false;
         % polling nlx
@@ -2061,9 +2094,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         obj_gap = 0.01;
         
         % Bottom start
-        btm = D.UI.stup_pan_pos(2) + ...
-            D.UI.stup_pan_pos(4) - ...
-            D.UI.fontSzTxtLrg(2) - obj_gap;
+        btm = D.UI.stup_pan_pos(2) + D.UI.stup_pan_pos(4) - 2*obj_gap;
         
         % SETUP PANEL
         
@@ -2088,8 +2119,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % RAT SELECTION
         
         % Header text
-        btm = btm - obj_gap;
-        pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzTxtMed(2)];
+        ht = D.UI.fontSzTxtMed(2);
+        btm = btm - ht - obj_gap;
+        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
         D.UI.txtRat = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','Rat Number', ...
@@ -2383,9 +2415,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         obj_gap = 0.01;
         
         % Bottom start
-        btm = D.UI.run_pan_pos(2) + ...
-            D.UI.run_pan_pos(4) - ...
-            D.UI.fontSzTxtLrg(2) - obj_gap;
+        btm = D.UI.run_pan_pos(2) + D.UI.run_pan_pos(4) - 2*obj_gap;
         
         % RUN PANEL
         D.UI.panRun = uipanel(...
@@ -4938,15 +4968,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        %% Enable Ephys Objects
-        
-        if isTTtrackSolo
-            Set_Object_Group('Ephys_Objects', 'Enable')
-        end
-        
-        % Set flag
-        D.F.ephys_setup = true;
-        
     end
 
 % --------------------------FINISH AC SETUP------------------------
@@ -5388,21 +5409,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Selectable Items
         uistack(D.UI.axH(9),'top');
         
-        %% UPDATE UI OBJECTS
-        
-        % Enable Run panel stuff
-        if ~D.F.implant_session
-            Set_Object_Group('Run_Objects', 'Enable')
-        else
-            Set_Object_Group('Sleep1_Objects', 'Enable')
-        end
-        
-        % Enable text info
-        Set_Object_Group('Text_Objects', 'Enable')
-        
-        % Start timer
-        start(timer_graphics);
-        
         %% SEND SETUP COMMAND TO ROBOT
         
         % ses cond
@@ -5423,6 +5429,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             d2 = 2;
         end
         Send_M2C('S', d1, d2);
+        
+        % Start timer
+        start(timer_graphics);
         
         % Log/print
         Console_Write('[Finish_GUI_Setup] FINISHED: Session Setup');
@@ -6078,7 +6087,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% SET LAST SAVED ENTRIES TO WHAT WE WANT
         
-        if doAutoLoad && ~isTTtrackSolo
+        if doAutoloadUI && ~isTTtrackSolo
             
             % Change data table entries which will be loaded later
             ratInd = ...
@@ -7327,6 +7336,81 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Set update ui flag
                 update_ui = true;
                 
+            end
+            
+        end
+        
+    end
+
+% ------------------------CHECK SLEEP STATUS-----------------------
+    function Sleep_Check(sleep_phase)
+        
+        % Bail if sleep not started or finished
+        if D.T.sleep_str(sleep_phase) == 0 || ...
+                D.F.sleep_done(sleep_phase)
+            return;
+        end
+        
+        % Check time left
+        sleep_dt = ...
+            (Elapsed_Seconds(now) - D.T.sleep_str(sleep_phase));
+        
+        % Wait till time ellapsed
+        if sleep_dt < D.PAR.sleepDur(sleep_phase) && ...
+                get(D.UI.toggSleep(sleep_phase), 'Value') == 1 && ...
+                ~doExit
+            
+            % Change button string
+            str = ...
+                sprintf('%s/%s', ...
+                datestr(sleep_dt/(24*60*60), 'MM:SS'), ...
+                datestr(D.PAR.sleepDur(sleep_phase)/(24*60*60), 'MM:SS'));
+            D.UI.editSleep(sleep_phase).String = str;
+            
+            % Pause before next loop
+            pause(0.1);
+            
+            % Exit function
+            return;
+            
+        end
+        
+        % Set final button string
+        if sleep_dt >= D.PAR.sleepDur(sleep_phase)
+            str = ...
+                sprintf('%s/%s', ...
+                datestr(D.PAR.sleepDur(sleep_phase)/(24*60*60), 'MM:SS'), ...
+                datestr(D.PAR.sleepDur(sleep_phase)/(24*60*60), 'MM:SS'));
+            D.UI.editSleep(sleep_phase).String = str;
+        end
+        
+        % Send NLX end event
+        Send_M2NLX(D.NLX.sleep_end_evt{sleep_phase});
+        
+        % Store end time
+        D.T.sleep_end(sleep_phase) = Elapsed_Seconds(now);
+        
+        % Set flag
+        D.F.sleep_done(sleep_phase) = true;
+        
+        % Handle Sleep 1
+        if sleep_phase == 1
+            
+            % Disable Sleep 1 stuff
+            Set_Object_Group('Sleep1_Objects', 'Disable');
+            
+        end
+        
+        % Handle Sleep 2
+        if sleep_phase == 2
+            
+            % Disable Sleep 2 stuff
+            Set_Object_Group('Sleep2_Objects', 'Disable');
+            
+            % Stop recording
+            if D.F.rec
+                set(D.UI.toggRec,'Value', 0)
+                ToggRec(D.UI.toggRec);
             end
             
         end
@@ -9605,9 +9689,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Enable/Disable ephys objects
             if D.UI.toggStreamTTs.Value == 1
-                Set_Object_Group('Ephys_Objects', 'Enable')
+                Set_Object_Group('TT_Plot_Objects', 'Enable')
             else
-                Set_Object_Group('Ephys_Objects', 'Disable')
+                Set_Object_Group('TT_Plot_Objects', 'Disable')
             end
             
             % Bail
@@ -9670,7 +9754,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         [D.S.pos_clust{:, :}] =  deal({[0,0], NaN(60*60*100,3)});
         
         % Enable ephys objects
-        Set_Object_Group('Ephys_Objects', 'Enable')
+        Set_Object_Group('TT_Plot_Objects', 'Enable')
         
     end
 
@@ -9686,88 +9770,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return;
         end
         
-        % Start sleep phase
-        if val == 1
-            
-            % Update button
-            Set_Button_State(D.UI.toggSleep(sleep_phase), 'Update');
-            
-            % Store sleep start time
-            D.T.sleep_str(sleep_phase) = Elapsed_Seconds(now);
-            
-            % Send NLX start event
-            Send_M2NLX(D.NLX.sleep_start_evt{sleep_phase});
-            
-            % Initialize time remaining
-            sleep_dt = 0;
-            
-            % Wait till time ellapsed
-            while (sleep_dt < D.PAR.sleepDur(sleep_phase)) && ~doExit
-                
-                % Check time left
-                sleep_dt = ...
-                    (Elapsed_Seconds(now) - D.T.sleep_str(sleep_phase));
-                
-                % Change button string
-                str = ...
-                    sprintf('%s/%s', ...
-                    datestr(sleep_dt/(24*60*60), 'MM:SS'), ...
-                    datestr(D.PAR.sleepDur(sleep_phase)/(24*60*60), 'MM:SS'));
-                D.UI.editSleep(sleep_phase).String = str;
-                
-                % Pause before next loop
-                pause(0.1);
-                
-                % Check if button unset
-                if get(D.UI.toggSleep(sleep_phase), 'Value') == 0
-                    
-                    % Bail
-                    break;
-                    
-                end
-                
-            end
-            
-            % Set final button string
-            if sleep_dt >= D.PAR.sleepDur(sleep_phase)
-                str = ...
-                    sprintf('%s/%s', ...
-                    datestr(D.PAR.sleepDur(sleep_phase)/(24*60*60), 'MM:SS'), ...
-                    datestr(D.PAR.sleepDur(sleep_phase)/(24*60*60), 'MM:SS'));
-                D.UI.editSleep(sleep_phase).String = str;
-            end
-            
-            % Send NLX end event
-            Send_M2NLX(D.NLX.sleep_end_evt{sleep_phase});
-            
-            % Store end time
-            D.T.sleep_end(sleep_phase) = Elapsed_Seconds(now);
-            
-            % Set flag
-            D.F.sleep_done(sleep_phase) = true;
-            
-            % Handle Sleep 1
-            if sleep_phase == 1
-                
-                % Disable Sleep 1 stuff
-                Set_Object_Group('Sleep1_Objects', 'Disable');
-                
-            end
-            
-            % Handle Sleep 2
-            if sleep_phase == 2
-                
-                % Disable Sleep 2 stuff
-                Set_Object_Group('Sleep2_Objects', 'Disable');
-                
-                % Stop recording
-                if D.F.rec
-                    set(D.UI.toggRec,'Value', 0)
-                    ToggRec(D.UI.toggRec);
-                end
-            end
-            
-        end
+        % Update button
+        Set_Button_State(D.UI.toggSleep(sleep_phase), 'Update');
+        
+        % Store sleep start time
+        D.T.sleep_str(sleep_phase) = Elapsed_Seconds(now);
+        
+        % Send NLX start event
+        Send_M2NLX(D.NLX.sleep_start_evt{sleep_phase});
+        
     end
 
 % ---------------------------ROTATION BUTTON-------------------------------
@@ -10206,19 +10217,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Disable Run objects
         Set_Object_Group('Run_Objects', 'Disable')
         
-        % Disable Track and Forage task objects
-        Set_Object_Group('Track_Task_Objects', 'Disable')
-        Set_Object_Group('Forage_Task_Objects', 'Disable')
-        
-        % Enable sleep objects
-        if D.F.implant_session
-            Set_Button_State(D.UI.toggSleep(2), 'Enable');
-        else
+        % Disable recording objects
+        if ~D.F.implant_session
+            
             % Stop recording
             if D.F.rec
                 set(D.UI.toggRec,'Value', 0)
                 ToggRec(D.UI.toggRec);
             end
+            
         end
         
         % Log/print
@@ -10964,11 +10971,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set data loaded flag
         D.F.rat_loaded = true;
-        
-        % Enable panel
-        if isTTtrackSolo
-            Set_Object_Group('Ephys_Objects', 'Enable');
-        end
         
         % Auto run GUI
         if (D.DB.doAutoSetTT)
@@ -12165,9 +12167,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ------------------------SET CUE BUTTONS----------------------------------
     function Set_Object_Group(set_what, setting_str)
         % Note:
-        %   set_what = ['Setup_Objects', 'Run_Objects' 'Text_Objects'
-        %               'Ephys_Objects', 'Sleep1_Objects', 'Sleep2_Objects'
-        %               'Track_Task_Objects', 'Forage_Task_Objects']
+        %   set_what = [
+        %               'Setup_Objects',
+        %               'Run_Objects'
+        %               'Text_Objects'
+        %               'Sleep1_Objects',
+        %               'Sleep2_Objects'
+        %               'TT_Track_Objects',
+        %               'TT_Plot_Objects' ]
         %   setting_str = ['Enable', 'Disable']
         
         %% SETUP OBJECTS
@@ -12423,43 +12430,81 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        %% EPHYS OBJECTS
-        if strcmp(set_what, 'Ephys_Objects')
+        %% TT TRACK OBJECTS
+        if strcmp(set_what, 'TT_Track_Objects')
             
             % Set to 'Enable
             if strcmp(setting_str, 'Enable')
                 
-                % Enable main tt panel objects
+                % Enable tt select panel objects
                 Set_Panel_State(D.UI.panSelectTT, 'Enable');
-                set(D.UI.toggTT, 'Visible', 'on');
                 Set_Button_State(D.UI.toggIncludeTT, 'Enable');
+                
+                % Show and disable non-included tt select buttons
+                set(D.UI.toggTT, 'Visible', 'on');
                 set(D.UI.toggTT(logical([D.UI.toggIncludeTT.Value])), 'Enable', 'off');
-                Set_Button_State(D.UI.toggActionTT, 'Enable');
-                set(D.UI.btnSaveLogTT, 'Enable', 'on');
+                
+                % Enable hear tt buttons
+                Set_Button_State(D.UI.toggActionTT(1), 'Enable');
                 set(D.UI.toggHearSide, 'Enable', 'on');
                 set(D.UI.toggHearChan, 'Enable', 'on');
                 
-                % Enable show/hide tt track buttons
+                % Enable show/hide tt buttons
                 Set_Button_State(D.UI.toggHideTT, 'Enable');
                 
-                % Clear TT
+                % Enable save tt log button
+                set(D.UI.btnSaveLogTT, 'Enable', 'on');
+                
+                % Enable Quit
+                set(D.UI.btnQuit, 'Enable', 'on')
+                
+            end
+            
+            % Set to 'Disable'
+            if strcmp(setting_str, 'Disable')
+                
+                % Disable tt select panel objects
+                Set_Panel_State(D.UI.panSelectTT, 'Unenable');
+                Set_Button_State(D.UI.toggIncludeTT, 'Unenable');
+                
+                % Hide tt select buttons
+                set(D.UI.toggTT, 'Visible', 'off');
+                
+                % Disable hear tt buttons
+                Set_Button_State(D.UI.toggActionTT(1), 'Unenable');
+                set(D.UI.toggHearSide, 'Enable', 'off');
+                set(D.UI.toggHearChan, 'Enable', 'off');
+                
+                % Disable show/hide tt buttons
+                Set_Button_State(D.UI.toggHideTT, 'Unenable');
+                
+                % Disable save tt log button
+                set(D.UI.btnSaveLogTT, 'Enable', 'off');
+                
+            end
+            
+        end
+        
+        %% TT PLOT OBJECTS
+        if strcmp(set_what, 'TT_Plot_Objects')
+            
+            % Set to 'Enable
+            if strcmp(setting_str, 'Enable')
+                
+                % Enable Clear TT
                 Set_Button_State(D.UI.btnClrTT, 'Enable');
                 
-                % TT plot type
+                % Enable TT plot type
                 Set_Button_State(D.UI.toggActionTT, 'Enable');
                 
-                % Normal run
-                if ~isTTtrackSolo
-                    
-                    % Color bars
-                    set(D.UI.colBarH, 'Visible', 'on')
-                    
-                    % Set Plot Spikes button
-                    if any(D.S.stream_clust(:))
-                        ind = ismember({D.UI.toggActionTT(:).String}, 'Plot Spikes');
-                        D.UI.toggActionTT(ind).Value = 1;
-                        ToggActionTT(D.UI.toggActionTT(ind))
-                    end
+                % Show Color bars
+                set(D.UI.colBarH, 'Visible', 'on')
+                
+                % Set 'Plot Spikes' button active
+                if any(D.S.stream_clust(:))
+                    ind = ismember({D.UI.toggActionTT(:).String}, 'Plot Spikes');
+                    D.UI.toggActionTT(ind).Value = 1;
+                    ToggActionTT(D.UI.toggActionTT(ind))
                 end
                 
             end
@@ -12467,29 +12512,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set to 'Disable'
             if strcmp(setting_str, 'Disable')
                 
-                % Unenable main tt panel objects
-                Set_Panel_State(D.UI.panSelectTT, 'Unenable');
-                set(D.UI.toggTT, 'Enable', 'off');
-                Set_Button_State(D.UI.toggIncludeTT, 'Unenable');
-                Set_Button_State(D.UI.toggActionTT, 'Unenable');
-                set(D.UI.btnSaveLogTT, 'Enable', 'off');
-                set(D.UI.toggHearSide, 'Enable', 'off');
-                set(D.UI.toggHearChan, 'Enable', 'off');
-                Set_Button_State(D.UI.toggStreamTTs, 'Unenable');
-                
-                % Unenable show/hide tt track buttons
-                Set_Button_State(D.UI.toggHideTT, 'Unenable');
-                
-                % Clear TT
+                % Disable Clear TT
                 Set_Button_State(D.UI.btnClrTT, 'Unenable');
                 
-                % TT plot type
+                % Disable TT plot type
                 Set_Button_State(D.UI.toggActionTT, 'Unenable');
                 
-                % Color bars
-                if ~isTTtrackSolo
-                    set(D.UI.colBarH, 'Visible', 'off')
-                end
+                % Hide Color bars
+                set(D.UI.colBarH, 'Visible', 'off')
                 
             end
             

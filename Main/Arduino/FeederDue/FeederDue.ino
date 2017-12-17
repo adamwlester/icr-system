@@ -633,7 +633,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 void RunErrorHold(char msg[], uint32_t t_kill = 0);
 
 // GET ID INDEX
-template <typename T> int CharInd(char id, T *r24);
+template <typename T> int ID_Ind(char id, T *r24);
 
 // BLINK LEDS AT RESTART/UPLOAD
 bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0, bool rat_in_blink = false);
@@ -3921,8 +3921,8 @@ void GetSerial(R4 *r4)
 	else {
 
 		// Get id ind
-		r4_ind = CharInd<R4>(id, r4);
-		r2_ind = CharInd<R2>(id, r2);
+		r4_ind = ID_Ind<R4>(id, r4);
+		r2_ind = ID_Ind<R2>(id, r2);
 
 		// Send confirmation
 		if (do_conf) {
@@ -4366,7 +4366,7 @@ bool SendPacket(R2 *r2)
 	r2->sendQueue[r2->sendQueueIndRead][0] = '\0';
 
 	// Get id ind
-	id_ind = CharInd<R2>(id, r2);
+	id_ind = ID_Ind<R2>(id, r2);
 
 	// Check if resending
 	is_resend = pack == r2a.packLast[id_ind];
@@ -7565,7 +7565,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 	else if (r2->instID == "r2a") {
 		r4 = &a2r;
 	}
-	int r2_ind = CharInd<R2>(id, r2);
+	int r2_ind = ID_Ind<R2>(id, r2);
 	if (r2_ind != -1) {
 		r2c.doRcvCheck[r2_ind] = false;
 	}
@@ -7635,7 +7635,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 #pragma region --------MINOR FUNCTIONS---------
 
 // GET ID INDEX
-template <typename T> int CharInd(char id, T *r24)
+template <typename T> int ID_Ind(char id, T *r24)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -8661,7 +8661,7 @@ void loop() {
 
 			// Tell CS quit is done
 			if (!fc.isQuitConfirmed) {
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('Q', &c2r)], true);
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('Q', &c2r)], true);
 				fc.isQuitConfirmed = true;
 			}
 
@@ -8790,7 +8790,7 @@ void loop() {
 				DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 				// Tell CS movement is done
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('M', &c2r)], true);
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('M', &c2r)], true);
 			}
 
 			// Reset flags
@@ -9064,7 +9064,7 @@ void loop() {
 
 		DebugFlow(__FUNCTION__, __LINE__, "STREAMING CONFIRMED");
 		// Send streaming confirmation
-		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[CharInd<R4>('V', &c2r)], true);
+		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('V', &c2r)], true);
 
 		// Reset flag
 		fc.doStreamCheck = false;
