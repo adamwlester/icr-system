@@ -6024,8 +6024,6 @@ void HardwareTest()
 	DB_FUN_STR();
 #endif
 
-#if DO_HARDWARE_TEST
-
 	// ------------------------ LOCAL VARS ------------------------
 
 	static char str[200] = { 0 };
@@ -6442,7 +6440,6 @@ void HardwareTest()
 	sprintf(str, "PING TIMES r2a: avg=%0.2f all=|%s", dt_pingRoundTrip[1], str_ping[1]);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 
-#endif
 }
 
 // CHECK LOOP TIME AND MEMORY
@@ -7202,7 +7199,7 @@ bool PrintDebug()
 	// Check if ind should roll over 
 	if (printQueueIndRead == printQueueSize) {
 		printQueueIndRead = 0;
-	}
+}
 
 	// Print
 	SerialUSB.print(printQueue[printQueueIndRead]);
@@ -7355,7 +7352,7 @@ int GetPrintQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < printQueueSize; i++) {
 		n_entries += printQueue[i][0] != '\0' ? 1 : 0;
-	}
+}
 
 	// Get total available
 	return printQueueSize - n_entries;
@@ -7435,7 +7432,8 @@ void LogTrackingData()
 	static const byte n_samps = 40;
 	static int16_t pos_hist[10][n_samps] = { { 0 } };
 	static const char id_str[10][n_samps] = { { "Rat VT Pos: |" } ,{ "Rat Px Pos: |" } ,{ "Rob VT Pos: |" } ,{ "Rat EKF Pos: |" } ,{ "Rob EKF Pos: |" },
-	{ "Rat VT Vel: |" } ,{ "Rat Px Vel: |" } ,{ "Rob VT Vel: |" } ,{ "Rat EKF Vel: |" } ,{ "Rob EKF Vel: |" } };
+	{ "Rat VT Vel: |" } ,{ "Rat Px Vel: |" } ,{ "Rob VT Vel: |" } ,{ "Rat EKF Vel: |" } ,{ "Rob EKF Vel: |" }
+};
 	static bool do_log[10] = { db.log_pos_rat_vt, db.log_pos_rat_pixy, db.log_pos_rob_vt, db.log_pos_rat_ekf, db.log_pos_rob_ekf,
 		db.log_vel_rat_vt, db.log_vel_rat_pixy, db.log_vel_rob_vt, db.log_vel_rat_ekf, db.log_vel_rob_ekf };
 	static int hist_ind = 0;
@@ -8003,13 +8001,14 @@ void setup() {
 		delay(10);
 	}
 
-	// WAIT FOR POWER SWITCH IF NOT DEBUGGING
+	// WAIT FOR POWER SWITCH
 	digitalWrite(pin.PWR_OFF, HIGH);
-	while (!DO_DEBUG &&
-		digitalRead(pin.PWR_Swtch) == HIGH);
-
-	// Pause before powering on if in debug mode
-	if (DO_DEBUG) {
+	if (!DO_DEBUG && !DO_AUTO_POWER) {
+		while (digitalRead(pin.PWR_Swtch) == HIGH);
+	}
+	
+	// Otherwise pause before powering on
+	else {
 		delay(1000);
 	}
 
@@ -8434,47 +8433,143 @@ void loop() {
 	{
 		// Store message data
 		cmd.testCond = (byte)c2r.dat[0];
-		cmd.testDat = (byte)c2r.dat[1];
+		cmd.testRun = (byte)c2r.dat[1];
+		cmd.testDat = c2r.dat[2];
 
 		// Set testing flag
 		db.is_runTest = true;
 
-		// Set run pid calibration flag
+		// Simulated rat test
 		if (cmd.testCond == 1)
 		{
-			// Log/rint settings
-			sprintf(horeStr, "RUN PID CALIBRATION = kC=%0.2f", kC);
-			DebugFlow(__FUNCTION__, __LINE__, horeStr);
+			// Setup
+			if (cmd.testRun == 0) {
 
-			// Set flag
-			db.do_pidCalibration = true;
+				// Log/rint test
+				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: SIMULATED RAT TEST");
+
+				// Set flag
+				db.do_simRatTest = true;
+
+			}
 		}
 
-		// Update Halt Error test run speed
+		// Pid calibration test
 		else if (cmd.testCond == 2)
 		{
-			// Store new speed
-			double new_speed = double(cmd.testDat);
+			// Setup
+			if (cmd.testRun == 0) {
 
-			// Print speed
-			sprintf(horeStr, "HALT ERROR SPEED = %0.0f cm/sec", new_speed);
-			DebugFlow(__FUNCTION__, __LINE__, horeStr);
+				// Log/rint settings
+				sprintf(horeStr, "DO TEST: PID CALIBRATION = kC=%0.2f", kC);
+				DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
-			if (new_speed > 0) {
-				// Run motor
-				RunMotor('f', new_speed, "Override");
-			}
-			else {
-				// Halt robot
-				AD_R.hardStop();
-				AD_F.hardStop();
+				// Set flag
+				db.do_pidCalibration = true;
+
 			}
 		}
 
-		// Symulated rat test
+		// VT Calibration test
 		else if (cmd.testCond == 3)
 		{
-			db.do_simRatTest = true;
+			// Setup
+			if (cmd.testRun == 0) {
+
+				// Log/rint test
+				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: VT CALIBRATION");
+			}
+
+			// Run
+			else {
+
+				// Store new speed
+				double new_speed = double(cmd.testDat);
+
+				// Print speed
+				sprintf(horeStr, "VT CALIBRATION SPEED = %0.0f cm/sec", new_speed);
+				DebugFlow(__FUNCTION__, __LINE__, horeStr);
+
+				if (new_speed > 0) {
+					// Run motor
+					RunMotor('f', new_speed, "Override");
+				}
+				else {
+					// Halt robot
+					AD_R.hardStop();
+					AD_F.hardStop();
+				}
+			}
+
+		}
+
+		// Halt Error test
+		else if (cmd.testCond == 4)
+		{
+
+			// Setup
+			if (cmd.testRun == 0) {
+
+				// Log/rint test
+				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: HALT ERROR");
+			}
+
+			// Run
+			else {
+
+				// Store new speed
+				double new_speed = double(cmd.testDat);
+
+				// Print speed
+				sprintf(horeStr, "HALT ERROR SPEED = %0.0f cm/sec", new_speed);
+				DebugFlow(__FUNCTION__, __LINE__, horeStr);
+
+				if (new_speed > 0) {
+					// Run motor
+					RunMotor('f', new_speed, "Override");
+				}
+				else {
+					// Halt robot
+					AD_R.hardStop();
+					AD_F.hardStop();
+				}
+			}
+		}
+
+		// IR sync timing test
+		if (cmd.testCond == 6)
+		{
+			// Setup
+			if (cmd.testRun == 0) {
+
+				// Log/rint test
+				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: IR SYNC TIME");
+
+				// Set flag
+				db.do_irSyncCalibration = true;
+
+			}
+		}
+
+		// Robot hardware test
+		if (cmd.testCond == 7)
+		{
+			// Setup
+			if (cmd.testRun == 0) {
+
+				// Log/rint test
+				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: ROBOT HARDWARE");
+
+				// Run hardware test
+				HardwareTest();
+
+			}
+
+		}
+
+		// Send final ping times after test setup
+		if (cmd.testRun == 0) {
+			QueuePacket(&r2c, 't', n_pings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
 		}
 	}
 
@@ -8560,11 +8655,6 @@ void loop() {
 #pragma region //--- (h) PING TEST ---
 	if (c2r.idNow == 'h' && c2r.isNew)
 	{
-		// Run hardware test
-		HardwareTest();
-
-		// Send final ping times
-		QueuePacket(&r2c, 't', n_pings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
 
 		// Set flag
 		fc.isSesStarted = true;
@@ -8575,7 +8665,7 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- (S) DO SETUP ---
+#pragma region //--- (S) SESSION SETUP ---
 	if (c2r.idNow == 'S' && c2r.isNew)
 	{
 		// Store message data
@@ -8624,7 +8714,7 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- (Q) DO QUIT ---
+#pragma region //--- (Q) QUIT SESSION ---
 	if (c2r.idNow == 'Q' && c2r.isNew) {
 
 		// Log/print event

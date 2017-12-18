@@ -60,6 +60,7 @@ while etime(clock, t1) < 120
 end
 
 vtPos = vtPos(~isnan(vtPos));
+
 %% Process data
 
 % reshape data

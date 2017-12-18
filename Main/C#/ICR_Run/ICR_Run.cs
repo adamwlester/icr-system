@@ -20,10 +20,14 @@ namespace ICR_Run
             // Set System Test
             /*
                 0: No test
-                1: PID calibration
-                2: Halt error test
-                3: Simulated rat test
-                4: Auto setup
+                1: Simulated rat test
+                2: PID calibration
+                3: VT calibration
+                4: Halt error test
+                5: Wall image IR sync timing
+                6: IR sync timing
+                7: Robot hardware test
+                8: Forage path compute
             */
             public double systemTest;
 
@@ -87,9 +91,9 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 3, // 0
+            system_test: 1, // 0
             do_debug_mat: true, // false
-            do_autoload_ui: false, // false
+            do_autoload_ui: true, // false
             break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -192,13 +196,12 @@ namespace ICR_Run
             _lock_is_conf: new object(),
             _lock_is_done: new object(),
             _id:
-            new char[9] {
+            new char[8] {
             'g', // request m2c data
             'h', // setup handshake
             'J', // battery voltage
             'Z', // reward zone
-            'V', // robot streaming
-            'K', // robot in place
+            'K', // robot status
             'Y', // task done
             'E', // enable exit
             'C', // confirm close
@@ -212,8 +215,8 @@ namespace ICR_Run
             _id:
             new char[17] {
             'h', // setup handshake
-			't', // hardware test
-			'T', // system test command
+			't', // hardware ping test
+			'T', // system test
 			'S', // start session
 			'Q', // quit session
 			'M', // move to position
@@ -240,7 +243,7 @@ namespace ICR_Run
             _id:
             new char[17] {
             'h', // setup handshake
-			't', // hardware test
+			't', // hardware ping test
 			'T', // system test command
 			'S', // start session
 			'Q', // quit session
@@ -261,24 +264,7 @@ namespace ICR_Run
             _foot: (byte)'>'
         );
 
-        // Robot to Ard
-        private static Com_Track r2a = new Com_Track(
-            _lock_is_conf: new object(),
-            _lock_is_done: new object(),
-            _id:
-            new char[6] {
-            't', // hardware test
-            'q', // quit/reset
-	        'r', // reward
-	        's', // sound cond [0, 1, 2]
-	        'p', // pid mode [0, 1]
-	        'b', // bull mode [0, 1]
-            },
-            _head: (byte)'{',
-            _foot: (byte)'}'
-        );
-
-        // Robot to Ard
+        // Ard to CS
         private static Com_Track a2c = new Com_Track(
             _lock_is_conf: new object(),
             _lock_is_done: new object(),
@@ -522,32 +508,52 @@ namespace ICR_Run
                 // Log/print success
                 LogEvent("[Setup] SUCCEEDED: Robot Handshake");
 
-                // Run ping round trip test
-                LogEvent("[Setup] RUNNING: Hardware Test...");
-
-                // Wait for x pings
-                pass = WaitForSerial(id: 't', dat: r2c.datMat[r2c.ID_Ind('h')][0] + 1, chk_rcv: true, do_abort: true, timeout: 20000);
-                if (pass)
-                {
-                    // Log/print success
-                    LogEvent("[Setup] FINISHED: Hardware Test");
-
-                    // Log/print average ping time
-                    double dt_ping_r2c = r2c.datMat[r2c.ID_Ind('t')][1];
-                    double dt_ping_r2a = r2c.datMat[r2c.ID_Ind('t')][2];
-                    LogEvent(String.Format("PING TIMES: r2c={0:0.00}ms r2a={1:0.00}ms", dt_ping_r2c, dt_ping_r2a));
-                }
-                else
-                {
-                    LogEvent("!!ERROR!! [Setup] ABORTED: Hardware Test", is_error: true);
-                    return false;
-                }
             }
             else
             {
                 LogEvent("!!ERROR!! [Setup] ABORTED: Robot Handshake", is_error: true);
                 return false;
             }
+
+            // Send Test setup 
+            LogEvent("[Run] RUNNING: Test Setup...");
+            RepeatSendPack_Thread(id: 'T', dat1: db.systemTest, dat2:0, dat3:0);
+            // Wait for recieve confirmation
+            pass = WaitForSerial(id: 'T', chk_send: true, chk_conf: true, timeout: 5000);
+            if (pass)
+            {
+                LogEvent("[Run] SUCCEEDED: Test Setup");
+            }
+            else
+            {
+                LogEvent("**WARNING** [Run] ABORTED: Test Setup", is_warning: true);
+                return false;
+            }
+
+            // Run ping round trip test
+            LogEvent("[Setup] RUNNING: Hardware Test...");
+
+            // Wait for x pings
+            pass = WaitForSerial(id: 't', dat: r2c.datMat[r2c.ID_Ind('h')][0] + 1, chk_rcv: true, do_abort: true, timeout: 20000);
+            if (pass)
+            {
+                // Log/print success
+                LogEvent("[Setup] FINISHED: Hardware Test");
+
+                // Log/print average ping time
+                double dt_ping_r2c = r2c.datMat[r2c.ID_Ind('t')][1];
+                double dt_ping_r2a = r2c.datMat[r2c.ID_Ind('t')][2];
+                LogEvent(String.Format("PING TIMES: r2c={0:0.00}ms r2a={1:0.00}ms", dt_ping_r2c, dt_ping_r2a));
+            }
+            else
+            {
+                LogEvent("!!ERROR!! [Setup] ABORTED: Hardware Test", is_error: true);
+                return false;
+            }
+
+            // Send robot setup confirmation to ICR_GUI
+            LogEvent("[Setup] RUNNING: Send Robot Setup Confirmation");
+            SendMCOM_Thread(id: 'K', dat_num: 1);
 
             // Initilize deligate for VT callback
             deligate_netComCallback = new MNetCom.MNC_VTCallback(NetComCallbackVT);
@@ -634,13 +640,14 @@ namespace ICR_Run
             pass = WaitForSerial(id: 'V', chk_send: true, chk_conf: true, chk_done: true, do_abort: true);
             if (pass)
             {
-                // Send confirm stream to Matlbab
-                SendMCOM_Thread(id: 'V', dat_num: 1);
+                // Send confirm robot streaming to ICR_GUI
+                SendMCOM_Thread(id: 'K', dat_num: 2);
                 LogEvent("[Run] SUCCEEDED: Confirm Robot Streaming");
             }
             else
             {
-                LogEvent("**WARNING** [Run] ABORTED: Confirm Robot Streaming", is_warning: true);
+                LogEvent("!!ERROR!! [Run] ABORTED: Confirm Robot Streaming", is_error: true);
+                fc.isRunError = true;
                 return false;
             }
 
@@ -667,7 +674,7 @@ namespace ICR_Run
                 if (pass)
                 {
                     // Send confirm robot in place to Matlbab
-                    SendMCOM_Thread(id: 'K', dat_num: 1);
+                    SendMCOM_Thread(id: 'K', dat_num: 3);
                     fc.isMovedToStart = true;
                     LogEvent("[Run] SUCCEEDED: MoveTo Start");
                 }
@@ -965,7 +972,8 @@ namespace ICR_Run
             LogEvent("[Exit] FINISHED: Clear MatCom Globals");
 
             // Hold for debugging or errors errors
-            if (db.is_debugRun || fc.isRunError)
+            // TEMP if (db.is_debugRun || fc.isRunError)
+            if (fc.isRunError)
             {
                 // Show Matlab window
                 com_Matlab.Visible = fc.isRunError ? 1 : 0;

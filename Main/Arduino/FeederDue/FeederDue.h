@@ -51,6 +51,10 @@
 
 #pragma region ============ DEBUG SETTINGS =============
 
+
+// POWER SETTING
+#define DO_AUTO_POWER 1
+
 // DEBUG SETTING
 
 // Logging
@@ -58,12 +62,11 @@
 #define DO_FAST_LOG 0
 
 // Console
-#define DO_PRINT_DEBUG 1
+#define DO_PRINT_DEBUG 0
 #define DO_FAST_PRINT 0
 
 // Other
 #define DO_TEENSY_DEBUG 0
-#define DO_HARDWARE_TEST 0
 
 // Main debug flag
 #if DO_PRINT_DEBUG || DO_TEENSY_DEBUG
@@ -126,11 +129,12 @@ struct DB
 	// Testing
 	const bool do_posDebug = false; // I set
 	const bool do_posPlot = false; // I set
-	bool do_pidCalibration = false; // set by system
-	bool do_simRatTest = false; // set by system
 	bool is_runTest = false; // set by system
+	bool do_simRatTest = false; // set by system
+	bool do_pidCalibration = false; // set by system
+	bool do_irSyncCalibration = false; // set by system
 
-							 // Other
+	// Other
 	bool isErrLoop = false;
 }
 // Initialize
@@ -380,6 +384,7 @@ const char tnsy_id_list[1] =
 struct CMD
 {
 	byte testCond = 0;
+	byte testRun = 0;
 	byte testDat = 0;
 	byte sesCond = 0;
 	byte soundCond = 0;

@@ -720,7 +720,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Start Cheetah Recording
                     set(D.UI.toggRec,'Value', 1);
                     ToggRec(D.UI.toggRec);
-                    
+                                    
                 case 'HOLD FOR SOLO TT TRACK SESSION'
                     %% ---------HOLD FOR SOLO TT TRACK SESSION-------------
                     continue;
@@ -731,14 +731,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Bail if setup not confirmed
                     if c2m.('K').dat1 < 1
-                        continue
+                        
+                        % Log/print
+                        Console_Write('[MainLoop] CONFIRMED ROBOT SETUP');
+                        
+                        % Set flag
+                        D.F.rob_setup = true;
                     end
-                    
-                    % Log/print
-                    Console_Write('[MainLoop] CONFIRMED ROBOT SETUP');
-                    
-                    % Set flag
-                    D.F.rob_setup = true;
                     
                 case 'RUN SLEEP 1'
                     %% ------------------RUN SLEEP 1-------------------
@@ -775,14 +774,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 case 'WAIT FOR ROBOT STREAMING'
                     
                     %% ----------WAIT FOR ROBOT STREAMING-----------
-                    
-                    % Bail if streaming not confirmed
-                    if c2m.('K').dat1 < 2
-                        continue
+                    % Wait for robot streaming to start
+                    Console_Write('[MainLoop] RUNNING: Wait for Robot Streaming...');
+                    while ...
+                            c2m.('K').dat1 < 2 && ...
+                            ~doExit
+                        pause(0.01);
+                        Update_UI(50);
                     end
-                    
-                    % Log/print
-                    Console_Write('[MainLoop] CONFIRMED ROBOT STREAMING');
+                    if ~doExit
+                        Console_Write('[MainLoop] FINISHED: Wait for Robot Streaming');
+                    else
+                        Console_Write('**WARNING** [MainLoop] ABORTED: Wait for Robot Streaming');
+                        return
+                    end
                     
                     % Dump initial vt recs
                     Console_Write('[MainLoop] RUNNING: Dump VT Recs...');
@@ -838,7 +843,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if ~D.F.first_move_sent
                         D.F.poll_what = 'CHECK IF MOVE READY';
                         
-                    elseif  ~D.F.rat_in && ...
+                    elseif c2m.('K').dat1 == 3 && ...
+                            ~D.F.rat_in && ...
                             D.F.rec && ...
                             ~D.F.task_done && ...
                             ~D.F.quit
@@ -8396,7 +8402,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 c2m.('K').dat1 == 3
             
             % Start pid test
-            Send_M2C('T', sysTest, 1, 0);
+            Send_M2C('T', sysTest, 0);
             
             % Set flag to start pid
             D.F.pidStarted = true;
@@ -8460,7 +8466,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Tell CS to resume run
-                Send_M2C('T', sysTest, 1, D.DB.nowVel);
+                Send_M2C('T', sysTest, D.DB.nowVel);
                 
                 % Set flag
                 D.DB.isHalted = false;
@@ -8470,7 +8476,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.P.Rob.vel < 5
                 
                 % Tell CS to resume run
-                Send_M2C('T', sysTest, 1, D.DB.nowVel);
+                Send_M2C('T', sysTest, D.DB.nowVel);
                 
             end
             
@@ -8483,7 +8489,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.haltCnt = D.DB.haltCnt+1;
                 
                 % Tell CS to Halt Robot
-                Send_M2C('T', sysTest, 1, 0);
+                Send_M2C('T', sysTest, 0);
                 
                 % Store robots current pos and time
                 D.DB.sendPos = D.P.Rob.radLast;
@@ -8564,7 +8570,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'Visible', 'on');
                         
                         % Send test info to robot once
-                        Send_M2C('T', sysTest, 1, 0);
+                        Send_M2C('T', sysTest, 0);
                         
                         % Unset flag
                         D.F.initVals = false;

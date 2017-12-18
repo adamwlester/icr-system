@@ -38,7 +38,7 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool CONSOLE = false;
+	bool CONSOLE = true;
 	// What to print
 	bool print_flow = true;
 	bool print_errors = true;
@@ -46,14 +46,15 @@ struct DB
 	bool print_a2r = true;
 	bool print_resent = true;
 	bool print_log = false;
+
+	// Testing
+	const bool doPrintPimMapTest = false; // I set
+	bool do_irSyncCalibration = false; // set by system
+
 }
 // Initialize
 db;
 
-// TESTING 
-
-// Print pin mapping
-const bool doTestPinMapping = false;
 
 #pragma endregion 
 
@@ -164,7 +165,7 @@ int cnt_logBytesSent = 0;
 struct R2A
 {
 	const char id[6] = {
-		't', // ping test
+		't', // system test
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
@@ -191,7 +192,7 @@ r2a;
 struct A2R
 {
 	const char id[6] = {
-		't', // ping test
+		't', // system test
 		'q', // quit/reset
 		'r', // reward
 		's', // sound cond [0, 1, 2]
@@ -237,24 +238,26 @@ int cnt_ir = 0;
 uint32_t t_irSyncLast;
 uint32_t word_irOn;
 
+// Volitiles
+volatile bool v_doPTInterupt = false;
 // PT north vars
-volatile uint32_t t_inLastNorth = millis();
-volatile uint32_t t_outLastNorth = millis();
-volatile bool isOnNorth = false;
+volatile uint32_t v_t_inLastNorth = millis();
+volatile uint32_t v_t_outLastNorth = millis();
+volatile bool v_isOnNorth = false;
 // PT west vars
-volatile uint32_t t_inLastWest = millis();
-volatile uint32_t t_outLastWest = millis();
-volatile bool isOnWest = false;
+volatile uint32_t v_t_inLastWest = millis();
+volatile uint32_t v_t_outLastWest = millis();
+volatile bool v_isOnWest = false;
 // PT south 
-volatile uint32_t t_inLastSouth = millis();
-volatile uint32_t t_outLastSouth = millis();
-volatile bool isOnSouth = false;
+volatile uint32_t v_t_inLastSouth = millis();
+volatile uint32_t v_t_outLastSouth = millis();
+volatile bool v_isOnSouth = false;
 // PT east vars
-volatile uint32_t t_inLastEast = millis();
-volatile uint32_t t_outLastEast = millis();
-volatile bool isOnEast = false;
+volatile uint32_t v_t_inLastEast = millis();
+volatile uint32_t v_t_outLastEast = millis();
+volatile bool v_isOnEast = false;
 // Any pin
-volatile bool isOnAny = false;
+volatile bool v_isOnAny = false;
 
 // TTL timers
 uint32_t t_debounce = 10; // (ms)
@@ -412,6 +415,7 @@ bool CheckForStart()
 	// Set flags
 	is_rcvd = true;
 	fc.isSesStarted = true;
+	v_doPTInterupt = true;
 	DebugFlow("[CheckForStart] START SESSION");
 
 	// Dump Xbee buffer
@@ -1621,15 +1625,15 @@ void ResetTTL()
 {
 
 	// Bail if nothing on
-	if (!isOnAny) {
+	if (!v_isOnAny) {
 		return;
 	}
 
 	// north
-	if (isOnNorth && millis() - t_outLastNorth > dt_ttlPulse) {
+	if (v_isOnNorth && millis() - v_t_outLastNorth > dt_ttlPulse) {
 
 		digitalWrite(pin.ttlNorthOn, LOW); // set back to LOW
-		isOnNorth = false;
+		v_isOnNorth = false;
 		// Print
 		if (db.print_flow) {
 			DebugFlow("[ResetTTL] NORTH OFF");
@@ -1637,10 +1641,10 @@ void ResetTTL()
 	}
 
 	// west
-	if (isOnWest && millis() - t_outLastWest > dt_ttlPulse) {
+	if (v_isOnWest && millis() - v_t_outLastWest > dt_ttlPulse) {
 
 		digitalWrite(pin.ttlWestOn, LOW); // set back to LOW
-		isOnWest = false;
+		v_isOnWest = false;
 
 		// Print
 		if (db.print_flow) {
@@ -1649,10 +1653,10 @@ void ResetTTL()
 	}
 
 	// south
-	if (isOnSouth && millis() - t_outLastSouth > dt_ttlPulse) {
+	if (v_isOnSouth && millis() - v_t_outLastSouth > dt_ttlPulse) {
 
 		digitalWrite(pin.ttlSouthOn, LOW); // set back to LOW
-		isOnSouth = false;
+		v_isOnSouth = false;
 
 		// Print
 		if (db.print_flow) {
@@ -1661,17 +1665,17 @@ void ResetTTL()
 	}
 
 	// east
-	if (isOnEast && millis() - t_outLastEast > dt_ttlPulse) {
+	if (v_isOnEast && millis() - v_t_outLastEast > dt_ttlPulse) {
 
 		digitalWrite(pin.ttlEastOn, LOW); // set back to LOW
-		isOnEast = false;
+		v_isOnEast = false;
 
 		// Print
 		if (db.print_flow) {
 			DebugFlow("[ResetTTL] EAST OFF");
 		}
 	}
-	isOnAny = isOnNorth || isOnWest || isOnSouth || isOnEast;
+	v_isOnAny = v_isOnNorth || v_isOnWest || v_isOnSouth || v_isOnEast;
 }
 
 // North
@@ -1681,21 +1685,21 @@ void NorthInterrupt()
 }
 void NorthFun()
 {
-	if (fc.isSesStarted)
+	if (v_doPTInterupt)
 	{
-		if (millis() - t_inLastNorth > t_debounce) {
+		if (millis() - v_t_inLastNorth > t_debounce) {
 
 			digitalWrite(pin.ttlNorthOn, HIGH);
-			t_outLastNorth = millis();
-			isOnNorth = true;
-			isOnAny = true;
+			v_t_outLastNorth = millis();
+			v_isOnNorth = true;
+			v_isOnAny = true;
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[NorthFun] NORTH ON", t_outLastNorth);
+				DebugFlow("[NorthFun] NORTH ON", v_t_outLastNorth);
 			}
 		}
-		t_inLastNorth = millis();
+		v_t_inLastNorth = millis();
 	}
 }
 
@@ -1706,20 +1710,20 @@ void WestInterrupt()
 }
 void WestFun()
 {
-	if (fc.isSesStarted)
+	if (v_doPTInterupt)
 	{
-		if (millis() - t_inLastWest > t_debounce) {
+		if (millis() - v_t_inLastWest > t_debounce) {
 			digitalWrite(pin.ttlWestOn, HIGH);
-			t_outLastWest = millis();
-			isOnWest = true;
-			isOnAny = true;
+			v_t_outLastWest = millis();
+			v_isOnWest = true;
+			v_isOnAny = true;
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[WestFun] WEST ON", t_outLastWest);
+				DebugFlow("[WestFun] WEST ON", v_t_outLastWest);
 			}
 		}
-		t_inLastWest = millis();
+		v_t_inLastWest = millis();
 	}
 }
 
@@ -1730,21 +1734,21 @@ void SouthInterrupt()
 }
 void SouthFun()
 {
-	if (fc.isSesStarted)
+	if (v_doPTInterupt)
 	{
-		if (millis() - t_inLastSouth > t_debounce) {
+		if (millis() - v_t_inLastSouth > t_debounce) {
 
 			digitalWrite(pin.ttlSouthOn, HIGH);
-			t_outLastSouth = millis();
-			isOnSouth = true;
-			isOnAny = true;
+			v_t_outLastSouth = millis();
+			v_isOnSouth = true;
+			v_isOnAny = true;
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[SouthFun] SOUTH ON", t_outLastSouth);
+				DebugFlow("[SouthFun] SOUTH ON", v_t_outLastSouth);
 			}
 		}
-		t_inLastSouth = millis();
+		v_t_inLastSouth = millis();
 	}
 }
 
@@ -1755,21 +1759,21 @@ void EastInterrupt()
 }
 void EastFun()
 {
-	if (fc.isSesStarted)
+	if (v_doPTInterupt)
 	{
-		if (millis() - t_inLastEast > t_debounce) {
+		if (millis() - v_t_inLastEast > t_debounce) {
 
 			digitalWrite(pin.ttlEastOn, HIGH);
-			t_outLastEast = millis();
-			isOnEast = true;
-			isOnAny = true;
+			v_t_outLastEast = millis();
+			v_isOnEast = true;
+			v_isOnAny = true;
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[EastFun] EAST ON", t_outLastEast);
+				DebugFlow("[EastFun] EAST ON", v_t_outLastEast);
 			}
 		}
-		t_inLastEast = millis();
+		v_t_inLastEast = millis();
 	}
 }
 
@@ -1872,7 +1876,7 @@ void setup()
 	/*
 	Note: make sure Cheetah aquiring
 	*/
-	if (doTestPinMapping) {
+	if (db.doPrintPimMapTest) {
 		DebugPinMap();
 	}
 
@@ -1925,7 +1929,26 @@ void loop()
 	if (r2a.isNew)
 	{
 
-		// Run reward tone
+		// (t) SESTEM TEST
+		if (r2a.idNow == 't') {
+
+			// IR sync timing test
+			if (r2a.dat[0] == 6)
+			{
+				// Setup
+				if (r2a.dat[1] == 0)
+				{
+					// Log/rint test
+					DebugFlow("TESTING: SIMULATED RAT TEST");
+
+					// Set flag
+					db.do_irSyncCalibration = true;
+				}
+			}
+
+		}
+
+		// (r) RUN REWARD TONE
 		if (r2a.idNow == 'r') {
 
 			// Get reward duration and convert to ms
@@ -1935,7 +1958,7 @@ void loop()
 			StartRew();
 		}
 
-		// Get noise settings
+		// (s) SESSION SETUP
 		else if (r2a.idNow == 's') {
 
 			// No noise
@@ -1984,25 +2007,25 @@ void loop()
 
 		}
 
-		// Signal PID mode
+		// (p) SIGNAL PID MODE
 		else if (r2a.idNow == 'p') {
 			// Signal PID stopped
 			if (r2a.dat[0] == 0)
 			{
 				digitalWrite(pin.ttlPidStop, HIGH);
 				digitalWrite(pin.ttlPidRun, LOW);
-				DebugFlow("[loop] PId Stopped");
+				DebugFlow("[loop] PID Stopped");
 			}
 			// Signal PID running
 			else if (r2a.dat[0] == 1)
 			{
 				digitalWrite(pin.ttlPidRun, HIGH);
 				digitalWrite(pin.ttlPidStop, LOW);
-				DebugFlow("[loop] Pid Started");
+				DebugFlow("[loop] PID Started");
 			}
 		}
 
-		// Signal bull running
+		// (b) SIGNAL BULLDOZE MODE
 		else if (r2a.idNow == 'b') {
 			// Signal Bull stopped
 			if (r2a.dat[0] == 0)
@@ -2020,7 +2043,7 @@ void loop()
 			}
 		}
 
-		// Quite and reset
+		// (q) DO QUIT
 		else if (r2a.idNow == 'q') {
 
 			// Log warnings summary
