@@ -135,7 +135,7 @@ public:
 	uint32_t t_init;
 
 	// METHODS
-	PID(uint32_t t, const float kC, const float pC, const float set_point);
+	PID(uint32_t t, const float kC, const float pC);
 	double UpdatePID();
 	void PID_Run(char called_from[]);
 	void PID_Stop(char called_from[]);
@@ -197,7 +197,7 @@ class MOVETO
 public:
 
 	// VARS
-	int targSetTimeout = 10000;
+	int targSetTimeout = 30000;
 	int moveTimeout = 10000;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
@@ -467,7 +467,7 @@ POSTRACK Pos[3] = {
 };
 
 // Initialize PID class instance
-PID Pid(millis(), kC, pC, pidSetPoint);
+PID Pid(millis(), kC, pC);
 
 // Initialize BULLDOZE class instance
 BULLDOZE Bull(millis());
@@ -880,13 +880,12 @@ void POSTRACK::PosReset(bool do_lap_reset)
 
 #pragma region ----------CLASS: PID----------
 
-PID::PID(uint32_t t, const float kC, const float pC, const float set_point)
+PID::PID(uint32_t t, const float kC, const float pC)
 {
 	this->t_init = t;
 	this->kP = 0.6 * kC; // proportional constant
 	this->kI = 2 * kP / pC; // integral constant
 	this->kD = kP*pC / 8; // derivative constant
-	this->setPoint = set_point;
 	sprintf(this->modePID, "Manual");
 }
 
@@ -1365,7 +1364,7 @@ void BULLDOZE::UpdateBull()
 	isMoved = distMoved >= moveMin ? true : false;
 
 	// Check if rat passed reset
-	double error = kal.RatPos - (kal.RobPos + pidSetPoint);
+	double error = kal.RatPos - (kal.RobPos + Pid.setPoint);
 	isPassedReset = error > 1 ? true : false;
 
 	// Check time
@@ -3701,8 +3700,8 @@ bool CheckForStart()
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static bool is_on = false;
 	static uint32_t t_pulse_last = 0;
-	static uint16_t dt_blink_off = 500;
 	static uint16_t dt_blink_on = 10;
+	static uint16_t dt_blink_off = 490;
 
 	if (fc.isHandShook) {
 		return true;
@@ -3713,9 +3712,9 @@ bool CheckForStart()
 #endif
 
 	// Pulse tracker led
-	if (!is_on && millis() >= t_pulse_last + dt_blink_off) {
+	if (!is_on && millis() >= t_pulse_last + dt_blink_on + dt_blink_off) {
 
-		analogWrite(pin.TrackLED, 100);
+		analogWrite(pin.TrackLED, trackLEDduty[0][1]);
 		t_pulse_last = millis();
 		is_on = true;
 	}
@@ -5577,7 +5576,7 @@ bool GetButtonInput()
 
 				// Reset flags etc
 				t_debounce[i] = millis() + dt_debounce[i];
-				analogWrite(pin.TrackLED, trackLEDduty[1]);
+				analogWrite(pin.TrackLED, trackLEDduty[0][1]);
 				is_running[i] = false;
 				t_hold_min[i] = 0;
 				t_long_hold[i] = 0;
@@ -6477,7 +6476,7 @@ void CheckLoop()
 	// Flicker led
 	if (!StatusBlink()) {
 		if (millis() > t_led) {
-			analogWrite(pin.TrackLED, is_led_high ? trackLEDduty[0] : trackLEDduty[1]);
+			analogWrite(pin.TrackLED, is_led_high ? trackLEDduty[0][0] : trackLEDduty[0][1]);
 			is_led_high = !is_led_high;
 			t_led = millis() + 100;
 		}
@@ -7199,7 +7198,7 @@ bool PrintDebug()
 	// Check if ind should roll over 
 	if (printQueueIndRead == printQueueSize) {
 		printQueueIndRead = 0;
-}
+	}
 
 	// Print
 	SerialUSB.print(printQueue[printQueueIndRead]);
@@ -7352,7 +7351,7 @@ int GetPrintQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < printQueueSize; i++) {
 		n_entries += printQueue[i][0] != '\0' ? 1 : 0;
-}
+	}
 
 	// Get total available
 	return printQueueSize - n_entries;
@@ -7433,7 +7432,7 @@ void LogTrackingData()
 	static int16_t pos_hist[10][n_samps] = { { 0 } };
 	static const char id_str[10][n_samps] = { { "Rat VT Pos: |" } ,{ "Rat Px Pos: |" } ,{ "Rob VT Pos: |" } ,{ "Rat EKF Pos: |" } ,{ "Rob EKF Pos: |" },
 	{ "Rat VT Vel: |" } ,{ "Rat Px Vel: |" } ,{ "Rob VT Vel: |" } ,{ "Rat EKF Vel: |" } ,{ "Rob EKF Vel: |" }
-};
+	};
 	static bool do_log[10] = { db.log_pos_rat_vt, db.log_pos_rat_pixy, db.log_pos_rob_vt, db.log_pos_rat_ekf, db.log_pos_rob_ekf,
 		db.log_vel_rat_vt, db.log_vel_rat_pixy, db.log_vel_rob_vt, db.log_vel_rat_ekf, db.log_vel_rob_ekf };
 	static int hist_ind = 0;
@@ -7702,7 +7701,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
 			}
 			else {
-				analogWrite(pin.RewLED_R, duty[(int)do_led_on]);
+				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
 			}
 
 			// Update stuff
@@ -7717,7 +7716,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 	else {
 		analogWrite(pin.Disp_LED, 0);
 		analogWrite(pin.RewLED_C, rewLEDmin);
-		analogWrite(pin.TrackLED, trackLEDduty[1]);
+		analogWrite(pin.TrackLED, trackLEDduty[0][1]);
 		do_led_on = true;
 		cnt_blink = 0;
 		do_blink = false;
@@ -8006,7 +8005,7 @@ void setup() {
 	if (!DO_DEBUG && !DO_AUTO_POWER) {
 		while (digitalRead(pin.PWR_Swtch) == HIGH);
 	}
-	
+
 	// Otherwise pause before powering on
 	else {
 		delay(1000);
@@ -8454,7 +8453,7 @@ void loop() {
 			}
 		}
 
-		// Pid calibration test
+		// PID calibration test
 		else if (cmd.testCond == 2)
 		{
 			// Setup
@@ -8486,19 +8485,36 @@ void loop() {
 				// Store new speed
 				double new_speed = double(cmd.testDat);
 
-				// Print speed
-				sprintf(horeStr, "VT CALIBRATION SPEED = %0.0f cm/sec", new_speed);
-				DebugFlow(__FUNCTION__, __LINE__, horeStr);
+				if (new_speed > 1) {
 
-				if (new_speed > 0) {
 					// Run motor
 					RunMotor('f', new_speed, "Override");
+
+					// Set tracker duty to max
+					trackLEDduty[0][0] = 255;
+					trackLEDduty[0][1] = 255;
+					analogWrite(pin.TrackLED, trackLEDduty[0][0]);
+
+					// Print speed
+					sprintf(horeStr, "VT CALIBRATION SPEED = %0.0f cm/sec", new_speed);
+					DebugFlow(__FUNCTION__, __LINE__, horeStr);
+
 				}
+
+				// End of run
 				else {
+
 					// Halt robot
 					AD_R.hardStop();
 					AD_F.hardStop();
+
+					// Set tracker duty to default
+					trackLEDduty[0][0] = trackLEDduty[1][0];
+					trackLEDduty[0][1] = trackLEDduty[1][1];
+					analogWrite(pin.TrackLED, trackLEDduty[0][0]);
+
 				}
+
 			}
 
 		}
@@ -8671,6 +8687,7 @@ void loop() {
 		// Store message data
 		cmd.sesCond = (byte)c2r.dat[0];
 		cmd.soundCond = (byte)c2r.dat[1];
+		cmd.setPoint = c2r.dat[2];
 		millis();
 
 		// Set manual ses flag
@@ -8710,6 +8727,11 @@ void loop() {
 			QueuePacket(&r2a, 's', 2);
 			DebugFlow(__FUNCTION__, __LINE__, "DO TONE");
 		}
+
+		// Set setpoint
+		Pid.setPoint = cmd.setPoint;
+		sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", cmd.setPoint);
+		DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 	}
 #pragma endregion

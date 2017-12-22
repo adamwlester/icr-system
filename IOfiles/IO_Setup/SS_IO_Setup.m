@@ -1,6 +1,6 @@
 function[] = SS_IO_Setup()
 
-%% ========================= Set Paramiters =============================== 
+%% ========================= SET PARAMETERS =============================== 
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
 ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
 ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData'); 
@@ -29,7 +29,7 @@ nses = 200; % number of total sessions
 % Max ICR events per session
 rots = 9;
 
-%% =========================== Setup Vars =================================
+%% =========================== SETUP VARS =================================
 
 % convert to yy/mm/dd format
 DOBstr = cellstr(datestr(DOBstr, 'yyyy/mm/dd'));
@@ -152,7 +152,7 @@ end
 % Copy sorted rat data
 SS_IO_1 = sortrows(T, 'RowNames');
 
-%% ========================== Generate Values =============================
+%% ========================== GERNATE ENTRIES =============================
 
 %  ------------------  Create condition paramiters ------------------------
 
@@ -398,7 +398,7 @@ end
 [~, ind] = sort(fieldnames(SS_IO_2));
 SS_IO_2 = orderfields(SS_IO_2, ind);
 
-%% ============================== Save ====================================
+%% ============================== SAVE ====================================
 
 % Save out table
 save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1')

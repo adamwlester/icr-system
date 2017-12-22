@@ -275,7 +275,6 @@ struct KAL
 kal;
 
 // PID SETTINGS
-const float pidSetPoint = 50; // (cm)
 const float guardDist = 4.5;
 const float feedDist = 66;
 
@@ -314,7 +313,7 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-const int trackLEDduty[2] = { 128, 255 }; // value between 0 and 255
+int trackLEDduty[2][2] = { { 64, 255 },{ 64, 255 } }; // value between 0 and 255
 const int rewLEDduty = 15; // value between 0 and 255
 const int rewLEDmin = 0; // value between 0 and 255
 
@@ -388,6 +387,7 @@ struct CMD
 	byte testDat = 0;
 	byte sesCond = 0;
 	byte soundCond = 0;
+	float setPoint = 0;
 	byte vtEnt = 0;
 	float vtCM[2] = { 0,0 };
 	uint32_t vtTS[2] = { 0,0 };

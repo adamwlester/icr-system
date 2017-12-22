@@ -115,6 +115,7 @@ namespace ICR_Run
         static readonly object lock_sendPack = new object();
         static readonly object lock_queue_sendMCOM = new object();
         static readonly object lock_queue_sendPack = new object();
+        static readonly object lock_console = new object();
         private static int queue_sendMCOM = 0;
         private static int queue_SendXBee = 0;
         static readonly object lock_isConf = new object();
@@ -287,9 +288,9 @@ namespace ICR_Run
         private static long timeoutImportLog = 10000; // (ms)
 
         // Position variables
-        private static double X_CENT = 359.5553;
-        private static double Y_CENT = 260.2418;
-        private static double RADIUS = 179.4922;
+        private static double vt_R; 
+        private static double vt_XC; 
+        private static double vt_YC; 
         private static double feedDist = 66 * ((2 * Math.PI) / (140 * Math.PI));
         private static UInt64 vtStr = 0;
         private static double[,] vtRad = new double[2, 2];
@@ -517,7 +518,7 @@ namespace ICR_Run
 
             // Send Test setup 
             LogEvent("[Run] RUNNING: Test Setup...");
-            RepeatSendPack_Thread(id: 'T', dat1: db.systemTest, dat2:0, dat3:0);
+            RepeatSendPack_Thread(id: 'T', dat1: db.systemTest, dat2: 0, dat3: 0);
             // Wait for recieve confirmation
             pass = WaitForSerial(id: 'T', chk_send: true, chk_conf: true, timeout: 5000);
             if (pass)
@@ -565,10 +566,19 @@ namespace ICR_Run
             if (pass)
             {
                 LogEvent("[Setup] SUCCEEDED WAIT FOR: ICR_GUI to Load");
+
+                // Store vt pixel parameters
+                vt_R = m2c.datMat[m2c.ID_Ind('G')][0];
+                vt_XC = m2c.datMat[m2c.ID_Ind('G')][1]; 
+                vt_YC = m2c.datMat[m2c.ID_Ind('G')][2]; 
+
+                // Print values
+                LogEvent(String.Format("[Setup] RECIEVED VT FOV INFO: vt_R={0:0.00} vt_XC={1:0.00} vt_YC={2:0.00}", vt_R, vt_XC, vt_YC));
             }
             else
             {
                 LogEvent("**WARNING** [Setup] ABORTED WAIT FOR: ICR_GUI to Load", is_warning: true);
+                LogEvent("**WARNING** [Setup] DID NOT RECIEVE VT FOV INFO:", is_warning: true);
                 return false;
             }
 
@@ -617,7 +627,7 @@ namespace ICR_Run
             com_netComClient.SetApplicationName(NETCOM_APP_ID);
 
             // Stream rat vt
-            if (db.systemTest != 3)
+            if (db.systemTest != 1)
             {
                 LogEvent("[Run] RUNNING: Open VT1 Stream...");
                 bool is_vt1_streaming = false;
@@ -742,7 +752,7 @@ namespace ICR_Run
                 double move_to = CalcMove(4.7124 - feedDist);
 
                 // Clear check state from previous 'M' message
-                WaitForSerial(id: 'M', chk_send: true, chk_conf: true, chk_done: true, timeout: 1);
+                c2r.GetMsgState(id: 'M', get_sent_rcvd: true, get_conf: true, get_done: true);
 
                 // Send move command on seperate thread and wait for done reply
                 RepeatSendPack_Thread(id: 'M', dat1: move_to, do_check_done: true);
@@ -916,7 +926,7 @@ namespace ICR_Run
 
             // Wait for GUI to close
             LogEvent("[Exit] RUNNING: Confirm ICR_GUI Closed...");
-            pass = WaitForMCOM(id: 'C', chk_rcv: true, timeout: fc.isMatComActive && !fc.isMAThanging ? 30000 : 10000);
+            pass = WaitForMCOM(id: 'C', chk_rcv: true, timeout: fc.isMatComActive && !(fc.isMAThanging || db.is_debugRun) ? 30000 : 10000);
             if (pass)
                 LogEvent("[Exit] SUCCEEDED: Confirm ICR_GUI Closed");
             else
@@ -972,34 +982,43 @@ namespace ICR_Run
             LogEvent("[Exit] FINISHED: Clear MatCom Globals");
 
             // Hold for debugging or errors errors
-            // TEMP if (db.is_debugRun || fc.isRunError)
-            if (fc.isRunError)
+            if (db.is_debugRun || fc.isRunError)
+            // TEMP if (fc.isRunError)
             {
                 // Show Matlab window
                 com_Matlab.Visible = fc.isRunError ? 1 : 0;
 
                 // Pause to let printing finish
-                Thread.Sleep(5000);
+                Thread.Sleep(1000);
 
                 // Print messeage with error
-                Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                if (fc.isRunError)
+                lock (lock_console)
                 {
-                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                    // Print all errors
-                    for (int i = 0; i < fc.cnt_err; i++)
-                        Console.WriteLine(fc.err_list[i]);
-                }
-                else
-                {
-                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                }
+                    Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    if (fc.isRunError)
+                    {
+                        Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+                        // Print all errors
+                        for (int i = 0; i < fc.cnt_err; i++)
+                        {
+                            Console.WriteLine(fc.err_list[i]);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    }
 
-                // Wait for key press
-                Console.ReadKey();
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+
+                    // Pause to let printing finish
+                    Thread.Sleep(1000);
+
+                    // Wait for key press
+                    Console.ReadKey();
+                }
             }
 
             // Quit MatCOM
@@ -2306,7 +2325,7 @@ namespace ICR_Run
             m2c.SetMsgState(id: id, set_sent_rcvd: true);
 
             // Handle simulation data
-            if (id == 'p' && db.systemTest == 3)
+            if (id == 'p' && db.systemTest == 1)
             {
                 // Store matlab position data
                 UnionHack U = new UnionHack(0, '0', 0, 0, 0);
@@ -2784,8 +2803,8 @@ namespace ICR_Run
             y = y * 1.0976;
 
             // Normalize 
-            x = (x - X_CENT) / RADIUS;
-            y = (y - Y_CENT) / RADIUS;
+            x = (x - vt_XC) / vt_R;
+            y = (y - vt_YC) / vt_R;
 
             // Flip y 
             y = y * -1;
@@ -2808,8 +2827,8 @@ namespace ICR_Run
                 ((140 * Math.PI) / (2 * Math.PI)) /
                 dt;
             // Convert back to pixels with lower left = 0
-            x = Math.Round(x * RADIUS) + RADIUS;
-            y = Math.Round(y * RADIUS) + RADIUS;
+            x = Math.Round(x * vt_R) + vt_R;
+            y = Math.Round(y * vt_R) + vt_R;
 
             // Check for negative dt
             if (dt < 0)
@@ -2819,8 +2838,8 @@ namespace ICR_Run
             }
 
             // Convert cart to cm
-            x = x * (140 / (RADIUS * 2));
-            y = y * (140 / (RADIUS * 2));
+            x = x * (140 / (vt_R * 2));
+            y = y * (140 / (vt_R * 2));
 
             // Convert rad to cm
             double radFlip = Math.Abs(rad_now - (2 * Math.PI)); // flip
@@ -2922,7 +2941,8 @@ namespace ICR_Run
             msg_print = "\n" + ts_str + msg_in + "\n";
 
             // Print message
-            Console.Write(msg_print);
+            lock (lock_console)
+                Console.Write(msg_print);
 
             // Remove cammas from message
             msg_log = msg_in.Replace(",", string.Empty);

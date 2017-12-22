@@ -38,7 +38,7 @@ struct DB
 	bool log_resent = true;
 
 	// Print to console
-	bool CONSOLE = true;
+	bool CONSOLE = false;
 	// What to print
 	bool print_flow = true;
 	bool print_errors = true;
@@ -54,7 +54,6 @@ struct DB
 }
 // Initialize
 db;
-
 
 #pragma endregion 
 
@@ -93,6 +92,14 @@ struct PIN
 	// Bulldozer
 	const int ttlBullRun = 30;
 	const int ttlBullStop = 32;
+
+	// IR blink switch
+	/*
+	Note: Do not use real ground pin as this will cause
+	an upload error if switch is shorted when writing sketch
+	*/
+	const int BlinkSwitch_Gnd = 11;
+	const int BlinkSwitch = 12;
 
 	// PT
 	const int ttlNorthOn = A7;
@@ -363,7 +370,10 @@ bool CheckForStart()
 	}
 
 	// Check if IR should be pulsed 
-	PulseIR(500, dt_irSyncPulse);
+	if (digitalRead(pin.BlinkSwitch) == LOW || is_irOn)
+	{
+		PulseIR(500, dt_irSyncPulse);
+	}
 
 	// Bail if no new data
 	if (Serial.available() < 1) {
@@ -1805,7 +1815,7 @@ void setup()
 	digitalWrite(pin.ttlSouthOn, LOW);
 	digitalWrite(pin.ttlEastOn, LOW);
 
-	// Set relay/ttl pin to output
+	// Set relay/ttl pin direction
 	pinMode(pin.relIR, OUTPUT);
 	pinMode(pin.relWhiteNoise, OUTPUT);
 	pinMode(pin.relRewTone, OUTPUT);
@@ -1813,7 +1823,7 @@ void setup()
 	pinMode(pin.ttlRewTone, OUTPUT);
 	pinMode(pin.ttlWhiteNoise, OUTPUT);
 
-	// set relay/ttl pins low
+	// Set relay/ttl pins low
 	digitalWrite(pin.relIR, LOW);
 	digitalWrite(pin.relRewTone, LOW);
 	digitalWrite(pin.relWhiteNoise, LOW);
@@ -1821,13 +1831,18 @@ void setup()
 	digitalWrite(pin.ttlRewTone, LOW);
 	digitalWrite(pin.ttlWhiteNoise, LOW);
 
-	// set other output pins
+	// Set other ttl pins
 	pinMode(pin.ttlRewOn, OUTPUT);
 	pinMode(pin.ttlRewOff, OUTPUT);
 	pinMode(pin.ttlBullRun, OUTPUT);
 	pinMode(pin.ttlBullStop, OUTPUT);
 	pinMode(pin.ttlPidRun, OUTPUT);
 	pinMode(pin.ttlPidStop, OUTPUT);
+
+	// Set ir blink switch
+	pinMode(pin.BlinkSwitch_Gnd, OUTPUT);
+	digitalWrite(pin.BlinkSwitch_Gnd, LOW);
+	pinMode(pin.BlinkSwitch, INPUT_PULLUP);
 
 	// SET UP SERIAL STUFF
 
@@ -1879,6 +1894,13 @@ void setup()
 	if (db.doPrintPimMapTest) {
 		DebugPinMap();
 	}
+
+	// PRINT DEBUG STATUS
+	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s",
+		db.CONSOLE ? "DEBUG" : "RELEASE",
+		db.LOG ? "LOGGING ENABLED|" : "",
+		db.CONSOLE ? "PRINTING ENABLED|" : "");
+	DebugFlow(str);
 
 	// PRINT SETUP FINISHED
 	DebugFlow("[setup] FINISHED: Setup");

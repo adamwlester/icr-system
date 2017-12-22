@@ -23,7 +23,7 @@ if not_running == 1
     system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
 end
 
-%% CONNECT AND LOAD CFG
+%% CONNECT TO NETCOM
 
 % Connect
 D.NLX.connected = false;
@@ -43,14 +43,26 @@ if NlxAreWeConnected() ~= 1
     end
 end
 
+%% LOAD CONFIG FILE
+
 % Load behavior tracking config
-%NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
+%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
 
 % Load implant tracking config
-%NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Implant_Tracking.cfg');
+%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Tracking.cfg');
 
-% Load main ephys config file if not loaded
-%NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys.cfg');
+% Load ephys setup
+%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
+
+% Load ephys graphics
+%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
+
+% Window pos
+%   cfg_fi = 'AWL-WinPos_VT_M1.cfg';
+%   cfg_fi = 'AWL-WinPos_VT_M3.cfg';
+%   cfg_fi = 'AWL-WinPos_Ephys_M1.cfg';
+%   cfg_fi = 'AWL-WinPos_Ephys_M3.cfg';
+%   NlxSendCommand(['-ProcessConfigurationFile ', cfg_fi])
 
 %% OPEN STREAM
 
