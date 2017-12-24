@@ -49,6 +49,7 @@ struct DB
 
 	// Testing
 	const bool doPrintPimMapTest = false; // I set
+	const bool doHandshakeBypass = false; // I set
 	bool do_irSyncCalibration = false; // set by system
 
 }
@@ -128,6 +129,7 @@ struct FC
 	bool doRewTone = false;
 	bool isRewarding = false;
 	bool isRobLogging = false;
+	bool doBlockIRPulse = false;
 }
 // Initialize
 fc;
@@ -369,19 +371,21 @@ bool CheckForStart()
 		return true;
 	}
 
+	// Bypass handshake
+	if (db.doHandshakeBypass) {
+		in_byte[0] = handshake_byte[0];
+	}
+
 	// Check if IR should be pulsed 
 	if (digitalRead(pin.BlinkSwitch) == LOW || is_irOn)
 	{
 		PulseIR(500, dt_irSyncPulse);
 	}
 
-	// Bail if no new data
-	if (Serial.available() < 1) {
-		return false;
-	}
-
 	// Get new data
-	in_byte[0] = Serial.read();
+	if (Serial.available() > 0) {
+		in_byte[0] = Serial.read();
+	}
 
 	// Bail if not a match
 	if (in_byte[0] != handshake_byte[0]) {
@@ -1548,6 +1552,11 @@ bool PulseIR(int dt_off, int dt_on, byte force_state)
 	// Local vars
 	bool is_changed = false;
 
+	// Bail if blocking
+	if (fc.doBlockIRPulse) {
+		return false;
+	}
+
 	// Set high
 	if (
 		force_state == 1 ||
@@ -1872,7 +1881,7 @@ void setup()
 	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT C
 	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output port
 
-								   // Get ir word
+	// Get ir word
 	int sam_ir_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
 	word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
 
@@ -1954,18 +1963,82 @@ void loop()
 		// (t) SESTEM TEST
 		if (r2a.idNow == 't') {
 
-			// IR sync timing test
+			// Wall IR timing test
+			if (r2a.dat[0] == 5)
+			{
+
+				// Setup
+				if (r2a.dat[1] == 0)
+				{
+					// Log/rint test
+					DebugFlow("TESTING: WALL IR TIMING TEST");
+
+					// Make sure IR off
+					PulseIR(0, 0, 0);
+
+					// Set to block IR pulse
+					fc.doBlockIRPulse = true;
+				}
+
+				// Test finished
+				if (r2a.dat[1] == 2)
+				{
+					// Unblock IR
+					fc.doBlockIRPulse = false;
+
+					// Unset flag
+					fc.doBlockIRPulse = false;
+				}
+
+			}
+
+			// Sync IR timing test
 			if (r2a.dat[0] == 6)
 			{
 				// Setup
 				if (r2a.dat[1] == 0)
 				{
 					// Log/rint test
-					DebugFlow("TESTING: SIMULATED RAT TEST");
+					DebugFlow("TESTING: SYNC IR TIMING TEST");
 
 					// Set flag
 					db.do_irSyncCalibration = true;
+
+					// Make sure IR off
+					PulseIR(0, 0, 0);
+
+					// Set to block IR pulse
+					fc.doBlockIRPulse = true;
 				}
+
+				// Pulse IR
+				if (r2a.dat[1] == 1)
+				{
+					// Unblock IR
+					fc.doBlockIRPulse = false;
+
+					// Turn on IR
+					PulseIR(0, 0, 1);
+					delayMicroseconds(10 * 1000);
+
+					// Turn off IR
+					PulseIR(0, 0, 0);
+
+					// Turn block back on
+					fc.doBlockIRPulse = true;
+
+				}
+
+				// Test finished
+				if (r2a.dat[1] == 2)
+				{
+					// Unblock IR
+					fc.doBlockIRPulse = false;
+
+					// Unset flag
+					fc.doBlockIRPulse = false;
+				}
+
 			}
 
 		}

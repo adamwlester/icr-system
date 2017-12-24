@@ -68,6 +68,7 @@ T.Age_Group = categorical(agestr, age_group);
 T.DOB = DOBstr;
 T.Yoke_Mate = categorical(repmat({'<undefined>'},length(ratList),1), ...
     [{'None'}; ratList]);
+T.Weight_Baseline = NaN(length(ratList),1);
 T.Session_Condition = categorical(repmat({'Manual_Training'},length(ratList),1), ...
     session_condition);
 T.Session_Task = categorical(repmat({'Track'},length(ratList),1), ...
@@ -114,6 +115,7 @@ T.Days_Till_Rotation = repmat({categorical(repmat({'<undefined>'},200,1), ...
 T.Notes = cell(length(ratList),1);
 
 % Set variable units
+T.Properties.VariableUnits{'Weight_Baseline'} = 'g';
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
 T.Properties.VariableUnits{'Pulse_Duration'} = 'ms';
 
@@ -332,9 +334,17 @@ T = table;
 T.Include_Analysis = true;
 T.Implanted = false;
 T.Date = {''};
+T.Experimenter = {''};
+T.Weight = NaN;
+T.Weight_Baseline = NaN;
+T.Weight_Drive = NaN;
+T.Weight_Cap = NaN;
+T.Weight_Corrected = NaN;
+T.Weight_Proportion = NaN;
+T.VT_Pixel_Coordinates = {NaN(1,3)};
 T.Start_Time = {''};
 T.Total_Time = NaN;
-T.Sleep_Time = {nan, nan};
+T.Sleep_Time = {NaN(1,2)};
 T.Session_Condition = categorical({'<undefined>'}, ...
     session_condition);
 T.Session_Task = categorical({'<undefined>'}, session_task);
@@ -372,12 +382,22 @@ T.Rewards_0_Deg = {[]};
 T.Laps_Standard = {[]};
 T.Laps_40_Deg = {[]};
 T.Laps_0_Deg = {[]};
+T.Fed_Pellets = NaN;
+T.Fed_Mash = NaN;
+T.Fed_Ensure = NaN;
 T.Notes = {''};
 
 % Set variable units
+T.Properties.VariableUnits{'Weight'} = 'g';
+T.Properties.VariableUnits{'Weight_Baseline'} = 'g';
+T.Properties.VariableUnits{'Weight_Corrected'} = 'g';
+T.Properties.VariableUnits{'VT_Pixel_Coordinates'} = 'pixels';
 T.Properties.VariableUnits{'Total_Time'} = 'min';
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
 T.Properties.VariableUnits{'Pulse_Duration'} = 'ms';
+T.Properties.VariableUnits{'Fed_Pellets'} = 'pellets';
+T.Properties.VariableUnits{'Fed_Mash'} = 'TB';
+T.Properties.VariableUnits{'Fed_Ensure'} = 'ml';
 
 % Set variable descriptions
 T.Properties.VariableDescriptions{'Session_Manual_Training'} = session_number_description;

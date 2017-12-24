@@ -27,16 +27,16 @@ namespace ICR_Run
                 5: Wall image IR sync timing
                 6: IR sync timing
                 7: Robot hardware test
-                8: Forage path compute
             */
             public double systemTest;
 
             // Debug matlab
             /*
-                true: Dont break on errors
-                false: Break on errors
+                [0]: Dont break on errors
+                [1]: Break on errors
+                [>1]: Break on line
             */
-            public bool do_debugMat;
+            public int breakDebug;
 
             // Autoload rat data
             /*
@@ -44,9 +44,6 @@ namespace ICR_Run
                 false: Start normally
             */
             public bool do_autoloadUI;
-
-            // Breakpoint line for matlab debugging
-            public int breakLine;
 
 
             // Print all blocked vt recs
@@ -67,9 +64,8 @@ namespace ICR_Run
             // Constructor:
             public DB(
                 double system_test,
-                bool do_debug_mat,
+                int break_debug,
                 bool do_autoload_ui,
-                int break_line,
                 bool do_print_blocked_vt,
                 bool do_print_sent_rat_vt,
                 bool do_print_sent_rob_vt,
@@ -78,23 +74,21 @@ namespace ICR_Run
                 )
             {
                 systemTest = system_test;
-                do_debugMat = do_debug_mat;
+                breakDebug = break_debug;
                 do_autoloadUI = do_autoload_ui;
-                breakLine = break_line;
                 do_printBlockedVt = do_print_blocked_vt;
                 do_printSentRatVT = do_print_sent_rat_vt;
                 do_printSentRobVT = do_print_sent_rob_vt;
                 do_printRobLog = do_print_rob_log;
                 do_printDueLog = do_print_due_log;
                 is_cheetahAlreadyOpen = false;
-                is_debugRun = system_test != 0 || do_debug_mat || do_autoload_ui;
+                is_debugRun = system_test != 0 || break_debug > 0 || do_autoload_ui;
             }
         }
         private static DB db = new DB(
-            system_test: 1, // 0
-            do_debug_mat: true, // false
+            system_test: 6, // 0
+            break_debug: 9643, // 0
             do_autoload_ui: true, // false
-            break_line: 0, // 0
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
             do_print_sent_rob_vt: false,
@@ -288,9 +282,9 @@ namespace ICR_Run
         private static long timeoutImportLog = 10000; // (ms)
 
         // Position variables
-        private static double vt_R; 
-        private static double vt_XC; 
-        private static double vt_YC; 
+        private static double vt_R;
+        private static double vt_XC;
+        private static double vt_YC;
         private static double feedDist = 66 * ((2 * Math.PI) / (140 * Math.PI));
         private static UInt64 vtStr = 0;
         private static double[,] vtRad = new double[2, 2];
@@ -432,15 +426,11 @@ namespace ICR_Run
                 // Hide/show matlab app window
                 com_Matlab.Visible = 1;
 
-                // Set MATLAB break point
-                if (db.breakLine != 0)
-                    SendMCOM_Thread(msg: String.Format("dbstop in ICR_GUI at {0};", db.breakLine));
-
                 LogEvent("[Setup] FINISHED: Setup Debugging");
 
                 // Log/print db settings
-                LogEvent(String.Format("[Setup] RUNNING IN DEBUG MODE: systemTest={0} do_debugMat={1} do_autoloadUI={2}",
-                    db.systemTest, db.do_debugMat, db.do_autoloadUI));
+                LogEvent(String.Format("[Setup] RUNNING IN DEBUG MODE: systemTest={0} breakDebug={1} do_autoloadUI={2}",
+                    db.systemTest, db.breakDebug, db.do_autoloadUI));
             }
             else
                 com_Matlab.Visible = 0;
@@ -569,8 +559,8 @@ namespace ICR_Run
 
                 // Store vt pixel parameters
                 vt_R = m2c.datMat[m2c.ID_Ind('G')][0];
-                vt_XC = m2c.datMat[m2c.ID_Ind('G')][1]; 
-                vt_YC = m2c.datMat[m2c.ID_Ind('G')][2]; 
+                vt_XC = m2c.datMat[m2c.ID_Ind('G')][1];
+                vt_YC = m2c.datMat[m2c.ID_Ind('G')][2];
 
                 // Print values
                 LogEvent(String.Format("[Setup] RECIEVED VT FOV INFO: vt_R={0:0.00} vt_XC={1:0.00} vt_YC={2:0.00}", vt_R, vt_XC, vt_YC));
@@ -2182,7 +2172,7 @@ namespace ICR_Run
 
             // Run ICR_GUI.m
             LogEvent_Thread("[DoWork_RunGUI] RUNNING: ICR_GUI.m...");
-            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.do_debugMat, db.do_autoloadUI);
+            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.breakDebug, db.do_autoloadUI);
 
             // Get status
             object[] res = icr_gui_result as object[];

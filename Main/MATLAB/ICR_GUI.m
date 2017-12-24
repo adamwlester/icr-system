@@ -1,4 +1,4 @@
-function[status] = ICR_GUI(sysTest, doDebug, doAutoloadUI, isMatSolo, isTTtrackSolo)
+function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, isMatSolo, isTTtrackSolo)
 % INPUT:
 %
 %	sysTest = [0:8]
@@ -11,9 +11,10 @@ function[status] = ICR_GUI(sysTest, doDebug, doAutoloadUI, isMatSolo, isTTtrackS
 %   	6: IR sync timing
 %   	7: Robot hardware test
 %
-%   doDebug = [true,false]
-%     	true: Break on errors
-%       false: Dont break on errors
+%   breakDebug = [0:n_lines]
+%       [0]: Dont break on errors
+%     	[1]: Break on errors
+%     	[>1]: Break on line
 %
 %   doAutoloadUI = [true,false]
 %     	true: Load rat data based on ICR_GUI hardcoded values
@@ -40,6 +41,7 @@ function[status] = ICR_GUI(sysTest, doDebug, doAutoloadUI, isMatSolo, isTTtrackS
 % Matlab globals
 global ME; % error handeling
 global doExit; % exit flag
+global isCrashed; % crash flag
 global FigGroupH; % ui figure group
 global D; % main data struct
 global tcpIP; % tcp object
@@ -62,8 +64,9 @@ startTime = now;
 % Initialize output
 status = 'failed';
 
-% Initialize exit flag
+% Initialize exit and crash flag
 doExit = false;
+isCrashed = false;
 
 % ------------------------ HANDLE INPUT ARGUMENTS -------------------------
 
@@ -78,7 +81,7 @@ if nargin < 3
     doAutoloadUI = false;
 end
 if nargin < 2
-    doDebug = true;
+    breakDebug = 1;
 end
 if nargin < 1
     sysTest = 0;
@@ -111,34 +114,56 @@ D.DB.doForagePathCompute = false;
 
 % SYSTEM SET FLAGS
 D.DB.isTestRun = true;
-D.DB.doSimRatTest = false;
-D.DB.doPidCalibrationTest = false;
-D.DB.doVTCalibrationTest = false;
-D.DB.doHaltErrorTest = false;
-D.DB.doWallIRTimingTest = false;
+D.DB.t1_doSimRatTest = false;
+D.DB.t2_doPidCalibrationTest = false;
+D.DB.t3_doVTCalibrationTest = false;
+D.DB.t4_doHaltErrorTest = false;
+D.DB.t5_doWallIRTimingTest = false;
+D.DB.t6_doSyncIRTimingTest = false;
+D.DB.t7_doRobotHardwareTest = false;
 
 % SIMULATED RAT TEST SETTINGS
 
 % Starting velocity
-D.DB.simVelStart = 50; % (cm/sec)
+D.DB.SIM.VelStart = 50; % (cm/sec)
 % Max acc
-D.DB.simMaxAcc = 100; % (cm/sec/sec)
+D.DB.SIM.MaxAcc = 100; % (cm/sec/sec)
 % Max dec
-D.DB.simMaxDec = 100; % (cm/sec/sec)
+D.DB.SIM.MaxDec = 100; % (cm/sec/sec)
 
 % VT CALIBRATION TEST SETTINGS
 
 % Run time
-D.DB.vtcalRunDur = 2; % (min)
+D.DB.CALVT.RunDur = 2; % (min)
 % Robot vel
-D.DB.vtcalRobVel = 50; % (cm/sec)
+D.DB.CALVT.RobVel = 50; % (cm/sec)
 
 % HALT ERROR TEST SETTINGS
 
 % Velocities to step through
-D.DB.haltVelSteps = 10:10:80; % (cm/sec)
+D.DB.HALT.VelSteps = 10:10:80; % (cm/sec)
 % Number of trials for each step
-D.DB.haltStepTrials = 4;
+D.DB.HALT.StepTrials = 4;
+
+% WALL IMAGE IR TIMING TEST
+
+% Number of image trials
+D.DB.WALIR.imgTrials = 10; % 10
+% Number of pulse trials
+D.DB.WALIR.pulseTrials = 20; % 20
+% Period between image change
+D.DB.WALIR.DTImg = 1; % (sec) % 1
+% Period between ir pulses
+D.DB.WALIR.DTPulse = 100; % (ms) % 100
+% Period between LED pulses
+D.DB.WALIR.DTSensor = 10; % (sec) % 10
+
+% SYNC IR TIMING TEST
+
+% Number of pulse trials
+D.DB.SYNCIR.pulseTrials = 100; % 20
+% Period between ir pulses
+D.DB.SYNCIR.DTPulse = 100; % (ms) % 100
 
 % SETUP ERROR HANDELING
 
@@ -146,12 +171,15 @@ D.DB.haltStepTrials = 4;
 lasterror('reset'); %#ok<LERR>
 
 % Setup error handeling
-if doDebug
+if breakDebug == 0
+    % Catch and print error in console
+    dbclear if caught error;
+elseif breakDebug == 1
     % Stop on error
     dbstop if error;
 else
-    % Catch and print error in console
-    dbclear if caught error;
+    % Stop on line
+    eval(sprintf('dbstop at %d in ICR_GUI',breakDebug));
 end
 
 %---------------------Important variable formats---------------------------
@@ -163,7 +191,7 @@ end
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]
 
-if doDebug
+if breakDebug > 0
     
     % ------------------------- RUN IN DEBUG MODE -------------------------
     
@@ -185,7 +213,11 @@ if doDebug
     Exit();
     
     % SET STATUS
-    status = 'finished';
+    if ~isCrashed
+        status = 'finished';
+    else
+        status = 'crashed';
+    end
     
 else
     
@@ -217,7 +249,11 @@ else
         Exit();
         
         % SET STATUS
-        status = 'finished';
+        if ~isCrashed
+            status = 'finished';
+        else
+            status = 'crashed';
+        end
         
     catch ME
         SetExit()
@@ -313,15 +349,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Top directory
         D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
         
-        % IO dirs
-        D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
+        % Test output
         D.DIR.ioTestOut = fullfile(D.DIR.top,'Testing','Output');
-        D.DIR.ioWallImage = fullfile(D.DIR.ioTop,'Images','plot_images','wall_top_down.png');
-        D.DIR.ioSS_IO_1 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_1.mat');
-        D.DIR.ioSS_IO_2 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_2.mat');
-        D.DIR.ioTT_IO = fullfile(D.DIR.ioTop, 'SessionData', 'TT_IO.mat');
-        D.DIR.ioTrkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds.mat');
-        D.DIR.ioRFPath = fullfile(D.DIR.ioTop, 'Operational', 'forage_path.mat');
+        
+        % IO top
+        D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
+        
+        % IO images
+        D.DIR.ioImg = fullfile(D.DIR.ioTop,'Images');
+        % IO wall images
+        D.DIR.wallImage = fullfile(D.DIR.ioImg,'plot_images','wall_top_down.png');
+        % IO paxinos images
+        D.DIR.paxDat = fullfile(D.DIR.ioImg, 'Paxinos', 'procPax.mat');
+        D.DIR.paxImg{1} = fullfile(D.DIR.ioImg, 'Paxinos', 'sag_lab');
+        D.DIR.paxImg{2} = fullfile(D.DIR.ioImg, 'Paxinos', 'cor_lab');
+        D.DIR.paxImg{3} = fullfile(D.DIR.ioImg, 'Paxinos', 'hor_lab');
+        
+        % IO tables
+        D.DIR.SS_IO_1 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_1.mat');
+        D.DIR.SS_IO_2 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_2.mat');
+        D.DIR.TT_IO = fullfile(D.DIR.ioTop, 'SessionData', 'TT_IO.mat');
+        
+        % IO datasets
+        D.DIR.trkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds.mat');
+        D.DIR.rfPath = fullfile(D.DIR.ioTop, 'Operational', 'forage_path.mat');
         
         % Cheetah dirs
         D.DIR.nlxCfg = 'C:\Users\Public\Documents\Cheetah\Configuration';
@@ -395,25 +446,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         switch sysTest
             
             case 1 % Simulated rat test
-                D.DB.doSimRatTest = true;
+                D.DB.t1_doSimRatTest = true;
                 
             case 2 % PID calibration
-                D.DB.doPidCalibrationTest = true;
+                D.DB.t2_doPidCalibrationTest = true;
                 
             case 3 % VT calibration
-                D.DB.doVTCalibrationTest = true;
+                D.DB.t3_doVTCalibrationTest = true;
                 
             case 4 % Halt error test
-                D.DB.doHaltErrorTest = true;
+                D.DB.t4_doHaltErrorTest = true;
                 
             case 5 % Wall image IR sync timing
-                D.DB.doWallIRTimingTest
+                D.DB.t5_doWallIRTimingTest = true;
                 
             case 6 % IR sync timing
-                D.DB.isTestRun = true;
+                D.DB.t6_doSyncIRTimingTest = true;
                 
             case 7 % Robot hardware test
-                D.DB.isTestRun = true;
+                D.DB.t7_doRobotHardwareTest = true;
                 
             otherwise
                 D.DB.isTestRun = doAutoloadUI;
@@ -428,8 +479,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log print run conditions
-        Console_Write(sprintf('[Setup] RUNNING ICR_GUI.m: sysTest=%d doDebug=%d isMatSolo=%d', ...
-            sysTest, doDebug, isMatSolo));
+        Console_Write(sprintf('[Setup] RUNNING ICR_GUI.m: sysTest=%d breakDebug=%d isMatSolo=%d', ...
+            sysTest, breakDebug, isMatSolo));
         
         % Setup and start c2m com check timer
         timer_c2m = timer;
@@ -847,7 +898,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % PROCESS NLX VT
                     VT_Get('Rob');
                     VT_Proc('Rob');
-                    if ~D.DB.doSimRatTest
+                    if ~D.DB.t1_doSimRatTest
                         VT_Get('Rat');
                         VT_Proc('Rat');
                     end
@@ -895,8 +946,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         case 'CHECK IF MOVE READY'
                             % ----------CHECK IF MOVE READY------------
                             
-                            % Wait till at least 2000 VT samples collected
-                            if D.P.Rob.cnt_vtRec > 2000
+                            % Wait till at least 1000 VT samples collected
+                            if D.P.Rob.cnt_vtRec < 1000
                                 continue;
                             end
                             
@@ -1008,6 +1059,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 % -----------------------------MAIN EXIT-----------------------------------
     function[] = Exit()
+        
+        % Bail if crashed
+        if isCrashed
+            return;
+        end
         
         % Start of exit
         Console_Write('[Exit] BEGIN Exit()');
@@ -1128,7 +1184,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % bounding box for video tracker (in pixels)
         % track plot bounds (width, hight)
-        S = load(D.DIR.ioTrkBnds);
+        S = load(D.DIR.trkBnds);
         % track bound radius
         D.PAR.R = S.R;
         % track bound center X
@@ -1215,9 +1271,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% FLOW CONTROL VARIABLES
         
         % LOAD DATA TABLES
-        T = load(D.DIR.ioSS_IO_1);
+        T = load(D.DIR.SS_IO_1);
         D.SS_IO_1 = T.SS_IO_1;
-        T = load(D.DIR.ioSS_IO_2);
+        T = load(D.DIR.SS_IO_2);
         D.SS_IO_2 = T.SS_IO_2;
         clear T;
         
@@ -1539,9 +1595,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % draw now dt [now, min, max, sum, count]
         D.DB.draw = [0, inf, 0, 0, 0];
         % halt error [now, min, max, sum, count]
-        D.DB.halt_error = [0, inf, 0, 0, 0];
+        D.DB.HALT.error = [0, inf, 0, 0, 0];
         % simulated rat forage data
-        D.DB.simRatPathMat = D.P.pathMat;
+        D.DB.SIM.RatPathMat = D.P.pathMat;
         
         % OTHER
         % rotaion pos
@@ -1806,7 +1862,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             uitabgroup(FigGroupH, ...
             'Units', 'Normalized', ...
             'SelectionChangedFcn', {@TabGrpChange}, ...
-            'UserData', 'TT', ...
+            'UserData', 'TT TRACK', ...
             'Position',[0,0,1,1]);
         
         % Set figure stuff
@@ -1819,7 +1875,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Add ICR main tab
         D.UI.tabICR = uitab(D.UI.tabgp, ...
-            'Title', 'ICR', ...
+            'Title', 'ICR ARENA', ...
             'BackgroundColor', [1, 1, 1]);
         
         % Store pos
@@ -2035,6 +2091,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         D.UI.dlgPos{4} = D.UI.dlgPos{D.UI.monDefault};
         
+        % Defaults
+        obj_gap = 0.005;
+        
         % Bounds of plot space
         D.UI.main_ax_bounds = [ ...
             D.UI.axPos(1) - 0.05, ...
@@ -2051,14 +2110,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Save button pos
         D.UI.save_btn_pos = [...
-            0.005, ...
-            D.UI.mon_btn_pos(4) + 0.005, ...
+            obj_gap, ...
+            D.UI.mon_btn_pos(4) + obj_gap, ...
             (D.UI.main_ax_bounds(1) - 0.015) / 2, ...
             0.03];
         
         % Quit button pos
         D.UI.quit_btn_pos = [...
-            D.UI.save_btn_pos(3) + 0.01, ...
+            D.UI.save_btn_pos(3) + obj_gap*2, ...
             D.UI.save_btn_pos(2), ...
             D.UI.save_btn_pos(3), ...
             D.UI.save_btn_pos(4)];
@@ -2073,7 +2132,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Panel run
         pan_ht = D.UI.stup_pan_pos(2) - sum(D.UI.quit_btn_pos([2,4])) - 0.02;
-        pan_botm = sum(D.UI.quit_btn_pos([2,4])) + 0.01;
+        pan_botm = sum(D.UI.quit_btn_pos([2,4])) + obj_gap*2;
         D.UI.run_pan_pos = ...
             [0, ...
             pan_botm, ...
@@ -2101,17 +2160,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Panel console
         pan_ht = 1 - D.UI.fig_rng(2)/D.UI.figGrpPos{4}(4);
         D.UI.cnsl_pan_pos = ...
-            [D.UI.main_ax_bounds(1)+0.005, ...
+            [D.UI.main_ax_bounds(1)+obj_gap, ...
             0, ...
-            D.UI.main_ax_bounds(3) - pan_wd*0.75 - 0.01, ...
+            D.UI.main_ax_bounds(3) - pan_wd*0.75 - obj_gap*2, ...
             pan_ht];
         
         % Panel time info
         pan_ht = 0.15;
         D.UI.tim_inf_pan_pos = [...
-            sum(D.UI.cnsl_pan_pos([1,3])) + 0.005, ...
+            sum(D.UI.cnsl_pan_pos([1,3])) + obj_gap, ...
             0, ...
-            pan_lft - sum(D.UI.cnsl_pan_pos([1,3])) - 0.01, ...
+            pan_lft - sum(D.UI.cnsl_pan_pos([1,3])) - obj_gap*2, ...
             pan_ht];
         
         % Panel tt select
@@ -2170,7 +2229,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         set(D.UI.axH(1), 'Units', 'Normalized');
         
         % Read in image
-        [img{1}, ~, D.UI.wall_mask] = imread(D.DIR.ioWallImage);
+        [img{1}, ~, D.UI.wall_mask] = imread(D.DIR.wallImage);
         set(D.UI.axH(1), 'XLim', [0,size(img{1},2)], 'YLim', [0,size(img{1},1)]);
         img{1} = flip(img{1}, 1);
         mask = true(size(img{1}));
@@ -3853,20 +3912,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.doAutoSetTT = false;
         D.DB.depthSet = 1; % (mm)
         
-        % Top directory
-        D.DIR.top = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
-        
-        % IO dirs
-        D.DIR.ioTop = fullfile(D.DIR.top,'IOfiles');
-        D.DIR.log = fullfile(D.DIR.top,'IOfiles');
-        D.DIR.ioTT_IO = fullfile(D.DIR.ioTop, 'SessionData', 'TT_IO.mat');
-        % Image directory
-        D.DIR.img = fullfile(D.DIR.ioTop,'Images');
-        D.DIR.matFile = fullfile(D.DIR.img, 'Paxinos', 'procPax.mat');
-        D.DIR.pax{1} = fullfile(D.DIR.img, 'Paxinos', 'sag_lab');
-        D.DIR.pax{2} = fullfile(D.DIR.img, 'Paxinos', 'cor_lab');
-        D.DIR.pax{3} = fullfile(D.DIR.img, 'Paxinos', 'hor_lab');
-        
         % Cannula spacing (mm)
         D.PAR.canSp = 0.3175;
         
@@ -3916,7 +3961,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% ================== IMPORT/FORMAT PAXINOS IMAGES ================
         
         % Load session data
-        T = load(D.DIR.ioTT_IO);
+        T = load(D.DIR.TT_IO);
         D.TT_IO = T.TT_IO;
         clear T;
         
@@ -3930,7 +3975,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         for z_view = 1:3
             
             % Get image list
-            D.PAR.paxFiLabs{z_view} = dir(D.DIR.pax{z_view});
+            D.PAR.paxFiLabs{z_view} = dir(D.DIR.paxImg{z_view});
             D.PAR.paxFiLabs{z_view} = {D.PAR.paxFiLabs{z_view}(:).name};
             D.PAR.paxFiLabs{z_view} = ...
                 D.PAR.paxFiLabs{z_view}(cell2mat(cellfun(@(x) ~isempty(x), strfind(D.PAR.paxFiLabs{z_view}, 'img'), 'uni', false)));
@@ -3946,8 +3991,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Check if we already have processed image data
-        if exist(D.DIR.matFile, 'file')
-            load(D.DIR.matFile);
+        if exist(D.DIR.paxDat, 'file')
+            load(D.DIR.paxDat);
             D.UI.paxMat = IMG_MAT; %#ok<NODEF>
             D.TT.imgCoor = IMG_COORD; %#ok<NODEF>
             
@@ -3960,7 +4005,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Store
                     D.UI.paxMat{z_view}{z_pax} = ...
-                        imread(fullfile(D.DIR.pax{z_view}, D.PAR.paxFiLabs{z_view}{z_pax}));
+                        imread(fullfile(D.DIR.paxImg{z_view}, D.PAR.paxFiLabs{z_view}{z_pax}));
                     
                     % Handle stupid fucking pax bullshit
                     if z_view == 2 && size(D.UI.paxMat{z_view}{z_pax},1) == 3300
@@ -4015,7 +4060,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Save coordinate and image matrix
             IMG_MAT = D.UI.paxMat; %#ok<NASGU>
             IMG_COORD = D.TT.imgCoor; %#ok<NASGU>
-            save(D.DIR.matFile,  'IMG_MAT', 'IMG_COORD');
+            save(D.DIR.paxDat,  'IMG_MAT', 'IMG_COORD');
             
         end
         
@@ -4034,7 +4079,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Add TT Track tab
         D.UI.tabTT = uitab(D.UI.tabgp, ...
-            'Title', 'TT', ...
+            'Title', 'TT TRACK', ...
             'BackgroundColor', [1, 1, 1]);
         
         % Switch tab
@@ -4933,7 +4978,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'END SESSION', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
-                    'Ques');
+                    'question');
             else
                 load_last = 'No';
             end
@@ -5001,7 +5046,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'CLOSE SPIKESORT3D', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
-                'Dflt');
+                'default');
             
             % Keep checking for x seconds
             dt_wait = 1;
@@ -5998,12 +6043,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Load path file if exists and not flaged to recompute
         if ~D.DB.doForagePathCompute && ...
-                exist(D.DIR.ioRFPath, 'file')
-            load(D.DIR.ioRFPath);
+                exist(D.DIR.rfPath, 'file')
+            load(D.DIR.rfPath);
             
             % Store in struct
             D.P.pathMat = double(path_mat); %#ok<NODEF>
-            D.DB.simRatPathMat = double(sim_rat_path_mat); %#ok<NODEF>
+            D.DB.SIM.RatPathMat = double(sim_rat_path_mat); %#ok<NODEF>
             D.PAR.pathLengthArr = path_length_arr;  %#ok<NODEF>
             clear path_mat sim_rat_path_mat path_length_arr;
         else
@@ -6075,7 +6120,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         if c==1
                             D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
                         else
-                            D.DB.simRatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                            D.DB.SIM.RatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
                         end
                     end
                 end
@@ -6084,12 +6129,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Mask values outside circle
             mask = repmat(D.PAR.rfMask,[1,1,D.PAR.nPaths,n_targs]);
             D.P.pathMat = D.P.pathMat.*mask;
-            D.DB.simRatPathMat = D.DB.simRatPathMat.*mask;
+            D.DB.SIM.RatPathMat = D.DB.SIM.RatPathMat.*mask;
             
             % Nomalize
             D.P.pathMat(D.P.pathMat>0) = 1;
             %D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.PAR.rfBins,D.PAR.rfBins,1,1]);
-            D.DB.simRatPathMat(D.DB.simRatPathMat>0) = 1;
+            D.DB.SIM.RatPathMat(D.DB.SIM.RatPathMat>0) = 1;
             
             % Plot path averages
             ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
@@ -6116,10 +6161,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Store path info
             path_mat = single(D.P.pathMat); %#ok<NASGU>
-            sim_rat_path_mat = single(D.DB.simRatPathMat); %#ok<NASGU>
+            sim_rat_path_mat = single(D.DB.SIM.RatPathMat); %#ok<NASGU>
             
             % Save path info
-            fi_path = D.DIR.ioRFPath;
+            fi_path = D.DIR.rfPath;
             save(fi_path, 'path_mat', 'sim_rat_path_mat', 'path_length_arr');
             
             % Save second copy with date
@@ -6261,18 +6306,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% SETUP SPECIFIC TEST
         
         % SIMULATED RAT TEST
-        if D.DB.doSimRatTest
+        if D.DB.t1_doSimRatTest
             
             % Initialize variables
-            D.DB.simXY = [NaN,NaN];
-            D.DB.simRadLast = NaN;
-            D.DB.simRohLast = NaN;
-            D.DB.simRunRad = NaN;
-            D.DB.simTargAng = NaN;
-            D.DB.simVelLast = NaN;
-            D.DB.simTSStart = NaN;
-            D.DB.simTSLast = NaN;
-            D.DB.simSwayDir = -1;
+            D.DB.SIM.XY = [NaN,NaN];
+            D.DB.SIM.RadLast = NaN;
+            D.DB.SIM.RohLast = NaN;
+            D.DB.SIM.RunRad = NaN;
+            D.DB.SIM.TargAng = NaN;
+            D.DB.SIM.VelLast = NaN;
+            D.DB.SIM.TSStart = NaN;
+            D.DB.SIM.TSLast = NaN;
+            D.DB.SIM.SwayDir = -1;
             D.DB.isTestStarted = false;
             
             % Create rat velocity slider object
@@ -6281,7 +6326,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Parent',D.UI.tabICR, ...
                 'Units', 'Normalized', ...
                 'Min',0,'Max',100, ...
-                'Value',D.DB.simVelStart,...
+                'Value',D.DB.SIM.VelStart,...
                 'SliderStep', [0.01,0.1], ...
                 'Visible', 'off',...
                 'Enable', 'off',...
@@ -6302,55 +6347,126 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % PID CALIBRATION
-        if D.DB.doPidCalibrationTest
+        if D.DB.t2_doPidCalibrationTest
             
             % Set flag to start pid
             D.DB.isTestStarted = false;
             
-            % Set implanted flag
+            % Change implanted flag
             D.DB.Implanted = false;
-            % Set task
+            % Change task
             D.DB.Session_Task = 'Track';
             
         end
         
         % VT CALIBRATION
-        if D.DB.doVTCalibrationTest
+        if D.DB.t3_doVTCalibrationTest
             
             % Initialize variables
-            D.DB.vtcalRunEnd = NaN;
-            D.DB.vtcalVTHist = NaN(1, ceil(D.DB.vtcalRunDur*60*30*2*1.1));
-            D.DB.vtcalPosHist = NaN(2, ceil(D.DB.vtcalRunDur*60*30*1.1));
-            D.DB.vtcalRecCnt = 0;
-            
-            % Set flag to start test
             D.DB.isTestStarted = false;
+            D.DB.CALVT.RunEnd = NaN;
+            D.DB.CALVT.VTHist = NaN(1, ceil(D.DB.CALVT.RunDur*60*30*2*1.1));
+            D.DB.CALVT.PosHist = NaN(2, ceil(D.DB.CALVT.RunDur*60*30*1.1));
+            D.DB.CALVT.RecCnt = 0;
             
-            % Set implanted flag
+            % Change implanted flag
             D.DB.Implanted = false;
-            % Set condition flag
+            % Change condition flag
             D.DB.Session_Condition = 'Manual_Training';
-            % Set task
+            % Change task
             D.DB.Session_Task = 'Track';
             
         end
         
         % HALT ERROR TEST
-        if D.DB.doHaltErrorTest
+        if D.DB.t4_doHaltErrorTest
             
             % Initialize variables
-            D.DB.haltCnt = D.DB.haltStepTrials;
-            D.DB.haltDur = 5; % (sec)
-            D.DB.halt_error_str = '';
-            D.DB.halt_t_halted = Sec_DT(now);
-            D.DB.haltNowStep = 0;
-            D.DB.haltNowVel = 0;
-            D.DB.haltIsHalted = true;
-            D.DB.haltSendPos = 0;
+            D.DB.HALT.Cnt = D.DB.HALT.StepTrials;
+            D.DB.HALT.Dur = 5; % (sec)
+            D.DB.HALT.error_str = '';
+            D.DB.HALT.t_halted = Sec_DT(now);
+            D.DB.HALT.NowStep = 0;
+            D.DB.HALT.NowVel = 0;
+            D.DB.HALT.IsHalted = true;
+            D.DB.HALT.SendPos = 0;
             
-            % Set implanted flag
+            % Change implanted flag
             D.DB.Implanted = false;
-            % Set task
+            % Change task
+            D.DB.Session_Task = 'Track';
+            
+        end
+        
+        % WALL IMAGE IR TIMING TEST
+        if D.DB.t5_doWallIRTimingTest
+            
+            % Notes:
+            %   Connect LED to DigitalLynx port 2 pin 0
+            %   Turn off CheetahDue IR blink (might have program do it...)
+            
+            % Initialize variables
+            D.DB.isTestStarted = false;
+            % LED on event string
+            D.DB.WALIR.NLXevtStr = 'TTL_LED_On';
+            % PT TTL strings
+            D.DB.WALIR.PTttlStr = {D.NLX.north_str, D.NLX.west_str, D.NLX.south_str, D.NLX.east_str};
+            % LED pulse command
+            D.DB.WALIR.LEDttlStr = ['-DigitalIOTtlPulse ', D.NLX.DevTTL, ' 2 0 High'];
+            % Next pulse/image change time
+            D.DB.WALIR.t_next = 0;
+            % Curent event number [sent, evt1 rcvd, evt2 rcvd]
+            D.DB.WALIR.cntEvent = [0, 0, 0];
+            % Curent sensor number
+            D.DB.WALIR.cntSensor = 0;
+            % Send time
+            D.DB.WALIR.t_send = NaN(D.DB.WALIR.imgTrials,4);
+            % Trigger time
+            D.DB.WALIR.t_trig = NaN(D.DB.WALIR.imgTrials,4);
+            % Flag image test done
+            D.DB.WALIR.isImgTestDone = false;
+            % Flag ir test done
+            D.DB.WALIR.isIRTestDone = false;
+            
+            % Prevent start move
+            D.F.first_move_sent = true;
+            
+            % Change implanted flag
+            D.DB.Implanted = false;
+            % Change condition and Task
+            D.DB.Session_Condition = 'Behavior_Training';
+            % Change task
+            D.DB.Session_Task = 'Track';
+            
+        end
+        
+        if D.DB.t6_doSyncIRTimingTest
+            
+            % Notes:
+            %   Connect robot Reward LED red and ground to DigitalLynx port 2 pin 0
+            %   Turn off CheetahDue IR blink (might have program do it...)
+            
+            % Initialize variables
+            D.DB.isTestStarted = false;
+            % Robot on event string
+            D.DB.SYNCIR.NLXevtStr = 'TTL_IR_Detected';
+            % Curent event number [send, ttl ard, ttl rob]
+            D.DB.SYNCIR.cntEvent = [0, 0, 0];
+            % Next pulse time
+            D.DB.SYNCIR.t_next = 0;
+            % Pulse time
+            D.DB.SYNCIR.t_pulse = NaN(D.DB.SYNCIR.pulseTrials,1);
+            % TTL trigger time
+            D.DB.SYNCIR.t_trig = NaN(D.DB.SYNCIR.pulseTrials,1);
+            
+            % Prevent start move
+            D.F.first_move_sent = true;
+            
+            % Change implanted flag
+            D.DB.Implanted = false;
+            % Change condition and Task
+            D.DB.Session_Condition = 'Behavior_Training';
+            % Change task
             D.DB.Session_Task = 'Track';
             
         end
@@ -7273,11 +7389,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if D.I.zone_now ~= 0
                 halt_err = D.PAR.rewZoneBnds(D.I.zone_now,2,D.I.rot) - (D.P.Rob.radLast-D.PAR.setPointRad);
                 % Save reward duration
-                D.DB.halt_error(1) = halt_err * ((140*pi)/(2*pi));
-                D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
-                D.DB.halt_error(3) = min(999, max(D.DB.halt_error(1), D.DB.halt_error(3)));
-                D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
-                D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
+                D.DB.HALT.error(1) = halt_err * ((140*pi)/(2*pi));
+                D.DB.HALT.error(2) = min(D.DB.HALT.error(1), D.DB.HALT.error(2));
+                D.DB.HALT.error(3) = min(999, max(D.DB.HALT.error(1), D.DB.HALT.error(3)));
+                D.DB.HALT.error(4) = D.DB.HALT.error(1) + D.DB.HALT.error(4);
+                D.DB.HALT.error(5) = D.DB.HALT.error(5) + 1;
             end
             
             % Set flag
@@ -8541,23 +8657,33 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Run simulated rat test
-        if D.DB.doSimRatTest
+        if D.DB.t1_doSimRatTest
             SimRatTest();
         end
         
         % Run pid calibration test
-        if D.DB.doPidCalibrationTest
+        if D.DB.t2_doPidCalibrationTest
             PidCalibrationTest();
         end
         
         % Run pid calibration test
-        if D.DB.doVTCalibrationTest
+        if D.DB.t3_doVTCalibrationTest
             VTCalibrationTest();
         end
         
         % Run halt error test
-        if D.DB.doHaltErrorTest
+        if D.DB.t4_doHaltErrorTest
             HaltErrorTest();
+        end
+        
+        % Wall image IR timing test
+        if D.DB.t5_doWallIRTimingTest
+            WallIRTimingTest()
+        end
+        
+        % Sync IR timing test
+        if D.DB.t6_doSyncIRTimingTest
+            SyncIRTimingTest()
         end
         
         % SIMULATED RAT TEST
@@ -8584,11 +8710,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if D.PAR.sesTask == 'Forage'
                     
                     % Store current target
-                    D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
+                    D.DB.SIM.TargAng = D.PAR.rfTargDegArr(D.I.targ_now);
                     
                     % Compute angle between start pos and targ
                     ang_str = rad2deg(mean(D.PAR.strQuadBnds));
-                    ang_targ = D.DB.simTargAng;
+                    ang_targ = D.DB.SIM.TargAng;
                     [x1,y1] = pol2cart(deg2rad(ang_str), 1);
                     [x2,y2] = pol2cart(deg2rad(ang_targ), 1);
                     x_diff = x2-x1;
@@ -8600,7 +8726,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             ang_new = ang_new + 360;
                         end
                     end
-                    D.DB.simRunRad = deg2rad(ang_new);
+                    D.DB.SIM.RunRad = deg2rad(ang_new);
                     
                     % Store rf roh
                     roh = mean(D.P.rfRohBnd);
@@ -8608,19 +8734,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Store track roh
                     roh = mean(D.P.trackRohBnd);
                 end
-                D.DB.simRadLast = mean(D.PAR.strQuadBnds);
+                D.DB.SIM.RadLast = mean(D.PAR.strQuadBnds);
                 if D.PAR.sesTask == 'Track'
-                    D.DB.simRohLast = mean(D.P.trackRohBnd);
+                    D.DB.SIM.RohLast = mean(D.P.trackRohBnd);
                 else
-                    D.DB.simRohLast = 0;
+                    D.DB.SIM.RohLast = 0;
                 end
-                D.DB.simVelLast = 0;
-                D.DB.simTSStart = Sec_DT(now);
-                D.DB.simTSLast = 0;
+                D.DB.SIM.VelLast = 0;
+                D.DB.SIM.TSStart = Sec_DT(now);
+                D.DB.SIM.TSLast = 0;
                 
                 % Get inital x/y
-                xy_pos = Pol_2_VT(wrapTo2Pi(D.DB.simRadLast), roh);
-                D.DB.simXY = reshape(xy_pos', 1, []);
+                xy_pos = Pol_2_VT(wrapTo2Pi(D.DB.SIM.RadLast), roh);
+                D.DB.SIM.XY = reshape(xy_pos', 1, []);
                 
                 % Make UI stuff visible
                 set(D.UI.sldSimVel, ...
@@ -8630,7 +8756,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Visible', 'on');
                 
                 % Send test info to robot once
-                Send_M2C('T', sysTest, 1, 0);
+                Send_M2C('T', sysTest, 0, 0);
                 
                 % Close rat stream
                 D.F.vtStreaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
@@ -8655,12 +8781,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
             else
                 % Get TS from MATLAB
-                ts_now = ceil((Sec_DT(now) - D.DB.simTSStart)*10^6);
+                ts_now = ceil((Sec_DT(now) - D.DB.SIM.TSStart)*10^6);
             end
             
             % Compute ts(us) from dt(s)
-            dt_sec = double(ts_now - D.DB.simTSLast) / 10^6;
-            D.DB.simTSLast = ts_now;
+            dt_sec = double(ts_now - D.DB.SIM.TSLast) / 10^6;
+            D.DB.SIM.TSLast = ts_now;
             
             % Get slider val
             sld_vel = round(get(D.UI.sldSimVel, 'Value'));
@@ -8675,15 +8801,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Sec_DT(now) - D.T.run_str > 2
                 
                 % Check vel
-                if D.DB.simVelLast == sld_vel
+                if D.DB.SIM.VelLast == sld_vel
                     % Hold velocity
-                    vel_now = D.DB.simVelLast;
-                elseif D.DB.simVelLast < sld_vel
+                    vel_now = D.DB.SIM.VelLast;
+                elseif D.DB.SIM.VelLast < sld_vel
                     % Accelerate
-                    vel_now = D.DB.simVelLast + (D.DB.simMaxAcc*dt_sec);
-                elseif D.DB.simVelLast > sld_vel
+                    vel_now = D.DB.SIM.VelLast + (D.DB.SIM.MaxAcc*dt_sec);
+                elseif D.DB.SIM.VelLast > sld_vel
                     % Deccelerate
-                    vel_now = D.DB.simVelLast - (D.DB.simMaxDec*dt_sec);
+                    vel_now = D.DB.SIM.VelLast - (D.DB.SIM.MaxDec*dt_sec);
                 end
                 
                 % Keep in bounds
@@ -8709,43 +8835,43 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Compute rad change
                     rad_diff = cm / ((140 * pi)/(2 * pi));
-                    rad_now = Rad_Diff(D.DB.simRadLast, rad_diff);
-                    D.DB.simRadLast = rad_now;
+                    rad_now = Rad_Diff(D.DB.SIM.RadLast, rad_diff);
+                    D.DB.SIM.RadLast = rad_now;
                     
                     % Get roh 'sway'
-                    roh_diff = cm/D.UI.arnRad * D.DB.simSwayDir;
-                    scale = abs(cos((D.DB.simRohLast-mean(D.P.trackRohBnd)) / (D.P.trackRohBnd(2)-mean(D.P.trackRohBnd))));
+                    roh_diff = cm/D.UI.arnRad * D.DB.SIM.SwayDir;
+                    scale = abs(cos((D.DB.SIM.RohLast-mean(D.P.trackRohBnd)) / (D.P.trackRohBnd(2)-mean(D.P.trackRohBnd))));
                     if scale>1 || ...
-                            D.DB.simRohLast > D.P.trackRohBnd(2) || ...
-                            D.DB.simRohLast < D.P.trackRohBnd(1)
+                            D.DB.SIM.RohLast > D.P.trackRohBnd(2) || ...
+                            D.DB.SIM.RohLast < D.P.trackRohBnd(1)
                         
                         scale = 1;
                     elseif scale <=0
                         scale = 0.001;
                     end
                     roh_diff = roh_diff*scale;
-                    roh_now = D.DB.simRohLast + roh_diff;
+                    roh_now = D.DB.SIM.RohLast + roh_diff;
                     
                     % Keep in bounds
                     thresh = rand(1,1)*0.5;
                     if roh_now > D.P.trackRohBnd(2) - (D.P.trackRohBnd(2)-D.P.trackRohBnd(1))*thresh
-                        D.DB.simSwayDir = -1;
+                        D.DB.SIM.SwayDir = -1;
                     elseif   roh_now < D.P.trackRohBnd(1) + (D.P.trackRohBnd(2)-D.P.trackRohBnd(1))*thresh
-                        D.DB.simSwayDir = 1;
+                        D.DB.SIM.SwayDir = 1;
                     end
-                    D.DB.simRohLast = roh_now;
+                    D.DB.SIM.RohLast = roh_now;
                     
                     % Convert rad back to cart
                     xy_pos = Pol_2_VT(wrapTo2Pi(rad_now), roh_now);
-                    D.DB.simXY = reshape(xy_pos', 1, []);
+                    D.DB.SIM.XY = reshape(xy_pos', 1, []);
                     
                 else
                     
                     % Check for changed targ
-                    if D.DB.simTargAng ~= D.PAR.rfTargDegArr(D.I.targ_now)
+                    if D.DB.SIM.TargAng ~= D.PAR.rfTargDegArr(D.I.targ_now)
                         
                         % Get current rad pos
-                        [rad_start, ~] = VT_2_Pol(D.DB.simXY);
+                        [rad_start, ~] = VT_2_Pol(D.DB.SIM.XY);
                         
                         % Add some noise
                         ang_end = D.PAR.rfTargDegArr(D.I.targ_now);
@@ -8767,45 +8893,45 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 ang_new = ang_new + 360;
                             end
                         end
-                        D.DB.simRunRad = deg2rad(ang_new);
+                        D.DB.SIM.RunRad = deg2rad(ang_new);
                         
                         % Store new target
-                        D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
+                        D.DB.SIM.TargAng = D.PAR.rfTargDegArr(D.I.targ_now);
                         
                         % Reset roh
-                        D.DB.simRohLast = 0;
+                        D.DB.SIM.RohLast = 0;
                     end
                     
                     % Move along roh
                     roh_diff = cm / D.UI.arnRad;
-                    roh_now = D.DB.simRohLast + roh_diff;
-                    D.DB.simRohLast = roh_now;
+                    roh_now = D.DB.SIM.RohLast + roh_diff;
+                    D.DB.SIM.RohLast = roh_now;
                     
                     % Convert to cart
-                    rad = wrapTo2Pi(D.DB.simRunRad);
+                    rad = wrapTo2Pi(D.DB.SIM.RunRad);
                     rad = abs(rad - 2*pi);
                     rad = wrapToPi(rad);
                     [x_diff,y_diff] = pol2cart(rad, roh_now);
                     
                     % Check if out of bounds
-                    [~, roh] = VT_2_Pol([D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff]);
+                    [~, roh] = VT_2_Pol([D.DB.SIM.XY(1)+x_diff, D.DB.SIM.XY(2)+y_diff]);
                     if roh < D.P.rfRohBnd(2)
-                        D.DB.simXY = [D.DB.simXY(1)+x_diff, D.DB.simXY(2)+y_diff];
+                        D.DB.SIM.XY = [D.DB.SIM.XY(1)+x_diff, D.DB.SIM.XY(2)+y_diff];
                     end
                     
                     % Store current targ ang
-                    D.DB.simTargAng = D.PAR.rfTargDegArr(D.I.targ_now);
+                    D.DB.SIM.TargAng = D.PAR.rfTargDegArr(D.I.targ_now);
                 end
                 
             end
             
             % Send Pos data to CS
-            Send_M2C('p', ts_now, D.DB.simXY(1), D.DB.simXY(2), 0, false);
+            Send_M2C('p', ts_now, D.DB.SIM.XY(1), D.DB.SIM.XY(2), 0, false);
             
             % Update simulated rat data
-            D.DB.simVelLast = vel_now;
+            D.DB.SIM.VelLast = vel_now;
             D.P.Rat.vtTS = uint64(ts_now);
-            D.P.Rat.vtPos = single(D.DB.simXY);
+            D.P.Rat.vtPos = single(D.DB.SIM.XY);
             D.P.Rat.vtNRecs = single(1);
             
             % Run VT_Proc('Rat');
@@ -8821,7 +8947,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     c2m.('K').dat1 == 3
                 
                 % Start pid test
-                Send_M2C('T', sysTest, 1, 0);
+                Send_M2C('T', sysTest, 0, 0);
                 
                 % Set flag
                 D.DB.isTestStarted = true;
@@ -8838,7 +8964,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     c2m.('K').dat1 == 3
                 
                 % Compute end time
-                D.DB.vtcalRunEnd = Sec_DT(now) + D.DB.vtcalRunDur*60;
+                D.DB.CALVT.RunEnd = Sec_DT(now) + D.DB.CALVT.RunDur*60;
                 
                 % Close rat stream
                 D.F.vtStreaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
@@ -8849,20 +8975,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.P.Rat.vtNRecs = 1;
                 
                 % Start robot running
-                Send_M2C('T', sysTest, 1, D.DB.vtcalRobVel);
+                Send_M2C('T', sysTest, 1, D.DB.CALVT.RobVel);
                 
                 % Set flag
                 D.DB.isTestStarted = true;
                 
                 % Log/print
                 Console_Write(sprintf('[Run_Test] Start VT Calibration Test: dt_run=%0.2fmin rob_vel=%dcm/sec', ...
-                    D.DB.vtcalRunDur, D.DB.vtcalRobVel));
+                    D.DB.CALVT.RunDur, D.DB.CALVT.RobVel));
                 
             end
             
             % Get new data
             if D.DB.isTestStarted && ...
-                    Sec_DT(now) < D.DB.vtcalRunEnd
+                    Sec_DT(now) < D.DB.CALVT.RunEnd
                 
                 % Bail if no new recs
                 if D.P.Rob.vtNRecs == 0
@@ -8873,17 +8999,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if D.F.Rob.new_pos_data
                     
                     % Add to history
-                    ind_str = find(isnan(D.DB.vtcalPosHist(1,:)), 1, 'first');
+                    ind_str = find(isnan(D.DB.CALVT.PosHist(1,:)), 1, 'first');
                     ind_end = ind_str + length(D.P.Rob.x) - 1;
-                    D.DB.vtcalPosHist(1, ind_str:ind_end) = D.P.Rob.x;
-                    D.DB.vtcalPosHist(2, ind_str:ind_end) = D.P.Rob.y;
+                    D.DB.CALVT.PosHist(1, ind_str:ind_end) = D.P.Rob.x;
+                    D.DB.CALVT.PosHist(2, ind_str:ind_end) = D.P.Rob.y;
                     
                     % Replot robot data
                     if isfield(D.UI, 'vtRobPltTest')
                         delete(D.UI.vtRobPltTest);
                     end
                     D.UI.vtRobPltTest = ...
-                        plot(D.DB.vtcalPosHist(1,:), D.DB.vtcalPosHist(2,:), 'o', ...
+                        plot(D.DB.CALVT.PosHist(1,:), D.DB.CALVT.PosHist(2,:), 'o', ...
                         'MarkerFaceColor', [0.5 ,0.5, 0.5], ...
                         'MarkerEdgeColor', [0, 0, 0], ...
                         'MarkerSize', 5, ...
@@ -8893,29 +9019,29 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Itterate count
-                D.DB.vtcalRecCnt = D.DB.vtcalRecCnt + D.P.Rob.vtNRecs;
+                D.DB.CALVT.RecCnt = D.DB.CALVT.RecCnt + D.P.Rob.vtNRecs;
                 
                 % Store raw vt pos data
-                ind_str = find(isnan(D.DB.vtcalVTHist), 1, 'first');
+                ind_str = find(isnan(D.DB.CALVT.VTHist), 1, 'first');
                 ind_end = ind_str + 2*D.P.Rob.vtNRecs - 1;
-                D.DB.vtcalVTHist(ind_str:ind_end) = D.P.Rob.vtPos;
+                D.DB.CALVT.VTHist(ind_str:ind_end) = D.P.Rob.vtPos;
                 
             end
             
             % End test and save
             if D.DB.isTestStarted && ...
-                    Sec_DT(now) >= D.DB.vtcalRunEnd
+                    Sec_DT(now) >= D.DB.CALVT.RunEnd
                 
                 % SEND END COMMAND
-                Send_M2C('T', sysTest, 1, 0);
+                Send_M2C('T', sysTest, 2, 0);
                 
                 % COMPUTE ARENA VALUES
                 
                 % Remove empty entries
-                D.DB.vtcalVTHist = D.DB.vtcalVTHist(~isnan(D.DB.vtcalVTHist));
+                D.DB.CALVT.VTHist = D.DB.CALVT.VTHist(~isnan(D.DB.CALVT.VTHist));
                 
                 % Reshape data
-                xy_pos = reshape(double(D.DB.vtcalVTHist),2,[])';
+                xy_pos = reshape(double(D.DB.CALVT.VTHist),2,[])';
                 
                 % Exlude jumps
                 exc_ind = [true; any(diff(xy_pos,1,1) > 10, 2)];
@@ -8936,9 +9062,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Fit circle to data
                 [XC, YC, R] = circfit(x,y);
-                
-                % Flip y
-                %y = abs(y-YC);
                 
                 % PLOT CORRECTED DATA
                 
@@ -8972,10 +9095,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Check if user wants axes rescaled
                 choice = dlgAWL(...
                     'Rescale Axis?', ...
-                    'TEST DONE', ...
+                    'TEST INFO', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
-                    'Ques');
+                    'question');
                 
                 % Rescale track plot axes
                 if strcmp(choice, 'Yes')
@@ -9001,10 +9124,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Check if values should be saved
                 choice = dlgAWL(...
                     'Save VT Calibration?', ...
-                    'TEST DONE', ...
+                    'TEST INFO', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
-                    'Ques');
+                    'question');
                 
                 % Delete plots
                 delete(plot_new_h)
@@ -9015,7 +9138,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if strcmp(choice, 'Yes')
                     
                     % Save track bound info
-                    fi_path = D.DIR.ioTrkBnds;
+                    fi_path = D.DIR.trkBnds;
                     save(fi_path, 'XC', 'YC', 'R')
                     
                     % Save second copy with date
@@ -9026,7 +9149,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Unset test flag
-                D.DB.doVTCalibrationTest = false;
+                D.DB.t3_doVTCalibrationTest = false;
                 D.DB.isTestRun = false;
                 
             end
@@ -9037,47 +9160,47 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         function HaltErrorTest()
             
             % Check if robot should be restarted
-            if D.DB.haltIsHalted && ...
+            if D.DB.HALT.IsHalted && ...
                     ~D.F.halted && ...
-                    Sec_DT(now) - D.DB.halt_t_halted > D.DB.haltDur
+                    Sec_DT(now) - D.DB.HALT.t_halted > D.DB.HALT.Dur
                 
                 % Save and print halt error
                 % Store halt error
-                halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.haltSendPos) * ((140*pi)/(2*pi));
-                D.DB.halt_error(1) = halt_err;
-                D.DB.halt_error(2) = min(D.DB.halt_error(1), D.DB.halt_error(2));
-                D.DB.halt_error(3) = min(999, max(D.DB.halt_error(1), D.DB.halt_error(3)));
-                D.DB.halt_error(4) = D.DB.halt_error(1) + D.DB.halt_error(4);
-                D.DB.halt_error(5) = D.DB.halt_error(5) + 1;
+                halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.HALT.SendPos) * ((140*pi)/(2*pi));
+                D.DB.HALT.error(1) = halt_err;
+                D.DB.HALT.error(2) = min(D.DB.HALT.error(1), D.DB.HALT.error(2));
+                D.DB.HALT.error(3) = min(999, max(D.DB.HALT.error(1), D.DB.HALT.error(3)));
+                D.DB.HALT.error(4) = D.DB.HALT.error(1) + D.DB.HALT.error(4);
+                D.DB.HALT.error(5) = D.DB.HALT.error(5) + 1;
                 % Print halt error
-                D.DB.halt_error_str = [D.DB.halt_error_str, ...
+                D.DB.HALT.error_str = [D.DB.HALT.error_str, ...
                     sprintf('\r%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
-                    D.DB.halt_error(1), D.DB.halt_error(2), D.DB.halt_error(3), D.DB.halt_error(4)/D.DB.halt_error(5), D.DB.haltNowVel)];
+                    D.DB.HALT.error(1), D.DB.HALT.error(2), D.DB.HALT.error(3), D.DB.HALT.error(4)/D.DB.HALT.error(5), D.DB.HALT.NowVel)];
                 % Log/print
-                Console_Write(D.DB.halt_error_str);
+                Console_Write(D.DB.HALT.error_str);
                 
                 % Check if vel should be stepped
-                if D.DB.haltCnt == D.DB.haltStepTrials
+                if D.DB.HALT.Cnt == D.DB.HALT.StepTrials
                     
                     % Reset counter
-                    D.DB.haltCnt = 0;
+                    D.DB.HALT.Cnt = 0;
                     
                     % Incriment step
-                    D.DB.haltNowStep = D.DB.haltNowStep+1;
+                    D.DB.HALT.NowStep = D.DB.HALT.NowStep+1;
                     
                     % Incriment vel
-                    if D.DB.haltNowStep <= length(D.DB.haltVelSteps);
-                        D.DB.haltNowVel = D.DB.haltVelSteps(D.DB.haltNowStep);
+                    if D.DB.HALT.NowStep <= length(D.DB.HALT.VelSteps);
+                        D.DB.HALT.NowVel = D.DB.HALT.VelSteps(D.DB.HALT.NowStep);
                     else
                         % End test
-                        D.DB.haltNowVel = 0;
-                        D.DB.doHaltErrorTest = false;
+                        D.DB.HALT.NowVel = 0;
+                        D.DB.t4_doHaltErrorTest = false;
                         
                         % Save data to csv file
                         fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
                         file_id = fopen(fi_out,'w');
                         fprintf(file_id,'Err, Min, Max, Avg, Vel\r');
-                        fprintf(file_id,D.DB.halt_error_str(3:end));
+                        fprintf(file_id,D.DB.HALT.error_str(3:end));
                         fclose(file_id);
                         % Log/print
                         Console_Write(sprintf('[Run_Test] Saved Halt Error Test: %s', ...
@@ -9086,42 +9209,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Log/print
                     Console_Write(sprintf('[Run_Test] Halt Error Test: new_vel=%dcm/sec', ...
-                        D.DB.haltNowVel));
+                        D.DB.HALT.NowVel));
                     
                 end
                 
                 % Tell CS to resume run
-                Send_M2C('T', sysTest, 1, D.DB.haltNowVel);
+                Send_M2C('T', sysTest, 1, D.DB.HALT.NowVel);
                 
                 % Set flag
-                D.DB.haltIsHalted = false;
+                D.DB.HALT.IsHalted = false;
                 
                 % Check if robot has stopped
-            elseif ~D.DB.haltIsHalted && ...
+            elseif ~D.DB.HALT.IsHalted && ...
                     D.P.Rob.vel < 5
                 
                 % Tell CS to resume run
-                Send_M2C('T', sysTest, 1, D.DB.haltNowVel);
+                Send_M2C('T', sysTest, 1, D.DB.HALT.NowVel);
                 
             end
             
             % Check if robot has passed 0 deg
-            if ~D.DB.haltIsHalted && ...
-                    Sec_DT(now) - D.DB.halt_t_halted > D.DB.haltDur+1 && ...
+            if ~D.DB.HALT.IsHalted && ...
+                    Sec_DT(now) - D.DB.HALT.t_halted > D.DB.HALT.Dur+1 && ...
                     any(Check_Pol_Bnds(D.P.Rob.rad, D.P.Rob.roh, [deg2rad(355), deg2rad(360)]))
                 
                 % Incriment counter
-                D.DB.haltCnt = D.DB.haltCnt+1;
+                D.DB.HALT.Cnt = D.DB.HALT.Cnt+1;
                 
                 % Tell CS to Halt Robot
                 Send_M2C('T', sysTest, 1, 0);
                 
                 % Store robots current pos and time
-                D.DB.haltSendPos = D.P.Rob.radLast;
-                D.DB.halt_t_halted = Sec_DT(now);
+                D.DB.HALT.SendPos = D.P.Rob.radLast;
+                D.DB.HALT.t_halted = Sec_DT(now);
                 
                 % Set flag
-                D.DB.haltIsHalted = true;
+                D.DB.HALT.IsHalted = true;
                 
                 % Log/print
                 Console_Write('[Run_Test] Halt Error Test: Halting Robot');
@@ -9129,6 +9252,499 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
+        % WALL IMAGE IR TIMING TEST
+        function WallIRTimingTest()
+            
+            % BEGIN TEST
+            if ~D.DB.isTestStarted
+                
+                % Set port direction
+                Send_M2NLX(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', '2', ' Output']);
+                
+                % Setup LED on event
+                Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' 2 0 ', D.DB.WALIR.NLXevtStr]);
+                
+                % Setup pulse duration to 1/2 dt pulse
+                Send_M2NLX(['-SetDigitalIOPulseDuration ', D.NLX.DevTTL, ' 2 ', num2str(round(D.DB.WALIR.DTPulse/2))]);
+                
+                % Set flag
+                D.DB.isTestStarted = true;
+                
+                % Format message
+                msg = ...
+                    sprintf('WALL IR IMAGE TEST STARTS IN %d SECONDS\r\nTrials=%d Image Delay=%dsec', ...
+                    D.DB.WALIR.DTImg, D.DB.WALIR.imgTrials, D.DB.WALIR.DTImg);
+                
+                % Prompt that first test starting
+                dlgAWL(msg, ...
+                    'TEST INFO', ...
+                    'OK', [], [], 'OK', ...
+                    D.UI.dlgPos{4}, ...
+                    'default');
+                
+                % Send setup command
+                Send_M2C('T', sysTest, 0, 0);
+                
+                % Set time
+                D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTImg;
+                
+                % Bail
+                return;
+            end
+            
+            % DO IR IMAGE TEST
+            if D.DB.isTestStarted && ~D.DB.WALIR.isImgTestDone
+                
+                % Check if ready to switch image
+                if Sec_DT(now) > D.DB.WALIR.t_next
+                    
+                    % Itterate trial count
+                    D.DB.WALIR.cntEvent(1) = D.DB.WALIR.cntEvent(1)+1;
+                    
+                    % Check if done
+                    if D.DB.WALIR.cntEvent(1) > D.DB.WALIR.imgTrials
+                        
+                        % Get round trip times
+                        dt_mat = ...
+                            [(1:D.DB.WALIR.imgTrials)', ...
+                            ( D.DB.WALIR.t_trig - D.DB.WALIR.t_send)/1000];
+                        
+                        % Show as plot
+                        fg = figure();
+                        ax = axes();
+                        hold on;
+                        set(ax, 'YLim', [0, max(dt_mat(:))]);
+                        set(fg, 'Position', FigGroupH.Position);
+                        plot(dt_mat(:,1), dt_mat(:,2:end), '-o', ...
+                            'Parent', ax);
+                        ax.YLabel.String = 'Round Trip (ms)';
+                        ax.XLabel.String = 'Trial Number';
+                        
+                        % Create legend with average times
+                        dt_stats = [mean(dt_mat(:,2:end),1)', ...
+                            min(dt_mat(:,2:end),[],1)', ...
+                            max(dt_mat(:,2:end),[],1)'];
+                        leg_str = D.DB.WALIR.PTttlStr;
+                        for z_ev = 1:4
+                            leg_str{z_ev} = ...
+                                sprintf('%s: mu=%0.0f, min=%0.0f, max=%0.0f', ...
+                                leg_str{z_ev}, dt_stats(z_ev,1), dt_stats(z_ev,2), dt_stats(z_ev,3));
+                            leg_str{z_ev} = regexprep(leg_str{z_ev}, '_', ' ');
+                        end
+                        legend(leg_str, 'FontName', 'MonoSpace');
+                        
+                        % Create mesage string
+                        msg = [...
+                            sprintf('FINISHED WALL IR IMAGE TEST: \r\n'), ...
+                            sprintf('\r\n%d N=%0.0fms W=%0.0fms S=%0.0fms E=%0.0fms', ...
+                            dt_mat')];
+                        
+                        % Show prompt and dt info
+                        dlgAWL(msg, ...
+                            'TEST INFO', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'default');
+                        
+                        % Close figure
+                        if(isgraphics(fg))
+                            close(fg);
+                        end
+                        
+                        % Set flag
+                        D.DB.WALIR.isImgTestDone = true;
+                        
+                        % Reset data
+                        D.DB.WALIR.t_send = NaN(D.DB.WALIR.pulseTrials,4);
+                        D.DB.WALIR.t_trig = NaN(D.DB.WALIR.pulseTrials,4);
+                        D.DB.WALIR.cntEvent(:) = 0;
+                        
+                        % Format message
+                        msg = ...
+                            sprintf('WALL IR PULSE TEST STARTS IN %d SECONDS\r\nTrials=%d Pulse Delay=%dms Switch Time=%dsec', ...
+                            D.DB.WALIR.DTSensor, D.DB.WALIR.pulseTrials, D.DB.WALIR.DTPulse, D.DB.WALIR.DTSensor);
+                        
+                        % Prompt that second test starting
+                        dlgAWL(msg, ...
+                            'TEST INFO', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'default');
+                        
+                        % Set time and sensor
+                        D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTSensor;
+                        D.DB.WALIR.cntSensor = 1;
+                        
+                        % Bail
+                        return;
+                    end
+                    
+                    % Get new image
+                    D.I.rot = find([1, 2] ~=  D.I.rot);
+                    
+                    % Update D.AC.data(2) and send command to rotate image
+                    D.AC.data(2) = D.I.img_ind(D.I.rot);
+                    Send_M2AC();
+                    
+                    % Get time stamp
+                    [pass, ts_string] = Send_M2NLX('-GetTimestamp', false);
+                    
+                    % Convert ts
+                    if pass == 1
+                        
+                        % Get time stamp
+                        ts = uint64(str2double(ts_string));
+                        D.DB.WALIR.t_send(D.DB.WALIR.cntEvent(1), :) = ts;
+                        
+                        % Log/print
+                        Console_Write(sprintf('[Run_Test] WALL IR IMAGE TEST: Trial=%d Img Change TS=%0.0fms', ...
+                            D.DB.WALIR.cntEvent(1), ts/1000));
+                    end
+                    
+                    % Switch image in x sec
+                    D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTImg;
+                    
+                end
+                
+                % Get new events
+                if D.E.evtNRecs > 0
+                    
+                    % Check for trigger events
+                    for z_t = 1:4
+                        if any(ismember(D.E.evtStr, D.DB.WALIR.PTttlStr{z_t}))
+                            
+                            % Get time stamp
+                            ts = D.E.evtTS(ismember(D.E.evtStr, D.DB.WALIR.PTttlStr{z_t}));
+                            D.DB.WALIR.t_trig(D.DB.WALIR.cntEvent(1), z_t) = ts;
+                            
+                            % Log/print
+                            Console_Write(sprintf('[Run_Test] WALL IR IMAGE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
+                                D.DB.WALIR.PTttlStr{z_t}, D.DB.WALIR.cntEvent(1), ts/1000));
+                            
+                        end
+                    end
+                    
+                end
+                
+                % Bail
+                return;
+                
+            end
+            
+            % DO IR PULSE TEST
+            if D.DB.isTestStarted && ~D.DB.WALIR.isIRTestDone
+                
+                % Do next event
+                if Sec_DT(now) > D.DB.WALIR.t_next && ...
+                        all(diff(D.DB.WALIR.cntEvent) == 0)
+                    
+                    % Do next pulse
+                    if D.DB.WALIR.cntEvent(1) < D.DB.WALIR.pulseTrials
+                        
+                        % Itterate count
+                        D.DB.WALIR.cntEvent(1) = D.DB.WALIR.cntEvent(1)+1;
+                        
+                        % Set next pulse time
+                        if D.DB.WALIR.cntEvent(1) < D.DB.WALIR.pulseTrials
+                            
+                            % Set to pulse dt
+                            D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTPulse/1000;
+                            
+                        else
+                            
+                            % Set to wait for move
+                            D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTSensor;
+                            
+                            % Make last pulse longer
+                            Send_M2NLX(['-SetDigitalIOPulseDuration ', D.NLX.DevTTL, ' 2 ', '2000']);
+                            
+                        end
+                        
+                        % Send pulse command
+                        Send_M2NLX(D.DB.WALIR.LEDttlStr);
+                        
+                        % Check if ready to switch sensor
+                    else
+                        
+                        % Itterate sensor count
+                        D.DB.WALIR.cntSensor = D.DB.WALIR.cntSensor+1;
+                        
+                        % Reset trial count
+                        D.DB.WALIR.cntEvent(:) = 0;
+                        
+                        % Reset pulse
+                        Send_M2NLX(['-SetDigitalIOPulseDuration ', D.NLX.DevTTL, ' 2 ', num2str(round(D.DB.WALIR.DTPulse/2))]);
+                        
+                        
+                    end
+                    
+                end
+                
+                % Get new events
+                if D.E.evtNRecs > 0 && ...
+                        D.DB.WALIR.cntSensor > 0 && ...
+                        D.DB.WALIR.cntSensor <= 4 && ...
+                        D.DB.WALIR.cntEvent(1) > 0 && ...
+                        D.DB.WALIR.cntEvent(1) <= D.DB.WALIR.pulseTrials
+                    
+                    % Reset events
+                    D.E.evtNRecs = 0;
+                    
+                    % Check for pulse event
+                    if any(ismember(D.E.evtStr, D.DB.WALIR.NLXevtStr))
+                        
+                        % Itterate count
+                        D.DB.WALIR.cntEvent(2) = D.DB.WALIR.cntEvent(2)+1;
+                        
+                        % Get time stamp
+                        ts = D.E.evtTS(ismember(D.E.evtStr, D.DB.WALIR.NLXevtStr));
+                        D.DB.WALIR.t_send(D.DB.WALIR.cntEvent(2), D.DB.WALIR.cntSensor) = ts;
+                        
+                        % Log/print
+                        Console_Write(sprintf('[Run_Test] WALL IR PULSE TEST: Sensor=%s Trial=%d Pulse TS=%0.0fms', ...
+                            D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}, D.DB.WALIR.cntEvent(2), ts/1000));
+                    end
+                    
+                    % Check for trigger events
+                    if any(ismember(D.E.evtStr, D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}))
+                        
+                        % Itterate count
+                        D.DB.WALIR.cntEvent(3) = D.DB.WALIR.cntEvent(3)+1;
+                        
+                        % Get time stamp
+                        ts = D.E.evtTS(ismember(D.E.evtStr, D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}));
+                        D.DB.WALIR.t_trig(D.DB.WALIR.cntEvent(3), D.DB.WALIR.cntSensor) = ts;
+                        
+                        % Log/print
+                        Console_Write(sprintf('[Run_Test] WALL IR PULSE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
+                            D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}, D.DB.WALIR.cntEvent(3), ts/1000));
+                    end
+                end
+                
+                % Check if done
+                if D.DB.WALIR.cntSensor > 4
+                    
+                    % Get round trip times
+                    dt_mat = ...
+                        [(1:D.DB.WALIR.pulseTrials)', ...
+                        ( D.DB.WALIR.t_trig - D.DB.WALIR.t_send)/1000];
+                    
+                    % Show as plot
+                    fg = figure();
+                    ax = axes();
+                    hold on;
+                    set(ax, 'YLim', [0, max(max(dt_mat(:,2:end)))]);
+                    set(fg, 'Position', FigGroupH.Position);
+                    plot(dt_mat(:,1), dt_mat(:,2:end), '-o', ...
+                        'Parent', ax);
+                    ax.YLabel.String = 'Sensor Delay (ms)';
+                    ax.XLabel.String = 'Trial Number';
+                    
+                    % Create legend with average times
+                    dt_stats = [mean(dt_mat(:,2:end),1)', ...
+                        min(dt_mat(:,2:end),[],1)', ...
+                        max(dt_mat(:,2:end),[],1)'];
+                    leg_str = D.DB.WALIR.PTttlStr;
+                    for z_ev = 1:4
+                        leg_str{z_ev} = ...
+                            sprintf('%s: mu=%0.2f, min=%0.2f, max=%0.2f', ...
+                            leg_str{z_ev}, dt_stats(z_ev,1), dt_stats(z_ev,2), dt_stats(z_ev,3));
+                        leg_str{z_ev} = regexprep(leg_str{z_ev}, '_', ' ');
+                    end
+                    legend(leg_str, 'FontName', 'MonoSpace');
+                    
+                    % Create mesage string
+                    msg = [...
+                        sprintf('FINISHED WALL IR PULSE TEST:\r\n'), ...
+                        sprintf('\r\n%d N=%0.2fms W=%0.2fms S=%0.2fms E=%0.2fms', ...
+                        dt_mat')];
+                    
+                    % Show prompt and dt info
+                    dlgAWL(msg, ...
+                        'TEST INFO', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.dlgPos{4}, ...
+                        'default');
+                    
+                    % Close figure
+                    if(isgraphics(fg))
+                        close(fg);
+                    end
+                    
+                    % Set flag
+                    D.DB.WALIR.isIRTestDone = true;
+                    
+                    % Bail
+                    return;
+                    
+                end
+                
+                % Bail
+                return;
+            end
+            
+            % END OF TEST
+            if D.DB.isTestStarted && ...
+                    D.DB.WALIR.isIRTestDone && ...
+                    D.DB.WALIR.isImgTestDone
+                
+                % Send end command
+                Send_M2C('T', sysTest, 2, 0);
+                
+                % Unset flag
+                D.DB.t5_doWallIRTimingTest = false;
+                
+                % Bail
+                return;
+                
+            end
+            
+        end
+        
+        % SYNC IR TIMING TEST
+        function SyncIRTimingTest()
+            
+            % BEGIN TEST
+            if ~D.DB.isTestStarted
+                
+                % Set port direction
+                Send_M2NLX(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', '2', ' Input']);
+                
+                % Setup robot input event
+                Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' 2 0 ', D.DB.SYNCIR.NLXevtStr]);
+                
+                % Set flag
+                D.DB.isTestStarted = true;
+                
+                % Format message
+                msg = ...
+                    sprintf('START SYNC IR TEST\r\n\r\nTrials=%d Pulse Delay=%dsec', ...
+                    D.DB.SYNCIR.pulseTrials, D.DB.SYNCIR.DTPulse);
+                
+                % Prompt that first test starting
+                dlgAWL(msg, ...
+                    'TEST INFO', ...
+                    'OK', [], [], 'OK', ...
+                    D.UI.dlgPos{4}, ...
+                    'default');
+                
+                % Send setup command
+                Send_M2C('T', sysTest, 0, 0);
+                
+                % Bail
+                return;
+            end
+            
+            % RUN TEST
+            if D.DB.isTestStarted
+                
+                % Check if ready to switch image
+                if Sec_DT(now) > D.DB.SYNCIR.t_next && ...
+                        all(diff(D.DB.SYNCIR.cntEvent) == 0)
+                    
+                    % Itterate trial count
+                    D.DB.SYNCIR.cntEvent(1) = D.DB.SYNCIR.cntEvent(1)+1;
+                    
+                    % Send next pulse command
+                    if D.DB.SYNCIR.cntEvent(1) <= D.DB.SYNCIR.pulseTrials
+                        
+                        % Send command
+                        Send_M2C('T', sysTest, 1, 0);
+                        
+                        % Get next pulse time
+                        D.DB.SYNCIR.t_next = Sec_DT(now) + D.DB.SYNCIR.DTPulse/1000;
+                    end
+                    
+                    % Check if done
+                    if D.DB.SYNCIR.cntEvent(1) > D.DB.SYNCIR.pulseTrials
+                        
+                        % Get round trip times
+                        dt_mat = ...
+                            [(1:D.DB.SYNCIR.pulseTrials)', ...
+                            ( D.DB.SYNCIR.t_trig - D.DB.SYNCIR.t_pulse)/1000];
+                        
+                        % Show as plot
+                        fg = figure();
+                        ax = axes();
+                        hold on;
+                        set(ax, 'YLim', [0, max(dt_mat(:,2:end))*1.5]);
+                        set(fg, 'Position', FigGroupH.Position);
+                        plot(dt_mat(:,1), dt_mat(:,2:end), '-o', ...
+                            'Parent', ax);
+                        ax.YLabel.String = 'Sensor Delay (ms)';
+                        ax.XLabel.String = 'Trial Number';
+                        
+                        % Create legend with average times
+                        dt_stats = [mean(dt_mat(:,2),1)', ...
+                            min(dt_mat(:,2),[],1)', ...
+                            max(dt_mat(:,2),[],1)'];
+                        leg_str = ...
+                            sprintf('Signal DT: mu=%0.2f, min=%0.2f, max=%0.2f', ...
+                            dt_stats(1), dt_stats(2), dt_stats(3));
+                        legend(leg_str, 'FontName', 'MonoSpace');
+                        
+                        % Create mesage string
+                        msg = 'FINISHED SYNC IR TEST';
+                        
+                        % Show prompt and dt info
+                        dlgAWL(msg, ...
+                            'TEST INFO', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'default');
+                        
+                        % Close figure
+                        if(isgraphics(fg))
+                            close(fg);
+                        end
+                        
+                        % Bail
+                        return;
+                    end
+                    
+                end
+                
+                % Get new events
+                if D.E.evtNRecs > 0
+                    
+                    % Check for pulse event
+                    if any(ismember(D.E.evtStr, D.NLX.ir_ts_str))
+                        
+                        % Itterate count
+                        D.DB.SYNCIR.cntEvent(2) = D.DB.SYNCIR.cntEvent(2)+1;
+                        
+                        % Get time stamp
+                        ts = D.E.evtTS(ismember(D.E.evtStr, D.NLX.ir_ts_str));
+                        D.DB.SYNCIR.t_pulse(D.DB.SYNCIR.cntEvent(2)) = ts(1);
+                        
+                        % Log/print
+                        Console_Write(sprintf('[Run_Test] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
+                            D.NLX.ir_ts_str, D.DB.SYNCIR.cntEvent(2), ts/1000));
+                    end
+                    
+                    % Check for robot event
+                    if any(ismember(D.E.evtStr, D.DB.SYNCIR.NLXevtStr))
+                        
+                        % Itterate count
+                        D.DB.SYNCIR.cntEvent(3) = D.DB.SYNCIR.cntEvent(3)+1;
+                        
+                        % Get time stamp
+                        ts = D.E.evtTS(ismember(D.E.evtStr, D.DB.SYNCIR.NLXevtStr));
+                        D.DB.SYNCIR.t_trig(D.DB.SYNCIR.cntEvent(3)) = ts(1);
+                        
+                        % Log/print
+                        Console_Write(sprintf('[Run_Test] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
+                            D.DB.SYNCIR.NLXevtStr, D.DB.SYNCIR.cntEvent(3), ts/1000));
+                    end
+                    
+                end
+                
+                % Bail
+                return;
+                
+            end
+            
+        end
         
     end
 
@@ -9161,7 +9777,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'SAVE CFG', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
-                'Dflt');
+                'default');
         end
         
         % Confirm that Cheetah is closed
@@ -9174,7 +9790,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'CLOSE PROGRAMS', ...
             'OK', [], [], 'OK', ...
             D.UI.dlgPos{4}, ...
-            'Dflt');
+            'default');
         
         % Get check start time
         t_prompt = Sec_DT(now) + 10;
@@ -9208,7 +9824,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         'CHEETAH NOT CLOSED', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
-                        'Warn');
+                        'warning');
                 else
                     break
                 end
@@ -9265,6 +9881,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Store 'Date'
         D.SS_IO_2.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
+        
+        % Store 'VT_Pixel_Coordinates'
+        D.SS_IO_2.(D.PAR.ratLab).VT_Pixel_Coordinates{rowInd} = [D.PAR.R, D.PAR.XC, D.PAR.YC];
         
         % Store 'Start_Time'
         D.SS_IO_2.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
@@ -9407,9 +10026,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Save out data
         SS_IO_2 = D.SS_IO_2; %#ok<NASGU>
-        save(D.DIR.ioSS_IO_2, 'SS_IO_2');
+        save(D.DIR.SS_IO_2, 'SS_IO_2');
         SS_IO_1 = D.SS_IO_1; %#ok<NASGU>
-        save(D.DIR.ioSS_IO_1, 'SS_IO_1');
+        save(D.DIR.SS_IO_1, 'SS_IO_1');
         
         % Print saved table data
         Console_Write('[Save_Ses_Data] FINISHED: Save Data Tables');
@@ -9617,6 +10236,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         e = lasterror; %#ok<LERR>
         do_exit_all = do_exit_all || ~isempty(e.message);
         
+        % Set crash flag
+        isCrashed = true;
+        
         % Clear and close
         if do_exit_all
             Console_Write('**WARNING** [ForceClose] CLEARING AND CLOSING');
@@ -9686,14 +10308,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        % Clear all variables
-        clearvars -global;
+        % Clear all global variables but "doExit" and "ME"
+        clearvars -global -except doExit isCrashed ME;
         close all;
         
         % For added measure
         Vars=whos;
         Vars={Vars.name};
         Vars(ismember(Vars,'status')) = [];
+        Vars(ismember(Vars,'doExit')) = [];
+        Vars(ismember(Vars, 'isCrashed')) = [];
+        Vars(ismember(Vars,'ME')) = [];
         clear(Vars{:});
         
     end
@@ -10087,7 +10712,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'MISSING SETUP ENTRIES', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
-                'Warn');
+                'warning');
             
             % Bail out of function
             switch choice
@@ -10670,7 +11295,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'END TASK RUN', ...
             'Yes', 'No', [], 'No', ...
             D.UI.dlgPos{4}, ...
-            'Ques');
+            'question');
         
         % Handle response
         switch choice
@@ -10703,7 +11328,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'RAT OUT', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
-                'Dflt');
+                'default');
         end
         
         % Post NLX event: rat out
@@ -10787,7 +11412,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'ABBORT RUN', ...
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
-                'Warn');
+                'warning');
             
             % Handle response
             switch choice
@@ -10803,7 +11428,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'RAT OUT', ...
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
-                    'Warn');
+                    'warning');
             end
             
         end
@@ -10855,7 +11480,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'BATTERY LOW', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
-                'Warn');
+                'warning');
         end
         
         % Tell C# to begin quit
@@ -11813,7 +12438,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Update sub buttons
             Set_Button_State(D.UI.toggSubFlagTT, 'Update');
         end
-
+        
         
         % Log/print
         Console_Write(sprintf('[%s] Set \"%s\" to %d', 'ToggFlagTT', btn_str, val));
@@ -12245,12 +12870,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Enable audio on all chan
         if val == 1
             
-            % Enable left audio
-            lft_ind = ismember({D.UI.toggSubHearSdTT(1,1,:).String}, 'L');
-            set(D.UI.toggSubHearSdTT(bndl_ind,tt_ind,lft_ind), 'Value', 1)
+            % Turn on audio for this TT
+            if isempty(strfind(D.TT.ttFldNow, 'R')) && ...
+                    any([D.UI.toggHearTT.Value] == 1)
+                
+                % Enable left audio for all but refs
+                lft_ind = ismember({D.UI.toggSubHearSdTT(1,1,:).String}, 'L');
+                set(D.UI.toggSubHearSdTT(bndl_ind,tt_ind,lft_ind), 'Value', 1)
+                
+                % Run callback
+                ToggHearTT(D.UI.toggSubHearSdTT(bndl_ind,tt_ind,lft_ind));
+                
+            end
             
-            % Run callback
-            ToggHearTT(D.UI.toggSubHearSdTT(bndl_ind,tt_ind,lft_ind));
         end
         
         % Disable all buttons
@@ -12514,7 +13146,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Save out data
         TT_IO = D.TT_IO; %#ok<NASGU>
-        save(D.DIR.ioTT_IO, 'TT_IO');
+        save(D.DIR.TT_IO, 'TT_IO');
         
         % Set user data to 1
         set(hObject, 'UserData', 1)
@@ -12657,7 +13289,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
-                        'Err', ...
+                        'error', ...
                         false);
                     
                 end
@@ -12674,7 +13306,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
-                        'Err', ...
+                        'error', ...
                         false);
                     
                     % Set exit flag
@@ -12882,14 +13514,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         tab_str = D.UI.tabgp.SelectedTab.Title;
         
         % Enable/Disable axis rotations
-        if strcmp(tab_str, 'TT')
+        if strcmp(tab_str, 'TT TRACK')
             set(D.UI.mouseRotView, 'Enable', 'on')
         else
             set(D.UI.mouseRotView, 'Enable', 'off')
         end
         
         % Get new parent
-        if strcmp(tab_str, 'ICR')
+        if strcmp(tab_str, 'ICR ARENA')
             tab_parent = D.UI.tabICR;
             
         else
@@ -12913,7 +13545,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get button position
-        if strcmp(tab_str, 'ICR')
+        if strcmp(tab_str, 'ICR ARENA')
             new_pos = D.UI.tt_tab_1_select_pan_pos;
             old_pos = D.UI.tt_tab_2_select_pan_pos;
             

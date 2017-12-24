@@ -132,7 +132,7 @@ struct DB
 	bool is_runTest = false; // set by system
 	bool do_simRatTest = false; // set by system
 	bool do_pidCalibration = false; // set by system
-	bool do_irSyncCalibration = false; // set by system
+	volatile bool do_v_irSyncCalibration = false; // set by system
 
 	// Other
 	bool isErrLoop = false;

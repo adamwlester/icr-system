@@ -1,0 +1,10 @@
+NetCom Log File Opened - File Name:  MatlabNetComLogfile.txt
+Time Opened: (mm/dd/yyyy): 12/23/2017 At Time: 21:54:49
+NetCom Version 3.1.0
+
+-* NOTICE  *- (mm/dd/yyyy): 12/23/2017 At Time: 21:54:49 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26200.
+-* NOTICE  *- (mm/dd/yyyy): 12/23/2017 At Time: 21:54:49 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
+-* NOTICE  *- (mm/dd/yyyy): 12/23/2017 At Time: 21:54:49 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26201.
+-* NOTICE  *- (mm/dd/yyyy): 12/23/2017 At Time: 21:55:12 - NodeConnectionClient::AddStreamObject - Object VT1 has been added to our stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 12/23/2017 At Time: 21:55:12 - NodeConnectionClient::AddStreamObject - Object VT2 has been added to our stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 12/23/2017 At Time: 21:55:12 - NodeConnectionClient::AddStreamObject - Object EVENTS has been added to our stream list. Stream Type: Event

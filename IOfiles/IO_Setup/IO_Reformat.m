@@ -1,4 +1,4 @@
-function [] = SS_IO_Reformat()
+function [] = IO_Reformat()
 
 % Directory containing tables
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
@@ -6,33 +6,23 @@ ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
 ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData'); 
 
 %% =========================== LOAD TABLES ================================
-[SS_IO_1, SS_IO_2] = LoadTables(ioDir);
+[SS_IO_1, SS_IO_2, TT_IO] = LoadTables(ioDir); %#ok<ASGLU>
 
 %% ========================== WHAT TO CHANGE ==============================
 
 % ------------------------------- ADD VAR ---------------------------------
 
 % Specify new variable to add
-Implanted = false;
-%                 implant_coordinates_description = '[Hipp{A-P, M-L, D-V}, MEC{A-P, M-L, D-V}]';
-%                 tetrode_mapping = ...
-%                     {'R1','R2','TT01','TT02','TT03','TT04','TT05','TT06', ...
-%                     'TT07','TT08','TT09','TT10','TT11','TT12', ...
-%                     'TT13','TT14','TT15','TT16','TT17','TT18'};
-%                 turn_log = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
-%                     {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
-%                 Implant_Coordinates = {nan(1,3), nan(1,3)};
-%                 Turn_Log = {cell2struct(...
-%                     [{NaN}; ...
-%                     {cell2struct(repmat({categorical({'<undefined>'}, turn_log)},1,20), tetrode_mapping, 2)}; ...
-%                     {cell2struct(num2cell(nan(1,20)), tetrode_mapping, 2)}; ...
-%                     {cell2struct(cell(1,20), tetrode_mapping, 2)}], ...
-%                     {'Date', 'Orientation', 'Depth', 'Notes'})};
+% EXAMPLE
+%   Weight_Baseline = NaN;
+%   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, 'Yoke_Mate', '', 'g');
 
-% Add new variable
-%                SS_IO_1 = AddNewVar(SS_IO_1, Implant_Coordinates, 'Days_Till_Rotation', implant_coordinates_description, 'um');
-Sleep_Time = {nan, nan};
-SS_IO_2 = AddNewVar(SS_IO_2, Sleep_Time, 'Total_Time', '', 'min')
+% weight_cap_labels = {'None', 'Light', 'Medium', 'Heavy'};
+% Weight_Cap =  categorical({'None'}, weight_cap_labels);
+% TT_IO = AddNewVar(TT_IO, Weight_Cap, 'Weight_Drive');
+
+VT_Pixel_Coordinates = {NaN(1,3)};
+SS_IO_2 = AddNewVar(SS_IO_2, VT_Pixel_Coordinates, 'Weight_Proportion', '', 'pixels');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
@@ -61,6 +51,7 @@ SS_IO_2 = AddNewVar(SS_IO_2, Sleep_Time, 'Total_Time', '', 'min')
 
 save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1');
 save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
+save(fullfile(ioDir,'TT_IO'), 'TT_IO');
 
 %% ============================ FUNCTIONS =================================
 
@@ -94,7 +85,7 @@ save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
             % Add for each field (rat) entry
             T2 = structfun(@(x) AddV(x, new_var, var_name, var_before, description_str, unit_str), T, 'uni', false);
             
-        elseif strcmp(table_name, 'SS_IO_1')
+        elseif strcmp(table_name, 'SS_IO_1') || strcmp(table_name, 'TT_IO')
             
             % Add single instance
             T2 = AddV(T, new_var, var_name, var_before, description_str, unit_str);
@@ -166,7 +157,7 @@ save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
             % Add for each field (rat) entry
             T2 = structfun(@(x) ChngV(x, var_change, new_val, preserve_val, description_str, unit_str), T, 'uni', false);
             
-        elseif strcmp(table_name, 'SS_IO_1')
+        elseif strcmp(table_name, 'SS_IO_1') || strcmp(table_name, 'TT_IO')
             
             % Add single instance
             T2 = ChngV(T, var_change, new_val, preserve_val, description_str, unit_str);
@@ -270,7 +261,7 @@ save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
             % Add for each field (rat) entry
             T2 = structfun(@(x) MoveV(x, var_move, var_before, remove_var), T, 'uni', false);
             
-        elseif strcmp(table_name, 'SS_IO_1')
+        elseif strcmp(table_name, 'SS_IO_1') || strcmp(table_name, 'TT_IO')
             
             % Add single instance
             T2 = MoveV(T, var_move, var_before, remove_var);
@@ -308,7 +299,7 @@ save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
     end
 
 % LOAD TABLE
-    function [ss_all, ss_icr] = LoadTables(io_dir)
+    function [ss_io_1, ss_io_2, tt_io] = LoadTables(io_dir)
         
         % Chenge directory
         if ~ismember(regexp(pwd,'\w+(?=$)','match'), regexp(io_dir,'\w+(?=$)','match'))
@@ -317,9 +308,11 @@ save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2');
         
         % Import session data
         s = load('SS_IO_1.mat');
-        ss_all = s.SS_IO_1;
+        ss_io_1 = s.SS_IO_1;
         s = load('SS_IO_2.mat');
-        ss_icr = s.SS_IO_2;
+        ss_io_2 = s.SS_IO_2;
+        s = load('TT_IO.mat');
+        tt_io = s.TT_IO;
         
     end
 

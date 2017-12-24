@@ -78,6 +78,9 @@ struct PIN
 	// Buttons
 	const int Btn[3] = { A2, A1, A0 };
 
+	// Testing
+	int Test_Signal = A8;
+
 	/*
 	Note: pins bellow are all used for external interupts
 	and must all be members of the same port (PortA)
@@ -96,6 +99,7 @@ pin;
 
 // SETUP PINS
 void SetupPins() {
+	
 	// SETUP OUTPUT PINS
 
 	// Power
@@ -141,6 +145,8 @@ void SetupPins() {
 	// Feeder switch
 	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
 	delayMicroseconds(100);
+	// Test Pins
+	pinMode(pin.Test_Signal, OUTPUT);
 
 	// Power
 	digitalWrite(pin.PWR_OFF, LOW);
@@ -185,6 +191,8 @@ void SetupPins() {
 	// Feeder switch
 	digitalWrite(pin.FeedSwitch_Gnd, LOW);
 	delayMicroseconds(100);
+	// Test Pins
+	digitalWrite(pin.Test_Signal, LOW);
 
 	// SET INPUT PINS
 

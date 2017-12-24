@@ -96,7 +96,7 @@ if nargin < 9
     doWait = true;
 end
 if nargin < 8
-    dlgType = 'Ques'; % ['Dflt', 'Ques', 'Warn', 'Err']
+    dlgType = 'question'; % ['default', 'question', 'warning', 'error']
 end
 if isempty(Btn1)
     error(message('dlgAWL:MustSpecifyAtLeastOneButton'));
@@ -111,13 +111,13 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%%% Color Check %%%
 %%%%%%%%%%%%%%%%%%%%
-if strcmp(dlgType,'Dflt')
+if strcmp(dlgType,'default')
     TxtCol = [0.1 0.1 0.1];
-elseif strcmp(dlgType,'Ques')
+elseif strcmp(dlgType,'question')
     TxtCol = [0.1 0.1 0.1];
-elseif strcmp(dlgType,'Warn')
+elseif strcmp(dlgType,'warning')
     TxtCol = [0.9 0 0];
-elseif strcmp(dlgType,'Err')
+elseif strcmp(dlgType,'error')
     TxtCol = [0.9 0 0];
 end
 
@@ -266,7 +266,7 @@ for i = 1:NumButtons
         'Tag'                ,ButtonTag     ...
         );
     
-    setappdata(BtnHandle{i},'QuestDlgReturnName',ButtonString);   
+    setappdata(BtnHandle{i},'QuestDlgReturnName',ButtonString);
 end
 
 if ~DefaultValid
@@ -347,8 +347,8 @@ elseif NumButtons==3,
 end
 
 % Reposition dialogue to center of second screen (AWL)
-FigPos(1) = ScreenCenter(1) - (FigPos(3)/2); 
-FigPos(2) = ScreenCenter(2) - (FigPos(4)/2); 
+FigPos(1) = ScreenCenter(1) - (FigPos(3)/2);
+FigPos(2) = ScreenCenter(2) - (FigPos(4)/2);
 
 set(QuestFig ,'Position',FigPos);
 assert(iscell(BtnHandle));
@@ -381,19 +381,19 @@ IconAxes=axes(                                      ...
 set(QuestFig ,'NextPlot','add');
 
 % Get icon bitmap
-if strcmp(dlgType,'Dflt')
+if strcmp(dlgType,'default')
     load dlgawlicons.mat icrIconData icrIconMap;
     IconData=icrIconData;
     IconCMap=icrIconMap;
-elseif strcmp(dlgType,'Ques')
+elseif strcmp(dlgType,'question')
     load dlgawlicons.mat questIconData questIconMap;
     IconData=questIconData;
     IconCMap=questIconMap;
-elseif strcmp(dlgType,'Warn')
+elseif strcmp(dlgType,'warning')
     load dlgawlicons.mat warnIconData warnIconMap;
     IconData=warnIconData;
     IconCMap=warnIconMap;
-elseif strcmp(dlgType,'Err')
+elseif strcmp(dlgType,'error')
     load dlgawlicons.mat errorIconData errorIconMap;
     IconData=errorIconData;
     IconCMap=errorIconMap;
@@ -439,30 +439,30 @@ else
 end
 
     function doFigureKeyPress(obj, evd)  %#ok
-    switch(evd.Key)
-        case {'return','space'}
-            if DefaultValid
-                DefaultWasPressed = true;
-                uiresume(gcbf);
-            end
-        case 'escape'
-            doDelete
-    end
+        switch(evd.Key)
+            case {'return','space'}
+                if DefaultValid
+                    DefaultWasPressed = true;
+                    uiresume(gcbf);
+                end
+            case 'escape'
+                doDelete
+        end
     end
 
     function doControlKeyPress(obj, evd)  %#ok
-    switch(evd.Key)
-        case {'return'}
-            if DefaultValid
-                DefaultWasPressed = true;
-                uiresume(gcbf);
-            end
-        case 'escape'
-            doDelete
-    end
+        switch(evd.Key)
+            case {'return'}
+                if DefaultValid
+                    DefaultWasPressed = true;
+                    uiresume(gcbf);
+                end
+            case 'escape'
+                doDelete
+        end
     end
 
     function doDelete(varargin)
-    delete(QuestFig);
+        delete(QuestFig);
     end
 end

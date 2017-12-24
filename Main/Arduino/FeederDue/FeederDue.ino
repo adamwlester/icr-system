@@ -3502,6 +3502,12 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 	DB_FUN_STR();
 #endif
 
+    //EXAMPLE:
+	/* 
+		Log.TestLoad(0, "LOG00035.CSV");
+		Log.TestLoad(2500);
+	*/
+
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 	bool pass = false;
@@ -7914,6 +7920,13 @@ void Interupt_IR_Detect()
 		return;
 	}
 
+	// Handle test
+	if (db.do_v_irSyncCalibration) {
+
+		// Set tracker LED high
+		digitalWrite(pin.Test_Signal, HIGH);
+	}
+
 	// Store time
 	v_dt_ir = millis() - v_t_irSyncLast;
 	v_t_irSyncLast = millis();
@@ -8168,7 +8181,7 @@ void setup() {
 	// Do not enable if ir detector pin already high
 	if (is_ir_low) {
 		// IR detector
-		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, HIGH);
+		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, RISING);
 	}
 	else {
 		// Skip ir sync setup
@@ -8272,9 +8285,15 @@ void setup() {
 	// Flag setup done
 	fc.isSetup = true;
 
-	// TEMP
-	//Log.TestLoad(0, "LOG00035.CSV");
-	//Log.TestLoad(2500);
+	//// TEMP
+	//while (true) {
+	//	delay(1);
+	//	digitalWrite(pin.Test_Signal, HIGH);
+	//	SerialUSB.println("HIGH");
+	//	delay(1);
+	//	digitalWrite(pin.Test_Signal, LOW);
+	//	SerialUSB.println("LOW");
+	//}
 
 }
 
@@ -8480,11 +8499,12 @@ void loop() {
 			}
 
 			// Run
-			else {
+			if (cmd.testRun == 1) {
 
 				// Store new speed
 				double new_speed = double(cmd.testDat);
 
+				// Run at new speed
 				if (new_speed > 1) {
 
 					// Run motor
@@ -8501,19 +8521,27 @@ void loop() {
 
 				}
 
-				// End of run
+				// Halt robot
 				else {
-
-					// Halt robot
 					AD_R.hardStop();
 					AD_F.hardStop();
-
-					// Set tracker duty to default
-					trackLEDduty[0][0] = trackLEDduty[1][0];
-					trackLEDduty[0][1] = trackLEDduty[1][1];
-					analogWrite(pin.TrackLED, trackLEDduty[0][0]);
-
 				}
+
+
+			}
+
+			// End of run
+			if (cmd.testRun == 2) {
+
+				// Halt robot
+				AD_R.hardStop();
+				AD_F.hardStop();
+
+				// Set tracker duty to default
+				trackLEDduty[0][0] = trackLEDduty[1][0];
+				trackLEDduty[0][1] = trackLEDduty[1][1];
+				analogWrite(pin.TrackLED, trackLEDduty[0][0]);
+
 
 			}
 
@@ -8531,7 +8559,7 @@ void loop() {
 			}
 
 			// Run
-			else {
+			if (cmd.testRun == 1) {
 
 				// Store new speed
 				double new_speed = double(cmd.testDat);
@@ -8562,7 +8590,7 @@ void loop() {
 				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: IR SYNC TIME");
 
 				// Set flag
-				db.do_irSyncCalibration = true;
+				db.do_v_irSyncCalibration = true;
 
 			}
 		}
@@ -8582,6 +8610,9 @@ void loop() {
 			}
 
 		}
+
+		// Pass info to ard
+		QueuePacket(&r2a, 't', c2r.dat[0], c2r.dat[1], c2r.dat[2], 0, true);
 
 		// Send final ping times after test setup
 		if (cmd.testRun == 0) {
@@ -8664,6 +8695,17 @@ void loop() {
 			// Reset flag
 			Pid.cal_isPidUpdated = false;
 		}
+	}
+
+	// Run IR sync time
+	if (db.do_v_irSyncCalibration) {
+
+		// Set "Test_Signal" to LOW after 50ms
+		if (digitalRead(pin.Test_Signal) == HIGH &&
+			millis() - v_t_irSyncLast > 10) {
+			digitalWrite(pin.Test_Signal, LOW);
+		}
+
 	}
 
 #pragma endregion

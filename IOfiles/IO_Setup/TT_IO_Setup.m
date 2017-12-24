@@ -7,7 +7,7 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0000'} ...
+    {'r0001'} ...
     {'r0203'} ...
     {'r0278'} ...
     {'r0499'} ...
@@ -27,6 +27,7 @@ reference_tt_labels = {'R01_1','R01_2','R02_1','R02_2','CE01','CE02'};
 reference_eib_labels = {'R1','R2','R3','R4','R5','R6','R7','R8'};
 
 % Variable descriptions
+cap_weights_description = '["None", "Light", "Medium", "Heavy"]';
 implant_coordinates_description = '[Bndl_1{A-P, M-L, D-V}, Bndl_2{A-P, M-L, D-V}]';
 implant_angle_description = '[Bndl_1{A-P, M-L, D-V}, Bndl_2{A-P, M-L, D-V}]';
 implant_configuration_description = '[Bndl_1{A-P, M-L}, Bndl_2{A-P, M-L}]';
@@ -38,6 +39,8 @@ T = table('RowNames',ratList);
 
 % Add rat level entries
 T.Include_Run = true(length(ratList),1);
+T.Weight_Drive = NaN(length(ratList),1);
+T.Cap_Weights = repmat({nan(1,4)},length(ratList),1);
 T.Implant_Coordinates = repmat({nan(1,3), nan(1,3)},length(ratList),1);
 T.Implant_Angle = repmat({nan(1,2), nan(1,2)},length(ratList),1);
 T.Implant_Configuration = repmat({nan(1,2), nan(1,2)},length(ratList),1);
@@ -85,12 +88,15 @@ log_var_names = [{'Session'},{'Date'}, reshape([log_var_names{:}], 1, [])];
 log_table = cell2table(log_var_values', 'VariableNames', log_var_names);
 
 % Set variable units
+T.Properties.VariableUnits{'Weight_Drive'} = 'g';
+T.Properties.VariableUnits{'Cap_Weights'} = 'g';
 T.Properties.VariableUnits{'Implant_Coordinates'} = 'mm';
 T.Properties.VariableUnits{'Implant_Angle'} = 'deg';
 T.Properties.VariableUnits{'Thread_Pitch'} = 'mm';
 log_table.Properties.VariableUnits(3:3:end) = {'um'};
 
 % Set variable descriptions
+T.Properties.VariableDescriptions{'Cap_Weights'} = cap_weights_description;
 T.Properties.VariableDescriptions{'Implant_Coordinates'} = implant_coordinates_description;
 T.Properties.VariableDescriptions{'Implant_Angle'} = implant_angle_description;
 T.Properties.VariableDescriptions{'Implant_Configuration'} = implant_configuration_description;
