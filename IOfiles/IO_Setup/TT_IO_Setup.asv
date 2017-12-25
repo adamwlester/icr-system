@@ -162,4 +162,8 @@ save(fullfile(ioDir,'TT_IO'), 'TT_IO')
 % TT_IO.Turn_Log{2,1} = log_table;
 % TT_IO(1,1:end-2) = TT_IO(2,1:end-2)
 
+% Add log variable
+%
+TT_IO.Turn_Log{3,1}.Notes = repmat(TT_IO.Turn_Log{2,1}.Notes,5,1)
+
 end

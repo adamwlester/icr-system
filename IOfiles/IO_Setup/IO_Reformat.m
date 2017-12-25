@@ -21,8 +21,8 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % Weight_Cap =  categorical({'None'}, weight_cap_labels);
 % TT_IO = AddNewVar(TT_IO, Weight_Cap, 'Weight_Drive');
 
-VT_Pixel_Coordinates = {NaN(1,3)};
-SS_IO_2 = AddNewVar(SS_IO_2, VT_Pixel_Coordinates, 'Weight_Proportion', '', 'pixels');
+Human = {''};
+SS_IO_1 = AddNewVar(SS_IO_1, Human, 'Weight_Baseline');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 

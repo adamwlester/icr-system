@@ -11557,17 +11557,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get pellet entry
         D.PAR.feedPellets = str2double(D.UI.editFeedPellets.String);
         
-        % Get mash entry
-        D.PAR.feedMash = str2double(D.UI.editFeedMash.String);
-        
-        % Get ensure entry
-        D.PAR.feedEnsure = str2double(D.UI.editFeedEnsure.String);
-        
-        % Get stat entry
-        D.PAR.feedSTAT = str2double(D.UI.editFeedSTAT.String);
-        
         % Unset and bail if any bad values
-        if any(isnan([D.PAR.feedPellets, D.PAR.feedMash, D.PAR.feedEnsure, D.PAR.feedSTAT]))
+        if isnan(D.PAR.feedPellets)
             set(D.UI.toggSaveFeed, 'Value', 0)
             return;
         end
