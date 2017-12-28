@@ -4613,38 +4613,38 @@ OUTPUT(C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Relea
  .debug_ranges  0x000022f0      0x248 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
  .debug_ranges  0x00002538       0xd0 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
-.debug_line     0x00000000     0xc798
- .debug_line    0x00000000     0x3212 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
- .debug_line    0x00003212      0xa00 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\Wire\Wire.cpp.o
- .debug_line    0x00003c12      0x900 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\SPI\SPI.cpp.o
- .debug_line    0x00004512       0x87 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
- .debug_line    0x00004599      0x530 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriverCommands_Due.cpp.o
- .debug_line    0x00004ac9      0x533 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriverConfig_Due.cpp.o
- .debug_line    0x00004ffc      0x6b5 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriverSupport_Due.cpp.o
- .debug_line    0x000056b1      0x618 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriver_Due.cpp.o
- .debug_line    0x00005cc9      0x6d4 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\DueTimer\DueTimer.cpp.o
- .debug_line    0x0000639d       0x73 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\LCD5110_Basic\DefaultFonts.c.o
- .debug_line    0x00006410      0x895 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\LCD5110_Basic\LCD5110_Basic.cpp.o
- .debug_line    0x00006ca5      0x2b4 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\TinyEKF\tiny_ekf.c.o
- .debug_line    0x00006f59      0x633 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\variant\variant.cpp.o
- .debug_line    0x0000758c      0x35a C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
- .debug_line    0x000078e6       0xb1 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(hooks.c.o)
- .debug_line    0x00007997      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
- .debug_line    0x00007e32      0x5d9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
- .debug_line    0x0000840b      0x35e C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(wiring.c.o)
- .debug_line    0x00008769      0x5f3 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
- .debug_line    0x00008d5c      0x4ad C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
- .debug_line    0x00009209       0xa1 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(abi.cpp.o)
- .debug_line    0x000092aa      0x3d5 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(main.cpp.o)
- .debug_line    0x0000967f      0x717 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(Print.cpp.o)
- .debug_line    0x00009d96      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(Reset.cpp.o)
- .debug_line    0x0000a231      0x1d7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
- .debug_line    0x0000a408      0x663 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
- .debug_line    0x0000aa6b      0x4ff C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
- .debug_line    0x0000af6a      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
- .debug_line    0x0000b356      0x814 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(CDC.cpp.o)
- .debug_line    0x0000bb6a      0x92f C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
- .debug_line    0x0000c499      0x2ff C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
+.debug_line     0x00000000     0xc796
+ .debug_line    0x00000000     0x3210 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
+ .debug_line    0x00003210      0xa00 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\Wire\Wire.cpp.o
+ .debug_line    0x00003c10      0x900 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\SPI\SPI.cpp.o
+ .debug_line    0x00004510       0x87 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\Arduino-MemoryFree\MemoryFree.cpp.o
+ .debug_line    0x00004597      0x530 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriverCommands_Due.cpp.o
+ .debug_line    0x00004ac7      0x533 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriverConfig_Due.cpp.o
+ .debug_line    0x00004ffa      0x6b5 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriverSupport_Due.cpp.o
+ .debug_line    0x000056af      0x618 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\AutoDriver_Due\AutoDriver_Due.cpp.o
+ .debug_line    0x00005cc7      0x6d4 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\DueTimer\DueTimer.cpp.o
+ .debug_line    0x0000639b       0x73 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\LCD5110_Basic\DefaultFonts.c.o
+ .debug_line    0x0000640e      0x895 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\LCD5110_Basic\LCD5110_Basic.cpp.o
+ .debug_line    0x00006ca3      0x2b4 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\TinyEKF\tiny_ekf.c.o
+ .debug_line    0x00006f57      0x633 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\variant\variant.cpp.o
+ .debug_line    0x0000758a      0x35a C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(cortex_handlers.c.o)
+ .debug_line    0x000078e4       0xb1 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(hooks.c.o)
+ .debug_line    0x00007995      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(syscalls_sam3.c.o)
+ .debug_line    0x00007e30      0x5d9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(WInterrupts.c.o)
+ .debug_line    0x00008409      0x35e C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(wiring.c.o)
+ .debug_line    0x00008767      0x5f3 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(wiring_analog.c.o)
+ .debug_line    0x00008d5a      0x4ad C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(wiring_digital.c.o)
+ .debug_line    0x00009207       0xa1 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(abi.cpp.o)
+ .debug_line    0x000092a8      0x3d5 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(main.cpp.o)
+ .debug_line    0x0000967d      0x717 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(Print.cpp.o)
+ .debug_line    0x00009d94      0x49b C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(Reset.cpp.o)
+ .debug_line    0x0000a22f      0x1d7 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(RingBuffer.cpp.o)
+ .debug_line    0x0000a406      0x663 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(UARTClass.cpp.o)
+ .debug_line    0x0000aa69      0x4ff C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(USARTClass.cpp.o)
+ .debug_line    0x0000af68      0x3ec C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(watchdog.cpp.o)
+ .debug_line    0x0000b354      0x814 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(CDC.cpp.o)
+ .debug_line    0x0000bb68      0x92f C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(USBCore.cpp.o)
+ .debug_line    0x0000c497      0x2ff C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release/core.a(PluggableUSB.cpp.o)
 
 .debug_str      0x00000000     0xa0fa
  .debug_str     0x00000000     0x46a4 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o

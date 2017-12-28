@@ -1,4 +1,4 @@
-function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, isMatSolo, isTTtrackSolo)
+function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, isMatSolo)
 % INPUT:
 %
 %	sysTest = [0:8]
@@ -23,10 +23,6 @@ function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, isMatSolo, isTTtra
 %   isMatSolo = [true,false]
 %     	true: Matlab running alone
 %       false: Matlab running with other programs
-%
-%   isTTtrackSolo = [true,false]
-%     	true: Do TT tracking only
-%       false: Run it as part of main script
 
 
 
@@ -71,9 +67,6 @@ isCrashed = false;
 % ------------------------ HANDLE INPUT ARGUMENTS -------------------------
 
 % Set inputs
-if nargin < 5
-    isTTtrackSolo = false;
-end
 if nargin < 4
     isMatSolo = false;
 end
@@ -97,7 +90,8 @@ D.DB.ratLab = 'r0000';
 % Implant status
 D.DB.Implanted = true;
 
-% Condition and Task
+% Load, Condition and Task
+D.DB.Load = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
@@ -589,6 +583,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return;
         end
         
+        % ------------------------- SETUP VARS AND UI ---------------------
+        
         % Generate figure tab group
         FigGroupH = figure('Visible', 'Off', ...
             'DeleteFcn', {@ForceClose});
@@ -603,26 +599,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         UI_Setup();
         Console_Write('[Setup] FINISHED: "UI_Setup()"');
         
+        % Enable setup panel and load popup
+        Set_Object_Group('Setup_Objects', 'Enable')
+        
         % Send setup confirmation with VT info
-        Send_M2C('G', D.PAR.R, D.PAR.XC, D.PAR.YC);
+        Send_M2C('G');
         
         % Run NLX setup code
         Console_Write('[Setup] RUNNING: "NLX_Setup()"...');
         NLX_Setup();
         Console_Write('[Setup] FINISHED: "NLX_Setup()"');
-        Send_M2C('N');
-        
-        % Enable Setup UI objects
-        if ~isTTtrackSolo
-            Set_Object_Group('Setup_Objects', 'Enable')
-        end
+        Send_M2C('N', D.PAR.R, D.PAR.XC, D.PAR.YC);
         
         % Run testing setup
-        if ~isTTtrackSolo
-            Console_Write('[Setup] RUNNING: "Run_Test_Setup()"...');
-            Run_Test_Setup();
-            Console_Write('[Setup] FINISHED: "Run_Test_Setup()"');
-        end
+        Console_Write('[Setup] RUNNING: "Test_Setup()"...');
+        Test_Setup();
+        Console_Write('[Setup] FINISHED: "Test_Setup()"');
         
         % End of setup
         Console_Write('[Setup] END Setup()');
@@ -673,47 +665,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Store last case
-            D.F.main_last = D.F.main_case;
+            D.F.main_case_last = D.F.main_case_now;
             
-            % Handle flow
-            if ~D.F.rat_loaded && ...
-                    (~isTTtrackSolo || D.F.tt_track_setup)
-                D.F.main_case = 'WAIT FOR UI SETUP';
+            % Handle Flow
+            if ~D.F.ses_data_loaded
+                D.F.main_case_now = 'WAIT FOR UI SETUP';
                 
-            elseif ~D.F.tt_track_setup
-                D.F.main_case = 'SETUP TT TRACK';
+                % Finish Setup
+            elseif ~D.F.ses_setup_done
+                D.F.main_case_now = 'FINISH SESSION SETUP';
                 
-            elseif ~D.F.tables_setup
-                D.F.main_case = 'SETUP TABLES';
+                % Run Task
+            elseif (~D.F.task_done_confirmed || (D.F.implant_session && ~all(D.F.sleep_done))) && ...
+                    ~(D.F.tt_track_solo || D.F.table_solo)
+                D.F.main_case_now = 'RUN ICR TASK';
                 
-            elseif ~D.F.session_setup
-                D.F.main_case = 'FINISH SESSION SETUP';
-                
-            elseif isTTtrackSolo
-                D.F.main_case = 'HOLD FOR SOLO TT TRACK SESSION';
-                
-            elseif ~D.F.rob_setup
-                D.F.main_case = 'WAIT FOR ROBOT SETUP';
-                
-            elseif D.F.implant_session && ~D.F.sleep_done(1)
-                D.F.main_case = 'RUN SLEEP 1';
-                
-            elseif ~D.F.task_setup
-                D.F.main_case = 'SETUP TASK';
-                
-            elseif ~D.F.rob_streaming
-                D.F.main_case = 'WAIT FOR ROBOT STREAMING';
-                
-            elseif D.F.poll_nlx && ...
-                    (Sec_DT(now) - D.T.poll_last) >= D.PAR.polRate
-                D.F.main_case = 'RUN TASK';
-                
-            elseif D.F.implant_session && ~D.F.sleep_done(2)
-                D.F.main_case = 'RUN SLEEP 2';
-                
-            elseif D.F.task_done_confirmed && ...
-                    (~D.F.implant_session || all(D.F.sleep_done))
-                D.F.main_case = 'WAIT FOR SAVE';
+                % Wait for save
+            elseif ~D.F.ses_save_done %TEMP
+                D.F.main_case_now = 'WAIT FOR SAVE';
                 
             else
                 continue;
@@ -721,88 +690,60 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % PRINT CHANGE IN FLOW
-            if ~strcmp(D.F.main_case, D.F.main_last)
-                Console_Write(sprintf('[MainLoop] SWITCH FROM "%s" TO "%s"', D.F.main_last, D.F.main_case));
+            if ~strcmp(D.F.main_case_now, D.F.main_case_last)
+                Console_Write(sprintf('[Run:MainLoop] SWITCH FROM "%s" TO "%s"', D.F.main_case_last, D.F.main_case_now));
             end
             
             % HANDLE CASE
-            switch D.F.main_case
+            switch D.F.main_case_now
                 
                 
                 case 'WAIT FOR UI SETUP'
                     %% ---------------WAIT FOR UI SETUP----------------
                     continue;
                     
-                case 'SETUP TT TRACK'
-                    %% ---------------SETUP TT TRACK----------------
+                case 'FINISH SESSION SETUP'
+                    %% -----------------FINISH SESSION SETUP-------------------
                     
-                    % Run TT_Track
-                    Console_Write('[MainLoop] RUNNING: "TT_Track_Setup()"...');
+                    % Flag setup done flag
+                    D.F.ses_setup_done = true;
+                    
+                    % Run Table Setup code
+                    Console_Write('[Run:MainLoop] RUNNING: "Table_Setup()"...');
+                    Table_Setup();
+                    D.F.table_tab_setup = true;
+                    Console_Write('[Run:MainLoop] FINISHED: "Table_Setup()"');
+                    
+                    % Run TT Track Setup code
+                    Console_Write('[Run:MainLoop] RUNNING: "TT_Track_Setup()"...');
                     was_ran = TT_Track_Setup();
                     if was_ran
-                        Console_Write('[MainLoop] FINISHED: "TT_Track_Setup()"');
+                        Console_Write('[Run:MainLoop] FINISHED: "TT_Track_Setup()"');
+                        D.F.tt_tab_setup = true;
                     else
                         Console_Write('[TT_Track_Setup] SKIPPED: "TT_Track_Setup()"');
                     end
                     
-                    % Switch tab to TT Track
-                    if isTTtrackSolo
-                        
-                        % Switch to TT tab
-                        TabGrpChange(D.UI.tabTT); 
-                    else
-                        
-                        % Load rat tt info
-                        D.UI.popLoadRatTTInf.Value = find(ismember(D.PAR.ratList, D.PAR.ratLab(2:end)));
-                        PopLoadRatTTInf(D.UI.popLoadRatTTInf);
-                    end
-                    
-                    % Set flag
-                    D.F.tt_track_setup =  true;
-                    
-                case 'SETUP TABLES'
-                    %% -----------------SETUP TABLES----------------
-                    
-                    % Switch to table tab
-                    TabGrpChange(D.UI.tabTBL);
-                    
-                    % Run TT_Track
-                    Console_Write('[MainLoop] RUNNING: "Table_Setup()"...');
-                    Table_Setup();
-                    Console_Write('[MainLoop] FINISHED: "Table_Setup()"');
-                    
-                    % Switch tab back to ICR
-                    TabGrpChange(D.UI.tabICR);
-                    
-                    % Set flag
-                    D.F.tables_setup = true;
-                    
-                case 'FINISH SESSION SETUP'
-                    %% -----------------FINISH SESSION SETUP-------------------
-                    
-                    % Flag setup done
-                    D.F.session_setup = true;
-                    
-                    % Run Finish NLX setup code
-                    Console_Write('[MainLoop] RUNNING: "Finish_NLX_Setup()"...');
+                    % Run Finish NLX Setup code
+                    Console_Write('[Run:MainLoop] RUNNING: "Finish_NLX_Setup()"...');
                     was_ran = Finish_NLX_Setup();
                     if was_ran
-                        Console_Write('[MainLoop] FINISHED: "Finish_NLX_Setup()"');
+                        Console_Write('[Run:MainLoop] FINISHED: "Finish_NLX_Setup()"');
                     else
-                        Console_Write('[MainLoop] SKIPPED: "Finish_NLX_Setup()"');
+                        Console_Write('[Run:MainLoop] SKIPPED: "Finish_NLX_Setup()"');
                     end
                     
-                    % Run Finish Ephys setup code
-                    Console_Write('[MainLoop] RUNNING: "Finish_Ephys_Setup()"...');
+                    % Run Finish Ephys Setup code
+                    Console_Write('[Run:MainLoop] RUNNING: "Finish_Ephys_Setup()"...');
                     was_ran = Finish_Ephys_Setup();
                     if was_ran
-                        Console_Write('[MainLoop] FINISHED: "Finish_Ephys_Setup()"');
+                        Console_Write('[Run:MainLoop] FINISHED: "Finish_Ephys_Setup()"');
                     else
                         Console_Write('[Finish_Ephys_Setup] SKIPPED: "Finish_Ephys_Setup()"');
                     end
                     
                     % Enable TT_Track Objects
-                    if D.F.implant_session || isTTtrackSolo
+                    if D.F.implant_session || D.F.tt_track_solo
                         Set_Object_Group('TT_Track_Objects', 'Enable')
                     end
                     
@@ -811,24 +752,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     ToggAcq(D.UI.toggAcq);
                     
                     % Run Finish AC setup code
-                    Console_Write('[MainLoop] RUNNING: "Finish_AC_Setup()"...');
+                    Console_Write('[Run:MainLoop] RUNNING: "Finish_AC_Setup()"...');
                     Finish_AC_Setup();
-                    Console_Write('[MainLoop] FINISHED: "Finish_AC_Setup()"');
+                    Console_Write('[Run:MainLoop] FINISHED: "Finish_AC_Setup()"');
                     
-                    % Bail here if running TT_Track solo
-                    if isTTtrackSolo
+                    % Bail here if running TT Track or Table solo
+                    if D.F.tt_track_solo || D.F.table_solo
                         
-                        % Switch to TT Track tab
-                        TabGrpChange(D.UI.tabTT);
+                        % Switch to 'TT TRACK' tab
+                        if D.F.tt_track_solo
+                            TabGrpChange(D.UI.tabTT);
+                        end
+                        
+                        % Switch to 'TABLE' tab
+                        if D.F.table_solo
+                            TabGrpChange(D.UI.tabTBL);
+                        end
                         
                         % Bail
                         continue;
                     end
                     
-                    % Run Finish GUI setup code
-                    Console_Write('[MainLoop] RUNNING: "Finish_GUI_Setup()"...');
-                    Finish_GUI_Setup();
-                    Console_Write('[MainLoop] FINISHED: "Finish_GUI_Setup()"');
+                    % Run ICR Session setup code
+                    Console_Write('[Run:MainLoop] RUNNING: "ICR_Session_Setup()"...');
+                    ICR_Session_Setup();
+                    Console_Write('[Run:MainLoop] FINISHED: "ICR_Session_Setup()"');
                     
                     % Enable Run panel stuff
                     if D.F.implant_session
@@ -840,163 +788,192 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Enable text info
                     Set_Object_Group('Text_Objects', 'Enable')
                     
+                    % Show all objects on 'ICR STUDY' tab
+                    TabGrpChange(D.UI.tabICR);
+                    
                     % Start Cheetah Recording
                     set(D.UI.toggRec,'Value', 1);
                     ToggRec(D.UI.toggRec);
                     
-                case 'HOLD FOR SOLO TT TRACK SESSION'
-                    %% ---------HOLD FOR SOLO TT TRACK SESSION-------------
-                    continue;
+                case 'RUN ICR TASK'
+                    %% ------------------RUN ICR TASK-------------------
                     
+                    % RESET POLL STATUS FLAG
+                    D.F.poll_new = false;
                     
-                case 'WAIT FOR ROBOT SETUP'
-                    %% -------------WAIT FOR ROBOT SETUP-------------------
-                    
-                    % Bail if setup not confirmed
-                    if c2m.('K').dat1 < 1
-                        continue
-                    end
-                    
-                    % Log/print
-                    Console_Write('[MainLoop] CONFIRMED ROBOT SETUP');
-                    
-                    % Set flag
-                    D.F.rob_setup = true;
-                    
-                case 'RUN SLEEP 1'
-                    %% ------------------RUN SLEEP 1-------------------
-                    
-                    % Check sleep status
-                    Sleep_Check(1);
-                    
-                case 'SETUP TASK'
-                    %% ------------------SETUP TASK--------------------
-                    
-                    % Enable Run objects
-                    Set_Object_Group('Run_Objects', 'Enable');
-                    
-                    % Run 'Track' task setup code
-                    if D.PAR.sesTask == 'Track'
-                        Console_Write('[MainLoop] RUNNING: "Track_Task_Setup()"');
-                        Track_Task_Setup();
-                        Console_Write('[MainLoop] FINISHED: "Track_Task_Setup()"');
-                    end
-                    
-                    % Run 'Forage' task setup code
-                    if D.PAR.sesTask == 'Forage'
-                        Console_Write('[MainLoop] RUNNING: "Forage_Task_Setup()"');
-                        Forage_Task_Setup();
-                        Console_Write('[MainLoop] FINISHED: "Forage_Task_Setup()"');
-                    end
-                    
-                    % Set flag
-                    D.F.task_setup = true;
-                    
-                    % Refresh UI
-                    Update_UI(0);
-                    
-                case 'WAIT FOR ROBOT STREAMING'
-                    
-                    %% ----------WAIT FOR ROBOT STREAMING-----------
-                    
-                    % Bail if streaming not confirmed
-                    if c2m.('K').dat1 < 2
-                        continue
-                    end
-                    
-                    % Log/print
-                    Console_Write('[MainLoop] CONFIRMED ROBOT STREAMING');
-                    
-                    % Dump initial vt recs
-                    Console_Write('[MainLoop] RUNNING: Dump VT Recs...');
-                    while true
-                        Update_UI(10);
+                    % POLL NLX
+                    if D.F.poll_nlx && ...
+                            (Sec_DT(now) - D.T.poll_last) >= D.PAR.polRate
                         
-                        % Get stream data
-                        pause(0.01);
-                        VT_Get('Rat');
+                        % STORE POLL TIME
+                        D.T.poll_last = Sec_DT(now);
+                        
+                        % PROCESS NLX EVENTS
+                        Evt_Proc();
+                        
+                        % PROCESS NLX VT
                         VT_Get('Rob');
-                        Evt_Get();
-                        
-                        % Check if no new recs
-                        if ...
-                                D.P.Rat.vtNRecs == 0 && ...
-                                D.P.Rat.vtNRecs == 0 && ...
-                                D.E.evtNRecs == 0
-                            break;
+                        VT_Proc('Rob');
+                        if ~D.DB.t1_doSimRatTest
+                            VT_Get('Rat');
+                            VT_Proc('Rat');
                         end
+                        
+                        % PROCESS NLX TT DATA
+                        TT_Get();
+                        
+                        % Set flag
+                        D.F.poll_new = true;
+                        
                     end
-                    Console_Write('[MainLoop] FINISHED: Dump VT Recs...');
-                    
-                    % Set flags
-                    D.F.rob_streaming = true;
-                    D.F.poll_nlx = true;
-                    
-                    % Begin main loop
-                    Console_Write('[MainLoop] READY TO ROCK!');
-                    
-                case 'RUN TASK'
-                    %% ------------------RUN TASK-------------------
-                    
-                    % STORE POLL TIME
-                    D.T.poll_last = Sec_DT(now);
-                    
-                    % PROCESS NLX EVENTS
-                    Evt_Proc();
-                    
-                    % PROCESS NLX VT
-                    VT_Get('Rob');
-                    VT_Proc('Rob');
-                    if ~D.DB.t1_doSimRatTest
-                        VT_Get('Rat');
-                        VT_Proc('Rat');
-                    end
-                    
-                    % PROCESS NLX TT DATA
-                    TT_Get();
                     
                     % RUN TEST/DEBUG CODE
-                    Run_Test();
+                    if D.F.poll_new
+                        Test_Run();
+                    end
                     
                     % ---------------CHECK WHAT TO DO------------------
-                    D.F.poll_last = D.F.poll_case;
+                    D.F.sub_case_last = D.F.sub_case_now;
                     
-                    if ~D.F.first_move_sent
-                        D.F.poll_case = 'CHECK IF MOVE READY';
+                    
+                    if D.F.implant_session && ~D.F.sleep_done(1)
+                        D.F.sub_case_now = 'RUN SLEEP 1';
                         
-                    elseif  ~D.F.rat_in && ...
-                            D.F.rec && ...
-                            ~D.F.task_done && ...
-                            ~D.F.quit
-                        D.F.poll_case = 'CHECK IF RAT IN';
+                    elseif ~D.F.task_setup
+                        D.F.sub_case_now = 'SETUP TASK';
                         
-                    elseif D.F.rat_in
-                        D.F.poll_case = 'RUN MAIN';
+                    elseif ~D.F.rob_setup_confirmed
+                        D.F.sub_case_now = 'WAIT FOR ROBOT SETUP';
                         
-                    elseif (D.F.task_done || D.F.quit) && ~D.F.rat_out
-                        D.F.poll_case = 'SEND TASK DONE CONFIRMATION';
+                    elseif ~D.F.rob_streaming_confirmed
+                        D.F.sub_case_now = 'WAIT FOR ROBOT STREAMING';
                         
-                    elseif D.F.task_done && D.F.rat_out && ~D.F.task_done_confirmed
-                        D.F.poll_case = 'CHECK FOR TASK DONE CONFIRMATION';
+                    elseif ~(D.F.task_done || D.F.quit)
                         
-                    else
-                        continue;
+                        if ~D.F.first_move_sent && D.F.poll_new
+                            D.F.sub_case_now = 'CHECK IF MOVE READY';
+                            
+                        elseif  ~D.F.rat_in && D.F.poll_new
+                            D.F.sub_case_now = 'CHECK IF RAT IN';
+                            
+                        elseif D.F.rat_in && D.F.poll_new
+                            D.F.sub_case_now = 'DO TASK CHECKS';
+                            
+                        else
+                            continue;
+                        end
+                        
+                    elseif ~D.F.rat_out
+                        D.F.sub_case_now = 'SEND TASK DONE CONFIRMATION';
+                        
+                    elseif ~D.F.task_done_confirmed
+                        D.F.sub_case_now = 'CHECK FOR TASK DONE CONFIRMATION';
+                        
+                    elseif D.F.implant_session && ~D.F.sleep_done(2)
+                        D.F.sub_case_now = 'RUN SLEEP 2';
                         
                     end
                     
                     % PRINT CHANGE IN FLOW
-                    if ~strcmp(D.F.poll_case, D.F.poll_last)
-                        Console_Write(sprintf('[MainLoop] SWITCH FROM "%s"" TO "%s""', D.F.poll_last, D.F.poll_case));
+                    if ~strcmp(D.F.sub_case_now, D.F.sub_case_last)
+                        Console_Write(sprintf('[Run:SubLoop] SWITCH FROM "%s"" TO "%s""', D.F.sub_case_last, D.F.sub_case_now));
                     end
                     
                     % HANDLE CASE
-                    switch D.F.poll_case
+                    switch D.F.sub_case_now
                         
+                        case 'WAIT FOR ROBOT SETUP'
+                            %% -------------WAIT FOR ROBOT SETUP-------------------
+                            
+                            % Bail if setup not confirmed
+                            if c2m.('K').dat1 < 1
+                                continue
+                            end
+                            
+                            % Log/print
+                            Console_Write('[Run:SubLoop] CONFIRMED ROBOT SETUP');
+                            
+                            % Set flag
+                            D.F.rob_setup_confirmed = true;
+                            
+                        case 'RUN SLEEP 1'
+                            %% ------------------RUN SLEEP 1-------------------
+                            
+                            % Check sleep status
+                            Sleep_Check(1);
+                            
+                        case 'SETUP TASK'
+                            %% ------------------SETUP TASK--------------------
+                            
+                            % Enable Run objects
+                            Set_Object_Group('Run_Objects', 'Enable');
+                            
+                            % Run 'Track' task setup code
+                            if D.PAR.sesTask == 'Track'
+                                Console_Write('[Run:SubLoop] RUNNING: "Track_Task_Setup()"');
+                                Track_Task_Setup();
+                                Console_Write('[Run:SubLoop] FINISHED: "Track_Task_Setup()"');
+                            end
+                            
+                            % Run 'Forage' task setup code
+                            if D.PAR.sesTask == 'Forage'
+                                Console_Write('[Run:SubLoop] RUNNING: "Forage_Task_Setup()"');
+                                Forage_Task_Setup();
+                                Console_Write('[Run:SubLoop] FINISHED: "Forage_Task_Setup()"');
+                            end
+                            
+                            % Set flag
+                            D.F.task_setup = true;
+                            
+                            % Refresh UI
+                            Update_UI(0);
+                            
+                        case 'WAIT FOR ROBOT STREAMING'
+                            
+                            %% ----------WAIT FOR ROBOT STREAMING-----------
+                            
+                            % Bail if streaming not confirmed
+                            if c2m.('K').dat1 < 2
+                                continue
+                            end
+                            
+                            % Log/print
+                            Console_Write('[Run:SubLoop] CONFIRMED ROBOT STREAMING');
+                            
+                            % Dump initial vt recs
+                            Console_Write('[Run:SubLoop] RUNNING: Dump VT Recs...');
+                            while true
+                                Update_UI(10);
+                                
+                                % Get stream data
+                                pause(0.01);
+                                VT_Get('Rat');
+                                VT_Get('Rob');
+                                Evt_Get();
+                                
+                                % Check if no new recs
+                                if ...
+                                        D.P.Rat.vtNRecs == 0 && ...
+                                        D.P.Rat.vtNRecs == 0 && ...
+                                        D.E.evtNRecs == 0
+                                    break;
+                                end
+                            end
+                            Console_Write('[Run:SubLoop] FINISHED: Dump VT Recs...');
+                            
+                            % Set flags
+                            D.F.rob_streaming_confirmed = true;
+                            D.F.poll_nlx = true;
+                            
+                            % Begin main loop
+                            Console_Write('[Run:SubLoop] READY TO ROCK!');
+                            
                         case 'CHECK IF MOVE READY'
-                            % ----------CHECK IF MOVE READY------------
+                            %% ------------CHECK IF MOVE READY--------------
                             
                             % Wait till at least 1000 VT samples collected
-                            if D.P.Rob.cnt_vtRec < 1000
+                            if ~isMatSolo && ...
+                                    D.P.Rob.cnt_vtRec < 1000
                                 continue;
                             end
                             
@@ -1004,27 +981,27 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             if D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
                                 % Move to track reward zone
                                 Send_M2C('M', D.UI.rewZoneRad(1));
-                                Console_Write('[MainLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
+                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
                             elseif D.PAR.sesTask == 'Forage'
                                 % Move to forage reward targ
                                 Send_M2C('M', deg2rad(D.PAR.rfTargDegArr(D.I.targ_now)));
-                                Console_Write('[MainLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
+                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
                             else
                                 % Move to start quad
                                 Send_M2C('M', D.PAR.strQuadBnds(1));
-                                Console_Write('[MainLoop] SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
+                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
                             end
                             
                             % Set flag
                             D.F.first_move_sent = true;
                             
                         case 'CHECK IF RAT IN'
-                            % ------------CHECK IF RAT IN--------------
+                            %% ------------CHECK IF RAT IN------------------
                             
                             Rat_In_Check();
                             
-                        case 'RUN MAIN'
-                            % ---------------RUN MAIN------------------
+                        case 'DO TASK CHECKS'
+                            %% ----------DO TASK CHECKS----------------
                             
                             % ROTATION TRIGGER CHECK
                             Rotation_Trig_Check();
@@ -1043,21 +1020,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             
                         case 'SEND TASK DONE CONFIRMATION'
-                            % --------SEND TASK DONE CONFIRMATION--------
+                            %% --------SEND TASK DONE CONFIRMATION-----------
                             
                             % Tell CS task is finished
                             Send_M2C('O');
                             D.F.rat_out = true;
-                            Console_Write('[MainLoop] SENT TASK DONE CONFIRMATION');
+                            Console_Write('[Run:SubLoop] SENT TASK DONE CONFIRMATION');
                             
                         case 'CHECK FOR TASK DONE CONFIRMATION'
-                            % -------------CHECK FOR TASK DONE CONFIRMATION---------------
+                            %% ------CHECK FOR TASK DONE CONFIRMATION-------
                             
                             % Check if CS has confirmed task done
                             if c2m.('Y').dat1 == 1
                                 
                                 % Set flags
-                                D.F.poll_nlx = false;
                                 D.F.task_done_confirmed = true;
                                 
                                 % Enable Sleep 2 objects
@@ -1067,43 +1043,54 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 
                                 % Reset c2m flag
                                 c2m.('Y').dat1 = 0;
-                                Console_Write('[MainLoop] RECEIVED TASK DONE CONFIRMATION');
+                                Console_Write('[Run:SubLoop] RECEIVED TASK DONE CONFIRMATION');
                             end
+                            
+                        case 'RUN SLEEP 2'
+                            %% ------------------RUN SLEEP 2-------------------
+                            
+                            % Check sleep status
+                            Sleep_Check(2);
+                            
                             
                         otherwise
                             continue;
                             
                     end
                     
-                case 'RUN SLEEP 2'
-                    %% ------------------RUN SLEEP 2-------------------
-                    
-                    % Check sleep status
-                    Sleep_Check(2);
-                    
                 case 'WAIT FOR SAVE'
                     %% -------------WAIT FOR SAVE---------------
                     
                     % Enable save button
-                    if ~D.F.do_save && strcmp(D.UI.btnSaveSes.Enable, 'off')
-                        Set_Button_State(D.UI.btnSaveSes, 'Enable', D.UI.attentionCol);
+                    if ~D.F.do_save && strcmp(D.UI.toggSave.Enable, 'off')
+                        Set_Button_State(D.UI.toggSave, 'Enable', D.UI.attentionCol);
                     end
                     
                     % Save sesion data
                     if D.F.do_save
-                        Console_Write('[MainLoop] SAVE INITIATED');
+                        Console_Write('[Run:MainLoop] SAVE INITIATED');
                         
-                        % Save table data
-                        Console_Write('[MainLoop] RUNNING: "Save_Session_Data()"...');
+                        % Save task data
+                        Console_Write('[Run:MainLoop] RUNNING: "Save_Session_Data()"...');
                         Save_Session_Data();
-                        Console_Write('[MainLoop] FINISHED: "Save_Session_Data()"');
+                        Console_Write('[Run:MainLoop] FINISHED: "Save_Session_Data()"');
                         
                         % Save Cheetah data
-                        Console_Write('[MainLoop] RUNNING: "Save_Cheetah_Data()"...');
-                        pass = Save_Cheetah_Data();
-                        if pass
-                            Console_Write('[MainLoop] FINISHED: "Save_Cheetah_Data()"');
+                        Console_Write('[Run:MainLoop] RUNNING: "Save_TT_Track_Data()"...');
+                        was_ran = Save_TT_Track_Data();
+                        if was_ran
+                            Console_Write('[Run:MainLoop] FINISHED: "Save_TT_Track_Data()"');
                         else
+                            Console_Write('[Run:MainLoop] SKIPPED: "Save_TT_Track_Data()"');
+                        end
+                        
+                        % Save Cheetah data
+                        Console_Write('[Run:MainLoop] RUNNING: "Save_Cheetah_Data()"...');
+                        was_ran = Save_Cheetah_Data();
+                        if was_ran
+                            Console_Write('[Run:MainLoop] FINISHED: "Save_Cheetah_Data()"');
+                        else
+                            Console_Write('[Run:MainLoop] SKIPPED: "Save_Cheetah_Data()"');
                         end
                         
                         % Set flags
@@ -1112,11 +1099,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         % Tell CS Matlab session saved
                         Send_M2C('F');
                         
-                        % Highlight Quit button
-                        Set_Button_State(D.UI.btnQuit, 'Enable', D.UI.attentionCol);
-                        
                         % Stop status timer
                         stop(timer_save);
+                        
+                        % Highlight Quit button
+                        Set_Button_State(D.UI.toggQuit, 'Enable', D.UI.attentionCol);
                         
                         % Reset flag
                         D.F.do_save = false;
@@ -1255,6 +1242,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% TOP LEVEL PARAMETERS
         
+        % LOAD DATA TABLES
+        T = load(D.DIR.SS_IO_1);
+        D.SS_IO_1 = T.SS_IO_1;
+        T = load(D.DIR.SS_IO_2);
+        D.SS_IO_2 = T.SS_IO_2;
+        T = load(D.DIR.TT_IO);
+        D.TT_IO = T.TT_IO;
+        clear T;
+        
         % LOAD TRACK BOUNDS
         
         % bounding box for video tracker (in pixels)
@@ -1267,6 +1263,47 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % track bound center Y
         D.PAR.YC = S.YC;
         clear S;
+        
+        % CATEGORICAL VARS
+        
+        % age group
+        D.PAR.listAgeGrp = categories(D.SS_IO_1.Age_Group); % [Young,Old];
+        % human
+        D.PAR.listHuman = categories(D.SS_IO_1.Human);
+        % session type
+        D.PAR.listSesType = categories(D.SS_IO_1.Session_Type);
+        % session condition
+        D.PAR.listSesCond = categories(D.SS_IO_1.Session_Condition);
+        % task condition
+        D.PAR.listSesTask = {'Track'; 'Forage'};
+        % feeder condition
+        D.PAR.listFeedCnd = categories(D.SS_IO_1.Feeder_Condition); % [C1,C2];
+        % delay cond
+        D.PAR.listDel = {'0.0 '; '1.0 '; '2.0'; '3.0'};
+        % cue condition
+        D.PAR.listCueCond = categories(D.SS_IO_1.Cue_Condition); % [All, Half, None]
+        % start qauadrant
+        D.PAR.listStrQuad = categories(D.SS_IO_1.Start_Quadrant{1}); % [NE,SE,SW,NW];
+        % rotation direction
+        D.PAR.listRotDrc = categories(D.SS_IO_1.Rotation_Direction{1}); % [CCW,CW];
+        % rotation position
+        D.PAR.listRotPos = categories(D.SS_IO_1.Rotation_Positions{1}); % [90,180,270];
+        % bulldoze delay
+        D.PAR.listBull = {'0 sec'; '5 sec'; '10 sec'; '30 sec'; '60 sec'; '120 sec'};
+        
+        % RAT LIST
+        
+        % Pull out row names
+        D.PAR.listRat = ...
+            [D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run), ...
+            cellstr(char(D.SS_IO_1.Yoke_Mate(D.SS_IO_1.Include_Run)))];
+        
+        % Remove 'r'
+        D.PAR.listRat = regexprep(D.PAR.listRat, 'r', '');
+        
+        % Add space
+        D.PAR.listRat = cellfun(@(x,y) sprintf('%s (%s)', x, y), ...
+            D.PAR.listRat(:,1), D.PAR.listRat(:,2), 'Uni', false);
         
         % POSITION VARS
         
@@ -1345,30 +1382,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% FLOW CONTROL VARIABLES
         
-        % LOAD DATA TABLES
-        T = load(D.DIR.SS_IO_1);
-        D.SS_IO_1 = T.SS_IO_1;
-        T = load(D.DIR.SS_IO_2);
-        D.SS_IO_2 = T.SS_IO_2;
-        clear T;
-        
-        % CATEGORICAL VARS
-        
-        % age group
-        D.PAR.catAgeGrp = categories(D.SS_IO_1.Age_Group); % [Young,Old];
-        % session condition
-        D.PAR.catSesCond = categories(D.SS_IO_1.Session_Condition); % [M,B,I,R];
-        % feeder condition
-        D.PAR.catFeedCnd = categories(D.SS_IO_1.Feeder_Condition); % [C1,C2];
-        % cue condition
-        D.PAR.catCueCond = categories(D.SS_IO_1.Cue_Condition); % [All, Half, None]
-        % start qauadrant
-        D.PAR.catStrQuad = categories(D.SS_IO_1.Start_Quadrant{1}); % [NE,SE,SW,NW];
-        % rotation direction
-        D.PAR.catRotDrc = categories(D.SS_IO_1.Rotation_Direction{1}); % [CCW,CW];
-        % rotation position
-        D.PAR.catRotPos = categories(D.SS_IO_1.Rotation_Positions{1}); % [90,180,270];
-        
         % COUNTERS
         
         % track icr events
@@ -1388,46 +1401,56 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % FLAGS
         
-        % switch case main loop
-        D.F.main_case = 'NULL';
-        D.F.main_last = 'NULL';
         % force close flag
         D.F.force_closed = false;
+        % loading tables alone
+        D.F.table_solo = false;
+        % running tt track alone
+        D.F.tt_track_solo = false;
+        % implant session
+        D.F.implant_session = false;
+        % rat_implanted
+        D.F.rat_implanted = false;
+        % table tab setup
+        D.F.table_tab_setup = false;
+        % tt tab setup
+        D.F.tt_tab_setup = false;
+        % switch case main loop
+        D.F.main_case_now = 'NULL';
+        D.F.main_case_last = 'NULL';
         % switch case poll
-        D.F.poll_case = 'NULL';
-        D.F.poll_last = 'NULL';
+        D.F.sub_case_now = 'NULL';
+        D.F.sub_case_last = 'NULL';
+        % status of Cheetah.exe
+        D.F.cheetah_open = false;
+        % status of SpikeSort3D.exe
+        D.F.spikesort_open = false;
+        % cube connection status
+        D.F.cube_connected = false;
         % nlx connected
-        D.F.nlxConnected = false;
+        D.F.nlx_connected = false;
         % nlx streaming
-        D.F.vtStreaming(1) = false;
-        D.F.vtStreaming(2) = false;
-        D.F.evtStreaming = false;
+        D.F.vt_streaming(1) = false;
+        D.F.vt_streaming(2) = false;
+        D.F.evt_streaming = false;
         % robot setup
-        D.F.rob_setup = false;
-        % tt track setup
-        D.F.tt_track_setup = false;
-        % tables setup
-        D.F.tables_setup = false;
+        D.F.rob_setup_confirmed = false;
         % sleep done
         D.F.sleep_done = [false, false];
-        % rat data loaded
-        D.F.rat_loaded = false;
+        % ses data loaded
+        D.F.ses_data_loaded = false;
         % ui setup finished
-        D.F.session_setup = false;
+        D.F.ses_setup_done = false;
         % setup finished
         D.F.task_setup = false;
         % robot streaming
-        D.F.rob_streaming = false;
+        D.F.rob_streaming_confirmed = false;
         % polling nlx
         D.F.poll_nlx = false;
-        % polling nlx
+        % new nlx data
+        D.F.poll_new = false;
+        % first move sent to robot
         D.F.first_move_sent = false;
-        % sound settings
-        D.F.sound = false(1,2);
-        % acquiring nlx
-        D.F.acq = false;
-        % recording nlx
-        D.F.rec = false;
         % recording done
         D.F.task_done = false;
         % task done confirm enabled
@@ -1444,12 +1467,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.tt_save_done = false;
         % flag quit
         D.F.quit = false;
-        % flag gui forced exit
-        D.F.force_closed = false;
         % flag gui closed
         D.F.close = false;
-        % implant session
-        D.F.implant_session = false;
+        % sound settings
+        D.F.sound = false(1,2);
+        % acquiring nlx
+        D.F.acq = false;
+        % recording nlx
+        D.F.rec = false;
         % do rotation
         D.F.rotate = false;
         % rotation has occured
@@ -1480,12 +1505,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.Rob.new_vel_data = false;
         % new hd data processed
         D.F.Rat.new_hd_data = false;
-        % cube connection status
-        D.F.cube_connected = false;
-        % status of Cheetah.exe
-        D.F.cheetah_open = false;
-        % status of SpikeSort3D.exe
-        D.F.spikesort_open = false;
         % track clusters being streemed
         D.F.stream_clust = false(18,D.PAR.maxClust);
         % track clusters that are selected
@@ -1577,6 +1596,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.I.targ_last = 1;
         
         %% DATA STORAGE VARIABLES
+        
+        % SESSION PARAMETERS
+        D.PAR.sesType = categorical({'<undefined>'}, D.PAR.listSesType);
+        D.PAR.sesHuman = categorical({'<undefined>'}, D.PAR.listHuman);
+        D.PAR.sesCond = categorical({'<undefined>'}, D.PAR.listSesCond);
+        D.PAR.sesTask = categorical({'<undefined>'}, D.PAR.listSesTask);
+        D.PAR.sesCue = categorical({'<undefined>'}, D.PAR.listCueCond);
+        D.PAR.sesRewDel = categorical({'<undefined>'}, D.PAR.listDel);
+        
+        % RAT PARAMETERS
+        D.PAR.ratFeedCnd = '<undefined>';
+        D.PAR.ratRotDrc = '<undefined>';
+        D.PAR.ratStrQuad = '<undefined>';
         
         % VCC VARS
         D.PAR.rob_vcc = 0;
@@ -1865,46 +1897,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % UI OBJECT FEATURES
         
-        % Human List
-        D.UI.humanList = {'', 'AWL', 'CB'};
-        
-        % Rat List
-        ind = D.SS_IO_1.Include_Run & ...
-            ~isundefined(D.SS_IO_1.Session_Condition);
-        D.UI.ratList = ...
-            [D.SS_IO_1.Properties.RowNames(ind), ...
-            cellstr(char(D.SS_IO_1.Yoke_Mate(ind)))];
-        
-        % Remove 'r'
-        D.UI.ratList = regexprep(D.UI.ratList, 'r', '');
-        
-        % Add space
-        D.UI.ratList = [{blanks(16)}; ...
-            cellfun(@(x,y) sprintf('%s (%s)', x, y), ...
-            D.UI.ratList(:,1), D.UI.ratList(:,2), 'Uni', false)];
-        
-        % Task List
-        D.UI.taskList = {''; 'Track'; 'Forage'};
-        D.PAR.sesTask = categorical({'<undefined>'}, {'Track', 'Forage'});
-        
-        % Condition List
-        D.UI.condList = {''; 'Manual_Training'; 'Behavior_Training'; 'Implant_Training'; 'Rotation'};
-        D.PAR.sesCond = categorical({'<undefined>'}, D.PAR.catSesCond);
-        
-        % Reward Delay List
-        D.UI.delList = {''; '0.0 '; '1.0 '; '2.0'; '3.0'};
-        
-        % Cue List
-        D.PAR.cueFeed = categorical({'<undefined>'}, D.PAR.catCueCond);
-        
-        % Sound List
-        D.F.soundLabs = [...
-            {'White Noise'}, ...
-            {'Reward Tone'}];
-        
-        % Bulldoze List
-        D.UI.bullList = {'0 sec'; '5 sec'; '10 sec'; '30 sec'; '60 sec'; '120 sec'};
-        
         % Rotation Button String
         D.UI.btnICRstr = cell(2,1);
         
@@ -1943,11 +1935,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Add ICR ARENA tab
         D.UI.tabICR = uitab(D.UI.tabgp, ...
             'Title', 'ICR ARENA', ...
-            'BackgroundColor', [1, 1, 1]);
-        
-        % Add TABLE tab
-        D.UI.tabTBL = uitab(D.UI.tabgp, ...
-            'Title', 'TABLE', ...
             'BackgroundColor', [1, 1, 1]);
         
         % Store pos
@@ -2195,7 +2182,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.save_btn_pos(4)];
         
         % Panel setup
-        pan_ht = 0.46 * D.UI.main_ax_bounds(4);
+        pan_ht = 0.505 * D.UI.main_ax_bounds(4);
         D.UI.stup_pan_pos = ...
             [0,  ...
             1 - pan_ht, ...
@@ -2203,7 +2190,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_ht];
         
         % Panel run
-        pan_ht = D.UI.stup_pan_pos(2) - sum(D.UI.quit_btn_pos([2,4])) - 0.02;
+        pan_ht = D.UI.stup_pan_pos(2) - sum(D.UI.quit_btn_pos([2,4])) - 0.01;
         pan_botm = sum(D.UI.quit_btn_pos([2,4])) + obj_gap*2;
         D.UI.run_pan_pos = ...
             [0, ...
@@ -2247,12 +2234,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Panel tt select
         pan_ht = D.UI.perf_inf_pan_pos(2)-0.04;
-        D.UI.tt_tab_1_select_pan_pos(1,:) = [...
+        D.UI.tab_1_tt_select_pan_pos(1,:) = [...
             pan_lft, ...
             0.04, ...
             pan_wd/2, ...
             pan_ht];
-        D.UI.tt_tab_1_select_pan_pos(2,:) = [...
+        D.UI.tab_1_tt_select_pan_pos(2,:) = [...
             pan_lft+pan_wd/2, ...
             0.04, ...
             pan_wd/2, ...
@@ -2356,12 +2343,48 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','on', ...
             'Position', D.UI.stup_pan_pos);
         
+        % SESSION TYPE SELECTION
+        
+        % Header text
+        wd = pos_wd_dflt;
+        ht = D.UI.fontSzTxtMed(2);
+        btm = btm - ht - obj_gap;
+        pos = [pos_lft_dflt, btm, wd, ht];
+        D.UI.txtType = uicontrol('Style','text', ...
+            'Parent',D.UI.tabICR, ...
+            'String','Load', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'HorizontalAlignment', 'Center', ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontWeight','Bold', ...
+            'FontName', D.UI.headFont, ...
+            'FontSize', D.UI.fontSzTxtMed(1));
+        
+        % Popupmenu
+        btm = btm - D.UI.fontSzPopLrg(2);
+        pos = [pos_lft_dflt, btm, wd, D.UI.fontSzPopLrg(2)];
+        D.UI.popType = uicontrol('Style','popupmenu', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'on', ...
+            'Callback', {@PopType}, ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor',D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontName',D.UI.popFont, ...
+            'FontSize',D.UI.fontSzPopLrg(1), ...
+            'FontWeight','Bold', ...
+            'String',[{''}; D.PAR.listSesType], ...
+            'Value',1);
+        
         % RAT SELECTION
         
         % Header text
         wd = pos_wd_dflt*0.65;
         ht = D.UI.fontSzTxtMed(2);
-        btm = btm - ht - obj_gap;
+        btm = btm - 2*obj_gap;
         pos = [pos_lft_dflt, btm, wd, ht];
         D.UI.txtRat = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
@@ -2389,7 +2412,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName',D.UI.popFont, ...
             'FontSize',D.UI.fontSzPopLrg(1), ...
             'FontWeight','Bold', ...
-            'String',D.UI.ratList, ...
+            'String',{''}, ...
             'Value',1);
         
         % HUMAN SELECTION
@@ -2425,7 +2448,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName',D.UI.popFont, ...
             'FontSize',D.UI.fontSzPopLrg(1), ...
             'FontWeight','Bold', ...
-            'String',D.UI.humanList, ...
+            'String',[{''}; D.PAR.listHuman], ...
             'Value',1);
         
         % ICR CONDITION
@@ -2493,7 +2516,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName',D.UI.popFont, ...
             'FontSize',D.UI.fontSzPopLrg(1), ...
             'FontWeight','Bold', ...
-            'String',D.UI.taskList, ...
+            'String',[{''}; D.PAR.listSesTask], ...
             'Value',1);
         
         % REWARD DELAY
@@ -2526,7 +2549,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName',D.UI.popFont, ...
             'FontSize',D.UI.fontSzPopLrg(1), ...
             'FontWeight','Bold', ...
-            'String',D.UI.delList, ...
+            'String',[{''}; D.PAR.listDel], ...
             'Value',1);
         
         % CUE CONDITION
@@ -2665,10 +2688,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',0);
         
         % SETUP DONE
-        ht = 0.04;
-        wd = D.UI.stup_pan_pos(3)/2;
+        ht = 0.035;
+        wd = D.UI.stup_pan_pos(3)*0.4;
         btm = D.UI.stup_pan_pos(2) + 0.01;
-        pos = [wd/2, btm, wd, ht];
+        lft = (D.UI.stup_pan_pos(3) - wd)/2;
+        pos = [lft, btm, wd, ht];
         D.UI.toggSetupDone = uicontrol('Style','togglebutton', ...
             'Parent', D.UI.tabICR, ...
             'Enable', 'off', ...
@@ -2952,7 +2976,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName',D.UI.popFont, ...
             'FontSize',D.UI.fontSzPopLrg(1), ...
             'FontWeight','Bold', ...
-            'String',D.UI.bullList);
+            'String',D.PAR.listBull);
         
         % Bulldoze toggle
         pos = [lft, pos(2), wd-0.0425, pos(4)];
@@ -3124,10 +3148,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value', 0);
         
         % TASK DONE
-        ht = 0.04;
-        wd = D.UI.run_pan_pos(3)/2;
+        ht = 0.035;
+        wd = D.UI.run_pan_pos(3)*0.4;
         btm = D.UI.run_pan_pos(2) + 0.01;
-        pos = [wd/2, btm, wd, ht];
+        lft = (D.UI.run_pan_pos(3) - wd)/2;
+        pos = [lft, btm, wd, ht];
         D.UI.toggTaskDone = uicontrol('Style','togglebutton', ...
             'Parent', D.UI.tabICR, ...
             'Enable', 'off', ...
@@ -3201,11 +3226,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % SAVE & AND QUIT SESSION
         
         % Save button
-        D.UI.btnSaveSes = uicontrol('Style','push', ...
+        D.UI.toggSave = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'Enable', 'off', ...
             'String','SAVE', ...
-            'Callback', {@BtnSaveSes}, ...
+            'Callback', {@ToggSaveSes}, ...
             'Unit', 'Normalized', ...
             'Position', D.UI.save_btn_pos, ...
             'FontName', D.UI.btnFont, ...
@@ -3214,11 +3239,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',0);
         
         % Quit button
-        D.UI.btnQuit = uicontrol('Style','push', ...
+        D.UI.toggQuit = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'Enable', 'off', ...
             'String','QUIT', ...
-            'Callback', {@BtnQuitSes}, ...
+            'Callback', {@ToggQuitSes}, ...
             'Unit', 'Normalized', ...
             'Position', D.UI.quit_btn_pos, ...
             'FontName', D.UI.btnFont, ...
@@ -3817,7 +3842,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.cheetah_open = ~any(strfind(result, 'INFO'));
         
         % Only run if Matlab solo or running TT_Track solo
-        if (isMatSolo || isTTtrackSolo) && ...
+        if (isMatSolo || D.F.tt_track_solo) && ...
                 ~D.F.cheetah_open
             
             % Log/print
@@ -3924,27 +3949,27 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.cheetah_open
             
             % Run if not connected already
-            D.F.nlxConnected = NlxAreWeConnected() == 1;
-            if ~D.F.nlxConnected
+            D.F.nlx_connected = NlxAreWeConnected() == 1;
+            if ~D.F.nlx_connected
                 
                 % Keep attempting till success
                 while D.F.cheetah_open && ...
-                        ~D.F.nlxConnected && ...
+                        ~D.F.nlx_connected && ...
                         ~doExit
                     Update_UI(10);
                     
                     % Attempt connection
-                    D.F.nlxConnected = NlxConnectToServer(D.NLX.ServerIP) == 1;
+                    D.F.nlx_connected = NlxConnectToServer(D.NLX.ServerIP) == 1;
                     
                     % Identify id to server
-                    if D.F.nlxConnected
+                    if D.F.nlx_connected
                         NlxSetApplicationName('ICR_GUI');
                     end
                     
                 end
                 
                 % Log/print status
-                if D.F.nlxConnected
+                if D.F.nlx_connected
                     Console_Write('[NLX_Setup] FINISHED: Connect to NLX');
                 else
                     Console_Write('[NLX_Setup] ABORTED: Connect to NLX');
@@ -4012,14 +4037,565 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[NLX_Setup] FINISHED: Configure NLX');
         end
         
-        %% Get NLX recording directory
+    end
+
+% -----------------------------TABLE SETUP-------------------------
+    function[] = Table_Setup()
         
-        % Find current recording directory
-        dirs = dir(D.DIR.nlxTempTop);
-        dirs = dirs(3:end);
-        fi_dat_num = ...
-            cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
-        D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
+        %% SETUP TABLE UI
+        
+        % Add TABLE tab
+        D.UI.tabTBL = uitab(D.UI.tabgp, ...
+            'Title', 'TABLE', ...
+            'BackgroundColor', [1, 1, 1]);
+        
+        % GET POSITION INFO
+        
+        % Defaults
+        obj_gap = 0.005;
+        
+        % Panel task table pos
+        pan_lft = 0;
+        pan_ht = (D.UI.tabTBL.Position(4)*0.75) / 2;
+        pan_botm = pan_ht;
+        pan_wdth = D.UI.tabTBL.Position(3);
+        D.UI.pan_task_tbl_pos = ...
+            [pan_lft, ...
+            pan_botm, ...
+            pan_wdth, ...
+            pan_ht];
+        
+        % Panel tt table pos
+        pan_lft = D.UI.pan_task_tbl_pos(1);
+        pan_ht = D.UI.pan_task_tbl_pos(4);
+        pan_botm = 0;
+        pan_wdth = D.UI.pan_task_tbl_pos(3);
+        D.UI.pan_tt_tbl_pos = ...
+            [pan_lft, ...
+            pan_botm, ...
+            pan_wdth, ...
+            pan_ht];
+        
+        % Panel weight
+        pan_lft = 0;
+        pan_ht = 0.14;
+        pan_botm = 1 - pan_ht - obj_gap;
+        pan_wdth = 0.2;
+        D.UI.weight_pan_pos = ...
+            [pan_lft, ...
+            pan_botm, ...
+            pan_wdth, ...
+            pan_ht];
+        
+        % Panel food
+        pan_lft = 0;
+        pan_ht = pan_botm - sum(D.UI.pan_task_tbl_pos([2,4])) - 2*obj_gap;
+        pan_botm = sum(D.UI.pan_task_tbl_pos([2,4])) + obj_gap;
+        pan_wdth = 0.2;
+        D.UI.food_pan_pos = ...
+            [pan_lft, ...
+            pan_botm, ...
+            pan_wdth, ...
+            pan_ht];
+        
+        % Panel Session notes
+        pan_lft = sum(D.UI.weight_pan_pos([1,3])) + obj_gap;
+        pan_ht = 1 - D.UI.food_pan_pos(2) - obj_gap;
+        pan_botm = D.UI.food_pan_pos(2);
+        pan_wdth = (1 - sum(D.UI.weight_pan_pos([1,3])) - 2*obj_gap) / 2;
+        D.UI.task_notes_pan_pos = ...
+            [pan_lft, ...
+            pan_botm, ...
+            pan_wdth, ...
+            pan_ht];
+        
+        % Panel Task notes
+        pan_lft = sum(D.UI.task_notes_pan_pos([1,3])) + obj_gap;
+        pan_ht = D.UI.task_notes_pan_pos(4);
+        pan_botm = D.UI.task_notes_pan_pos(2);
+        pan_wdth = D.UI.task_notes_pan_pos(3);
+        D.UI.tt_notes_pan_pos = ...
+            [pan_lft, ...
+            pan_botm, ...
+            pan_wdth, ...
+            pan_ht];
+        
+        %% CREATE TEMPLATE OBJECTS
+        
+        % Table Template
+        D.UI.tblTemplate = uitable(...
+            D.UI.tabTBL, ...
+            'Units', 'normalized', ...
+            'Position', [0,0,1,1], ...
+            'FontSize', 8, ...
+            'Enable', 'inactive', ...
+            'Visible', 'off');
+        
+        % Panel Template
+        D.UI.panTemplate = uipanel(...
+            'Parent',D.UI.tabTBL, ...
+            'Units','Normalized', ...
+            'BorderType','line', ...
+            'BorderWidth',4, ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.disabledCol, ...
+            'HighlightColor', D.UI.disabledCol, ...
+            'FontSize',12, ...
+            'FontWeight','Bold', ...
+            'FontName', D.UI.titleFont, ...
+            'FontName', D.UI.titleFont, ...
+            'TitlePosition','centertop', ...
+            'Clipping','on', ...
+            'Position', [0,0,0.1,0.1]);
+        
+        % Text Template
+        D.UI.txtTemplate = uicontrol(...
+            'Style','text', ...
+            'Parent',D.UI.tabTBL, ...
+            'Units','Normalized', ...
+            'Position', [0,0,0.1,D.UI.fontSzTxtMed(2)], ...
+            'HorizontalAlignment', 'Center', ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontWeight','Bold', ...
+            'FontName',D.UI.txtFont, ...
+            'FontSize', D.UI.fontSzTxtMed(1), ...
+            'Visible', 'off');
+        
+        % Edit Template
+        D.UI.editTemplate = uicontrol(...
+            'Style','edit',...
+            'Parent',D.UI.tabTBL, ...
+            'Units','Normalized',...
+            'Position',[0,0,0.1,D.UI.fontSzTxtLrg(2)],...
+            'HorizontalAlignment', 'Left', ...
+            'FontSize', D.UI.fontSzTxtLrg(1), ...
+            'FontName','Monospaced', ...
+            'Max', 1, ...
+            'Enable','inactive',...
+            'Visible', 'off');
+        
+        % Popupmenu Template
+        D.UI.popTemplate = uicontrol(...
+            'Style','popupmenu', ...
+            'Parent',D.UI.tabTBL, ...
+            'Units','Normalized', ...
+            'Position', [0,0,0.1,D.UI.fontSzPopSml(2)], ...
+            'Enable', 'off', ...
+            'BackgroundColor',D.UI.figBckCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'FontName',D.UI.popFont, ...
+            'FontSize',D.UI.fontSzPopSml(1), ...
+            'FontWeight','Bold', ...
+            'String', ' ', ...
+            'Value',1);
+        
+        % Togle Template
+        D.UI.toggTemplate = uicontrol(...
+            'Style','togglebutton', ...
+            'Parent',D.UI.tabTBL, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', [0,0,0.1,D.UI.fontSzTxtLrg(2)], ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzTxtMed(1), ...
+            'Value',0);
+        
+        %% CREATE WEIGHT PANEL OBJECTS
+        
+        % GET WEIGHT VALUES
+        
+        % Get baseline weight
+        D.PAR.ratWeightBaseline = D.SS_IO_1.Weight_Baseline(D.PAR.ratIndSS);
+        
+        % Get last corrected weight
+        D.PAR.ratWeightLast = D.SS_IO_2.(D.PAR.ratLab).Weight_Corrected(end);
+        
+        % Get cap weight list
+        list_str = D.TT_IO.Properties.VariableDescriptions{'Cap_Weights'};
+        D.PAR.capWeightList = regexp(list_str, '\w*', 'match');
+        
+        % Get drive weight and cap weights
+        if D.F.rat_implanted || D.F.tt_track_solo
+            D.PAR.driveWeight = D.TT_IO.Weight_Drive(D.PAR.ratIndTT);
+            D.PAR.capWeightArr = D.TT_IO.Cap_Weights{D.PAR.ratIndTT};
+        else
+            D.PAR.driveWeight = 0;
+            D.PAR.capWeightArr = zeros(size(D.PAR.capWeightList));
+        end
+        
+        % ADD WEIGHT OBJECTS
+        
+        % Weight Panel
+        D.UI.panWeight = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        set(D.UI.panWeight, ...
+            'Title','Weights', ...
+            'Position', D.UI.weight_pan_pos)
+        
+        % Starting pos
+        botm = sum(D.UI.weight_pan_pos([2,4])) - D.UI.fontSzTxtMed(2)*3;
+        lft = D.UI.weight_pan_pos(1) + obj_gap;
+        wd =  (D.UI.weight_pan_pos(3) - obj_gap*2)/2 - obj_gap;
+        
+        % New weight text
+        D.UI.txtNewWeight = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtNewWeight.Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtNewWeight, ...
+            'String', 'New Weight:', ...
+            'HorizontalAlignment', 'Left', ...
+            'Visible', 'on');
+        
+        % New weight edit
+        lft_new = lft + wd + obj_gap;
+        D.UI.editNewWeight = copyobj(D.UI.editTemplate, D.UI.tabTBL);
+        D.UI.editNewWeight.Position(1:3) = [lft_new, botm, wd];
+        set(D.UI.editNewWeight, ...
+            'Enable','on',...
+            'Visible', 'on');
+        
+        % Cap weight text
+        botm = botm - D.UI.txtTemplate.Position(4) - obj_gap;
+        D.UI.txtCapWeight = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtCapWeight.Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtCapWeight, ...
+            'String', 'Cap Weight:', ...
+            'HorizontalAlignment', 'Left', ...
+            'Visible', 'on');
+        
+        % Cap weight pop
+        lft_new = lft + wd + obj_gap;
+        D.UI.popCapWeight = copyobj(D.UI.popTemplate, D.UI.tabTBL);
+        D.UI.popCapWeight.Position(1:3) = [lft_new, botm, wd];
+        set(D.UI.popCapWeight, ...
+            'String', D.PAR.capWeightList, ...
+            'Visible', 'on');
+        
+        % Enable if implanted
+        if D.F.rat_implanted || D.F.tt_track_solo
+            set(D.UI.popCapWeight, 'Enable', 'On');
+        end
+        
+        % Update weight button
+        wd_new = sum(D.UI.weight_pan_pos([1,3]))*0.3;
+        lft_new = D.UI.weight_pan_pos(1) + sum(D.UI.weight_pan_pos([1,3]))*0.35;
+        botm = botm - D.UI.txtTemplate.Position(4) - 2*obj_gap;
+        D.UI.toggUpdateWeight = copyobj(D.UI.toggTemplate, D.UI.tabTBL);
+        D.UI.toggUpdateWeight.Position(1:3) = [lft_new, botm, wd_new];
+        set(D.UI.toggUpdateWeight, ...
+            'String', 'Update', ...
+            'Callback', {@ToggUpdateWeight}, ...
+            'Visible', 'on');
+        
+        % Enable button
+        Set_Button_State(D.UI.toggUpdateWeight, 'Enable');
+        
+        % Corrected weight text
+        wd =  (D.UI.weight_pan_pos(3) - obj_gap*2)/3 - obj_gap;
+        botm = botm - D.UI.txtTemplate.Position(4) - obj_gap;
+        D.UI.txtCorrectedWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtCorrectedWeight(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtCorrectedWeight(1), ...
+            'String', 'New', ...
+            'Visible', 'on');
+        D.UI.txtCorrectedWeight(2) = copyobj(D.UI.txtCorrectedWeight(1), D.UI.tabTBL);
+        D.UI.txtCorrectedWeight(2).Position(2) = ...
+            D.UI.txtCorrectedWeight(2).Position(2)-D.UI.txtCorrectedWeight(2).Position(4);
+        D.UI.txtCorrectedWeight(2).String = 'xxxg';
+        
+        % Last weight text
+        lft = lft + wd + obj_gap;
+        D.UI.txtLastWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtLastWeight(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtLastWeight(1), ...
+            'String', 'Last', ...
+            'Visible', 'on');
+        D.UI.txtLastWeight(2) = copyobj(D.UI.txtLastWeight(1), D.UI.tabTBL);
+        D.UI.txtLastWeight(2).Position(2) = ...
+            D.UI.txtLastWeight(2).Position(2)-D.UI.txtLastWeight(2).Position(4);
+        D.UI.txtLastWeight(2).String = 'xxxg';
+        
+        % Percentage weight text
+        lft = lft + wd + obj_gap;
+        D.UI.txtPercentageWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtPercentageWeight(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtPercentageWeight(1), ...
+            'String', 'Percent', ...
+            'Visible', 'on');
+        D.UI.txtPercentageWeight(2) = copyobj(D.UI.txtPercentageWeight(1), D.UI.tabTBL);
+        D.UI.txtPercentageWeight(2).Position(2) = ...
+            D.UI.txtPercentageWeight(2).Position(2)-D.UI.txtPercentageWeight(2).Position(4);
+        D.UI.txtPercentageWeight(2).String = 'XX%';
+        
+        %% CREATE FOOD PANEL OBJECTS
+        
+        % Food Panel
+        D.UI.panFeed = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        set(D.UI.panFeed, ...
+            'Title','Feeding', ...
+            'Position', D.UI.food_pan_pos)
+        
+        % Start and default position info
+        botm = sum(D.UI.food_pan_pos([2,4])) - D.UI.fontSzTxtMed(2)*3;
+        lft = D.UI.food_pan_pos(1) + obj_gap;
+        wd =  (D.UI.food_pan_pos(3) - obj_gap*2)/4 - obj_gap;
+        
+        % Pellets text
+        D.UI.txtFeedPellets(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtFeedPellets(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtFeedPellets(1), ...
+            'FontSize', 7, ...
+            'String', 'Pellets', ...
+            'Visible', 'on');
+        
+        % Pellets edit
+        D.UI.editFeedPellets = copyobj(D.UI.editTemplate, D.UI.tabTBL);
+        D.UI.editFeedPellets.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
+        set(D.UI.editFeedPellets, ...
+            'Enable','on',...
+            'String', '0', ...
+            'Visible', 'on');
+        
+        % Mash text
+        lft = lft + wd + obj_gap;
+        D.UI.txtFeedMash(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtFeedMash(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtFeedMash(1), ...
+            'FontSize', 7, ...
+            'String', 'Mash(TB)', ...
+            'Visible', 'on');
+        
+        % Mash edit
+        D.UI.editFeedMash = copyobj(D.UI.editTemplate, D.UI.tabTBL);
+        D.UI.editFeedMash.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
+        set(D.UI.editFeedMash, ...
+            'Enable','on',...
+            'String', '0', ...
+            'Visible', 'on');
+        
+        % Ensure text
+        lft = lft + wd + obj_gap;
+        D.UI.txtFeedEnsure(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtFeedEnsure(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtFeedEnsure(1), ...
+            'FontSize', 7, ...
+            'String', 'Ensure(ml)', ...
+            'Visible', 'on');
+        
+        % Ensure edit
+        D.UI.editFeedEnsure = copyobj(D.UI.editTemplate, D.UI.tabTBL);
+        D.UI.editFeedEnsure.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
+        set(D.UI.editFeedEnsure, ...
+            'Enable','on',...
+            'String', '0', ...
+            'Visible', 'on');
+        
+        % STAT text
+        lft = lft + wd + obj_gap;
+        D.UI.txtFeedSTAT(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtFeedSTAT(1).Position(1:3) = [lft, botm, wd];
+        set(D.UI.txtFeedSTAT(1), ...
+            'FontSize', 7, ...
+            'String', 'STAT(ml)', ...
+            'Visible', 'on');
+        
+        % STAT edit
+        D.UI.editFeedSTAT = copyobj(D.UI.editTemplate, D.UI.tabTBL);
+        D.UI.editFeedSTAT.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
+        set(D.UI.editFeedSTAT, ...
+            'Enable','on',...
+            'String', '0', ...
+            'Visible', 'on');
+        
+        % Save feed button
+        botm = D.UI.food_pan_pos(2) + 0.01;
+        D.UI.toggUpdateFed = copyobj(D.UI.toggUpdateWeight, D.UI.tabTBL);
+        D.UI.toggUpdateFed.Position(2) = botm;
+        set(D.UI.toggUpdateFed, ...
+            'String', 'Update', ...
+            'Callback', {@ToggUpdateFed}, ...
+            'Visible', 'on');
+        
+        % Enable button
+        Set_Button_State(D.UI.toggUpdateFed, 'Enable');
+        
+        %% CREATE TASK TABLE OBJECTS
+        
+        % Task Table Panel
+        D.UI.panTaskTable = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        set(D.UI.panTaskTable, ...
+            'Title','Task Table', ...
+            'Position', D.UI.pan_task_tbl_pos)
+        
+        % Task Notes Panel
+        D.UI.panTaskNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        set(D.UI.panTaskNotes, ...
+            'Title','Task Notes', ...
+            'Position', D.UI.task_notes_pan_pos)
+        
+        % Format SS_IO_2 table
+        D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.PAR.ratLab), D.UI.panTaskTable);
+        
+        % Start and default position info
+        ht_edit = 0.4;
+        ht_tbl = 1 - ht_edit;
+        botm_tbl = 0;
+        botm_edit = ht_tbl;
+        lft = 0;
+        wd =  1;
+        
+        % Old task notes table
+        D.UI.tblTaskNotes = copyobj(D.UI.tblSSIO2,D.UI.panTaskNotes);
+        set(D.UI.tblTaskNotes, ...
+            'Position', [lft, botm_tbl, wd, ht_tbl], ...
+            'Visible', 'on')
+        
+        % New task notes edit
+        D.UI.editTaskNotes = copyobj(D.UI.editTemplate, D.UI.panTaskNotes);
+        set(D.UI.editTaskNotes, ...
+            'Position', [lft, botm_edit, wd, ht_edit], ...
+            'Units', 'Normalized', ...
+            'FontSize', 10, ...
+            'Max', 100, ...
+            'Enable','on',...
+            'Visible', 'on');
+        
+        % Keep only notes entry
+        notes_ind = ismember(D.UI.tblSSIO2.ColumnName, 'Notes');
+        D.UI.tblTaskNotes.Data = D.UI.tblSSIO2.Data(:,notes_ind);
+        D.UI.tblTaskNotes.ColumnName = {[]};
+        D.UI.tblTaskNotes.ColumnWidth = D.UI.tblSSIO2.ColumnWidth(notes_ind);
+        
+        % Remove notes from main table
+        D.UI.tblSSIO2.Data(:,notes_ind) = [];
+        D.UI.tblSSIO2.ColumnName(notes_ind) = [];
+        
+        %% CREATE TT TABLE OBJECTS
+        
+        % TT Table Panel
+        D.UI.panTTTable = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        set(D.UI.panTTTable, ...
+            'Title','TT Table', ...
+            'Position', D.UI.pan_tt_tbl_pos)
+        
+        % TT Notes Panel
+        D.UI.panTTNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        set(D.UI.panTTNotes, ...
+            'Title','TT Notes', ...
+            'Position', D.UI.tt_notes_pan_pos)
+        
+        % Set panels disabled
+        if ~D.F.rat_implanted && ~D.F.tt_track_solo
+            Set_Panel_State(D.UI.panTTTable, 'Disable');
+            Set_Panel_State(D.UI.panTTNotes, 'Disable');
+            
+        else
+            
+            % Format SS_IO_2 table
+            D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.panTTTable);
+            
+            % Old tt notes table
+            D.UI.tblTTNotes = copyobj(D.UI.tblTaskNotes, D.UI.panTTNotes);
+            D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data;
+            D.UI.tblTTNotes.ColumnName = D.UI.tblTTIO.ColumnName;
+            D.UI.tblTTNotes.RowName = D.UI.tblTTIO.RowName;
+            
+            % New tt notes edit
+            D.UI.editTTNotes = copyobj(D.UI.editTaskNotes, D.UI.panTTNotes);
+            
+            % Keep only notes entry
+            notes_ind = ismember(D.UI.tblTTIO.ColumnName, 'Notes');
+            D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data(:,notes_ind);
+            D.UI.tblTTNotes.ColumnName = {[]};
+            D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.ColumnWidth(notes_ind);
+            
+            % Remove notes from main table
+            D.UI.tblTTIO.Data(:,notes_ind) = [];
+            D.UI.tblTTIO.ColumnName(notes_ind) = [];
+            
+        end
+        
+        %% FORMAT TABLE FUNCTION
+        function [ui_table] = FormatTable(io_table, parent)
+            
+            % Convert table data to cell
+            c_ss_io = table2cell(io_table);
+            
+            % Convert categorical to char
+            cat_ind = cell2mat(cellfun(@(x) isa(x, 'categorical'), ...
+                c_ss_io(1,:), 'uni', false));
+            c_ss_io(:,cat_ind) = cellfun(@(x) char(x), c_ss_io(:,cat_ind), 'uni', false);
+            
+            % Remove nexted cell or 2d data
+            cell_ind = cell2mat(cellfun(@(x) isa(x, 'cell'), ...
+                c_ss_io(1,:), 'uni', false));
+            nd_ind = any(cell2mat(cellfun(@(x) max(size(x))>1 && ~isa(x, 'char'), ...
+                c_ss_io, 'uni', false)), 1);
+            exc_ind = cell_ind | nd_ind;
+            
+            % Remove values
+            c_ss_io = c_ss_io(:, ~exc_ind);
+            
+            % Convert numeric to char
+            num_ind = any(cell2mat(cellfun(@(x) isa(x, 'double'), ...
+                c_ss_io, 'uni', false)),1);
+            c_ss_io(:,num_ind) = cellfun(@(x) num2str(x), ...
+                c_ss_io(:,num_ind), 'uni', false);
+            
+            % Replace [] 'NaN' and '<undefined>' with 'NA'
+            empty_ind = cell2mat(cellfun(@(x) isempty(x), ...
+                c_ss_io, 'uni', false));
+            nan_ind =  cell2mat(cellfun(@(x) strcmp(x, 'NaN'), ...
+                c_ss_io, 'uni', false));
+            undef_ind =  cell2mat(cellfun(@(x) strcmp(x, '<undefined>'), ...
+                c_ss_io, 'uni', false));
+            c_ss_io(empty_ind | nan_ind | undef_ind) = {'NA'};
+            
+            % Get variable names
+            var_list = io_table.Properties.VariableNames(~exc_ind);
+            
+            % Get dates for row names
+            date_list = io_table.Date;
+            date_list = regexp(date_list, '\S*(?=_)', 'match');
+            date_list = [date_list{:}];
+            
+            % Remove dates entry
+            date_ind = ismember(io_table.Properties.VariableNames , 'Date');
+            c_ss_io(:,date_ind) = [];
+            var_list(date_ind) = [];
+            
+            % ADD DATA TO TABLE
+            
+            % Copy table
+            ui_table = copyobj(D.UI.tblTemplate,D.UI.tabTBL);
+            set(ui_table, ...
+                'Parent', parent, ...
+                'Visible', 'on');
+            
+            % Add data to table
+            ui_table.Data = c_ss_io;
+            ui_table.ColumnName = var_list;
+            ui_table.RowName = date_list;
+            
+            % Flip table so newest entries at top
+            ui_table.Data = flip(ui_table.Data, 1);
+            ui_table.RowName = flip(ui_table.RowName);
+            
+            % Get charicter widths
+            dat_width = max(cell2mat(cellfun(@(x) max(size(x)), ...
+                c_ss_io, 'uni', false)), [], 1);
+            var_width = cell2mat(cellfun(@(x) max(size(x)), ...
+                var_list, 'uni', false));
+            
+            % Scale widths
+            dat_width = dat_width*6;
+            var_width = var_width*7;
+            col_width = num2cell(max([dat_width;var_width],[],1));
+            ui_table.ColumnWidth = col_width;
+            
+        end
         
     end
 
@@ -4029,7 +4605,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% ======================== SET PARAMETERS ========================
         
         % Bail if not implant or TT_track session
-        if ~D.F.implant_session && ~isTTtrackSolo
+        if ~D.F.implant_session && ~D.F.tt_track_solo
             
             % Set output and bail
             was_ran = false;
@@ -4087,17 +4663,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %==========================================================================
         
         %% ================== IMPORT/FORMAT PAXINOS IMAGES ================
-        
-        % Load session data
-        T = load(D.DIR.TT_IO);
-        D.TT_IO = T.TT_IO;
-        clear T;
-        
-        % Get rat list
-        ind = D.TT_IO.Include_Run;
-        D.PAR.ratList = D.TT_IO.Properties.RowNames(ind);
-        D.PAR.ratList = regexprep(D.PAR.ratList, 'r', '');
-        D.PAR.ratList = [{'Select Rat'};D.PAR.ratList];
         
         % Get image stuff
         for z_view = 1:3
@@ -4194,16 +4759,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %==========================================================================
         
-        %% ======================= SETUP TT TAB FIGURE ====================
-        
-        % Monitor positions
-        sc = get(0,'MonitorPositions');
-        [~, mon_ind] = sort(sc(:,1));
-        D.UI.monPos(1,:) = sc(mon_ind(1),:);
-        D.UI.monPos(2,:) = sc(mon_ind(2),:);
-        if size(sc,1) == 3
-            D.UI.monPos(3,:) = sc(mon_ind(3),:);
-        end
+        %% ============================ SETUP TT TAB  =============================
         
         % Add TT TRACK tab
         D.UI.tabTT = uitab(D.UI.tabgp, ...
@@ -4574,26 +5130,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         SldSwtchImg(D.UI.sldSwtchImg(2));
         SldSwtchImg(D.UI.sldSwtchImg(3));
         
-        % --------------------- SETUP, SAVE, QUIT CONTROLS ------------------------
-        
-        % Load popup
-        D.UI.posPopLoad = [0, D.UI.tabTTNormPos(4)-D.UI.bordOffHt-0.005, D.UI.dfltPanWd, D.UI.bordOffHt];
-        D.UI.popLoadRatTTInf = uicontrol('Style','popupmenu', ...
-            'Parent', D.UI.tabTT, ...
-            'Enable', 'On', ...
-            'String', D.PAR.ratList,...
-            'Callback', {@PopLoadRatTTInf},...
-            'FontName', D.UI.popFont,...
-            'UserData', 1, ...
-            'Units', 'Normalized', ...
-            'Position', D.UI.posPopLoad, ...
-            'FontWeight', 'Bold',...
-            'FontSize', D.UI.fontSzPopLrg(1));
-        
-        % Save button copy
-        D.UI.btnSaveLogTT =  copyobj(D.UI.btnSaveSes, D.UI.tabTT);
-        set(D.UI.btnSaveLogTT, 'Callback', {@BtnSaveLogTT});
-        
         % ------------------------ TT HIDE SHOW TOGGLE ----------------------------
         
         % Create button
@@ -4630,16 +5166,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Panel tt select
         pan_ht = 0.385 - D.UI.bordOffHt;
-        D.UI.tt_tab_2_select_pan_pos(1,:) = ...
+        D.UI.tab_2_tt_select_pan_pos(1,:) = ...
             [0,  ...
-            D.UI.posPopLoad(2) - pan_ht - D.UI.dfltSp, ...
+            1 - pan_ht - D.UI.dfltSp, ...
             D.UI.dfltPanWd/2, ...
             pan_ht];
-        D.UI.tt_tab_2_select_pan_pos(2,:) = D.UI.tt_tab_2_select_pan_pos(1,:);
-        D.UI.tt_tab_2_select_pan_pos(2,1) = D.UI.tt_tab_2_select_pan_pos(1,3);
+        D.UI.tab_2_tt_select_pan_pos(2,:) = D.UI.tab_2_tt_select_pan_pos(1,:);
+        D.UI.tab_2_tt_select_pan_pos(2,1) = D.UI.tab_2_tt_select_pan_pos(1,3);
         
         % Panel tt track
-        pan_ht = D.UI.tt_tab_2_select_pan_pos(1,2) - sum(D.UI.quit_btn_pos([2,4])) - D.UI.bordOffHt*2 - 0.02;
+        pan_ht = D.UI.tab_2_tt_select_pan_pos(1,2) - sum(D.UI.quit_btn_pos([2,4])) - D.UI.bordOffHt*2 - 0.02;
         pan_botm = sum(D.UI.quit_btn_pos([2,4])) + 0.01;
         D.UI.tt_track_pan_pos = ...
             [0,  ...
@@ -4667,13 +5203,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'TitlePosition', 'centertop',...
                 'UserData', [],...
                 'Clipping', 'on',...
-                'Position', D.UI.tt_tab_2_select_pan_pos(z_bndl,:));
+                'Position', D.UI.tab_2_tt_select_pan_pos(z_bndl,:));
         end
         
         % Add action buttons
         ht = D.UI.bordOffHt;
         lft = 0;
-        btm = D.UI.tt_tab_2_select_pan_pos(1,2) - ht;
+        btm = D.UI.tab_2_tt_select_pan_pos(1,2) - ht;
         wd = D.UI.dfltPanWd/2;
         pos = [lft, btm, wd, ht];
         D.UI.toggMainActionTT(1) = uicontrol('style','togglebutton', ...
@@ -4742,6 +5278,34 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         set(D.UI.toggFlagTT, 'Callback', {@ToggFlagTT})
         set(D.UI.toggHearTT, 'Callback', {@ToggHearTT})
         set(D.UI.toggPlotTT, 'Callback', {@ToggPlotTT});
+        
+        % Store position for each panel
+        lft_shft = D.UI.tab_1_tt_select_pan_pos(1,1) - D.UI.tab_2_tt_select_pan_pos(1,1);
+        btm_shft = D.UI.tab_1_tt_select_pan_pos(1,2) - D.UI.tab_2_tt_select_pan_pos(1,2);
+        
+        % Move action type buttons
+        for z_b = 1:2
+            D.UI.tab_2_main_act_pos(z_b,:) = D.UI.toggMainActionTT(z_b).Position;
+            D.UI.tab_1_main_act_pos(z_b,:) = [D.UI.tab_2_main_act_pos(z_b,1:2) + [lft_shft, btm_shft], ...
+                D.UI.tab_2_main_act_pos(z_b,3:end)];
+        end
+        
+        % Move action select buttons
+        D.UI.tab_2_flag_tt_pos = D.UI.toggFlagTT.Position;
+        D.UI.tab_1_flag_tt_pos = [D.UI.tab_2_flag_tt_pos(1:2) + [lft_shft, btm_shft], ...
+            D.UI.tab_2_flag_tt_pos(3:end)];
+        
+        for z_b = 1:2
+            % Hear
+            D.UI.tab_2_hear_pos(z_b,:) = D.UI.toggHearTT(z_b).Position;
+            D.UI.tab_1_hear_pos(z_b,:) = [D.UI.tab_2_hear_pos(z_b,1:2) + [lft_shft, btm_shft], ...
+                D.UI.tab_2_hear_pos(z_b,3:end)];
+            
+            % Plot
+            D.UI.tab_2_plot_pos(z_b,:) = D.UI.toggPlotTT(z_b).Position;
+            D.UI.tab_1_plot_pos(z_b,:) = [D.UI.tab_2_plot_pos(z_b,1:2) + [lft_shft, btm_shft], ...
+                D.UI.tab_2_plot_pos(z_b,3:end)];
+        end
         
         % --------------------------- TT TURN CONTROLS ----------------------------
         
@@ -4975,563 +5539,453 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set text colors
         set(D.UI.txtPanTT, 'ForegroundColor', D.UI.disabledCol)
         
+        %==========================================================================
+        
+        %% ==================== LOAD AND SETUP RAT TT STUFF ===============
+        
+        % Get implant coordinates
+        D.TT.ttCoords = D.TT_IO.Implant_Coordinates(D.PAR.ratIndTT,:);
+        
+        % Get number of bundles
+        D.TT.nBndl = ~any(isnan(D.TT.ttCoords{2}))+1;
+        
+        % Get tt configs
+        D.TT.ttConfig = D.TT_IO.Implant_Configuration(D.PAR.ratIndTT,:);
+        
+        % Get bundle angle
+        D.UI.bndAng = D.TT_IO.Implant_Angle(D.PAR.ratIndTT,:);
+        D.UI.bndAng{1} = deg2rad(270 + D.UI.bndAng{1});
+        D.UI.bndAng{2} = deg2rad(270 + D.UI.bndAng{2});
+        
+        % Get bundle labels
+        D.TT.bndlLab = D.TT_IO.Bundle_Label{D.PAR.ratIndTT,:};
+        
+        % Get tt list
+        D.TT.ttList = D.TT_IO.TT_Label{D.PAR.ratIndTT,:};
+        
+        % Get tt map
+        D.TT.ttMap = D.TT_IO.TT_Mapping(D.PAR.ratIndTT,:);
+        
+        % Remove unused entries
+        for z_b = 1:2
+            if D.TT.nBndl==1 && z_b == 2
+                D.TT.ttMap{z_b} = D.TT.ttMap{1}(1,1);
+            else
+                D.TT.ttMap{z_b} = D.TT.ttMap{z_b}(1:D.TT.ttConfig{z_b}(1),1:D.TT.ttConfig{z_b}(2));
+            end
+        end
+        
+        % Get included TTs
+        D.TT.ttInclude = D.TT_IO.TT_Include{D.PAR.ratIndTT,:};
+        
+        % Get references
+        D.TT.refMap = ...
+            cellfun(@(x,y) [x, ' ', y], ...
+            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1))), ...
+            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,2))), ...
+            'uni', false);
+        D.TT.refList = cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1)));
+        
+        % Set pop ref list
+        D.UI.popRefTT.String = D.TT.refMap;
+        
+        % Get thread pitch
+        D.UI.umPerTurn = D.TT_IO.Thread_Pitch(D.PAR.ratIndTT)*1000;
+        
+        % Store current log
+        D.TT.ttLogTable = D.TT_IO.Turn_Log{D.PAR.ratIndTT};
+        D.TT.ttLogNew = D.TT.ttLogTable(end,:);
+        
+        % Get session number
+        D.TT.Ses = D.TT.ttLogTable.Session(end)+1;
+        
+        % Initialize arrays
+        D.TT.ttFlds = cell(2,18);
+        D.TT.nTT = zeros(1,2);
+        D.UI.ttCol = NaN(2,18,3);
+        
+        % Get tt string info
+        for z_b = 1:D.TT.nBndl
+            
+            % Store tt fields
+            tt_list = cellstr(char(D.TT.ttMap{z_b}(~isundefined(D.TT.ttMap{z_b}))));
+            tt_list = D.TT.ttList(ismember( D.TT.ttList, tt_list));
+            D.TT.ttFlds(z_b, 1:length(tt_list)) =  tt_list;
+            
+            % Get number of tts in each bundle
+            D.TT.nTT(z_b) = length(tt_list);
+            
+            % Specify tt colors
+            D.UI.ttCol(z_b,1:D.TT.nTT(z_b),:) = hsv(D.TT.nTT(z_b));
+        end
+        
+        % Remove empty entries
+        D.TT.ttFlds = D.TT.ttFlds(:,1:max(D.TT.nTT));
+        D.UI.ttCol = D.UI.ttCol(:,1:max(D.TT.nTT),:);
+        
+        % Create tt plot handles
+        D.UI.ttTrkLin = gobjects(D.TT.nBndl,max(D.TT.nTT));
+        D.UI.ttTrkMrk = gobjects(D.TT.nBndl,max(D.TT.nTT),50);
+        
+        % Resize axis
+        center = (max([size(D.TT.ttMap{2}),size(D.TT.ttMap{1})]) + 0.5)/2;
+        
+        % Store titles
+        title_arr = {sprintf('    %s Bundle', D.TT.bndlLab{1}), ...
+            sprintf('    %s Bundle', D.TT.bndlLab{2}), ...
+            'Drive Top'};
+        
+        % Store axes labels
+        xlab_arr = {sprintf('A-P %0.2fmm', D.TT.ttCoords{1}(1)), ...
+            sprintf('A-P %0.2fmm', D.TT.ttCoords{2}(1)), ...
+            'Medial'};
+        ylab_arr = {sprintf('M-L %0.2fmm', D.TT.ttCoords{1}(2)), ...
+            sprintf('M-L %0.2fmm', D.TT.ttCoords{2}(2)), ...
+            'Anterior'};
+        
+        % Plot TT bundle loc legends
+        for z_l = 1:3
+            
+            % Add bundle title
+            set(D.UI.axLeg(z_l), 'Title', ...
+                text(...
+                'String', title_arr{z_l}, ...
+                'FontSize',D.UI.fontSzTxtLrg(1), ...
+                'FontWeight', 'bold', ...
+                'Color', 'k'))
+            
+            % Show implant A-P coordinates on x axes
+            set(D.UI.axLeg(z_l).XLabel, ...
+                'Units', 'Normalized', ...
+                'FontSize', D.UI.fontSzTxtSml(1), ...
+                'String', xlab_arr{z_l});
+            D.UI.axLeg(z_l).XLabel.Position(2) = D.UI.axLeg(z_l).XLabel.Position(2)+0.05;
+            
+            % Show implant M-L coordinates on y axes
+            set(D.UI.axLeg(z_l).YLabel, ...
+                'Units', 'Normalized', ...
+                'FontSize', D.UI.fontSzTxtSml(1), ...
+                'String', ylab_arr{z_l});
+            D.UI.axLeg(z_l).YLabel.Position(1) = D.UI.axLeg(z_l).YLabel.Position(1)+0.05;
+            
+            % Bail for last loop
+            if z_l == 3
+                continue;
+            end
+            
+            % Set axis lims
+            set(D.UI.axLeg(z_l), ...
+                'XLim', [D.TT.ttConfig{z_l}(1)/2 - center+ 0.5, D.TT.ttConfig{z_l}(1)/2 + center + 0.5], ...
+                'YLim', [D.TT.ttConfig{z_l}(2)/2 - center+ 0.5, D.TT.ttConfig{z_l}(2)/2 + center + 0.5])
+            
+            % Add panel title
+            set(D.UI.panSelectTT(z_l), 'Title', D.TT.bndlLab{z_l});
+            
+            % Create markers with text
+            z_b = z_l;
+            for z_tt = 1:D.TT.nTT(z_l)
+                
+                % Find position of next tt
+                tt_fld = D.TT.ttFlds{z_b,z_tt};
+                [x,y] = find(ismember(D.TT.ttMap{z_b}, tt_fld) == 1);
+                
+                % Bail if not found
+                if isempty(x) || isempty(y)
+                    continue
+                end
+                
+                % Plot tt marker
+                D.UI.ttBndlLegMrk(z_b,z_tt) = ...
+                    plot(x , y, 'o', 'Parent', D.UI.axLeg(z_b), ...
+                    'MarkerEdgeColor', D.UI.ttCol(z_b,z_tt,:), ...
+                    'MarkerFaceColor', D.UI.ttCol(z_b,z_tt,:)*0.5, ...
+                    'LineWidth', D.UI.ttBndlLegMrkWdth(1), ...
+                    'MarkerSize', 13);
+                tt_lab = regexprep(D.TT.ttFlds{z_b,z_tt}, 'TT', '');
+                D.UI.ttBndlLegTxt(z_b,z_tt) = ...
+                    text(x , y, tt_lab, 'Parent', D.UI.axLeg(z_b), ...
+                    'Color', [1, 1, 1], ...
+                    'HorizontalAlignment', 'Center', ...
+                    'FontSize', D.UI.fontSzTxtSml(1), ...
+                    'FontWeight', 'bold');
+            end
+        end
+        
+        % Get TT loc
+        tt_lab_shift = circshift([D.TT.ttFlds(1,:),D.TT.ttFlds(2,:)], 1);
+        rad_arr = linspace(0, 2*pi - 2*pi*(1/sum(D.TT.nTT)), sum(D.TT.nTT));
+        tt_loc_x = 0.85 * sin(rad_arr);
+        tt_loc_y = 0.85 * cos(rad_arr);
+        
+        % Set axis lims
+        set(D.UI.axLeg(3), ...
+            'XLim', [-1,1], ...
+            'YLim', [-1,1])
+        
+        % Plot TT loc on drive
+        for z_tt = 1:length(tt_lab_shift)
+            
+            % Get bundle inds
+            tt_lab = tt_lab_shift{z_tt};
+            [bndl_ind, tt_ind] = find(ismember(D.TT.ttFlds, tt_lab));
+            
+            % Copy objects
+            D.UI.ttDriveLegMrk(bndl_ind,tt_ind) = ...
+                copyobj(D.UI.ttBndlLegMrk(bndl_ind,tt_ind), D.UI.axLeg(3));
+            D.UI.ttDriveLegTxt(bndl_ind,tt_ind) = ...
+                copyobj(D.UI.ttBndlLegTxt(bndl_ind,tt_ind), D.UI.axLeg(3));
+            
+            % Change position
+            D.UI.ttDriveLegMrk(bndl_ind,tt_ind).XData = tt_loc_x(z_tt);
+            D.UI.ttDriveLegMrk(bndl_ind,tt_ind).YData = tt_loc_y(z_tt);
+            D.UI.ttDriveLegTxt(bndl_ind,tt_ind).Position(1) = tt_loc_x(z_tt);
+            D.UI.ttDriveLegTxt(bndl_ind,tt_ind).Position(2) = tt_loc_y(z_tt);
+        end
+        
+        % Button position
+        wdth_norm = 0.375;
+        lft_norm = 0.005;
+        ht_norm = 1/max(D.TT.nTT) * 0.85;
+        btm_norm = linspace(1-ht_norm*1.25, 0.005, max(D.TT.nTT));
+        
+        % Create handle arrays
+        D.UI.toggTT = gobjects(D.TT.nBndl,max(D.TT.nTT));
+        
+        % Clust sub toggles
+        D.UI.toggSubPlotTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,D.PAR.maxClust);
+        
+        % Flag features sub toggles
+        D.UI.toggSubFlagTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,6);
+        set_flag_labs = {'U', char(415), 'W', 'N', '?', '?'};
+        
+        % TT hear sub toggles
+        D.UI.toggSubHearChTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,4,2);
+        D.UI.toggSubHearSdTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,2);
+        
+        % Loop through each bundle
+        for z_b = 1:D.TT.nBndl
+            
+            % Looop through each TT
+            for z_tt = 1:D.TT.nTT(z_b)
+                
+                % Get tt strings
+                tt_fld = D.TT.ttFlds{z_b,z_tt};
+                tt_lab = regexprep(D.TT.ttFlds{z_b,z_tt}, 'TT', '');
+                
+                % ADD MAIN TT SELECT BUTTONS
+                btn_tt_pos = [lft_norm(1), btm_norm(z_tt), wdth_norm, ht_norm];
+                D.UI.toggTT(z_b,z_tt) = ...
+                    uicontrol('style','togglebutton', ...
+                    'Parent', D.UI.panSelectTT(z_b), ...
+                    'Enable', 'on', ...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'ForegroundColor', D.UI.ttCol(z_b,z_tt,:), ...
+                    'String', tt_lab,...
+                    'Callback', {@ToggLoadTT},...
+                    'UserData', [z_b,z_tt], ...
+                    'Units', 'Normalized', ...
+                    'Value', 0, ...
+                    'Position', btn_tt_pos, ...
+                    'FontName', D.UI.btnFont,...
+                    'FontWeight', 'Bold',...
+                    'FontSize', D.UI.fontSzBtnLrg(1), ...
+                    'Visible', 'off');
+                
+                % ADD DISABLED TT BUTTONS
+                ht = ht_norm*0.35;
+                wd = wdth_norm*0.35;
+                lft = lft_norm;
+                btm = btm_norm(z_tt);
+                btn_dis_pos = [lft, btm, wd, ht];
+                val = ...
+                    ~D.TT.ttInclude(ismember(D.TT.ttList, tt_fld));
+                D.UI.toggIncludeTT(z_b,z_tt) = uicontrol('style','togglebutton', ...
+                    'Parent', D.UI.panSelectTT(z_b), ...
+                    'Units', 'Normalized', ...
+                    'String', sprintf('%c', char(216)),...
+                    'Callback', {@ToggIncludeTT},...
+                    'FontName', D.UI.btnFont,...
+                    'BackgroundColor', D.UI.enabledCol, ...
+                    'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+                    'FontWeight', 'Bold',...
+                    'FontSize',  5, ...
+                    'Enable', 'on', ...
+                    'Position', btn_dis_pos, ...
+                    'UserData', [z_b,z_tt], ...
+                    'Value', val, ...
+                    'Visible', 'off');
+                
+                % Plot tt track
+                Plot_TT_Path(z_b, z_tt);
+                
+                % Bail if ref
+                if ~isempty(strfind(D.TT.ttFlds{z_b,z_tt}, 'R'))
+                    continue
+                end
+                
+                % ADD CLUSTER BUTTONS
+                wd = (1 - btn_tt_pos(3) - btn_tt_pos(1)*3)/5;
+                ht = btn_tt_pos(4)/2;
+                btm_arr = ...
+                    [repmat(btn_tt_pos(2)+ht,5,1);repmat(btn_tt_pos(2),5,1)];
+                lft_arr = ...
+                    repmat(linspace(btn_tt_pos(1)+btn_tt_pos(3), btn_tt_pos(1)+btn_tt_pos(3) + wd*4, 5), 1, 2);
+                for z_c = 1:D.PAR.maxClust
+                    
+                    % Create cluster button
+                    btn_c_pos = [lft_arr(z_c), btm_arr(z_c), wd, ht];
+                    D.UI.toggSubPlotTT(z_b,z_tt,z_c) = ...
+                        uicontrol('style','togglebutton', ...
+                        'Parent', D.UI.panSelectTT(z_b), ...
+                        'Enable', 'Off', ...
+                        'BackgroundColor', D.UI.enabledCol, ...
+                        'ForegroundColor', D.UI.clustCol(z_c,:), ...
+                        'String',num2str(z_c-1),...
+                        'Callback', {@ToggPlotTT},...
+                        'UserData', [z_b, z_tt, z_c], ...
+                        'Units','Normalized', ...
+                        'Value', 0, ...
+                        'Position', btn_c_pos, ...
+                        'FontName',D.UI.btnFont,...
+                        'FontWeight','Bold',...
+                        'Visible', 'off', ...
+                        'FontSize', D.UI.fontSzBtnSml(1));
+                    
+                end
+                
+                % ADD FLAG FEATURES
+                
+                % Copy cluster buttons
+                D.UI.toggSubFlagTT(z_b,z_tt,1:3) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,1:3), D.UI.panSelectTT(z_b));
+                D.UI.toggSubFlagTT(z_b,z_tt,4:end) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,7:9), D.UI.panSelectTT(z_b));
+                
+                % Set position
+                wd = (1 - btn_tt_pos(3) - btn_tt_pos(1)*3)/3;
+                lft_arr = ...
+                    repmat(linspace(btn_tt_pos(1)+btn_tt_pos(3), btn_tt_pos(1)+btn_tt_pos(3) + wd*2, 3), 1, 2);
+                
+                % Modify buttons
+                for z_f = 1:6
+                    
+                    % Get value
+                    val = D.TT.ttLogNew.([D.TT.ttFlds{z_b,z_tt},'_F'])(z_f);
+                    
+                    % Set string etc
+                    set(D.UI.toggSubFlagTT(z_b,z_tt,z_f), ...
+                        'String', set_flag_labs{z_f}, ...
+                        'ForegroundColor', D.UI.enabledBtnFrgCol, ...
+                        'UserData', [z_b,z_tt,z_f], ...
+                        'Callback', {@ToggFlagTT}, ...
+                        'Value', val);
+                    
+                    % Change pos
+                    D.UI.toggSubFlagTT(z_b,z_tt,z_f).Position(1) = lft_arr(z_f);
+                    D.UI.toggSubFlagTT(z_b,z_tt,z_f).Position(3) = wd;
+                    
+                end
+                
+                % ADD HEAR TT CHAN BUTTONS
+                
+                % Copy cluster buttons
+                D.UI.toggSubHearSdTT(z_b,z_tt,1) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,1), D.UI.panSelectTT(z_b));
+                D.UI.toggSubHearSdTT(z_b,z_tt,2) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,6), D.UI.panSelectTT(z_b));
+                D.UI.toggSubHearChTT(z_b,z_tt,:,1) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,2:5), D.UI.panSelectTT(z_b));
+                D.UI.toggSubHearChTT(z_b,z_tt,:,2) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,7:end), D.UI.panSelectTT(z_b));
+                
+                % Modify buttons
+                sn_lab = {'L','R'};
+                for z_sn = 1:2
+                    
+                    % Set sound side button
+                    set(D.UI.toggSubHearSdTT(z_b,z_tt,z_sn), ...
+                        'String', sn_lab{z_sn}, ...
+                        'ForegroundColor', D.UI.enabledBtnFrgCol, ...
+                        'UserData', [z_b,z_tt,0,z_sn], ...
+                        'Callback', {@ToggHearTT});
+                    
+                    for z_chan = 1:4
+                        
+                        % Set values
+                        set(D.UI.toggSubHearChTT(z_b,z_tt,z_chan,z_sn), ...
+                            'String', num2str(z_chan-1), ...
+                            'ForegroundColor', D.UI.hearCol(z_chan,:), ...
+                            'UserData', [z_b,z_tt,z_chan,z_sn], ...
+                            'Callback', {@ToggHearTT});
+                    end
+                end
+                
+            end
+        end
+        
+        % Set paxinos sag center of first bundle
+        img_ind = knnsearch(D.TT.imgCoor{1}', D.TT.ttCoords{1}(2));
+        set(D.UI.sldSwtchImg(1), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(1));
+        
+        % Set paxinos cor center of first bundle
+        img_ind = knnsearch(D.TT.imgCoor{2}', D.TT.ttCoords{1}(1));
+        set(D.UI.sldSwtchImg(2), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(2));
+        
+        % Set hor to deepest tt in first bundle
+        dpth_max = 0;
+        for z_tt = 1:D.TT.nTT(1)
+            dpth_max = max(dpth_max, D.TT.ttLogNew.([D.TT.ttFlds{1,z_tt},'_D']));
+        end
+        img_ind = knnsearch(D.TT.imgCoor{3}', -1*dpth_max/1000);
+        set(D.UI.sldSwtchImg(3), 'Value', img_ind);
+        SldSwtchImg(D.UI.sldSwtchImg(3));
+        
+        % Auto run GUI
+        if (D.DB.doAutoSetTT)
+            
+            % Get number of full turns
+            turn_ind = ...
+                find(ismember(cellstr(get(D.UI.popTrn, 'Str')), num2str(round((D.DB.depthSet/(D.UI.umPerTurn/1000))))));
+            if isempty(turn_ind)
+                turn_ind = length(get(D.UI.popTrn,'String'));
+            end
+            
+            % Loop through each bundle
+            for z_b = 1:D.TT.nBndl
+                
+                % Looop through each TT
+                for z_tt = 1:D.TT.nTT(z_b)
+                    
+                    % Load next TT
+                    if D.F.tt_track_solo
+                        set(D.UI.toggTT(z_b,z_tt), 'Value', 1);
+                        ToggLoadTT(D.UI.toggTT(z_b,z_tt));
+                    end
+                    
+                    % Pause
+                    pause(0.05);
+                    
+                    % Set turns to max
+                    set(D.UI.popTrn, 'Value', turn_ind);
+                    
+                    % Set to random orientation
+                    %set(D.UI.popOr,'Value', ceil(rand(1,1)*length(get(D.UI.popOr,'String'))))
+                    
+                    % Pause
+                    pause(0.05);
+                    
+                    % Save
+                    ToggUpdateLogTT();
+                end
+            end
+        end
+        
         % Set output and bail
         was_ran = true;
         return;
-        
-        
-        
-        %==========================================================================
-        
-    end
-
-% -----------------------------TABLE SETUP-------------------------
-    function[] = Table_Setup()
-        
-        %% SETUP TABLE UI
-        
-        % GET POSITION INFO
-        
-        % Defaults
-        obj_gap = 0.005;
-        
-        % Panel task table pos
-        pan_lft = 0;
-        pan_ht = (D.UI.tabTBL.Position(4)*0.75) / 2;
-        pan_botm = pan_ht;
-        pan_wdth = D.UI.tabTBL.Position(3);
-        D.UI.pan_task_tbl_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        % Panel tt table pos
-        pan_lft = D.UI.pan_task_tbl_pos(1);
-        pan_ht = D.UI.pan_task_tbl_pos(4);
-        pan_botm = 0;
-        pan_wdth = D.UI.pan_task_tbl_pos(3);
-        D.UI.pan_tt_tbl_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        % Panel weight
-        pan_lft = 0;
-        pan_ht = 0.14;
-        pan_botm = 1 - pan_ht - obj_gap;
-        pan_wdth = 0.2;
-        D.UI.weight_pan_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        % Panel food
-        pan_lft = 0;
-        pan_ht = pan_botm - sum(D.UI.pan_task_tbl_pos([2,4])) - 2*obj_gap;
-        pan_botm = sum(D.UI.pan_task_tbl_pos([2,4])) + obj_gap;
-        pan_wdth = 0.2;
-        D.UI.food_pan_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        % Panel Session notes
-        pan_lft = sum(D.UI.weight_pan_pos([1,3])) + obj_gap;
-        pan_ht = 1 - D.UI.food_pan_pos(2) - obj_gap;
-        pan_botm = D.UI.food_pan_pos(2);
-        pan_wdth = (1 - sum(D.UI.weight_pan_pos([1,3])) - 2*obj_gap) / 2;
-        D.UI.task_notes_pan_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        % Panel Task notes
-        pan_lft = sum(D.UI.task_notes_pan_pos([1,3])) + obj_gap;
-        pan_ht = D.UI.task_notes_pan_pos(4);
-        pan_botm = D.UI.task_notes_pan_pos(2);
-        pan_wdth = D.UI.task_notes_pan_pos(3);
-        D.UI.tt_notes_pan_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        %% CREATE TEMPLATE OBJECTS
-        
-        % Table Template
-        D.UI.tblTemplate = uitable(...
-            D.UI.tabTBL, ...
-            'Units', 'normalized', ...
-            'Position', [0,0,1,1], ...
-            'FontSize', 8, ...
-            'Enable', 'inactive', ...
-            'Visible', 'off');
-        
-        % Panel Template
-        D.UI.panTemplate = uipanel(...
-            'Parent',D.UI.tabTBL, ...
-            'Units','Normalized', ...
-            'BorderType','line', ...
-            'BorderWidth',4, ...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.disabledCol, ...
-            'HighlightColor', D.UI.disabledCol, ...
-            'FontSize',12, ...
-            'FontWeight','Bold', ...
-            'FontName', D.UI.titleFont, ...
-            'FontName', D.UI.titleFont, ...
-            'TitlePosition','centertop', ...
-            'Clipping','on', ...
-            'Position', [0,0,0.1,0.1]);
-        
-        % Text Template
-        D.UI.txtTemplate = uicontrol(...
-            'Style','text', ...
-            'Parent',D.UI.tabTBL, ...
-            'Units','Normalized', ...
-            'Position', [0,0,0.1,D.UI.fontSzTxtMed(2)], ...
-            'HorizontalAlignment', 'Center', ...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'FontWeight','Bold', ...
-            'FontName',D.UI.txtFont, ...
-            'FontSize', D.UI.fontSzTxtMed(1), ...
-            'Visible', 'off');
-        
-        % Edit Template
-        D.UI.editTemplate = uicontrol(...
-            'Style','edit',...
-            'Parent',D.UI.tabTBL, ...
-            'Units','Normalized',...
-            'Position',[0,0,0.1,D.UI.fontSzTxtLrg(2)],...
-            'HorizontalAlignment', 'Left', ...
-            'FontSize', D.UI.fontSzTxtLrg(1), ...
-            'FontName','Monospaced', ...
-            'Max', 1, ...
-            'Enable','inactive',...
-            'Visible', 'off');
-        
-        % Popupmenu Template
-        D.UI.popTemplate = uicontrol(...
-            'Style','popupmenu', ...
-            'Parent',D.UI.tabTBL, ...
-            'Units','Normalized', ...
-            'Position', [0,0,0.1,D.UI.fontSzPopSml(2)], ...
-            'Enable', 'off', ...
-            'BackgroundColor',D.UI.figBckCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'FontName',D.UI.popFont, ...
-            'FontSize',D.UI.fontSzPopSml(1), ...
-            'FontWeight','Bold', ...
-            'String', ' ', ...
-            'Value',1);
-        
-        % Togle Template
-        D.UI.toggTemplate = uicontrol(...
-            'Style','togglebutton', ...
-            'Parent',D.UI.tabTBL, ...
-            'Enable', 'off', ...
-            'Units','Normalized', ...
-            'Position', [0,0,0.1,D.UI.fontSzTxtLrg(2)], ...
-            'BackgroundColor', D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontName', D.UI.btnFont, ...
-            'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzTxtMed(1), ...
-            'Value',0);
-        
-        %% CREATE WEIGHT PANEL OBJECTS
-        
-        % GET WEIGHT VALUES
-        
-        % Get baseline weight
-        D.PAR.ratWeightBaseline = D.SS_IO_1.Weight_Baseline(D.PAR.ratIndSS);
-        
-        % Get last corrected weight
-        D.PAR.ratWeightLast = D.SS_IO_2.(D.PAR.ratLab).Weight_Corrected(end);
-        
-        % Get cap weight list
-        list_str = D.TT_IO.Properties.VariableDescriptions{'Cap_Weights'};
-        D.PAR.capWeightList = regexp(list_str, '\w*', 'match');
-        
-        % Get drive weight and cap weights
-        if D.F.implant_session || isTTtrackSolo
-            D.PAR.driveWeight = D.TT_IO.Weight_Drive(D.PAR.ratIndTT);
-            D.PAR.capWeightArr = D.TT_IO.Cap_Weights{D.PAR.ratIndTT};
-        else
-            D.PAR.driveWeight = 0;
-            D.PAR.capWeightArr = zeros(size(D.PAR.capWeightList));
-        end
-        
-        % ADD WEIGHT OBJECTS
-        
-        % Weight Panel
-        D.UI.panWeight = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        set(D.UI.panWeight, ...
-            'Title','Weights', ...
-            'Position', D.UI.weight_pan_pos)
-        
-        % Starting pos
-        botm = sum(D.UI.weight_pan_pos([2,4])) - D.UI.fontSzTxtMed(2)*3;
-        lft = D.UI.weight_pan_pos(1) + obj_gap;
-        wd =  (D.UI.weight_pan_pos(3) - obj_gap*2)/2 - obj_gap;
-        
-        % New weight text
-        D.UI.txtNewWeight = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtNewWeight.Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtNewWeight, ...
-            'String', 'New Weight:', ...
-            'HorizontalAlignment', 'Left', ...
-            'Visible', 'on');
-        
-        % New weight edit
-        lft_new = lft + wd + obj_gap;
-        D.UI.editNewWeight = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editNewWeight.Position(1:3) = [lft_new, botm, wd];
-        set(D.UI.editNewWeight, ...
-            'Enable','on',...
-            'Visible', 'on');
-        
-        % Cap weight text
-        botm = botm - D.UI.txtTemplate.Position(4) - obj_gap;
-        D.UI.txtCapWeight = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtCapWeight.Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtCapWeight, ...
-            'String', 'Cap Weight:', ...
-            'HorizontalAlignment', 'Left', ...
-            'Visible', 'on');
-        
-        % Cap weight pop
-        lft_new = lft + wd + obj_gap;
-        D.UI.popCapWeight = copyobj(D.UI.popTemplate, D.UI.tabTBL);
-        D.UI.popCapWeight.Position(1:3) = [lft_new, botm, wd];
-        set(D.UI.popCapWeight, ...
-            'String', D.PAR.capWeightList, ...
-            'Visible', 'on');
-        
-        % Enable if implanted
-        if D.F.implant_session || isTTtrackSolo
-            set(D.UI.popCapWeight, 'Enable', 'On');
-        end
-        
-        % Update weight button
-        wd_new = sum(D.UI.weight_pan_pos([1,3]))*0.3;
-        lft_new = D.UI.weight_pan_pos(1) + sum(D.UI.weight_pan_pos([1,3]))*0.35;
-        botm = botm - D.UI.txtTemplate.Position(4) - 2*obj_gap;
-        D.UI.toggUpdateWeight = copyobj(D.UI.toggTemplate, D.UI.tabTBL);
-        D.UI.toggUpdateWeight.Position(1:3) = [lft_new, botm, wd_new];
-        set(D.UI.toggUpdateWeight, ...
-            'String', 'Update', ...
-            'Callback', {@ToggUpdateWeight}, ...
-            'Visible', 'on');
-        
-        % Enable button
-        Set_Button_State(D.UI.toggUpdateWeight, 'Enable');
-        
-        % Corrected weight text
-        wd =  (D.UI.weight_pan_pos(3) - obj_gap*2)/3 - obj_gap;
-        botm = botm - D.UI.txtTemplate.Position(4) - obj_gap;
-        D.UI.txtCorrectedWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtCorrectedWeight(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtCorrectedWeight(1), ...
-            'String', 'New', ...
-            'Visible', 'on');
-        D.UI.txtCorrectedWeight(2) = copyobj(D.UI.txtCorrectedWeight(1), D.UI.tabTBL);
-        D.UI.txtCorrectedWeight(2).Position(2) = ...
-            D.UI.txtCorrectedWeight(2).Position(2)-D.UI.txtCorrectedWeight(2).Position(4);
-        D.UI.txtCorrectedWeight(2).String = 'xxxg';
-        
-        % Last weight text
-        lft = lft + wd + obj_gap;
-        D.UI.txtLastWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtLastWeight(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtLastWeight(1), ...
-            'String', 'Last', ...
-            'Visible', 'on');
-        D.UI.txtLastWeight(2) = copyobj(D.UI.txtLastWeight(1), D.UI.tabTBL);
-        D.UI.txtLastWeight(2).Position(2) = ...
-            D.UI.txtLastWeight(2).Position(2)-D.UI.txtLastWeight(2).Position(4);
-        D.UI.txtLastWeight(2).String = 'xxxg';
-        
-        % Percentage weight text
-        lft = lft + wd + obj_gap;
-        D.UI.txtPercentageWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtPercentageWeight(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtPercentageWeight(1), ...
-            'String', 'Percent', ...
-            'Visible', 'on');
-        D.UI.txtPercentageWeight(2) = copyobj(D.UI.txtPercentageWeight(1), D.UI.tabTBL);
-        D.UI.txtPercentageWeight(2).Position(2) = ...
-            D.UI.txtPercentageWeight(2).Position(2)-D.UI.txtPercentageWeight(2).Position(4);
-        D.UI.txtPercentageWeight(2).String = 'XX%';
-        
-        %% CREATE FOOD PANEL OBJECTS
-        
-        % Food Panel
-        D.UI.panFeed = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        set(D.UI.panFeed, ...
-            'Title','Feeding', ...
-            'Position', D.UI.food_pan_pos)
-        
-        % Start and default position info
-        botm = sum(D.UI.food_pan_pos([2,4])) - D.UI.fontSzTxtMed(2)*3;
-        lft = D.UI.food_pan_pos(1) + obj_gap;
-        wd =  (D.UI.food_pan_pos(3) - obj_gap*2)/4 - obj_gap;
-        
-        % Pellets text
-        D.UI.txtFeedPellets(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedPellets(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtFeedPellets(1), ...
-            'FontSize', 7, ...
-            'String', 'Pellets', ...
-            'Visible', 'on');
-        
-        % Pellets edit
-        D.UI.editFeedPellets = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedPellets.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
-        set(D.UI.editFeedPellets, ...
-            'Enable','on',...
-            'String', '0', ...
-            'Visible', 'on');
-        
-        % Mash text
-        lft = lft + wd + obj_gap;
-        D.UI.txtFeedMash(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedMash(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtFeedMash(1), ...
-            'FontSize', 7, ...
-            'String', 'Mash(TB)', ...
-            'Visible', 'on');
-        
-        % Mash edit
-        D.UI.editFeedMash = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedMash.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
-        set(D.UI.editFeedMash, ...
-            'Enable','on',...
-            'String', '0', ...
-            'Visible', 'on');
-        
-        % Ensure text
-        lft = lft + wd + obj_gap;
-        D.UI.txtFeedEnsure(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedEnsure(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtFeedEnsure(1), ...
-            'FontSize', 7, ...
-            'String', 'Ensure(ml)', ...
-            'Visible', 'on');
-        
-        % Ensure edit
-        D.UI.editFeedEnsure = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedEnsure.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
-        set(D.UI.editFeedEnsure, ...
-            'Enable','on',...
-            'String', '0', ...
-            'Visible', 'on');
-        
-        % STAT text
-        lft = lft + wd + obj_gap;
-        D.UI.txtFeedSTAT(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedSTAT(1).Position(1:3) = [lft, botm, wd];
-        set(D.UI.txtFeedSTAT(1), ...
-            'FontSize', 7, ...
-            'String', 'STAT(ml)', ...
-            'Visible', 'on');
-        
-        % STAT edit
-        D.UI.editFeedSTAT = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedSTAT.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
-        set(D.UI.editFeedSTAT, ...
-            'Enable','on',...
-            'String', '0', ...
-            'Visible', 'on');
-        
-        % Save feed button
-        botm = D.UI.food_pan_pos(2) + 0.01;
-        D.UI.toggSaveFeed = copyobj(D.UI.toggUpdateWeight, D.UI.tabTBL);
-        D.UI.toggSaveFeed.Position(2) = botm;
-        set(D.UI.toggSaveFeed, ...
-            'String', 'Save', ...
-            'Callback', {@ToggSaveFeed}, ...
-            'Visible', 'on');
-        
-        % Enable button
-        Set_Button_State(D.UI.toggSaveFeed, 'Enable');
-        
-        %% CREATE TASK TABLE OBJECTS
-        
-        % Task Table Panel
-        D.UI.panTaskTable = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        set(D.UI.panTaskTable, ...
-            'Title','Task Table', ...
-            'Position', D.UI.pan_task_tbl_pos)
-        
-        % Task Notes Panel
-        D.UI.panTaskNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        set(D.UI.panTaskNotes, ...
-            'Title','Task Notes', ...
-            'Position', D.UI.task_notes_pan_pos)
-        
-        % Format SS_IO_2 table
-        D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.PAR.ratLab), D.UI.panTaskTable);
-        
-        % Start and default position info
-        ht_edit = 0.4;
-        ht_tbl = 1 - ht_edit;
-        botm = ht_edit;
-        lft = 0;
-        wd =  1;
-        
-        % Old task notes table
-        D.UI.tblTaskNotes = copyobj(D.UI.tblSSIO2,D.UI.panTaskNotes);
-        set(D.UI.tblTaskNotes, ...
-            'Position', [lft, botm, wd, ht_tbl], ...
-            'Visible', 'on')
-        
-        % New task notes edit
-        botm = 0;
-        D.UI.editTaskNotes = copyobj(D.UI.editTemplate, D.UI.panTaskNotes);
-        set(D.UI.editTaskNotes, ...
-            'Units', 'Normalized', ...
-            'FontSize', 10, ...
-            'Max', 100, ...
-            'Enable','on',...
-            'Visible', 'on');
-        D.UI.editTaskNotes.Position = [lft, botm, wd, ht_edit];
-        
-        % Keep only notes entry
-        notes_ind = ismember(D.UI.tblSSIO2.ColumnName, 'Notes');
-        D.UI.tblTaskNotes.Data = D.UI.tblSSIO2.Data(:,notes_ind);
-        D.UI.tblTaskNotes.ColumnName = {[]};
-        D.UI.tblTaskNotes.ColumnWidth = D.UI.tblSSIO2.ColumnWidth(notes_ind);
-        
-        %% CREATE TT TABLE OBJECTS
-        
-        % TT Table Panel
-        D.UI.panTTTable = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        set(D.UI.panTTTable, ...
-            'Title','TT Table', ...
-            'Position', D.UI.pan_tt_tbl_pos)
-        
-        % TT Notes Panel
-        D.UI.panTTNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        set(D.UI.panTTNotes, ...
-            'Title','TT Notes', ...
-            'Position', D.UI.tt_notes_pan_pos)
-        
-        % Set panels disabled
-        if ~D.F.implant_session && ~isTTtrackSolo
-            Set_Panel_State(D.UI.panTTTable, 'Disable');
-            Set_Panel_State(D.UI.panTTNotes, 'Disable');
-            
-        else
-            
-            % Format SS_IO_2 table
-            D.UI.tblTTIO = FormatTable(D.TT.ttLogTable, D.UI.panTTTable);
-            
-            % Old tt notes table
-            D.UI.tblTTNotes = copyobj(D.UI.tblTaskNotes, D.UI.panTTNotes);
-            D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data;
-            D.UI.tblTTNotes.ColumnName = D.UI.tblTTIO.ColumnName;
-            D.UI.tblTTNotes.RowName = D.UI.tblTTIO.RowName;
-            
-            % New tt notes edit
-            D.UI.editTTNotes = copyobj(D.UI.editTaskNotes, D.UI.panTTNotes);
-            
-            % Keep only notes entry
-            notes_ind = ismember(D.UI.tblTTIO.ColumnName, 'Notes');
-            D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data(:,notes_ind);
-            D.UI.tblTTNotes.ColumnName = {[]};
-            D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.ColumnWidth(notes_ind);
-            
-        end
-        
-        %% FORMAT TABLE FUNCTION
-        function [ui_table] = FormatTable(io_table, parent)
-            
-            % Convert table data to cell
-            c_ss_io = table2cell(io_table);
-            
-            % Convert categorical to char
-            cat_ind = cell2mat(cellfun(@(x) isa(x, 'categorical'), ...
-                c_ss_io(1,:), 'uni', false));
-            c_ss_io(:,cat_ind) = cellfun(@(x) char(x), c_ss_io(:,cat_ind), 'uni', false);
-            
-            % Remove nexted cell or 2d data
-            cell_ind = cell2mat(cellfun(@(x) isa(x, 'cell'), ...
-                c_ss_io(1,:), 'uni', false));
-            nd_ind = any(cell2mat(cellfun(@(x) max(size(x))>1 && ~isa(x, 'char'), ...
-                c_ss_io, 'uni', false)), 1);
-            exc_ind = cell_ind | nd_ind;
-            
-            % Remove values
-            c_ss_io = c_ss_io(:, ~exc_ind);
-            
-            % Convert numeric to char
-            num_ind = any(cell2mat(cellfun(@(x) isa(x, 'double'), ...
-                c_ss_io, 'uni', false)),1);
-            c_ss_io(:,num_ind) = cellfun(@(x) num2str(x), ...
-                c_ss_io(:,num_ind), 'uni', false);
-            
-            % Replace [] 'NaN' and '<undefined>' with 'NA'
-            empty_ind = cell2mat(cellfun(@(x) isempty(x), ...
-                c_ss_io, 'uni', false));
-            nan_ind =  cell2mat(cellfun(@(x) strcmp(x, 'NaN'), ...
-                c_ss_io, 'uni', false));
-            undef_ind =  cell2mat(cellfun(@(x) strcmp(x, '<undefined>'), ...
-                c_ss_io, 'uni', false));
-            c_ss_io(empty_ind | nan_ind | undef_ind) = {'NA'};
-            
-            % Get variable names
-            var_list = io_table.Properties.VariableNames(~exc_ind);
-            
-            % Get dates for row names
-            date_list = io_table.Date;
-            date_list = regexp(date_list, '\S*(?=_)', 'match');
-            date_list = [date_list{:}];
-            
-            % Remove dates entry
-            date_ind = ismember(io_table.Properties.VariableNames , 'Date');
-            c_ss_io(:,date_ind) = [];
-            var_list(date_ind) = [];
-            
-            % ADD DATA TO TABLE
-            
-            % Copy table
-            ui_table = copyobj(D.UI.tblTemplate,D.UI.tabTBL);
-            set(ui_table, ...
-                'Parent', parent, ...
-                'Visible', 'on');
-            
-            % Add data to table
-            ui_table.Data = c_ss_io;
-            ui_table.ColumnName = var_list;
-            ui_table.RowName = date_list;
-            
-            % Get charicter widths
-            dat_width = max(cell2mat(cellfun(@(x) max(size(x)), ...
-                c_ss_io, 'uni', false)), [], 1);
-            var_width = cell2mat(cellfun(@(x) max(size(x)), ...
-                var_list, 'uni', false));
-            
-            % Scale widths
-            dat_width = dat_width*6;
-            var_width = var_width*7;
-            col_width = num2cell(max([dat_width;var_width],[],1));
-            ui_table.ColumnWidth = col_width;
-            
-        end
         
     end
 
 % --------------------------FINISH NLX SETUP------------------------
     function[was_ran] = Finish_NLX_Setup()
         
-        %% Bail if Cheetah not open
+        % Bail if Cheetah not open
         if ~D.F.cheetah_open
             
             % Set output and bail
@@ -5563,7 +6017,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Finish_NLX_Setup] RUNNING: Load Cheetah Configs...');
         
         % Load config files
-        if ~D.F.implant_session && ~isTTtrackSolo
+        if ~D.F.implant_session && ~D.F.tt_track_solo
             
             % Specify setpoint
             D.PAR.setPointCM = D.PAR.setPointBackpack;
@@ -5644,7 +6098,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Finish_NLX_Setup] FINISHED: Load Cheetah Configs');
         
         % Setup Cube
-        if D.F.implant_session || isTTtrackSolo
+        if D.F.implant_session || D.F.tt_track_solo
             
             % Log/print
             Console_Write('[Finish_NLX_Setup] RUNNING: Setup Cube');
@@ -5672,31 +6126,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Finish_NLX_Setup] RUNNING: Open VT and Event Streams');
         
         % Open rat vt stream
-        D.F.vtStreaming(1) = NlxOpenStream(D.NLX.vt_rat_ent) == 1;
+        D.F.vt_streaming(1) = NlxOpenStream(D.NLX.vt_rat_ent) == 1;
         Console_Write(sprintf('[Finish_NLX_Setup] Open NLX "%s" Stream: status=%d', ...
-            D.NLX.vt_rat_ent, D.F.vtStreaming(1)));
+            D.NLX.vt_rat_ent, D.F.vt_streaming(1)));
         
         % Open robot vt stream
-        D.F.vtStreaming(2) = NlxOpenStream(D.NLX.vt_rob_ent) == 1;
+        D.F.vt_streaming(2) = NlxOpenStream(D.NLX.vt_rob_ent) == 1;
         Console_Write(sprintf('[Finish_NLX_Setup] Open NLX "%s" Stream: status=%d', ...
-            D.NLX.vt_rob_ent, D.F.vtStreaming(2)));
+            D.NLX.vt_rob_ent, D.F.vt_streaming(2)));
         
         % Open event vt stream
-        D.F.evtStreaming = NlxOpenStream(D.NLX.event_ent) == 1;
+        D.F.evt_streaming = NlxOpenStream(D.NLX.event_ent) == 1;
         Console_Write(sprintf('[Finish_NLX_Setup] Open NLX "%s" Stream: status=%d', ...
-            D.NLX.event_ent, D.F.evtStreaming));
+            D.NLX.event_ent, D.F.evt_streaming));
         
         % Log/print stream status
-        if D.F.vtStreaming(1) && ...
-                D.F.vtStreaming(2) && ...
-                D.F.evtStreaming
+        if D.F.vt_streaming(1) && ...
+                D.F.vt_streaming(2) && ...
+                D.F.evt_streaming
             % All streaming
             Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
-                D.F.vtStreaming(1), D.F.vtStreaming(2), D.F.evtStreaming));
+                D.F.vt_streaming(1), D.F.vt_streaming(2), D.F.evt_streaming));
         else
             % Open stream failed
             Console_Write(sprintf('**WARING** [Finish_NLX_Setup] FAILED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
-                D.F.vtStreaming(1), D.F.vtStreaming(2), D.F.evtStreaming));
+                D.F.vt_streaming(1), D.F.vt_streaming(2), D.F.evt_streaming));
         end
         
         % Set output and bail
@@ -5709,7 +6163,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[was_ran] = Finish_Ephys_Setup()
         
         %% Bail if not implant or TT_track session
-        if ~D.F.implant_session && ~isTTtrackSolo
+        if ~D.F.implant_session && ~D.F.tt_track_solo
             
             % Set output and bail
             was_ran = false;
@@ -5756,7 +6210,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check if SpikeSort should be run
         if D.F.cheetah_open
-            if isTTtrackSolo
+            if D.F.tt_track_solo
                 load_ss3d = dlgAWL(...
                     'Do you want to run SpikeSort3D.exe?', ...
                     'RUN SS3D?', ...
@@ -5772,7 +6226,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Run SpikeSort3D.exe
         if strcmp('Yes', load_ss3d)
-            
             
             % Run exe
             if ~D.F.spikesort_open
@@ -5906,8 +6359,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% --------------------------FINISH GUI SETUP------------------------
-    function Finish_GUI_Setup()
+% -----------------------------SETUP ICR SESSION---------------------------
+    function ICR_Session_Setup()
         
         %% UPDATE SESSION SPECIFIC VARS
         
@@ -5928,7 +6381,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_1{D.PAR.ratIndSS, 'Session_Rotation'};
         
         % start quadrant
-        D.PAR.ratStrQuad = categorical({'<undefined>'}, D.PAR.catStrQuad);
+        D.PAR.ratStrQuad = categorical({'<undefined>'}, D.PAR.listStrQuad);
         if D.PAR.sesCond ~= 'Manual_Training'
             D.PAR.ratStrQuad = ... % [NE,SE,SW,NW]
                 D.SS_IO_1.Start_Quadrant{D.PAR.ratIndSS}(D.PAR.sesNumAll);
@@ -5980,7 +6433,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Generate rotation button string
         D.UI.btnICRstr = ...
-            [{sprintf('40%c %s', char(176), char(D.PAR.catRotDrc(D.PAR.catRotDrc ~= D.PAR.ratRotDrc)))}; ...
+            [{sprintf('40%c %s', char(176), char(D.PAR.listRotDrc(D.PAR.listRotDrc ~= D.PAR.ratRotDrc)))}; ...
             {sprintf('40%c %s', char(176), char(D.PAR.ratRotDrc))}];
         
         % Modify vars based on rot dir
@@ -6212,7 +6665,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % first ind is NE going ccw
         quadBndLocs = 45:90:360;
         % shift so that start quadrant is last entry
-        strQuadInd = find(D.PAR.catStrQuad == D.PAR.ratStrQuad);
+        strQuadInd = find(D.PAR.listStrQuad == D.PAR.ratStrQuad);
         lapBndLocs = circshift(quadBndLocs,[0, -1*(strQuadInd-1)])';
         % flip direction
         lapBndLocs = flip(lapBndLocs);
@@ -6356,7 +6809,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         start(timer_graphics);
         
         % Log/print
-        Console_Write('[Finish_GUI_Setup] FINISHED: Session Setup');
+        Console_Write('[ICR_Session_Setup] FINISHED: Session Setup');
         
     end
 
@@ -6500,7 +6953,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.I.zone_arr = zone_arr*-1;
         
         % plot sample dist
-        if D.PAR.cueFeed ~= 'None'
+        if D.PAR.sesCue ~= 'None'
             D.UI.zone_arrH = createPatches(...
                 -1*D.PAR.zoneLocs, samp_dist, 2, ...
                 [0, 0, 0], ...
@@ -6715,14 +7168,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         set(D.UI.axZoneH, 'Visible', 'on');
         
         % Bulldoze default
-        val = find(ismember(D.UI.bullList, [num2str(D.PAR.bullDel), ' sec']));
+        val = find(ismember(D.UI.popBulldoze.String, [num2str(D.PAR.bullDel), ' sec']));
         set(D.UI.popBulldoze, 'Value', val);
         set(D.UI.toggBulldoze, 'Value', 1);
         PopBulldoze();
         
         % Cue setup
         if D.PAR.sesCond ~= 'Manual_Training' && ...
-                D.PAR.cueFeed == 'Half'
+                D.PAR.sesCue == 'Half'
             
             % Set cue button on
             set(D.UI.toggDoCue, 'Value', 1);
@@ -6969,20 +7422,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
-        % Tell CS rat is in
-        Send_M2C('I', 1);
-        
         % Post NLX event: rat in
         Send_M2NLX(D.NLX.rat_in_evt);
-        
-        % Change bool so code will only be run once
-        D.F.rat_in = true;
         
         % Save time
         D.T.run_str = Sec_DT(now);
         
         % Start tracking lap times
         D.T.lap_tim = Sec_DT(now);
+        
+        % Tell CS rat is in
+        Send_M2C('I', 1);
+        
+        % Set flag
+        D.F.rat_in = true;
         
         % Set patch to nonvisible
         Set_Patch_State(D.UI.ptchStQ, 'Hide');
@@ -7010,7 +7463,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -----------------------------TEST SETUP--------------------------
-    function[] = Run_Test_Setup()
+    function[] = Test_Setup()
         
         %% BAIL IF NOT TEST RUN
         if ~D.DB.isTestRun
@@ -7186,34 +7639,39 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write('[Run_Test_Setup] FINISHED: Test Run Setup');
+        Console_Write('[Test_Setup] FINISHED: Test Run Setup');
         
         %% AUTOLOAD RAT DATA
         
-        if doAutoloadUI && ~isTTtrackSolo
+        if doAutoloadUI && ~D.F.tt_track_solo
+            
+            % Set and run load pop
+            set(D.UI.popType, 'Value', ...
+                find(ismember(D.UI.popType.String,  D.DB.Load)));
+            PopType();
             
             % Get rat table ind
             ratInd = ...
                 find(ismember(D.SS_IO_1.Properties.RowNames, D.DB.ratLab));
             
             % Set Human
-            D.SS_IO_1.Human(ratInd) = 'AWL';
+            D.SS_IO_1.Human(ratInd) = {'AWL'};
             
-            % Set condition
+            % Set session condition
             D.SS_IO_1.Session_Condition(ratInd) = D.DB.Session_Condition;
-           
+            
             % Set implanted flag
             D.SS_IO_1.Implanted(ratInd) = D.DB.Implanted;
-           
+            
             % Set task
             D.SS_IO_1.Session_Task(ratInd) = D.DB.Session_Task;
-           
+            
             % Set reward delay
             D.SS_IO_1.Reward_Delay(ratInd)= D.DB.Reward_Delay;
             
             % Set cue condition
             D.SS_IO_1.Cue_Condition(ratInd) = D.DB.Cue_Condition;
-           
+            
             % Set sound conditions
             D.SS_IO_1.Sound_Conditions(ratInd,1:2) = D.DB.Sound_Conditions;
             
@@ -7246,7 +7704,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Run PopRat
-            val = find(cell2mat(cellfun(@(x) strcmp(x(1:4), D.DB.ratLab(2:end)), D.UI.ratList, 'uni', false)));
+            val = 1 + find(cell2mat(cellfun(@(x) strcmp(x(1:4), D.DB.ratLab(2:end)), D.UI.popRat.String(2:end), 'uni', false)));
             set(D.UI.popRat, 'Value', val);
             PopRat();
             
@@ -7269,13 +7727,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function VT_Get(fld)
         
         % Bail if not connected
-        if ~D.F.nlxConnected
+        if ~D.F.nlx_connected
             return
         end
         
         % Bail if not streaming
-        if (strcmp(fld, 'Rat') && ~D.F.vtStreaming(1)) || ...
-                (strcmp(fld, 'Rob') && ~D.F.vtStreaming(2))
+        if (strcmp(fld, 'Rat') && ~D.F.vt_streaming(1)) || ...
+                (strcmp(fld, 'Rob') && ~D.F.vt_streaming(2))
             return;
         end
         
@@ -7639,7 +8097,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % BAIL IF SETUP NOT FINISHED
         update_ui = false;
-        if ~D.F.session_setup
+        if ~D.F.ses_setup_done
             return;
         end
         
@@ -8003,12 +8461,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Evt_Get()
         
         % Bail if not connected
-        if ~D.F.nlxConnected
+        if ~D.F.nlx_connected
             return
         end
         
         % Bail if not streaming
-        if ~D.F.evtStreaming
+        if ~D.F.evt_streaming
             return;
         end
         
@@ -8182,7 +8640,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bail if not connected
-        if ~D.F.nlxConnected
+        if ~D.F.nlx_connected
             return
         end
         
@@ -8308,7 +8766,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bail if not connected
-        if ~D.F.nlxConnected
+        if ~D.F.nlx_connected
             return
         end
         
@@ -8841,14 +9299,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.F.rew_confirmed
                 
                 if ...
-                        D.PAR.cueFeed == 'All' || ...
-                        (D.PAR.cueFeed == 'Half' && get(D.UI.toggDoCue, 'Value') == 0)
+                        D.PAR.sesCue == 'All' || ...
+                        (D.PAR.sesCue == 'Half' && get(D.UI.toggDoCue, 'Value') == 0)
                     
                     % Set cue button on
                     set(D.UI.toggDoCue, 'Value', 1);
                     ToggDoCue();
                     
-                elseif D.PAR.cueFeed == 'Half'
+                elseif D.PAR.sesCue == 'Half'
                     
                     % Set cue button off
                     set(D.UI.toggDoCue, 'Value', 0);
@@ -9169,7 +9627,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% BAIL IF SETUP NOT FINISHED OR DT NOT REACEHD
         if ...
-                ~D.F.session_setup || ...
+                ~D.F.ses_setup_done || ...
                 Sec_DT(now) - D.T.info_txt_update < 0.1
             return
         end
@@ -9371,7 +9829,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % --------------------------RUN TEST CODE--------------------------
-    function Run_Test()
+    function Test_Run()
         
         % RUN LOCAL TEST FUNCTION
         
@@ -9412,6 +9870,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % SIMULATED RAT TEST
         function SimRatTest()
+            
+            % Bail if rat out
+            if D.F.rat_out
+                return;
+            end
             
             % Bail if robot not in place and recording
             if c2m.('K').dat1 < 3 || ~D.F.rec
@@ -9483,7 +9946,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Send_M2C('T', sysTest, 0, 0);
                 
                 % Close rat stream
-                D.F.vtStreaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
+                D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
                 
                 % Unset flag
                 D.DB.isTestStarted = true;
@@ -9691,7 +10154,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.CALVT.RunEnd = Sec_DT(now) + D.DB.CALVT.RunDur*60;
                 
                 % Close rat stream
-                D.F.vtStreaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
+                D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
                 
                 % Trigger start
                 D.P.Rat.rad = mean(D.PAR.strQuadBnds);
@@ -9705,7 +10168,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.isTestStarted = true;
                 
                 % Log/print
-                Console_Write(sprintf('[Run_Test] Start VT Calibration Test: dt_run=%0.2fmin rob_vel=%dcm/sec', ...
+                Console_Write(sprintf('[Test_Run] Start VT Calibration Test: dt_run=%0.2fmin rob_vel=%dcm/sec', ...
                     D.DB.CALVT.RunDur, D.DB.CALVT.RobVel));
                 
             end
@@ -9927,12 +10390,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         fprintf(file_id,D.DB.HALT.error_str(3:end));
                         fclose(file_id);
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] Saved Halt Error Test: %s', ...
+                        Console_Write(sprintf('[Test_Run] Saved Halt Error Test: %s', ...
                             fi_out));
                     end
                     
                     % Log/print
-                    Console_Write(sprintf('[Run_Test] Halt Error Test: new_vel=%dcm/sec', ...
+                    Console_Write(sprintf('[Test_Run] Halt Error Test: new_vel=%dcm/sec', ...
                         D.DB.HALT.NowVel));
                     
                 end
@@ -9971,7 +10434,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.HALT.IsHalted = true;
                 
                 % Log/print
-                Console_Write('[Run_Test] Halt Error Test: Halting Robot');
+                Console_Write('[Test_Run] Halt Error Test: Halting Robot');
             end
             
         end
@@ -10121,7 +10584,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.t_send(D.DB.WALIR.cntEvent(1), :) = ts;
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] WALL IR IMAGE TEST: Trial=%d Img Change TS=%0.0fms', ...
+                        Console_Write(sprintf('[Test_Run] WALL IR IMAGE TEST: Trial=%d Img Change TS=%0.0fms', ...
                             D.DB.WALIR.cntEvent(1), ts/1000));
                     end
                     
@@ -10142,7 +10605,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.DB.WALIR.t_trig(D.DB.WALIR.cntEvent(1), z_t) = ts;
                             
                             % Log/print
-                            Console_Write(sprintf('[Run_Test] WALL IR IMAGE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
+                            Console_Write(sprintf('[Test_Run] WALL IR IMAGE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
                                 D.DB.WALIR.PTttlStr{z_t}, D.DB.WALIR.cntEvent(1), ts/1000));
                             
                         end
@@ -10225,7 +10688,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.t_send(D.DB.WALIR.cntEvent(2), D.DB.WALIR.cntSensor) = ts;
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] WALL IR PULSE TEST: Sensor=%s Trial=%d Pulse TS=%0.0fms', ...
+                        Console_Write(sprintf('[Test_Run] WALL IR PULSE TEST: Sensor=%s Trial=%d Pulse TS=%0.0fms', ...
                             D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}, D.DB.WALIR.cntEvent(2), ts/1000));
                     end
                     
@@ -10240,7 +10703,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.t_trig(D.DB.WALIR.cntEvent(3), D.DB.WALIR.cntSensor) = ts;
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] WALL IR PULSE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
+                        Console_Write(sprintf('[Test_Run] WALL IR PULSE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
                             D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}, D.DB.WALIR.cntEvent(3), ts/1000));
                     end
                 end
@@ -10442,7 +10905,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.SYNCIR.t_pulse(D.DB.SYNCIR.cntEvent(2)) = ts(1);
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
+                        Console_Write(sprintf('[Test_Run] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
                             D.NLX.ir_ts_str, D.DB.SYNCIR.cntEvent(2), ts/1000));
                     end
                     
@@ -10457,7 +10920,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.SYNCIR.t_trig(D.DB.SYNCIR.cntEvent(3)) = ts(1);
                         
                         % Log/print
-                        Console_Write(sprintf('[Run_Test] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
+                        Console_Write(sprintf('[Test_Run] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
                             D.DB.SYNCIR.NLXevtStr, D.DB.SYNCIR.cntEvent(3), ts/1000));
                     end
                     
@@ -10480,7 +10943,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 %% ============================== EXIT FUNCTIONS ==========================
 
 % -------------------------SAVE SESSION DATA---------------------------
-    function  Save_Session_Data()
+    function Save_Session_Data()
         
         % Save GUI window image
         export_fig(FigGroupH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.jpg'));
@@ -10496,25 +10959,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 [D.SS_IO_2.(D.PAR.ratLab); D.SS_IO_2.(D.PAR.ratLab)(end,:)];
         end
         
+        % Get date
+        date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+        
+        % Get recording file string
+        if D.F.cheetah_open
+            rec_file = D.DIR.recFi;
+        else
+            rec_file = '';
+        end
+        
         % Store 'Include_Analysis'
         D.SS_IO_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
         
         % Store 'Implanted'
-        D.SS_IO_2.(D.PAR.ratLab).Implanted(rowInd) = D.F.implant_session;
+        D.SS_IO_2.(D.PAR.ratLab).Implanted(rowInd) = D.F.rat_implanted;
         
         % Store 'Date'
-        D.SS_IO_2.(D.PAR.ratLab).Date{rowInd} = D.DIR.recFi;
+        D.SS_IO_2.(D.PAR.ratLab).Date{rowInd} = date;
+        
+        % Store 'Recording File'
+        D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = rec_file;
         
         % Store 'Human'
-        D.SS_IO_2.(D.PAR.ratLab).Human{rowInd} = D.PAR.human;
-        
-        % Sore weight info
-        D.SS_IO_2.(D.PAR.ratLab).Weight(rowInd) = D.PAR.ratWeightNew;
-        D.SS_IO_2.(D.PAR.ratLab).Weight_Baseline(rowInd) = D.PAR.ratWeightBaseline;
-        D.SS_IO_2.(D.PAR.ratLab).Weight_Drive(rowInd) = D.PAR.driveWeight;
-        D.SS_IO_2.(D.PAR.ratLab).Weight_Cap(rowInd) = D.PAR.capWeight;
-        D.SS_IO_2.(D.PAR.ratLab).Weight_Corrected(rowInd) = D.PAR.ratWeightCorrected;
-        D.SS_IO_2.(D.PAR.ratLab).Weight_Proportion(rowInd) = D.PAR.ratWeightProportion;
+        D.SS_IO_2.(D.PAR.ratLab).Human(rowInd) = D.PAR.sesHuman;
         
         % Store 'VT_Pixel_Coordinates'
         D.SS_IO_2.(D.PAR.ratLab).VT_Pixel_Coordinates{rowInd} = [D.PAR.R, D.PAR.XC, D.PAR.YC];
@@ -10528,15 +10996,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'Sleep_Time'
         D.SS_IO_2.(D.PAR.ratLab).Sleep_Time(rowInd,:) = num2cell((D.T.sleep_end - D.T.sleep_str) / 60);
         
+        % Store 'Session_Type'
+        D.SS_IO_2.(D.PAR.ratLab).Session_Type(rowInd) = D.PAR.sesType;
+        
         % Store 'Session_Condition'
-        D.SS_IO_2.(D.PAR.ratLab).Session_Condition(rowInd) = char(D.PAR.sesCond);
-        D.SS_IO_2.(D.PAR.ratLab).Session_Task(rowInd) = char(D.PAR.sesTask);
+        D.SS_IO_2.(D.PAR.ratLab).Session_Condition(rowInd) = D.PAR.sesCond;
+        
+        % Store 'Session_Task'
+        D.SS_IO_2.(D.PAR.ratLab).Session_Task(rowInd) = D.PAR.sesTask;
         
         % Store 'Session_X' Number
-        var_ind = ...
-            ismember(D.SS_IO_2.(D.PAR.ratLab).Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
-        col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
-        D.SS_IO_2.(D.PAR.ratLab){rowInd, var_ind}(col_ind) = D.PAR.sesNum;
+        if ~isundefined(D.PAR.sesCond) && ~isundefined(D.PAR.sesTask)
+            var_ind = ...
+                ismember(D.SS_IO_2.(D.PAR.ratLab).Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
+            col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
+            D.SS_IO_2.(D.PAR.ratLab){rowInd, var_ind}(col_ind) = D.PAR.sesNum;
+        end
         
         % Store 'Feeder_Condition'
         D.SS_IO_2.(D.PAR.ratLab).Feeder_Condition(rowInd) = D.PAR.ratFeedCnd;
@@ -10545,13 +11020,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_2.(D.PAR.ratLab).Rotation_Direction(rowInd) = D.PAR.ratRotDrc;
         
         % Store 'Reward_Delay'
-        D.SS_IO_2.(D.PAR.ratLab).Reward_Delay(rowInd) = sprintf('%1.1f', D.PAR.rewDel);
+        D.SS_IO_2.(D.PAR.ratLab).Reward_Delay(rowInd) = char(D.PAR.sesRewDel);
         
         % Store 'Cue_Condition'
-        D.SS_IO_2.(D.PAR.ratLab).Cue_Condition(rowInd) = char(D.PAR.cueFeed);
-        
-        % Store 'Pulse_Duration'
-        D.SS_IO_2.(D.PAR.ratLab).Pulse_Duration(rowInd) = D.PAR.rewDur;
+        D.SS_IO_2.(D.PAR.ratLab).Cue_Condition(rowInd) = char(D.PAR.sesCue);
         
         % Store 'Sound_Conditions'
         D.SS_IO_2.(D.PAR.ratLab).Sound_Conditions(rowInd,:) = D.F.sound;
@@ -10572,14 +11044,32 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'Laps_Standard'
         D.SS_IO_2.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
         
-        % Store feed info
-        D.SS_IO_2.(D.PAR.ratLab).Fed_Pellets(rowInd) = D.PAR.feedPellets;
-        D.SS_IO_2.(D.PAR.ratLab).Fed_Mash(rowInd) = D.PAR.feedMash;
-        D.SS_IO_2.(D.PAR.ratLab).Fed_Ensure(rowInd) = D.PAR.feedEnsure;
-        D.SS_IO_2.(D.PAR.ratLab).Fed_STAT(rowInd) = D.PAR.feedSTAT;
-        
         % Store 'Notes'
         D.SS_IO_2.(D.PAR.ratLab).Notes{rowInd} = D.UI.editTaskNotes.String;
+        
+        % Sore weight info
+        if  get(D.UI.toggUpdateWeight, 'Value') == 1
+            D.SS_IO_2.(D.PAR.ratLab).Weight(rowInd) = D.PAR.ratWeightNew;
+            D.SS_IO_2.(D.PAR.ratLab).Weight_Baseline(rowInd) = D.PAR.ratWeightBaseline;
+            D.SS_IO_2.(D.PAR.ratLab).Weight_Drive(rowInd) = D.PAR.driveWeight;
+            D.SS_IO_2.(D.PAR.ratLab).Weight_Cap(rowInd) = D.PAR.capWeight;
+            D.SS_IO_2.(D.PAR.ratLab).Weight_Corrected(rowInd) = D.PAR.ratWeightCorrected;
+            D.SS_IO_2.(D.PAR.ratLab).Weight_Proportion(rowInd) = D.PAR.ratWeightProportion;
+            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Weight');
+        else
+            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Weight');
+        end
+        
+        % Store feed info
+        if  get(D.UI.toggUpdateFed, 'Value') == 1
+            D.SS_IO_2.(D.PAR.ratLab).Fed_Pellets(rowInd) = D.PAR.feedPellets;
+            D.SS_IO_2.(D.PAR.ratLab).Fed_Mash(rowInd) = D.PAR.feedMash;
+            D.SS_IO_2.(D.PAR.ratLab).Fed_Ensure(rowInd) = D.PAR.feedEnsure;
+            D.SS_IO_2.(D.PAR.ratLab).Fed_STAT(rowInd) = D.PAR.feedSTAT;
+            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Food');
+        else
+            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Food');
+        end
         
         % STORE ROTATION SESSION SPECIFIC VARS
         
@@ -10649,23 +11139,33 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % UPDATE SS_IO_1
         
+        % Update 'Session_Type'
+        D.SS_IO_1.Session_Type(D.PAR.ratIndSS) = D.PAR.sesType;
+        
         % Update 'Human'
-        D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.human;
+        D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.sesHuman;
         
-        % Update 'Session_Condition'
-        D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCond);
-        
-        % Update 'Reward_Delay'
-        D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = sprintf('%1.1f', D.PAR.rewDel);
-        
-        % Update 'Cue_Condition'
-        D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.cueFeed);
-        
-        % Update 'Pulse_Duration'
-        D.SS_IO_1.Pulse_Duration(D.PAR.ratIndSS) = D.PAR.rewDur;
-        
-        % Update 'Sound_Conditions'
-        D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
+        % Dont update if not ICR Session
+        if ~(D.F.tt_track_solo || D.F.table_solo)
+            
+            % Update 'Session_Condition'
+            D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
+            
+            % Update 'Session_Task'
+            D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
+            
+            % Update 'Reward_Delay'
+            D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
+            
+            % Update 'Cue_Condition'
+            D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
+            
+            % Update 'Sound_Conditions'
+            D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
+            Console_Write('[Save_Weight_Data] FINISHED: Update "SS_IO_1"');
+        else
+            Console_Write('[Save_Weight_Data] SKIPPED: Update "SS_IO_1"');
+        end
         
         % Save out data
         SS_IO_2 = D.SS_IO_2; %#ok<NASGU>
@@ -10809,16 +11309,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -------------------------SAVE TT TRACK DATA---------------------------
-    function  Save_TT_Track_Data()
+    function[was_ran] = Save_TT_Track_Data()
+        
+        % Bail if not implant or TT_track session
+        if ~D.F.implant_session && ~D.F.tt_track_solo
+            
+            % Set output and bail
+            was_ran = false;
+            return;
+        end
         
         % Store 'Session'
         D.TT.ttLogNew.Session = D.TT.Ses;
         
         % Store 'Date'
-        D.TT.ttLogNew.Date = {datestr(clock, 'yyyy-mm-dd_HH-MM-SS', 'local')};
+        D.TT.ttLogNew.Date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
         
         % Store 'Notes'
-        D.TT.ttLogNew.Notes = D.UI.editTTNotes.String;
+        D.TT.ttLogNew.Notes{:} = D.UI.editTTNotes.String;
         
         % Save back to main table
         D.TT_IO.Turn_Log{D.PAR.ratIndTT} = [D.TT_IO.Turn_Log{D.PAR.ratIndTT}; D.TT.ttLogNew];
@@ -10829,6 +11337,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set flag
         D.F.tt_save_done = true;
+        
+        % Set output and bail
+        was_ran = true;
+        return;
         
     end
 
@@ -10854,21 +11366,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if isfield(D.NLX, 'vt_rat_ent')
                         
                         % Close rat vt stream
-                        D.F.vtStreaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
+                        D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
                         Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
-                            D.NLX.vt_rat_ent, ~D.F.vtStreaming(1)));
+                            D.NLX.vt_rat_ent, ~D.F.vt_streaming(1)));
                         
                         % Close robot vt stream
-                        D.F.vtStreaming(2) = NlxCloseStream(D.NLX.vt_rob_ent) ~= 1;
+                        D.F.vt_streaming(2) = NlxCloseStream(D.NLX.vt_rob_ent) ~= 1;
                         Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
-                            D.NLX.vt_rob_ent, ~D.F.vtStreaming(2)));
+                            D.NLX.vt_rob_ent, ~D.F.vt_streaming(2)));
                     end
                     
                     % Close event stream
                     if isfield(D.NLX, 'event_ent')
-                        D.F.evtStreaming = NlxCloseStream(D.NLX.event_ent) ~= 1;
+                        D.F.evt_streaming = NlxCloseStream(D.NLX.event_ent) ~= 1;
                         Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
-                            D.NLX.event_ent, ~D.F.evtStreaming));
+                            D.NLX.event_ent, ~D.F.evt_streaming));
                     end
                     
                     % Close TT stream
@@ -11115,7 +11627,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Send_M2NLX(['-ProcessConfigurationFile ', cfg_fi]);
             
             % Dont move unless using
-            if D.F.implant_session || isTTtrackSolo
+            if D.F.implant_session || D.F.tt_track_solo
                 
                 % Move Ephys windows
                 if mon_ind == 1 || mon_ind == 2
@@ -11149,115 +11661,185 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
+% -----------------------------LOAD SELECTION------------------------------
+    function PopType(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popType,'Value') == 1
+            return;
+        end
+        
+        % Change to active color
+        set(D.UI.popType, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Store selected session type
+        D.PAR.sesType(:) = D.UI.popType.String(get(D.UI.popType, 'Value'));
+        
+        % Change rat list pop
+        if D.PAR.sesType == 'TT_Turn'
+            
+            % Get ind of rats to include
+            inc_ind = ismember(D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run), ...
+                D.TT_IO.Properties.RowNames(D.TT_IO.Include_Run));
+            tt_rat_list = regexprep(D.PAR.listRat(inc_ind), 'r', '');
+            
+            % Update pop menu
+            set(D.UI.popRat, 'String', [{''}; tt_rat_list])
+            
+        else
+            set(D.UI.popRat, 'String', [{''}; D.PAR.listRat])
+        end
+        
+        % set tt run solo flag
+        if D.PAR.sesType == 'TT_Turn'
+            D.F.tt_track_solo = true;
+        else
+            D.F.tt_track_solo = false;
+        end
+        
+        % Set table load solo flag
+        if D.PAR.sesType == 'Table_Update'
+            D.F.table_solo = true;
+        else
+            D.F.table_solo = false;
+        end
+        
+        % Enable setup objects
+        Set_Object_Group('Setup_Objects', 'Enable')
+        
+    end
+
 % ------------------------------RAT SELECTION------------------------------
     function PopRat(~, ~, ~)
         
-        if get(D.UI.popRat,'Value') ~= 1
-            
-            % Change to active color
-            set(D.UI.popRat, ...
-                'BackgroundColor', D.UI.activeCol, ...
-                'ForegroundColor', D.UI.enabledBtnFrgCol);
-            
-            % Get Rat label
-            D.PAR.ratLab = ... % ('r####')
-                ['r',D.UI.ratList{get(D.UI.popRat,'Value')}(1:4)];
-            
-            % Get rat number
-            D.PAR.ratNum = ... % (####)
-                str2double(D.PAR.ratLab(2:end));
-            
-            % Get rat index in D.SS_IO_1
-            D.PAR.ratIndSS = ...
-                find(ismember(D.SS_IO_1.Properties.RowNames, D.PAR.ratLab));
-            
-            % Get rat implant status
-            D.F.implant_session = D.SS_IO_1.Implanted(D.PAR.ratIndSS);
-            
-            % Get rat age
-            D.PAR.ratAgeGrp = ... % [Young,Old]
-                D.SS_IO_1.Age_Group(D.PAR.ratIndSS);
-            
-            % Get rat dob
-            D.PAR.ratDOB = ...
-                D.SS_IO_1.DOB(D.PAR.ratIndSS);
-            
-            % Get feeder condition
-            D.PAR.ratFeedCnd = ... % [C1,C2]
-                D.SS_IO_1.Feeder_Condition(D.PAR.ratIndSS);
-            
-            % Get feeder condition number
-            D.PAR.ratFeedCnd_Num = ... % [1,2]
-                find(D.PAR.catFeedCnd == D.PAR.ratFeedCnd);
-            
-            % CHANGE SESSION CONDITION LIST
-            cond_list = D.UI.condList;
-            if D.F.implant_session
-                cond_list(ismember(cond_list, 'Behavior_Training')) = [];
-            else
-                cond_list(ismember(cond_list, 'Implant_Training')) = [];
-            end
-            set(D.UI.popCond,'String',cond_list);
-            
-            % SET UI TO LAST SESSION
-            
-            % Set human
-            D.PAR.human = ...
-                D.SS_IO_1.Human(D.PAR.ratIndSS);
-            set(D.UI.popHuman, 'Value', ...
-                find(ismember(D.UI.humanList, D.PAR.human)));
-            
-            % Set cue condition
-            D.PAR.cueFeed = ...
-                D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS);
-            set(D.UI.toggCue( ...
-                ismember(D.PAR.catCueCond, D.PAR.cueFeed)), 'Value', 1);
-            % Set all others to off
-            set(D.UI.toggCue( ...
-                ~ismember(D.PAR.catCueCond, D.PAR.cueFeed)), 'Value', 0);
-            ToggCue();
-            
-            % Set reward delay
-            D.PAR.rewDel = ...
-                D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS);
-            set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.delList, D.PAR.rewDel)));
-            % run callback
-            PopRewDel();
-            
-            % Set sound conditions
-            D.F.sound(1:2) = logical(...
-                D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,1:2));
-            set(D.UI.toggSnd(D.F.sound(1:2)), 'Value', 1);
-            ToggSound();
-            
-            % Set Session Condition
-            D.PAR.sesCond = ...
-                D.SS_IO_1.Session_Condition(D.PAR.ratIndSS);
-            val_ind = find(ismember(D.UI.popCond.String, D.PAR.sesCond));
-            if ~isempty(val_ind)
-                set(D.UI.popCond, 'Value', val_ind);
-                % run callback
-                PopCond();
-            end
-            
-            % Set Session Task
-            D.PAR.sesTask = ...
-                D.SS_IO_1.Session_Task(D.PAR.ratIndSS);
-            set(D.UI.popTask, 'Value', ...
-                find(ismember(D.UI.taskList, D.PAR.sesTask)));
-            % run callback
-            PopTask();
-            
-            % Log/print
-            Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRat', D.PAR.ratLab));
-            Update_UI(10);
+        % Bail if nothing selected
+        if get(D.UI.popRat,'Value') == 1
+            return;
         end
+        
+        % Change to active color
+        set(D.UI.popRat, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Get Rat label
+        D.PAR.ratLab = ... % ('r####')
+            ['r',D.UI.popRat.String{get(D.UI.popRat,'Value')}(1:4)];
+        
+        % Get rat number
+        D.PAR.ratNum = ... % (####)
+            str2double(D.PAR.ratLab(2:end));
+        
+        % Get rat index in D.SS_IO_1
+        D.PAR.ratIndSS = ...
+            find(ismember(D.SS_IO_1.Properties.RowNames, D.PAR.ratLab));
+        
+        % Get rat index in D.TT_IO
+        D.PAR.ratIndTT = ...
+            find(ismember(D.TT_IO.Properties.RowNames, D.PAR.ratLab));
+        
+        % Get rat implant status
+        D.F.rat_implanted = D.SS_IO_1.Implanted(D.PAR.ratIndSS);
+        
+        % Bail here if not not running in ICR
+        if D.PAR.sesType ~= 'ICR_Session'
+            return;
+        end
+        
+        % Set implant status for session
+        D.F.implant_session = D.SS_IO_1.Implanted(D.PAR.ratIndSS);
+        
+        % Get rat age
+        D.PAR.ratAgeGrp = ... % [Young,Old]
+            D.SS_IO_1.Age_Group(D.PAR.ratIndSS);
+        
+        % Get rat dob
+        D.PAR.ratDOB = ...
+            D.SS_IO_1.DOB(D.PAR.ratIndSS);
+        
+        % Get feeder condition
+        D.PAR.ratFeedCnd = ... % [C1,C2]
+            D.SS_IO_1.Feeder_Condition(D.PAR.ratIndSS);
+        
+        % Get feeder condition number
+        D.PAR.ratFeedCnd_Num = ... % [1,2]
+            find(D.PAR.listFeedCnd == D.PAR.ratFeedCnd);
+        
+        % CHANGE SESSION CONDITION LIST
+        cond_list = [{''}; D.PAR.listSesCond];
+        if D.F.implant_session
+            cond_list(ismember(cond_list, 'Behavior_Training')) = [];
+        else
+            cond_list(ismember(cond_list, 'Implant_Training')) = [];
+        end
+        set(D.UI.popCond,'String',cond_list);
+        
+        % SET UI TO LAST SESSION
+        
+        % Set human
+        D.PAR.sesHuman = ...
+            D.SS_IO_1.Human(D.PAR.ratIndSS);
+        set(D.UI.popHuman, 'Value', ...
+            find(ismember(D.UI.popHuman.String, D.PAR.sesHuman)));
+        PopHuman();
+        
+        % Set cue condition
+        D.PAR.sesCue = ...
+            D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS);
+        set(D.UI.toggCue( ...
+            ismember(D.PAR.listCueCond, D.PAR.sesCue)), 'Value', 1);
+        % Set all others to off
+        set(D.UI.toggCue( ...
+            ~ismember(D.PAR.listCueCond, D.PAR.sesCue)), 'Value', 0);
+        ToggCue();
+        
+        % Set reward delay
+        D.PAR.sesRewDel = ...
+            D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS);
+        set(D.UI.popRewDel, 'Value', ...
+            find(ismember(D.UI.popRewDel.String, D.PAR.sesRewDel)));
+        % run callback
+        PopRewDel();
+        
+        % Set sound conditions
+        D.F.sound(1:2) = logical(...
+            D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,1:2));
+        set(D.UI.toggSnd(D.F.sound(1:2)), 'Value', 1);
+        ToggSound();
+        
+        % Set Session Condition
+        D.PAR.sesCond = ...
+            D.SS_IO_1.Session_Condition(D.PAR.ratIndSS);
+        val_ind = find(ismember(D.UI.popCond.String, D.PAR.sesCond));
+        if ~isempty(val_ind)
+            set(D.UI.popCond, 'Value', val_ind);
+            % run callback
+            PopCond();
+        end
+        
+        % Set Session Task
+        D.PAR.sesTask = ...
+            D.SS_IO_1.Session_Task(D.PAR.ratIndSS);
+        set(D.UI.popTask, 'Value', ...
+            find(ismember(D.UI.popTask.String, D.PAR.sesTask)));
+        % run callback
+        PopTask();
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRat', D.PAR.ratLab));
+        Update_UI(10);
         
     end
 
 % ---------------------------SESSION CONDITION-----------------------------
     function PopHuman(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popHuman,'Value') == 1
+            return;
+        end
         
         % Change to active color
         set(D.UI.popHuman, ...
@@ -11265,12 +11847,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.enabledBtnFrgCol);
         
         % Store value
-        D.PAR.human = D.UI.popHuman.String(get(D.UI.popHuman, 'Value'));
+        D.PAR.sesHuman(:) = D.UI.popHuman.String(get(D.UI.popHuman, 'Value'));
         
     end
 
 % ---------------------------SESSION CONDITION-----------------------------
     function PopCond(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popCond,'Value') == 1
+            return;
+        end
         
         % Change to active color
         set(D.UI.popCond, ...
@@ -11285,16 +11872,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set to minimum reward delay
             set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.delList, D.UI.delList(2))));
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
             % run callback
             PopRewDel();
             
             % Set cue condition
             set(D.UI.toggCue( ...
-                ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
+                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
             % Set all others to off
             set(D.UI.toggCue( ...
-                ~ismember(D.PAR.catCueCond, 'None')), 'Value', 0);
+                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
             ToggCue();
             
             % Change other buttons for rot cond
@@ -11302,22 +11889,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set Session Task to Track
             set(D.UI.popTask, 'Value', ...
-                find(ismember(D.UI.taskList, 'Track')));
+                find(ismember(D.UI.popTask.String, 'Track')));
             % run callback
             PopTask();
             
             % Set to maximum reward delay
             set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.delList, D.UI.delList(end))));
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(end))));
             % run callback
             PopRewDel();
             
             % Set cue condition
             set(D.UI.toggCue( ...
-                ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
+                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
             % Set all others to off
             set(D.UI.toggCue( ...
-                ~ismember(D.PAR.catCueCond, 'None')), 'Value', 0);
+                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
             ToggCue();
             
             % Set sound condition
@@ -11337,29 +11924,34 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -----------------------------SESSION TASK--------------------------------
     function PopTask(~, ~, ~)
         
+        % Bail if nothing selected
+        if get(D.UI.popTask,'Value') == 1
+            return;
+        end
+        
         % Change to active color
         set(D.UI.popTask, ...
             'BackgroundColor', D.UI.activeCol, ...
             'ForegroundColor', D.UI.enabledBtnFrgCol);
         
         % Store value
-        D.PAR.sesTask(:) = D.UI.taskList(get(D.UI.popTask, 'Value'));
+        D.PAR.sesTask(:) = D.UI.popTask.String(get(D.UI.popTask, 'Value'));
         
         % Change settings for 'Forage'
         if D.PAR.sesTask == 'Forage'
             
             % Set to minimum reward delay
             set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.delList, D.UI.delList(2))));
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
             % run callback
             PopRewDel();
             
             % Set cue condition
             set(D.UI.toggCue( ...
-                ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
+                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
             % Set all others to off
             set(D.UI.toggCue( ...
-                ~ismember(D.PAR.catCueCond, 'None')), 'Value', 0);
+                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
             ToggCue();
             
         end
@@ -11375,18 +11967,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -----------------------------REWARD DELAY--------------------------------
     function PopRewDel(~, ~, ~)
         
+        % Bail if nothing selected
+        if get(D.UI.popRewDel,'Value') == 1
+            return;
+        end
+        
         % Change to active color
         set(D.UI.popRewDel, ...
             'BackgroundColor', D.UI.activeCol, ...
             'ForegroundColor', D.UI.enabledBtnFrgCol);
         
-        if get(D.UI.popRewDel,'Value') ~= 1
-            % Get selected minimum time in bounds for reward
-            D.PAR.rewDel = str2double(D.UI.delList{get(D.UI.popRewDel,'Value'),:});
-        end
+        % Store as cat
+        D.PAR.sesRewDel(:) = D.UI.popRewDel.String{get(D.UI.popRewDel,'Value'),:};
+        
+        % Convert to number
+        D.PAR.rewDel = str2double(char(D.PAR.sesRewDel));
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRewDel', num2str(D.PAR.rewDel)));
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'PopRewDel', char(D.PAR.sesRewDel)));
         Update_UI(10);
         
         % Check settings
@@ -11418,7 +12016,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Set_Button_State(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Update');
             
             % Save data
-            D.PAR.cueFeed(:) = cue_str;
+            D.PAR.sesCue(:) = cue_str;
             
             % Change to inactive
         else
@@ -11427,7 +12025,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'ToggCue', char(D.PAR.cueFeed)));
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'ToggCue', char(D.PAR.sesCue)));
         Update_UI(10);
         
         % Check settings
@@ -11480,10 +12078,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ...
                 get(D.UI.popRat,'Value') == 1 || ...
                 get(D.UI.popHuman,'Value') == 1 || ...
-                get(D.UI.popCond,'Value') == 1 || ...
+                (D.PAR.sesType == 'ICR_Session' && ...
+                (get(D.UI.popCond,'Value') == 1 || ...
                 get(D.UI.popTask,'Value') == 1 || ...
                 get(D.UI.popRewDel,'Value') == 1 || ...
-                all(cell2mat(get(D.UI.toggCue,'Value')) == 0)
+                all(cell2mat(get(D.UI.toggCue,'Value')) == 0)))
             
             choice = dlgAWL(...
                 '!!WARNING: MISSING ENTRY!!', ...
@@ -11495,6 +12094,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Bail out of function
             switch choice
                 case 'OK'
+                    
+                    % Unset button
+                    set(D.UI.ToggSetupDone, 'Value', 0);
+                    
+                    % Bail
                     return
             end
             
@@ -11504,8 +12108,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Set_Button_State(D.UI.toggSetupDone, 'Update');
         Set_Object_Group('Setup_Objects', 'Disable')
         
-        % Signal to continue setup
-        D.F.rat_loaded = true;
+        % Set flag
+        D.F.ses_data_loaded = true;
         
         % Log/print
         Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggSetupDone', get(D.UI.toggSetupDone,'Value')));
@@ -11542,9 +12146,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         weight_prcnt = round(D.PAR.ratWeightProportion*100);
         
         % Print new values
-        D.UI.txtCorrectedWeight(2).String = sprintf('%dg', D.PAR.ratWeightCorrected);
-        D.UI.txtLastWeight(2).String = sprintf('%dg', D.PAR.ratWeightLast);
-        D.UI.txtPercentageWeight(2).String = sprintf('%d%', weight_prcnt);
+        D.UI.txtCorrectedWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightCorrected);
+        D.UI.txtLastWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightLast);
+        D.UI.txtPercentageWeight(2).String = sprintf('%0.0f', weight_prcnt);
         
         % Update button
         Set_Button_State(D.UI.toggUpdateWeight, 'Update');
@@ -11552,7 +12156,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ------------------------------SAVE FOOD INFO-----------------------------
-    function ToggSaveFeed(~, ~, ~)
+    function ToggUpdateFed(~, ~, ~)
         
         % Get pellet entry
         D.PAR.feedPellets = str2double(D.UI.editFeedPellets.String);
@@ -11568,15 +12172,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Unset and bail if any bad values
         if any(isnan([D.PAR.feedPellets, D.PAR.feedMash, D.PAR.feedEnsure, D.PAR.feedSTAT]))
-            set(D.UI.toggSaveFeed, 'Value', 0)
+            set(D.UI.toggUpdateFed, 'Value', 0)
             return;
         end
         
         % Update button
-        Set_Button_State(D.UI.toggSaveFeed, 'Update');
+        Set_Button_State(D.UI.toggUpdateFed, 'Update');
         
     end
-
 
 % -------------------------------ACQ BUTTON--------------------------------
     function ToggAcq(~, ~, ~)
@@ -12190,10 +12793,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             PopBulldoze();
         end
         
-        % Tell CS rat is out
-        Send_M2C('I', 0)
-        D.F.rat_in = false;
-        
         % Save end time
         D.T.ses_end = Sec_DT(now);
         
@@ -12217,15 +12816,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -------------------------SAVE SESSION DATA-------------------------------
-    function BtnSaveSes(~, ~, ~)
+    function ToggSaveSes(~, ~, ~)
         
         % Only run once
-        if get(D.UI.btnSaveSes, 'UserData') > 0
+        if get(D.UI.toggSave, 'UserData') > 0
             return
         end
         
-        % Disable save button so only pressed once
-        set(D.UI.btnSaveSes, 'UserData', 1);
+        % "Disable" save button so only pressed once
+        set(D.UI.toggSave, 'UserData', 1);
+        
+        % Update button
+        Set_Button_State(D.UI.toggSave, 'Update');
         
         % Start save status timer
         start(timer_save);
@@ -12234,22 +12836,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.do_save = true;
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnSaveSes', get(D.UI.btnSaveSes,'Value')));
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggSaveSes', get(D.UI.toggSave,'Value')));
         Update_UI(10);
     end
 
 % ------------------------------QUIT ALL-----------------------------------
-    function BtnQuitSes(~, ~, ~)
+    function ToggQuitSes(~, ~, ~)
         
         % Only run once
-        if get(D.UI.btnQuit, 'UserData') > 0
+        if get(D.UI.toggQuit, 'UserData') > 0
             return
         end
         
         % Check for save unless quit before setup done
-        if (D.F.rat_loaded && ~D.F.ses_save_done && ~isTTtrackSolo) || ...
-                (D.F.implant_session && ~D.F.tt_save_done) || ...
-                (isTTtrackSolo && ~D.F.tt_save_done)
+        if (D.F.ses_data_loaded && ~D.F.ses_save_done)
             
             % Construct a questdlg with two options
             choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
@@ -12277,15 +12877,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        % Disable save button so only pressed once
-        set(D.UI.btnQuit, 'UserData', 1);
+        % "Disable" save button so only pressed once
+        set(D.UI.toggQuit, 'UserData', 1);
+        
+        % Update button
+        Set_Button_State(D.UI.toggQuit, 'Update');
         
         % Start quit status timer
         start(timer_quit);
         
         % Print session aborting
         if ~D.F.ses_save_done
-            Console_Write('**WARNING** [BtnQuitSes] ABORTING SESSION...');
+            Console_Write('**WARNING** [ToggQuitSes] ABORTING SESSION...');
         end
         
         % Stop halt if still active
@@ -12298,12 +12901,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if (get(D.UI.toggBulldoze, 'Value') == 1)
             set(D.UI.toggBulldoze, 'Value', 0);
             PopBulldoze();
-        end
-        
-        % Tell CS rat is out
-        if D.F.rat_in
-            Send_M2C('I', 0)
-            D.F.rat_in = false;
         end
         
         % Stop recording
@@ -12339,7 +12936,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'BtnQuitSes', get(D.UI.btnQuit,'Value')));
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggQuitSes', get(D.UI.toggQuit,'Value')));
         Update_UI(10);
         
     end
@@ -12385,9 +12982,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if (get(D.UI.toggBulldoze, 'Value') == 1)
             
             % Get bulldoze delay
-            delStr = D.UI.bullList(get(D.UI.popBulldoze, 'Value'));
+            delStr = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
             delStr = regexp(delStr, '\d*', 'match');
-            D.PAR.bullDel = str2double(delStr{:}{:});
+            D.PAR.bullDel = str2double(delStr{:});
             D.PAR.bullSpeed = str2double(get(D.UI.editBulldoze, 'String'));
             
             % Change backround text
@@ -12626,473 +13223,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set user data so data will be cleared in main loop
         D.UI.btnClrTT.UserData = 1;
-    end
-
-% -----------------------LOAD ALL PREVEOUS TT DATA-------------------------
-    function PopLoadRatTTInf(hObject, ~, ~)
-        
-        % Get dropdown value
-        dd_val = get(hObject, 'Value');
-        
-        % Bail if not valid selection
-        if dd_val == 1
-            return
-        end
-        
-        % Get rat number as string
-        D.TT.ratID = D.PAR.ratList{dd_val};
-        
-        % Get Rat label
-        D.PAR.ratLab = ... % ('r####')
-            ['r',D.TT.ratID(1:4)];
-        
-        % Get rat index in D.TT_IO
-        D.PAR.ratIndTT = ...
-            find(ismember(D.TT_IO.Properties.RowNames, D.PAR.ratLab));
-        
-        % Get rat index in D.SS_IO_1
-        D.PAR.ratIndSS = ...
-            find(ismember(D.SS_IO_1.Properties.RowNames, D.PAR.ratLab));
-        
-        % Get implant coordinates
-        D.TT.ttCoords = D.TT_IO.Implant_Coordinates(D.PAR.ratIndTT,:);
-        
-        % Get number of bundles
-        D.TT.nBndl = ~any(isnan(D.TT.ttCoords{2}))+1;
-        
-        % Get tt configs
-        D.TT.ttConfig = D.TT_IO.Implant_Configuration(D.PAR.ratIndTT,:);
-        
-        % Get bundle angle
-        D.UI.bndAng = D.TT_IO.Implant_Angle(D.PAR.ratIndTT,:);
-        D.UI.bndAng{1} = deg2rad(270 + D.UI.bndAng{1});
-        D.UI.bndAng{2} = deg2rad(270 + D.UI.bndAng{2});
-        
-        % Get bundle labels
-        D.TT.bndlLab = D.TT_IO.Bundle_Label{D.PAR.ratIndTT,:};
-        
-        % Get tt list
-        D.TT.ttList = D.TT_IO.TT_Label{D.PAR.ratIndTT,:};
-        
-        % Get tt map
-        D.TT.ttMap = D.TT_IO.TT_Mapping(D.PAR.ratIndTT,:);
-        
-        % Remove unused entries
-        for z_b = 1:2
-            if D.TT.nBndl==1 && z_b == 2
-                D.TT.ttMap{z_b} = D.TT.ttMap{1}(1,1);
-            else
-                D.TT.ttMap{z_b} = D.TT.ttMap{z_b}(1:D.TT.ttConfig{z_b}(1),1:D.TT.ttConfig{z_b}(2));
-            end
-        end
-        
-        % Get included TTs
-        D.TT.ttInclude = D.TT_IO.TT_Include{D.PAR.ratIndTT,:};
-        
-        % Get references
-        D.TT.refMap = ...
-            cellfun(@(x,y) [x, ' ', y], ...
-            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1))), ...
-            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,2))), ...
-            'uni', false);
-        D.TT.refList = cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1)));
-        
-        % Set pop ref list
-        D.UI.popRefTT.String = D.TT.refMap;
-        
-        % Get thread pitch
-        D.UI.umPerTurn = D.TT_IO.Thread_Pitch(D.PAR.ratIndTT)*1000;
-        
-        % Store current log
-        D.TT.ttLogTable = D.TT_IO.Turn_Log{D.PAR.ratIndTT};
-        D.TT.ttLogNew = D.TT.ttLogTable(end,:);
-        
-        % Get session number
-        D.TT.Ses = D.TT.ttLogTable.Session(end)+1;
-        
-        % Initialize arrays
-        D.TT.ttFlds = cell(2,18);
-        D.TT.nTT = zeros(1,2);
-        D.UI.ttCol = NaN(2,18,3);
-        
-        % Get tt string info
-        for z_b = 1:D.TT.nBndl
-            
-            % Store tt fields
-            tt_list = cellstr(char(D.TT.ttMap{z_b}(~isundefined(D.TT.ttMap{z_b}))));
-            tt_list = D.TT.ttList(ismember( D.TT.ttList, tt_list));
-            D.TT.ttFlds(z_b, 1:length(tt_list)) =  tt_list;
-            
-            % Get number of tts in each bundle
-            D.TT.nTT(z_b) = length(tt_list);
-            
-            % Specify tt colors
-            D.UI.ttCol(z_b,1:D.TT.nTT(z_b),:) = hsv(D.TT.nTT(z_b));
-        end
-        
-        % Remove empty entries
-        D.TT.ttFlds = D.TT.ttFlds(:,1:max(D.TT.nTT));
-        D.UI.ttCol = D.UI.ttCol(:,1:max(D.TT.nTT),:);
-        
-        % Create tt plot handles
-        D.UI.ttTrkLin = gobjects(D.TT.nBndl,max(D.TT.nTT));
-        D.UI.ttTrkMrk = gobjects(D.TT.nBndl,max(D.TT.nTT),50);
-        
-        % Resize axis
-        center = (max([size(D.TT.ttMap{2}),size(D.TT.ttMap{1})]) + 0.5)/2;
-        
-        % Store titles
-        title_arr = {sprintf('    %s Bundle', D.TT.bndlLab{1}), ...
-            sprintf('    %s Bundle', D.TT.bndlLab{2}), ...
-            'Drive Top'};
-        
-        % Store axes labels
-        xlab_arr = {sprintf('A-P %0.2fmm', D.TT.ttCoords{1}(1)), ...
-            sprintf('A-P %0.2fmm', D.TT.ttCoords{2}(1)), ...
-            'Medial'};
-        ylab_arr = {sprintf('M-L %0.2fmm', D.TT.ttCoords{1}(2)), ...
-            sprintf('M-L %0.2fmm', D.TT.ttCoords{2}(2)), ...
-            'Anterior'};
-        
-        % Plot TT bundle loc legends
-        for z_l = 1:3
-            
-            % Add bundle title
-            set(D.UI.axLeg(z_l), 'Title', ...
-                text(...
-                'String', title_arr{z_l}, ...
-                'FontSize',D.UI.fontSzTxtLrg(1), ...
-                'FontWeight', 'bold', ...
-                'Color', 'k'))
-            
-            % Show implant A-P coordinates on x axes
-            set(D.UI.axLeg(z_l).XLabel, ...
-                'Units', 'Normalized', ...
-                'FontSize', D.UI.fontSzTxtSml(1), ...
-                'String', xlab_arr{z_l});
-            D.UI.axLeg(z_l).XLabel.Position(2) = D.UI.axLeg(z_l).XLabel.Position(2)+0.05;
-            
-            % Show implant M-L coordinates on y axes
-            set(D.UI.axLeg(z_l).YLabel, ...
-                'Units', 'Normalized', ...
-                'FontSize', D.UI.fontSzTxtSml(1), ...
-                'String', ylab_arr{z_l});
-            D.UI.axLeg(z_l).YLabel.Position(1) = D.UI.axLeg(z_l).YLabel.Position(1)+0.05;
-            
-            % Bail for last loop
-            if z_l == 3
-                continue;
-            end
-            
-            % Set axis lims
-            set(D.UI.axLeg(z_l), ...
-                'XLim', [D.TT.ttConfig{z_l}(1)/2 - center+ 0.5, D.TT.ttConfig{z_l}(1)/2 + center + 0.5], ...
-                'YLim', [D.TT.ttConfig{z_l}(2)/2 - center+ 0.5, D.TT.ttConfig{z_l}(2)/2 + center + 0.5])
-            
-            % Add panel title
-            set(D.UI.panSelectTT(z_l), 'Title', D.TT.bndlLab{z_l});
-            
-            % Create markers with text
-            z_b = z_l;
-            for z_tt = 1:D.TT.nTT(z_l)
-                
-                % Find position of next tt
-                tt_fld = D.TT.ttFlds{z_b,z_tt};
-                [x,y] = find(ismember(D.TT.ttMap{z_b}, tt_fld) == 1);
-                
-                % Bail if not found
-                if isempty(x) || isempty(y)
-                    continue
-                end
-                
-                % Plot tt marker
-                D.UI.ttBndlLegMrk(z_b,z_tt) = ...
-                    plot(x , y, 'o', 'Parent', D.UI.axLeg(z_b), ...
-                    'MarkerEdgeColor', D.UI.ttCol(z_b,z_tt,:), ...
-                    'MarkerFaceColor', D.UI.ttCol(z_b,z_tt,:)*0.5, ...
-                    'LineWidth', D.UI.ttBndlLegMrkWdth(1), ...
-                    'MarkerSize', 13);
-                tt_lab = regexprep(D.TT.ttFlds{z_b,z_tt}, 'TT', '');
-                D.UI.ttBndlLegTxt(z_b,z_tt) = ...
-                    text(x , y, tt_lab, 'Parent', D.UI.axLeg(z_b), ...
-                    'Color', [1, 1, 1], ...
-                    'HorizontalAlignment', 'Center', ...
-                    'FontSize', D.UI.fontSzTxtSml(1), ...
-                    'FontWeight', 'bold');
-            end
-        end
-        
-        % Get TT loc
-        tt_lab_shift = circshift([D.TT.ttFlds(1,:),D.TT.ttFlds(2,:)], 1);
-        rad_arr = linspace(0, 2*pi - 2*pi*(1/sum(D.TT.nTT)), sum(D.TT.nTT));
-        tt_loc_x = 0.85 * sin(rad_arr);
-        tt_loc_y = 0.85 * cos(rad_arr);
-        
-        % Set axis lims
-        set(D.UI.axLeg(3), ...
-            'XLim', [-1,1], ...
-            'YLim', [-1,1])
-        
-        % Plot TT loc on drive
-        for z_tt = 1:length(tt_lab_shift)
-            
-            % Get bundle inds
-            tt_lab = tt_lab_shift{z_tt};
-            [bndl_ind, tt_ind] = find(ismember(D.TT.ttFlds, tt_lab));
-            
-            % Copy objects
-            D.UI.ttDriveLegMrk(bndl_ind,tt_ind) = ...
-                copyobj(D.UI.ttBndlLegMrk(bndl_ind,tt_ind), D.UI.axLeg(3));
-            D.UI.ttDriveLegTxt(bndl_ind,tt_ind) = ...
-                copyobj(D.UI.ttBndlLegTxt(bndl_ind,tt_ind), D.UI.axLeg(3));
-            
-            % Change position
-            D.UI.ttDriveLegMrk(bndl_ind,tt_ind).XData = tt_loc_x(z_tt);
-            D.UI.ttDriveLegMrk(bndl_ind,tt_ind).YData = tt_loc_y(z_tt);
-            D.UI.ttDriveLegTxt(bndl_ind,tt_ind).Position(1) = tt_loc_x(z_tt);
-            D.UI.ttDriveLegTxt(bndl_ind,tt_ind).Position(2) = tt_loc_y(z_tt);
-        end
-        
-        % Button position
-        wdth_norm = 0.375;
-        lft_norm = 0.005;
-        ht_norm = 1/max(D.TT.nTT) * 0.85;
-        btm_norm = linspace(1-ht_norm*1.25, 0.005, max(D.TT.nTT));
-        
-        % Create handle arrays
-        D.UI.toggTT = gobjects(D.TT.nBndl,max(D.TT.nTT));
-        
-        % Clust sub toggles
-        D.UI.toggSubPlotTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,D.PAR.maxClust);
-        
-        % Flag features sub toggles
-        D.UI.toggSubFlagTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,6);
-        set_flag_labs = {'U', char(415), 'W', 'N', '?', '?'};
-        
-        % TT hear sub toggles
-        D.UI.toggSubHearChTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,4,2);
-        D.UI.toggSubHearSdTT = gobjects(D.TT.nBndl,max(D.TT.nTT)-1,2);
-        
-        % Loop through each bundle
-        for z_b = 1:D.TT.nBndl
-            
-            % Looop through each TT
-            for z_tt = 1:D.TT.nTT(z_b)
-                
-                % Get tt strings
-                tt_fld = D.TT.ttFlds{z_b,z_tt};
-                tt_lab = regexprep(D.TT.ttFlds{z_b,z_tt}, 'TT', '');
-                
-                % ADD MAIN TT SELECT BUTTONS
-                btn_tt_pos = [lft_norm(1), btm_norm(z_tt), wdth_norm, ht_norm];
-                D.UI.toggTT(z_b,z_tt) = ...
-                    uicontrol('style','togglebutton', ...
-                    'Parent', D.UI.panSelectTT(z_b), ...
-                    'Enable', 'on', ...
-                    'BackgroundColor', D.UI.enabledCol, ...
-                    'ForegroundColor', D.UI.ttCol(z_b,z_tt,:), ...
-                    'String', tt_lab,...
-                    'Callback', {@ToggLoadTT},...
-                    'UserData', [z_b,z_tt], ...
-                    'Units', 'Normalized', ...
-                    'Value', 0, ...
-                    'Position', btn_tt_pos, ...
-                    'FontName', D.UI.btnFont,...
-                    'FontWeight', 'Bold',...
-                    'FontSize', D.UI.fontSzBtnLrg(1), ...
-                    'Visible', 'off');
-                
-                % ADD DISABLED TT BUTTONS
-                ht = ht_norm*0.35;
-                wd = wdth_norm*0.35;
-                lft = lft_norm;
-                btm = btm_norm(z_tt);
-                btn_dis_pos = [lft, btm, wd, ht];
-                val = ...
-                    ~D.TT.ttInclude(ismember(D.TT.ttList, tt_fld));
-                D.UI.toggIncludeTT(z_b,z_tt) = uicontrol('style','togglebutton', ...
-                    'Parent', D.UI.panSelectTT(z_b), ...
-                    'Units', 'Normalized', ...
-                    'String', sprintf('%c', char(216)),...
-                    'Callback', {@ToggIncludeTT},...
-                    'FontName', D.UI.btnFont,...
-                    'BackgroundColor', D.UI.enabledCol, ...
-                    'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-                    'FontWeight', 'Bold',...
-                    'FontSize',  5, ...
-                    'Enable', 'on', ...
-                    'Position', btn_dis_pos, ...
-                    'UserData', [z_b,z_tt], ...
-                    'Value', val, ...
-                    'Visible', 'off');
-                
-                % Plot tt track
-                Plot_TT_Path(z_b, z_tt);
-                
-                % Bail if ref
-                if ~isempty(strfind(D.TT.ttFlds{z_b,z_tt}, 'R'))
-                    continue
-                end
-                
-                % ADD CLUSTER BUTTONS
-                wd = (1 - btn_tt_pos(3) - btn_tt_pos(1)*3)/5;
-                ht = btn_tt_pos(4)/2;
-                btm_arr = ...
-                    [repmat(btn_tt_pos(2)+ht,5,1);repmat(btn_tt_pos(2),5,1)];
-                lft_arr = ...
-                    repmat(linspace(btn_tt_pos(1)+btn_tt_pos(3), btn_tt_pos(1)+btn_tt_pos(3) + wd*4, 5), 1, 2);
-                for z_c = 1:D.PAR.maxClust
-                    
-                    % Create cluster button
-                    btn_c_pos = [lft_arr(z_c), btm_arr(z_c), wd, ht];
-                    D.UI.toggSubPlotTT(z_b,z_tt,z_c) = ...
-                        uicontrol('style','togglebutton', ...
-                        'Parent', D.UI.panSelectTT(z_b), ...
-                        'Enable', 'Off', ...
-                        'BackgroundColor', D.UI.enabledCol, ...
-                        'ForegroundColor', D.UI.clustCol(z_c,:), ...
-                        'String',num2str(z_c-1),...
-                        'Callback', {@ToggPlotTT},...
-                        'UserData', [z_b, z_tt, z_c], ...
-                        'Units','Normalized', ...
-                        'Value', 0, ...
-                        'Position', btn_c_pos, ...
-                        'FontName',D.UI.btnFont,...
-                        'FontWeight','Bold',...
-                        'Visible', 'off', ...
-                        'FontSize', D.UI.fontSzBtnSml(1));
-                    
-                end
-                
-                % ADD FLAG FEATURES
-                
-                % Copy cluster buttons
-                D.UI.toggSubFlagTT(z_b,z_tt,1:3) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,1:3), D.UI.panSelectTT(z_b));
-                D.UI.toggSubFlagTT(z_b,z_tt,4:end) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,7:9), D.UI.panSelectTT(z_b));
-                
-                % Set position
-                wd = (1 - btn_tt_pos(3) - btn_tt_pos(1)*3)/3;
-                lft_arr = ...
-                    repmat(linspace(btn_tt_pos(1)+btn_tt_pos(3), btn_tt_pos(1)+btn_tt_pos(3) + wd*2, 3), 1, 2);
-                
-                % Modify buttons
-                for z_f = 1:6
-                    
-                    % Get value
-                    val = D.TT.ttLogNew.([D.TT.ttFlds{z_b,z_tt},'_F'])(z_f);
-                    
-                    % Set string etc
-                    set(D.UI.toggSubFlagTT(z_b,z_tt,z_f), ...
-                        'String', set_flag_labs{z_f}, ...
-                        'ForegroundColor', D.UI.enabledBtnFrgCol, ...
-                        'UserData', [z_b,z_tt,z_f], ...
-                        'Callback', {@ToggFlagTT}, ...
-                        'Value', val);
-                    
-                    % Change pos
-                    D.UI.toggSubFlagTT(z_b,z_tt,z_f).Position(1) = lft_arr(z_f);
-                    D.UI.toggSubFlagTT(z_b,z_tt,z_f).Position(3) = wd;
-                    
-                end
-                
-                % ADD HEAR TT CHAN BUTTONS
-                
-                % Copy cluster buttons
-                D.UI.toggSubHearSdTT(z_b,z_tt,1) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,1), D.UI.panSelectTT(z_b));
-                D.UI.toggSubHearSdTT(z_b,z_tt,2) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,6), D.UI.panSelectTT(z_b));
-                D.UI.toggSubHearChTT(z_b,z_tt,:,1) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,2:5), D.UI.panSelectTT(z_b));
-                D.UI.toggSubHearChTT(z_b,z_tt,:,2) = copyobj(D.UI.toggSubPlotTT(z_b,z_tt,7:end), D.UI.panSelectTT(z_b));
-                
-                % Modify buttons
-                sn_lab = {'L','R'};
-                for z_sn = 1:2
-                    
-                    % Set sound side button
-                    set(D.UI.toggSubHearSdTT(z_b,z_tt,z_sn), ...
-                        'String', sn_lab{z_sn}, ...
-                        'ForegroundColor', D.UI.enabledBtnFrgCol, ...
-                        'UserData', [z_b,z_tt,0,z_sn], ...
-                        'Callback', {@ToggHearTT});
-                    
-                    for z_chan = 1:4
-                        
-                        % Set values
-                        set(D.UI.toggSubHearChTT(z_b,z_tt,z_chan,z_sn), ...
-                            'String', num2str(z_chan-1), ...
-                            'ForegroundColor', D.UI.hearCol(z_chan,:), ...
-                            'UserData', [z_b,z_tt,z_chan,z_sn], ...
-                            'Callback', {@ToggHearTT});
-                    end
-                end
-                
-            end
-        end
-        
-        % Set paxinos sag center of first bundle
-        img_ind = knnsearch(D.TT.imgCoor{1}', D.TT.ttCoords{1}(2));
-        set(D.UI.sldSwtchImg(1), 'Value', img_ind);
-        SldSwtchImg(D.UI.sldSwtchImg(1));
-        
-        % Set paxinos cor center of first bundle
-        img_ind = knnsearch(D.TT.imgCoor{2}', D.TT.ttCoords{1}(1));
-        set(D.UI.sldSwtchImg(2), 'Value', img_ind);
-        SldSwtchImg(D.UI.sldSwtchImg(2));
-        
-        % Set hor to deepest tt in first bundle
-        dpth_max = 0;
-        for z_tt = 1:D.TT.nTT(1)
-            dpth_max = max(dpth_max, D.TT.ttLogNew.([D.TT.ttFlds{1,z_tt},'_D']));
-        end
-        img_ind = knnsearch(D.TT.imgCoor{3}', -1*dpth_max/1000);
-        set(D.UI.sldSwtchImg(3), 'Value', img_ind);
-        SldSwtchImg(D.UI.sldSwtchImg(3));
-        
-        % Disable load button
-        set(D.UI.popLoadRatTTInf, 'Enable', 'Off');
-        
-        % Set data loaded flag
-        D.F.rat_loaded = true;
-        
-        % Auto run GUI
-        if (D.DB.doAutoSetTT)
-            
-            % Get number of full turns
-            turn_ind = ...
-                find(ismember(cellstr(get(D.UI.popTrn, 'Str')), num2str(round((D.DB.depthSet/(D.UI.umPerTurn/1000))))));
-            if isempty(turn_ind)
-                turn_ind = length(get(D.UI.popTrn,'String'));
-            end
-            
-            % Loop through each bundle
-            for z_b = 1:D.TT.nBndl
-                
-                % Looop through each TT
-                for z_tt = 1:D.TT.nTT(z_b)
-                    
-                    % Load next TT
-                    if isTTtrackSolo
-                        set(D.UI.toggTT(z_b,z_tt), 'Value', 1);
-                        ToggLoadTT(D.UI.toggTT(z_b,z_tt));
-                    end
-                    
-                    % Pause
-                    pause(0.05);
-                    
-                    % Set turns to max
-                    set(D.UI.popTrn, 'Value', turn_ind);
-                    
-                    % Set to random orientation
-                    %set(D.UI.popOr,'Value', ceil(rand(1,1)*length(get(D.UI.popOr,'String'))))
-                    
-                    % Pause
-                    pause(0.05);
-                    
-                    % Save
-                    ToggUpdateLogTT();
-                end
-            end
-        end
-        
     end
 
 % ----------------------------SELECT TT ACTION-----------------------------
@@ -14005,21 +14135,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% ------------------BUTTON PRESS TO SAVE ALL TT ENTRIES--------------------
-    function BtnSaveLogTT(hObject, ~, ~)
-        
-        % Run function
-        Save_TT_Track_Data();
-        
-        % Set user data to 1
-        set(hObject, 'UserData', 1)
-        
-        % Set backround active and disable
-        set(D.UI.btnSaveLogTT, 'BackgroundColor', D.UI.activeCol);
-        Set_Button_State(D.UI.btnSaveLogTT, 'Unenable');
-        
-    end
-
 % ---------------------------SET 3D PLOT VIEW------------------------------
     function Set3dView(hObject, ~, ~)
         
@@ -14284,36 +14399,36 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             case 'Quit'
                 
                 % Itterate count
-                D.UI.btnQuit.UserData = D.UI.btnQuit.UserData +1;
-                if D.UI.btnQuit.UserData>4
-                    D.UI.btnQuit.UserData = 1;
+                D.UI.toggQuit.UserData = D.UI.toggQuit.UserData +1;
+                if D.UI.toggQuit.UserData>4
+                    D.UI.toggQuit.UserData = 1;
                 end
                 
                 % Change button string
                 bnt_str = ...
                     sprintf('%s%s%s', agent, ...
-                    repmat('.',1,D.UI.btnQuit.UserData), ...
-                    blanks(4-D.UI.btnQuit.UserData));
-                set(D.UI.btnQuit, ...
+                    repmat('.',1,D.UI.toggQuit.UserData), ...
+                    blanks(4-D.UI.toggQuit.UserData));
+                set(D.UI.toggQuit, ...
                     'String', bnt_str);
                 
                 % Update Save button
             case 'Save'
                 
                 % Itterate count
-                D.UI.btnSaveSes.UserData = D.UI.btnSaveSes.UserData +1;
-                if D.UI.btnSaveSes.UserData>4
-                    D.UI.btnSaveSes.UserData = 1;
+                D.UI.toggSave.UserData = D.UI.toggSave.UserData +1;
+                if D.UI.toggSave.UserData>4
+                    D.UI.toggSave.UserData = 1;
                 end
                 
                 % Change button string
                 bnt_str = ...
                     sprintf('%s%s%s', agent, ...
-                    repmat('.',1,D.UI.btnSaveSes.UserData), ...
-                    blanks(4-D.UI.btnSaveSes.UserData));
-                set(D.UI.btnSaveSes, ...
+                    repmat('.',1,D.UI.toggSave.UserData), ...
+                    blanks(4-D.UI.toggSave.UserData));
+                set(D.UI.toggSave, ...
                     'String', bnt_str);
-                set(D.UI.btnSaveSes, ...
+                set(D.UI.toggSave, ...
                     'String', bnt_str);
         end
         
@@ -14339,22 +14454,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         if (strcmp(btn_str,'Quit'))
             % Disable quit button
-            if ~isfield(D.UI, 'btnQuit')
-                if ishandle(D.UI.btnQuit)
-                    set(D.UI.btnQuit, 'String', btn_str);
-                    set(D.UI.btnQuit, 'BackgroundColor', D.UI.activeCol);
-                    Set_Button_State(D.UI.btnQuit, 'Unenable');
+            if isfield(D.UI, 'toggQuit')
+                if ishandle(D.UI.toggQuit)
+                    set(D.UI.toggQuit, 'String', btn_str);
+                    Set_Button_State(D.UI.toggQuit, 'Unenable');
                 end
             end
         end
         
         if (strcmp(btn_str,'Save'))
             % Disable save button
-            if ~isfield(D.UI, 'btnSave')
-                if ishandle(D.UI.btnSaveSes)
-                    set(D.UI.btnSaveSes, 'String', btn_str);
-                    set(D.UI.btnSaveSes, 'BackgroundColor', D.UI.activeCol);
-                    Set_Button_State(D.UI.btnSaveSes, 'Unenable');
+            if isfield(D.UI, 'toggSave')
+                if ishandle(D.UI.toggSave)
+                    set(D.UI.toggSave, 'String', btn_str);
+                    Set_Button_State(D.UI.toggSave, 'Unenable');
                 end
             end
         end
@@ -14371,15 +14484,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             tab_now = hObject;
             D.UI.tabgp.SelectedTab = hObject;
         end
-            
+        
+        % Bail if 'TABLE' tab not setup
+        if ~D.F.table_tab_setup
+            return;
+        end
+        
         % Get last tab
         tab_last = get(D.UI.tabgp, 'UserData');
         
         % Update last tab
         set(D.UI.tabgp, 'UserData', tab_now)
         
-        % Bail if tt track not setup
-        if ~D.F.tt_track_setup
+        % Change main shared button parent
+        set(D.UI.toggMon, 'Parent', tab_now)
+        set(D.UI.toggSave, 'Parent', tab_now)
+        set(D.UI.toggQuit, 'Parent', tab_now)
+        
+        
+        % Bail if on 'TABLE' tab 'TT TRACK' not setup
+        if strcmp(tab_now.Title, 'TABLE') || ~D.F.tt_tab_setup
             return;
         end
         
@@ -14390,60 +14514,52 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             set(D.UI.mouseRotView, 'Enable', 'off')
         end
         
-        % Change mon select button parent
-        set(D.UI.toggMon, 'Parent', tab_now)
-        
-        % Bail if on table tab
-        if strcmp(tab_now.Title, 'TABLE')
-            return;
-        end
-        
         % Change tt select objects parent
         set(D.UI.panSelectTT, 'Parent', tab_now)
         set(D.UI.toggMainActionTT, 'Parent', tab_now)
         set(D.UI.toggFlagTT, 'Parent', tab_now)
         set(D.UI.toggHearTT, 'Parent', tab_now)
         set(D.UI.toggPlotTT, 'Parent', tab_now)
-        set(D.UI.btnQuit, 'Parent', tab_now)
         
-        % Do not move if already on this tab
-        if tab_now == tab_last
-            return;
-        end
-        
-        % Get button position
+        % Set button and panel positions
         if strcmp(tab_now.Title, 'ICR ARENA')
-            new_pos = D.UI.tt_tab_1_select_pan_pos;
-            old_pos = D.UI.tt_tab_2_select_pan_pos;
+            
+            % Move panel
+            for z_b = 1:2
+                D.UI.panSelectTT(z_b).Position = D.UI.tab_1_tt_select_pan_pos(z_b,:);
+            end
+            
+            % Move action type buttons
+            for z_b = 1:2
+                D.UI.toggMainActionTT(z_b).Position = D.UI.tab_1_main_act_pos(z_b,:);
+            end
+            
+            % Move action select buttons
+            D.UI.toggFlagTT.Position = D.UI.tab_1_flag_tt_pos;
+            for z_b = 1:2
+                D.UI.toggHearTT(z_b).Position = D.UI.tab_1_hear_pos(z_b,:);
+                D.UI.toggPlotTT(z_b).Position = D.UI.tab_1_plot_pos(z_b,:);
+            end
             
         elseif strcmp(tab_now.Title, 'TT TRACK')
-            new_pos = D.UI.tt_tab_2_select_pan_pos;
-            old_pos = D.UI.tt_tab_1_select_pan_pos;
-        end
-        
-        % Move panel
-        for z_b = 1:2
-            D.UI.panSelectTT(z_b).Position = new_pos(z_b,:);
-        end
-        
-        % Button shift
-        lft_shft = new_pos(1,1) - old_pos(1,1);
-        btm_shft = new_pos(1,2) - old_pos(1,2);
-        
-        % Move actin type buttons
-        for z_b = 1:2
-            D.UI.toggMainActionTT(z_b).Position([1,2]) = ...
-                D.UI.toggMainActionTT(z_b).Position([1,2]) + [lft_shft, btm_shft];
-        end
-        
-        % Move action select buttons
-        D.UI.toggFlagTT.Position([1,2]) = ...
-            D.UI.toggFlagTT.Position([1,2]) + [lft_shft, btm_shft];
-        for z_b = 1:2
-            D.UI.toggHearTT(z_b).Position([1,2]) = ...
-                D.UI.toggHearTT(z_b).Position([1,2]) + [lft_shft, btm_shft];
-            D.UI.toggPlotTT(z_b).Position([1,2]) = ...
-                D.UI.toggPlotTT(z_b).Position([1,2]) + [lft_shft, btm_shft];
+            
+            % Move panel
+            for z_b = 1:2
+                D.UI.panSelectTT(z_b).Position = D.UI.tab_2_tt_select_pan_pos(z_b,:);
+            end
+            
+            % Move action type buttons
+            for z_b = 1:2
+                D.UI.toggMainActionTT(z_b).Position = D.UI.tab_2_main_act_pos(z_b,:);
+            end
+            
+            % Move action select buttons
+            D.UI.toggFlagTT.Position = D.UI.tab_2_flag_tt_pos;
+            for z_b = 1:2
+                D.UI.toggHearTT(z_b).Position = D.UI.tab_2_hear_pos(z_b,:);
+                D.UI.toggPlotTT(z_b).Position = D.UI.tab_2_plot_pos(z_b,:);
+            end
+            
         end
         
     end
@@ -14480,20 +14596,43 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Set to 'Enable
                 if strcmp(setting_str, 'Enable')
                     
-                    % Enable all setup stuff
-                    Set_Panel_State(D.UI.panStup, 'Enable');
-                    set(D.UI.popRat, 'Enable', 'on')
-                    set(D.UI.popHuman, 'Enable', 'on')
-                    set(D.UI.popCond, 'Enable', 'on')
-                    set(D.UI.popTask, 'Enable', 'on')
-                    set(D.UI.popRewDel, 'Enable', 'on')
-                    Set_Button_State(D.UI.toggCue, 'Enable');
-                    Set_Button_State(D.UI.toggSnd, 'Enable');
-                    Set_Panel_State(D.UI.panConsole, 'Enable');
-                    Set_Button_State(D.UI.toggSetupDone, 'Enable');
+                    % Enable load pop
+                    set(D.UI.popType, 'Enable', 'on')
                     
-                    % Enable Quit
-                    set(D.UI.btnQuit, 'Enable', 'on')
+                    % Enable panel
+                    Set_Panel_State(D.UI.panStup, 'Enable');
+                    
+                    % Enable other setup objects
+                    if ~isundefined(D.PAR.sesType)
+                        
+                        % Enable main setup objects
+                        set(D.UI.popRat, 'Enable', 'on')
+                        set(D.UI.popHuman, 'Enable', 'on')
+                        Set_Button_State(D.UI.toggSetupDone, 'Enable');
+                        
+                        % Enable Quit
+                        set(D.UI.toggQuit, 'Enable', 'on')
+                        
+                        % Disable ICR objectes
+                        if D.PAR.sesType ~= 'ICR_Session'
+                            set(D.UI.popCond, 'Enable', 'off')
+                            set(D.UI.popTask, 'Enable', 'off')
+                            set(D.UI.popRewDel, 'Enable', 'off')
+                            Set_Button_State(D.UI.toggCue, 'Unenable');
+                            Set_Button_State(D.UI.toggSnd, 'Unenable');
+                        end
+                        
+                        % Enable ICR objectes
+                        if D.PAR.sesType == 'ICR_Session'
+                            set(D.UI.popCond, 'Enable', 'on')
+                            set(D.UI.popTask, 'Enable', 'on')
+                            set(D.UI.popRewDel, 'Enable', 'on')
+                            Set_Button_State(D.UI.toggCue, 'Enable');
+                            Set_Button_State(D.UI.toggSnd, 'Enable');
+                            Set_Panel_State(D.UI.panConsole, 'Enable');
+                        end
+                        
+                    end
                     
                 end
                 
@@ -14502,6 +14641,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Disable all setup stuff
                     Set_Panel_State(D.UI.panStup, 'Disable');
+                    set(D.UI.popType, 'Enable', 'off')
                     set(D.UI.popRat, 'Enable', 'off')
                     set(D.UI.popHuman, 'Enable', 'off')
                     set(D.UI.popCond, 'Enable', 'off')
@@ -14751,11 +14891,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Enable show/hide tt buttons
                     Set_Button_State(D.UI.toggHideTT, 'Enable');
                     
-                    % Enable save tt log button
-                    set(D.UI.btnSaveLogTT, 'Enable', 'on');
-                    
                     % Enable Quit
-                    set(D.UI.btnQuit, 'Enable', 'on')
+                    set(D.UI.toggQuit, 'Enable', 'on')
                     
                 end
                 
@@ -14781,9 +14918,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Disable show/hide tt buttons
                     Set_Button_State(D.UI.toggHideTT, 'Unenable');
-                    
-                    % Disable save tt log button
-                    set(D.UI.btnSaveLogTT, 'Enable', 'off');
                     
                 end
                 
@@ -14889,7 +15023,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ------------------------SET CUE BUTTONS----------------------------------
     function Set_Cue_Buttons(setting_str)
         
-        if D.PAR.cueFeed == 'Half' || D.PAR.cueFeed == 'None'
+        if D.PAR.sesCue == 'Half' || D.PAR.sesCue == 'None'
             
             % Set to enabled color and change user data
             if strcmp(setting_str, 'Enable')
@@ -15334,7 +15468,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Visible', 'on')
                 
                 % Show semitransparent backround
-                if ~isTTtrackSolo
+                if ~D.F.tt_track_solo
                     set(D.UI.ttMask, 'Visible', 'on')
                 end
                 
@@ -15357,7 +15491,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Set_Button_State(D.UI.toggPlotTT, 'Unenable');
                 
                 % Hide semitransparent backround
-                if ~isTTtrackSolo
+                if ~D.F.tt_track_solo
                     set(D.UI.ttMask, 'Visible', 'off')
                 end
                 
@@ -15395,6 +15529,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         else
             depths_all_mm = depths_old_mm;
         end
+        
+        % Include start depth
+        depths_all_mm = [0; depths_all_mm];
         
         % Get position in bundle
         [ap, ml] = find(ismember(D.TT.ttMap{bndl_ind}, tt_fld));
@@ -16049,9 +16186,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Check_Setup_Defaults()
         
         % Local vars
-        rew_del = D.UI.delList{get(D.UI.popRewDel,'Value'),:};
-        cue_cond = D.PAR.catCueCond{logical(cell2mat(get(D.UI.toggCue, 'Value')))};
-        task_cond = D.UI.taskList{get(D.UI.popTask, 'Value')}; %#ok<NASGU>
+        rew_del = D.UI.popRewDel.String{get(D.UI.popRewDel,'Value'),:};
+        cue_cond = D.PAR.listCueCond{logical(cell2mat(get(D.UI.toggCue, 'Value')))};
+        task_cond = D.UI.popTask.String{get(D.UI.popTask, 'Value')}; %#ok<NASGU>
         is_del_changed = false;
         is_cue_changed = false;
         is_task_changed = false;
@@ -16073,11 +16210,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reward delay for 'Half' or 'None' Cue if zero delay set
         if (strcmp(cue_cond, 'Half') || strcmp(cue_cond, 'None')) && ...
                 D.PAR.sesCond ~= 'Manual_Training' && ...
-                strcmp(rew_del, D.UI.delList{2})
+                strcmp(rew_del, D.UI.popRewDel.String{2})
             
             % Set reward delay popmenu to minimum delay
             set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.delList, D.UI.delList(3))));
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(3))));
             PopRewDel();
             
             % Set flag
@@ -16087,11 +16224,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Reward delay for 'All' Cue
         if strcmp(cue_cond, 'All') && ...
-                ~strcmp(rew_del, D.UI.delList{2})
+                ~strcmp(rew_del, D.UI.popRewDel.String{2})
             
             % Set to no delay
             set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.delList, D.UI.delList(2))));
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
             PopRewDel();
             
             % Set flag
@@ -16099,19 +16236,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % CHANGE VALUES BASED ON SES COND
-        rew_del = D.UI.delList{get(D.UI.popRewDel,'Value'),:};
-        cue_cond = D.PAR.catCueCond{logical(cell2mat(get(D.UI.toggCue, 'Value')))};
-        task_cond = D.UI.taskList{get(D.UI.popTask, 'Value')};
+        rew_del = D.UI.popRewDel.String{get(D.UI.popRewDel,'Value'),:};
+        cue_cond = D.PAR.listCueCond{logical(cell2mat(get(D.UI.toggCue, 'Value')))};
+        task_cond = D.UI.popTask.String{get(D.UI.popTask, 'Value')};
         
         % Defaults for 'Manual_Training'
         if D.PAR.sesCond == 'Manual_Training'
             
             % Set to no delay
-            if ~strcmp(rew_del, D.UI.delList{2})
+            if ~strcmp(rew_del, D.UI.popRewDel.String{2})
                 
                 % Change reward delay popmenu
                 set(D.UI.popRewDel, 'Value', ...
-                    find(ismember(D.UI.delList, D.UI.delList(2))));
+                    find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
                 PopRewDel();
                 
                 % Set flag
@@ -16123,8 +16260,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Change cue buttons
                 set(D.UI.toggCue( ...
-                    ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
-                ToggCue(D.UI.toggCue(ismember(D.PAR.catCueCond, 'None')));
+                    ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
+                ToggCue(D.UI.toggCue(ismember(D.PAR.listCueCond, 'None')));
                 ToggCue();
                 
                 % Set flag
@@ -16140,7 +16277,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Change task popmenu
                 set(D.UI.popTask, 'Value', ...
-                    find(ismember(D.UI.taskList, 'Track')));
+                    find(ismember(D.UI.popTask.String, 'Track')));
                 PopTask();
                 
                 % Set flag
@@ -16148,11 +16285,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Set reward delay to max
-            if ~strcmp(rew_del, D.UI.delList{end})
+            if ~strcmp(rew_del, D.UI.popRewDel.String{end})
                 
                 % Change reward delay popmenu
                 set(D.UI.popRewDel, 'Value', ...
-                    find(ismember(D.UI.delList, D.UI.delList(end))));
+                    find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(end))));
                 PopRewDel();
                 
                 % Set flag
@@ -16164,8 +16301,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Change cue buttons
                 set(D.UI.toggCue( ...
-                    ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
-                ToggCue(D.UI.toggCue(ismember(D.PAR.catCueCond, 'None')));
+                    ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
+                ToggCue(D.UI.toggCue(ismember(D.PAR.listCueCond, 'None')));
                 
                 % Set flag
                 is_cue_changed = true;
@@ -16185,9 +16322,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % CHANGE VALUES BASED ON TASK
-        rew_del = D.UI.delList{get(D.UI.popRewDel,'Value'),:};
-        cue_cond = D.PAR.catCueCond{logical(cell2mat(get(D.UI.toggCue, 'Value')))};
-        task_cond = D.UI.taskList{get(D.UI.popTask, 'Value')};
+        rew_del = D.UI.popRewDel.String{get(D.UI.popRewDel,'Value'),:};
+        cue_cond = D.PAR.listCueCond{logical(cell2mat(get(D.UI.toggCue, 'Value')))};
+        task_cond = D.UI.popTask.String{get(D.UI.popTask, 'Value')};
         
         % Settings for 'Forage' Task
         if strcmp(task_cond, 'Forage')
@@ -16197,19 +16334,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Change cue buttons
                 set(D.UI.toggCue( ...
-                    ismember(D.PAR.catCueCond, 'None')), 'Value', 1);
-                ToggCue(D.UI.toggCue(ismember(D.PAR.catCueCond, 'None')));
+                    ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
+                ToggCue(D.UI.toggCue(ismember(D.PAR.listCueCond, 'None')));
                 
                 % Set flag
                 is_cue_changed = true;
             end
             
             % Set reward delay to minimum
-            if ~strcmp(rew_del, D.UI.delList{3})
+            if ~strcmp(rew_del, D.UI.popRewDel.String{3})
                 
                 % Set to minimum delay
                 set(D.UI.popRewDel, 'Value', ...
-                    find(ismember(D.UI.delList, D.UI.delList(3))));
+                    find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(3))));
                 PopRewDel();
                 
                 % Set flag

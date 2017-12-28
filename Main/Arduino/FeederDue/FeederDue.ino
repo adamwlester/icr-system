@@ -8285,16 +8285,6 @@ void setup() {
 	// Flag setup done
 	fc.isSetup = true;
 
-	//// TEMP
-	//while (true) {
-	//	delay(1);
-	//	digitalWrite(pin.Test_Signal, HIGH);
-	//	SerialUSB.println("HIGH");
-	//	delay(1);
-	//	digitalWrite(pin.Test_Signal, LOW);
-	//	SerialUSB.println("LOW");
-	//}
-
 }
 
 

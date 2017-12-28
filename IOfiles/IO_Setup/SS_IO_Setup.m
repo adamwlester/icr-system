@@ -37,6 +37,8 @@ DOBstr = cellstr(datestr(DOBstr, 'yyyy/mm/dd'));
 % Define categories
 feeder_version = {'Static_Feeder', 'Mobile_Feeder'};
 age_group = {'Young', 'Old'};
+human = {'AWL', 'CB', 'Other'};
+session_type = {'ICR_Session', 'TT_Turn', 'Table_Update'};
 session_condition = {'Manual_Training', 'Behavior_Training', 'Implant_Training', 'Rotation'};
 session_task = {'Track', 'Forage'};
 feeder_condition = {'C1', 'C2'};
@@ -69,7 +71,10 @@ T.DOB = DOBstr;
 T.Yoke_Mate = categorical(repmat({'<undefined>'},length(ratList),1), ...
     [{'None'}; ratList]);
 T.Weight_Baseline = NaN(length(ratList),1);
-T.Human = {''};
+T.Human = categorical(repmat({'<undefined>'},length(ratList),1), ...
+    human);
+T.Session_Type = categorical(repmat({'<undefined>'},length(ratList),1), ...
+    session_type);
 T.Session_Condition = categorical(repmat({'Manual_Training'},length(ratList),1), ...
     session_condition);
 T.Session_Task = categorical(repmat({'Track'},length(ratList),1), ...
@@ -96,7 +101,6 @@ T.Reward_Delay = categorical(repmat({'<undefined>'},length(ratList),1), ...
     reward_delay, 'Ordinal', true);
 T.Cue_Condition = categorical(repmat({'<undefined>'},length(ratList),1), ...
     cue_condition, 'Ordinal', true);
-T.Pulse_Duration = NaN(length(ratList),1);
 T.Sound_Conditions = ...
     table(false(length(ratList),1), false(length(ratList),1), ...
     'VariableNames', [{'S1'}, {'S2'}]);
@@ -118,7 +122,6 @@ T.Notes = cell(length(ratList),1);
 % Set variable units
 T.Properties.VariableUnits{'Weight_Baseline'} = 'g';
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
-T.Properties.VariableUnits{'Pulse_Duration'} = 'ms';
 
 % Set variable descriptions
 T.Properties.VariableDescriptions{'Session_Manual_Training'} = session_number_description;
@@ -335,7 +338,9 @@ T = table;
 T.Include_Analysis = true;
 T.Implanted = false;
 T.Date = {''};
-T.Human = {''};
+T.Recording_File = {''};
+T.Human = categorical({'<undefined>'}, ...
+    human);
 T.Weight = NaN;
 T.Weight_Baseline = NaN;
 T.Weight_Drive = NaN;
@@ -346,6 +351,8 @@ T.VT_Pixel_Coordinates = {NaN(1,3)};
 T.Start_Time = {''};
 T.Total_Time = NaN;
 T.Sleep_Time = {NaN(1,2)};
+T.Session_Type = categorical({'<undefined>'}, ...
+    session_type);
 T.Session_Condition = categorical({'<undefined>'}, ...
     session_condition);
 T.Session_Task = categorical({'<undefined>'}, session_task);
@@ -364,7 +371,6 @@ T.Reward_Delay = ...
     categorical({'<undefined>'}, reward_delay, 'Ordinal', true);
 T.Cue_Condition = ...
     categorical({'<undefined>'}, cue_condition, 'Ordinal', true);
-T.Pulse_Duration = NaN;
 T.Sound_Conditions = ...
     table(false, false,  'VariableNames', [{'S1'}, {'S2'}]);
 T.Sound_Conditions = ...
@@ -396,7 +402,6 @@ T.Properties.VariableUnits{'Weight_Corrected'} = 'g';
 T.Properties.VariableUnits{'VT_Pixel_Coordinates'} = 'pixels';
 T.Properties.VariableUnits{'Total_Time'} = 'min';
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
-T.Properties.VariableUnits{'Pulse_Duration'} = 'ms';
 T.Properties.VariableUnits{'Fed_Pellets'} = 'pellets';
 T.Properties.VariableUnits{'Fed_Mash'} = 'TB';
 T.Properties.VariableUnits{'Fed_Ensure'} = 'ml';
