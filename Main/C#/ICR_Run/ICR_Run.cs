@@ -560,7 +560,18 @@ namespace ICR_Run
             LogEvent("[Setup] RUNNING: Send Robot Setup Confirmation");
             SendMCOM_Thread(id: 'K', dat_num: 1);
 
-
+            // WAIT FOR ICR_GUI LOADED CONFIRMATION
+            LogEvent("[Setup] RUNNING WAIT FOR...: ICR_GUI to Load...");
+            pass = WaitForMCOM(id: 'G', chk_rcv: true, timeout: timeoutLoadGUI);
+            if (pass)
+            {
+                LogEvent("[Setup] SUCCEEDED WAIT FOR: ICR_GUI to Load");
+            }
+            else
+            {
+                LogEvent("**WARNING** [Setup] ABORTED WAIT FOR: ICR_GUI to Load", is_warning: true);
+                return false;
+            }
 
             // WAIT FOR MATLAB NETCOM SETUP CONFIRMATION
             LogEvent("[Setup] RUNNING WAIT FOR...: ICR_GUI NLX Setup...");
