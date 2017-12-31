@@ -26,20 +26,29 @@
 
 #pragma region ============ DEBUG SETTINGS =============
 
+// Logging
+#define DO_LOG 1
+
+// Console
+#define DO_PRINT_DEBUG 0
+
+// Main debug flag
+#if DO_PRINT_DEBUG 
+#define DO_DEBUG 1
+#else
+#define DO_DEBUG 0
+#endif
+
 struct DB
 {
-	// Do log
-	bool LOG = true;
-	// What to print
+	// Logging
 	bool log_flow = true;
 	bool log_errors = true;
 	bool log_r2a = true;
 	bool log_a2r = true;
 	bool log_resent = true;
 
-	// Print to console
-	bool CONSOLE = false;
-	// What to print
+	// Printing
 	bool print_flow = true;
 	bool print_errors = true;
 	bool print_r2a = true;
@@ -328,7 +337,7 @@ void StatusBlink();
 // PLAY SOUND WHEN QUITING
 void QuitBeep();
 // PULSE IR: force_state=[0=off, 1=on, 2=auto]
-bool PulseIR(int dt_off, int dt_on, byte force_state = 2);
+bool PulseIR(int dt_off, int dt_on, byte force_state = 2, bool do_ttl = true);
 // GET ID INDEX
 int CharInd(char id, const char id_arr[], int arr_size);
 // GET 32 BIT WORD FOR PORT
@@ -379,7 +388,8 @@ bool CheckForStart()
 	// Check if IR should be pulsed 
 	if (digitalRead(pin.BlinkSwitch) == LOW || is_irOn)
 	{
-		PulseIR(500, dt_irSyncPulse);
+		// Turn on without triggering ttl
+		PulseIR(500, dt_irSyncPulse, 2, false);
 	}
 
 	// Get new data
@@ -980,7 +990,7 @@ void QueueLog(char msg[], uint32_t t)
 
 		// Print error if print queue not also overflowed
 		if (db.print_errors &&
-			db.CONSOLE &&
+			DO_PRINT_DEBUG &&
 			GetQueueAvailable("Print") > 1) {
 
 			// Print
@@ -1088,7 +1098,7 @@ bool SendLog()
 	cnt_logBytesSent += msg_lng;
 
 	// Print
-	if (db.print_log && db.CONSOLE)
+	if (db.print_log && DO_PRINT_DEBUG)
 	{
 		// Get data in buffers
 		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
@@ -1223,8 +1233,8 @@ void DebugPinMap()
 void DebugFlow(char msg[], uint32_t t)
 {
 	// Local vars
-	bool do_print = db.CONSOLE && db.print_flow;
-	bool do_log = db.LOG && db.log_flow;
+	bool do_print = DO_PRINT_DEBUG && db.print_flow;
+	bool do_log = DO_LOG && db.log_flow;
 
 	if (do_print) {
 		QueueDebug(msg, millis());
@@ -1240,8 +1250,8 @@ void DebugFlow(char msg[], uint32_t t)
 void DebugError(char msg[], bool is_error, uint32_t t)
 {
 	// Local vars
-	bool do_print = db.print_errors && db.CONSOLE;
-	bool do_log = db.log_errors && db.LOG;
+	bool do_print = db.print_errors && DO_PRINT_DEBUG;
+	bool do_log = db.log_errors && DO_LOG;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
@@ -1273,8 +1283,8 @@ void DebugRcvd(char id, char msg[], bool is_repeat)
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	char msg_out[maxStoreStrLng + 50] = { 0 };
-	bool do_print = db.CONSOLE && db.print_r2a;
-	bool do_log = db.LOG && db.log_r2a;
+	bool do_print = DO_PRINT_DEBUG && db.print_r2a;
+	bool do_log = DO_LOG && db.log_r2a;
 
 	// Print/Log
 	if (!(do_print || do_log)) {
@@ -1309,8 +1319,8 @@ void DebugSent(char msg[], bool is_repeat)
 	bool do_log = false;
 
 	// Get print status
-	do_print = db.CONSOLE && db.print_a2r;
-	do_log = db.LOG && db.log_a2r;
+	do_print = DO_PRINT_DEBUG && db.print_a2r;
+	do_log = DO_LOG && db.log_a2r;
 
 	// Bail if neither set
 	if (!(do_print || do_log)) {
@@ -1402,7 +1412,7 @@ void QueueDebug(char msg[], uint32_t t)
 
 		// Log error
 		if (db.log_errors &&
-			db.LOG &&
+			DO_LOG &&
 			GetQueueAvailable("Log") > 1) {
 
 			// Log
@@ -1547,7 +1557,7 @@ void QuitBeep()
 }
 
 // PULSE IR: force_state=[0,1,2]
-bool PulseIR(int dt_off, int dt_on, byte force_state)
+bool PulseIR(int dt_off, int dt_on, byte force_state, bool do_ttl)
 {
 	// Local vars
 	bool is_changed = false;
@@ -1566,8 +1576,13 @@ bool PulseIR(int dt_off, int dt_on, byte force_state)
 			millis() > t_irSyncLast + dt_off)
 		)
 	{
-		// Set ir pins on
-		SetPort(word_irOn, 0x0);
+		// Set ir relay and ttl pins high
+		if (do_ttl) {
+			SetPort(word_irOn, 0x0);
+		}
+		else {
+			digitalWrite(pin.relIR, HIGH);
+		}
 		t_irSyncLast = millis();
 		is_irOn = true;
 		is_changed = true;
@@ -1581,7 +1596,13 @@ bool PulseIR(int dt_off, int dt_on, byte force_state)
 			millis() > t_irSyncLast + dt_on)
 		)
 	{
-		SetPort(0x0, word_irOn);
+		// Set ir relay and ttl pins high
+		if (do_ttl) {
+			SetPort(0x0, word_irOn);
+		}
+		else {
+			digitalWrite(pin.relIR, LOW);
+		}
 		is_irOn = false;
 		is_changed = true;
 	}
@@ -1866,7 +1887,7 @@ void setup()
 
 	// Wait for SerialUSB if debugging
 	uint32_t t_check = millis() + 100;
-	if (db.CONSOLE) {
+	if (DO_PRINT_DEBUG) {
 		while (!SerialUSB && millis() < t_check);
 	}
 
@@ -1905,10 +1926,20 @@ void setup()
 	}
 
 	// PRINT DEBUG STATUS
+
+	// Print run mode
+	if (DO_DEBUG) {
+		DebugFlow("RUN MODE = DEBUG");
+	}
+	else {
+		DebugFlow("RUN MODE = RELEASE");
+	}
+
+	// Print settings
 	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s",
-		db.CONSOLE ? "DEBUG" : "RELEASE",
-		db.LOG ? "LOGGING ENABLED|" : "",
-		db.CONSOLE ? "PRINTING ENABLED|" : "");
+		DO_DEBUG ? "DEBUG" : "RELEASE",
+		DO_LOG ? "LOGGING ENABLED|" : "",
+		DO_PRINT_DEBUG ? "PRINTING ENABLED|" : "");
 	DebugFlow(str);
 
 	// PRINT SETUP FINISHED

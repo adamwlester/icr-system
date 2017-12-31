@@ -11,8 +11,8 @@ D.NLX.event_ent = 'Events';
 %% START CHEETAH
    
 % NLX setup
-%top_cfg_fi = 'Cheetah.cfg';
-top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
+top_cfg_fi = 'Cheetah.cfg';
+%top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
 
 % Open Cheetah
 curdir = pwd;

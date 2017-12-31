@@ -4887,7 +4887,7 @@ bool SetMotorControl(char set_to[], char agent[])
 
 			// Can still move robot if rat not in
 			if (set_to == "MoveTo" &&
-				!fc.isRatIn) {
+				(!fc.isRatIn || fc.isTaskDone)) {
 				do_change = true;
 			}
 
@@ -5056,8 +5056,8 @@ void InitializeTracking()
 	double cm_diff = 0;
 	double cm_dist = 0;
 
-	// Bail if finished
-	if (fc.isTrackingEnabled) {
+	// Bail if finished or task done
+	if (fc.isTrackingEnabled || fc.isTaskDone) {
 		return;
 	}
 
@@ -5154,8 +5154,8 @@ void CheckSampDT()
 	int dt_vt = 0;
 	int dt_pixy = 0;
 
-	// Bail if rat not in yet
-	if (!fc.isRatIn) {
+	// Bail if rat not in or task done
+	if (!fc.isRatIn || fc.isTaskDone) {
 		return;
 	}
 
@@ -5244,6 +5244,11 @@ double CheckPixy(bool is_hardware_test)
 	// Bail if robot not streaming yet
 	if (!is_hardware_test &&
 		!Pos[1].is_streamStarted) {
+		return px_rel;
+	}
+
+	// Bail if task done
+	if (fc.isTaskDone) {
 		return px_rel;
 	}
 
@@ -7991,7 +7996,7 @@ void setup() {
 	// XBee 1b (to/from CheetahDue)
 	r2a.port.begin(57600);
 
-	// Wait for SerialUSB if debugging
+	// Wait for SerialUSB if printing to console
 #if DO_PRINT_DEBUG
 	uint32_t t_check = millis() + 100;
 	while (!SerialUSB && millis() < t_check);
@@ -8045,6 +8050,14 @@ void setup() {
 
 	// LOG/PRINT SETUP RUNNING
 
+	// Print run mode
+	if (DO_DEBUG) {
+		DebugFlow(__FUNCTION__, __LINE__, "RUN MODE = DEBUG");
+	}
+	else {
+		DebugFlow(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
+	}
+		
 	// Print to LCD
 	ChangeLCDlight(50);
 	PrintLCD(true, "SETUP", "MAIN");
@@ -9162,7 +9175,7 @@ void loop() {
 	}
 #pragma endregion
 
-#pragma region //--- (I) START/STOP PID ---
+#pragma region //--- (I) RAT IN ---
 	if (c2r.idNow == 'I' && c2r.isNew)
 	{
 		// Store message data
@@ -9177,10 +9190,20 @@ void loop() {
 			Pos[0].PosReset();
 			Pos[2].PosReset();
 		}
-		else {
+
+	}
+#pragma endregion
+
+#pragma region //--- (O) TASK DONE ---
+	if (c2r.idNow == 'O' && c2r.isNew)
+	{
+		// Store message data
+		fc.isTaskDone = c2r.dat[0] > 0 ? true : false;
+
+		if (fc.isTaskDone) {
 
 			// Log/print event
-			DebugFlow(__FUNCTION__, __LINE__, "RAT OUT");
+			DebugFlow(__FUNCTION__, __LINE__, "TASK DONE");
 
 			// Turn off bulldoze
 			Bull.BullOff("loop \'I\'");
@@ -9233,8 +9256,10 @@ void loop() {
 			// Update VT
 			Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
-			// Set rat vt and pixy to setpoint if rat not in 
-			if (!fc.isRatIn && !db.do_posDebug) {
+			// Set rat vt and pixy to setpoint if rat not in or task done
+			if ((!fc.isRatIn && !db.do_posDebug) ||
+				fc.isTaskDone) {
+
 				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
 				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
 			}
@@ -9255,8 +9280,9 @@ void loop() {
 		// Handle rat vt data
 		else if (cmd.vtEnt == 0) {
 
-			// Update only after rat in
-			if (fc.isRatIn || db.do_posDebug) {
+			// Update only after rat in before task done
+			if ((fc.isRatIn || db.do_posDebug) &&
+				!fc.isTaskDone) {
 
 				// Update rat VT
 				Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);

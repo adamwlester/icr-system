@@ -20,10 +20,9 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % weight_cap_labels = {'None', 'Light', 'Medium', 'Heavy'};
 % Weight_Cap =  categorical({'None'}, weight_cap_labels);
 % TT_IO = AddNewVar(TT_IO, Weight_Cap, 'Weight_Drive');
-session_type = {'ICR_Session', 'TT_Turn', 'Table_Update'};
-Session_Type = categorical({'ICR_Session'}, ...
-    session_type);
-SS_IO_2 = AddNewVar(SS_IO_2, Session_Type, 'Sleep_Time');
+
+Cued_Rewards = {[]};
+SS_IO_2 = AddNewVar(SS_IO_2, Cued_Rewards, 'Zones_Rewarded');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 

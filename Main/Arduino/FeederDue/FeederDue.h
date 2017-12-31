@@ -170,6 +170,7 @@ struct FC
 	bool isManualSes = false;
 	bool isForageTask = false;
 	bool isRatIn = false;
+	bool isTaskDone = false;
 	bool isTrackingEnabled = false;
 	bool doMove = false;
 	bool doRew = false;
@@ -341,7 +342,7 @@ volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma region ============ COM STRUCT SETUP ===========
 
-const char cs_id_list[18] =
+const char cs_id_list[19] =
 {
 	'h', // setup handshake
 	't', // hardware test
@@ -357,6 +358,7 @@ const char cs_id_list[18] =
 	'L', // request log conf/send
 	'J', // battery voltage
 	'Z', // reward zone
+	'O', // confirm task or sleep done
 	'U', // log size
 	'D', // execution done
 	'P', // position data

@@ -383,6 +383,7 @@ T.Laps_Per_Rotation = {[]};
 T.Days_Till_Rotation = categorical({'<undefined>'}, days_till_rotation);
 T.Bulldozings = NaN;
 T.Zones_Rewarded = {[]};
+T.Cued_Rewards = {[]};
 T.Rewards_Standard = {[]};
 T.Rewards_40_Deg = {[]};
 T.Rewards_0_Deg = {[]};
