@@ -874,6 +874,7 @@ namespace ICR_Run
 
             // WAIT FOR FINAL MOVEMENT TO PLOT
 
+            // Wait also cause fucking 'Done' Check still does not work
             Thread.Sleep(1000);
 
             // SEND TASK DONE CONFIRMATION TO MATLAB
@@ -2935,12 +2936,6 @@ namespace ICR_Run
 
             if (!vtHandler.CheckBlock(ent))
             {
-                // Skip if sent within last 10 ms
-                if (vtHandler.GetSendDT(ent, "now") < 10)
-                {
-                    // Bail
-                    return;
-                }
 
                 // Compute position
                 bool pass = CompPos(ent, ts, x, y);
