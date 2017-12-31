@@ -199,8 +199,10 @@ public:
 	// VARS
 	int targSetTimeout = 30000;
 	int moveTimeout = 10000;
+	int ekfTimeout = 500;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
+	char moveCntStr[20] = { 0 };
 	bool doAbortMove = false;
 	double posAbs = 0;
 	const int dt_update = 10;
@@ -1666,7 +1668,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 		doAbortMove = true;
 
 		// Log/print error
-		sprintf(str, "Timedout after %dms", targSetTimeout);
+		sprintf(str, "MOVE [%s]: Timedout after %dms", moveCntStr, targSetTimeout);
 		DebugError(__FUNCTION__, __LINE__, str, true);
 
 		// Return failure
@@ -1712,8 +1714,8 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 	isTargSet = true;
 
 	// Log/print
-	sprintf(str, "FINISHED: Set Target: start_rel=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
-		posRelStart, posAbsStart, targPos, targDist, moveDir);
+	sprintf(str, "FINISHED: MOVE [%s]: Set Move Target: start_rel=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
+		moveCntStr, posRelStart, posAbsStart, targPos, targDist, moveDir);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 
 	// Retern flag
@@ -1741,14 +1743,29 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 		t_tryMoveTill = millis() + moveTimeout;
 	}
 
+	// Check if vt hanging
+	int dt_ekf = millis() - kal.t_last;
+	if (dt_ekf >= ekfTimeout) {
+
+		// Log/print error
+		sprintf(str, "MOVE [%s]: ABORT: EKF Hanging: dt=%dms", moveCntStr, dt_ekf);
+		DebugError(__FUNCTION__, __LINE__, str, true);
+
+		// Set abort flag
+		doAbortMove = true;
+
+		// Stop run
+		return 0;
+	}
+
 	// Check if time out reached
 	if (millis() > t_tryMoveTill) {
 
 		// Log/print error
-		sprintf(str, "Timedout after %dms", moveTimeout);
+		sprintf(str, "MOVE [%s]: ABORT: Timedout after %dms", moveCntStr, moveTimeout);
 		DebugError(__FUNCTION__, __LINE__, str, true);
 
-		// Set error flag
+		// Set abort flag
 		doAbortMove = true;
 
 		// Stop run
@@ -1764,6 +1781,10 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 		// Get base speed to decelerate from
 		if (baseSpeed == 0) {
 			baseSpeed = abs(now_vel);
+
+			// Log/print decel distance
+			sprintf(str, "MOVE [%s]: Reached %0.2fcm From Target", moveCntStr, distLeft);
+			DebugError(__FUNCTION__, __LINE__, str, true);
 		}
 
 		// Update decel speed
@@ -1781,8 +1802,8 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	if (distLeft < 1)
 	{
 		// Log/print
-		sprintf(str, "FINISHED: MoveTo: start_rel=%0.2fcm now_rel=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
-			posRelStart, now_pos, targPos, targDist, distLeft);
+		sprintf(str, "FINISHED: MOVE [%s]: start_rel=%0.2fcm now_rel=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
+			moveCntStr, posRelStart, now_pos, targPos, targDist, distLeft);
 		DebugFlow(__FUNCTION__, __LINE__, str);
 
 		// Set flag true
@@ -3502,8 +3523,8 @@ void LOGGER::TestLoad(int n_entry, char log_file[])
 	DB_FUN_STR();
 #endif
 
-    //EXAMPLE:
-	/* 
+	//EXAMPLE:
+	/*
 		Log.TestLoad(0, "LOG00035.CSV");
 		Log.TestLoad(2500);
 	*/
@@ -4885,9 +4906,9 @@ bool SetMotorControl(char set_to[], char agent[])
 		// Cannot unset "None" unless certain conditions met
 		if (strcmp(fc.motorControl, "None") == 0) {
 
-			// Can still move robot if rat not in
+			// Can still move robot if rat not on track
 			if (set_to == "MoveTo" &&
-				(!fc.isRatIn || fc.isTaskDone)) {
+				(!fc.isRatOnTrack || fc.isTaskDone)) {
 				do_change = true;
 			}
 
@@ -5062,7 +5083,7 @@ void InitializeTracking()
 	}
 
 	// Wait for new data
-	if (!fc.isRatIn ||
+	if (!fc.isRatOnTrack ||
 		!Pos[0].isNew ||
 		!Pos[2].isNew ||
 		!Pos[1].isNew) {
@@ -5154,8 +5175,8 @@ void CheckSampDT()
 	int dt_vt = 0;
 	int dt_pixy = 0;
 
-	// Bail if rat not in or task done
-	if (!fc.isRatIn || fc.isTaskDone) {
+	// Bail if rat not on track or task done
+	if (!fc.isRatOnTrack || fc.isTaskDone) {
 		return;
 	}
 
@@ -5252,10 +5273,10 @@ double CheckPixy(bool is_hardware_test)
 		return px_rel;
 	}
 
-	// Bail if rat not in or doing sym test
+	// Bail if rat not on track or doing simulation test
 	if (!is_hardware_test &&
 		!db.do_posDebug &&
-		(!fc.isRatIn || db.do_simRatTest)) {
+		(!fc.isRatOnTrack || db.do_simRatTest)) {
 		return px_rel;
 	}
 
@@ -5409,7 +5430,7 @@ void UpdateEKF()
 	kal.RobVel = !isnan(rob_vel) ? rob_vel : kal.RobVel;
 
 	// Update count and time
-	kal.t_update = millis();
+	kal.t_last = millis();
 	kal.cnt_ekf++;
 
 	// Check for nan values
@@ -5431,8 +5452,8 @@ void UpdateEKF()
 	}
 
 	// Check if too much time elapsed between updates
-	if (millis() > kal.t_update + 250 &&
-		kal.t_update != 0) {
+	if (millis() > kal.t_last + 250 &&
+		kal.t_last != 0) {
 
 		// Add to count
 		cnt_error++;
@@ -5442,7 +5463,7 @@ void UpdateEKF()
 			cnt_error % 10 == 0) {
 
 			// Log/print warning
-			sprintf(str, "EKF Hanging: cnt_err=%d dt_update=%d", cnt_error, millis() - kal.t_update);
+			sprintf(str, "EKF Hanging: cnt_err=%d dt_update=%d", cnt_error, millis() - kal.t_last);
 			DebugError(__FUNCTION__, __LINE__, str);
 		}
 	}
@@ -7456,7 +7477,7 @@ void LogTrackingData()
 	}
 
 	// Initilazie store time
-	static uint32_t t_last_log = kal.t_update;
+	static uint32_t t_last_log = kal.t_last;
 
 	// Store pos values
 	if (do_log[0]) {
@@ -7518,12 +7539,12 @@ void LogTrackingData()
 			}
 
 			// Log
-			Log.QueueLog(str, kal.t_update);
+			Log.QueueLog(str, kal.t_last);
 		}
 
 		// Reset vals
 		hist_ind = 0;
-		t_last_log = kal.t_update;
+		t_last_log = kal.t_last;
 	}
 }
 
@@ -8057,7 +8078,7 @@ void setup() {
 	else {
 		DebugFlow(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
 	}
-		
+
 	// Print to LCD
 	ChangeLCDlight(50);
 	PrintLCD(true, "SETUP", "MAIN");
@@ -8843,8 +8864,9 @@ void loop() {
 #pragma region //--- (M) DO MOVE ---
 	if (c2r.idNow == 'M' && c2r.isNew) {
 
-		// Store move pos
-		cmd.moveToTarg = c2r.dat[0];
+		// Store move count and pos
+		cmd.cnt_move = (byte)c2r.dat[0];
+		cmd.moveToTarg = c2r.dat[1];
 
 		// Align target pos to feeder
 		cmd.moveToTarg = cmd.moveToTarg - feedDist;
@@ -8853,7 +8875,15 @@ void loop() {
 		// Set flags
 		fc.doMove = true;
 
-		sprintf(horeStr, "DO MOVE: targ=%0.2fcm", cmd.moveToTarg);
+		// Get move count str
+		if (cmd.cnt_move != 0 && cmd.cnt_move != 1) {
+			sprintf(Move.moveCntStr, "%d", cmd.cnt_move);
+		}
+		else {
+			sprintf(Move.moveCntStr, "%s", cmd.cnt_move == 1 ? "FIRST" : cmd.cnt_move == 0 ? "LAST" : "?");
+		}
+
+		sprintf(horeStr, "DO MOVE [%s]: targ=%0.2fcm", Move.moveCntStr, cmd.moveToTarg);
 		DebugFlow(__FUNCTION__, __LINE__, horeStr);
 	}
 
@@ -8873,8 +8903,8 @@ void loop() {
 						) {
 
 						// Print message
-						sprintf(horeStr, "RUNNING: MoveTo: targ_dist=%0.2fcm move_dir=\'%c\'...",
-							Move.targDist, Move.moveDir);
+						sprintf(horeStr, "RUNNING: MOVE [%s]: Begin: targ_dist=%0.2fcm move_dir=\'%c\'...",
+							Move.moveCntStr, Move.targDist, Move.moveDir);
 						DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 						// Set flag
@@ -8887,7 +8917,8 @@ void loop() {
 						if (!SetMotorControl("None", "MoveTo")) {
 
 							// Log/print error
-							DebugError(__FUNCTION__, __LINE__, "\"MoveTo\" Failed to Set Motor Control back to \"None\" after Motor Run Fail");
+							sprintf(horeStr, "MOVE [%s]: Failed to Set Motor Control to \"None\" After Fail", Move.moveCntStr);
+							DebugError(__FUNCTION__, __LINE__, horeStr);
 						}
 
 						// Set flags
@@ -8933,8 +8964,8 @@ void loop() {
 			if (Move.doAbortMove) {
 
 				// Print failure message
-				sprintf(horeStr, "ABORTED: MoveTo: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-					Move.isTargSet, fc.isEKFReady, Move.isMoveStarted, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
+				sprintf(horeStr, "ABORTED: MOVE [%s]: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+					Move.moveCntStr, Move.isTargSet, fc.isEKFReady, Move.isMoveStarted, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
 				DebugError(__FUNCTION__, __LINE__, horeStr, true);
 			}
 
@@ -8942,8 +8973,8 @@ void loop() {
 			else if (Move.isTargReached) {
 
 				// Print success message
-				sprintf(horeStr, "SUCCEEDED: MoveTo: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-					Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
+				sprintf(horeStr, "SUCCEEDED: MOVE [%s]: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+					Move.moveCntStr, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
 				DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 				// Tell CS movement is done
@@ -9179,16 +9210,21 @@ void loop() {
 	if (c2r.idNow == 'I' && c2r.isNew)
 	{
 		// Store message data
-		fc.isRatIn = c2r.dat[0] != 0 ? true : false;
+		fc.isRatOnTrack = c2r.dat[0] == 1 ? true : false;
 
-		if (fc.isRatIn) {
+		if (fc.isRatOnTrack) {
 
-			// Pid started by InitializeTracking()
-			DebugFlow(__FUNCTION__, __LINE__, "RAT IN");
+			// Log/print
+			DebugFlow(__FUNCTION__, __LINE__, "RAT ON TRACK");
 
 			// Reset rat pos data
 			Pos[0].PosReset();
 			Pos[2].PosReset();
+		}
+		else
+		{
+			// Log/print
+			DebugFlow(__FUNCTION__, __LINE__, "RAT ON FORAGE PLATFORM");
 		}
 
 	}
@@ -9257,7 +9293,7 @@ void loop() {
 			Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
 			// Set rat vt and pixy to setpoint if rat not in or task done
-			if ((!fc.isRatIn && !db.do_posDebug) ||
+			if ((!fc.isRatOnTrack && !db.do_posDebug) ||
 				fc.isTaskDone) {
 
 				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
@@ -9281,7 +9317,7 @@ void loop() {
 		else if (cmd.vtEnt == 0) {
 
 			// Update only after rat in before task done
-			if ((fc.isRatIn || db.do_posDebug) &&
+			if ((fc.isRatOnTrack || db.do_posDebug) &&
 				!fc.isTaskDone) {
 
 				// Update rat VT

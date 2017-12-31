@@ -72,10 +72,10 @@ FUNNOW = 'None';
 
 % Set inputs
 if nargin < 5
-    doProfile = false;
+    isMatSolo = false;
 end
 if nargin < 4
-    isMatSolo = false;
+    doProfile = false;
 end
 if nargin < 3
     doAutoloadUI = false;
@@ -169,8 +169,10 @@ D.DB.SYNCIR.DTPulse = 100; % (ms) % 100
 %----------------SETUP DEBUGGING AND ERROR HANDELING-----------------------
 
 % PROFILING CODE
-if doProfile
-    profile on
+if exist('doProfile', 'var')
+    if doProfile
+        profile on
+    end
 end
 
 % SETUP ERROR HANDELING
@@ -234,8 +236,8 @@ else
 end
 
 % Log print input arguments
-Console_Write(sprintf('INPUT ARGUMENTS: sysTest=%d breakDebug=%d doAutoloadUI=%d doProfile=%d isMatSolo=%d', ...
-    sysTest, breakDebug, doAutoloadUI, doProfile, isMatSolo));
+Console_Write(sprintf('INPUT ARGUMENTS (%d): sysTest=%d breakDebug=%d doAutoloadUI=%d doProfile=%d isMatSolo=%d', ...
+    nargin, sysTest, breakDebug, doAutoloadUI, doProfile, isMatSolo));
 
 %---------------------Important variable formats---------------------------
 %...........................D.F.sound....................................
@@ -361,8 +363,10 @@ elseif strcmp(status, 'finished')
 end
 
 % STOP PROFILER
-if doProfile
-    profile viewer
+if exist('doProfile', 'var')
+    if doProfile
+        profile viewer
+    end
 end
 
 % RUN CLEAR AND CLOSE ALL
@@ -478,7 +482,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'H', ... % halt movement [halt_state]
             'B', ... % bulldoze rat [bull_delay, bull_speed]
             'I' ... % rat in/out [in/out]
-            'O' ... % confirm task or sleep done [1,2]
+            'O' ... % confirm task done
             ];
         for z_id = 1:length(id_list)
             m2c.(id_list(z_id)) = cell2struct( ...
@@ -755,16 +759,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.main_case_now = 'FINISH SESSION SETUP';
                 
                 % Run Task
-            elseif (~D.F.task_done_confirmed || ~D.F.sleep_done_confirmed) && ...
+            elseif (~D.F.task_done_confirmed || ~all(D.F.sleep_done)) && ...
                     ~(D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update')
                 D.F.main_case_now = 'RUN ICR TASK';
                 
                 % Wait for save
-            elseif ~D.F.ses_save_done
+            elseif ~D.F.ses_save_done && ~D.F.do_quit
                 D.F.main_case_now = 'WAIT FOR SAVE';
                 
+            elseif ~D.F.do_quit
+                D.F.main_case_now = 'WAIT FOR QUIT';
+                
             else
-                continue;
+                 D.F.main_case_now = 'WAIT FOR EXIT';
                 
             end
             
@@ -932,7 +939,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     elseif ~D.F.rob_streaming_confirmed
                         D.F.sub_case_now = 'WAIT FOR ROBOT STREAMING';
                         
-                    elseif ~(D.F.task_done || D.F.quit)
+                    elseif ~(D.F.task_done || D.F.do_quit)
                         
                         if ~D.F.first_move_sent && D.F.poll_new
                             D.F.sub_case_now = 'CHECK IF MOVE READY';
@@ -955,9 +962,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         
                     elseif ~D.F.sleep_done(2)
                         D.F.sub_case_now = 'RUN SLEEP 2';
-                        
-                    elseif ~D.F.sleep_done_confirmed
-                        D.F.sub_case_now = 'CHECK FOR SLEEP DONE CONFIRMATION';
                         
                     end
                     
@@ -1075,19 +1079,28 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 continue;
                             end
                             
+                            % Itterate move count
+                            D.C.move = D.C.move+1;
+                            
                             % Send C# command to move robot to start quad or reward loc
                             if D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
+                                
                                 % Move to track reward zone
-                                Send_M2C('M', D.UI.rewZoneRad(1));
+                                Send_M2C('M', D.C.move, D.UI.rewZoneRad(1));
+                                
                                 Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
                             elseif D.PAR.sesTask == 'Forage'
+                                
                                 % Move to forage reward targ
-                                Send_M2C('M', deg2rad(D.PAR.frgTargDegArr(D.I.targ_now)));
+                                Send_M2C('M', D.C.move, deg2rad(D.PAR.frgTargDegArr(D.I.targ_now)));
+                                
                                 Console_Write('[Run:SubLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
                             else
+                                
                                 % Move to start quad
-                                Send_M2C('M', D.PAR.strQuadBnds(1));
+                                Send_M2C('M', D.C.move, D.PAR.strQuadBnds(1));
                                 Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
+                            
                             end
                             
                             % Set flag
@@ -1121,7 +1134,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             %% --------SEND TASK DONE CONFIRMATION-----------
                             
                             % Tell CS task is finished
-                            Send_M2C('O', 1);
+                            Send_M2C('O');
                             
                             % Set flag
                             D.F.rat_out = true;
@@ -1151,30 +1164,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             % Check sleep status
                             Sleep_Check(2);
-                            
-                            % Send sleep done confirmation
-                            if D.F.sleep_done(2)
-                                
-                                % Tell CS sleep is finished
-                                Send_M2C('O', 2);
-                                
-                                Console_Write('[Run:SubLoop] SENT SLEEP DONE CONFIRMATION');
-                            end
-                            
-                        case 'CHECK FOR SLEEP DONE CONFIRMATION'
-                            %% ------CHECK FOR SLEEP DONE CONFIRMATION-------
-                            
-                            % Check if CS has confirmed sleep done
-                            if c2m.('Y').dat1 == 2
-                                
-                                % Set flags
-                                D.F.sleep_done_confirmed = true;
-                                
-                                % Reset c2m flag
-                                c2m.('Y').dat1 = 0;
-                                Console_Write('[Run:SubLoop] RECEIVED SLEEP DONE CONFIRMATION');
-                                
-                            end
+
                             
                         otherwise
                             continue;
@@ -1184,7 +1174,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 case 'WAIT FOR SAVE'
                     %% -------------WAIT FOR SAVE---------------
                     
-                    % Enable save button
+                    % Set Save button to active color
                     if ~D.F.do_save && strcmp(D.UI.toggSave.Enable, 'off')
                         Button_State(D.UI.toggSave, 'Enable', D.UI.attentionCol);
                     end
@@ -1231,6 +1221,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         % Reset flag
                         D.F.do_save = false;
                     end
+                    
+                case 'WAIT FOR QUIT'
+                    %% -------------WAIT FOR QUIT---------------
+                    
+                    % Set Quit button to active color
+                    if ~D.F.do_quit && ~all(D.UI.toggQuit.BackgroundColor == D.UI.attentionCol)
+                        Button_State(D.UI.toggQuit, 'Enable', D.UI.attentionCol);
+                    end
+                    
+                case 'WAIT FOR EXIT'
+                    %% -------------WAIT FOR EXIT---------------
+                    continue;
                     
                 otherwise
                     continue;
@@ -1524,6 +1526,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.bull_cnt = 0;
         % counter for each reward zone
         D.C.zone = zeros(2,length(D.PAR.zoneLocs));
+        % track number of robot move cammands
+        D.C.move = 0;
         
         % FLAGS
         
@@ -1579,8 +1583,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.task_done = false;
         % task done confirm enabled
         D.F.task_done_confirmed = false;
-        % sleep done confirm enabled
-        D.F.sleep_done_confirmed = false;
         % track if rat is in arena
         D.F.rat_in = false;
         % track if rat is out of arena
@@ -1592,7 +1594,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % tt turn save done
         D.F.tt_save_done = false;
         % flag quit
-        D.F.quit = false;
+        D.F.do_quit = false;
         % flag gui closed
         D.F.close = false;
         % sound settings
@@ -7582,7 +7584,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.lap_tim = Sec_DT(now);
         
         % Tell CS rat is in
-        Send_M2C('I', 1);
+        if D.PAR.sesTask == 'Track'
+            % Rat on track
+            Send_M2C('I', 1);
+        else
+            % Rat on forage platform
+            Send_M2C('I', 0);
+        end
         
         % Set flag
         D.F.rat_in = true;
@@ -8359,8 +8367,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Plot feeder pos feed in cond color
             [xbnd, ybnd] =  Get_Cart_Bnds(D.P.Rob.feedRad, D.P.trackRohBnd);
-            x = xbnd;
-            y = ybnd;
+            x = xbnd(1);
+            y = ybnd(1);
             if ~isgraphics(D.UI.Rob.mrkPosNowDishH)
                 D.UI.Rob.mrkPosNowDishH = ...
                     line(x, y, ...
@@ -9835,9 +9843,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 (Sec_DT(now) > D.T.frg_rew+D.PAR.frgRewBlock || ...
                 ~any(check_last_inbound))
             
+            % Itterate move count
+            D.C.move = D.C.move+1;
+            
             % Send move command
             targ_rad = deg2rad(D.PAR.frgTargDegArr(D.I.targ_now));
-            Send_M2C('M', targ_rad);
+            Send_M2C('M', D.C.move, targ_rad);
             
             % Reset flag
             D.F.move_to_targ = false;
@@ -10204,7 +10215,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         function SimRatTest()
             
             % Bail if rat out
-            if D.F.task_done || D.F.quit
+            if D.F.task_done || D.F.do_quit
                 return;
             end
             
@@ -13478,7 +13489,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Send_M2C('X', 1);
         
         % Set flag
-        D.F.quit = true;
+        D.F.do_quit = true;
         
         % Shut down if matlab run alone
         if isMatSolo
@@ -14763,11 +14774,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if D deleted
             if ~exist('D', 'var')
+                return;
+            elseif ~isfield(D, 'UI')
                 return
             end
             
-            % Bail if c2m not initialized
-            if isempty(c2m)
+            % Bail if c2m deleted or not initialized
+            if ~exist('c2m', 'var')
+                return;
+            elseif isempty(c2m)
                 return
             end
             
@@ -14888,246 +14903,276 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     m2c.(id_send).pack);
             end
             
+            % Update UI
+            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
+            
         catch ME
             Console_Write('!!ERROR!! [TimerFcnCheckC2M] FAILED', now);
             SetExit()
         end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
         
     end
 
 % ------------------------BUTTON STATUS RUN TIMER--------------------------
     function TimerFcnGraphics(~, ~, agent)
         
-        % Bail if figure closed
-        if ~ishandle(FIGH)
-            return
-        end
-        
-        % Bail if UI field not exist
-        if ~isfield(D, 'UI')
-            return
-        end
-        
-        % Handle input
-        switch agent
+        % Have to explicitely catch errors
+        try
             
-            % Update Vcc text
-            case 'Other'
+            % Bail if figure closed
+            if ~exist('FIGH', 'var')
+                return;
+            elseif ~ishandle(FIGH)
+                return
+            end
+            
+            % Bail if UI field not exist
+            if ~exist('D', 'var')
+                return;
+            elseif ~isfield(D, 'UI')
+                return
+            end
+            
+            % Handle input
+            switch agent
                 
-                % Print robot voltage
-                if D.PAR.rob_vcc <= D.PAR.robVccWarning && D.PAR.rob_vcc > 0
-                    set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.attentionCol);
+                % Update Vcc text
+                case 'Other'
                     
-                    % Turn red and flicker if bellow Warning
-                    if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
-                        set(D.UI.txtPerfInf(7), 'Visible', 'off')
+                    % Print robot voltage
+                    if D.PAR.rob_vcc <= D.PAR.robVccWarning && D.PAR.rob_vcc > 0
+                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.attentionCol);
+                        
+                        % Turn red and flicker if bellow Warning
+                        if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
+                            set(D.UI.txtPerfInf(7), 'Visible', 'off')
+                        else
+                            set(D.UI.txtPerfInf(7), 'Visible', 'on')
+                        end
                     else
-                        set(D.UI.txtPerfInf(7), 'Visible', 'on')
+                        
+                        % Check if printing a new value is new
+                        if Sec_DT(now) - c2m.('J').t_rcvd < 5
+                            set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.activeCol);
+                        else
+                            set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledCol);
+                        end
                     end
-                else
                     
-                    % Check if printing a new value is new
-                    if Sec_DT(now) - c2m.('J').t_rcvd < 5
-                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.activeCol);
+                    % Print cube voltage
+                    if D.PAR.cube_vcc <= D.PAR.cubeVccWarning && D.PAR.cube_vcc > 0
+                        set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.attentionCol);
+                        
+                        % Turn red and flicker if bellow cutoff
+                        if strcmp(get(D.UI.txtPerfInf(8), 'Visible'), 'on')
+                            set(D.UI.txtPerfInf(8), 'Visible', 'off')
+                        else
+                            set(D.UI.txtPerfInf(8), 'Visible', 'on')
+                        end
                     else
-                        set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledCol);
+                        % Check if printing a new value is new
+                        if Sec_DT(now) - D.T.cube_vcc_update < 5
+                            set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.activeCol);
+                        else
+                            set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.enabledCol);
+                        end
                     end
-                end
-                
-                % Print cube voltage
-                if D.PAR.cube_vcc <= D.PAR.cubeVccWarning && D.PAR.cube_vcc > 0
-                    set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.attentionCol);
                     
-                    % Turn red and flicker if bellow cutoff
-                    if strcmp(get(D.UI.txtPerfInf(8), 'Visible'), 'on')
-                        set(D.UI.txtPerfInf(8), 'Visible', 'off')
-                    else
-                        set(D.UI.txtPerfInf(8), 'Visible', 'on')
+                    % Update Quit button
+                case 'Quit'
+                    
+                    % Itterate count
+                    D.UI.toggQuit.UserData = D.UI.toggQuit.UserData +1;
+                    if D.UI.toggQuit.UserData>4
+                        D.UI.toggQuit.UserData = 1;
                     end
-                else
-                    % Check if printing a new value is new
-                    if Sec_DT(now) - D.T.cube_vcc_update < 5
-                        set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.activeCol);
-                    else
-                        set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.enabledCol);
+                    
+                    % Change button string
+                    bnt_str = ...
+                        sprintf('%s%s%s', agent, ...
+                        repmat('.',1,D.UI.toggQuit.UserData), ...
+                        blanks(4-D.UI.toggQuit.UserData));
+                    set(D.UI.toggQuit, ...
+                        'String', bnt_str);
+                    
+                    % Update Save button
+                case 'Save'
+                    
+                    % Itterate count
+                    D.UI.toggSave.UserData = D.UI.toggSave.UserData +1;
+                    if D.UI.toggSave.UserData>4
+                        D.UI.toggSave.UserData = 1;
                     end
-                end
-                
-                % Update Quit button
-            case 'Quit'
-                
-                % Itterate count
-                D.UI.toggQuit.UserData = D.UI.toggQuit.UserData +1;
-                if D.UI.toggQuit.UserData>4
-                    D.UI.toggQuit.UserData = 1;
-                end
-                
-                % Change button string
-                bnt_str = ...
-                    sprintf('%s%s%s', agent, ...
-                    repmat('.',1,D.UI.toggQuit.UserData), ...
-                    blanks(4-D.UI.toggQuit.UserData));
-                set(D.UI.toggQuit, ...
-                    'String', bnt_str);
-                
-                % Update Save button
-            case 'Save'
-                
-                % Itterate count
-                D.UI.toggSave.UserData = D.UI.toggSave.UserData +1;
-                if D.UI.toggSave.UserData>4
-                    D.UI.toggSave.UserData = 1;
-                end
-                
-                % Change button string
-                bnt_str = ...
-                    sprintf('%s%s%s', agent, ...
-                    repmat('.',1,D.UI.toggSave.UserData), ...
-                    blanks(4-D.UI.toggSave.UserData));
-                set(D.UI.toggSave, ...
-                    'String', bnt_str);
-                set(D.UI.toggSave, ...
-                    'String', bnt_str);
+                    
+                    % Change button string
+                    bnt_str = ...
+                        sprintf('%s%s%s', agent, ...
+                        repmat('.',1,D.UI.toggSave.UserData), ...
+                        blanks(4-D.UI.toggSave.UserData));
+                    set(D.UI.toggSave, ...
+                        'String', bnt_str);
+                    set(D.UI.toggSave, ...
+                        'String', bnt_str);
+            end
+            
+            % Update UI
+            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [TimerFcnGraphics] FAILED', now);
+            SetExit()
         end
         
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
     end
 
 % -----------------------BUTTON STATUS STOP TIMER--------------------------
     function TimerStopBtnStatus(~, ~, btn_str)
         
-        % Bail if globals cleared
-        if ~exist('D', 'var')
-            return
-        end
-        
-        % Bail if figure closed
-        if ~ishandle(FIGH)
-            return
-        end
-        
-        % Bail if UI field not exist
-        if ~isfield(D, 'UI')
-            return
-        end
-        
-        if (strcmp(btn_str,'Quit'))
-            % Disable quit button
-            if isfield(D.UI, 'toggQuit')
-                if ishandle(D.UI.toggQuit)
-                    set(D.UI.toggQuit, 'String', btn_str);
-                    Button_State(D.UI.toggQuit, 'Disable');
+        % Have to explicitely catch errors
+        try
+            
+            % Bail if figure closed
+            if ~exist('FIGH', 'var')
+                return;
+            elseif ~ishandle(FIGH)
+                return
+            end
+            
+            % Bail if UI field not exist
+            if ~exist('D', 'var')
+                return;
+            elseif ~isfield(D, 'UI')
+                return
+            end
+            
+            if (strcmp(btn_str,'Quit'))
+                % Disable quit button
+                if isfield(D.UI, 'toggQuit')
+                    if ishandle(D.UI.toggQuit)
+                        set(D.UI.toggQuit, 'String', btn_str);
+                        Button_State(D.UI.toggQuit, 'Disable');
+                    end
                 end
             end
-        end
-        
-        if (strcmp(btn_str,'Save'))
-            % Disable save button
-            if isfield(D.UI, 'toggSave')
-                if ishandle(D.UI.toggSave)
-                    set(D.UI.toggSave, 'String', btn_str);
-                    Button_State(D.UI.toggSave, 'Disable');
+            
+            if (strcmp(btn_str,'Save'))
+                % Disable save button
+                if isfield(D.UI, 'toggSave')
+                    if ishandle(D.UI.toggSave)
+                        set(D.UI.toggSave, 'String', btn_str);
+                        Button_State(D.UI.toggSave, 'Disable');
+                    end
                 end
             end
+            
+            % Update UI
+            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [TimerStopBtnStatus] FAILED', now);
+            SetExit()
         end
         
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
     end
 
 % -----------------------BUTTON STATUS STOP TIMER--------------------------
     function TabGrpChange(hObject, ~, ~)
         
-        % Handle input
-        if isa(hObject, 'matlab.ui.container.TabGroup')
-            tab_now =  D.UI.tabgp.SelectedTab;
-        else
-            tab_now = hObject;
-            D.UI.tabgp.SelectedTab = hObject;
+        % Have to explicitely catch errors
+        try
+            
+            % Handle input
+            if isa(hObject, 'matlab.ui.container.TabGroup')
+                tab_now =  D.UI.tabgp.SelectedTab;
+            else
+                tab_now = hObject;
+                D.UI.tabgp.SelectedTab = hObject;
+            end
+            
+            % Bail if 'TABLE' tab not setup
+            if ~D.F.table_tab_setup
+                return;
+            end
+            
+            % Get last tab
+            %tab_last = get(D.UI.tabgp, 'UserData');
+            
+            % Update last tab
+            set(D.UI.tabgp, 'UserData', tab_now)
+            
+            % Change main shared button parent
+            set(D.UI.toggMon, 'Parent', tab_now)
+            set(D.UI.toggSave, 'Parent', tab_now)
+            set(D.UI.toggQuit, 'Parent', tab_now)
+            
+            % Bail if on 'TABLE' tab 'TT TRACK' not setup
+            if strcmp(tab_now.Title, 'TABLE') || ~D.F.tt_tab_setup
+                return;
+            end
+            
+            % Enable/Disable axis rotations
+            if strcmp(tab_now.Title, 'TT TRACK')
+                set(D.UI.mouseRotView, 'Enable', 'on')
+            else
+                set(D.UI.mouseRotView, 'Enable', 'off')
+            end
+            
+            % Change tt select objects parent
+            set(D.UI.panSelectTT, 'Parent', tab_now)
+            set(D.UI.toggMainActionTT, 'Parent', tab_now)
+            set(D.UI.toggFlagTT, 'Parent', tab_now)
+            set(D.UI.toggHearTT, 'Parent', tab_now)
+            set(D.UI.toggPlotTT, 'Parent', tab_now)
+            
+            % Set button and panel positions
+            if strcmp(tab_now.Title, 'ICR ARENA')
+                
+                % Move panel
+                for z_b = 1:2
+                    D.UI.panSelectTT(z_b).Position = D.UI.tab_1_tt_select_pan_pos(z_b,:);
+                end
+                
+                % Move action type buttons
+                for z_b = 1:2
+                    D.UI.toggMainActionTT(z_b).Position = D.UI.tab_1_main_act_pos(z_b,:);
+                end
+                
+                % Move action select buttons
+                D.UI.toggFlagTT.Position = D.UI.tab_1_flag_tt_pos;
+                for z_b = 1:2
+                    D.UI.toggHearTT(z_b).Position = D.UI.tab_1_hear_pos(z_b,:);
+                    D.UI.toggPlotTT(z_b).Position = D.UI.tab_1_plot_pos(z_b,:);
+                end
+                
+            elseif strcmp(tab_now.Title, 'TT TRACK')
+                
+                % Move panel
+                for z_b = 1:2
+                    D.UI.panSelectTT(z_b).Position = D.UI.tab_2_tt_select_pan_pos(z_b,:);
+                end
+                
+                % Move action type buttons
+                for z_b = 1:2
+                    D.UI.toggMainActionTT(z_b).Position = D.UI.tab_2_main_act_pos(z_b,:);
+                end
+                
+                % Move action select buttons
+                D.UI.toggFlagTT.Position = D.UI.tab_2_flag_tt_pos;
+                for z_b = 1:2
+                    D.UI.toggHearTT(z_b).Position = D.UI.tab_2_hear_pos(z_b,:);
+                    D.UI.toggPlotTT(z_b).Position = D.UI.tab_2_plot_pos(z_b,:);
+                end
+                
+            end
+            
+            % Update UI
+            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [TabGrpChange] FAILED', now);
+            SetExit()
         end
         
-        % Bail if 'TABLE' tab not setup
-        if ~D.F.table_tab_setup
-            return;
-        end
-        
-        % Get last tab
-        %tab_last = get(D.UI.tabgp, 'UserData');
-        
-        % Update last tab
-        set(D.UI.tabgp, 'UserData', tab_now)
-        
-        % Change main shared button parent
-        set(D.UI.toggMon, 'Parent', tab_now)
-        set(D.UI.toggSave, 'Parent', tab_now)
-        set(D.UI.toggQuit, 'Parent', tab_now)
-        
-        % Bail if on 'TABLE' tab 'TT TRACK' not setup
-        if strcmp(tab_now.Title, 'TABLE') || ~D.F.tt_tab_setup
-            return;
-        end
-        
-        % Enable/Disable axis rotations
-        if strcmp(tab_now.Title, 'TT TRACK')
-            set(D.UI.mouseRotView, 'Enable', 'on')
-        else
-            set(D.UI.mouseRotView, 'Enable', 'off')
-        end
-        
-        % Change tt select objects parent
-        set(D.UI.panSelectTT, 'Parent', tab_now)
-        set(D.UI.toggMainActionTT, 'Parent', tab_now)
-        set(D.UI.toggFlagTT, 'Parent', tab_now)
-        set(D.UI.toggHearTT, 'Parent', tab_now)
-        set(D.UI.toggPlotTT, 'Parent', tab_now)
-        
-        % Set button and panel positions
-        if strcmp(tab_now.Title, 'ICR ARENA')
-            
-            % Move panel
-            for z_b = 1:2
-                D.UI.panSelectTT(z_b).Position = D.UI.tab_1_tt_select_pan_pos(z_b,:);
-            end
-            
-            % Move action type buttons
-            for z_b = 1:2
-                D.UI.toggMainActionTT(z_b).Position = D.UI.tab_1_main_act_pos(z_b,:);
-            end
-            
-            % Move action select buttons
-            D.UI.toggFlagTT.Position = D.UI.tab_1_flag_tt_pos;
-            for z_b = 1:2
-                D.UI.toggHearTT(z_b).Position = D.UI.tab_1_hear_pos(z_b,:);
-                D.UI.toggPlotTT(z_b).Position = D.UI.tab_1_plot_pos(z_b,:);
-            end
-            
-        elseif strcmp(tab_now.Title, 'TT TRACK')
-            
-            % Move panel
-            for z_b = 1:2
-                D.UI.panSelectTT(z_b).Position = D.UI.tab_2_tt_select_pan_pos(z_b,:);
-            end
-            
-            % Move action type buttons
-            for z_b = 1:2
-                D.UI.toggMainActionTT(z_b).Position = D.UI.tab_2_main_act_pos(z_b,:);
-            end
-            
-            % Move action select buttons
-            D.UI.toggFlagTT.Position = D.UI.tab_2_flag_tt_pos;
-            for z_b = 1:2
-                D.UI.toggHearTT(z_b).Position = D.UI.tab_2_hear_pos(z_b,:);
-                D.UI.toggPlotTT(z_b).Position = D.UI.tab_2_plot_pos(z_b,:);
-            end
-            
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
     end
 
 

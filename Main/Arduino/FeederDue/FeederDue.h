@@ -169,7 +169,7 @@ struct FC
 	bool doSendVCC = false;
 	bool isManualSes = false;
 	bool isForageTask = false;
-	bool isRatIn = false;
+	bool isRatOnTrack = false;
 	bool isTaskDone = false;
 	bool isTrackingEnabled = false;
 	bool doMove = false;
@@ -271,7 +271,7 @@ struct KAL
 	double RatVel = 0;
 	double RobVel = 0;
 	int cnt_ekf = 0;
-	uint32_t t_update = 0;
+	uint32_t t_last = 0;
 }
 kal;
 
@@ -304,7 +304,7 @@ Updated when EtOH relay opened
 const float bit2volt = 0.01545; // was 0.0164;
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;
-const int dt_vccSend = 15000;
+const int dt_vccSend = 30000;
 const int dt_vccPrint = 30000;
 float vccArr[vccMaxSamp] = { 0 };
 float vccNow = 0;
@@ -393,6 +393,7 @@ struct CMD
 	byte vtEnt = 0;
 	float vtCM[2] = { 0,0 };
 	uint32_t vtTS[2] = { 0,0 };
+	byte cnt_move = 0;
 	float moveToTarg = 0;
 	float bullDel = 0;
 	float bullSpeed = 0;
