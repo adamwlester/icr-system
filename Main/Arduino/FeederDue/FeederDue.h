@@ -510,7 +510,7 @@ R2 r2c
 	// packLast
 	{ 0 },
 	// cnt_pack
-	0,
+	UINT16_MAX / 2,
 	// cnt_repeat
 	0,
 	// datList

@@ -73,27 +73,26 @@ db;
 struct PIN
 {
 	// Relays
-	const int relIR = 51;
-	const int relRewTone = 47;
-	const int relWhiteNoise = 45;
-	// ttl
-	const int ttlIR = 50;
-	const int ttlRewTone = 46;
-	const int ttlWhiteNoise = 44;
+	const int relIR = 51;				// port=PC due=51 sam=12
+	const int relRewTone = 47;			// port=PC due=47 sam=16
+	const int relWhiteNoise = 45;		// port=PC due=45 sam=18
 
-	// Rew
-	const int ttlRewOn = 34;
-	const int ttlRewOff = 36;
+	// TTL
+	const int ttlIR = 50;				// port=PC due=50 sam=13 nlx=1,7
+	const int ttlRewTone = 46;			// port=PC due=46 sam=17 nlx=1,4
+	const int ttlWhiteNoise = 44;		// port=PC due=44 sam=19 nlx=1,5
+	const int ttlRewOn = 34;			// port=PC due=34 sam=2  nlx=1,0
+	const int ttlRewOff = 36;			// port=PC due=36 sam=4  nlx=1,1
 
 	// SAM3X pin
-	const int sam_relIR = 12;
-	const int sam_relRewTone = 16;
-	const int sam_relWhiteNoise = 18;
-	const int sam_ttlIR = 13;
-	const int sam_ttlRewTone = 17;
-	const int sam_ttlWhiteNoise = 19;
-	const int sam_ttlRewOn = 2;
-	const int sam_ttlRewOff = 4;
+	const int sam_relIR = 12;			// port=PC due=51 sam=12
+	const int sam_relRewTone = 16;		// port=PC due=47 sam=16
+	const int sam_relWhiteNoise = 18;	// port=PC due=45 sam=18
+	const int sam_ttlIR = 13;			// port=PC due=50 sam=13 nlx=1,7
+	const int sam_ttlRewTone = 17;		// port=PC due=46 sam=17 nlx=1,4
+	const int sam_ttlWhiteNoise = 19;	// port=PC due=44 sam=19 nlx=1,5
+	const int sam_ttlRewOn = 2;			// port=PC due=34 sam=2  nlx=1,0
+	const int sam_ttlRewOff = 4;		// port=PC due=36 sam=4  nlx=1,1
 
 	// PID
 	const int ttlPidRun = 26;
@@ -244,8 +243,8 @@ a2c;
 // Reward
 uint32_t rewDur; // (ms) 
 uint32_t t_rewEnd;
-uint32_t word_rewOn;
-uint32_t word_rewOff;
+uint32_t word_rewStr;
+uint32_t word_rewEnd;
 
 // IR time sync LED
 const int dt_irSyncPulse = 10; // (ms)
@@ -332,6 +331,8 @@ void QueueDebug(char msg[], uint32_t t);
 bool PrintDebug();
 // SEND TEST PACKET
 void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
+// HARDWARE TEST
+void HardwareTest(int test_num);
 // BLINK LEDS AT RESTART/UPLOAD
 void StatusBlink();
 // PLAY SOUND WHEN QUITING
@@ -1166,7 +1167,7 @@ void StartRew()
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 
 	// Set rew on pins
-	SetPort(word_rewOn, word_rewOff);
+	SetPort(word_rewStr, word_rewEnd);
 
 	// Set rew off time
 	t_rewEnd = millis() + rewDur;
@@ -1191,7 +1192,7 @@ void EndRew()
 	{
 
 		// Set reward off pins
-		SetPort(word_rewOff, word_rewOn);
+		SetPort(word_rewEnd, word_rewStr);
 
 		fc.isRewarding = false;
 		DebugFlow("[EndRew] REWARD OFF");
@@ -1510,6 +1511,158 @@ void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bo
 	while (PrintDebug());
 }
 
+// HARDWARE TEST
+void HardwareTest(int test_num)
+{
+	// Local vars
+	int dt_on = 500;
+
+	switch (test_num)
+	{
+
+	// Test arduino pin reward tone
+	case 1:
+	{
+		// Write pins high then low
+		DebugFlow("[HardwareTest] TEST DUE PIN: Reward Tone");
+		digitalWrite(pin.relWhiteNoise, LOW);
+		digitalWrite(pin.ttlWhiteNoise, LOW);
+		digitalWrite(pin.relRewTone, HIGH);
+		digitalWrite(pin.ttlRewTone, HIGH);
+		delay(dt_on);
+		digitalWrite(pin.relRewTone, LOW);
+		digitalWrite(pin.ttlRewTone, LOW);
+	}
+	break;
+
+	// Test arduino pin white noise
+	case 2:
+	{
+		DebugFlow("[HardwareTest] TEST DUE PIN: White Noise");
+		digitalWrite(pin.relWhiteNoise, HIGH);
+		digitalWrite(pin.ttlWhiteNoise, HIGH);
+		delay(dt_on);
+		digitalWrite(pin.relWhiteNoise, LOW);
+		digitalWrite(pin.ttlWhiteNoise, LOW);
+	}
+	break;
+
+	// Test port set reward only
+	case 3:
+	{
+		// Create port word for rew event pins only
+		DebugFlow("[HardwareTest] TEST PORT WORD: Reward Event Only");
+		int sam_on_pins[1] = { pin.sam_ttlRewOn };
+		word_rewStr = GetPortWord(0x0, sam_on_pins, 1);
+		int sam_off_pins[1] = { pin.sam_ttlRewOff };
+		word_rewEnd = GetPortWord(0x0, sam_off_pins, 1);
+
+		// Write word on then off
+		SetPort(word_rewStr, word_rewEnd);
+		delay(dt_on);
+		SetPort(word_rewEnd, word_rewStr);
+	}
+	break;
+
+	// Test port set reward with sound
+	case 4:
+	{
+		// Create port word for white and tone pins
+		DebugFlow("[HardwareTest] TEST PORT WORD: Reward With Sound");
+		int sam_on_pins[3] = { pin.sam_relRewTone, pin.sam_ttlRewTone, pin.sam_ttlRewOn };
+		word_rewStr = GetPortWord(0x0, sam_on_pins, 3);
+		int sam_off_pins[3] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise, pin.sam_ttlRewOff };
+		word_rewEnd = GetPortWord(0x0, sam_off_pins, 3);
+
+		// Write word on then off
+		SetPort(word_rewStr, word_rewEnd);
+		delay(dt_on);
+		SetPort(word_rewEnd, word_rewStr);
+	}
+	break;
+
+	// Test arduino pin IR
+	case 5:
+	{
+		// Write pins high then low
+		DebugFlow("[HardwareTest] TEST DUE PIN: IR");
+		digitalWrite(pin.relIR, HIGH);
+		digitalWrite(pin.ttlIR, HIGH);
+		delay(dt_on);
+		digitalWrite(pin.relIR, LOW);
+		digitalWrite(pin.ttlIR, LOW);
+	}
+	break;
+
+	// Test arduino pin IR
+	case 6:
+	{
+		// Create port word for white and tone pins
+		DebugFlow("[HardwareTest] TEST PORT WORD: IR");
+		int sam_ir_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
+		word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
+
+		// Write word on then off
+		SetPort(word_irOn, 0x0);
+		delay(dt_on);
+		SetPort(0x0, word_irOn);
+
+	}
+	break;
+
+	// Test arduino pin PID
+	case 7:
+	{
+		// Write pins high then low
+		DebugFlow("[HardwareTest] TEST DUE PIN: PID");
+		digitalWrite(pin.ttlPidRun, HIGH);
+		digitalWrite(pin.ttlPidStop, LOW);
+		delay(dt_on);
+		digitalWrite(pin.ttlPidRun, LOW);
+		digitalWrite(pin.ttlPidStop, HIGH);
+	}
+	break;
+
+
+	// Test arduino pin Bull
+	case 8:
+	{
+		// Write pins high then low
+		DebugFlow("[HardwareTest] TEST DUE PIN: BULL");
+		digitalWrite(pin.ttlBullRun, HIGH);
+		digitalWrite(pin.ttlBullStop, LOW);
+		delay(dt_on);
+		digitalWrite(pin.ttlBullRun, LOW);
+		digitalWrite(pin.ttlBullStop, HIGH);
+	}
+	break;
+
+	// Test arduino pin PT
+	case 9:
+	{
+		// Write pins high then low
+		DebugFlow("[HardwareTest] TEST DUE PIN: PT");
+		digitalWrite(pin.ttlNorthOn, HIGH);
+		delay(10);
+		digitalWrite(pin.ttlWestOn, HIGH);
+		delay(10);
+		digitalWrite(pin.ttlSouthOn, HIGH);
+		delay(10);
+		digitalWrite(pin.ttlEastOn, HIGH);
+		delay(dt_on);
+		digitalWrite(pin.ttlNorthOn, LOW);
+		digitalWrite(pin.ttlWestOn, LOW);
+		digitalWrite(pin.ttlSouthOn, LOW);
+		digitalWrite(pin.ttlEastOn, LOW);
+	}
+	break;
+
+	default:
+		break;
+	}
+}
+
+
 #pragma endregion
 
 #pragma region --------MINOR FUNCTIONS---------
@@ -1596,7 +1749,7 @@ bool PulseIR(int dt_off, int dt_on, byte force_state, bool do_ttl)
 			millis() > t_irSyncLast + dt_on)
 		)
 	{
-		// Set ir relay and ttl pins high
+		// Set ir relay and ttl pins low
 		if (do_ttl) {
 			SetPort(0x0, word_irOn);
 		}
@@ -1951,6 +2104,9 @@ void setup()
 	DebugFlow(str);
 	while (PrintDebug());
 
+	// SET WHITE NOISE RELAY HIGH
+	digitalWrite(pin.relWhiteNoise, HIGH);
+
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);
 	StatusBlink();
@@ -2002,7 +2158,7 @@ void loop()
 				if (r2a.dat[1] == 0)
 				{
 					// Log/rint test
-					DebugFlow("TESTING: WALL IR TIMING TEST");
+					DebugFlow("DO TEST: WALL IR TIMING TEST");
 
 					// Make sure IR off
 					PulseIR(0, 0, 0);
@@ -2030,7 +2186,7 @@ void loop()
 				if (r2a.dat[1] == 0)
 				{
 					// Log/rint test
-					DebugFlow("TESTING: SYNC IR TIMING TEST");
+					DebugFlow("DO TEST: SYNC IR TIMING TEST");
 
 					// Set flag
 					db.do_irSyncCalibration = true;
@@ -2072,6 +2228,34 @@ void loop()
 
 			}
 
+			// Hardware test
+			if (r2a.dat[0] == 7)
+			{
+				// Setup
+				if (r2a.dat[1] == 0)
+				{
+					// Log/rint test
+					DebugFlow("DO TEST: HARDWARE");
+
+					// Set to block IR pulse
+					fc.doBlockIRPulse = true;
+				}
+
+				// Run
+				if (r2a.dat[1] == 1)
+				{
+					HardwareTest(r2a.dat[2]);
+				}
+
+				// Test finished
+				if (r2a.dat[1] == 2)
+				{
+					// Unblock IR
+					fc.doBlockIRPulse = false;
+				}
+
+
+			}
 		}
 
 		// (r) RUN REWARD TONE
@@ -2092,40 +2276,59 @@ void loop()
 			{
 				fc.doWhiteNoise = false;
 				fc.doRewTone = false;
+				DebugFlow("[loop] NO SOUND");
 			}
+
 			// White noise only
 			else if (r2a.dat[0] == 1)
 			{
-				// set white noise pins
+				
+				// Set flags
 				fc.doWhiteNoise = true;
 				fc.doRewTone = false;
+				DebugFlow("[loop] DONT DO TONE");
+
 			}
+
 			// White and reward sound
 			else if (r2a.dat[0] == 2)
 			{
-				// set white noise pins
+
+				// Set flags
 				fc.doWhiteNoise = true;
 				fc.doRewTone = true;
+				DebugFlow("[loop] DO TONE");
+
 			}
 
-			// Get reward on port word
+			// Create white, tone and reward word
 			if (fc.doWhiteNoise && fc.doRewTone) {
-				// white and tone pins
+
+				// Create word
 				int sam_on_pins[3] = { pin.sam_relRewTone, pin.sam_ttlRewTone, pin.sam_ttlRewOn };
-				word_rewOn = GetPortWord(0x0, sam_on_pins, 3);
+				word_rewStr = GetPortWord(0x0, sam_on_pins, 3);
 				int sam_off_pins[3] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise, pin.sam_ttlRewOff };
-				word_rewOff = GetPortWord(0x0, sam_off_pins, 3);
+				word_rewEnd = GetPortWord(0x0, sam_off_pins, 3);
+			
 			}
+
+			// Create reward event only word
 			else {
-				// rew event pins only
+
+				// Create word
 				int sam_on_pins[1] = { pin.sam_ttlRewOn };
-				word_rewOn = GetPortWord(0x0, sam_on_pins, 1);
+				word_rewStr = GetPortWord(0x0, sam_on_pins, 1);
 				int sam_off_pins[1] = { pin.sam_ttlRewOff };
-				word_rewOff = GetPortWord(0x0, sam_off_pins, 1);
+				word_rewEnd = GetPortWord(0x0, sam_off_pins, 1);
 			}
+
 			// Turn on white noise
 			if (fc.doWhiteNoise) {
-				// turn white on
+
+				// Set relay back to low first
+				digitalWrite(pin.relWhiteNoise, LOW);
+				
+				// Set port 
 				int sam_white_pins[2] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise };
 				uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
 				SetPort(word_white, 0x0);

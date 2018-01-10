@@ -199,7 +199,7 @@ public:
 	// VARS
 	int targSetTimeout = 30000;
 	int moveTimeout = 10000;
-	int ekfTimeout = 500;
+	int ekfTimeout = 1000;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
 	char moveCntStr[20] = { 0 };
@@ -521,7 +521,7 @@ void AD_Config(float max_speed, float max_acc, float max_dec);
 void AD_CheckOC(bool force_check = false);
 
 // HARD STOP
-void HardStop(char called_from[]);
+void HardStop(char called_from[], bool do_block_hz = false);
 
 // IR TRIGGERED HARD STOP
 void IRprox_Halt();
@@ -3037,7 +3037,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	bool is_queue_overflowing = false;
 	bool is_mem_overflowing = false;
 	uint32_t t_m = 0;
-
+	
 	// Bail if queue store blocked
 	if (fc.doBlockLogQueue) {
 		return;
@@ -3843,7 +3843,7 @@ void GetSerial(R4 *r4)
 	R2 *r2;
 	R2 *r2o;
 	R4 *r4o;
-
+	
 	// Set pointer to R2 struct
 	if (r4->instID == "c2r") {
 		r2 = &r2c;
@@ -4737,7 +4737,7 @@ void AD_CheckOC(bool force_check)
 }
 
 // HARD STOP
-void HardStop(char called_from[])
+void HardStop(char called_from[], bool do_block_hz)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4761,7 +4761,7 @@ void HardStop(char called_from[])
 	Pid.PID_Reset();
 
 	// Set to high impedance so robot can be moved
-	if (fc.isManualSes) {
+	if (fc.isManualSes && ~do_block_hz) {
 
 		AD_R.hardHiZ();
 		AD_F.hardHiZ();
@@ -6178,7 +6178,7 @@ void HardwareTest()
 				is_stressin = !is_stressin;
 
 				// Run motors
-				HardStop("HardwareTest");
+				HardStop("HardwareTest", true);
 				RunMotor(runDirNow == 'f' ? 'r' : 'f', run_speed[cnt_stress], "Override");
 
 				// Open Solenoids
@@ -6232,7 +6232,7 @@ void HardwareTest()
 				millis() > t_stress_run + dt_stress_run) {
 
 				// Stop motors
-				HardStop("HardwareTest");
+				HardStop("HardwareTest", true);
 
 				// Turn all off
 				analogWrite(pin.Disp_LED, 0);
@@ -8318,7 +8318,6 @@ void setup() {
 
 	// Flag setup done
 	fc.isSetup = true;
-
 }
 
 
@@ -8547,8 +8546,7 @@ void loop() {
 
 				// Halt robot
 				else {
-					AD_R.hardStop();
-					AD_F.hardStop();
+					HardStop("loop", true);
 				}
 
 
@@ -8558,8 +8556,7 @@ void loop() {
 			if (cmd.testRun == 2) {
 
 				// Halt robot
-				AD_R.hardStop();
-				AD_F.hardStop();
+				HardStop("loop", true);
 
 				// Set tracker duty to default
 				trackLEDduty[0][0] = trackLEDduty[1][0];
@@ -8598,8 +8595,7 @@ void loop() {
 				}
 				else {
 					// Halt robot
-					AD_R.hardStop();
-					AD_F.hardStop();
+					HardStop("loop", true);
 				}
 			}
 		}
@@ -8936,7 +8932,7 @@ void loop() {
 		}
 
 		// Check if robot is ready to be stopped
-		else if (!Move.isTargReached && !Move.doAbortMove) {
+		else if (!Move.isTargReached && !Move.doAbortMove && !fc.doHalt) {
 
 			// Do deceleration
 			double new_speed = Move.DecelToTarg(kal.RobPos, kal.RobVel, 40, 10);
@@ -8960,11 +8956,16 @@ void loop() {
 				SetMotorControl("None", "MoveTo");
 			}
 
-			// Log/print error
-			if (Move.doAbortMove) {
+			// Log/print warning
+			if (fc.doHalt) {
+				// Print abort message
+				sprintf(horeStr, "ABORTED: MOVE [%s]: Robot Halted", Move.moveCntStr);
+				DebugError(__FUNCTION__, __LINE__, horeStr, false);
+			}
 
-				// Print failure message
-				sprintf(horeStr, "ABORTED: MOVE [%s]: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+			// Log/print failure
+			else if (Move.doAbortMove) {
+				sprintf(horeStr, "FAILED: MOVE [%s]: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
 					Move.moveCntStr, Move.isTargSet, fc.isEKFReady, Move.isMoveStarted, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
 				DebugError(__FUNCTION__, __LINE__, horeStr, true);
 			}
@@ -8977,8 +8978,19 @@ void loop() {
 					Move.moveCntStr, Move.targDist, Move.GetMoveError(kal.RobPos), Move.moveDir);
 				DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
-				// Tell CS movement is done
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('M', &c2r)], true);
+				// Confirm movmement done for for first and last move commans
+				if (strcmp(Move.moveCntStr, "FIRST") == 0 ||
+					strcmp(Move.moveCntStr, "LAST") == 0) {
+
+					// Log/print
+					sprintf(horeStr, "MOVE [%s]: Sending Done Confirmation", Move.moveCntStr);
+					DebugFlow(__FUNCTION__, __LINE__, horeStr);
+					
+					// Send done confirmation
+					QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('M', &c2r)], true);
+				
+				}
+
 			}
 
 			// Reset flags
@@ -9264,8 +9276,8 @@ void loop() {
 	if (fc.doStreamCheck && Pos[1].is_streamStarted)
 	{
 		// Log/print event
-
 		DebugFlow(__FUNCTION__, __LINE__, "STREAMING CONFIRMED");
+
 		// Send streaming confirmation
 		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('V', &c2r)], true);
 

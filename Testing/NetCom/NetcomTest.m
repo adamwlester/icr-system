@@ -8,11 +8,10 @@ D.NLX.vt_rat_ent = 'VT1';
 D.NLX.vt_rob_ent = 'VT2';
 D.NLX.event_ent = 'Events';
 
-%% START CHEETAH
+%% START CHEETAH NORMALLY
    
 % NLX setup
 top_cfg_fi = 'Cheetah.cfg';
-%top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
 
 % Open Cheetah
 curdir = pwd;
@@ -22,6 +21,29 @@ if not_running == 1
     cd('C:\Program Files\Neuralynx\Cheetah');
     system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
 end
+
+%% START CHEETAH FOR RAW DATA PLAYBACK
+% NOTE:
+%   Can run this then run ICR_GUI    
+   
+% NLX setup
+top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
+
+% Open Cheetah
+curdir = pwd;
+[~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+not_running = strfind(result, 'INFO');
+if not_running == 1
+    cd('C:\Program Files\Neuralynx\Cheetah');
+    system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
+end
+
+% OPTIONAL CONFIGS
+% % Load graphics setup
+% NlxConnectToServer(D.NLX.ServerIP);
+% pause(1);
+% NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
+% NlxSendCommand('-ProcessConfigurationFile AWL-WinPos_Ephys_M1.cfg');
 
 %% CONNECT TO NETCOM
 

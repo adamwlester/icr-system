@@ -11766,50 +11766,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'default');
             
             % Set delay
-            dt_send = 2;
+            dt_send = 1;
             
             % TEST REWARD RELATED PINS
-
-            Send_M2NLX('-PostEvent TEST:_Reward_Tone:_DUE_PIN 255 0');
+            
+            Send_M2NLX('-PostEvent TEST:_White_Noise:_DUE_PIN 255 0');
             Send_M2C('T', sysTest(1), 1, 1);
             pause(dt_send)
-            Send_M2NLX('-PostEvent TEST:_White_Noise:_DUE_PIN 254 0');
+            Send_M2NLX('-PostEvent TEST:_Reward_Tone:_DUE_PIN 254 0');
             Send_M2C('T', sysTest(1), 1, 2);
             pause(dt_send)
-            Send_M2NLX('-PostEvent TEST:_Reward_Event_Only:_PORT_WORD 253 0');
+            Send_M2NLX('-PostEvent TEST:_Reward_Event_Only:_PORT_WORD:_Reward_Event_Only 253 0');
             Send_M2C('T', sysTest(1), 1, 3);
             pause(dt_send)
-            Send_M2NLX('-PostEvent TEST:_Reward_With_Sound:_PORT_WORD 252 0');
+            Send_M2NLX('-PostEvent TEST_PORT_WORD:_Reward_With_Sound 252 0');
             Send_M2C('T', sysTest(1), 1, 4);
             
             % TEST IR PINS
-            Send_M2NLX('-PostEvent TEST:_IR:_DUE_PIN 251 0');
+            Send_M2NLX('-PostEvent TEST_DUE_PIN:_IR 251 0');
             Send_M2C('T', sysTest(1), 1, 5);
             pause(dt_send)
-            Send_M2NLX('-PostEvent TEST:_IR:_PORT_WORD 250 0');
+            Send_M2NLX('-PostEvent TEST_PORT_WORD:_IR 250 0');
             Send_M2C('T', sysTest(1), 1, 6);
             pause(dt_send)
             
             % TEST PID PINS
-            Send_M2NLX('-PostEvent TEST:_PID:_DUE_PIN 249 0');
+            Send_M2NLX('-PostEvent TEST_DUE_PIN:_PID 249 0');
             Send_M2C('T', sysTest(1), 1, 7);
             pause(dt_send)
             
             % TEST BULL PINS
-            Send_M2NLX('-PostEvent TEST:_BULL:_DUE_PIN 249 0');
+            Send_M2NLX('-PostEvent TEST_DUE_PIN:_BULL 249 0');
             Send_M2C('T', sysTest(1), 1, 8);
-            pause(dt_send)
-            
-            % TEST PT PINS
-            Send_M2NLX('-PostEvent TEST:_PT:_DUE_PIN:_N_W_S_E 249 0');
-            Send_M2C('T', sysTest(1), 1, 9);
             pause(dt_send)
             
             % Send test end
             Send_M2C('T', sysTest(1), 2);
-            
-            % Unset flag
-            D.DB.t7_doRobotHardwareTest = false;
             
         end
         
