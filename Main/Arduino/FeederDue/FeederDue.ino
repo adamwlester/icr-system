@@ -330,6 +330,8 @@ public:
 
 	// VARS
 	USARTClass &port = Serial1;
+	char logHead[3] = { '<','<','<' };
+	char logFoot[3] = { '>','>','>' };
 	byte msg_streamSuccess[3] = { '>','>','>' };
 	byte msg_streamFail[3] = { '>','>','!' };
 	uint32_t t_sent = 0; // (ms)
@@ -2670,6 +2672,11 @@ int LOGGER::OpenNewLog()
 		return 0;
 	}
 
+	// Write log header
+	if (DO_LOG) {
+		port.write(logHead, 3);
+	}
+
 	// Write first log entry
 	if (DO_LOG) {
 		sprintf(str, "Begin Logging to \"%s\"", logFile);
@@ -3037,7 +3044,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	bool is_queue_overflowing = false;
 	bool is_mem_overflowing = false;
 	uint32_t t_m = 0;
-	
+
 	// Bail if queue store blocked
 	if (fc.doBlockLogQueue) {
 		return;
@@ -3247,6 +3254,10 @@ void LOGGER::StreamLogs()
 	fc.doBlockLogQueue = true;
 	fc.doBlockLogWrite = true;
 
+	// Write footer
+	port.write(logFoot, 3);
+	delay(100);
+
 	// Make sure in command mode
 	if (!SetToCmdMode()) {
 
@@ -3359,28 +3370,22 @@ void LOGGER::StreamLogs()
 			t_last_read = millis();
 			read_ind++;
 
-			// Check for leading "\r\n"
+			// Check for header
 			if (!head_passed) {
 
 				// Header found
-				if (c_arr[2] != '\r' &&
-					c_arr[2] != '\n') {
+				if (c_arr[0] == logHead[0] &&
+					c_arr[1] == logHead[1] &&
+					c_arr[2] == logHead[2]) {
 
 					head_passed = true;
+					continue;
 				}
 
 				// Continue till header found
 				else {
 					continue;
 				}
-			}
-
-			// Check for stupid fucking command prompt
-			if (c_arr[2] == '>') {
-
-				// Reset flag and continue
-				head_passed = false;
-				continue;
 			}
 
 			// Check for error
@@ -3405,6 +3410,24 @@ void LOGGER::StreamLogs()
 
 					// Break
 					break;
+				}
+			}
+
+			// Check for footer
+			if (c_arr[2] == logFoot[0] ||
+				c_arr[2] == logFoot[1] ||
+				c_arr[2] == logFoot[2]) {
+
+				// Check if complete footer found
+				if (c_arr[0] == logFoot[0] &&
+					c_arr[1] == logFoot[1] &&
+					c_arr[2] == logFoot[2]) {
+
+					send_done = true;
+					break;
+				}
+				else {
+					continue;
 				}
 			}
 
@@ -3445,17 +3468,6 @@ void LOGGER::StreamLogs()
 			strcat(err_str, str);
 		}
 	}
-
-	//TEMP
-	// End reached send ">>>"
-	if (!do_abort) {
-		r2c.port.write(msg_streamSuccess, 3);
-	}
-	// Aborted send ">>!"
-	else {
-		r2c.port.write(msg_streamFail, 3);
-	}
-	delay(1000);
 
 	// Unblock log store
 	fc.doBlockLogQueue = false;
@@ -3696,7 +3708,7 @@ int LOGGER::GetLogQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < logQueueSize; i++) {
 		n_entries += logQueue[i][0] != '\0' ? 1 : 0;
-	}
+}
 
 	// Get total available
 	return logQueueSize - n_entries;
@@ -3863,7 +3875,7 @@ void GetSerial(R4 *r4)
 	R2 *r2;
 	R2 *r2o;
 	R4 *r4o;
-	
+
 	// Set pointer to R2 struct
 	if (r4->instID == "c2r") {
 		r2 = &r2c;
@@ -4053,7 +4065,7 @@ void GetSerial(R4 *r4)
 	if (dt_parse > 30) {
 		sprintf(str, "Parser Hanging: %s %s", dat_str_1, dat_str_2);
 		DebugError(__FUNCTION__, __LINE__, str);
-	}
+}
 
 	return;
 }
@@ -4702,7 +4714,7 @@ void AD_CheckOC(bool force_check)
 	// Bail if check disabled
 	if (dp_disable) {
 		return;
-	}
+}
 
 	// Bail if not time for next check
 	if (!force_check &&
@@ -4853,7 +4865,7 @@ bool RunMotor(char dir, double new_speed, char agent[])
 	runDirNow = dir;
 
 	return true;
-}
+	}
 
 // RUN MOTOR MANUALLY
 bool ManualRun(char dir)
@@ -5100,7 +5112,7 @@ void InitializeTracking()
 	// Bail if finished or task done
 	if (fc.isTrackingEnabled || fc.isTaskDone) {
 		return;
-	}
+}
 
 	// Wait for new data
 	if (!fc.isRatOnTrack ||
@@ -5534,7 +5546,7 @@ bool GetButtonInput()
 			digitalRead(pin.Btn[i]) == LOW ||
 			is_pressed[i] ||
 			is_running[i];
-	}
+}
 	if (!do_check) {
 		return false;
 	}
@@ -5844,7 +5856,7 @@ void CheckEtOH()
 		sprintf(str, "Close EtOH: dt_open=%d", dt_open);
 		DebugFlow(__FUNCTION__, __LINE__, str);
 	}
-}
+		}
 
 // CHECK BATTERY VALUES
 float CheckBattery(bool force_check)
@@ -6850,7 +6862,7 @@ void GetTeensyDebug()
 
 		// Hold for 500 ms for Teensy to reset
 		delay(1000);
-	}
+}
 	else {
 		DebugError(__FUNCTION__, __LINE__, "FAILED: Teensy Reset");
 	}
@@ -6859,7 +6871,7 @@ void GetTeensyDebug()
 	DoAll("PrintDebug");
 
 #endif
-}
+	}
 
 // LOG/PRINT MAIN EVENT
 void DebugFlow(const char *fun, int line, char msg[], uint32_t t)
@@ -6891,7 +6903,7 @@ void DebugFlow(const char *fun, int line, char msg[], uint32_t t)
 		Log.QueueLog(str, t);
 	}
 
-}
+	}
 
 // LOG/PRINT ERRORS
 void DebugError(const char *fun, int line, char msg[], bool is_error, uint32_t t)
@@ -6930,7 +6942,7 @@ void DebugError(const char *fun, int line, char msg[], bool is_error, uint32_t t
 	// Store error info
 	if (is_error) {
 		err_line[cnt_err < 100 ? cnt_err++ : 99] = Log.cnt_logsStored;
-	}
+}
 	else {
 		warn_line[cnt_warn < 100 ? cnt_warn++ : 99] = Log.cnt_logsStored;
 	}
@@ -6977,7 +6989,7 @@ void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], ch
 		Log.QueueLog(str, millis());
 	}
 
-}
+	}
 
 // LOG/PRINT MOTOR SPEED CHANGE
 void DebugRunSpeed(const char *fun, int line, char agent[], double speed_last, double speed_now)
@@ -7010,7 +7022,7 @@ void DebugRunSpeed(const char *fun, int line, char agent[], double speed_last, d
 		Log.QueueLog(str, millis());
 	}
 
-}
+	}
 
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
 void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
@@ -7066,7 +7078,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 		Log.QueueLog(msg_out, r4->t_rcvd);
 	}
 
-}
+	}
 
 // LOG/PRINT SENT PACKET DEBUG STRING
 void DebugSent(R2 *r2, char msg[], bool is_repeat)
@@ -7265,7 +7277,7 @@ bool PrintDebug()
 	return false;
 
 #endif
-}
+	}
 
 // FOR PRINTING TO LCD
 void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
@@ -7302,7 +7314,7 @@ void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 	if (do_block) {
 		fc.doBlockWriteLCD = true;
 	}
-}
+	}
 
 // CLEAR LCD
 void ClearLCD()
@@ -7403,7 +7415,7 @@ int GetPrintQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < printQueueSize; i++) {
 		n_entries += printQueue[i][0] != '\0' ? 1 : 0;
-	}
+}
 
 	// Get total available
 	return printQueueSize - n_entries;
@@ -7565,8 +7577,8 @@ void LogTrackingData()
 		// Reset vals
 		hist_ind = 0;
 		t_last_log = kal.t_last;
+		}
 	}
-}
 
 // SEND TEST PACKET
 void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
@@ -7617,7 +7629,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 	int r2_ind = ID_Ind<R2>(id, r2);
 	if (r2_ind != -1) {
 		r2c.doRcvCheck[r2_ind] = false;
-	}
+}
 
 	// Print everything
 	DoAll("PrintDebug");
@@ -7676,7 +7688,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 		}
 
 	}
-}
+	}
 
 #pragma endregion
 
@@ -7731,7 +7743,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		dt_cycle = dt_led;
 		do_blink = true;
 		is_rat_blink = rat_in_blink;
-	}
+}
 
 	// Bail if not running
 	else if (!do_blink) {
@@ -9005,10 +9017,10 @@ void loop() {
 					// Log/print
 					sprintf(horeStr, "MOVE [%s]: Sending Done Confirmation", Move.moveCntStr);
 					DebugFlow(__FUNCTION__, __LINE__, horeStr);
-					
+
 					// Send done confirmation
 					QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('M', &c2r)], true);
-				
+
 				}
 
 			}
