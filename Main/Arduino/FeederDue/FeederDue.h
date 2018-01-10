@@ -280,7 +280,9 @@ const float guardDist = 4.5;
 const float feedDist = 66;
 
 // MOVEMENT
-float moveToSpeed = 80; // (cm/sec)
+float moveToSpeedMax = 80; // (cm/sec)
+float moveToSpeedMin = 15; // (cm/sec)
+float moveToDecelDist = 30; // cm
 
 // REWARD
 const long armStepFreq = 1000; // (us)

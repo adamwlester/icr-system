@@ -3375,6 +3375,14 @@ void LOGGER::StreamLogs()
 				}
 			}
 
+			// Check for stupid fucking command prompt
+			if (c_arr[2] == '>') {
+
+				// Reset flag and continue
+				head_passed = false;
+				continue;
+			}
+
 			// Check for error
 			if (c_arr[2] == '!') {
 
@@ -3438,8 +3446,20 @@ void LOGGER::StreamLogs()
 		}
 	}
 
+	//TEMP
+	// End reached send ">>>"
+	if (!do_abort) {
+		r2c.port.write(msg_streamSuccess, 3);
+	}
+	// Aborted send ">>!"
+	else {
+		r2c.port.write(msg_streamFail, 3);
+	}
+	delay(1000);
+
 	// Unblock log store
 	fc.doBlockLogQueue = false;
+	delay(50);
 
 	// Log warnings summary
 	for (int i = 0; i < cnt_warn; i++) {
@@ -3451,7 +3471,7 @@ void LOGGER::StreamLogs()
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	// Send
 	r2c.port.write(logQueue[logQueueIndStore]);
-	delay(10);
+	delay(50);
 
 	// Log errors summary
 	for (int i = 0; i < cnt_err; i++) {
@@ -3463,7 +3483,7 @@ void LOGGER::StreamLogs()
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	// Send
 	r2c.port.write(logQueue[logQueueIndStore]);
-	delay(10);
+	delay(50);
 
 	// Get total data left in buffers
 	int xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - r2c.port.availableForWrite();
@@ -3478,7 +3498,7 @@ void LOGGER::StreamLogs()
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	// Send
 	r2c.port.write(logQueue[logQueueIndStore]);
-	delay(10);
+	delay(50);
 
 	// Print final status then send as log
 	if (!do_abort) {
@@ -3491,7 +3511,7 @@ void LOGGER::StreamLogs()
 	}
 	// Send
 	r2c.port.write(logQueue[logQueueIndStore]);
-	delay(10);
+	delay(50);
 
 	// End reached send ">>>"
 	if (!do_abort) {
@@ -8895,7 +8915,7 @@ void loop() {
 				// Start running
 				if (SetMotorControl("MoveTo", "MoveTo")) {
 
-					if (RunMotor(Move.moveDir, moveToSpeed, "MoveTo")
+					if (RunMotor(Move.moveDir, moveToSpeedMax, "MoveTo")
 						) {
 
 						// Print message
@@ -8935,7 +8955,7 @@ void loop() {
 		else if (!Move.isTargReached && !Move.doAbortMove && !fc.doHalt) {
 
 			// Do deceleration
-			double new_speed = Move.DecelToTarg(kal.RobPos, kal.RobVel, 40, 10);
+			double new_speed = Move.DecelToTarg(kal.RobPos, kal.RobVel, moveToDecelDist, moveToSpeedMin);
 
 			// Change speed if > 0
 			if (new_speed > 0 && new_speed != runSpeedNow) {

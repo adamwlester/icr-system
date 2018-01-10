@@ -6219,7 +6219,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Log/print
         Console_Write('[Finish_NLX_Setup] RUNNING: Load Cheetah Configs...');
         
-        % Load config files
+        % Load behavior config files
         if ~D.F.implant_session && D.PAR.sesType ~= 'TT_Turn'
             
             % Specify setpoint
@@ -6229,8 +6229,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Load behavior tracking config
             Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
             Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Behavior_Tracking.cfg"');
-            
-        else
+        
+        end
+        
+        % Load ephys config files
+        if D.F.implant_session || D.PAR.sesType == 'TT_Turn'
             
             % Specify setpoint
             D.PAR.setPointCM = D.PAR.setPointImplant;
@@ -6257,10 +6260,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
             Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Graphics.cfg"');
             
-            % Update window positions
-            ToggMon(D.UI.toggMon(D.UI.monDefault));
-            
         end
+        
+        % Update/refresh window positions
+        ToggMon(D.UI.toggMon(D.UI.monDefault));
         
         % Log/print
         Console_Write('[Finish_NLX_Setup] FINISHED: Load Cheetah Configs');
