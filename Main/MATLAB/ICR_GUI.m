@@ -2063,7 +2063,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.robAvgCol = [0.9961, 0.6953, 0.3984];
         D.UI.robHistCol = [0.9961, 0.8711, 0.7461];
         % color of line for rob guard pos
-        D.UI.guardPosCol = D.UI.robNowCol;
+        D.UI.guardPosCol = D.UI.disabledCol;
         % width of line for rob guard pos
         D.UI.guardPosLineWidth = 5;
         % color of line for feeder pos
@@ -2071,7 +2071,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % marker size for feeder pos
         D.UI.feedPosMarkSize = 10;
         % color of line for setpoint
-        D.UI.setPosCol = D.UI.robNowCol;
+        D.UI.setPosCol = D.UI.disabledCol;
         % width of line for setpoint
         D.UI.setPosLineWidth = 2;
         % tt color
@@ -8610,6 +8610,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Parent',D.UI.axH(4));
             else
                 Safe_Set(D.UI.Rob.linPosNowGuardH, ...
+                    'Color', D.UI.guardPosCol, ...
                     'XData', x, ...
                     'YData', y);
             end
@@ -8627,6 +8628,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Parent',D.UI.axH(4));
             else
                 Safe_Set(D.UI.Rob.linPosNowSetH, ...
+                    'Color', D.UI.setPosCol, ...
                     'XData', x, ...
                     'YData', y);
             end
@@ -8640,15 +8642,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     line(x, y, ...
                     'LineStyle', 'none', ...
                     'Marker', 'o', ...
-                    'MarkerFaceColor', D.UI.feedPosCol, ...
-                    'MarkerEdgeColor', D.UI.robNowCol, ...
                     'LineWidth', 2, ...
                     'MarkerSize', D.UI.feedPosMarkSize, ...
+                    'MarkerFaceColor', D.UI.feedPosCol, ...
+                    'MarkerEdgeColor', D.UI.robNowCol, ...
                     'HitTest', 'off', ...
                     'Parent', D.UI.axH(4));
                 uistack(D.UI.Rob.mrkPosNowDishH, 'top');
             else
                 Safe_Set(D.UI.Rob.mrkPosNowDishH, ...
+                    'MarkerSize', D.UI.feedPosMarkSize, ...
                     'MarkerFaceColor', D.UI.feedPosCol, ...
                     'XData', x, ...
                     'YData', y);
@@ -9075,9 +9078,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Change feeder dish plot color and marker size
-            D.UI.feedPosCol = D.UI.activeCol;
+            D.UI.feedPosCol = D.UI.attentionCol;
             D.UI.feedPosMarkSize = 30;
-            if isfield(D.UI, 'feedPltNow')
+            if isgraphics(D.UI.Rob.mrkPosNowDishH)
                 Safe_Set(D.UI.Rob.mrkPosNowDishH, ...
                     'MarkerFaceColor', D.UI.feedPosCol, ...
                     'MarkerSize', D.UI.feedPosMarkSize);
@@ -9085,7 +9088,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Turn on reward button backround color
             Safe_Set(D.UI.btnReward, ...
-                'BackgroundColor', D.UI.activeCol);
+                'BackgroundColor', D.UI.attentionCol);
             
             % Add to reward count for manual session
             if D.PAR.sesCond == 'Manual_Training'
@@ -9094,6 +9097,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set flags
             D.F.rewarding = true;
+            
+            % Log/print
+            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.rew_on_str));
             
         end
         
@@ -9144,7 +9150,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Change feeder dish plot color and marker size
             D.UI.feedPosCol = D.UI.rotCol(D.I.rot,:);
             D.UI.feedPosMarkSize = 10;
-            if isfield(D.UI, 'feedPltNow')
+            if isgraphics(D.UI.Rob.mrkPosNowDishH)
                 Safe_Set(D.UI.Rob.mrkPosNowDishH, ...
                     'MarkerFaceColor', D.UI.feedPosCol, ...
                     'MarkerSize', D.UI.feedPosMarkSize);
@@ -9154,39 +9160,59 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Safe_Set(D.UI.btnReward, ...
                 'BackgroundColor', D.UI.enabledCol);
             
+            % Log/print
+            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.rew_off_str));
+            
         end
         
         %% CHECK FOR PID
         
         % Running
         if any(ismember(D.E.evtStr, D.NLX.pid_run_str))
+            
             % Change setpoint plot color and width
             D.UI.setPosCol = D.UI.activeCol;
             D.UI.setPosLineWidth = 4;
+            
+            % Log/print
+            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.pid_run_str));
         end
+        
         % Stopped
         if any(ismember(D.E.evtStr, D.NLX.pid_stop_str))
+            
             % Change setpoint plot color
-            D.UI.setPosCol = D.UI.robNowCol;
+            D.UI.setPosCol = D.UI.disabledCol;
             D.UI.setPosLineWidth = 2;
+            
+            % Log/print
+            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.pid_stop_str));
         end
         
         %% CHECK FOR BULLDOZE
         
         % Running
         if any(ismember(D.E.evtStr, D.NLX.bull_run_str))
+           
             % Change guard plot color and width
             D.UI.guardPosCol = D.UI.activeCol;
             D.UI.guardPosLineWidth = 10;
             
             % Track count
             D.C.bull_cnt = D.C.bull_cnt + 1;
+            
+            % Log/print
+            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.bull_run_str));
         end
         % Stopped
         if any(ismember(D.E.evtStr, D.NLX.bull_stop_str))
+            
             % Change guard plot color
-            D.UI.guardPosCol = D.UI.robNowCol;
+            D.UI.guardPosCol = D.UI.disabledCol;
             D.UI.guardPosLineWidth = 5;
+            
+            % Log/print
+            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.bull_stop_str));
         end
         
     end
