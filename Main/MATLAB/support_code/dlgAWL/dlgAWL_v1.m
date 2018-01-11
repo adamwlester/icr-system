@@ -1,21 +1,23 @@
-function QuestFig = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dlgType)
+function ButtonName = dlgAWL_v1(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dlgType,doWait)
 %QUESTDLG Question dialog box.
-%  QuestFig = QUESTDLG(Question) creates a modal dialog box that
+%  ButtonName = QUESTDLG(Question) creates a modal dialog box that
 %  automatically wraps the cell array or string (vector or matrix)
 %  Question to fit an appropriately sized window.  The name of the
-%  button that is pressed is stored on QuestFig.UserData.  The Title of
+%  button that is pressed is returned in ButtonName.  The Title of
 %  the figure may be specified by adding a second string argument:
 %
-%    QuestFig = handle to figure
+%    ButtonName = questdlg(Question, Title)
 %
 %  Question will be interpreted as a normal string.
+%
+%  QUESTDLG uses UIWAIT to suspend execution until the user responds.
 %
 %  The default set of buttons names for QUESTDLG are 'Yes','No' and 'Cancel'.
 %  The default answer for the above calling syntax is 'Yes'.
 %  This can be changed by adding a third argument which specifies the
 %  default Button:
 %
-%    QuestFig = questdlg(Question, Title, 'No')
+%    ButtonName = questdlg(Question, Title, 'No')
 %
 %  Up to 3 custom button names may be specified by entering
 %  the button string name(s) as additional arguments to the function
@@ -24,7 +26,7 @@ function QuestFig = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dl
 %  setting DEFAULT to the same string name as the button you want
 %  to use as the default button:
 %
-%    QuestFig = questdlg(Question, Title, Btn1, Btn2, DEFAULT);
+%    ButtonName = questdlg(Question, Title, Btn1, Btn2, DEFAULT);
 %
 %  where DEFAULT is set to Btn1.  This makes Btn1 the default answer.
 %  If the DEFAULT string does not match any of the button string names,
@@ -33,7 +35,7 @@ function QuestFig = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dl
 %  To use TeX interpretation for the Question string, a data
 %  structure must be used for the last argument, i.e.
 %
-%    QuestFig = questdlg(Question, Title, Btn1, Btn2, OPTIONS);
+%    ButtonName = questdlg(Question, Title, Btn1, Btn2, OPTIONS);
 %
 %  The OPTIONS structure must include the fields Default and Interpreter.
 %  Interpreter may be 'none' or 'tex' and Default is the default button
@@ -41,6 +43,23 @@ function QuestFig = dlgAWL(Question,Title,Btn1,Btn2,Btn3,Default,ScreenCenter,dl
 %
 %  If the dialog is closed without a valid selection, the return value
 %  is empty.
+%
+%  Example:
+%
+%  ButtonName = questdlg('What is your favorite color?', ...
+%                        'Color Question', ...
+%                        'Red', 'Green', 'Blue', 'Green');
+%  switch ButtonName,
+%    case 'Red',
+%     disp('Your favorite color is Red');
+%    case 'Blue',
+%     disp('Your favorite color is Blue.')
+%     case 'Green',
+%      disp('Your favorite color is Green.');
+%  end % switch
+%
+%  See also DIALOG, ERRORDLG, HELPDLG, INPUTDLG, LISTDLG,
+%    MSGBOX, WARNDLG, FIGURE, TEXTWRAP, UIWAIT, UIRESUME.
 
 
 %  Copyright 1984-2011 The MathWorks, Inc.
@@ -53,6 +72,7 @@ end
 
 Interpreter='none';
 Question = {Question};
+needsLookup = false;
 
 %%%%%%%%%%%%%%%%%%%%%
 %%% General Info. %%%
@@ -69,8 +89,11 @@ Question = {Question};
 if nargout > 1
     error(message('dlgAWL:WrongNumberOutputs'));
 end
-if nargin > 8
+if nargin > 9
     error(message('dlgAWL:TooManyInputs'));
+end
+if nargin < 9
+    doWait = true;
 end
 if nargin < 8
     dlgType = 'question'; % ['default', 'question', 'warning', 'error']
@@ -107,8 +130,8 @@ FigPos(3) = 267;
 FigPos(4) =  70;
 FigPos    = getnicedialoglocation(FigPos, get(0,'DefaultFigureUnits'));
 
-QuestFig = figure( ...                                    ...
-    'Visible'         ,'off'                      , ...
+QuestFig=dialog(                                    ...
+    'Visible'         ,'on'                      , ...
     'Color'           , [1, 1, 1]                , ...
     'Name'            ,Title                      , ...
     'Pointer'         ,'arrow'                    , ...
@@ -118,8 +141,7 @@ QuestFig = figure( ...                                    ...
     'WindowStyle'     ,'normal'                   , ...
     'HandleVisibility','callback'                 , ...
     'CloseRequestFcn' ,@doDelete                  , ...
-    'Tag'             ,Title                      ,  ...
-    'UserData'        ,''                        ...
+    'Tag'             ,Title                        ...
     );
 
 %%%%%%%%%%%%%%%%%%%%%
@@ -132,7 +154,7 @@ IconWidth  =54;
 IconHeight =54;
 IconXOffset=DefOffset;
 IconYOffset=FigPos(4)-DefOffset-IconHeight;  %#ok
-IconCMap=[TxtCol;get(QuestFig,'Color')];  
+IconCMap=[TxtCol;get(QuestFig,'Color')];  %#ok
 
 DefBtnWidth =56;
 BtnHeight   =22;
@@ -171,12 +193,12 @@ set(QuestFig,'Position',FigPos);
 
 BtnXOffset=zeros(NumButtons,1);
 
-if NumButtons==1
+if NumButtons==1,
     BtnXOffset=(FigPos(3)-BtnWidth)/2;
-elseif NumButtons==2
+elseif NumButtons==2,
     BtnXOffset=[MsgTxtXOffset
         FigPos(3)-DefOffset-BtnWidth];
-elseif NumButtons==3
+elseif NumButtons==3,
     BtnXOffset=[MsgTxtXOffset
         0
         FigPos(3)-DefOffset-BtnWidth];
@@ -193,6 +215,9 @@ MsgTxtHeight=max(1, FigPos(4)-DefOffset-MsgTxtYOffset);
 MsgTxtForeClr=TxtCol;
 MsgTxtBackClr=get(QuestFig,'Color');
 
+CBString='uiresume(gcbf)';
+DefaultValid = false;
+DefaultWasPressed = false;
 BtnHandle = cell(NumButtons, 1);
 DefaultButton = 0;
 
@@ -204,6 +229,7 @@ for i = 1:NumButtons
             ButtonString=Btn1;
             ButtonTag='Btn1';
             if strcmp(ButtonString, Default)
+                DefaultValid = true;
                 DefaultButton = 1;
             end
             
@@ -211,30 +237,42 @@ for i = 1:NumButtons
             ButtonString=Btn2;
             ButtonTag='Btn2';
             if strcmp(ButtonString, Default)
+                DefaultValid = true;
                 DefaultButton = 2;
             end
         case 3
             ButtonString=Btn3;
             ButtonTag='Btn3';
             if strcmp(ButtonString, Default)
+                DefaultValid = true;
                 DefaultButton = 3;
             end
     end
     
-    buttonDisplayString = ButtonString;
+    if (needsLookup)
+        buttonDisplayString = getString(message(['MATLAB:uistring:popupdialogs:' ButtonString]));
+    else
+        buttonDisplayString = ButtonString;
+    end
     
     BtnHandle{i}=uicontrol(QuestFig            , ...
         'Style'              ,'pushbutton', ...
         'FontSize'           ,10, ...
         'Position'           ,[ BtnXOffset(1) BtnYOffset BtnWidth BtnHeight ], ...
         'KeyPressFcn'        ,@doControlKeyPress , ...
-        'Callback'           ,@doBtnSelect, ...
+        'Callback'           ,CBString    , ...
         'String'             ,buttonDisplayString, ...
         'HorizontalAlignment','center'    , ...
         'Tag'                ,ButtonTag     ...
         );
     
     setappdata(BtnHandle{i},'QuestDlgReturnName',ButtonString);
+end
+
+if ~DefaultValid
+    warnstate = warning('backtrace','off');
+    warning(message('dlgAWL:StringMismatch'));
+    warning(warnstate);
 end
 
 MsgHandle=uicontrol(QuestFig            , ...
@@ -282,7 +320,7 @@ FigPos(3)=max(NumButtons*(BtnWidth+DefOffset)+DefOffset, ...
 
 
 % Center Vertically around icon
-if IconHeight>MsgTxtHeight
+if IconHeight>MsgTxtHeight,
     IconYOffset=BtnYOffset+BtnHeight+DefOffset;
     MsgTxtYOffset=IconYOffset+(IconHeight-MsgTxtHeight)/2;
     FigPos(4)=IconYOffset+IconHeight+DefOffset;
@@ -293,14 +331,14 @@ else
     FigPos(4)=MsgTxtYOffset+MsgTxtHeight+DefOffset;
 end
 
-if NumButtons==1
+if NumButtons==1,
     BtnXOffset=(FigPos(3)-BtnWidth)/2;
-elseif NumButtons==2
+elseif NumButtons==2,
     BtnXOffset=[(FigPos(3)-DefOffset)/2-BtnWidth
         (FigPos(3)+DefOffset)/2
         ];
     
-elseif NumButtons==3
+elseif NumButtons==3,
     BtnXOffset(2)=(FigPos(3)-BtnWidth)/2;
     BtnXOffset=[BtnXOffset(2)-DefOffset-BtnWidth
         BtnXOffset(2)
@@ -308,7 +346,7 @@ elseif NumButtons==3
         ];
 end
 
-% Reposition dialogue to specified pos
+% Reposition dialogue to center of second screen (AWL)
 FigPos(1) = ScreenCenter(1) - (FigPos(3)/2);
 FigPos(2) = ScreenCenter(2) - (FigPos(4)/2);
 
@@ -322,12 +360,15 @@ BtnPos=num2cell(BtnPos,2);
 assert(iscell(BtnPos));
 cellfun(@(bh,pos)set(bh, 'Position', pos), BtnHandle, BtnPos, 'UniformOutput', false);
 
-setdefaultbutton(QuestFig, BtnHandle{DefaultButton});
+if DefaultValid
+    setdefaultbutton(QuestFig, BtnHandle{DefaultButton});
+end
 
 delete(MsgHandle);
 
 
 set(texthandle, 'Position',[MsgTxtXOffset MsgTxtYOffset 0]);
+
 
 IconAxes=axes(                                      ...
     'Parent'      ,QuestFig              , ...
@@ -338,7 +379,6 @@ IconAxes=axes(                                      ...
     );
 
 set(QuestFig ,'NextPlot','add');
-QuestFig.UserData = '';
 
 % Get icon bitmap
 if strcmp(dlgType,'default')
@@ -369,41 +409,60 @@ set(IconAxes, ...
     'YLim'   ,get(Img,'YData')  ...
     );
 
-% Window takes control
 set(QuestFig ,'WindowStyle','modal','Visible','on');
 drawnow;
 
-uicontrol(BtnHandle{DefaultButton});
+if DefaultButton ~= 0
+    uicontrol(BtnHandle{DefaultButton});
+end
 
-    function doBtnSelect(obj, ~)
-        QuestFig.UserData = obj.String;
-        doDelete;
+% Set to wait for response
+if doWait
+    % Go into uiwait if the figure handle is still valid.
+    if ishghandle(QuestFig)
+        
+        uiwait(QuestFig);
     end
+end
+
+% Check handle validity again since we may be out of uiwait because the
+% figure was deleted.
+if ishghandle(QuestFig)
+    if DefaultWasPressed
+        ButtonName=Default;
+    else
+        ButtonName = getappdata(get(QuestFig,'CurrentObject'),'QuestDlgReturnName');
+    end
+    doDelete;
+else
+    ButtonName='';
+end
 
     function doFigureKeyPress(obj, evd)  %#ok
         switch(evd.Key)
-            case {'return','escape'}
-                QuestFig.UserData = getappdata(get(QuestFig,'CurrentObject'),'QuestDlgReturnName');
-                doDelete;
-            otherwise 
-                return
+            case {'return','space'}
+                if DefaultValid
+                    DefaultWasPressed = true;
+                    uiresume(gcbf);
+                end
+            case 'escape'
+                doDelete
         end
     end
 
     function doControlKeyPress(obj, evd)  %#ok
         switch(evd.Key)
-            case {'return','escape'}
-                QuestFig.UserData = getappdata(get(QuestFig,'CurrentObject'),'QuestDlgReturnName');
-                doDelete;
-            otherwise
-                return
+            case {'return'}
+                if DefaultValid
+                    DefaultWasPressed = true;
+                    uiresume(gcbf);
+                end
+            case 'escape'
+                doDelete
         end
     end
 
     function doDelete(varargin)
-        set(QuestFig , ...
-            'WindowStyle', 'normal', ...
-            'Visible', 'off')
-        drawnow;
+        delete(QuestFig);
     end
 end

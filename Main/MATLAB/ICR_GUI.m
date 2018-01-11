@@ -34,7 +34,6 @@ function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, doProfile, isMatSo
 
 
 
-
 %% ============================= TOP LEVEL RUN ===========================
 
 % ----------------------------- SETUP GLOBALS -----------------------------
@@ -104,12 +103,13 @@ D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Tra
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
-D.DB.Reward_Delay = '3.0';
-D.DB.Cue_Condition = 'Half';
-D.DB.Sound_Conditions = [1,1];
-D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'SW'; % [NE,SE,SW,NW];
-D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90,180,270];
+D.DB.Feeder_Condition = 'C2'; % ['C1' 'C2']
+D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Cue_Condition = 'All'; % ['All' 'Half' 'None']
+D.DB.Sound_Conditions = [1,1]; % [0 1]
+D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
+D.DB.Start_Quadrant = 'SE'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
 D.DB.doForagePathCompute = false;
@@ -128,7 +128,7 @@ D.DB.t8_doCubeBatteryTest = false;
 % SIMULATED RAT TEST SETTINGS
 
 % Starting velocity
-D.DB.SIM.VelStart = 1; % (cm/sec)
+D.DB.SIM.VelStart = 10; % (cm/sec)
 % Max acc
 D.DB.SIM.MaxAcc = 100; % (cm/sec/sec)
 % Max dec
@@ -901,7 +901,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Start recording
                     if D.F.cheetah_open
-                        Safe_Set(D.UI.toggRec,'Value', 1); 
+                        Safe_Set(D.UI.toggRec,'Value', 1);
                         ToggRec(D.UI.toggRec);
                     end
                     
@@ -1569,6 +1569,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.lap_cnt = num2cell(zeros(1,3));
         % rew by rotation
         D.C.rew_cnt = num2cell(zeros(1,3));
+        % reward send
+        D.C.rew_send_cnt = 0;
         % reward crossings
         D.C.rew_cross_cnt = 0;
         % missed rewards [consecutive, total]
@@ -1664,6 +1666,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.halted = false;
         % track reward reset
         D.F.rew_confirmed = false;
+        % track reward reset
+        D.F.rew_reset = false;
         % track reset crossing
         D.F.rew_send_crossed = false;
         % track reward crossing
@@ -1817,10 +1821,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.P.Rat.y = NaN;
         D.P.Rob.x = NaN;
         D.P.Rob.y = NaN;
+        % last valide x y
+        D.P.Rat.xLast = NaN;
+        D.P.Rob.xLast = NaN;
+        D.P.Rat.yLast = NaN;
+        D.P.Rob.yLast = NaN;
         % pos rad
         D.P.Rat.rad = NaN;
         D.P.Rob.rad = NaN;
-        % last used rad
+        % last valid rad
         D.P.Rat.radLast = NaN;
         D.P.Rob.radLast = NaN;
         % vel radian
@@ -2163,8 +2172,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Name', 'ICR Behavior Pilot', ...
             'Position', D.UI.figGrpPos{4}, ...
             'MenuBar', 'none', ...
-            'Color', [1, 1, 1], ...
-            'Visible', 'off');
+            'Color', [1, 1, 1]);
         
         % Add ICR ARENA tab
         D.UI.tabICR = uitab(D.UI.tabgp, ...
@@ -4073,15 +4081,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[NLX_Setup] RUNNING: Open Cheetah.exe...');
             
             % Check if Cheetah should be run
-            load_cheetah = dlgAWL(...
+            dlg_h = dlgAWL(...
                 'Do you want to run Cheetah.exe?', ...
                 'RUN CHEETAH?', ...
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
                 'question');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Open Cheetah
-            if strcmp(load_cheetah, 'Yes') && ~DOEXIT
+            if strcmp(choice, 'Yes') && ~DOEXIT
                 
                 % NLX setup config
                 top_cfg_fi = 'Cheetah.cfg';
@@ -6229,7 +6242,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Load behavior tracking config
             Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
             Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Behavior_Tracking.cfg"');
-        
+            
         end
         
         % Load ephys config files
@@ -6292,18 +6305,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Propt to load last configuration file
             if ~isempty(nlx_cfg_file_last)
-                load_last = dlgAWL(...
+                
+                dlg_h = dlgAWL(...
                     sprintf('Load previous Cheetah settings from:\n"%s"?', nlx_rec_dir_last), ...
                     'END SESSION', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
+                
             else
-                load_last = 'No';
+                choice = 'No';
             end
             
             % Load last settings
-            if strcmp(load_last, 'Yes') && ~DOEXIT
+            if strcmp(choice, 'Yes') && ~DOEXIT
                 
                 % Run local function
                 LoadConfigSettings(nlx_cfg_file_last)
@@ -6398,11 +6418,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.spikesort_open
             
             % Show prompt
-            dlgAWL('Close SpikeSort3D', ...
+            dlg_h = dlgAWL( ...
+                'Close SpikeSort3D', ...
                 'CLOSE SPIKESORT3D', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Get check time
             dt_wait = 1;
@@ -6438,19 +6464,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check if SpikeSort should be run
         if D.F.cheetah_open && ...
-            (D.F.implant_session || D.PAR.sesType == 'TT_Turn')
-            load_ss3d = dlgAWL(...
+                (D.F.implant_session || D.PAR.sesType == 'TT_Turn')
+            
+            dlg_h = dlgAWL(...
                 'Do you want to run SpikeSort3D.exe?', ...
                 'RUN SS3D?', ...
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
                 'question');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
+            
         else
-            load_ss3d = 'No';
+            choice = 'No';
         end
         
         % Run SpikeSort3D.exe
-        if strcmp('Yes', load_ss3d) && ~DOEXIT
+        if strcmp('Yes', choice) && ~DOEXIT
             
             % Run exe
             if ~D.F.spikesort_open
@@ -6624,7 +6657,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.cnsl_pan_pos(4), ...
             D.UI.tim_inf_pan_pos(3), ...
             0.115];
-      
+        
         % Setup legend axis
         set(D.UI.axColLeg, ...
             'Position', ax_pos,...
@@ -6978,8 +7011,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.rewZoneBnds = wrapTo2Pi(D.PAR.rewZoneBnds);
         
         % REWARD RESET BOUNDS
-        D.UI.rewRstBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(0),deg2rad(30)];
-        D.UI.rewRstBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(0),deg2rad(30)];
+        D.UI.rewRstBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(10),deg2rad(30)];
+        D.UI.rewRstBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(10),deg2rad(30)];
         D.UI.rewRstBnds = wrapTo2Pi(D.UI.rewRstBnds);
         
         % REWARD PASS BOUNDS
@@ -7858,18 +7891,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DB.isTestStarted = false;
             
             % Create rat velocity slider object
-            pos = [D.UI.ses_inf_pan_pos(1)-0.185, 1-0.025, 0.175, 0.02];
+            pos_sld = [D.UI.ses_inf_pan_pos(1)-0.185, 1-0.025, 0.175, 0.02];
+            vel_rng = [-25,100];
+            step_rng = [0.01,0.1]*(100/diff(vel_rng));
             D.UI.sldSimVel = uicontrol('Style', 'slider',...
                 'Parent',D.UI.tabICR, ...
                 'Units', 'Normalized', ...
-                'Min',0,'Max',100, ...
+                'Min',vel_rng(1),'Max',vel_rng(2), ...
                 'Value',D.DB.SIM.VelStart,...
-                'SliderStep', [0.01,0.1], ...
+                'SliderStep', step_rng, ...
                 'Visible', 'off',...
                 'Enable', 'off',...
-                'Position', pos);
+                'Position', pos_sld);
+            
             % Vel text
-            pos = [pos(1)-0.03, pos(2), 0.03, pos(4)];
+            pos_txt = [pos_sld(1)-0.03, pos_sld(2), 0.03, pos_sld(4)];
             D.UI.txtSimVel = uicontrol('Style', 'text',...
                 'Parent',D.UI.tabICR, ...
                 'Units', 'Normalized', ...
@@ -7879,7 +7915,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'FontWeight', 'Bold', ...
                 'String','100',...
                 'Visible', 'off',...
-                'Position', pos);
+                'Position', pos_txt);
+            
+            % Axes ticks
+            pos_txt(1) = pos_sld(1)-0.005;
+            pos_txt(2) = pos_txt(2)-pos_txt(4);
+            pos_txt(3) = pos_txt(3)*0.75;
+            D.UI.txtVelTick(1) = copyobj(D.UI.txtSimVel, D.UI.tabICR);
+            set(D.UI.txtVelTick(1), ...
+                'Position', pos_txt, ...
+                'FontSize', 8, ...
+                'String', num2str(vel_rng(1)))
+            
+            pos_txt(1) = pos_sld(1) + 0.035;
+            D.UI.txtVelTick(2) = copyobj(D.UI.txtSimVel, D.UI.tabICR);
+            set(D.UI.txtVelTick(2), ...
+                'Position', pos_txt, ...
+                'FontSize', 8, ...
+                'String', num2str(0))
+            
+            pos_txt(1) = pos_sld(1) + (pos_sld(3)-pos_sld(3)*0.1);
+            D.UI.txtVelTick(3) = copyobj(D.UI.txtSimVel, D.UI.tabICR);
+            set(D.UI.txtVelTick(3), ...
+                'Position', pos_txt, ...
+                'FontSize', 8, ...
+                'String', num2str(vel_rng(2)))
             
         end
         
@@ -8073,6 +8133,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Set task
                 D.SS_IO_1.Session_Task(ratInd) = D.DB.Session_Task;
+                
+                % Set feeder condition
+                D.SS_IO_1.Feeder_Condition(ratInd) = D.DB.Feeder_Condition;
                 
                 % Set reward delay
                 D.SS_IO_1.Reward_Delay(ratInd)= D.DB.Reward_Delay;
@@ -8269,6 +8332,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Save last usable rad value
                 D.P.(fld).radLast = rad(end);
+                
+                % Save last
+                D.P.(fld).xLast = x(end);
+                D.P.(fld).yLast = y(end);
             end
             
             % Store vars for later use
@@ -8561,8 +8628,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Plot current rob tracker pos
-            x = D.P.Rob.x(end);
-            y = D.P.Rob.y(end);
+            x = D.P.Rob.xLast;
+            y = D.P.Rob.yLast;
             if ~isgraphics(D.UI.Rob.mrkPosNowH)
                 D.UI.Rob.mrkPosNowH = ...
                     line(x, y, ...
@@ -8685,8 +8752,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Plot current rat position with larger marker
-            x = D.P.Rat.x(end);
-            y = D.P.Rat.y(end);
+            x = D.P.Rat.xLast;
+            y = D.P.Rat.yLast;
             if ~isgraphics(D.UI.Rat.mrkPosNowH)
                 D.UI.Rat.mrkPosNowH = ...
                     line(x, y, ...
@@ -8776,16 +8843,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Calculate coordinates for line
             % x start/end
-            xs = D.P.Rat.x(end);
-            xe = cos(deg2rad(hd_deg))*10 + D.P.Rat.x(end);
+            xs = D.P.Rat.xLast;
+            xe = cos(deg2rad(hd_deg))*10 + xs;
             x = [xs, xe, ...
                 cos(deg2rad(hd_deg-90))*2 + xe, ...
                 cos(deg2rad(hd_deg))*4 + xe, ...
                 cos(deg2rad(hd_deg+90))*2 + xe, ...
                 xe];
             % y start/end
-            ys = D.P.Rat.y(end);
-            ye = sin(deg2rad(hd_deg))*10 + D.P.Rat.y(end);
+            ys = D.P.Rat.yLast;
+            ye = sin(deg2rad(hd_deg))*10 + ys;
             y = [ys, ye, ...
                 sin(deg2rad(hd_deg-90))*2 + ye, ...
                 sin(deg2rad(hd_deg))*4 + ye, ...
@@ -9193,9 +9260,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Running
         if any(ismember(D.E.evtStr, D.NLX.bull_run_str))
-           
+            
             % Change guard plot color and width
-            D.UI.guardPosCol = D.UI.activeCol;
+            D.UI.guardPosCol = D.UI.attentionCol;
             D.UI.guardPosLineWidth = 10;
             
             % Track count
@@ -9471,7 +9538,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'XData', x, ...
                             'YData', y);
                     end
-                
+                    
                 end
                 
                 % Plot spike rate
@@ -9520,12 +9587,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Show 1d spike occ
                     if D.PAR.sesTask == 'Track'
-                       
+                        
                         % Set alpha based on occ
                         rate_scale = rate_scale/max(rate_scale);
                         alph = num2cell(rate_scale);
                         [D.UI.ttClustAxNow(tt_ind, clust_ind).Children.FaceAlpha] = alph{:};
-                   
+                        
                     else
                         
                         % Get alpha mask
@@ -9776,7 +9843,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Print reset bounds crossed
-        Console_Write('[Track_Reward_Send_Check] Crossed Reset Bounds');
+        Console_Write('[Track_Reward_Send_Check] Crossed Reward Send Bounds');
+        
+        % Itterate count
+        D.C.rew_send_cnt = D.C.rew_send_cnt+1;
         
         % Disable cue buttons
         Cue_Button_State('Disable');
@@ -9801,8 +9871,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Store reward number
             D.PAR.cued_rew = [D.PAR.cued_rew, sum([D.C.rew_cnt{:}]) + 1];
             
-            % Post NLX event: cue on
-            Send_M2NLX(D.NLX.cue_on_evt);
         end
         
         % Reset patches
@@ -9823,6 +9891,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Send cued reward command
             Send_M2C('R', r_pos, r_cond, z_ind);
             
+            % Post NLX event: cue on
+            Send_M2NLX(D.NLX.cue_on_evt);
+            
             % Show new reward taget patch
             Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
                 'Active', D.UI.rotCol(D.I.rot,:));
@@ -9840,6 +9911,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Send free reward command
             Send_M2C('R', r_pos, r_cond, r_del);
             
+            % Post NLX event: cue off
+            Send_M2NLX(D.NLX.cue_off_evt);
+            
             % Darken all zone patches
             Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
                 'Select', D.UI.rotCol(D.I.rot,:))
@@ -9850,6 +9924,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.check_rew_confirm = true;
         D.F.rew_zone_crossed = false;
         D.F.rew_confirmed = false;
+        D.F.rew_reset = false;
         
         % Hide reset patch
         Patch_State(D.UI.ptchFdRstH(D.I.rot), ...
@@ -9891,11 +9966,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Reset next zone
             D.I.zone_select = 0;
-            
-            % Post NLX event: cue off
-            if get(D.UI.toggDoCue, 'Value') == 1
-                Send_M2NLX(D.NLX.cue_off_evt);
-            end
             
             % Post NLX event: reward info
             Send_M2NLX(...
@@ -9999,13 +10069,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             end
             
-            % Set flags
-            D.F.rew_zone_crossed = true;
-            D.F.rew_send_crossed = false;
-            D.F.check_rew_confirm = false;
+            % Check for zone crossing
+            if any(check_inbound)
+                
+                % Set flags
+                D.F.rew_zone_crossed = true;
+                D.F.rew_send_crossed = false;
+                D.F.check_rew_confirm
+                
+                % Itterate count
+                D.C.rew_cross_cnt = D.C.rew_cross_cnt+1;
+                
+            end
             
-            % Itterate count
-            D.C.rew_cross_cnt = D.C.rew_cross_cnt+1;
+            % Bail if reset already done
+            if D.F.rew_reset
+                return;
+            end
+            
+            % Set reward reset flag
+            D.F.rew_reset = true;
             
             % Enable cue buttons
             Cue_Button_State('Enable');
@@ -10014,7 +10097,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if ...
                     get(D.UI.toggForceCue, 'Value') == 0 && ...
                     get(D.UI.toggBlockCue, 'Value') == 0 && ...
-                    D.F.rew_confirmed
+                    (D.F.rew_confirmed || D.C.rew_send_cnt == 0)
                 
                 if ...
                         D.PAR.sesCue == 'All' || ...
@@ -10682,6 +10765,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Enable', 'on');
                 Safe_Set(D.UI.txtSimVel, ...
                     'Visible', 'on');
+                Safe_Set(D.UI.txtVelTick, ...
+                    'Visible', 'on');
                 
                 % Send test info to robot once
                 Send_M2C('T', sysTest(1), 0, 0);
@@ -10709,7 +10794,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
             else
                 % Get TS from MATLAB
-                ts_now = ceil((Sec_DT(now) - D.DB.SIM.TSStart)*10^6);
+                ts_now = int64(ceil((Sec_DT(now) - D.DB.SIM.TSStart)*10^6));
             end
             
             % Compute dt(s) form ts(us)
@@ -10945,7 +11030,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Update simulated rat data
             D.DB.SIM.VelLast = vel_now;
-            D.P.Rat.vtTS = int64(ts_now);
+            D.P.Rat.vtTS = ts_now;
             D.P.Rat.vtPos = single(D.DB.SIM.XY);
             D.P.Rat.vtNRecs = single(1);
             
@@ -11118,12 +11203,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Parent', ax_copy);
                 
                 % Check if user wants axes rescaled
-                choice = dlgAWL(...
+                dlg_h = dlgAWL(...
                     'Rescale Axis?', ...
                     'TEST INFO', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Rescale track plot axes
                 if strcmp(choice, 'Yes')
@@ -11147,12 +11237,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Check if values should be saved
-                choice = dlgAWL(...
+                dlg_h = dlgAWL(...
                     'Save VT Calibration?', ...
                     'TEST INFO', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Delete plots
                 delete(plot_new_h)
@@ -11301,11 +11396,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.WALIR.DTImg, D.DB.WALIR.imgTrials, D.DB.WALIR.DTImg);
                 
                 % Prompt that first test starting
-                dlgAWL(msg, ...
+                dlg_h = dlgAWL( ...
+                    msg, ...
                     'TEST INFO', ...
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'default');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Send setup command
                 Send_M2C('T', sysTest(1), 0, 0);
@@ -11367,11 +11468,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             dt_mat')];
                         
                         % Show prompt and dt info
-                        dlgAWL(msg, ...
+                        dlg_h = dlgAWL( ...
+                            msg, ...
                             'TEST INFO', ...
                             'OK', [], [], 'OK', ...
                             D.UI.dlgPos{4}, ...
                             'default');
+                        while ~DOEXIT; Update_UI(10); pause(0.001);
+                            if ~DOEXIT; choice = dlg_h.UserData;
+                                if ~strcmp(choice, ''); break; end
+                            end
+                        end
                         
                         % Close figure
                         if(isgraphics(fg))
@@ -11392,11 +11499,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.DB.WALIR.DTSensor, D.DB.WALIR.pulseTrials, D.DB.WALIR.DTPulse, D.DB.WALIR.DTSensor);
                         
                         % Prompt that second test starting
-                        dlgAWL(msg, ...
+                        dlg_h = dlgAWL( ...
+                            msg, ...
                             'TEST INFO', ...
                             'OK', [], [], 'OK', ...
                             D.UI.dlgPos{4}, ...
                             'default');
+                        while ~DOEXIT; Update_UI(10); pause(0.001);
+                            if ~DOEXIT; choice = dlg_h.UserData;
+                                if ~strcmp(choice, ''); break; end
+                            end
+                        end
                         
                         % Set time and sensor
                         D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTSensor;
@@ -11589,11 +11702,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         dt_mat')];
                     
                     % Show prompt and dt info
-                    dlgAWL(msg, ...
+                    dlg_h = dlgAWL( ...
+                        msg, ...
                         'TEST INFO', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
                         'default');
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
                     
                     % Close figure
                     if(isgraphics(fg))
@@ -11651,11 +11770,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.SYNCIR.pulseTrials, D.DB.SYNCIR.DTPulse);
                 
                 % Prompt that first test starting
-                dlgAWL(msg, ...
+                dlg_h = dlgAWL( ...
+                    msg, ...
                     'TEST INFO', ...
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'default');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Send setup command
                 Send_M2C('T', sysTest(1), 0, 0);
@@ -11718,11 +11843,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         msg = 'FINISHED SYNC IR TEST';
                         
                         % Show prompt and dt info
-                        dlgAWL(msg, ...
+                        dlg_h = dlgAWL( ...
+                            msg, ...
                             'TEST INFO', ...
                             'OK', [], [], 'OK', ...
                             D.UI.dlgPos{4}, ...
                             'default');
+                        while ~DOEXIT; Update_UI(10); pause(0.001);
+                            if ~DOEXIT; choice = dlg_h.UserData;
+                                if ~strcmp(choice, ''); break; end
+                            end
+                        end
                         
                         % Close figure
                         if(isgraphics(fg))
@@ -11788,17 +11919,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % BEGIN TEST
             
             % Prompt that test starting
-            dlgAWL('START HARDWARE TEST', ...
+            dlg_h = dlgAWL( ...
+                'START HARDWARE TEST', ...
                 'TEST INFO', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Set delay
             dt_send = 2;
             
             % TEST REWARD RELATED PINS
-
+            
             Send_M2NLX('-PostEvent TEST:_Reward_Tone:_DUE_PIN 255 0');
             Send_M2C('T', sysTest(1), 1, 1);
             pause(dt_send)
@@ -12174,12 +12311,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Disconnect_NLX()
         
         % Check if cheetah data should be saved
-        choice = dlgAWL(...
+        dlg_h = dlgAWL( ...
+            dlg_h,...
             'Save Cheetah Data?', ...
             'SAVE CHEETAH', ...
             'Yes', 'No', [], 'No', ...
             D.UI.dlgPos{4}, ...
             'question');
+        while ~DOEXIT; Update_UI(10); pause(0.001);
+            if ~DOEXIT; choice = dlg_h.UserData;
+                if ~strcmp(choice, ''); break; end
+            end
+        end
         
         % Handle response
         switch choice
@@ -12205,11 +12348,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Prompt user to close programs
-            dlgAWL(msg, ...
+            dlg_h = dlgAWL( ...
+                msg, ...
                 'CLOSE PROGRAMS', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
+            
         end
         
         % Get check start time
@@ -12244,12 +12394,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Reprompt once
                 if cnt_prompt<=1
-                    dlgAWL(...
+                    
+                    dlg_h = dlgAWL( ...
                         msg, ...
                         'CHEETAH NOT CLOSED', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
                         'warning');
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
+                    
                 else
                     break
                 end
@@ -12807,11 +12964,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.SS_IO_1.DOB(D.PAR.ratIndSS);
             
             % Get feeder condition
-            D.PAR.ratFeedCnd = ... % [C1,C2]
+            D.PAR.ratFeedCnd = ... % [C1 C2]
                 D.SS_IO_1.Feeder_Condition(D.PAR.ratIndSS);
             
             % Get feeder condition number
-            D.PAR.ratFeedCnd_Num = ... % [1,2]
+            D.PAR.ratFeedCnd_Num = ... % [1 2]
                 find(D.PAR.listFeedCnd == D.PAR.ratFeedCnd);
             
             % CHANGE SESSION CONDITION LIST
@@ -13152,12 +13309,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 get(D.UI.popRewDel,'Value') == 1 || ...
                 all(cell2mat(get(D.UI.toggCue,'Value')) == 0)))
             
-            choice = dlgAWL(...
+            dlg_h = dlgAWL(...
                 '!!WARNING: MISSING ENTRY!!', ...
                 'MISSING SETUP ENTRIES', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'warning');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Bail out of function
             switch choice
@@ -13878,12 +14040,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function ToggTaskDone(~, ~, ~)
         
         % Check if session is done
-        choice = dlgAWL(...
+        dlg_h = dlgAWL(...
             'End Task Run?', ...
             'END TASK RUN', ...
             'Yes', 'No', [], 'No', ...
             D.UI.dlgPos{4}, ...
             'question');
+        while ~DOEXIT; Update_UI(10); pause(0.001);
+            if ~DOEXIT; choice = dlg_h.UserData;
+                if ~strcmp(choice, ''); break; end
+            end
+        end
         
         % Handle response
         switch choice
@@ -13911,12 +14078,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check if rat is out of room for track run
         if D.PAR.sesTask == 'Track'
-            dlgAWL(...
+            dlg_h = dlgAWL(...
                 'Take out rat', ...
                 'RAT OUT', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
         end
         
         % Post NLX event: rat out
@@ -13997,11 +14169,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if (D.F.ses_data_loaded && ~D.F.ses_save_done)
             
             % Construct a questdlg with two options
-            choice = dlgAWL('!!WARNING: QUIT WITHOUT SAVING?!!', ...
+            dlg_h = dlgAWL( ...
+                '!!WARNING: QUIT WITHOUT SAVING?!!', ...
                 'ABBORT RUN', ...
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
                 'warning');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Handle response
             switch choice
@@ -14012,12 +14190,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Make sure rat is out
             if ~D.F.rat_out
-                dlgAWL(...
+                
+                dlg_h = dlgAWL(...
                     '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
                     'RAT OUT', ...
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'warning');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
+                
             end
             
         end
@@ -14062,11 +14247,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Confirm that Cheetah is closed
             warn_str = ...
                 sprintf('**WARNING** BATTERY IS AT %0.2fV AND NEEDS TO BE REPLACED', c2m.('J').dat1);
-            dlgAWL(warn_str, ...
+            
+            dlg_h = dlgAWL(...
+                warn_str, ...
                 'BATTERY LOW', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'warning');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
+            
         end
         
         % Tell C# to begin quit
@@ -14397,7 +14590,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reset data inds for active buttons
         [D.TT.posClust{active_mat}.indAll(1)] =  D.TT.posClust{active_mat}.indAll(2);
         [D.TT.posClust{active_mat}.indLap] =  D.TT.posClust{active_mat}.indAll;
-            
+        
     end
 
 % ----------------------------SELECT TT ACTION-----------------------------
@@ -14850,7 +15043,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set patch color
             Safe_Set(D.UI.ptchClustH(ax_ind,:), ...
-                'FaceColor', D.UI.clustCol(tt_ind,clust_ind,:)); 
+                'FaceColor', D.UI.clustCol(tt_ind,clust_ind,:));
             
             % Change text
             set(D.UI.txtColBarH(ax_ind), ...
@@ -15551,13 +15744,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
                     
                     % Display message
-                    dlgAWL(...
+                    dlg_h = dlgAWL(...
                         err_str, ...
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
                         'error', ...
                         false);
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
                     
                 end
                 
@@ -15568,13 +15766,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
                     
                     % Display message
-                    dlgAWL(...
+                    dlg_h = dlgAWL(...
                         err_str, ...
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
                         'error', ...
                         false);
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
                     
                     % Set exit flag
                     SetExit()
@@ -16283,7 +16486,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.UI.panSelectTT(z_p).Position = [0,0,1,1];
                     D.UI.panSelectTT(z_p).Position = pos;
                 end
-
+                
                 
             case 'TT_Plot_Objects'
                 %% TT PLOT OBJECTS
@@ -16323,7 +16526,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.UI.panSelectTT(z_p).Position = [0,0,1,1];
                     D.UI.panSelectTT(z_p).Position = pos;
                 end
-
+                
                 
             case 'TT_Turn_Panel_Objects'
                 %% TT TURN PANEL OBJECTS

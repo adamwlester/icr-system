@@ -199,7 +199,6 @@ public:
 	// VARS
 	int targSetTimeout = 30000;
 	int moveTimeout = 10000;
-	int ekfTimeout = 1000;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
 	char moveCntStr[20] = { 0 };
@@ -807,8 +806,8 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 			this->cnt_error % 10 == 0) {
 
 			// Log/print error
-			sprintf(str, "Bad Values |%s%s: obj=\"%s\" cnt_err=%d pos_new=%0.2f pos_last=%0.2f dist_sum=%0.2f dt_sec=%0.2f vel_new=%0.2f vel_last=%0.2f",
-				vel_diff > 300 ? "Vel|" : "", dt_sec == 0 ? "DT|" : "", this->instID, this->cnt_error, pos_new, this->posArr[this->nSamp - 2], dist_sum, dt_sec, vel, this->velLast);
+			sprintf(str, "Bad Values |%s%s: obj=\"%s\" cnt_err=%d pos_new=%0.2f pos_last=%0.2f dist_sum=%0.2f ts_new=%lu ts_last=%lu dt_sec=%0.2f vel_new=%0.2f vel_last=%0.2f",
+				vel_diff > 300 ? "Vel|" : "", dt_sec == 0 ? "DT|" : "", this->instID, this->cnt_error, pos_new, this->posArr[this->nSamp - 2], dist_sum, this->t_tsArr[this->nSamp - 1], this->t_tsArr[this->nSamp - 2], dt_sec, vel, this->velLast);
 			DebugError(__FUNCTION__, __LINE__, str);
 		}
 	}
@@ -1669,6 +1668,15 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 	if (millis() > t_tryTargSetTill) {
 		doAbortMove = true;
 
+		// Check if EKF not updating
+		int dt_ekf = millis() - kal.t_last;
+		if (dt_ekf >= t_tryTargSetTill / 2) {
+
+			// Log/print error
+			sprintf(str, "MOVE [%s]: ABORT: EKF Hanging: dt=%dms", moveCntStr, dt_ekf);
+			DebugError(__FUNCTION__, __LINE__, str, true);
+		}
+
 		// Log/print error
 		sprintf(str, "MOVE [%s]: Timedout after %dms", moveCntStr, targSetTimeout);
 		DebugError(__FUNCTION__, __LINE__, str, true);
@@ -1745,23 +1753,17 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 		t_tryMoveTill = millis() + moveTimeout;
 	}
 
-	// Check if vt hanging
-	int dt_ekf = millis() - kal.t_last;
-	if (dt_ekf >= ekfTimeout) {
-
-		// Log/print error
-		sprintf(str, "MOVE [%s]: ABORT: EKF Hanging: dt=%dms", moveCntStr, dt_ekf);
-		DebugError(__FUNCTION__, __LINE__, str, true);
-
-		// Set abort flag
-		doAbortMove = true;
-
-		// Stop run
-		return 0;
-	}
-
 	// Check if time out reached
 	if (millis() > t_tryMoveTill) {
+
+		// Check if EKF not updating
+		int dt_ekf = millis() - kal.t_last;
+		if (dt_ekf >= moveTimeout/2) {
+
+			// Log/print error
+			sprintf(str, "MOVE [%s]: ABORT: EKF Hanging: dt=%dms", moveCntStr, dt_ekf);
+			DebugError(__FUNCTION__, __LINE__, str, true);
+		}
 
 		// Log/print error
 		sprintf(str, "MOVE [%s]: ABORT: Timedout after %dms", moveCntStr, moveTimeout);
