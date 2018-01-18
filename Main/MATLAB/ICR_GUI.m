@@ -92,7 +92,7 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r9999';
+D.DB.ratLab = 'r0000'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
@@ -170,7 +170,7 @@ D.DB.SYNCIR.DTPulse = 100; % (ms) % 100
 
 % CUBE BATTERY TEST
 % Notification percent steps
-D.DB.CVCC.prcSteps = [95, 75, 50, 25, 5];
+D.DB.CVCC.prcSteps = 95:-5:5; %95:-5:5;
 
 %----------------SETUP DEBUGGING AND ERROR HANDELING-----------------------
 
@@ -205,6 +205,7 @@ end
 % Console and log vars
 D.DB.consoleStr = [repmat(' ',1000,150),repmat('\r',1000,1)];
 D.DB.logStr = cell(1000,1);
+D.DB.consoleCount = 0;
 D.DB.logCount = 0;
 
 % Set test flags
@@ -461,7 +462,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Warning battery voltage level (%)
         D.PAR.cubeVccWarning = 30;
         % Cube battery type ["C": Small, "A": Medium]
-        D.PAR.cubeBatteryType = 'C';
+        D.PAR.cubeBatteryType = 'A';
         % Cube battery check
         D.PAR.dtCubeBatteryCheck = 10;
         
@@ -666,34 +667,43 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Convert to 8 bit signed int
         D.AC.data = int8(D.AC.data);
         
-        % Stop c2m timer
-        if strcmp(D.timer_c2m.Running, 'on')
-            stop(D.timer_c2m);
-        end
+        % Initialize flag
+        D.AC.connected = false;
         
-        % Create tcpip object
-        TCPIP = tcpip('0.0.0.0',55000, ...
-            'OutputBufferSize', length(D.AC.data), ...
-            'NetworkRole','Server', ...
-            'Timeout', 1);
-        
-        % Establish connection
-        if strcmp('ICRCHEETAH', getenv('computername'))
-            fopen(TCPIP);
-            D.AC.connected = true;
+        % Skip if updating table
+        if D.PAR.sesType ~= 'Table_Update'
+            
+            % Stop c2m timer
+            if strcmp(D.timer_c2m.Running, 'on')
+                stop(D.timer_c2m);
+            end
+            
+            % Create tcpip object
+            TCPIP = tcpip('0.0.0.0',55000, ...
+                'OutputBufferSize', length(D.AC.data), ...
+                'NetworkRole','Server', ...
+                'Timeout', 1);
+            
+            % Establish connection
+            if strcmp('ICRCHEETAH', getenv('computername'))
+                fopen(TCPIP);
+                D.AC.connected = true;
+            end
+            
+            % Restart timer
+            start(D.timer_c2m);
+            
+            % Print that AC computer is connected
+            if (D.AC.connected)
+                Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer IP=%s', ...
+                    D.AC.IP));
+            else
+                Console_Write(sprintf('**WARNING** [Setup] ABORTED: Connect to AC Computer IP=%s', ...
+                    D.AC.IP));
+            end
+            
         else
-            D.AC.connected = false;
-        end
-        
-        % Restart timer
-        start(D.timer_c2m);
-        
-        % Print that AC computer is connected
-        if (D.AC.connected)
-            Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer IP=%s', ...
-                D.AC.IP));
-        else
-            Console_Write(sprintf('**WARNING** [Setup] ABORTED: Connect to AC Computer IP=%s', ...
+            Console_Write(sprintf('[Setup] SKIPPED: Connect to AC Computer IP=%s', ...
                 D.AC.IP));
         end
         
@@ -917,6 +927,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         if D.PAR.sesType == 'Table_Update'
                             TabGrpChange(D.UI.tabTBL);
                         end
+                        
+                        % Set rat out flag
+                        D.F.rat_out = true;
                         
                         % Bail
                         continue;
@@ -2027,10 +2040,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % UI window positions
-        fig_wh = [1240 1025];
+        fig_wh = [1240 1008];
+        fig_btm = 42;
         for z_m = 1:3
             fig_lft = D.UI.monPos(D.UI.figMon(z_m),1) + (D.UI.monPos(D.UI.figMon(z_m),3)-fig_wh(1))/2;
-            fig_btm = D.UI.monPos(D.UI.figMon(z_m),2) + (D.UI.monPos(D.UI.figMon(z_m),4)-fig_wh(2))/2;
+            %fig_btm = D.UI.monPos(D.UI.figMon(z_m),2) + (D.UI.monPos(D.UI.figMon(z_m),4)-fig_wh(2))/2;
             D.UI.figGrpPos{z_m} = [fig_lft, fig_btm, fig_wh(1), fig_wh(2)];
         end
         
@@ -4074,8 +4088,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
         D.F.cheetah_open = ~any(strfind(result, 'INFO'));
         
-        % Only run if Matlab solo or running TT_Track solo
-        if isMatSolo && ~D.F.cheetah_open
+        % Only run if Matlab solo not running Table_Update solo
+        if isMatSolo && ~D.F.cheetah_open && D.PAR.sesType ~= 'Table_Update'
             
             % Log/print
             Console_Write('[NLX_Setup] RUNNING: Open Cheetah.exe...');
@@ -4336,27 +4350,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Defaults
         obj_gap = 0.005;
         
-        % Panel task table pos
-        pan_lft = 0;
-        pan_ht = (D.UI.tabTBL.Position(4)*0.75) / 2;
-        pan_botm = pan_ht;
-        pan_wdth = D.UI.tabTBL.Position(3);
-        D.UI.pan_task_tbl_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
-        
-        % Panel tt table pos
-        pan_lft = D.UI.pan_task_tbl_pos(1);
-        pan_ht = D.UI.pan_task_tbl_pos(4);
-        pan_botm = 0;
-        pan_wdth = D.UI.pan_task_tbl_pos(3);
-        D.UI.pan_tt_tbl_pos = ...
-            [pan_lft, ...
-            pan_botm, ...
-            pan_wdth, ...
-            pan_ht];
+        % Panel group pos
+        grp_lft = 0;
+        grp_ht = (D.UI.tabTBL.Position(4)*0.75) - D.UI.run_pan_pos(2);
+        grp_botm = D.UI.run_pan_pos(2);
+        grp_wdth = D.UI.tabTBL.Position(3);
+        D.UI.tab_grp_pos = ...
+            [grp_lft, ...
+            grp_botm, ...
+            grp_wdth, ...
+            grp_ht];
         
         % Panel weight
         pan_lft = 0;
@@ -4371,8 +4374,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Panel food
         pan_lft = 0;
-        pan_ht = pan_botm - sum(D.UI.pan_task_tbl_pos([2,4])) - 2*obj_gap;
-        pan_botm = sum(D.UI.pan_task_tbl_pos([2,4])) + obj_gap;
+        pan_ht = pan_botm - sum(D.UI.tab_grp_pos([2,4])) - 2*obj_gap;
+        pan_botm = sum(D.UI.tab_grp_pos([2,4])) + obj_gap;
         pan_wdth = 0.2;
         D.UI.food_pan_pos = ...
             [pan_lft, ...
@@ -4402,7 +4405,33 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_wdth, ...
             pan_ht];
         
-        %% CREATE TEMPLATE OBJECTS
+        %% CREATE TEMPLATE ETC OBJECTS
+        
+        % Create tab group
+        D.UI.tblTabSubGrp = ...
+            uitabgroup(D.UI.tabTBL, ...
+            'Units', 'Normalized', ...
+            'SelectionChangedFcn', {@TabGrpChange}, ...
+            'UserData', 'TT TRACK', ...
+            'Position',D.UI.tab_grp_pos);
+        
+        % Add SS_IO_1 tab
+        D.UI.tbleSSIO1tab = uitab(D.UI.tblTabSubGrp, ...
+            'Title', 'All', ...
+            'BackgroundColor', [1, 1, 1]);
+        
+        % Add SS_IO_2 tab
+        D.UI.tbleSSIO2tab = uitab(D.UI.tblTabSubGrp, ...
+            'Title', D.PAR.ratLab(2:end), ...
+            'BackgroundColor', [1, 1, 1]);
+        
+        % Add TT_IO tab
+        D.UI.tbleTTIOtab = uitab(D.UI.tblTabSubGrp, ...
+            'Title', 'TT', ...
+            'BackgroundColor', [1, 1, 1]);
+        
+        % Set tab to rat
+        D.UI.tblTabSubGrp.SelectedTab = D.UI.tbleSSIO2tab;
         
         % Table Template
         D.UI.tblTemplate = uitable(...
@@ -4410,6 +4439,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Units', 'normalized', ...
             'Position', [0,0,1,1], ...
             'FontSize', 8, ...
+            'FontName', 'MonoSpace', ...
             'Enable', 'inactive', ...
             'Visible', 'off');
         
@@ -4428,7 +4458,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName', D.UI.titleFont, ...
             'TitlePosition','centertop', ...
             'Clipping','on', ...
-            'Position', [0,0,0.1,0.1]);
+            'Position', [0,0,0.1,0.1], ...
+            'Visible', 'off');
         
         % Text Template
         D.UI.txtTemplate = uicontrol(...
@@ -4514,6 +4545,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.panWeight = copyobj(D.UI.panTemplate, D.UI.tabTBL);
         Safe_Set(D.UI.panWeight, ...
             'Title','Weights', ...
+            'Visible', 'on', ...
             'Position', D.UI.weight_pan_pos)
         
         % Starting pos
@@ -4573,9 +4605,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Enable button
         Button_State(D.UI.toggUpdateWeight, 'Enable');
         
-        % Corrected weight text
-        wd =  (D.UI.weight_pan_pos(3) - obj_gap*2)/3 - obj_gap;
+        % Baseline weight text
+        wd =  (D.UI.weight_pan_pos(3) - obj_gap)/4 - obj_gap;
         botm = botm - D.UI.txtTemplate.Position(4) - obj_gap;
+        D.UI.txtBaselineWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
+        D.UI.txtBaselineWeight(1).Position(1:3) = [lft, botm, wd];
+        Safe_Set(D.UI.txtBaselineWeight(1), ...
+            'String', 'Base', ...
+            'Visible', 'on');
+        D.UI.txtBaselineWeight(2) = copyobj(D.UI.txtBaselineWeight(1), D.UI.tabTBL);
+        D.UI.txtBaselineWeight(2).Position(2) = ...
+            D.UI.txtBaselineWeight(2).Position(2)-D.UI.txtBaselineWeight(2).Position(4);
+        D.UI.txtBaselineWeight(2).String = 'xxxg';
+       
+        % Corrected weight text
+        lft = lft + wd + obj_gap;
         D.UI.txtCorrectedWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
         D.UI.txtCorrectedWeight(1).Position(1:3) = [lft, botm, wd];
         Safe_Set(D.UI.txtCorrectedWeight(1), ...
@@ -4603,7 +4647,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.txtPercentageWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
         D.UI.txtPercentageWeight(1).Position(1:3) = [lft, botm, wd];
         Safe_Set(D.UI.txtPercentageWeight(1), ...
-            'String', 'Percent', ...
+            'String', '%Base', ...
             'Visible', 'on');
         D.UI.txtPercentageWeight(2) = copyobj(D.UI.txtPercentageWeight(1), D.UI.tabTBL);
         D.UI.txtPercentageWeight(2).Position(2) = ...
@@ -4616,6 +4660,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.panFeed = copyobj(D.UI.panTemplate, D.UI.tabTBL);
         Safe_Set(D.UI.panFeed, ...
             'Title','Feeding', ...
+            'Visible', 'on', ...
             'Position', D.UI.food_pan_pos)
         
         % Start and default position info
@@ -4704,20 +4749,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% CREATE TASK TABLE OBJECTS
         
-        % Task Table Panel
-        D.UI.panTaskTable = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        Safe_Set(D.UI.panTaskTable, ...
-            'Title','Task Table', ...
-            'Position', D.UI.pan_task_tbl_pos)
-        
         % Task Notes Panel
         D.UI.panTaskNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
         Safe_Set(D.UI.panTaskNotes, ...
             'Title','Task Notes', ...
+            'Visible', 'on', ...
             'Position', D.UI.task_notes_pan_pos)
         
+        % Format SS_IO_1 table
+        D.UI.tblSSIO2 = FormatTable(D.SS_IO_1, D.UI.tbleSSIO1tab);
+        
         % Format SS_IO_2 table
-        D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.PAR.ratLab), D.UI.panTaskTable);
+        D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.PAR.ratLab), D.UI.tbleSSIO2tab);
         
         % Start and default position info
         ht_edit = 0.4;
@@ -4747,7 +4790,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         notes_ind = ismember(D.UI.tblSSIO2.ColumnName, 'Notes');
         D.UI.tblTaskNotes.Data = D.UI.tblSSIO2.Data(:,notes_ind);
         D.UI.tblTaskNotes.ColumnName = {[]};
-        D.UI.tblTaskNotes.ColumnWidth = D.UI.tblSSIO2.ColumnWidth(notes_ind);
+        D.UI.tblTaskNotes.ColumnWidth = D.UI.tblSSIO2.UserData(notes_ind);
         
         % Remove notes from main table
         D.UI.tblSSIO2.Data(:,notes_ind) = [];
@@ -4755,27 +4798,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% CREATE TT TABLE OBJECTS
         
-        % TT Table Panel
-        D.UI.panTTTable = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        Safe_Set(D.UI.panTTTable, ...
-            'Title','TT Table', ...
-            'Position', D.UI.pan_tt_tbl_pos)
-        
-        % TT Notes Panel
+       % TT Notes Panel
         D.UI.panTTNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
         Safe_Set(D.UI.panTTNotes, ...
             'Title','TT Notes', ...
+            'Visible', 'on', ...
             'Position', D.UI.tt_notes_pan_pos)
         
         % Set panels disabled
         if ~D.F.rat_implanted && D.PAR.sesType ~= 'TT_Turn'
-            Panel_State(D.UI.panTTTable, 'Disable');
+            delete(D.UI.tbleTTIOtab);
             Panel_State(D.UI.panTTNotes, 'Disable');
             
         else
             
             % Format SS_IO_2 table
-            D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.panTTTable);
+            D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.tbleTTIOtab);
             
             % Old tt notes table
             D.UI.tblTTNotes = copyobj(D.UI.tblTaskNotes, D.UI.panTTNotes);
@@ -4790,7 +4828,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             notes_ind = ismember(D.UI.tblTTIO.ColumnName, 'Notes');
             D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data(:,notes_ind);
             D.UI.tblTTNotes.ColumnName = {[]};
-            D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.ColumnWidth(notes_ind);
+            D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.UserData(notes_ind);
             
             % Remove notes from main table
             D.UI.tblTTIO.Data(:,notes_ind) = [];
@@ -4804,20 +4842,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Convert table data to cell
             c_ss_io = table2cell(io_table);
             
-            % Convert categorical to char
-            cat_ind = cell2mat(cellfun(@(x) isa(x, 'categorical'), ...
-                c_ss_io(1,:), 'uni', false));
-            c_ss_io(:,cat_ind) = cellfun(@(x) char(x), c_ss_io(:,cat_ind), 'uni', false);
-            
             % Remove nexted cell or 2d data
             cell_ind = cell2mat(cellfun(@(x) isa(x, 'cell'), ...
                 c_ss_io(1,:), 'uni', false));
             nd_ind = any(cell2mat(cellfun(@(x) max(size(x))>1 && ~isa(x, 'char'), ...
                 c_ss_io, 'uni', false)), 1);
-            exc_ind = cell_ind | nd_ind;
             
             % Remove values
+            exc_ind = cell_ind | nd_ind;
             c_ss_io = c_ss_io(:, ~exc_ind);
+            
+            % Convert categorical to char
+            cat_ind = cell2mat(cellfun(@(x) isa(x, 'categorical'), ...
+                c_ss_io(1,:), 'uni', false));
+            c_ss_io(:,cat_ind) = cellfun(@(x) char(x), c_ss_io(:,cat_ind), 'uni', false);
             
             % Convert numeric to char
             num_ind = any(cell2mat(cellfun(@(x) isa(x, 'double'), ...
@@ -4837,15 +4875,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Get variable names
             var_list = io_table.Properties.VariableNames(~exc_ind);
             
-            % Get dates for row names
-            date_list = io_table.Date;
-            date_list = regexp(date_list, '\S*(?=_)', 'match');
-            date_list = [date_list{:}];
-            
-            % Remove dates entry
-            date_ind = ismember(io_table.Properties.VariableNames , 'Date');
-            c_ss_io(:,date_ind) = [];
-            var_list(date_ind) = [];
+            % Handle data info
+            if any(ismember(io_table.Properties.VariableNames , 'Date'))
+                
+                % Get dates for row names
+                date_list = io_table.Date;
+                date_list = regexp(date_list, '\S*(?=_)', 'match');
+                date_list = [date_list{:}];
+                row_names = date_list;
+                
+                % Remove dates entry
+                date_ind = ismember(io_table.Properties.VariableNames , 'Date');
+                c_ss_io(:,date_ind) = [];
+                var_list(date_ind) = [];
+                
+            else
+                % Set row names to rat name
+                row_names = io_table.Properties.RowNames;
+            end
             
             % ADD DATA TO TABLE
             
@@ -4858,7 +4905,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Add data to table
             ui_table.Data = c_ss_io;
             ui_table.ColumnName = var_list;
-            ui_table.RowName = date_list;
+            ui_table.RowName = row_names;
             
             % Flip table so newest entries at top
             ui_table.Data = flip(ui_table.Data, 1);
@@ -4870,11 +4917,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             var_width = cell2mat(cellfun(@(x) max(size(x)), ...
                 var_list, 'uni', false));
             
-            % Scale widths
+            % Store max column widths
             dat_width = dat_width*6;
-            var_width = var_width*7;
+            var_width = var_width*8;
             col_width = num2cell(max([dat_width;var_width],[],1));
-            ui_table.ColumnWidth = col_width;
+            ui_table.UserData = col_width;
+            %ui_table.ColumnWidth = col_width;
             
         end
         
@@ -8086,8 +8134,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DB.CVCC.flagPrc = false(1, length(D.DB.CVCC.prcSteps));
             % Check start time
             D.DB.CVCC.t_start = [];
+            % Store time at change
+            D.DB.CVCC.dt_step = NaN(1, length(D.DB.CVCC.prcSteps) + 1);
             % Vcc at start
-            D.DB.CVCC.vccStart = [];
+            D.DB.CVCC.vcc_step = NaN(1, length(D.DB.CVCC.prcSteps) + 1);
+            % Figure and axis
+            D.DB.CVCC.fg = figure(...
+                'Visible', 'off', ...
+                'Position', FIGH.Position);
+            D.DB.CVCC.ax = axes( ...
+                'YLim', [0,100], ...
+                'XTick', 0:60, ...
+                'XGrid', 'on',...
+                'YGrid', 'on', ...
+                'XMinorGrid', 'on',...
+                'YMinorGrid', 'on', ...
+                'GridColor', [0.1,0.1,0.1], ...
+                'MinorGridColor', [0.2,0.2,0.2]);
+            hold on;
+            D.DB.CVCC.ax.YLabel.String = 'Vcc (%)';
+            D.DB.CVCC.ax.XLabel.String = 'DT Start (min)';
             
             % Change Cube battery check
             D.PAR.dtCubeBatteryCheck = 5;
@@ -11842,7 +11908,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         % Create mesage string
                         msg = 'FINISHED SYNC IR TEST';
                         
-                        % Show prompt and dt info
+                        % Show prompt
                         dlg_h = dlgAWL( ...
                             msg, ...
                             'TEST INFO', ...
@@ -11992,24 +12058,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Set start time
                 if isempty(D.DB.CVCC.t_start)
-                    D.DB.CVCC.vccStart = D.PAR.cube_vcc;
+                    D.DB.CVCC.t_start = Sec_DT(now);
                 end
                 
                 % Wait 10 seconds to actually start
-                if Sec_DT(now) - D.DB.CVCC.vccStart < 10
+                if Sec_DT(now) - D.DB.CVCC.t_start < 10
                     return;
                 end
                 
-                % Set start vcc and time
-                D.DB.CVCC.vccStart = D.PAR.cube_vcc;
-                D.DB.CVCC.t_start = Sec_DT(now);
+                % Set start vcc and dt
+                D.DB.CVCC.dt_step(1) = 0;
+                D.DB.CVCC.vcc_step(1) = D.PAR.cube_vcc;
                 
                 % Set flag
                 D.DB.isTestStarted = true;
                 
                 % Log/print
-                Console_Write(sprintf('[Test_Run] CUBE BATTERY TEST: Cube VCC Starting at %d%%', D.DB.CVCC.vccStart));
+                Console_Write(sprintf('[Test_Run] CUBE "%s" BATTERY TEST: Cube VCC Starting at %d%%', ...
+                    D.PAR.cubeBatteryType, D.DB.CVCC.vcc_step(1)));
             end
+            
+%             % TEMP
+%             change_ind = ...
+%                 find(~D.DB.CVCC.flagPrc, 1, 'first');
+%             D.PAR.cube_vcc = D.DB.CVCC.prcSteps(change_ind) - 1;
             
             % Check for change
             change_ind = ...
@@ -12039,13 +12111,53 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     sin(2*pi*t*fmax)],1);
                 soundsc(y,Fs)
                 
-                % Get time string
-                dt_test = Sec_DT(now) - D.DB.CVCC.vccStart;
-                time_str = datestr(dt_test/(24*60*60), 'MM:SS');
+                % Get dt
+                D.DB.CVCC.dt_step(change_ind+1) = Sec_DT(now) - D.DB.CVCC.t_start;
+                dt_str = datestr(D.DB.CVCC.dt_step(change_ind+1)/(24*60*60), 'MM:SS');
+                
+                % Store voltage
+                D.DB.CVCC.vcc_step(change_ind+1) = D.PAR.cube_vcc;
+                
+                % Update plot
+                set(D.DB.CVCC.fg, 'Visible', 'on')
+                line(D.DB.CVCC.dt_step/60, D.DB.CVCC.vcc_step, ...
+                    'color', [1 0 0], ...
+                    'LineWidth', 1, ...
+                    'Marker', 'o', ...
+                    'Parent', D.DB.CVCC.ax);
+                set(D.DB.CVCC.ax, 'XLim', [0,ceil(max(D.DB.CVCC.dt_step)/60)]);
                 
                 % Log/print
-                Console_Write(sprintf('[Test_Run] CUBE BATTERY TEST: [%s] Cube VCC < %d%%', ...
-                    time_str, D.DB.CVCC.prcSteps(change_ind)));
+                Console_Write(sprintf('[Test_Run] CUBE "%s" BATTERY TEST: [%s] Cube VCC = %d%%', ...
+                    D.PAR.cubeBatteryType, dt_str, D.DB.CVCC.vcc_step(change_ind+1)));
+            end
+            
+            % Check for end
+            if all(D.DB.CVCC.flagPrc)
+                
+                % Create mesage string
+                msg = sprintf('FINISHED: CUBE "%s" BATTERY REACHED %d%% AFTER %0.2f MIN', ...
+                    D.PAR.cubeBatteryType, D.DB.CVCC.vcc_step(end), D.DB.CVCC.dt_step(end)/60);
+                
+                % Show prompt and dt info
+                dlg_h = dlgAWL( ...
+                    msg, ...
+                    'TEST INFO', ...
+                    'OK', [], [], 'OK', ...
+                    D.UI.dlgPos{4}, ...
+                    'default');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
+                
+                % Close figure
+                close(D.DB.CVCC.fg);
+                
+                % Unset flag
+                D.DB.t8_doCubeBatteryTest = false;
+                
             end
             
         end
@@ -12111,7 +12223,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_2.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end - D.T.ses_str) / 60;
         
         % Store 'Sleep_Time'
-        D.SS_IO_2.(D.PAR.ratLab).Sleep_Time(rowInd,:) = num2cell((D.T.sleep_end - D.T.sleep_str) / 60);
+        D.SS_IO_2.(D.PAR.ratLab).Sleep_Time(rowInd,:) = (D.T.sleep_end - D.T.sleep_str) / 60;
         
         % Store 'Session_Type'
         D.SS_IO_2.(D.PAR.ratLab).Session_Type(rowInd) = D.PAR.sesType;
@@ -13379,9 +13491,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         weight_prcnt = round(D.PAR.ratWeightProportion*100);
         
         % Print new values
+        D.UI.txtBaselineWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightBaseline); 
         D.UI.txtCorrectedWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightCorrected);
         D.UI.txtLastWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightLast);
-        D.UI.txtPercentageWeight(2).String = sprintf('%0.0f', weight_prcnt);
+        D.UI.txtPercentageWeight(2).String = sprintf('%0.0f%%', weight_prcnt);
         
         % Update button
         Button_State(D.UI.toggUpdateWeight, 'Update');
@@ -17445,9 +17558,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~isfield(D, 'DB'); return; end
         if ~isfield(D.DB, 'consoleStr'); return; end
         
+        % Itterate log count
+        D.DB.consoleCount = D.DB.consoleCount+1;
+        
         % Insert new print string into existing string
-        if (D.DB.logCount>1)
-            D.DB.consoleStr(2:D.DB.logCount+1,:) = D.DB.consoleStr(1:D.DB.logCount,:);
+        if (D.DB.consoleCount>1)
+            D.DB.consoleStr(2:D.DB.consoleCount+1,:) = D.DB.consoleStr(1:D.DB.consoleCount,:);
         end
         D.DB.consoleStr(1,1:150) = ' ';
         D.DB.consoleStr(1,1:length(msg)) = msg;
@@ -17649,16 +17765,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % --------------------------SEND DATA TO AC--------------------------------
     function[] = Send_M2AC()
         
+        % Bail if not connected
+        if ~D.AC.connected
+            return
+        end
+        
         % Bail if not tcpip object
         if ~exist('TCPIP', 'var')
             return;
         elseif ~isvalid(TCPIP)
             return;
-        end
-        
-        % Bail if not connected
-        if ~D.AC.connected
-            return
         end
         
         % Send data

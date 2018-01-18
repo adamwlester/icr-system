@@ -37,35 +37,50 @@ turn_log_F_description = '[Units, Theta, Sharp Waves, Noise, ?, ?]';
 % Initialize table
 T = table('RowNames',ratList);
 
-% Add rat level entries
+% ADD/INITIALIZE TABLE ENTRIES
+
 T.Include_Run = true(length(ratList),1);
-T.Weight_Drive = NaN(length(ratList),1);
+
+T.Weight_Drive = nan(length(ratList),1);
+
 T.Cap_Weights = repmat({nan(1,4)},length(ratList),1);
+
 T.Implant_Coordinates = repmat({nan(1,3), nan(1,3)},length(ratList),1);
+
 T.Implant_Angle = repmat({nan(1,2), nan(1,2)},length(ratList),1);
+
 T.Implant_Configuration = repmat({nan(1,2), nan(1,2)},length(ratList),1);
+
 T.Bundle_Label = repmat({bundle_labels'}, ...
     length(ratList), 1);
+
 T.TT_Label = repmat({tetrode_labels'}, ...
     length(ratList), 1);
+
 T.TT_Mapping = repmat({categorical(repmat({'<undefined>'},18,18), tetrode_labels)}, ...
     length(ratList), 2);
+
 T.TT_Include = repmat({true(18,1)}, length(ratList), 1);
+
 T.Reference_Mapping = ...
     repmat({[reference_tt_labels', ...
     categorical(repmat({'<undefined>'},length(reference_tt_labels),1), reference_eib_labels)]}, ...
     length(ratList), 1);
+
 T.TT_Reference = repmat({categorical(repmat({'<undefined>'},18,1), reference_tt_labels)}, ...
     length(ratList), 1);
-T.Thread_Pitch = NaN(length(ratList),1);
+
+T.Thread_Pitch = nan(length(ratList),1);
+
 T.Turn_Log = repmat(...
     {cell2struct(...
-    [{NaN}; ...
+    [{nan}; ...
     {cell2struct(repmat({categorical({'<undefined>'}, turn_labels)},1,18), tetrode_labels, 2)}; ...
     {cell2struct(num2cell(nan(1,18)), tetrode_labels, 2)}; ...
     {cell2struct(cell(1,18), tetrode_labels, 2)}], ...
     {'Date', 'Orientation', 'Depth', 'Notes'})}, ...
     length(ratList), 1);
+
 T.Implant_Notes = cell(length(ratList),1);
 
 % Create turn log

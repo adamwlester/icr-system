@@ -21,28 +21,29 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % Weight_Cap =  categorical({'None'}, weight_cap_labels);
 % TT_IO = AddNewVar(TT_IO, Weight_Cap, 'Weight_Drive');
 
-Cued_Rewards = {[]};
-SS_IO_2 = AddNewVar(SS_IO_2, Cued_Rewards, 'Zones_Rewarded');
+%Tail_Mark = {''};
+%SS_IO_1 = AddNewVar(SS_IO_1, Tail_Mark, 'DOB');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
 % Specify inputs
-% var_change = 'Implant_Coordinates';
-% new_val = nan(1,2);
-% description = '[A-P, M-L]';
-% units = 'mm';
-% preserve_val = false;
+var_change = 'Sleep_Time';
+new_val = nan(1,2);
+preserve_val = false;
+description = [];
+units = [];
+
 
 
 % Make changes
-%SS_IO_2 = ChangeVarEntries(SS_IO_2, var_change, new_val, preserve_val);
+SS_IO_2 = ChangeVarEntries(SS_IO_2, var_change, new_val, preserve_val);
 
 % ------------------------ MOVE DELETE VAR ENTRY --------------------------
 
 % Specify inputs
-% var_move = 'Implant_Configuration';
-% var_before = '';
-% remove = true;
+% var_move = 'Yoke_Mate';
+% var_before = 'Include_Analysis';
+% remove = false;
 
 % Make changes
 %SS_IO_1 = MoveVarEntries(SS_IO_1, var_move, var_before, remove);

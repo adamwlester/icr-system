@@ -7,20 +7,44 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0002'}; ...
-    {'r9998'} ...
+    {'r0495'}; ...
+    {'r0496'}; ...
+    {'r0501'}; ...
+    ];
+
+% Yoke mate list
+yokeList = [...
+    {'None'}; ...
+    {'None'}; ...
+    {'None'}; ...
     ];
 
 % Age group [Young, Old]
-agestr = [...
+ageList = [...
     {'Young'}; ...
-    {'Old'} ...
+    {'Young'}; ...
+    {'Young'}; ...
     ];
 
 % DOB date string
-DOBstr = [...
-    {'03/1/2016'}; ...
-    {'10/1/2014'} ...
+dobList = [...
+    {'03/1/2017'}; ...
+    {'03/1/2017'}; ...
+    {'03/1/2017'}; ...
+    ];
+
+% Tail marking string
+tailMrkList = [...
+    {'2B'}; ...
+    {'3B'}; ...
+    {'8B'}; ...
+    ];
+
+% Baseline weight
+weightList = [...
+    457; ...
+    437; ...
+    425; ...
     ];
  
 % Max sesions
@@ -32,7 +56,7 @@ rots = 9;
 %% =========================== SETUP VARS =================================
 
 % convert to yy/mm/dd format
-DOBstr = cellstr(datestr(DOBstr, 'yyyy/mm/dd'));
+dobList = cellstr(datestr(dobList, 'yyyy/mm/dd'));
 
 % Define categories
 feeder_version = {'Static_Feeder', 'Mobile_Feeder'};
@@ -60,63 +84,86 @@ days_till_rotation_description = '{[1:4]}';
 
 %% ============================= SS_IO_1 ==================================
 
-% Initialize variables
+% Initialize table
 T = table('RowNames',ratList);
+
+% ADD/INITIALIZE TABLE ENTRIES
+
 T.Include_Run = true(length(ratList),1);
+
 T.Include_Analysis = true(length(ratList),1);
-T.Implanted = false(length(ratList),1);
-T.Feeder_Version = categorical(repmat({'Mobile_Feeder'},length(ratList),1), feeder_version);
-T.Age_Group = categorical(agestr, age_group);
-T.DOB = DOBstr;
-T.Yoke_Mate = categorical(repmat({'<undefined>'},length(ratList),1), ...
+
+T.Yoke_Mate = categorical(yokeList, ...
     [{'None'}; ratList]);
-T.Weight_Baseline = NaN(length(ratList),1);
-T.Human = categorical(repmat({'<undefined>'},length(ratList),1), ...
+
+T.Implanted = false(length(ratList),1);
+
+T.Feeder_Version = categorical(repmat({'Mobile_Feeder'},length(ratList),1), ...
+    feeder_version);
+
+T.Age_Group = categorical(ageList, age_group);
+
+T.DOB = dobList;
+
+T.Tail_Mark = tailMrkList;
+
+T.Weight_Baseline = weightList;
+
+T.Human = categorical(repmat({'AWL'},length(ratList),1), ...
     human);
-T.Session_Type = categorical(repmat({'<undefined>'},length(ratList),1), ...
+
+T.Session_Type = categorical(repmat({'ICR_Session'},length(ratList),1), ...
     session_type);
+
 T.Session_Condition = categorical(repmat({'Manual_Training'},length(ratList),1), ...
     session_condition);
+
 T.Session_Task = categorical(repmat({'Track'},length(ratList),1), ...
     session_task);
-T.Session_Manual_Training = ...
-    table(zeros(length(ratList),1), zeros(length(ratList),1), ...
-    'VariableNames', [{'T'}, {'F'}]);
-T.Session_Manual_Training = [T.Session_Manual_Training.T, T.Session_Manual_Training.F];
-T.Session_Behavior_Training = ...
-    table(zeros(length(ratList),1), zeros(length(ratList),1), ...
-    'VariableNames', [{'T'}, {'F'}]);
-T.Session_Behavior_Training = [T.Session_Behavior_Training.T, T.Session_Behavior_Training.F];
-T.Session_Implant_Training = ...
-    table(zeros(length(ratList),1), zeros(length(ratList),1), ...
-    'VariableNames', [{'T'}, {'F'}]);
-T.Session_Implant_Training = [T.Session_Implant_Training.T, T.Session_Implant_Training.F];
+
+T.Session_Manual_Training = repmat([0, 0],length(ratList),1);
+
+T.Session_Behavior_Training = repmat([0, 0],length(ratList),1);
+
+T.Session_Implant_Training = repmat([0, 0],length(ratList),1);
+
 T.Session_Rotation = zeros(length(ratList),1);
+
 T.Finished_Manual_Training = false(length(ratList),1);
+
 T.Finished_Behavior_Training = false(length(ratList),1);
+
 T.Finished_Study = false(length(ratList),1);
+
 T.Feeder_Condition = categorical(repmat({'<undefined>'},length(ratList),1), ...
     feeder_condition);
-T.Reward_Delay = categorical(repmat({'<undefined>'},length(ratList),1), ...
+
+T.Reward_Delay = categorical(repmat({'0.0'},length(ratList),1), ...
     reward_delay, 'Ordinal', true);
-T.Cue_Condition = categorical(repmat({'<undefined>'},length(ratList),1), ...
+
+T.Cue_Condition = categorical(repmat({'None'},length(ratList),1), ...
     cue_condition, 'Ordinal', true);
-T.Sound_Conditions = ...
-    table(false(length(ratList),1), false(length(ratList),1), ...
-    'VariableNames', [{'S1'}, {'S2'}]);
-T.Sound_Conditions = [T.Sound_Conditions.S1, T.Sound_Conditions.S2];
+
+T.Sound_Conditions = repmat([false, false], length(ratList) ,1);
+
 T.Start_Quadrant = repmat({categorical(repmat({'<undefined>'},200,1), ...
     start_quadrant)}, length(ratList),1);
+
 T.Rotation_Direction = repmat({categorical(repmat({'<undefined>'},200,1), ...
     rotation_direction)}, length(ratList),1);
+
 T.Rotation_Positions = repmat({categorical(repmat({'<undefined>'},200,9), ...
     rotation_positions)}, length(ratList),1);
+
 T.Rotations_Per_Session = repmat({categorical(repmat({'<undefined>'},200,1), ...
     rotations_per_session)}, length(ratList),1);
+
 T.Laps_Per_Rotation = repmat({categorical(repmat({'<undefined>'},200,9), ...
     laps_per_rotation)}, length(ratList),1);
+
 T.Days_Till_Rotation = repmat({categorical(repmat({'<undefined>'},200,1), ...
     days_till_rotation)}, length(ratList),1);
+
 T.Notes = cell(length(ratList),1);
 
 % Set variable units
@@ -162,59 +209,38 @@ SS_IO_1 = sortrows(T, 'RowNames');
 
 %  ------------------  Create condition paramiters ------------------------
 
-% Find rats going into icr
-icrRats = ... 
-    SS_IO_1.Session_Condition == 'Manual_Training';
-
-% Find rats that have not already been updated
-unmod = ...
-    isundefined(SS_IO_1.Feeder_Condition);
-newRats = icrRats & unmod; 
-ratList = categorical(SS_IO_1.Properties.RowNames(newRats));
-
-% Set Yoke_Mate to 'None' if '<undefined>'
-SS_IO_1.Yoke_Mate(isundefined(SS_IO_1.Yoke_Mate)) = 'None';
-yokeList = SS_IO_1{newRats, {'Yoke_Mate'}};
-% set yokeList to rat if no yoke mate
-yokeList(yokeList == 'None') = ratList(yokeList == 'None');
-
 % Get number of unique conditions needed
-nCond = length(ratList) - sum(ratList ~= yokeList)/2;
+nUnique = sum(ismember(yokeList, 'None')) + sum(ismember(ratList, yokeList))/2;
 
 % Get yoked pair indeces
 % NOTE: Each row denotes the rat (col 1) and its yoked pair (col 2).
 % non-yoked rats should be paired with themselves.
 [~,mateInd] = ismember(ratList, yokeList);
 yokePrs = [(1:length(ratList))',mateInd];
+yokePrs(mateInd==0, 2) = yokePrs(mateInd==0, 1);
 yokeInd = diff(yokePrs,[],2);
-yokeInd(yokeInd>=0) = 1:nCond;
+yokeInd(yokeInd>=0) = 1:nUnique;
 yokeInd(yokeInd<0) = find(yokeInd<0 == 1) + yokeInd(yokeInd<0);
-
-% Abort if nothing to update
-if isempty(ratList)
-    fprintf('WARNING Exited With Nothing Changed\n');
-    return
-end
 
 % ------------ Asign semi-random condition for yoked pairs ----------------
 
 % FEEDER CONDITION
-fdcnd = cell(2,ceil(nCond/2));
-for i = 1:ceil(nCond/2)
+fdcnd = cell(2,ceil(nUnique/2));
+for i = 1:ceil(nUnique/2)
     fdcnd(:,i) = feeder_condition(randperm(2));
 end
 % remove unneaded entries
 fdcnd = reshape(fdcnd(:),[],1);
-fdcnd = fdcnd(1:nCond);
+fdcnd = fdcnd(1:nUnique);
 
 % START QUADRANT
 % Note: the start quad for the first day will be counterbalanced accross
 % rats
-strqd = cell(4,ceil(nses/4),nCond);
+strqd = cell(4,ceil(nses/4),nUnique);
 % give each rat a different start quad on day 1
-day1 = repmat(1:4,1,ceil(nCond/4));
+day1 = repmat(1:4,1,ceil(nUnique/4));
 day1 = day1(:); 
-for i = 1:nCond
+for i = 1:nUnique
     for j = 1:ceil(nses/4)
         ind = randperm(4);
         if j == 1
@@ -226,15 +252,16 @@ for i = 1:nCond
     end
 end
 % Reshape and remove unneaded entries
-strqd = reshape(strqd,[],nCond,1);
+strqd = reshape(strqd,[],nUnique,1);
 strqd = strqd(1:nses,:);
 
 % ROTATION DIRECTION
-rtdir = cell(2,ceil(nses/2),nCond);
+rtdir = cell(2,ceil(nses/2),nUnique);
 % give each pair a different rotation directin on day 1
-day1 = repmat(1:2,1,ceil(nCond/4));
+rstr = ceil(rand(1,1)*2);
+day1 = repmat([rstr, find([1,2]~=rstr)],1,ceil(nUnique/2));
 day1 = day1(:);
-for i = 1:nCond
+for i = 1:nUnique
     for j = 1:ceil(nses/2)
         ind = randperm(2);
         if j == 1
@@ -246,14 +273,14 @@ for i = 1:nCond
     end
 end
 % Reshape and remove unneaded entries
-rtdir = reshape(rtdir,[],nCond,1);
+rtdir = reshape(rtdir,[],nUnique,1);
 rtdir = rtdir(1:nses,:);
 
 % ROTATION POSITION
 % Note: the order of rotation posisitions for the first rotation trial will
 % be counter balanced accross rats
-rotps = cell(3,rots/3,nses,nCond);
-for i = 1:nCond
+rotps = cell(3,rots/3,nses,nUnique);
+for i = 1:nUnique
     for j = 1:ceil(nses)
         for k = 1:rots/3
             rotps(:,k,j,i) = rotation_positions(randperm(3));
@@ -261,27 +288,27 @@ for i = 1:nCond
     end
 end
 % reshape
-rotps = reshape(rotps,nses,rots,nCond);
+rotps = reshape(rotps,nses,rots,nUnique);
 rotps = rotps(1:nses,:,:); % remove unneaded entries
 
 % ROTATIONS PER SESSION
 % Note: will perform 2 4 or 6 rotations per session
-nrot = cell(3,ceil(nses/3),nCond);
-for i = 1:nCond
+nrot = cell(3,ceil(nses/3),nUnique);
+for i = 1:nUnique
     for j = 1:ceil(nses/3)
         nrot(:,j,i) = rotations_per_session(randperm(3));
     end
 end
 % reshape
-nrot = reshape(nrot,[],nCond,1);
+nrot = reshape(nrot,[],nUnique,1);
 nrot = nrot(1:nses,:); % remove unneaded entries
 
 % REWARDS PER ROTATION
 % Note: a range of laps will be saved and the first entry for each session
 % will be set to max number of laps to collect more data for standard
 % configuration laps
-nlap = cell(3,rots/3,nses,nCond);
-for i = 1:nCond
+nlap = cell(3,rots/3,nses,nUnique);
+for i = 1:nUnique
     for j = 1:ceil(nses)
         for k = 1:rots/3
             nlap(:,k,j,i) = laps_per_rotation(randperm(3));
@@ -289,40 +316,46 @@ for i = 1:nCond
     end
 end
 % reshape
-nlap = reshape(nlap,nses,rots,nCond);
+nlap = reshape(nlap,nses,rots,nUnique);
 nlap(:,1,:) = laps_per_rotation(end); % set first entry each session to 7-10 rew
 nlap = nlap(1:nses,:,:); % remove unneaded entries
 
 % DAYS TILL ROTATION
 % Note: a range of days will be saved between 1-4 days
-ndays = cell(3,ceil(nses/3),nCond);
-for i = 1:nCond
+ndays = cell(3,ceil(nses/3),nUnique);
+for i = 1:nUnique
     for j = 1:ceil(nses/3)
         ndays(:,j,i) = days_till_rotation(randperm(3));
     end
 end
 % reshape
-ndays = reshape(ndays,[],nCond,1);
+ndays = reshape(ndays,[],nUnique,1);
 ndays = ndays(1:nses,:); % remove unneaded entries
 
 % Add to main data sets
 for i = 1:length(ratList)
+    
     SS_IO_1{char(ratList(i)), {'Feeder_Condition'}} = ...
         fdcnd(yokeInd(i)); 
-    SS_IO_1{char(ratList(i)), {'Reward_Delay'}} = {'0.0'};
-    SS_IO_1{char(ratList(i)), {'Cue_Condition'}} = {'All'};
+    
     SS_IO_1{char(ratList(i)), {'Start_Quadrant'}}{:} = ...
         categorical(strqd(:,yokeInd(i)), start_quadrant); 
+    
         SS_IO_1{char(ratList(i)), {'Rotation_Direction'}}{:} = ...
         categorical(rtdir(:,yokeInd(i)), rotation_direction);
+    
     SS_IO_1{char(ratList(i)), {'Rotation_Positions'}}{:} = ...
         categorical(rotps(:,:,yokeInd(i)), rotation_positions); 
+    
     SS_IO_1{char(ratList(i)), {'Rotations_Per_Session'}}{:} = ...
         categorical(nrot(:,yokeInd(i)), rotations_per_session); 
+    
     SS_IO_1{char(ratList(i)), {'Laps_Per_Rotation'}}{:} = ...
         categorical(nlap(:,:,yokeInd(i)), laps_per_rotation);
+    
     SS_IO_1{char(ratList(i)), {'Days_Till_Rotation'}}{:} = ...
         categorical(ndays(:,yokeInd(i)), days_till_rotation); 
+    
 end
 
 %% ============================= SS_IO_2 ==================================
@@ -333,67 +366,111 @@ if exist(fullfile(ioDir, 'SS_IO_2.mat'), 'file')
     SS_IO_2 = S.SS_IO_2;
 end
 
-% Store variables
+% Reinitialize table
 T = table;
+
+% STORE/ADD TABLE ENTRIES
+
 T.Include_Analysis = true;
+
 T.Implanted = false;
+
 T.Date = {''};
+
 T.Recording_File = {''};
+
 T.Human = categorical({'<undefined>'}, ...
     human);
-T.Weight = NaN;
-T.Weight_Baseline = NaN;
-T.Weight_Drive = NaN;
-T.Weight_Cap = NaN;
-T.Weight_Corrected = NaN;
-T.Weight_Proportion = NaN;
-T.VT_Pixel_Coordinates = {NaN(1,3)};
+
+T.Weight = nan;
+
+T.Weight_Baseline = nan;
+
+T.Weight_Drive = nan;
+
+T.Weight_Cap = nan;
+
+T.Weight_Corrected = nan;
+
+T.Weight_Proportion = nan;
+
+T.VT_Pixel_Coordinates = {nan(1,3)};
+
 T.Start_Time = {''};
-T.Total_Time = NaN;
-T.Sleep_Time = {NaN(1,2)};
+
+T.Total_Time = nan;
+
+T.Sleep_Time = nan(1,2);
+
 T.Session_Type = categorical({'<undefined>'}, ...
     session_type);
+
 T.Session_Condition = categorical({'<undefined>'}, ...
     session_condition);
-T.Session_Task = categorical({'<undefined>'}, session_task);
-T.Session_Manual_Training = ...
-    table(NaN, NaN, 'VariableNames', [{'T'}, {'F'}]);
-T.Session_Manual_Training = [T.Session_Manual_Training.T, T.Session_Manual_Training.F];
-T.Session_Behavior_Training = ...
-    table(NaN, NaN, 'VariableNames', [{'T'}, {'F'}]);
-T.Session_Behavior_Training = [T.Session_Behavior_Training.T, T.Session_Behavior_Training.F];
-T.Session_Implant_Training = ...
-    table(NaN, NaN, 'VariableNames', [{'T'}, {'F'}]);
-T.Session_Implant_Training = [T.Session_Implant_Training.T, T.Session_Implant_Training.F];
-T.Session_Rotation = NaN;
-T.Feeder_Condition = categorical({'<undefined>'}, feeder_condition);
-T.Reward_Delay = ...
-    categorical({'<undefined>'}, reward_delay, 'Ordinal', true);
-T.Cue_Condition = ...
-    categorical({'<undefined>'}, cue_condition, 'Ordinal', true);
-T.Sound_Conditions = ...
-    table(false, false,  'VariableNames', [{'S1'}, {'S2'}]);
-T.Sound_Conditions = ...
-    [T.Sound_Conditions.S1, T.Sound_Conditions.S2];
-T.Start_Quadrant = categorical({'<undefined>'}, start_quadrant);
-T.Rotation_Direction = categorical({'<undefined>'}, rotation_direction);
+
+T.Session_Task = categorical({'<undefined>'}, ...
+    session_task);
+
+T.Session_Manual_Training = nan(1,2);
+
+T.Session_Behavior_Training = nan(1,2);
+
+T.Session_Implant_Training =  nan(1,2);
+
+T.Session_Rotation = nan;
+
+T.Feeder_Condition = categorical({'<undefined>'}, ...
+    feeder_condition);
+
+T.Reward_Delay = categorical({'<undefined>'}, ...
+    reward_delay, 'Ordinal', true);
+
+T.Cue_Condition = categorical({'<undefined>'}, ...
+    cue_condition, 'Ordinal', true);
+
+T.Sound_Conditions =  [false, false];
+
+T.Start_Quadrant = categorical({'<undefined>'}, ...
+    start_quadrant);
+
+T.Rotation_Direction = categorical({'<undefined>'}, ...
+    rotation_direction);
+
 T.Rotation_Positions = {[]};
-T.Rotations_Per_Session = NaN;
+
+T.Rotations_Per_Session = nan;
+
 T.Laps_Per_Rotation = {[]};
-T.Days_Till_Rotation = categorical({'<undefined>'}, days_till_rotation);
-T.Bulldozings = NaN;
+
+T.Days_Till_Rotation = categorical({'<undefined>'}, ...
+    days_till_rotation);
+
+T.Bulldozings = nan;
+
 T.Zones_Rewarded = {[]};
+
 T.Cued_Rewards = {[]};
+
 T.Rewards_Standard = {[]};
+
 T.Rewards_40_Deg = {[]};
+
 T.Rewards_0_Deg = {[]};
+
 T.Laps_Standard = {[]};
+
 T.Laps_40_Deg = {[]};
+
 T.Laps_0_Deg = {[]};
-T.Fed_Pellets = NaN;
-T.Fed_Mash = NaN;
-T.Fed_Ensure = NaN;
-T.Fed_STAT = NaN;
+
+T.Fed_Pellets = nan;
+
+T.Fed_Mash = nan;
+
+T.Fed_Ensure = nan;
+
+T.Fed_STAT = nan;
+
 T.Notes = {''};
 
 % Set variable units
@@ -418,7 +495,6 @@ T.Properties.VariableDescriptions{'Laps_Per_Rotation'} = laps_per_rotation_descr
 T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
 
 % Loop through and create a field for each rat
-ratList = categories(ratList);
 for z_rat = 1:length(ratList)
     SS_IO_2.(ratList{z_rat}) = T;
 end
