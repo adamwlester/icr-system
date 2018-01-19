@@ -26,37 +26,27 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
-% % Specify inputs
-% var_change = 'Sleep_Time';
-% new_val = nan(1,2);
-% preserve_val = false;
-% description = [];
-% units = [];
-% 
-% 
-% 
-% % Make changes
-% SS_IO_2 = ChangeVarEntries(SS_IO_2, var_change, new_val, preserve_val);
+% Specify inputs
+var_change = 'Sleep_Time';
+new_val = nan(1,2);
+preserve_val = false;
+description = [];
+units = [];
+
+
+
+% Make changes
+SS_IO_2 = ChangeVarEntries(SS_IO_2, var_change, new_val, preserve_val);
 
 % ------------------------ MOVE DELETE VAR ENTRY --------------------------
 
 % Specify inputs
-var_move = 'Fed_Pellets';
-var_before = 'Laps_0_Deg';
-remove = true;
+% var_move = 'Yoke_Mate';
+% var_before = 'Include_Analysis';
+% remove = false;
 
 % Make changes
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight', 'Human', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Baseline', 'Weight', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Drive', 'Weight_Baseline', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Cap', 'Weight_Drive', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Corrected', 'Weight_Cap', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Proportion', 'Weight_Corrected', true);
-
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Pellets', 'Laps_0_Deg', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Mash', 'Fed_Pellets', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Ensure', 'Fed_Mash', true);
-SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_STAT', 'Fed_Ensure', true);
+%SS_IO_1 = MoveVarEntries(SS_IO_1, var_move, var_before, remove);
 
 %% =========================== SAVE TABLES ================================
 

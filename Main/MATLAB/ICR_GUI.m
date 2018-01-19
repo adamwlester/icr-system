@@ -98,7 +98,7 @@ D.DB.ratLab = 'r0000'; %'r9999';
 D.DB.Implanted = false;
 
 % Load, Condition and Task
-D.DB.Load = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Load = 'Table_Update' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
@@ -490,6 +490,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % IO tables
         D.DIR.SS_IO_1 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_1.mat');
         D.DIR.SS_IO_2 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_2.mat');
+        D.DIR.SS_IO_3 = fullfile(D.DIR.ioTop, 'SessionData', 'SS_IO_3.mat');
         D.DIR.TT_IO = fullfile(D.DIR.ioTop, 'SessionData', 'TT_IO.mat');
         
         % IO datasets
@@ -1252,9 +1253,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Console_Write('[Run:MainLoop] SAVE INITIATED');
                         
                         % Save task data
-                        Console_Write('[Run:MainLoop] RUNNING: "Save_Session_Data()"...');
-                        Save_Session_Data();
-                        Console_Write('[Run:MainLoop] FINISHED: "Save_Session_Data()"');
+                        Console_Write('[Run:MainLoop] RUNNING: "Save_Task_Data()"...');
+                        was_ran = Save_Task_Data();
+                        if was_ran
+                            Console_Write('[Run:MainLoop] FINISHED: "Save_Task_Data()"');
+                        else
+                            Console_Write('[Run:MainLoop] SKIPPED: "Save_Task_Data()"');
+                        end
+                        
+                        % Save health data
+                        Console_Write('[Run:MainLoop] RUNNING: "Save_General_Data()"...');
+                        Save_General_Data();
+                        Console_Write('[Run:MainLoop] FINISHED: "Save_General_Data()"');
                         
                         % Save Cheetah data
                         Console_Write('[Run:MainLoop] RUNNING: "Save_TT_Track_Data()"...');
@@ -1433,6 +1443,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_1 = T.SS_IO_1;
         T = load(D.DIR.SS_IO_2);
         D.SS_IO_2 = T.SS_IO_2;
+        T = load(D.DIR.SS_IO_3);
+        D.SS_IO_3 = T.SS_IO_3;
         T = load(D.DIR.TT_IO);
         D.TT_IO = T.TT_IO;
         clear T;
@@ -1657,8 +1669,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.do_save = false;
         % session save done
         D.F.ses_save_done = false;
-        % tt turn save done
-        D.F.tt_save_done = false;
         % flag quit
         D.F.do_quit = false;
         % flag gui closed
@@ -4383,22 +4393,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_wdth, ...
             pan_ht];
         
-        % Panel Session notes
+        % Panel General notes
         pan_lft = sum(D.UI.weight_pan_pos([1,3])) + obj_gap;
         pan_ht = 1 - D.UI.food_pan_pos(2) - obj_gap;
         pan_botm = D.UI.food_pan_pos(2);
         pan_wdth = (1 - sum(D.UI.weight_pan_pos([1,3])) - 2*obj_gap) / 2;
-        D.UI.task_notes_pan_pos = ...
+        D.UI.gen_notes_pan_pos = ...
             [pan_lft, ...
             pan_botm, ...
             pan_wdth, ...
             pan_ht];
         
-        % Panel Task notes
-        pan_lft = sum(D.UI.task_notes_pan_pos([1,3])) + obj_gap;
-        pan_ht = D.UI.task_notes_pan_pos(4);
-        pan_botm = D.UI.task_notes_pan_pos(2);
-        pan_wdth = D.UI.task_notes_pan_pos(3);
+        % Panel TT notes
+        pan_lft = sum(D.UI.gen_notes_pan_pos([1,3])) + obj_gap;
+        pan_ht = D.UI.gen_notes_pan_pos(4);
+        pan_botm = D.UI.gen_notes_pan_pos(2);
+        pan_wdth = D.UI.gen_notes_pan_pos(3);
         D.UI.tt_notes_pan_pos = ...
             [pan_lft, ...
             pan_botm, ...
@@ -4425,13 +4435,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Title', D.PAR.ratLab(2:end), ...
             'BackgroundColor', [1, 1, 1]);
         
+        % Add SS_IO_3 tab
+        D.UI.tbleSSIO3tab = uitab(D.UI.tblTabSubGrp, ...
+            'Title', 'Health', ...
+            'BackgroundColor', [1, 1, 1]);
+        
         % Add TT_IO tab
         D.UI.tbleTTIOtab = uitab(D.UI.tblTabSubGrp, ...
             'Title', 'TT', ...
             'BackgroundColor', [1, 1, 1]);
-        
-        % Set tab to rat
-        D.UI.tblTabSubGrp.SelectedTab = D.UI.tbleSSIO2tab;
         
         % Table Template
         D.UI.tblTemplate = uitable(...
@@ -4440,7 +4452,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Position', [0,0,1,1], ...
             'FontSize', 8, ...
             'FontName', 'MonoSpace', ...
-            'Enable', 'inactive', ...
+            'Enable', 'on', ...
+            'ColumnEditable', true, ...
             'Visible', 'off');
         
         % Panel Template
@@ -4524,7 +4537,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.ratWeightBaseline = D.SS_IO_1.Weight_Baseline(D.PAR.ratIndSS);
         
         % Get last corrected weight
-        D.PAR.ratWeightLast = D.SS_IO_2.(D.PAR.ratLab).Weight_Corrected(end);
+        D.PAR.ratWeightLast = D.SS_IO_3.(D.PAR.ratLab).Weight_Corrected(end);
         
         % Get cap weight list
         list_str = D.TT_IO.Properties.VariableDescriptions{'Cap_Weights'};
@@ -4617,7 +4630,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.txtBaselineWeight(2).Position(2) = ...
             D.UI.txtBaselineWeight(2).Position(2)-D.UI.txtBaselineWeight(2).Position(4);
         D.UI.txtBaselineWeight(2).String = 'xxxg';
-       
+        
         % Corrected weight text
         lft = lft + wd + obj_gap;
         D.UI.txtCorrectedWeight(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
@@ -4747,20 +4760,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Enable button
         Button_State(D.UI.toggUpdateFed, 'Enable');
         
-        %% CREATE TASK TABLE OBJECTS
-        
-        % Task Notes Panel
-        D.UI.panTaskNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
-        Safe_Set(D.UI.panTaskNotes, ...
-            'Title','Task Notes', ...
-            'Visible', 'on', ...
-            'Position', D.UI.task_notes_pan_pos)
+        %% CREATE MAIN NOTES TABLE OBJECTS
         
         % Format SS_IO_1 table
-        D.UI.tblSSIO2 = FormatTable(D.SS_IO_1, D.UI.tbleSSIO1tab);
+        D.UI.tblSSIO1 = FormatTable(D.SS_IO_1, D.UI.tbleSSIO1tab);
         
         % Format SS_IO_2 table
         D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.PAR.ratLab), D.UI.tbleSSIO2tab);
+        
+        % Format SS_IO_3 table
+        D.UI.tblSSIO3 = FormatTable(D.SS_IO_3.(D.PAR.ratLab), D.UI.tbleSSIO3tab);
+        
+        % Add new row to SS_IO_3 table
+        if size(D.UI.tblSSIO3.Data,1) > 1
+            D.UI.tblSSIO3.Data(end+1, :) = D.UI.tblSSIO3.Data(end,:);
+        end
+        
+        % Set tab to health
+        D.UI.tblTabSubGrp.SelectedTab = D.UI.tbleSSIO3tab;
+        
+        % Create notes panel
+        D.UI.panGenNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
+        Safe_Set(D.UI.panGenNotes, ...
+            'Title','General Notes', ...
+            'Visible', 'on', ...
+            'Position', D.UI.gen_notes_pan_pos)
         
         % Start and default position info
         ht_edit = 0.4;
@@ -4771,14 +4795,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         wd =  1;
         
         % Old task notes table
-        D.UI.tblTaskNotes = copyobj(D.UI.tblSSIO2,D.UI.panTaskNotes);
-        Safe_Set(D.UI.tblTaskNotes, ...
+        D.UI.tblGenNotes = copyobj(D.UI.tblSSIO3,D.UI.panGenNotes);
+        Safe_Set(D.UI.tblGenNotes, ...
+            'ColumnFormat', {'char'}, ...
             'Position', [lft, botm_tbl, wd, ht_tbl], ...
             'Visible', 'on')
         
         % New task notes edit
-        D.UI.editTaskNotes = copyobj(D.UI.editTemplate, D.UI.panTaskNotes);
-        Safe_Set(D.UI.editTaskNotes, ...
+        D.UI.editGenNotes = copyobj(D.UI.editTemplate, D.UI.panGenNotes);
+        Safe_Set(D.UI.editGenNotes, ...
             'Position', [lft, botm_edit, wd, ht_edit], ...
             'Units', 'Normalized', ...
             'FontSize', 10, ...
@@ -4786,19 +4811,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Enable','on',...
             'Visible', 'on');
         
-        % Keep only notes entry
-        notes_ind = ismember(D.UI.tblSSIO2.ColumnName, 'Notes');
-        D.UI.tblTaskNotes.Data = D.UI.tblSSIO2.Data(:,notes_ind);
-        D.UI.tblTaskNotes.ColumnName = {[]};
-        D.UI.tblTaskNotes.ColumnWidth = D.UI.tblSSIO2.UserData(notes_ind);
+        % Keep only notes and dates entry
+        notes_ind = ismember(D.UI.tblSSIO3.ColumnName, 'Notes');
+        D.UI.tblGenNotes.Data = D.UI.tblSSIO3.Data(:,notes_ind);
+        D.UI.tblGenNotes.ColumnName = {[]};
+        D.UI.tblGenNotes.ColumnWidth = D.UI.tblSSIO3.ColumnWidth(notes_ind);
         
-        % Remove notes from main table
+        % Remove notes from main tables
+        D.UI.tblSSIO3.ColumnName(notes_ind) = [];
+        D.UI.tblSSIO3.Data(:,notes_ind) = [];
+        notes_ind = ismember(D.UI.tblSSIO2.ColumnName, 'Notes');
         D.UI.tblSSIO2.Data(:,notes_ind) = [];
         D.UI.tblSSIO2.ColumnName(notes_ind) = [];
         
         %% CREATE TT TABLE OBJECTS
         
-       % TT Notes Panel
+        % TT Notes Panel
         D.UI.panTTNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
         Safe_Set(D.UI.panTTNotes, ...
             'Title','TT Notes', ...
@@ -4816,19 +4844,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.tbleTTIOtab);
             
             % Old tt notes table
-            D.UI.tblTTNotes = copyobj(D.UI.tblTaskNotes, D.UI.panTTNotes);
+            D.UI.tblTTNotes = copyobj(D.UI.tblGenNotes, D.UI.panTTNotes);
             D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data;
             D.UI.tblTTNotes.ColumnName = D.UI.tblTTIO.ColumnName;
             D.UI.tblTTNotes.RowName = D.UI.tblTTIO.RowName;
             
             % New tt notes edit
-            D.UI.editTTNotes = copyobj(D.UI.editTaskNotes, D.UI.panTTNotes);
+            D.UI.editTTNotes = copyobj(D.UI.editGenNotes, D.UI.panTTNotes);
             
             % Keep only notes entry
             notes_ind = ismember(D.UI.tblTTIO.ColumnName, 'Notes');
             D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data(:,notes_ind);
             D.UI.tblTTNotes.ColumnName = {[]};
-            D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.UserData(notes_ind);
+            D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.ColumnWidth(notes_ind);
             
             % Remove notes from main table
             D.UI.tblTTIO.Data(:,notes_ind) = [];
@@ -4840,37 +4868,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         function [ui_table] = FormatTable(io_table, parent)
             
             % Convert table data to cell
-            c_ss_io = table2cell(io_table);
+            c_io = table2cell(io_table);
             
             % Remove nexted cell or 2d data
             cell_ind = cell2mat(cellfun(@(x) isa(x, 'cell'), ...
-                c_ss_io(1,:), 'uni', false));
+                c_io(1,:), 'uni', false));
             nd_ind = any(cell2mat(cellfun(@(x) max(size(x))>1 && ~isa(x, 'char'), ...
-                c_ss_io, 'uni', false)), 1);
+                c_io, 'uni', false)), 1);
             
             % Remove values
             exc_ind = cell_ind | nd_ind;
-            c_ss_io = c_ss_io(:, ~exc_ind);
+            c_io = c_io(:, ~exc_ind);
             
-            % Convert categorical to char
-            cat_ind = cell2mat(cellfun(@(x) isa(x, 'categorical'), ...
-                c_ss_io(1,:), 'uni', false));
-            c_ss_io(:,cat_ind) = cellfun(@(x) char(x), c_ss_io(:,cat_ind), 'uni', false);
-            
-            % Convert numeric to char
-            num_ind = any(cell2mat(cellfun(@(x) isa(x, 'double'), ...
-                c_ss_io, 'uni', false)),1);
-            c_ss_io(:,num_ind) = cellfun(@(x) num2str(x), ...
-                c_ss_io(:,num_ind), 'uni', false);
-            
-            % Replace [] 'NaN' and '<undefined>' with 'NA'
+            % Replace [] with 'NA'
             empty_ind = cell2mat(cellfun(@(x) isempty(x), ...
-                c_ss_io, 'uni', false));
-            nan_ind =  cell2mat(cellfun(@(x) strcmp(x, 'NaN'), ...
-                c_ss_io, 'uni', false));
-            undef_ind =  cell2mat(cellfun(@(x) strcmp(x, '<undefined>'), ...
-                c_ss_io, 'uni', false));
-            c_ss_io(empty_ind | nan_ind | undef_ind) = {'NA'};
+                c_io, 'uni', false));
+            c_io(empty_ind) = {'NA'};
             
             % Get variable names
             var_list = io_table.Properties.VariableNames(~exc_ind);
@@ -4886,13 +4899,29 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Remove dates entry
                 date_ind = ismember(io_table.Properties.VariableNames , 'Date');
-                c_ss_io(:,date_ind) = [];
+                c_io(:,date_ind) = [];
                 var_list(date_ind) = [];
                 
             else
                 % Set row names to rat name
                 row_names = io_table.Properties.RowNames;
             end
+            
+            % Get numeric data inds
+            num_ind = any(cell2mat(cellfun(@(x) isa(x, 'double'), ...
+                c_io, 'uni', false)),1);
+            
+            % Get char data inds
+            char_ind = any(cell2mat(cellfun(@(x) isa(x, 'char'), ...
+                c_io, 'uni', false)),1);
+            
+            % Get logical data inds
+            bool_ind = any(cell2mat(cellfun(@(x) isa(x, 'logical'), ...
+                c_io, 'uni', false)),1);
+            
+            % Get categorical data inds to convert to pop menu
+            cat_ind = cell2mat(cellfun(@(x) isa(x, 'categorical'), ...
+                c_io(1,:), 'uni', false));
             
             % ADD DATA TO TABLE
             
@@ -4903,26 +4932,49 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Visible', 'on');
             
             % Add data to table
-            ui_table.Data = c_ss_io;
+            ui_table.Data = cell(size(c_io));
+            ui_table.Data(:,~cat_ind) = c_io(:,~cat_ind);
             ui_table.ColumnName = var_list;
             ui_table.RowName = row_names;
+            
+            % Set column formats
+            ui_table.ColumnFormat = cell(1,size(c_io,2));
+            ui_table.ColumnFormat(num_ind) = {'numeric'};
+            ui_table.ColumnFormat(char_ind) = {'char'};
+            ui_table.ColumnFormat(bool_ind) = {'logical'};
+            
+            % Set column/row default width
+            ui_table.ColumnWidth = repmat({'auto'}, 1, size(c_io,2));
+            
+            % Convert cat data to popmenu
+            cat_ind = find(cat_ind);
+            for z_c = 1:length(cat_ind)
+                
+                % Format for popmenu
+                ui_table.ColumnFormat(cat_ind(z_c)) = ...
+                    {categories(c_io{1,cat_ind(z_c)})'};
+                
+                % Add data
+                cell_str = cellfun(@(x) char(x), c_io(:,cat_ind(z_c)), 'uni', false);
+                ui_table.Data(:,cat_ind(z_c)) = cell_str;
+                
+                % Resize column
+                wdth = max([10*length(ui_table.ColumnName{cat_ind(z_c)}); ...
+                    10*cell2mat(cellfun(@(x) max(size(x)), ...
+                    cell_str, 'uni', false))]);
+                ui_table.ColumnWidth(cat_ind(z_c)) = {wdth};
+            end
             
             % Flip table so newest entries at top
             ui_table.Data = flip(ui_table.Data, 1);
             ui_table.RowName = flip(ui_table.RowName);
             
-            % Get charicter widths
-            dat_width = max(cell2mat(cellfun(@(x) max(size(x)), ...
-                c_ss_io, 'uni', false)), [], 1);
-            var_width = cell2mat(cellfun(@(x) max(size(x)), ...
-                var_list, 'uni', false));
-            
-            % Store max column widths
-            dat_width = dat_width*6;
-            var_width = var_width*8;
-            col_width = num2cell(max([dat_width;var_width],[],1));
-            ui_table.UserData = col_width;
-            %ui_table.ColumnWidth = col_width;
+            % Resize notes
+            ind = ismember(ui_table.ColumnName, 'Notes');
+            wdth = max([8*length('Notes'); ...
+                6*cell2mat(cellfun(@(x) max(size(x)), ...
+                ui_table.Data(:,ind), 'uni', false))]);
+            ui_table.ColumnWidth(ind) = {wdth};
             
         end
         
@@ -6307,7 +6359,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             [~, ~, das_types] = NlxGetDASObjectsAndTypes;
             if ~any(ismember(das_types, 'TTScAcqEnt'))
                 
-                % TEMP Load implant tracking config
+                % Load implant tracking config
                 Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Tracking.cfg');
                 Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Tracking.cfg"');
                 
@@ -12078,11 +12130,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.PAR.cubeBatteryType, D.DB.CVCC.vcc_step(1)));
             end
             
-%             % TEMP
-%             change_ind = ...
-%                 find(~D.DB.CVCC.flagPrc, 1, 'first');
-%             D.PAR.cube_vcc = D.DB.CVCC.prcSteps(change_ind) - 1;
-            
             % Check for change
             change_ind = ...
                 find(D.PAR.cube_vcc < D.DB.CVCC.prcSteps & ...
@@ -12171,11 +12218,93 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 %% ============================== EXIT FUNCTIONS ==========================
 
-% -------------------------SAVE SESSION DATA---------------------------
-    function Save_Session_Data()
+% -----------------------SAVE GENERAL DATA--------------------------
+    function Save_General_Data()
+        
+        % Get row ind
+        if strcmp(D.SS_IO_3.(D.PAR.ratLab).Date{1}, '')
+            % is first entry
+            rowInd = 1;
+        else
+            rowInd = size(D.SS_IO_3.(D.PAR.ratLab), 1) + 1;
+            % add new row at end of table
+            D.SS_IO_3.(D.PAR.ratLab) = ...
+                [D.SS_IO_3.(D.PAR.ratLab); D.SS_IO_3.(D.PAR.ratLab)(end,:)];
+        end
+        
+        % Get date
+        date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+        
+        % Store 'Date'
+        D.SS_IO_3.(D.PAR.ratLab).Date{rowInd} = date;
+        
+        % Store 'Human'
+        D.SS_IO_3.(D.PAR.ratLab).Human(rowInd) = D.PAR.sesHuman;
+        
+        % Store 'Start_Time'
+        D.SS_IO_3.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
+        
+        % Store 'Total_Time'
+        D.SS_IO_3.(D.PAR.ratLab).Total_Time(rowInd) = Sec_DT(now) / 60;
+        
+        % Sore new weight info
+        if  get(D.UI.toggUpdateWeight, 'Value') == 1
+            D.SS_IO_3.(D.PAR.ratLab).Weight(rowInd) = D.PAR.ratWeightNew;
+            D.SS_IO_3.(D.PAR.ratLab).Weight_Baseline(rowInd) = D.PAR.ratWeightBaseline;
+            D.SS_IO_3.(D.PAR.ratLab).Weight_Drive(rowInd) = D.PAR.driveWeight;
+            D.SS_IO_3.(D.PAR.ratLab).Weight_Cap(rowInd) = D.PAR.capWeight;
+            D.SS_IO_3.(D.PAR.ratLab).Weight_Corrected(rowInd) = D.PAR.ratWeightCorrected;
+            D.SS_IO_3.(D.PAR.ratLab).Weight_Proportion(rowInd) = D.PAR.ratWeightProportion;
+            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Weight');
+        else
+            % Carry over old weight info
+            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Weight');
+        end
+        
+        % Store feed info
+        if  get(D.UI.toggUpdateFed, 'Value') == 1
+            D.SS_IO_3.(D.PAR.ratLab).Fed_Pellets(rowInd) = D.PAR.feedPellets;
+            D.SS_IO_3.(D.PAR.ratLab).Fed_Mash(rowInd) = D.PAR.feedMash;
+            D.SS_IO_3.(D.PAR.ratLab).Fed_Ensure(rowInd) = D.PAR.feedEnsure;
+            D.SS_IO_3.(D.PAR.ratLab).Fed_STAT(rowInd) = D.PAR.feedSTAT;
+            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Food');
+        else
+            % Set to zeros
+            var_ind =  contains(D.SS_IO_3.(D.PAR.ratLab).Properties.VariableNames, 'Fed_');
+            D.SS_IO_3.(D.PAR.ratLab){end, var_ind} = 0;
+            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Food');
+        end
+        
+        % Store health info
+        var_ind = find(contains(D.UI.tblSSIO3.ColumnName,'Health'));
+        for z_v = 1:length(var_ind)
+            D.SS_IO_3.(D.PAR.ratLab){end, var_ind(z_v)+1}(:) = ...
+                D.UI.tblSSIO3.Data{end, var_ind(z_v)};
+        end
+        
+        % Store 'Notes'
+        D.SS_IO_3.(D.PAR.ratLab).Notes{rowInd} = D.UI.editGenNotes.String;
+        
+        % Save out data
+        SS_IO_3 = D.SS_IO_3; %#ok<NASGU>
+        save(D.DIR.SS_IO_3, 'SS_IO_3');
+        
+    end
+
+% -------------------------SAVE TASK DATA---------------------------
+    function [was_ran] = Save_Task_Data()
         
         % Save GUI window image
         export_fig(FIGH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.png'));
+        
+        % Dont update if not ICR Session
+        if D.PAR.sesType ~= 'ICR_Session'
+            
+            % Set output and bail
+            was_ran = false;
+            return;
+            
+        end
         
         % Get row ind
         if strcmp(D.SS_IO_2.(D.PAR.ratLab).Date{1}, '')
@@ -12277,31 +12406,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_2.(D.PAR.ratLab).Laps_Standard{rowInd} = sum(D.C.lap_cnt{3});
         
         % Store 'Notes'
-        D.SS_IO_2.(D.PAR.ratLab).Notes{rowInd} = D.UI.editTaskNotes.String;
-        
-        % Sore weight info
-        if  get(D.UI.toggUpdateWeight, 'Value') == 1
-            D.SS_IO_2.(D.PAR.ratLab).Weight(rowInd) = D.PAR.ratWeightNew;
-            D.SS_IO_2.(D.PAR.ratLab).Weight_Baseline(rowInd) = D.PAR.ratWeightBaseline;
-            D.SS_IO_2.(D.PAR.ratLab).Weight_Drive(rowInd) = D.PAR.driveWeight;
-            D.SS_IO_2.(D.PAR.ratLab).Weight_Cap(rowInd) = D.PAR.capWeight;
-            D.SS_IO_2.(D.PAR.ratLab).Weight_Corrected(rowInd) = D.PAR.ratWeightCorrected;
-            D.SS_IO_2.(D.PAR.ratLab).Weight_Proportion(rowInd) = D.PAR.ratWeightProportion;
-            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Weight');
-        else
-            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Weight');
-        end
-        
-        % Store feed info
-        if  get(D.UI.toggUpdateFed, 'Value') == 1
-            D.SS_IO_2.(D.PAR.ratLab).Fed_Pellets(rowInd) = D.PAR.feedPellets;
-            D.SS_IO_2.(D.PAR.ratLab).Fed_Mash(rowInd) = D.PAR.feedMash;
-            D.SS_IO_2.(D.PAR.ratLab).Fed_Ensure(rowInd) = D.PAR.feedEnsure;
-            D.SS_IO_2.(D.PAR.ratLab).Fed_STAT(rowInd) = D.PAR.feedSTAT;
-            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Food');
-        else
-            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Food');
-        end
+        D.SS_IO_2.(D.PAR.ratLab).Notes{rowInd} = D.UI.editGenNotes.String;
         
         % STORE ROTATION SESSION SPECIFIC VARS
         
@@ -12377,33 +12482,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Update 'Human'
         D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.sesHuman;
         
-        % Dont update if not ICR Session
-        if ~(D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update')
-            
-            % Update 'Session_Condition'
-            D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
-            
-            % Update 'Session_Task'
-            D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
-            
-            % Update 'Reward_Delay'
-            D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
-            
-            % Update 'Cue_Condition'
-            D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
-            
-            % Update 'Sound_Conditions'
-            D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
-            Console_Write('[Save_Weight_Data] FINISHED: Update "SS_IO_1"');
-        else
-            Console_Write('[Save_Weight_Data] SKIPPED: Update "SS_IO_1"');
-        end
+        % Update 'Session_Condition'
+        D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
+        
+        % Update 'Session_Task'
+        D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
+        
+        % Update 'Reward_Delay'
+        D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
+        
+        % Update 'Cue_Condition'
+        D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
+        
+        % Update 'Sound_Conditions'
+        D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
+        Console_Write('[Save_Weight_Data] FINISHED: Update "SS_IO_1"');
         
         % Save out data
         SS_IO_2 = D.SS_IO_2; %#ok<NASGU>
         save(D.DIR.SS_IO_2, 'SS_IO_2');
         SS_IO_1 = D.SS_IO_1; %#ok<NASGU>
         save(D.DIR.SS_IO_1, 'SS_IO_1');
+        
+        % Set output and bail
+        was_ran = true;
+        return;
         
     end
 
@@ -12424,7 +12527,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check if cheetah data should be saved
         dlg_h = dlgAWL( ...
-            dlg_h,...
             'Save Cheetah Data?', ...
             'SAVE CHEETAH', ...
             'Yes', 'No', [], 'No', ...
@@ -12591,6 +12693,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'Date'
         D.TT.ttLogNew.Date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
         
+        % Store 'Human'
+        D.TT.ttLogNew.Human = D.PAR.sesHuman;
+        
         % Store 'Notes'
         D.TT.ttLogNew.Notes{:} = D.UI.editTTNotes.String;
         
@@ -12600,9 +12705,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Save out data
         TT_IO = D.TT_IO; %#ok<NASGU>
         save(D.DIR.TT_IO, 'TT_IO');
-        
-        % Set flag
-        D.F.tt_save_done = true;
         
         % Set output and bail
         was_ran = true;
@@ -13491,7 +13593,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         weight_prcnt = round(D.PAR.ratWeightProportion*100);
         
         % Print new values
-        D.UI.txtBaselineWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightBaseline); 
+        D.UI.txtBaselineWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightBaseline);
         D.UI.txtCorrectedWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightCorrected);
         D.UI.txtLastWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightLast);
         D.UI.txtPercentageWeight(2).String = sprintf('%0.0f%%', weight_prcnt);

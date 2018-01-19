@@ -1896,8 +1896,8 @@ void REWARD::StartRew()
 	}
 
 	// Turn on reward LED
-	analogWrite(pin.RewLED_R, round(rewLEDduty * 1));
-	analogWrite(pin.RewLED_C, round(rewLEDduty * 0.5));
+	analogWrite(pin.RewLED_R, rewLEDduty);
+	analogWrite(pin.RewLED_C, rewLEDduty);
 
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
