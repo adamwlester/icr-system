@@ -449,7 +449,7 @@ namespace ICR_Run
             csLog.Print("[Setup] RUNNING: Run Cheetah.exe...");
 
             // Check if this should be skipped
-            if (!fc.doSessionICR && !fc.doSessionTurnTT)
+            if (!fc.doSessionICR || fc.doSessionTurnTT)
             {
                 csLog.Print("[Setup] SKIPPED: Run Cheetah.exe");
             }
@@ -904,7 +904,7 @@ namespace ICR_Run
 
             // SEND ROBOT LOG REQUEST
 
-            if (!fc.doSessionICR)
+            if (!fc.doSessionICR || !sp_Xbee.IsOpen)
             {
                 csLog.Print("[Exit] SKIPPED: Request Robot Log");
             }
@@ -985,7 +985,7 @@ namespace ICR_Run
 
             // WAIT FOR ROBOT LOG SAVE TO COMPLETE
 
-            if (!fc.doSessionICR)
+            if (!fc.doSessionICR || !sp_Xbee.IsOpen)
             {
                 csLog.Print("[Exit] SKIPPED: WAIT FOR Robot Log Save");
             }
@@ -1011,7 +1011,7 @@ namespace ICR_Run
 
             // SEND/WAIT FOR ROBOT QUIT COMMAND
 
-            if (!fc.doSessionICR)
+            if (!fc.doSessionICR || !sp_Xbee.IsOpen)
             {
                 csLog.Print("[Exit] SKIPPED: Confirm Robot Quit");
             }
@@ -1033,7 +1033,7 @@ namespace ICR_Run
             fc.isArdComActive = false;
 
             // SAVE CHEETAH DUE LOG FILE
-            if (!fc.doSessionICR)
+            if (!fc.doSessionICR || !sp_Xbee.IsOpen)
             {
                 csLog.Print("[Exit] SKIPPED: Save CheetahDue Log");
             }
@@ -1152,7 +1152,8 @@ namespace ICR_Run
             if (db.is_debugRun || fc.DoMatAbort)
             {
                 // Show Matlab window
-                com_Matlab.Visible = 1;
+                if (!fc.IsMAThanging)
+                    com_Matlab.Visible = 1;
 
                 // Pause to let printing finish
                 Thread.Sleep(1000);

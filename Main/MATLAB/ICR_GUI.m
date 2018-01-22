@@ -703,6 +703,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.AC.IP));
             end
             
+            % Enable setup objects
+            Object_Group_State('Setup_Objects', 'Enable')
+            
         else
             Console_Write(sprintf('[Setup] SKIPPED: Connect to AC Computer IP=%s', ...
                 D.AC.IP));
@@ -1252,6 +1255,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if D.F.do_save
                         Console_Write('[Run:MainLoop] SAVE INITIATED');
                         
+                        % Save health and general data
+                        Console_Write('[Run:MainLoop] RUNNING: "Save_General_Data()"...');
+                        Save_General_Data();
+                        Console_Write('[Run:MainLoop] FINISHED: "Save_General_Data()"');
+                        
                         % Save task data
                         Console_Write('[Run:MainLoop] RUNNING: "Save_Task_Data()"...');
                         was_ran = Save_Task_Data();
@@ -1260,11 +1268,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         else
                             Console_Write('[Run:MainLoop] SKIPPED: "Save_Task_Data()"');
                         end
-                        
-                        % Save health data
-                        Console_Write('[Run:MainLoop] RUNNING: "Save_General_Data()"...');
-                        Save_General_Data();
-                        Console_Write('[Run:MainLoop] FINISHED: "Save_General_Data()"');
                         
                         % Save Cheetah data
                         Console_Write('[Run:MainLoop] RUNNING: "Save_TT_Track_Data()"...');
@@ -4771,10 +4774,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Format SS_IO_3 table
         D.UI.tblSSIO3 = FormatTable(D.SS_IO_3.(D.PAR.ratLab), D.UI.tbleSSIO3tab);
         
-        % Add new row to SS_IO_3 table
-        if size(D.UI.tblSSIO3.Data,1) > 1
-            D.UI.tblSSIO3.Data(end+1, :) = D.UI.tblSSIO3.Data(end,:);
+        % Add new row to top of SS_IO_3 table
+        if ~isempty(D.UI.tblSSIO3.RowName)
+            D.UI.tblSSIO3.Data = [D.UI.tblSSIO3.Data(1,:); D.UI.tblSSIO3.Data];
         end
+        D.UI.tblSSIO3.RowName = [{datestr(startTime, 'yyyy-mm-dd')}; D.UI.tblSSIO3.RowName];
+        
+        % Clear non health feilds
+        var_ind = ~contains(D.UI.tblSSIO3.ColumnName,'Health');
+        D.UI.tblSSIO3.Data(1, var_ind) = {[]};
         
         % Set tab to health
         D.UI.tblTabSubGrp.SelectedTab = D.UI.tbleSSIO3tab;
@@ -7659,10 +7667,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.axZoneH, 'Visible', 'on');
         
         % Bulldoze default
-        val = find(ismember(D.UI.popBulldoze.String, [num2str(D.PAR.bullDel), ' sec']));
-        Safe_Set(D.UI.popBulldoze, 'Value', val);
-        Safe_Set(D.UI.toggBulldoze, 'Value', 1);
-        PopBulldoze();
+        if D.PAR.sesCond ~= 'Manual_Training'
+            val = find(ismember(D.UI.popBulldoze.String, [num2str(D.PAR.bullDel), ' sec']));
+            Safe_Set(D.UI.popBulldoze, 'Value', val);
+            Safe_Set(D.UI.toggBulldoze, 'Value', 1);
+            PopBulldoze();
+        end
         
         % Cue setup
         if D.PAR.sesCond ~= 'Manual_Training' && ...
@@ -13123,9 +13133,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Safe_Set(D.UI.popRat, 'String', [{''}; D.PAR.listRat])
         end
         
-        % Enable setup objects
-        Object_Group_State('Setup_Objects', 'Enable')
-        
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
         
@@ -16526,7 +16533,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Button_State(D.UI.btnClrVT, 'Enable');
                     
                     % Enable Track Task objects
-                    if D.PAR.sesTask == 'Track'
+                    if D.PAR.sesTask == 'Track' && ...
+                            D.PAR.sesCond ~= 'Manual_Training'
                         
                         % Enable bulldoze pop menue
                         Safe_Set(D.UI.popBulldoze, 'Enable', 'on')
