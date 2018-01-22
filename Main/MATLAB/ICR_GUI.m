@@ -13714,12 +13714,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.rec = ~ D.F.rec;
         D.T.rec_tim = Sec_DT(now);
         
-        % Enable recording done button
-        if strcmp(get(D.UI.toggTaskDone, 'Enable'), 'off') && ...
-                ~D.F.task_done
-            Button_State(D.UI.toggTaskDone, 'Enable');
-        end
-        
         % Log/print
         Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggRec', get(D.UI.toggRec,'Value')));
         
@@ -16516,8 +16510,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Enable Run panel
                     Panel_State(D.UI.panRun, 'Enable');
                     
-                    % Enable Halt robot
-                    Button_State(D.UI.toggHaltRob, 'Enable');
+                    % Enable Cheetah buttons
+                    Button_State(D.UI.toggAcq, 'Enable');
+                    Button_State(D.UI.toggRec, 'Enable');
                     
                     % Enable Reward button
                     Safe_Set(D.UI.popReward, ...
@@ -16525,9 +16520,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         'BackgroundColor', D.UI.enabledCol);
                     Button_State(D.UI.btnReward, 'Enable');
                     
-                    % Enable Cheetah buttons
-                    Button_State(D.UI.toggAcq, 'Enable');
-                    Button_State(D.UI.toggRec, 'Enable');
+                    % Enable Halt robot
+                    if D.PAR.sesCond ~= 'Manual_Training'
+                        Button_State(D.UI.toggHaltRob, 'Enable');
+                    end
+                    
+                    % Enable task done button
+                    Button_State(D.UI.toggTaskDone, 'Enable');
                     
                     % Clear VT
                     Button_State(D.UI.btnClrVT, 'Enable');
