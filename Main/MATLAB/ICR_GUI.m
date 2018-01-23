@@ -1,7 +1,7 @@
-function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, doProfile, isMatSolo)
+function[status] = ICR_GUI(SYSTEST, BREAKDEBUG, DOAUTOLOAD, DOPROFILE, ISMATSOLO)
 % INPUT:
 %
-%	sysTest = [0:8, 0:8]
+%	SYSTEST = [0:8, 0:8]
 %    	0: No test
 %    	1: Simulated rat test
 %     	2: PID calibration
@@ -12,20 +12,20 @@ function[status] = ICR_GUI(sysTest, breakDebug, doAutoloadUI, doProfile, isMatSo
 %   	7: Robot hardware test
 %   	8: Cube battery test
 %
-%   breakDebug = [0:n_lines]
+%   BREAKDEBUG = [0:n_lines]
 %       [0]: Dont break on errors
 %     	[1]: Break on errors
 %     	[>1]: Break on line
 %
-%   doAutoloadUI = [true,false]
+%   DOAUTOLOAD = [true,false]
 %     	true: Load rat data based on ICR_GUI hardcoded values
 %       false: Start normally
 %
-%   isMatSolo = [true,false]
+%   ISMATSOLO = [true,false]
 %     	true: Matlab running alone
 %       false: Matlab running with other programs
 %
-%   doProfile = [true,false]
+%   DOPROFILE = [true,false]
 %     	true: Run with profiler
 %       false: Run without profiler
 
@@ -72,19 +72,19 @@ STATUS = 'failed';
 
 % Set inputs
 if nargin < 5
-    isMatSolo = false;
+    ISMATSOLO = false;
 end
 if nargin < 4
-    doProfile = false;
+    DOPROFILE = false;
 end
 if nargin < 3
-    doAutoloadUI = false;
+    DOAUTOLOAD = false;
 end
 if nargin < 2
-    breakDebug = 1;
+    BREAKDEBUG = 1;
 end
 if nargin < 1
-    sysTest = 0;
+    SYSTEST = 0;
 end
 
 %---------------------SET DEBUG/TEST PARAMETERS----------------------------
@@ -175,8 +175,8 @@ D.DB.CVCC.prcSteps = 95:-5:5; %95:-5:5;
 %----------------SETUP DEBUGGING AND ERROR HANDELING-----------------------
 
 % PROFILING CODE
-if exist('doProfile', 'var')
-    if doProfile
+if exist('DOPROFILE', 'var')
+    if DOPROFILE
         profile on
     end
 end
@@ -187,17 +187,17 @@ end
 lasterror('reset'); %#ok<LERR>
 
 % Setup error handeling
-if breakDebug == 0
+if BREAKDEBUG == 0
     % Catch and print error in console
     dbclear if caught error;
-elseif breakDebug == 1
+elseif BREAKDEBUG == 1
     % Stop on error
     dbstop if error;
 else
     % Stop on error
     dbstop if error;
     % Stop on line
-    eval(sprintf('dbstop at %d in ICR_GUI',breakDebug));
+    eval(sprintf('dbstop at %d in ICR_GUI',BREAKDEBUG));
 end
 
 % DEBUG VARS AND FLAGS
@@ -209,65 +209,70 @@ D.DB.consoleCount = 0;
 D.DB.logCount = 0;
 
 % Set test flags
-if length(sysTest)==1
-    sysTest(2) = 0;
+if length(SYSTEST)==1
+    SYSTEST(2) = 0;
 end
 
 % Simulated rat test
-if any(sysTest == 1)
+if any(SYSTEST == 1)
     D.DB.t1_doSimRatTest = true;
 end
 
 % PID calibration
-if any(sysTest == 2)
+if any(SYSTEST == 2)
     D.DB.t2_doPidCalibrationTest = true;
 end
 
 % VT calibration
-if any(sysTest == 3)
+if any(SYSTEST == 3)
     D.DB.t3_doVTCalibrationTest = true;
 end
 
 % Halt error test
-if any(sysTest == 4)
+if any(SYSTEST == 4)
     D.DB.t4_doHaltErrorTest = true;
 end
 
 % Wall image IR sync timing
-if any(sysTest == 5)
+if any(SYSTEST == 5)
     D.DB.t5_doWallIRTimingTest = true;
 end
 
 % IR sync timing
-if any(sysTest == 6)
+if any(SYSTEST == 6)
     D.DB.t6_doSyncIRTimingTest = true;
 end
 
 % Robot hardware test
-if any(sysTest == 7)
+if any(SYSTEST == 7)
     D.DB.t7_doRobotHardwareTest = true;
 end
 
 % Cube battery test
-if any(sysTest == 8)
+if any(SYSTEST == 8)
     D.DB.t8_doCubeBatteryTest = true;
 end
 
 % No test
-if all(sysTest == 0)
-    D.DB.isTestRun = doAutoloadUI;
+if all(SYSTEST == 0)
+    D.DB.isTestRun = DOAUTOLOAD;
 end
 
 % Log print debug conditions
-if any(sysTest == 0) > 0 || breakDebug > 0 || doAutoloadUI || doProfile || isMatSolo
+if ...
+        any(SYSTEST == 0) > 0 || ...
+        BREAKDEBUG > 0 || ...
+        DOAUTOLOAD || ...
+        DOPROFILE || ...
+        ISMATSOLO
     Console_Write('RUN MODE = DEBUG');
 else
     Console_Write('RUN MODE = DEBUG');
 end
 
 % Log print input arguments
-Console_Write(sprintf('INPUT ARGUMENTS (%d): sysTest=|%d|%d| breakDebug=%d doAutoloadUI=%d doProfile=%d isMatSolo=%d', ...
-    nargin, sysTest, breakDebug, doAutoloadUI, doProfile, isMatSolo));
+Console_Write(sprintf('INPUT ARGUMENTS (%d): SYSTEST=|%d|%d| BREAKDEBUG=%d DOAUTOLOAD=%d DOPROFILE=%d ISMATSOLO=%d', ...
+    nargin, SYSTEST, BREAKDEBUG, DOAUTOLOAD, DOPROFILE, ISMATSOLO));
 
 %---------------------Important variable formats---------------------------
 %...........................D.F.sound....................................
@@ -278,7 +283,7 @@ Console_Write(sprintf('INPUT ARGUMENTS (%d): sysTest=|%d|%d| breakDebug=%d doAut
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
 %   val 3 = sound state [0, 1], [no sound, sound]
 
-if breakDebug > 0
+if BREAKDEBUG > 0
     
     % ------------------------- RUN IN DEBUG MODE -------------------------
     
@@ -302,7 +307,14 @@ if breakDebug > 0
     
     % RUN MAIN EXIT
     FUNNOW = 'Exit';
-    Exit();
+    if ~ISCRASH
+        Exit();
+    else
+        try
+            Exit();
+        catch ME
+        end
+    end
     FUNNOW = 'None';
     
     % SET STATUS
@@ -396,8 +408,8 @@ elseif strcmp(STATUS, 'finished')
 end
 
 % STOP PROFILER
-if exist('doProfile', 'var')
-    if doProfile
+if exist('DOPROFILE', 'var')
+    if DOPROFILE
         profile viewer
     end
 end
@@ -559,7 +571,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bypass some things if running solo
-        if isMatSolo
+        if ISMATSOLO
             c2m.('K').dat1 = 3;
             c2m.('Y').dat1 = 1;
             c2m.('C').dat1 = 1;
@@ -703,13 +715,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.AC.IP));
             end
             
-            % Enable setup objects
-            Object_Group_State('Setup_Objects', 'Enable')
-            
         else
             Console_Write(sprintf('[Setup] SKIPPED: Connect to AC Computer IP=%s', ...
                 D.AC.IP));
         end
+        
+        % Enable setup objects
+        Object_Group_State('Setup_Objects', 'Enable')
         
         % Send to CS
         Send_M2C('A');
@@ -718,7 +730,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Wait for sync time
         Console_Write('[Setup] RUNNING: Wait for Handshake...');
-        if ~isMatSolo
+        if ~ISMATSOLO
             
             % Tell CS ready for handshake
             Send_M2C('i');
@@ -1141,7 +1153,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             %% ------------CHECK IF MOVE READY--------------
                             
                             % Wait till at least 1000 VT samples collected
-                            if ~isMatSolo && ...
+                            if ~ISMATSOLO && ...
                                     D.P.Rob.cnt_vtRec < 100
                                 continue;
                             end
@@ -1327,11 +1339,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 % -----------------------------MAIN EXIT-----------------------------------
     function[] = Exit()
-        
-        % Bail if crashed
-        if ISCRASH
-            return;
-        end
         
         % Start of exit
         Console_Write('[Exit] BEGIN Exit()');
@@ -4102,7 +4109,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.cheetah_open = ~any(strfind(result, 'INFO'));
         
         % Only run if Matlab solo not running Table_Update solo
-        if isMatSolo && ~D.F.cheetah_open && D.PAR.sesType ~= 'Table_Update'
+        if ISMATSOLO && ~D.F.cheetah_open && D.PAR.sesType ~= 'Table_Update'
             
             % Log/print
             Console_Write('[NLX_Setup] RUNNING: Open Cheetah.exe...');
@@ -4424,7 +4431,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblTabSubGrp = ...
             uitabgroup(D.UI.tabTBL, ...
             'Units', 'Normalized', ...
-            'SelectionChangedFcn', {@TabGrpChange}, ...
             'UserData', 'TT TRACK', ...
             'Position',D.UI.tab_grp_pos);
         
@@ -8231,7 +8237,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% AUTOLOAD RAT DATA
         
-        if doAutoloadUI
+        if DOAUTOLOAD
             
             % Set and run load pop
             Safe_Set(D.UI.popType, 'Value', ...
@@ -10897,7 +10903,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Visible', 'on');
                 
                 % Send test info to robot once
-                Send_M2C('T', sysTest(1), 0, 0);
+                Send_M2C('T', SYSTEST(1), 0, 0);
                 
                 % Close rat stream
                 D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
@@ -11175,7 +11181,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     c2m.('K').dat1 == 3
                 
                 % Start pid test
-                Send_M2C('T', sysTest(1), 0, 0);
+                Send_M2C('T', SYSTEST(1), 0, 0);
                 
                 % Set flag
                 D.DB.isTestStarted = true;
@@ -11208,7 +11214,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.P.Rat.vtNRecs = 1;
                 
                 % Start robot running
-                Send_M2C('T', sysTest(1), 1, D.DB.CALVT.RobVel);
+                Send_M2C('T', SYSTEST(1), 1, D.DB.CALVT.RobVel);
                 
                 % Set flag
                 D.DB.isTestStarted = true;
@@ -11268,7 +11274,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Sec_DT(now) >= D.DB.CALVT.RunEnd
                 
                 % SEND END COMMAND
-                Send_M2C('T', sysTest(1), 2, 0);
+                Send_M2C('T', SYSTEST(1), 2, 0);
                 
                 % COMPUTE ARENA VALUES
                 
@@ -11462,7 +11468,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Tell CS to resume run
-                Send_M2C('T', sysTest(1), 1, D.DB.HALT.NowVel);
+                Send_M2C('T', SYSTEST(1), 1, D.DB.HALT.NowVel);
                 
                 % Set flag
                 D.DB.HALT.IsHalted = false;
@@ -11472,7 +11478,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.P.Rob.vel < 5
                 
                 % Tell CS to resume run
-                Send_M2C('T', sysTest(1), 1, D.DB.HALT.NowVel);
+                Send_M2C('T', SYSTEST(1), 1, D.DB.HALT.NowVel);
                 
             end
             
@@ -11485,7 +11491,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.HALT.Cnt = D.DB.HALT.Cnt+1;
                 
                 % Tell CS to Halt Robot
-                Send_M2C('T', sysTest(1), 1, 0);
+                Send_M2C('T', SYSTEST(1), 1, 0);
                 
                 % Store robots current pos and time
                 D.DB.HALT.SendPos = D.P.Rob.radLast;
@@ -11537,7 +11543,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Send setup command
-                Send_M2C('T', sysTest(1), 0, 0);
+                Send_M2C('T', SYSTEST(1), 0, 0);
                 
                 % Set time
                 D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTImg;
@@ -11865,7 +11871,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.WALIR.isImgTestDone
                 
                 % Send end command
-                Send_M2C('T', sysTest(1), 2, 0);
+                Send_M2C('T', SYSTEST(1), 2, 0);
                 
                 % Unset flag
                 D.DB.t5_doWallIRTimingTest = false;
@@ -11911,7 +11917,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Send setup command
-                Send_M2C('T', sysTest(1), 0, 0);
+                Send_M2C('T', SYSTEST(1), 0, 0);
                 
                 % Bail
                 return;
@@ -11931,7 +11937,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if D.DB.SYNCIR.cntEvent(1) <= D.DB.SYNCIR.pulseTrials
                         
                         % Send command
-                        Send_M2C('T', sysTest(1), 1, 0);
+                        Send_M2C('T', SYSTEST(1), 1, 0);
                         
                         % Get next pulse time
                         D.DB.SYNCIR.t_next = Sec_DT(now) + D.DB.SYNCIR.DTPulse/1000;
@@ -12065,42 +12071,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % TEST REWARD RELATED PINS
             
             Send_M2NLX('-PostEvent TEST:_Reward_Tone:_DUE_PIN 255 0');
-            Send_M2C('T', sysTest(1), 1, 1);
+            Send_M2C('T', SYSTEST(1), 1, 1);
             pause(dt_send)
             Send_M2NLX('-PostEvent TEST:_White_Noise:_DUE_PIN 254 0');
-            Send_M2C('T', sysTest(1), 1, 2);
+            Send_M2C('T', SYSTEST(1), 1, 2);
             pause(dt_send)
             Send_M2NLX('-PostEvent TEST:_Reward_Event_Only:_PORT_WORD 253 0');
-            Send_M2C('T', sysTest(1), 1, 3);
+            Send_M2C('T', SYSTEST(1), 1, 3);
             pause(dt_send)
             Send_M2NLX('-PostEvent TEST:_Reward_With_Sound:_PORT_WORD 252 0');
-            Send_M2C('T', sysTest(1), 1, 4);
+            Send_M2C('T', SYSTEST(1), 1, 4);
             
             % TEST IR PINS
             Send_M2NLX('-PostEvent TEST:_IR:_DUE_PIN 251 0');
-            Send_M2C('T', sysTest(1), 1, 5);
+            Send_M2C('T', SYSTEST(1), 1, 5);
             pause(dt_send)
             Send_M2NLX('-PostEvent TEST:_IR:_PORT_WORD 250 0');
-            Send_M2C('T', sysTest(1), 1, 6);
+            Send_M2C('T', SYSTEST(1), 1, 6);
             pause(dt_send)
             
             % TEST PID PINS
             Send_M2NLX('-PostEvent TEST:_PID:_DUE_PIN 249 0');
-            Send_M2C('T', sysTest(1), 1, 7);
+            Send_M2C('T', SYSTEST(1), 1, 7);
             pause(dt_send)
             
             % TEST BULL PINS
             Send_M2NLX('-PostEvent TEST:_BULL:_DUE_PIN 249 0');
-            Send_M2C('T', sysTest(1), 1, 8);
+            Send_M2C('T', SYSTEST(1), 1, 8);
             pause(dt_send)
             
             % TEST PT PINS
             Send_M2NLX('-PostEvent TEST:_PT:_DUE_PIN:_N_W_S_E 249 0');
-            Send_M2C('T', sysTest(1), 1, 9);
+            Send_M2C('T', SYSTEST(1), 1, 9);
             pause(dt_send)
             
             % Send test end
-            Send_M2C('T', sysTest(1), 2);
+            Send_M2C('T', SYSTEST(1), 2);
             
             % Unset flag
             D.DB.t7_doRobotHardwareTest = false;
@@ -12837,12 +12843,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             else
                 Console_Write('**WARNING** [Disconnect_AC] \"AC\" Not a Field of \"D\"');
             end
-            try fclose(TCPIP);
-            catch; end
-            try delete(TCPIP);
-            catch; end
-            try clear TCPIP;
-            catch; end
             
         end
     end
@@ -12888,7 +12888,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pause(1);
         
         % Check if called after error
-        e = lasterror; %#ok<LERR>
+        e = lasterror;
         ISCRASH = ~isempty(e.message);
         
         % Clear and close
@@ -14485,7 +14485,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.do_quit = true;
         
         % Shut down if matlab run alone
-        if isMatSolo
+        if ISMATSOLO
             SetExit()
         end
         
@@ -15965,13 +15965,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
-                        'error', ...
-                        false);
+                        'error');
                     while ~DOEXIT; Update_UI(10); pause(0.001);
                         if ~DOEXIT; choice = dlg_h.UserData;
                             if ~strcmp(choice, ''); break; end
                         end
                     end
+                    
+                    % Write to console
+                    Console_Write(err_str, now, true);
                     
                 end
                 
@@ -15982,18 +15984,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
                     
                     % Display message
-                    dlg_h = dlgAWL(...
+                    dlgAWL(...
                         err_str, ...
                         '!!ERROR!!', ...
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
-                        'error', ...
-                        false);
-                    while ~DOEXIT; Update_UI(10); pause(0.001);
-                        if ~DOEXIT; choice = dlg_h.UserData;
-                            if ~strcmp(choice, ''); break; end
-                        end
-                    end
+                        'error');
                     
                     % Set exit flag
                     SetExit()
@@ -16230,7 +16226,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% -----------------------BUTTON STATUS STOP TIMER--------------------------
+% -------------------CHANGE FEATURES WITH TAB CHANGE-----------------------
     function TabGrpChange(hObject, ~, ~)
         
         % Have to explicitely catch errors
@@ -17804,7 +17800,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Wait a max of 1 sec for last message to clear
-        if ~isMatSolo
+        if ~ISMATSOLO
             
             % Get current time
             t_start = Sec_DT(now);

@@ -4696,7 +4696,14 @@ void AD_Reset(float max_speed, float max_acc, float max_dec)
 	delayMicroseconds(100);
 
 	// Run motor at last speed
-	RunMotor(runDirNow, runSpeedNow, "Override");
+	if (runSpeedNow > 0) {
+		RunMotor(runDirNow, runSpeedNow, "Override");
+	}
+	else {
+		// Make sure motor is in correct impedance state
+		HardStop("AD_Reset");
+	}
+
 }
 
 // CHECK AUTODRIVER STATUS
