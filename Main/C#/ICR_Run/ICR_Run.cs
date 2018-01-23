@@ -1165,7 +1165,7 @@ namespace ICR_Run
 
                 // Print messeage with error
                 Console.WriteLine("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                if (fc.isAbortRun || fc.isErrorRun)
+                if (fc.isErrorRun)
                 {
                     Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
@@ -1174,6 +1174,10 @@ namespace ICR_Run
                     {
                         Console.WriteLine(csLog.err_list[i]);
                     }
+                }
+                else if (fc.isAbortRun)
+                {
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ABORT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                 }
                 else
                 {

@@ -12742,9 +12742,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Console_Write('[Disconnect_NLX] RUNNING: Disconnect from NLX...');
                     
                     % Stop recording and aquisition
-                    Send_M2NLX('-StopRecording');
-                    Send_M2NLX('-StopAcquisition');
-                    pause(0.1);
+                    if ISMATSOLO
+                        Send_M2NLX('-StopRecording');
+                        Send_M2NLX('-StopAcquisition');
+                        pause(0.1);
+                    end
                     
                     % Close VT stream
                     if isfield(D.NLX, 'vt_rat_ent')
