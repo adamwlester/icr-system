@@ -6374,8 +6374,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if ~any(ismember(das_types, 'TTScAcqEnt'))
                 
                 % Load implant tracking config
-                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Tracking.cfg');
-                Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Tracking.cfg"');
+                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Task_Tracking.cfg');
+                Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Task_Tracking.cfg"');
                 
                 % Load acquisition entity config
                 Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
@@ -7682,7 +7682,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Cue setup
         if D.PAR.sesCond ~= 'Manual_Training' && ...
-                D.PAR.sesCue == 'Half'
+                (D.PAR.sesCue == 'Half' || D.PAR.sesCue == 'All')
             
             % Set cue button on
             Safe_Set(D.UI.toggDoCue, 'Value', 1);
@@ -9821,6 +9821,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Send NLX end event
         Send_M2NLX(D.NLX.sleep_end_evt{sleep_phase});
         
+        % Stop recording and aquisition
+        Safe_Set(D.UI.toggAcq, 'Value', 0)
+        ToggAcq(D.UI.toggAcq);
+        Safe_Set(D.UI.toggRec,'Value', 0);
+        ToggRec(D.UI.toggRec);
+        
+        % Load sleep tracking config
+        Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Task_Tracking.cfg');
+        Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Task_Tracking.cfg"');
+        
+        % Start recording and aquisition
+        Safe_Set(D.UI.toggAcq, 'Value', 1)
+        ToggAcq(D.UI.toggAcq);
+        Safe_Set(D.UI.toggRec,'Value', 1);
+        ToggRec(D.UI.toggRec);
+        
         % Store end time
         D.T.sleep_end(sleep_phase) = Sec_DT(now);
         
@@ -10002,9 +10018,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Get new reward duration
             D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone_now);
             
-            % Store reward number
-            D.PAR.cued_rew = [D.PAR.cued_rew, sum([D.C.rew_cnt{:}]) + 1];
-            
         end
         
         % Reset patches
@@ -10112,6 +10125,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             else
                 % Add to standard count
                 D.C.rew_cnt{3}(end) = D.C.rew_cnt{3}(end) + 1;
+            end
+            
+            % Store cued reward number
+            if get(D.UI.toggDoCue, 'Value') == 1
+                D.PAR.cued_rew = [D.PAR.cued_rew, sum([D.C.rew_cnt{:}])];
             end
             
             % Store reward zone with range [-20,20]
@@ -10227,7 +10245,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Enable cue buttons
             Cue_Button_State('Enable');
             
-            % Check if next rew is cued for 'Half' cue
+            % Check if next rew is cued
             if ...
                     get(D.UI.toggForceCue, 'Value') == 0 && ...
                     get(D.UI.toggBlockCue, 'Value') == 0 && ...
@@ -13858,6 +13876,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Send NLX start event
         Send_M2NLX(D.NLX.sleep_start_evt{sleep_phase});
+        
+        % Stop recording and aquisition
+        Safe_Set(D.UI.toggAcq, 'Value', 0)
+        ToggAcq(D.UI.toggAcq);
+        Safe_Set(D.UI.toggRec,'Value', 0);
+        ToggRec(D.UI.toggRec);
+        
+        % Load sleep tracking config
+        Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
+        Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+        
+        % Start recording and aquisition
+        Safe_Set(D.UI.toggAcq, 'Value', 1)
+        ToggAcq(D.UI.toggAcq);
+        Safe_Set(D.UI.toggRec,'Value', 1);
+        ToggRec(D.UI.toggRec);
         
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end

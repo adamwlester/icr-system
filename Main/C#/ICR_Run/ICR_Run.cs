@@ -839,12 +839,33 @@ namespace ICR_Run
 
             if (fc.isRatInArena && !fc.isTaskDone)
             {
-                csLog.Print("[Run] RUNNING: WAIT FOR...: Confirmation Task Finished...");
+                csLog.Print("[Run] RUNNING: WAIT FOR...: Task Finished...");
                 pass = WaitForMCOM(id: 'O', chk_rcv: true, timeout: !fc.isAbortRun ? 30000 : 10000);
                 if (pass)
                 {
                     // Wait for all the other crap to be relayed from Matlab
                     Thread.Sleep(1000);
+                    csLog.Print("[Run] SUCCEEDED: WAIT FOR: Task Finished");
+                }
+                else
+                {
+                    fc.LogError("!!ERROR!! [Run] ABORTED: WAIT FOR: Task Finished");
+                    run_pass = false;
+                }
+            }
+            else
+                csLog.Print("**WARNING** [Run] SKIPPED: WAIT FOR: Task Finished");
+
+            // WAIT FOR TASK DONE ROBOT CONFIRMATION
+
+            // Wait for task done recieve confirmation
+            if (fc.isTaskDone)
+            {
+                csLog.Print("[Run] RUNNING: WAIT FOR...: Confirmation Task Finished Received...");
+                pass = WaitForSerial(id: 'O', chk_send: true, chk_conf: true, timeout: 5000);
+                if (pass)
+                {
+                    // Wait for all the other crap to be relayed from Matlab
                     csLog.Print("[Run] SUCCEEDED: WAIT FOR: Confirmation Task Finished");
                 }
                 else
@@ -853,6 +874,8 @@ namespace ICR_Run
                     run_pass = false;
                 }
             }
+            else
+                csLog.Print("**WARNING** [Run] SKIPPED: WAIT FOR: Confirmation Task Finished");
 
             // SEND/WAIT FOR FINAL MOVE TO COMPLETE
 
@@ -3235,7 +3258,7 @@ namespace ICR_Run
         // Log error
         public void LogError(string msg)
         {
-            _csLog.Print(msg, is_error:true);
+            _csLog.Print(msg, is_error: true);
             isErrorRun = true;
         }
 
