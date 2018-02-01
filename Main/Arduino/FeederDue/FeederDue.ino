@@ -318,7 +318,7 @@ public:
 	void ExtendFeedArm();
 	void RetractFeedArm();
 	void CheckFeedArm();
-	void RewardReset();
+	void RewardReset(bool was_rewarded = false);
 };
 
 
@@ -1980,7 +1980,7 @@ bool REWARD::EndRew()
 	}
 
 	// Reset flags etc
-	RewardReset();
+	RewardReset(true);
 
 	// Return end reward status
 	return true;
@@ -2462,7 +2462,7 @@ void REWARD::CheckFeedArm()
 	}
 }
 
-void REWARD::RewardReset()
+void REWARD::RewardReset(bool was_rewarded)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -2478,7 +2478,8 @@ void REWARD::RewardReset()
 	DebugFlow(__FUNCTION__, __LINE__, "Reseting Reward");
 
 	// Log zone info
-	if (strcmp(modeReward, "Free") == 0 || strcmp(modeReward, "Cue") == 0)
+	if (was_rewarded &&
+		(strcmp(modeReward, "Free") == 0 || strcmp(modeReward, "Cue") == 0))
 	{
 		sprintf(str1, "ZONE OCC:");
 		sprintf(str2, "ZONE CNT:");
@@ -9067,7 +9068,7 @@ void loop() {
 		cmd.rewDelay = (byte)c2r.dat[2];
 
 
-		// Bail if already rewarding
+		// Bail if in the process of rewarding
 		if (Reward.isRewarding) {
 			DebugError(__FUNCTION__, __LINE__, "ABORTED: \'R\' Reward Triggered When Already Running Reward");
 			return;
@@ -9078,6 +9079,17 @@ void loop() {
 
 			// Log/print
 			DebugFlow(__FUNCTION__, __LINE__, "DO NOW REWARD");
+
+			// Reset any ongoing reward
+			if (fc.doRew) {
+
+				// Log/print aborting last reward
+				DebugError(__FUNCTION__, __LINE__, "ABORTING PREVIOUS REWARD");
+
+				// Reset flags
+				Reward.RewardReset();
+				fc.doRew = false;
+			}
 
 			// Set mode
 			Reward.SetRewMode("Now", cmd.rewZoneInd);
