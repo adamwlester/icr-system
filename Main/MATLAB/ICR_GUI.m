@@ -6334,9 +6334,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
         D.DIR.nlxRecRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
         
-        % Save to global for CS
-        m2c_dir = fullfile(D.DIR.nlxRecRat, D.DIR.recFi);
-        
         % Make directory if none exists
         if exist(D.DIR.nlxRecRat, 'dir') == 0 && ...
                 exist(D.DIR.nlxSaveTop, 'dir') == 1
@@ -12694,11 +12691,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pause(3);
         
         % Log/print start
-        Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Cheetah File...: File=%s Size=%0.2fGB', ...
+        Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Cheetah File...: file=%s size=%0.2fGB', ...
             D.DIR.recFi, fiGigs));
         
+        % Save to global for CS
+        m2c_dir = fullfile(D.DIR.nlxRecRat, D.DIR.recFi);
+        Console_Write(sprintf('[Save_Cheetah_Data] SET RECORDING DIR TO "%s"', ...
+            m2c_dir));
+        
         % Copy file
-        copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi),fullfile(D.DIR.nlxRecRat, D.DIR.recFi))
+        copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi), m2c_dir)
         
         % Log/print end
         Console_Write(sprintf('[Save_Cheetah_Data] FINISHED: Copy Cheetah File: file=%s size=%0.2fGB', ...

@@ -213,6 +213,7 @@ public:
 	double targDist = 0;
 	char moveDir = 'f';
 	double baseSpeed = 0;
+	double lastSpeed = 0;
 	bool isTargSet = false;
 	bool isMoveStarted = false;
 	bool isTargReached = false;
@@ -1758,7 +1759,7 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 
 		// Check if EKF not updating
 		int dt_ekf = millis() - kal.t_last;
-		if (dt_ekf >= moveTimeout/2) {
+		if (dt_ekf >= moveTimeout / 2) {
 
 			// Log/print error
 			sprintf(str, "MOVE [%s]: ABORT: EKF Hanging: dt=%dms", moveCntStr, dt_ekf);
@@ -1778,6 +1779,12 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 
 	// Compute remaining distance
 	distLeft = targDist - abs(now_pos - posRelStart);
+
+	// Check if motor stopped
+	if (distLeft > 1 && runSpeedNow == 0) {
+		// Set to last speed
+		new_speed = lastSpeed;
+	}
 
 	// Check if rob is dec_pos cm from target
 	if (distLeft <= dist_decel) {
@@ -1852,6 +1859,7 @@ void MOVETO::MoveToReset()
 	doAbortMove = false;
 	t_tryTargSetTill = 0;
 	t_tryMoveTill = 0;
+	lastSpeed = 0;
 }
 
 #pragma endregion 
@@ -3710,7 +3718,7 @@ int LOGGER::GetLogQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < logQueueSize; i++) {
 		n_entries += logQueue[i][0] != '\0' ? 1 : 0;
-}
+	}
 
 	// Get total available
 	return logQueueSize - n_entries;
@@ -4067,7 +4075,7 @@ void GetSerial(R4 *r4)
 	if (dt_parse > 30) {
 		sprintf(str, "Parser Hanging: %s %s", dat_str_1, dat_str_2);
 		DebugError(__FUNCTION__, __LINE__, str);
-}
+	}
 
 	return;
 }
@@ -4723,7 +4731,7 @@ void AD_CheckOC(bool force_check)
 	// Bail if check disabled
 	if (dp_disable) {
 		return;
-}
+	}
 
 	// Bail if not time for next check
 	if (!force_check &&
@@ -4874,7 +4882,7 @@ bool RunMotor(char dir, double new_speed, char agent[])
 	runDirNow = dir;
 
 	return true;
-	}
+}
 
 // RUN MOTOR MANUALLY
 bool ManualRun(char dir)
@@ -5121,7 +5129,7 @@ void InitializeTracking()
 	// Bail if finished or task done
 	if (fc.isTrackingEnabled || fc.isTaskDone) {
 		return;
-}
+	}
 
 	// Wait for new data
 	if (!fc.isRatOnTrack ||
@@ -5555,7 +5563,7 @@ bool GetButtonInput()
 			digitalRead(pin.Btn[i]) == LOW ||
 			is_pressed[i] ||
 			is_running[i];
-}
+	}
 	if (!do_check) {
 		return false;
 	}
@@ -5865,7 +5873,7 @@ void CheckEtOH()
 		sprintf(str, "Close EtOH: dt_open=%d", dt_open);
 		DebugFlow(__FUNCTION__, __LINE__, str);
 	}
-		}
+}
 
 // CHECK BATTERY VALUES
 float CheckBattery(bool force_check)
@@ -6871,7 +6879,7 @@ void GetTeensyDebug()
 
 		// Hold for 500 ms for Teensy to reset
 		delay(1000);
-}
+	}
 	else {
 		DebugError(__FUNCTION__, __LINE__, "FAILED: Teensy Reset");
 	}
@@ -6880,7 +6888,7 @@ void GetTeensyDebug()
 	DoAll("PrintDebug");
 
 #endif
-	}
+}
 
 // LOG/PRINT MAIN EVENT
 void DebugFlow(const char *fun, int line, char msg[], uint32_t t)
@@ -6912,7 +6920,7 @@ void DebugFlow(const char *fun, int line, char msg[], uint32_t t)
 		Log.QueueLog(str, t);
 	}
 
-	}
+}
 
 // LOG/PRINT ERRORS
 void DebugError(const char *fun, int line, char msg[], bool is_error, uint32_t t)
@@ -6951,7 +6959,7 @@ void DebugError(const char *fun, int line, char msg[], bool is_error, uint32_t t
 	// Store error info
 	if (is_error) {
 		err_line[cnt_err < 100 ? cnt_err++ : 99] = Log.cnt_logsStored;
-}
+	}
 	else {
 		warn_line[cnt_warn < 100 ? cnt_warn++ : 99] = Log.cnt_logsStored;
 	}
@@ -6998,7 +7006,7 @@ void DebugMotorControl(const char *fun, int line, bool pass, char set_from[], ch
 		Log.QueueLog(str, millis());
 	}
 
-	}
+}
 
 // LOG/PRINT MOTOR SPEED CHANGE
 void DebugRunSpeed(const char *fun, int line, char agent[], double speed_last, double speed_now)
@@ -7031,7 +7039,7 @@ void DebugRunSpeed(const char *fun, int line, char agent[], double speed_last, d
 		Log.QueueLog(str, millis());
 	}
 
-	}
+}
 
 // LOG/PRINT RECIEVED PACKET DEBUG STRING
 void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
@@ -7087,7 +7095,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 		Log.QueueLog(msg_out, r4->t_rcvd);
 	}
 
-	}
+}
 
 // LOG/PRINT SENT PACKET DEBUG STRING
 void DebugSent(R2 *r2, char msg[], bool is_repeat)
@@ -7286,7 +7294,7 @@ bool PrintDebug()
 	return false;
 
 #endif
-	}
+}
 
 // FOR PRINTING TO LCD
 void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
@@ -7323,7 +7331,7 @@ void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 	if (do_block) {
 		fc.doBlockWriteLCD = true;
 	}
-	}
+}
 
 // CLEAR LCD
 void ClearLCD()
@@ -7424,7 +7432,7 @@ int GetPrintQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < printQueueSize; i++) {
 		n_entries += printQueue[i][0] != '\0' ? 1 : 0;
-}
+	}
 
 	// Get total available
 	return printQueueSize - n_entries;
@@ -7586,8 +7594,8 @@ void LogTrackingData()
 		// Reset vals
 		hist_ind = 0;
 		t_last_log = kal.t_last;
-		}
 	}
+}
 
 // SEND TEST PACKET
 void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
@@ -7638,7 +7646,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 	int r2_ind = ID_Ind<R2>(id, r2);
 	if (r2_ind != -1) {
 		r2c.doRcvCheck[r2_ind] = false;
-}
+	}
 
 	// Print everything
 	DoAll("PrintDebug");
@@ -7697,7 +7705,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 		}
 
 	}
-	}
+}
 
 #pragma endregion
 
@@ -7752,7 +7760,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		dt_cycle = dt_led;
 		do_blink = true;
 		is_rat_blink = rat_in_blink;
-}
+	}
 
 	// Bail if not running
 	else if (!do_blink) {
@@ -8940,9 +8948,12 @@ void loop() {
 						) {
 
 						// Print message
-						sprintf(horeStr, "RUNNING: MOVE [%s]: Begin: targ_dist=%0.2fcm move_dir=\'%c\'...",
-							Move.moveCntStr, Move.targDist, Move.moveDir);
+						sprintf(horeStr, "RUNNING: MOVE [%s]: Begin: speed=0.2fcm/sec targ_dist=%0.2fcm move_dir=\'%c\'...",
+							moveToSpeedMax, Move.moveCntStr, Move.targDist, Move.moveDir);
 						DebugFlow(__FUNCTION__, __LINE__, horeStr);
+
+						// Store new speed
+						Move.lastSpeed = moveToSpeedMax;
 
 						// Set flag
 						Move.isMoveStarted = true;
@@ -8981,7 +8992,12 @@ void loop() {
 			// Change speed if > 0
 			if (new_speed > 0 && new_speed != runSpeedNow) {
 
+				// Run motor
 				RunMotor(Move.moveDir, new_speed, "MoveTo");
+
+				// Store speed
+				Move.lastSpeed = new_speed;
+
 			}
 
 		}

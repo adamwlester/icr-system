@@ -1084,7 +1084,7 @@ namespace ICR_Run
 
             // WAIT FOR MATLAB TO SAVE
 
-            if (!fc.isSaveEnabled || fc.isGUIquit)
+            if (fc.isGUIquit)
             {
                 csLog.Print("[Exit] SKIPPED: WAIT FOR...: ICR_GUI to Save");
             }
@@ -3180,7 +3180,6 @@ namespace ICR_Run
         public bool isRatInArena = false;
         public bool isRatOnTrack = false;
         public bool isTaskDone = false;
-        public bool isSaveEnabled = false;
         public bool isSesSaved = false;
         public bool isGUIquit = false;
         public bool isGUIfinished = false;
