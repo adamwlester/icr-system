@@ -113,6 +113,7 @@ D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
 D.DB.doForagePathCompute = false;
+D.DB.doAutoSetTT = true;
 
 % SYSTEM SET FLAGS
 D.DB.isTestRun = true;
@@ -4905,6 +4906,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Handle data info
             if any(ismember(io_table.Properties.VariableNames , 'Date'))
                 
+                % Add date for first day
+                if isempty(io_table.Date{1})
+                    io_table.Date{1} = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+                end
+                
                 % Get dates for row names
                 date_list = io_table.Date;
                 date_list = regexp(date_list, '\S*(?=_)', 'match');
@@ -4997,6 +5003,76 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % --------------------------TT TRACKING SETUP----------------------
     function[was_ran] = TT_Track_Setup()
         
+        % ===================== IMPORT LOG TABLE DATA ===================== 
+        
+        % Get implant coordinates
+        D.TT.ttCoords = D.TT_IO.Implant_Coordinates(D.PAR.ratIndTT,:);
+        
+        % Get number of bundles
+        D.TT.nBndl = ~any(isnan(D.TT.ttCoords{2}))+1;
+        
+        % Get tt configs
+        D.TT.ttConfig = D.TT_IO.Implant_Configuration(D.PAR.ratIndTT,:);
+        
+        % Get bundle angle
+        D.UI.bndAng = D.TT_IO.Implant_Angle(D.PAR.ratIndTT,:);
+        D.UI.bndAng{1} = deg2rad(270 + D.UI.bndAng{1});
+        D.UI.bndAng{2} = deg2rad(270 + D.UI.bndAng{2});
+        
+        % Get bundle labels
+        D.TT.bndlLab = D.TT_IO.Bundle_Label{D.PAR.ratIndTT,:};
+        
+        % Get tt list
+        D.TT.ttList = D.TT_IO.TT_Label{D.PAR.ratIndTT,:};
+        
+        % Get tt map
+        D.TT.ttMap = D.TT_IO.TT_Mapping(D.PAR.ratIndTT,:);
+        
+        % Remove unused entries
+        for z_b = 1:2
+            if D.TT.nBndl==1 && z_b == 2
+                D.TT.ttMap{z_b} = D.TT.ttMap{1}(1,1);
+            else
+                D.TT.ttMap{z_b} = D.TT.ttMap{z_b}(1:D.TT.ttConfig{z_b}(1),1:D.TT.ttConfig{z_b}(2));
+            end
+        end
+        
+        % Get included TTs
+        D.TT.ttInclude = D.TT_IO.TT_Include{D.PAR.ratIndTT,:};
+        
+        % Get references
+        D.TT.refMap = ...
+            cellfun(@(x,y) [x, ' ', y], ...
+            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1))), ...
+            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,2))), ...
+            'uni', false);
+        D.TT.refList = cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1)));
+        
+        % Get thread pitch
+        D.UI.umPerTurn = D.TT_IO.Thread_Pitch(D.PAR.ratIndTT)*1000;
+        
+        % Store current log
+        D.TT.ttLogTable = D.TT_IO.Turn_Log{D.PAR.ratIndTT};
+        D.TT.ttLogNew = D.TT.ttLogTable(end,:);
+        
+        % Get session number
+        D.TT.Ses = D.TT.ttLogTable.Session(end)+1;
+        
+        % Get tt list sorted by bundle
+        tt_list = cell(2,1);
+        for z_b = 1:D.TT.nBndl
+            tt_list{z_b} = cellstr(char(D.TT.ttMap{z_b}(~isundefined(D.TT.ttMap{z_b}))));
+            tt_list{z_b} = D.TT.ttList(ismember(D.TT.ttList, tt_list{z_b}))';
+        end
+        
+        % Update list
+        D.TT.ttList = [tt_list{:}];
+        
+        % Get tt bundle ind
+        D.I.ttBndl = NaN(D.PAR.maxTT,1);
+        for z_b = 1:D.TT.nBndl
+            D.I.ttBndl(ismember(D.TT.ttList, tt_list{z_b})) =  z_b;
+        end
         
         %% ================== IMPORT/FORMAT PAXINOS IMAGES ================
         
@@ -5008,9 +5084,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return;
         end
         
+        % Get A-P lims
+        ap_lim = [ceil(max(D.TT.ttCoords{1}(1), D.TT.ttCoords{2}(1)) + ...
+            (max(size(D.TT.ttMap{1},1), size(D.TT.ttMap{2},1))/2) * D.PAR.canSp), ...
+            floor(min(D.TT.ttCoords{1}(1), D.TT.ttCoords{2}(1)) - ...
+            (max(size(D.TT.ttMap{1},1), size(D.TT.ttMap{2},1))/2) * D.PAR.canSp)];
+        
         % Set plot lims [A-P,M-L,D-V] (mm)
         D.UI.mmPlotLims = [...
-            3, -12; ...
+            ap_lim(1), ap_lim(2); ...
             0, 8; ...
             0, -10];
         
@@ -5132,7 +5214,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        %% ============================ SETUP TT TAB  =============================
+        %% ======================== SETUP TT TAB  =========================
         
         % Add TT TRACK tab
         D.UI.tabTT = uitab(D.UI.tabgp, ...
@@ -5371,7 +5453,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Add rotate option
         D.UI.mouseRotView = rotate3d(D.UI.axe3dH);
-        Safe_Set(D.UI.mouseRotView, ...
+        set(D.UI.mouseRotView, ...
             'ActionPostCallback', {@Set3dView},...
             'Enable', 'off')
         
@@ -5888,81 +5970,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set text colors
         Safe_Set(D.UI.txtPanTT, 'ForegroundColor', D.UI.disabledCol)
         
-        %% ==================== LOAD AND SETUP RAT TT STUFF ===============
-        
-        % ----------------------IMPORT LOG TABLE DATA----------------------
-        
-        % Get implant coordinates
-        D.TT.ttCoords = D.TT_IO.Implant_Coordinates(D.PAR.ratIndTT,:);
-        
-        % Get number of bundles
-        D.TT.nBndl = ~any(isnan(D.TT.ttCoords{2}))+1;
-        
-        % Get tt configs
-        D.TT.ttConfig = D.TT_IO.Implant_Configuration(D.PAR.ratIndTT,:);
-        
-        % Get bundle angle
-        D.UI.bndAng = D.TT_IO.Implant_Angle(D.PAR.ratIndTT,:);
-        D.UI.bndAng{1} = deg2rad(270 + D.UI.bndAng{1});
-        D.UI.bndAng{2} = deg2rad(270 + D.UI.bndAng{2});
-        
-        % Get bundle labels
-        D.TT.bndlLab = D.TT_IO.Bundle_Label{D.PAR.ratIndTT,:};
-        
-        % Get tt list
-        D.TT.ttList = D.TT_IO.TT_Label{D.PAR.ratIndTT,:};
-        
-        % Get tt map
-        D.TT.ttMap = D.TT_IO.TT_Mapping(D.PAR.ratIndTT,:);
-        
-        % Remove unused entries
-        for z_b = 1:2
-            if D.TT.nBndl==1 && z_b == 2
-                D.TT.ttMap{z_b} = D.TT.ttMap{1}(1,1);
-            else
-                D.TT.ttMap{z_b} = D.TT.ttMap{z_b}(1:D.TT.ttConfig{z_b}(1),1:D.TT.ttConfig{z_b}(2));
-            end
-        end
-        
-        % Get included TTs
-        D.TT.ttInclude = D.TT_IO.TT_Include{D.PAR.ratIndTT,:};
-        
-        % Get references
-        D.TT.refMap = ...
-            cellfun(@(x,y) [x, ' ', y], ...
-            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1))), ...
-            cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,2))), ...
-            'uni', false);
-        D.TT.refList = cellstr(char(D.TT_IO.Reference_Mapping{D.PAR.ratIndTT}(:,1)));
-        
-        % Set pop ref list
-        D.UI.popRefTT.String = D.TT.refMap;
-        
-        % Get thread pitch
-        D.UI.umPerTurn = D.TT_IO.Thread_Pitch(D.PAR.ratIndTT)*1000;
-        
-        % Store current log
-        D.TT.ttLogTable = D.TT_IO.Turn_Log{D.PAR.ratIndTT};
-        D.TT.ttLogNew = D.TT.ttLogTable(end,:);
-        
-        % Get session number
-        D.TT.Ses = D.TT.ttLogTable.Session(end)+1;
-        
-        % Get tt list sorted by bundle
-        tt_list = cell(2,1);
-        for z_b = 1:D.TT.nBndl
-            tt_list{z_b} = cellstr(char(D.TT.ttMap{z_b}(~isundefined(D.TT.ttMap{z_b}))));
-            tt_list{z_b} = D.TT.ttList(ismember(D.TT.ttList, tt_list{z_b}))';
-        end
-        
-        % Update list
-        D.TT.ttList = [tt_list{:}];
-        
-        % Get tt bundle ind
-        D.I.ttBndl = NaN(D.PAR.maxTT,1);
-        for z_b = 1:D.TT.nBndl
-            D.I.ttBndl(ismember(D.TT.ttList, tt_list{z_b})) =  z_b;
-        end
+        %% ======================== SETUP RAT TT STUFF ====================
+                
+        % -------------------SETUP BUNDLE CONFIG LEGENDS-------------------
         
         % Specify tt colors
         if D.TT.nBndl==2
@@ -5992,8 +6002,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             col_mat = col_mat(1:D.PAR.maxClust,:,:);
             D.UI.clustColMap(z_tt,:,:,:) = col_mat;
         end
-        
-        % -------------------SETUP BUNDLE CONFIG LEGENDS-------------------
         
         % Resize legend axis
         center = (max([size(D.TT.ttMap{2}),size(D.TT.ttMap{1})]) + 0.5)/2;
@@ -6120,6 +6128,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % ------------------SETUP TT SELECT PANEL OBJECTS------------------
+        
+        % Set pop ref list
+        D.UI.popRefTT.String = D.TT.refMap;
         
         % Button position
         wdth_norm = 0.375;
@@ -6303,6 +6314,52 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         img_ind = knnsearch(D.TT.imgCoor{3}', -1*dpth_max/1000);
         Safe_Set(D.UI.sldSwtchImg(3), 'Value', img_ind);
         SldSwtchImg(D.UI.sldSwtchImg(3));
+        
+        %% ====================== AUTO SET TT DEPTH =======================
+        if (D.DB.doAutoSetTT)
+            
+            % Switch tab 
+            TabGrpChange(D.UI.tabTT);
+            
+            % Enable buttons
+            Object_Group_State('TT_Track_Objects', 'Enable');
+            Safe_Set(D.UI.toggMainActionTT(1), 'Value', 1);
+            ToggMainActionTT(D.UI.toggMainActionTT(1));
+            
+            % Number of turns
+            turns = 20;
+            
+            % Get number of full turns
+            turn_ind = ...
+                find(ismember(cellstr(get(D.UI.popTrn, 'Str')), num2str(round((turns/(D.UI.umPerTurn/1000))))));
+            if isempty(turn_ind)
+                turn_ind = length(get(D.UI.popTrn,'String'));
+            end
+            
+            % Looop through each TT
+            for z_tt = 1:length(D.TT.ttList)
+                
+                % Load next TT
+                Safe_Set(D.UI.toggSelectTT(z_tt), 'Value', 1);
+                ToggSelectTT(D.UI.toggSelectTT(z_tt));
+                
+                % Pause
+                pause(0.05);
+                
+                % Set turns to max
+                set(D.UI.popTrn, 'Value', turn_ind);
+                
+                % Set to random orientation
+                %set(D.UI.popOr,'Value', ceil(rand(1,1)*length(get(D.UI.popOr,'String'))))
+                
+                % Pause
+                pause(0.05);
+                
+                % Save
+                Safe_Set(D.UI.toggUpdateLogTT, 'Value', 1);
+                ToggUpdateLogTT();
+            end
+        end
         
         % Set output and bail
         was_ran = true;
@@ -12727,7 +12784,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.ttLogNew.Session = D.TT.Ses;
         
         % Store 'Date'
-        D.TT.ttLogNew.Date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+        D.TT.ttLogNew.Date = {datestr(startTime, 'yyyy-mm-dd_HH-MM-SS')};
         
         % Store 'Human'
         D.TT.ttLogNew.Human = D.PAR.sesHuman;
@@ -12736,7 +12793,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.ttLogNew.Notes{:} = D.UI.editTTNotes.String;
         
         % Save back to main table
-        D.TT_IO.Turn_Log{D.PAR.ratIndTT} = [D.TT_IO.Turn_Log{D.PAR.ratIndTT}; D.TT.ttLogNew];
+        if D.TT.Ses == 1
+            D.TT_IO.Turn_Log{D.PAR.ratIndTT} = D.TT.ttLogNew;
+        else
+            D.TT_IO.Turn_Log{D.PAR.ratIndTT} = [D.TT_IO.Turn_Log{D.PAR.ratIndTT}; D.TT.ttLogNew];
+        end
         
         % Save out data
         TT_IO = D.TT_IO; %#ok<NASGU>
@@ -14896,7 +14957,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Unset all tt select buttons
-        btn_hand = D.UI.toggSelectTT([D.UI.toggSelectTT(:).Value]==1);
+        btn_hand = D.UI.toggSelectTT(logical(Safe_Get(D.UI.toggSelectTT, 'Value')));
         if ~isempty(btn_hand)
             for z_btn = 1:length(btn_hand)
                 btn_hand(z_btn).Value = 0;
@@ -15225,14 +15286,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.UI.toggMainActionTT(2).Value == 0
             
             % Remove all axes associations
-            set(D.UI.axClstH, 'UserData', 0)
+            Safe_Set(D.UI.axClstH, 'UserData', 0)
             
             % Unset all legends and text
             for z_ax = 1:size(D.UI.axClstH)
                 colormap(D.UI.axClstH(z_ax), D.UI.disabledCol)
             end
-            set(D.UI.linColBarH, 'Color', D.UI.disabledCol)
-            set(D.UI.txtColBarH, 'Visible', 'off')
+            Safe_Set(D.UI.linColBarH, 'Color', D.UI.disabledCol)
+            Safe_Set(D.UI.txtColBarH, 'Visible', 'off')
             
         end
         
@@ -15640,7 +15701,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggSelectTT, 'Update');
         
         % Reset color of updated buttons
-        [D.UI.toggSelectTT(D.F.tt_updated).BackgroundColor] =  D.UI.disabledCol;
+        Safe_Set(D.UI.toggSelectTT(D.F.tt_updated), 'BackgroundColor', D.UI.disabledCol);
         
         % Update current TT select button
         Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
@@ -16301,9 +16362,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Enable/Disable axis rotations
             if strcmp(tab_now.Title, 'TT TRACK')
-                Safe_Set(D.UI.mouseRotView, 'Enable', 'on')
+                set(D.UI.mouseRotView, 'Enable', 'on')
             else
-                Safe_Set(D.UI.mouseRotView, 'Enable', 'off')
+                set(D.UI.mouseRotView, 'Enable', 'off')
             end
             
             % Change tt select objects parent
@@ -17431,18 +17492,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         [ap, ml] = find(ismember(D.TT.ttMap{bndl_ind}, tt_fld));
         
         % Determine position relative to bundle center
-        center = [ap, ml] - ceil(size(D.TT.ttMap{bndl_ind})/2);
+        bndl_center = ...
+            (size(D.TT.ttMap{bndl_ind}) + 1 - 1*mod(size(D.TT.ttMap{bndl_ind}), 2)) / 2;
+        center = [ap, ml] - bndl_center;
+        ap_center = center(1);
+        ml_center = center(2);
         
         % Flip A-P center
-        center(1) = center(1)*-1;
+        ap_center = ap_center*-1;
         
         % Get x start pos with offset as a function of z pos
-        x_offset = center(2)*D.UI.ttPlotLinOffset;
-        x = D.TT.ttCoords{bndl_ind}(1) + center(1)*D.PAR.canSp + x_offset;
+        x_offset = ml_center*D.UI.ttPlotLinOffset;
+        x = D.TT.ttCoords{bndl_ind}(1) + ap_center*D.PAR.canSp + x_offset;
         
         % Get y pos
-        y_offset = center(1)*D.UI.ttPlotLinOffset;
-        y = D.TT.ttCoords{bndl_ind}(2) + center(2)*D.PAR.canSp + y_offset;
+        y_offset = ap_center*D.UI.ttPlotLinOffset;
+        y = D.TT.ttCoords{bndl_ind}(2) + ml_center*D.PAR.canSp + y_offset;
         
         % Align z to bundle implant pos
         z = D.TT.ttCoords{bndl_ind}(3);
@@ -17623,16 +17688,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         [ap, ml] = find(ismember(D.TT.ttMap{bndl_ind}, tt_fld));
         
         % Determine position relative to bundle center
-        center = [ap, ml] - ceil(size(D.TT.ttMap{bndl_ind})/2);
+        bndl_center = ...
+            (size(D.TT.ttMap{bndl_ind}) + 1 - 1*mod(size(D.TT.ttMap{bndl_ind}), 2)) / 2;
+        center = [ap, ml] - bndl_center;
+        ap_center = center(1);
+        ml_center = center(2);
         
         % Flip A-P center
-        center(1) = center(1)*-1;
+        ap_center = ap_center*-1;
         
         % Get x start pos with offset as a function of z pos
-        x = D.TT.ttCoords{bndl_ind}(1) + center(1)*D.PAR.canSp;
+        x = D.TT.ttCoords{bndl_ind}(1) + ap_center*D.PAR.canSp;
         
         % Get y pos
-        y = D.TT.ttCoords{bndl_ind}(2) + center(2)*D.PAR.canSp;
+        y = D.TT.ttCoords{bndl_ind}(2) + ml_center*D.PAR.canSp;
         
         % Align z to bundle implant pos
         z = D.TT.ttCoords{bndl_ind}(3);
