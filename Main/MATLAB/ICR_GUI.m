@@ -5005,6 +5005,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % ===================== IMPORT LOG TABLE DATA ===================== 
         
+        % Bail if not implant or TT_track session
+        if ~D.F.implant_session && D.PAR.sesType ~= 'TT_Turn'
+            
+            % Set output and bail
+            was_ran = false;
+            return;
+        end
+        
         % Get implant coordinates
         D.TT.ttCoords = D.TT_IO.Implant_Coordinates(D.PAR.ratIndTT,:);
         
@@ -5075,14 +5083,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         %% ================== IMPORT/FORMAT PAXINOS IMAGES ================
-        
-        % Bail if not implant or TT_track session
-        if ~D.F.implant_session && D.PAR.sesType ~= 'TT_Turn'
-            
-            % Set output and bail
-            was_ran = false;
-            return;
-        end
         
         % Get A-P lims
         ap_lim = [ceil(max(D.TT.ttCoords{1}(1), D.TT.ttCoords{2}(1)) + ...
@@ -10275,13 +10275,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             end
             
-            % Check for zone crossing
+            % Check for zone crossing before resseting flags for reward
+            % send to run
             if any(check_inbound)
                 
                 % Set flags
                 D.F.rew_zone_crossed = true;
                 D.F.rew_send_crossed = false;
-                D.F.check_rew_confirm
+                D.F.check_rew_confirm = true;
                 
                 % Itterate count
                 D.C.rew_cross_cnt = D.C.rew_cross_cnt+1;
@@ -14721,7 +14722,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'BtnBlockCue', get(D.UI.toggDoCue,'Value')));
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'ToggDoCue', get(D.UI.toggDoCue,'Value')));
         
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
@@ -14745,7 +14746,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'BtnBlockCue', get(D.UI.toggBlockCue,'Value')));
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'ToggBlockCue', get(D.UI.toggBlockCue,'Value')));
         
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
@@ -14766,7 +14767,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'toggForceCue', get(D.UI.toggForceCue,'Value')));
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'ToggForceCue', get(D.UI.toggForceCue,'Value')));
         
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
@@ -17221,7 +17222,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Log/print
-            Update_Log(sprintf('[Cue_Buttons] Set Cue Buttons to \"%s\"', setting_str));
+            Update_Log(sprintf('[Cue_Button_State] Set Cue Buttons to \"%s\"', setting_str));
         end
     end
 
