@@ -86,8 +86,8 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 1, // 0
-            break_debug: 1, // 0
+            system_test: 0, // 0
+            break_debug: 0, // 0
             do_autoload_ui: false, // false
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -319,7 +319,7 @@ namespace ICR_Run
             else
             {
                 fc.SetAbort(set_abort_mat: true);
-                fc.LogError("!!ERROR!! [MAIN] FAILED: SETUP");
+                fc.LogWarning("**WARNING** [MAIN] ABORTED: SETUP");
             }
 
 
@@ -333,7 +333,7 @@ namespace ICR_Run
                     if (passed_run)
                         csLog.Print_Thread("[MAIN] SUCCEEDED: RUN");
                     else
-                        fc.LogError("!!ERROR!! [MAIN] FAILED: RUN");
+                        fc.LogWarning("**WARNING** [MAIN] ABORTED: RUN");
                 }
                 else
                 {

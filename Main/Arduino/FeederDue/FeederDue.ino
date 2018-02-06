@@ -4811,7 +4811,7 @@ void HardStop(char called_from[], bool do_block_hz)
 	Pid.PID_Reset();
 
 	// Set to high impedance so robot can be moved
-	if (fc.isManualSes && ~do_block_hz) {
+	if (fc.isManualSes && !do_block_hz) {
 
 		AD_R.hardHiZ();
 		AD_F.hardHiZ();
@@ -8829,9 +8829,6 @@ void loop() {
 			DebugFlow(__FUNCTION__, __LINE__, horeStr);
 		}
 
-		// Set setpoint
-
-
 		// Set task condition
 		if (cmd.taskCond == 2) {
 			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE SESSION");
@@ -8852,10 +8849,10 @@ void loop() {
 		}
 
 		// Doing tracking ses
-		if (~fc.isManualSes && ~fc.isForageTask) {
+		if (!fc.isManualSes && !fc.isForageTask) {
 			DebugFlow(__FUNCTION__, __LINE__, "DO TRACKING SESSION");
-			fc.isForageTask = false;
 			fc.isManualSes = false;
+			fc.isForageTask = false;
 		}
 
 		// Set sound condition
@@ -8869,7 +8866,7 @@ void loop() {
 			QueuePacket(&r2a, 's', 1);
 			DebugFlow(__FUNCTION__, __LINE__, "DONT DO TONE");
 		}
-		else {
+		else if (cmd.soundCond == 2) {
 			// Use white and reward noise
 			QueuePacket(&r2a, 's', 2);
 			DebugFlow(__FUNCTION__, __LINE__, "DO TONE");

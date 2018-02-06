@@ -1163,18 +1163,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.C.move = D.C.move+1;
                             
                             % Send C# command to move robot to start quad or reward loc
-                            if D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
-                                
-                                % Move to track reward zone
-                                Send_M2C('M', D.C.move, D.UI.rewZoneRad(1));
-                                
-                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
-                            elseif D.PAR.sesTask == 'Forage'
+                            if D.PAR.sesTask == 'Forage'
                                 
                                 % Move to forage reward targ
                                 Send_M2C('M', D.C.move, deg2rad(D.PAR.frgTargDegArr(D.I.targ_now)));
                                 
                                 Console_Write('[Run:SubLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
+                                
+                            elseif D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
+                                
+                                % Move to track reward zone
+                                Send_M2C('M', D.C.move, D.UI.rewZoneRad(1));
+                                
+                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
                             else
                                 
                                 % Move to start quad
