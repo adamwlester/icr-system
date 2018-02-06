@@ -10,7 +10,7 @@ git rm z_Obs-Arc --cache
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # AWL
-/SessionData/
+/IOfiles/SessionData/
 
 # User-specific files
 *.suo
