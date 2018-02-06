@@ -10,6 +10,8 @@ git rm z_Obs-Arc --cache
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # AWL
+# Have to run at command line if already commited:
+# git rm --cached IOfiles/SessionData/ -r
 /IOfiles/SessionData/
 
 # User-specific files
