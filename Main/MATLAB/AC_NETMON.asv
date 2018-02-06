@@ -185,70 +185,35 @@ while true
         end
         
         % STOP/START/RESTART SOUND
-        
-        % Stop all sound
-        if data(3) == 0
-            
-            if isplaying(soundAllH)
-                stop(soundAllH)
-            elseif isplaying(soundWhiteH)
-                stop(soundWhiteH)
-            end
-            fprintf('\r\tstop sound: %s\r', ...
-                datestr(now, 'HH:MM:SS AM'))
-            
-        end
-        
-        % Play white only
         if data(3) == 1
-            
-            % Start sound
-            if ~isplaying(soundWhiteH)
-                play(soundWhiteH);
-                t_sound = clock;
-                % Print status message
-                fprintf('\r\tstart white only sound: %s\r', ...
-                    datestr(now, 'HH:MM:SS AM'))
-            end
-            
-                % Restart sound
-            if etime(clock, t_sound) >= 60*floor(nsmin)
-                % stop whatever was playing
-                stop(soundWhiteH);
-                % restart existing sound
-                play(soundWhiteH);
-                t_sound = clock;
-                % Print status message
-                fprintf('\r\trestart white only sound: %s\r', ...
-                    datestr(now, 'HH:MM:SS AM'))
-            end
-            
-        end
-        
-        % Play all sound
-        if data(3) == 2
-            
             % Start sound
             if ~isplaying(soundAllH)
                 play(soundAllH);
                 t_sound = clock;
                 % Print status message
-                fprintf('\r\tstart all sound sound: %s\r', ...
+                fprintf('\r\tstart sound: %s\r', ...
                     datestr(now, 'HH:MM:SS AM'))
-            end
-            
-            % Restart sound
-            if etime(clock, t_sound) >= 60*floor(nsmin)
+                % Restart sound
+            elseif etime(clock, t_sound) >= 60*floor(nsmin)
                 % stop whatever was playing
                 stop(soundAllH);
                 % restart existing sound
                 play(soundAllH);
                 t_sound = clock;
                 % Print status message
-                fprintf('\r\trestart all sound sound: %s\r', ...
+                fprintf('\r\trestart sound: %s\r', ...
                     datestr(now, 'HH:MM:SS AM'))
             end
-            
+            % stop whatever was playing
+        if data(3) == 0
+            if isplaying(soundAllH)
+                
+                stop(soundAllH)
+            elseif isplaying(soundWhiteH)
+                stop(soundWhiteH)
+            end
+                fprintf('\r\tstop sound: %s\r', ...
+                    datestr(now, 'HH:MM:SS AM'))
         end
         
         % Bring java window back to front

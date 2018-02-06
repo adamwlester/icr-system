@@ -282,7 +282,7 @@ Console_Write(sprintf('INPUT ARGUMENTS (%d): SYSTEST=|%d|%d| BREAKDEBUG=%d DOAUT
 %...........................D.AC.data......................................
 %   val 1 = conection [0, 1], [no, yes]
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
-%   val 3 = sound state [0, 1, 2], [no sound, white only, all sound]
+%   val 3 = sound state [0, 1], [no sound, sound]
 
 if BREAKDEBUG > 0
     
@@ -536,7 +536,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'X', ... % confirm quit abort [abort]
             'C', ... % confirm close
             'T', ... % system test command [test]
-            'S', ... % setup session [ses_cond, task_cond, sound_cond]
+            'S', ... % setup task session [ses_cond, sound_cond, setpoint]
             'M', ... % move to position [targ_pos]
             'R', ... % run reward [rew_pos, rew_cond, zone_ind/rew_delay]
             'H', ... % halt movement [halt_state]
@@ -6906,20 +6906,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Display image
         D.AC.data(2) = 1;
         
-        % No sound
+        % Sound condition
         if ~D.F.sound(1) && ~D.F.sound(2)
-            D.AC.data(3) = single(0);
-        end
-        
-        % White noise only
-        if D.F.sound(1) && ~D.F.sound(2)
-            D.AC.data(3) = single(1);
-        end
-        
-        % White noise and reward tone only
-        if D.F.sound(1) && D.F.sound(2)
-            D.AC.data(3) = single(2);
-        end
+        D.AC.data(3) = single(0);
+        elseif ~D.F.sound(2)
+            D.AC.data(3) = (1);
+            
         
         % Post to AC computer
         Send_M2AC();
@@ -7360,39 +7352,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Session condition
         if D.PAR.sesCond == 'Manual_Training'
-            % Manual session
+            d1 = 0;
+        else 
             d1 = 1;
-        elseif ~D.F.implant_session 
-            % Behavior session
-            d1 = 2;
-        else
-            % Implant session
-            d1 = 3;
         end
         
         % Task condition
         if D.PAR.sesTask == 'Track'
-            % Track task
             d2 = 1;
         elseif D.PAR.sesTask == 'Forage'
-            % Forage task
             d2 = 2;
-        end
-        
-        % Sound condition
-        if all(~D.F.sound)
-            % No sound
-            d3 = 0;
-        elseif ~D.F.sound(2)
-            % White noise
-            d3 = 1;
-        else
-            % White and reward
-            d3 = 2;
         end
     
         % Send setup info
-        Send_M2C('S', d1, d2, d3);
+        Send_M2C('S', d1, d2, D.PAR.setPointCM);
         
         % Start timer
         start(D.timer_graphics);

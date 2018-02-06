@@ -86,8 +86,8 @@ namespace ICR_Run
             }
         }
         private static DB db = new DB(
-            system_test: 0, // 0
-            break_debug: 0, // 0
+            system_test: 1, // 0
+            break_debug: 1, // 0
             do_autoload_ui: false, // false
             do_print_blocked_vt: false,
             do_print_sent_rat_vt: false,
@@ -172,7 +172,7 @@ namespace ICR_Run
             'X', // confirm quit
             'C', // confirm close
             'T', // system test command [test]
-            'S', // setup task session [ses_cond, sound_cond, setpoint]
+            'S', // setup task session [ses_cond, task_cond, sound_cond]
             'M', // move to position [targ_pos]
             'R', // run reward [rew_pos, zone_ind, rew_delay]
             'H', // halt movement [halt_state]
@@ -210,7 +210,7 @@ namespace ICR_Run
             'h', // setup handshake
 			't', // hardware ping test
 			'T', // system test
-			'S', // setup task session
+			'S', // setup session
 			'Q', // quit session
 			'M', // move to position
 			'R', // run reward
@@ -240,7 +240,7 @@ namespace ICR_Run
             'h', // setup handshake
 			't', // hardware ping test
 			'T', // system test command
-			'S', // setup task session [ses_cond, sound_cond, setpoint]
+			'S', // setup session
 			'Q', // quit session
 			'M', // move to position
 			'R', // run reward

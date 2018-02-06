@@ -1904,8 +1904,8 @@ void REWARD::StartRew()
 	}
 
 	// Turn on reward LED
-	analogWrite(pin.RewLED_R, rewLEDduty);
-	analogWrite(pin.RewLED_C, rewLEDduty);
+	analogWrite(pin.RewLED_R, rewLEDduty[1]);
+	analogWrite(pin.RewLED_C, rewLEDduty[1]);
 
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
@@ -1963,8 +1963,8 @@ bool REWARD::EndRew()
 	digitalWrite(pin.Rel_Rew, LOW);
 
 	// Turn off reward LED
-	analogWrite(pin.RewLED_R, rewLEDmin);
-	analogWrite(pin.RewLED_C, rewLEDmin);
+	analogWrite(pin.RewLED_R, rewLEDduty[0]);
+	analogWrite(pin.RewLED_C, rewLEDduty[0]);
 
 	// Store time
 	t_rew_end = millis();
@@ -3784,7 +3784,7 @@ bool CheckForStart()
 	// Pulse tracker led
 	if (!is_on && millis() >= t_pulse_last + dt_blink_on + dt_blink_off) {
 
-		analogWrite(pin.TrackLED, trackLEDduty[0][1]);
+		analogWrite(pin.TrackLED, trackLEDduty[1]);
 		t_pulse_last = millis();
 		is_on = true;
 	}
@@ -5658,7 +5658,7 @@ bool GetButtonInput()
 
 				// Reset flags etc
 				t_debounce[i] = millis() + dt_debounce[i];
-				analogWrite(pin.TrackLED, trackLEDduty[0][1]);
+				analogWrite(pin.TrackLED, trackLEDduty[1]);
 				is_running[i] = false;
 				t_hold_min[i] = 0;
 				t_long_hold[i] = 0;
@@ -6558,7 +6558,7 @@ void CheckLoop()
 	// Flicker led
 	if (!StatusBlink()) {
 		if (millis() > t_led) {
-			analogWrite(pin.TrackLED, is_led_high ? trackLEDduty[0][0] : trackLEDduty[0][1]);
+			analogWrite(pin.TrackLED, is_led_high ? trackLEDduty[0] : trackLEDduty[1]);
 			is_led_high = !is_led_high;
 			t_led = millis() + 100;
 		}
@@ -7797,8 +7797,9 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 	// Reset LEDs
 	else {
 		analogWrite(pin.Disp_LED, 0);
-		analogWrite(pin.RewLED_C, rewLEDmin);
-		analogWrite(pin.TrackLED, trackLEDduty[0][1]);
+		analogWrite(pin.RewLED_C, rewLEDduty[0]);
+		analogWrite(pin.RewLED_R, rewLEDduty[0]);
+		analogWrite(pin.TrackLED, trackLEDduty[1]);
 		do_led_on = true;
 		cnt_blink = 0;
 		do_blink = false;
@@ -8584,9 +8585,9 @@ void loop() {
 					RunMotor('f', new_speed, "Override");
 
 					// Set tracker duty to max
-					trackLEDduty[0][0] = 255;
-					trackLEDduty[0][1] = 255;
-					analogWrite(pin.TrackLED, trackLEDduty[0][0]);
+					trackLEDduty[0] = 255;
+					trackLEDduty[1] = 255;
+					analogWrite(pin.TrackLED, trackLEDduty[0]);
 
 					// Print speed
 					sprintf(horeStr, "VT CALIBRATION SPEED = %0.0f cm/sec", new_speed);
@@ -8609,9 +8610,9 @@ void loop() {
 				HardStop("loop", true);
 
 				// Set tracker duty to default
-				trackLEDduty[0][0] = trackLEDduty[1][0];
-				trackLEDduty[0][1] = trackLEDduty[1][1];
-				analogWrite(pin.TrackLED, trackLEDduty[0][0]);
+				trackLEDduty[0] = 75;
+				trackLEDduty[1] = 255;
+				analogWrite(pin.TrackLED, trackLEDduty[0]);
 
 
 			}
@@ -8727,7 +8728,8 @@ void loop() {
 				analogWrite(pin.RewLED_C, 10);
 			}
 			else {
-				analogWrite(pin.RewLED_C, rewLEDmin);
+				analogWrite(pin.RewLED_C, rewLEDduty[0]);
+				analogWrite(pin.RewLED_R, rewLEDduty[0]);
 			}
 
 			// Print pos data
@@ -8798,26 +8800,59 @@ void loop() {
 	{
 		// Store message data
 		cmd.sesCond = (byte)c2r.dat[0];
-		cmd.soundCond = (byte)c2r.dat[1];
-		cmd.setPoint = c2r.dat[2];
+		cmd.taskCond = (byte)c2r.dat[1];
+		cmd.soundCond = (byte)c2r.dat[2];
 		millis();
 
-		// Set manual ses flag
-		if (cmd.sesCond == 0) {
+		// Set session condition
+		if (cmd.sesCond == 1) {
 			DebugFlow(__FUNCTION__, __LINE__, "DO MANUAL SESSION");
 			fc.isManualSes = true;
-			fc.isForageTask = false;
+		}
+		else {
+
+			// Set setpoint
+			if (cmd.sesCond == 2) {
+				Pid.setPoint = setPointBackpack;
+				DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
+			}
+			else if (cmd.sesCond == 3) {
+				Pid.setPoint = setPointImplant;
+				DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
+			}
+
+			// Unset flag
+			fc.isManualSes = false;
+
+			// Log/print set setpoint
+			sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", Pid.setPoint);
+			DebugFlow(__FUNCTION__, __LINE__, horeStr);
 		}
 
-		// Set forage task flag
-		else if (cmd.sesCond == 2) {
+		// Set setpoint
+
+
+		// Set task condition
+		if (cmd.taskCond == 2) {
 			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE SESSION");
 			fc.isForageTask = true;
-			fc.isManualSes = false;
+
+			// Set rew led min
+			rewLEDduty[0] = rewLEDmin[1];
+
+			// Set to min
+			analogWrite(pin.RewLED_R, rewLEDduty[0]);
+			analogWrite(pin.RewLED_C, rewLEDduty[0]);
+		}
+		else {
+			fc.isForageTask = false;
+
+			// Set rew led min
+			rewLEDduty[0] = rewLEDmin[0];
 		}
 
 		// Doing tracking ses
-		else {
+		if (~fc.isManualSes && ~fc.isForageTask) {
 			DebugFlow(__FUNCTION__, __LINE__, "DO TRACKING SESSION");
 			fc.isForageTask = false;
 			fc.isManualSes = false;
@@ -8831,7 +8866,7 @@ void loop() {
 		}
 		else if (cmd.soundCond == 1) {
 			// Use white noise only
-			QueuePacket(&r2a, 's', 0);
+			QueuePacket(&r2a, 's', 1);
 			DebugFlow(__FUNCTION__, __LINE__, "DONT DO TONE");
 		}
 		else {
@@ -8839,11 +8874,6 @@ void loop() {
 			QueuePacket(&r2a, 's', 2);
 			DebugFlow(__FUNCTION__, __LINE__, "DO TONE");
 		}
-
-		// Set setpoint
-		Pid.setPoint = cmd.setPoint;
-		sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", cmd.setPoint);
-		DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 	}
 #pragma endregion
