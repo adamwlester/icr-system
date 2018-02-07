@@ -319,7 +319,7 @@ float icNow = 0;
 
 // LEDs
 int trackLEDduty[2] = { 74, 255 }; // value between 0 and 255
-const int rewLEDmin[2] = { 0, 5};
+const int rewLEDmin[2] = { 0, 3};
 int rewLEDduty[2] = { rewLEDmin[0], 15 }; // value between 0 and 255
 
 // LCD

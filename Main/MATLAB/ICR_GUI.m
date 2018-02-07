@@ -3561,6 +3561,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Visible', 'off', ...
             'Value',0);
         
+        % START BUTTON
+        pos = [0, 0, 0.04, 0.02];
+        D.UI.btnStart = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'String','START', ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzBtnMed(1), ...
+            'Visible', 'off', ...
+            'Value',0);
+
         % MOUSE ACTIONS
         set(FIGH, 'WindowButtonMotionFcn', @MouseTrack)
         
@@ -7308,7 +7324,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.txtStQ = ...
                 text(mean(xbnd(:,round(size(xbnd,2)/2))), ...
                 mean(ybnd(:,round(size(ybnd,2)/2))), ...
-                'Start', ...
+                '', ...
                 'FontSize', D.UI.fontSzTxtLrg(1), ...
                 'FontWeight', 'Bold', ...
                 'Color', D.UI.enabledCol, ...
@@ -7980,39 +7996,56 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ----------------------------RAT IN CHECK-------------------------
     function Rat_In_Check()
         
-        % Signal ready for rat
-        if strcmp(get(D.UI.txtStQ,'String'), 'Start')
-            Safe_Set(D.UI.txtStQ, ...
-                'String','READY', ...
-                'Color',  D.UI.activeCol);
+        % Show start button
+        if strcmp(get(D.UI.btnStart, 'Enable'), 'off')
+            
+            % Enable button
+            set(D.UI.btnStart, 'Visible', 'on');
+            Button_State(D.UI.btnStart, 'Enable');
+            [xbnd, ybnd] =  Get_Cart_Bnds(mean(D.PAR.strQuadBnds));
+            %uistack(D.UI.btnStart, 'top')
+            
+            % Set position
+            D.UI.btnStart.Position(1:2) = ...
+                [D.UI.axH(3).Position(1) + D.UI.axH(3).Position(3)*((mean(xbnd)-D.UI.axH(3).XLim(1))/diff(D.UI.axH(3).XLim) - D.UI.btnStart.Position(3)), ...
+                D.UI.axH(3).Position(2) + D.UI.axH(3).Position(4)*((mean(ybnd)-D.UI.axH(3).YLim(1))/diff(D.UI.axH(3).YLim))- D.UI.btnStart.Position(4)/2];
+            
         end
         
-        % Bail if no new data
-        if all(isnan(D.P.Rat.rad))
-            return
-        end
-        
-        % Keep checking if rat is in the arena
-        check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.strQuadBnds);
-        if ~any(check_inbound)
-            % Reinitialize
-            D.T.strqd_inbnd_t1 = 0;
-            return
-        end
-        
-        % Get inbound ts
-        if D.T.strqd_inbnd_t1 == 0
-            D.T.strqd_inbnd_t1 = D.P.Rat.ts(find(check_inbound, 1, 'first'));
+        % Bypass if button pressed
+        if get(D.UI.btnStart, 'Value') == 0
+            
+            % Bail if no new data
+            if all(isnan(D.P.Rat.rad))
+                return
+            end
+            
+            % Keep checking if rat is in the arena
+            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.strQuadBnds);
+            if ~any(check_inbound)
+                % Reinitialize
+                D.T.strqd_inbnd_t1 = 0;
+                return
+            end
+            
+            % Get inbound ts
+            if D.T.strqd_inbnd_t1 == 0
+                D.T.strqd_inbnd_t1 = D.P.Rat.ts(find(check_inbound, 1, 'first'));
+            else
+                D.T.strqd_inbnd_t2 = D.P.Rat.ts(find(check_inbound, 1, 'last'));
+            end
+            
+            % Compute time in seconds
+            inbndTim = (D.T.strqd_inbnd_t2 - D.T.strqd_inbnd_t1) / 10^6;
+            
+            % Check if rat has been in for the min delay period
+            if inbndTim < D.PAR.strQdDel
+                return
+            end
+            
         else
-            D.T.strqd_inbnd_t2 = D.P.Rat.ts(find(check_inbound, 1, 'last'));
-        end
-        
-        % Compute time in seconds
-        inbndTim = (D.T.strqd_inbnd_t2 - D.T.strqd_inbnd_t1) / 10^6;
-        
-        % Check if rat has been in for the min delay period
-        if inbndTim < D.PAR.strQdDel
-            return
+            % Set inbound time
+            inbndTim = 0;
         end
         
         % Post NLX event: rat in
@@ -8049,7 +8082,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Reset start string
         Safe_Set(D.UI.txtStQ, ...
-            'String','Start', ...
+            'String', 'START', ...
             'Color',  D.UI.enabledCol);
         
         % Clear VT data
@@ -8058,9 +8091,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reinitialize
         D.T.strqd_inbnd_t1 = 0;
         
+        % Disable button
+        set(D.UI.btnStart, 'Visible', 'off')
+        
         % Log/print
+        if inbndTim > 0
         Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
             inbndTim));
+        else
+            Console_Write('[Rat_In_Check] FINISHED: Rat In Check: Started Manually');
+        end
         
     end
 

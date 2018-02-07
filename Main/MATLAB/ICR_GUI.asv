@@ -282,7 +282,7 @@ Console_Write(sprintf('INPUT ARGUMENTS (%d): SYSTEST=|%d|%d| BREAKDEBUG=%d DOAUT
 %...........................D.AC.data......................................
 %   val 1 = conection [0, 1], [no, yes]
 %   val 2 = display image [0, 1, 2, 3], [Close all, 0-deg, -40-deg, 40-deg]
-%   val 3 = sound state [0, 1], [no sound, sound]
+%   val 3 = sound state [0, 1, 2], [no sound, white only, all sound]
 
 if BREAKDEBUG > 0
     
@@ -536,7 +536,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'X', ... % confirm quit abort [abort]
             'C', ... % confirm close
             'T', ... % system test command [test]
-            'S', ... % setup task session [ses_cond, sound_cond, setpoint]
+            'S', ... % setup session [ses_cond, task_cond, sound_cond]
             'M', ... % move to position [targ_pos]
             'R', ... % run reward [rew_pos, rew_cond, zone_ind/rew_delay]
             'H', ... % halt movement [halt_state]
@@ -1163,18 +1163,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.C.move = D.C.move+1;
                             
                             % Send C# command to move robot to start quad or reward loc
-                            if D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
-                                
-                                % Move to track reward zone
-                                Send_M2C('M', D.C.move, D.UI.rewZoneRad(1));
-                                
-                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
-                            elseif D.PAR.sesTask == 'Forage'
+                            if D.PAR.sesTask == 'Forage'
                                 
                                 % Move to forage reward targ
                                 Send_M2C('M', D.C.move, deg2rad(D.PAR.frgTargDegArr(D.I.targ_now)));
                                 
                                 Console_Write('[Run:SubLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
+                                
+                            elseif D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
+                                
+                                % Move to track reward zone
+                                Send_M2C('M', D.C.move, D.UI.rewZoneRad(1));
+                                
+                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
                             else
                                 
                                 % Move to start quad
@@ -3560,6 +3561,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Visible', 'off', ...
             'Value',0);
         
+        % START BUTTON
+        pos = [0, 0, 0.04, 0.02];
+        D.UI.btnStart = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'String','START', ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzBtnMed(1), ...
+            'Visible', 'off', ...
+            'Value',0);
+
         % MOUSE ACTIONS
         set(FIGH, 'WindowButtonMotionFcn', @MouseTrack)
         
@@ -6906,12 +6923,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Display image
         D.AC.data(2) = 1;
         
-        % Sound condition
+        % No sound
         if ~D.F.sound(1) && ~D.F.sound(2)
-        D.AC.data(3) = single(0);
-        elseif ~D.F.sound(2)
-            D.AC.data(3) = (1);
-            
+            D.AC.data(3) = single(0);
+        end
+        
+        % White noise only
+        if D.F.sound(1) && ~D.F.sound(2)
+            D.AC.data(3) = single(1);
+        end
+        
+        % White noise and reward tone only
+        if D.F.sound(1) && D.F.sound(2)
+            D.AC.data(3) = single(2);
+        end
         
         % Post to AC computer
         Send_M2AC();
@@ -7299,7 +7324,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.txtStQ = ...
                 text(mean(xbnd(:,round(size(xbnd,2)/2))), ...
                 mean(ybnd(:,round(size(ybnd,2)/2))), ...
-                'Start', ...
+                'START', ...
                 'FontSize', D.UI.fontSzTxtLrg(1), ...
                 'FontWeight', 'Bold', ...
                 'Color', D.UI.enabledCol, ...
@@ -7352,20 +7377,39 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Session condition
         if D.PAR.sesCond == 'Manual_Training'
-            d1 = 0;
-        else 
+            % Manual session
             d1 = 1;
+        elseif ~D.F.implant_session 
+            % Behavior session
+            d1 = 2;
+        else
+            % Implant session
+            d1 = 3;
         end
         
         % Task condition
         if D.PAR.sesTask == 'Track'
+            % Track task
             d2 = 1;
         elseif D.PAR.sesTask == 'Forage'
+            % Forage task
             d2 = 2;
+        end
+        
+        % Sound condition
+        if all(~D.F.sound)
+            % No sound
+            d3 = 0;
+        elseif ~D.F.sound(2)
+            % White noise
+            d3 = 1;
+        else
+            % White and reward
+            d3 = 2;
         end
     
         % Send setup info
-        Send_M2C('S', d1, d2, D.PAR.setPointCM);
+        Send_M2C('S', d1, d2, d3);
         
         % Start timer
         start(D.timer_graphics);
@@ -7953,20 +7997,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Rat_In_Check()
         
         % Signal ready for rat
-        if strcmp(get(D.UI.txtStQ,'String'), 'Start')
+        if strcmp(get(D.UI.txtStQ,'String'), 'START')
             Safe_Set(D.UI.txtStQ, ...
                 'String','READY', ...
                 'Color',  D.UI.activeCol);
         end
         
+        % Show start button
+        if strcmp(get(D.UI.btnStart, 'Enable'), 'off')
+            set(D.UI.btnStart, 'Visible', 'off');
+            [xbnd, ybnd] =  Get_Cart_Bnds(mean(D.PAR.strQuadBnds));
+            uistack(D.UI.btnStart, 'top')
+            D.UI.btnStart.Position(1:2) = ...
+                [D.UI.axH(3).Position(1) + D.UI.axH(3).Position(3)*((mean(xbnd)-D.UI.axH(3).XLim(1))/diff(D.UI.axH(3).XLim) - D.UI.btnStart.Position(3)/2), ...
+                D.UI.axH(3).Position(2) + D.UI.axH(3).Position(4)*((mean(ybnd)-D.UI.axH(3).YLim(1))/diff(D.UI.axH(3).YLim))- D.UI.btnStart.Position(4)/2];
+        end
+        
         % Bail if no new data
-        if all(isnan(D.P.Rat.rad))
+        if all(isnan(D.P.Rat.rad)) && get(D.UI.btnStart, 'Value') == 0
             return
         end
         
         % Keep checking if rat is in the arena
         check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.strQuadBnds);
-        if ~any(check_inbound)
+        if ~any(check_inbound) && get(D.UI.btnStart, 'Value') == 0
             % Reinitialize
             D.T.strqd_inbnd_t1 = 0;
             return
@@ -7983,7 +8037,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         inbndTim = (D.T.strqd_inbnd_t2 - D.T.strqd_inbnd_t1) / 10^6;
         
         % Check if rat has been in for the min delay period
-        if inbndTim < D.PAR.strQdDel
+        if inbndTim < D.PAR.strQdDel && get(D.UI.btnStart, 'Value') == 0
             return
         end
         
@@ -8021,7 +8075,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Reset start string
         Safe_Set(D.UI.txtStQ, ...
-            'String','Start', ...
+            'String','START', ...
             'Color',  D.UI.enabledCol);
         
         % Clear VT data
@@ -8029,6 +8083,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Reinitialize
         D.T.strqd_inbnd_t1 = 0;
+        
+        % Hide button
+        set(D.UI.btnStart, 'Visible', 'off')
         
         % Log/print
         Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
