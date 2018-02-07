@@ -17,10 +17,12 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 %   Weight_Baseline = NaN;
 %   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, 'Yoke_Mate', '', 'g');
 
-Camera_Orientation = nan;
-SS_IO_2 = AddNewVar(SS_IO_2, Camera_Orientation, 'VT_Pixel_Coordinates', '', 'rad');
-Image_Orientation = {nan(1,2)};
-SS_IO_2 = AddNewVar(SS_IO_2, Image_Orientation, 'Camera_Orientation', '', 'deg');
+% weight_cap_labels = {'None', 'Light', 'Medium', 'Heavy'};
+% Weight_Cap =  categorical({'None'}, weight_cap_labels);
+% TT_IO = AddNewVar(TT_IO, Weight_Cap, 'Weight_Drive');
+
+%Tail_Mark = {''};
+%SS_IO_1 = AddNewVar(SS_IO_1, Tail_Mark, 'DOB');
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
@@ -38,23 +40,23 @@ SS_IO_2 = AddNewVar(SS_IO_2, Image_Orientation, 'Camera_Orientation', '', 'deg')
 
 % ------------------------ MOVE DELETE VAR ENTRY --------------------------
 
-% % Specify inputs
-% var_move = 'Fed_Pellets';
-% var_before = 'Laps_0_Deg';
-% remove = true;
-% 
-% % Make changes
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight', 'Human', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Baseline', 'Weight', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Drive', 'Weight_Baseline', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Cap', 'Weight_Drive', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Corrected', 'Weight_Cap', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Proportion', 'Weight_Corrected', true);
-% 
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Pellets', 'Laps_0_Deg', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Mash', 'Fed_Pellets', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Ensure', 'Fed_Mash', true);
-% SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_STAT', 'Fed_Ensure', true);
+% Specify inputs
+var_move = 'Fed_Pellets';
+var_before = 'Laps_0_Deg';
+remove = true;
+
+% Make changes
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight', 'Human', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Baseline', 'Weight', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Drive', 'Weight_Baseline', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Cap', 'Weight_Drive', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Corrected', 'Weight_Cap', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Weight_Proportion', 'Weight_Corrected', true);
+
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Pellets', 'Laps_0_Deg', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Mash', 'Fed_Pellets', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_Ensure', 'Fed_Mash', true);
+SS_IO_2 = MoveVarEntries(SS_IO_2, 'Fed_STAT', 'Fed_Ensure', true);
 
 %% =========================== SAVE TABLES ================================
 

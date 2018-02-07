@@ -967,7 +967,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Enable text info
                     Object_Group_State('Text_Objects', 'Enable')
                     
-                    % Show all objects on 'ICR STUDY' tab
+                    % Show all objects on 'ICR ARENA' tab
                     TabGrpChange(D.UI.tabICR);
                     
                 case 'RUN ICR TASK'
@@ -4443,7 +4443,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_wdth, ...
             pan_ht];
         
-        %% CREATE TEMPLATE ETC OBJECTS
+        %% CREATE TEMPLATE OBJECTS
         
         % Create tab group
         D.UI.tblTabSubGrp = ...
@@ -4451,26 +4451,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Units', 'Normalized', ...
             'UserData', 'TT TRACK', ...
             'Position',D.UI.tab_grp_pos);
-        
-        % Add SS_IO_1 tab
-        D.UI.tbleSSIO1tab = uitab(D.UI.tblTabSubGrp, ...
-            'Title', 'All', ...
-            'BackgroundColor', [1, 1, 1]);
-        
-        % Add SS_IO_2 tab
-        D.UI.tbleSSIO2tab = uitab(D.UI.tblTabSubGrp, ...
-            'Title', D.PAR.ratLab(2:end), ...
-            'BackgroundColor', [1, 1, 1]);
-        
-        % Add SS_IO_3 tab
-        D.UI.tbleSSIO3tab = uitab(D.UI.tblTabSubGrp, ...
-            'Title', 'Health', ...
-            'BackgroundColor', [1, 1, 1]);
-        
-        % Add TT_IO tab
-        D.UI.tbleTTIOtab = uitab(D.UI.tblTabSubGrp, ...
-            'Title', 'TT', ...
-            'BackgroundColor', [1, 1, 1]);
         
         % Table Template
         D.UI.tblTemplate = uitable(...
@@ -4789,14 +4769,47 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% CREATE MAIN NOTES TABLE OBJECTS
         
+                % Get list of included rats
+        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
+        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
+        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
+        
+        % Add SS_IO_1 tab
+        D.UI.tbleSSIO1tab = uitab(D.UI.tblTabSubGrp, ...
+            'Title', 'All', ...
+            'BackgroundColor', [1, 1, 1]);
+        
         % Format SS_IO_1 table
         D.UI.tblSSIO1 = FormatTable(D.SS_IO_1, D.UI.tbleSSIO1tab);
         
-        % Format SS_IO_2 table
-        D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.PAR.ratLab), D.UI.tbleSSIO2tab);
+        % Add SS_IO_3 tab
+        D.UI.tbleSSIO3tab = uitab(D.UI.tblTabSubGrp, ...
+            'Title', 'Health', ...
+            'BackgroundColor', [1, 1, 1]);
         
         % Format SS_IO_3 table
         D.UI.tblSSIO3 = FormatTable(D.SS_IO_3.(D.PAR.ratLab), D.UI.tbleSSIO3tab);
+        
+        
+        % Add TT_IO tab
+        if D.F.rat_implanted || D.PAR.sesType == 'TT_Turn'
+            D.UI.tbleTTIOtab = uitab(D.UI.tblTabSubGrp, ...
+                'Title', 'TT', ...
+                'BackgroundColor', [1, 1, 1]);
+        end
+        
+        % Add SS_IO_2 tab for each rat
+        for z_r = 1:length(rat_list)
+            
+            % Add SS_IO_2 tab
+            D.UI.tbleSSIO2tab(z_r) = uitab(D.UI.tblTabSubGrp, ...
+                'Title', rat_list{z_r}(2:end), ...
+                'BackgroundColor', [1, 1, 1]);
+            
+            % Format SS_IO_2 tables
+            D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(rat_list{z_r}), D.UI.tbleSSIO2tab(z_r));
+            
+        end
         
         % Add new row to top of SS_IO_3 table
         if ~isempty(D.UI.tblSSIO3.RowName)
@@ -4853,8 +4866,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblSSIO3.ColumnName(notes_ind) = [];
         D.UI.tblSSIO3.Data(:,notes_ind) = [];
         notes_ind = ismember(D.UI.tblSSIO2.ColumnName, 'Notes');
-        D.UI.tblSSIO2.Data(:,notes_ind) = [];
-        D.UI.tblSSIO2.ColumnName(notes_ind) = [];
+        D.UI.tblSSIO2(1).Data(:,notes_ind) = [];
+        D.UI.tblSSIO2(1).ColumnName(notes_ind) = [];
         
         %% CREATE TT TABLE OBJECTS
         
@@ -4867,7 +4880,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set panels disabled
         if ~D.F.rat_implanted && D.PAR.sesType ~= 'TT_Turn'
-            delete(D.UI.tbleTTIOtab);
+            
+            % Disable tt notes panel 
             Panel_State(D.UI.panTTNotes, 'Disable');
             
         else
@@ -4984,23 +4998,45 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             ui_table.ColumnWidth = repmat({'auto'}, 1, size(c_io,2));
             
             % Convert cat data to popmenu
-            cat_ind = find(cat_ind);
-            for z_c = 1:length(cat_ind)
+            cat_col = find(cat_ind);
+            for z_c = 1:length(cat_col)
                 
                 % Format for popmenu
-                ui_table.ColumnFormat(cat_ind(z_c)) = ...
-                    {categories(c_io{1,cat_ind(z_c)})'};
+                ui_table.ColumnFormat(cat_col(z_c)) = ...
+                    {categories(c_io{1,cat_col(z_c)})'};
                 
                 % Add data
-                cell_str = cellfun(@(x) char(x), c_io(:,cat_ind(z_c)), 'uni', false);
-                ui_table.Data(:,cat_ind(z_c)) = cell_str;
+                cell_str = cellfun(@(x) char(x), c_io(:,cat_col(z_c)), 'uni', false);
+                ui_table.Data(:,cat_col(z_c)) = cell_str;
                 
                 % Resize column
-                wdth = max([10*length(ui_table.ColumnName{cat_ind(z_c)}); ...
+                wdth = max([10*length(ui_table.ColumnName{cat_col(z_c)}); ...
                     10*cell2mat(cellfun(@(x) max(size(x)), ...
                     cell_str, 'uni', false))]);
-                ui_table.ColumnWidth(cat_ind(z_c)) = {wdth};
+                ui_table.ColumnWidth(cat_col(z_c)) = {wdth};
             end
+            
+            % Remove vars with no values assigned
+            iif = @(varargin) varargin{2 * find([varargin{1:2:end}], 1, 'first')}();
+            exc_na = @(x1, x2, x3, y) iif( ...
+                x1, @() isnan(y{:}), ...
+                x2,       @() strcmp(y{:}, 'NA'), ...
+                x3,       @() strcmp(y{:}, '<undefined>'), ...
+                true,     false);
+             exc_mat = arrayfun(@(x1, x2, x3, y) exc_na(x1, x2, x3, y), ...
+                repmat(num_ind, size(ui_table.Data, 1), 1), ...
+                repmat(char_ind, size(ui_table.Data, 1), 1), ...
+                repmat(cat_ind, size(ui_table.Data, 1), 1), ...
+                ui_table.Data);
+            exc_ind = all(exc_mat, 1);
+            
+            % Keep notes
+            exc_ind(ismember(ui_table.ColumnName, 'Notes')) = false;
+            
+            % Remove values from table
+            set(ui_table, 'Data', ui_table.Data(:,~exc_ind));
+            set(ui_table, 'ColumnName', ui_table.ColumnName(~exc_ind));
+            set(ui_table, 'ColumnFormat', ui_table.ColumnFormat(~exc_ind));
             
             % Flip table so newest entries at top
             ui_table.Data = flip(ui_table.Data, 1);
@@ -12439,7 +12475,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store health info
         var_ind = find(contains(D.UI.tblSSIO3.ColumnName,'Health'));
         for z_v = 1:length(var_ind)
-            D.SS_IO_3.(D.PAR.ratLab){end, var_ind(z_v)+1}(:) = ...
+            ss_ind = ...
+                ismember(D.SS_IO_3.(D.PAR.ratLab).Properties.VariableNames, ...
+                D.UI.tblSSIO3.ColumnName{var_ind(z_v)});
+            D.SS_IO_3.(D.PAR.ratLab){end, ss_ind}(:) = ...
                 D.UI.tblSSIO3.Data{end, var_ind(z_v)};
         end
         
@@ -12454,6 +12493,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 % -------------------------SAVE TASK DATA---------------------------
     function [was_ran] = Save_Task_Data()
+        
+        % Switch to main tab for gui image capture
+        TabGrpChange(D.UI.tabICR);
+        pause(0.1)
         
         % Save GUI window image
         export_fig(FIGH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.png'));

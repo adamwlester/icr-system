@@ -397,10 +397,6 @@ T.Human = categorical({'<undefined>'}, ...
 
 T.VT_Pixel_Coordinates = {nan(1,3)};
 
-T.Camera_Orientation = nan;
-
-T.Image_Orientation = {nan(1,2)};
-
 T.Start_Time = {''};
 
 T.Total_Time = nan;
