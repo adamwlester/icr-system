@@ -7563,6 +7563,63 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Parent', D.UI.axZoneH(2));
         end
         
+        % Remove unused vals
+        dist_cut = find(dist_short ~= 0, 1, 'last');
+        zone_interp = zone_short(1:dist_cut);
+        dist_interp = dist_short(1:dist_cut);
+        
+        % Compute cumsum and interpolate from random data
+        cum = cumsum(dist_interp);
+        cum = cum/max(cum);
+        
+        % get random values based on distrebution
+        bins = linspace(min(zone_interp)-5,max(zone_interp),length(zone_interp)+1);
+        % run initial rand
+        rand_dist = round(interp1(cum, zone_interp, sort(rand(1,100))));
+        samp_hist = histc(rand_dist, bins);
+        samp_hist = samp_hist(1:end-1);
+        
+        % Get final zone dist
+        zone_arr = cell2mat(arrayfun(@(x) (repmat(zone_interp(x),samp_hist(x),1)), ...
+            (1:dist_cut)', 'Uni', false));
+        % shuffle
+        zone_arr = zone_arr(randperm(length(zone_arr)));
+        
+        % remove unused values
+        zone_arr(zone_arr < -20 | zone_arr > 20) = 0;
+        
+        % Plot saved sample dist
+        bins = ...
+            linspace(min(-1*D.PAR.zoneLocs)-2.5, max(-1*D.PAR.zoneLocs)+2.5, length(D.PAR.zoneLocs)+1);
+        samp_hist = histc(zone_arr, bins);
+        samp_hist(end) = [];
+        % rescale for plotting
+        samp_dist = samp_hist'/max(samp_hist);
+        
+        % Reverse sign and store values
+        D.PAR.zone_arr = zone_arr*-1;
+        
+        % plot sample dist
+        if D.PAR.sesCue ~= 'None'
+            D.UI.zone_arrH = Plot_Zone_Hist(...
+                -1*D.PAR.zoneLocs, samp_dist, 2, ...
+                [0, 0, 0], ...
+                0.25, ...
+                D.UI.axZoneH(2));
+        end
+        
+        % Compute reward vlue by pos
+        rew_by_pos = dist_short(2:end-1);
+        rew_by_pos = (rew_by_pos-min(rew_by_pos)) / ...
+            (max(rew_by_pos)-min(rew_by_pos));
+        rew_by_pos = ...
+            rew_by_pos * ...
+            diff(D.PAR.rewDurLim) + D.PAR.rewDurLim(1);
+        % must be convertable to byte
+        rew_by_pos = floor(rew_by_pos/10)*10; %#ok<NASGU>
+        % Store values
+        %D.PAR.zoneRewDur = rew_by_pos;
+        
         % Keep count shown on top of ax 1
         Safe_Set(D.UI.axZoneH(1), ...
             'XAxisLocation','top', ...
