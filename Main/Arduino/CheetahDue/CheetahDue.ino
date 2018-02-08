@@ -241,6 +241,7 @@ struct A2C
 a2c;
 
 // Reward
+int cnt_rew;
 uint32_t rewDur; // (ms) 
 uint32_t t_rewEnd;
 uint32_t word_rewStr;
@@ -1169,6 +1170,9 @@ void StartRew()
 	// Set rew on pins
 	SetPort(word_rewStr, word_rewEnd);
 
+	// Add to count
+	cnt_rew++;
+
 	// Set rew off time
 	t_rewEnd = millis() + rewDur;
 
@@ -1181,13 +1185,16 @@ void StartRew()
 	fc.isRewarding = true;
 
 	// Print
-	sprintf(str, "[StartRew] REWARDING(%dms)...", rewDur);
+	sprintf(str, "[StartRew] RUNNING: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
 	DebugFlow(str);
 }
 
 // END REWARD
 void EndRew()
 {
+	// Local vars
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+
 	if (millis() > t_rewEnd)
 	{
 
@@ -1195,6 +1202,7 @@ void EndRew()
 		SetPort(word_rewEnd, word_rewStr);
 
 		fc.isRewarding = false;
+		sprintf(str, "[StartRew] FINISHED: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
 		DebugFlow("[EndRew] REWARD OFF");
 
 	}

@@ -268,6 +268,7 @@ public:
 	double zoneBounds[zoneLng][2] = { { 0 } };
 	int zoneOccTim[zoneLng] = { 0 };
 	int zoneOccCnt[zoneLng] = { 0 };
+	int cnt_rew = 0;
 	uint32_t t_nowZoneCheck = 0;
 	uint32_t t_lastZoneCheck = 0;
 	char modeReward[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
@@ -1897,9 +1898,14 @@ void REWARD::StartRew()
 	// Hard stop
 	HardStop("StartRew");
 
+	// Add to count
+	if (strcmp(modeReward, "Button") != 0) {
+		cnt_rew++;
+	}
+
 	// Store and send packet imediately if coms setup
 	if (fc.isSesStarted) {
-		QueuePacket(&r2a, 'r', duration);
+		QueuePacket(&r2a, 'r', duration, cnt_rew);
 		SendPacket(&r2a);
 	}
 
@@ -1924,8 +1930,8 @@ void REWARD::StartRew()
 	}
 
 	// Log/print 
-	sprintf(str, "RUNNING: \"%s\" Reward: dt_rew=%dms dt_retract=%d...",
-		modeReward, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
+	sprintf(str, "RUNNING: \"%s\" Reward: cnt_rew=%d dt_rew=%dms dt_retract=%d...",
+		modeReward, cnt_rew, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(__FUNCTION__, __LINE__, str, t_rew_str);
 
 
@@ -1970,8 +1976,8 @@ bool REWARD::EndRew()
 	t_rew_end = millis();
 
 	// Log/print
-	sprintf(str, "FINISHED: \"%s\" Reward: dt_rew=%dms dt_retract=%d",
-		modeReward, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
+	sprintf(str, "FINISHED: \"%s\" Reward: cnt_rew=%d dt_rew=%dms dt_retract=%d",
+		modeReward, cnt_rew, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
 	DebugFlow(__FUNCTION__, __LINE__, str, t_rew_end);
 
 	// Clear LCD
@@ -8490,7 +8496,7 @@ void loop() {
 		if (strcmp(Reward.modeReward, "Now") != 0 &&
 			strcmp(Reward.modeReward, "Button") != 0) {
 
-			QueuePacket(&r2c, 'Z', Reward.zoneInd + 1, 0, 0, 0, true);
+			QueuePacket(&r2c, 'Z', Reward.zoneInd + 1, Reward.cnt_rew, 0, 0, true);
 		}
 	}
 

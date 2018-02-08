@@ -413,6 +413,17 @@ namespace ICR_Run
                 // Show matlab app window
                 com_Matlab.Visible = 1;
 
+                // Check for break line input
+                if (db.is_debugRun)
+                {
+                    // Keep checking on seperate thread
+                    new Thread(delegate ()
+                    {
+                        CheckBreakInput();
+                    }).Start();
+                    csLog.Print("[Setup] START: CheckBreakInput()");
+                }
+
                 csLog.Print("[Setup] FINISHED: Setup Debugging");
 
                 // Log/print db settings
@@ -443,7 +454,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: ICR_GUI to Load");
+                fc.LogWarning("**WARINING**  [Setup] ABORTED: WAIT FOR: ICR_GUI to Load");
                 fc.isMatComActive = false;
                 return false;
             }
@@ -492,7 +503,14 @@ namespace ICR_Run
             else
             {
                 // Program timed out because matlab was hanging on connect
-                fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: AC Connect");
+                if (!fc.doAbortCS)
+                {
+                    fc.LogWarning("**WARINING**  [Setup] ABORTED: WAIT FOR: AC Connect");
+                }
+                else
+                {
+                    fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: AC Connect");
+                }
                 fc.SetAbort(set_abort_cs: true, is_mat_failed: true);
                 return false;
             }
@@ -507,7 +525,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: ICR_GUI Handshake Request...");
+                fc.LogWarning("**WARINING** [Setup] ABORTED: WAIT FOR: ICR_GUI Handshake Request...");
                 return false;
             }
 
@@ -529,7 +547,7 @@ namespace ICR_Run
                 }
                 else
                 {
-                    fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: ICR_GUI Handshake to be Sent...");
+                    fc.LogWarning("**WARINING** [Setup] ABORTED: WAIT FOR: ICR_GUI Handshake to be Sent...");
                     return false;
                 }
 
@@ -598,7 +616,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: Robot Handshake");
+                fc.LogWarning("**WARINING** [Setup] ABORTED: Robot Handshake");
                 fc.isRobComActive = false;
                 fc.isArdComActive = false;
                 return false;
@@ -638,7 +656,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: Hardware Test");
+                fc.LogWarning("**WARINING** [Setup] ABORTED: Hardware Test");
                 return false;
             }
 
@@ -665,7 +683,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: ICR_GUI NLX Setup");
+                fc.LogWarning("**WARINING** [Setup] ABORTED: WAIT FOR: ICR_GUI NLX Setup");
                 return false;
             }
 
@@ -717,7 +735,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: Confirm Robot Streaming");
+                fc.LogWarning("**WARINING** [Setup] ABORTED: Confirm Robot Streaming");
                 return false;
             }
 
@@ -732,13 +750,13 @@ namespace ICR_Run
                     csLog.Print("[Setup] SUCCEEDED: WAIT FOR: Setup Parameters");
                 else
                 {
-                    fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: Setup Parameters");
+                    fc.LogWarning("**WARINING** [Setup] ABORTED: WAIT FOR: Setup Parameters");
                     return false;
                 }
             }
             else
             {
-                fc.LogError("!!ERROR!! [Setup] ABORTED: WAIT FOR: Setup Parameters");
+                fc.LogWarning("**WARINING** [Setup] ABORTED: WAIT FOR: Setup Parameters");
                 return false;
             }
 
@@ -781,7 +799,7 @@ namespace ICR_Run
             }
             else
             {
-                fc.LogError("!!ERROR!! [Run] ABORTED: WAIT FOR: MoveTo Start Command from MATLAB");
+                fc.LogWarning("**WARINING** [Run] ABORTED: WAIT FOR: MoveTo Start Command from MATLAB");
                 return false;
             }
 
@@ -2489,12 +2507,6 @@ namespace ICR_Run
                     fc.doAbortMat = false;
                 }
 
-                // Check for break line input
-                if (db.is_debugRun)
-                {
-                    CheckBreakInput();
-                }
-
                 // Pause thread
                 if (dt_check < 5)
                     Thread.Sleep((int)(5 - dt_check));
@@ -3138,73 +3150,58 @@ namespace ICR_Run
         #region ============= MINOR METHODS =============
 
         // CHECK CONSOLE FOR BREAK DEBUG REQUEST
-        public static char CheckBreakInput()
+        public static void CheckBreakInput()
         {
             // Local vars
             long t_check_enter = sw_main.ElapsedMilliseconds + 1000;
             long t_check_answer = sw_main.ElapsedMilliseconds + 10000;
-            char ch_cmd_1 = '\0';
-            char ch_enter_1 = '\0';
-            char ch_cmd_2 = '\0';
-            char ch_enter_2 = '\0';
-            int x;
+            string msg;
 
-            // Check for key press
-            ch_cmd_1 = (char)Console.ReadKey().Key;
-
-            // Bail if no input
-            if (ch_cmd_1 == '\0')
+            // Keep looping
+            while (!fc.doExit)
             {
-                return '\0';
-            }
 
-            // Check for 'b'
-            if (ch_cmd_1 == 'B')
-            {
-                // Get second key press
-                while (ch_enter_1 == '\0' && sw_main.ElapsedMilliseconds < t_check_enter)
+                // Reinitialize vars
+                string cmd = null;
+                int x;
+
+                // Check for input
+                cmd = Console.ReadLine();
+
+                // Bail if no input
+                if (cmd == null)
                 {
-                    ch_enter_1 = (char)Console.ReadKey().Key;
+                    // Pause and bail
+                    continue;
                 }
 
-                // Check for enter
-                if (ch_enter_1 == '\r')
+                // Check for 'b'
+                if (cmd == "db")
                 {
+
                     // Print message
-                    string msg = "\nDO YOU WANT TO BREAK HERE (Y/N + ENTER): ";
+                    msg = "\nDO YOU WANT TO DEBUG MATLAB (Y/N + ENTER): ";
                     Console.Write(msg);
 
-                    // Get response
-                    while (ch_enter_2 != '\r' && sw_main.ElapsedMilliseconds < t_check_answer)
-                    {
-                        if (ch_cmd_2 != 'N' && ch_cmd_2 != 'Y')
-                            ch_cmd_2 = (char)Console.ReadKey().Key;
-                        else
-                            ch_enter_2 = (char)Console.ReadKey().Key;
-                    }
+                    // Check for input
+                    cmd = Console.ReadLine();
 
                     // Handle response
-                    if (ch_cmd_2 == 'Y')
+                    if (cmd == "Y" || cmd == "y")
                     {
                         // Print next message
                         msg = "\nENTER BREAK LINE NUMBER: ";
                         Console.Write(msg);
 
-                        // GET LINE NUMBER
+                        // Get line number
                         x = Convert.ToInt32(Console.ReadLine());
 
                         // Break matlab at this line
                         msg = String.Format("dbstop at {0} in ICR_GUI", x);
                         SendMCOM(msg: msg);
-
                     }
                 }
             }
-
-            // Rentern entry
-            return ch_cmd_1;
-
-
 
         }
 
@@ -3445,14 +3442,6 @@ namespace ICR_Run
             // Local vars
             int id_ind = id != ' ' ? ID_Ind(id) : PackID_Ind(pack);
 
-            //// TEMP
-            //if (idArr[id_ind] == 'M')
-            //{
-            //    string str = String.Format("    [START] SetMsgState {0}: id={1} _isSentRcv={2} _isConf={3} _isDone={4}",
-            //        _objID, idArr[id_ind], _isSentRcv[id_ind], _isConf[id_ind], _isDone[id_ind]);
-            //    Console.WriteLine(str);
-            //}
-
             // Set sent/received check flag
             if (set_sent_rcvd)
             {
@@ -3473,15 +3462,7 @@ namespace ICR_Run
                 lock (_lock_isDone)
                     _isDone[id_ind] = state;
             }
-
-
-            //// TEMP
-            //if (idArr[id_ind] == 'M')
-            //{
-            //    string str = String.Format("    [END] SetMsgState {0}: id={1} _isSentRcv={2} _isConf={3} _isDone={4}",
-            //    _objID, idArr[id_ind], _isSentRcv[id_ind], _isConf[id_ind], _isDone[id_ind]);
-            //    Console.WriteLine(str);
-            //}
+            
         }
 
         // Get check status
@@ -3490,14 +3471,6 @@ namespace ICR_Run
             // Local vars
             int id_ind = ID_Ind(id);
             bool val = false;
-
-            //// TEMP
-            //if (idArr[id_ind] == 'M')
-            //{
-            //    string str = String.Format("    [START] GetMsgState {0}: id={1} _isSentRcv={2} _isConf={3} _isDone={4}",
-            //    _objID, idArr[id_ind], _isSentRcv[id_ind], _isConf[id_ind], _isDone[id_ind]);
-            //    Console.WriteLine(str);
-            //}
 
             // Set sent/received check flag
             if (get_sent_rcvd)
@@ -3528,14 +3501,6 @@ namespace ICR_Run
                     _isDone[id_ind] = false;
                 }
             }
-
-            //// TEMP
-            //if (idArr[id_ind] == 'M')
-            //{
-            //    string str = String.Format("    [END] GetMsgState {0}: id={1} _isSentRcv={2} _isConf={3} _isDone={4}",
-            //    _objID, idArr[id_ind], _isSentRcv[id_ind], _isConf[id_ind], _isDone[id_ind]);
-            //    Console.WriteLine(str);
-            //}
 
             // Return last value
             return val;
