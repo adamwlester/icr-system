@@ -2489,6 +2489,12 @@ namespace ICR_Run
                     fc.doAbortMat = false;
                 }
 
+                // Check for break line input
+                if (db.is_debugRun)
+                {
+                    CheckBreakInput();
+                }
+
                 // Pause thread
                 if (dt_check < 5)
                     Thread.Sleep((int)(5 - dt_check));
@@ -3130,6 +3136,77 @@ namespace ICR_Run
         #endregion
 
         #region ============= MINOR METHODS =============
+
+        // CHECK CONSOLE FOR BREAK DEBUG REQUEST
+        public static char CheckBreakInput()
+        {
+            // Local vars
+            long t_check_enter = sw_main.ElapsedMilliseconds + 1000;
+            long t_check_answer = sw_main.ElapsedMilliseconds + 10000;
+            char ch_cmd_1 = '\0';
+            char ch_enter_1 = '\0';
+            char ch_cmd_2 = '\0';
+            char ch_enter_2 = '\0';
+            int x;
+
+            // Check for key press
+            ch_cmd_1 = (char)Console.ReadKey().Key;
+
+            // Bail if no input
+            if (ch_cmd_1 == '\0')
+            {
+                return '\0';
+            }
+
+            // Check for 'b'
+            if (ch_cmd_1 == 'B')
+            {
+                // Get second key press
+                while (ch_enter_1 == '\0' && sw_main.ElapsedMilliseconds < t_check_enter)
+                {
+                    ch_enter_1 = (char)Console.ReadKey().Key;
+                }
+
+                // Check for enter
+                if (ch_enter_1 == '\r')
+                {
+                    // Print message
+                    string msg = "\nDO YOU WANT TO BREAK HERE (Y/N + ENTER): ";
+                    Console.Write(msg);
+
+                    // Get response
+                    while (ch_enter_2 != '\r' && sw_main.ElapsedMilliseconds < t_check_answer)
+                    {
+                        if (ch_cmd_2 != 'N' && ch_cmd_2 != 'Y')
+                            ch_cmd_2 = (char)Console.ReadKey().Key;
+                        else
+                            ch_enter_2 = (char)Console.ReadKey().Key;
+                    }
+
+                    // Handle response
+                    if (ch_cmd_2 == 'Y')
+                    {
+                        // Print next message
+                        msg = "\nENTER BREAK LINE NUMBER: ";
+                        Console.Write(msg);
+
+                        // GET LINE NUMBER
+                        x = Convert.ToInt32(Console.ReadLine());
+
+                        // Break matlab at this line
+                        msg = String.Format("dbstop at {0} in ICR_GUI", x);
+                        SendMCOM(msg: msg);
+
+                    }
+                }
+            }
+
+            // Rentern entry
+            return ch_cmd_1;
+
+
+
+        }
 
         // COMPUTE DIFF FOR RAD INPUT
         public static double RadDiff(double rad1, double rad2)
