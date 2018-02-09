@@ -2054,10 +2054,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Possible mons
         D.UI.figMon = [1,1,1];
-        if size(D.UI.monPos,2) > 1
+        if size(D.UI.monPos,1) > 1
             D.UI.figMon(2) = 2;
         end
-        if size(D.UI.monPos,2) > 2
+        if size(D.UI.monPos,1) > 2
             D.UI.figMon(3) = 3;
         end
         
@@ -2065,8 +2065,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         fig_wh = [1240 1008];
         fig_btm = 42;
         for z_m = 1:3
+            if z_m > size(D.UI.monPos,1)
+               continue;
+            end
             fig_lft = D.UI.monPos(D.UI.figMon(z_m),1) + (D.UI.monPos(D.UI.figMon(z_m),3)-fig_wh(1))/2;
-            %fig_btm = D.UI.monPos(D.UI.figMon(z_m),2) + (D.UI.monPos(D.UI.figMon(z_m),4)-fig_wh(2))/2;
             D.UI.figGrpPos{z_m} = [fig_lft, fig_btm, fig_wh(1), fig_wh(2)];
         end
         
@@ -12496,6 +12498,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'VT_Pixel_Coordinates'
         D.SS_IO_2.(D.PAR.ratLab).VT_Pixel_Coordinates{rowInd} = [D.PAR.R, D.PAR.XC, D.PAR.YC];
         
+        % Store 'Camera_Orientation'
+        D.SS_IO_2.(D.PAR.ratLab).Camera_Orientation(rowInd) = -20;
+        
+        % Store 'Image_Orientation'
+        if D.PAR.ratRotDrc == 'CW'
+            D.SS_IO_2.(D.PAR.ratLab).Image_Orientation{rowInd} = [0, 40];
+        else
+            D.SS_IO_2.(D.PAR.ratLab).Image_Orientation{rowInd} = [0, -40];
+        end
+        
         % Store 'Start_Time'
         D.SS_IO_2.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
         
@@ -14083,6 +14095,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Find moninotor window in
         for z_m = 1:3
+            
+            % Bail if monitor not present
+            if z_m > size(D.UI.monPos,1)
+                continue;
+            end
             
             % Move left
             if FIGH.Position(1) == D.UI.monPos(z_m, 1) + 1

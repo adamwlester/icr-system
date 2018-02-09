@@ -18,7 +18,7 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 %   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, 'Yoke_Mate', '', 'g');
 
 Camera_Orientation = nan;
-SS_IO_2 = AddNewVar(SS_IO_2, Camera_Orientation, 'VT_Pixel_Coordinates', '', 'rad');
+SS_IO_2 = AddNewVar(SS_IO_2, Camera_Orientation, 'VT_Pixel_Coordinates', '', 'deg');
 Image_Orientation = {nan(1,2)};
 SS_IO_2 = AddNewVar(SS_IO_2, Image_Orientation, 'Camera_Orientation', '', 'deg');
 

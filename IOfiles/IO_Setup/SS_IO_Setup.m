@@ -472,6 +472,8 @@ T.Notes = {''};
 
 % Set variable units
 T.Properties.VariableUnits{'VT_Pixel_Coordinates'} = 'pixels';
+T.Properties.VariableUnits{'Camera_Orientation'} = 'deg';
+T.Properties.VariableUnits{'Image_Orientation'} = 'deg';
 T.Properties.VariableUnits{'Total_Time'} = 'min';
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
 
