@@ -95,7 +95,7 @@ skin_cats{1} = {'Hydrated', 'Dehydrated'};
 feces_cats{1} = {'Firm', 'Soft', 'Present', 'Not Seen'};
 posture_cats{1} = {'Normal', 'Hunched'};
 
-%% ============================= SS_IO_1 ==================================
+%% ========================= UPDATE SS_IO_1 ===============================
 
 % Initialize table
 T = table('RowNames',ratList);
@@ -106,10 +106,10 @@ T.Include_Run = true(length(ratList),1);
 
 T.Include_Analysis = true(length(ratList),1);
 
+T.Implanted = false(length(ratList),1);
+
 T.Yoke_Mate = categorical(yokeList, ...
     [{'None'}; ratList]);
-
-T.Implanted = false(length(ratList),1);
 
 T.Feeder_Version = categorical(repmat({'Mobile_Feeder'},length(ratList),1), ...
     feeder_version_cats);
@@ -371,7 +371,7 @@ for i = 1:length(ratList)
     
 end
 
-%% ============================= SS_IO_2 ==================================
+%% ========================= UPDATE SS_IO_2 ===============================
 
 % Load existing dataset
 if exist(fullfile(ioDir, 'SS_IO_2.mat'), 'file')
@@ -634,7 +634,7 @@ SS_IO_3 = orderfields(SS_IO_3, ind);
 
 %% ============================== SAVE ====================================
 
-% Save out table
+% Save out tables
 save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1')
 save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2')
 save(fullfile(ioDir,'SS_IO_3'), 'SS_IO_3')

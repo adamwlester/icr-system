@@ -7009,30 +7009,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Start quadrant
         D.PAR.ratStrQuad = categorical({'<undefined>'}, D.PAR.listStrQuad);
         
-        % Get start quad for 'Track' task
-        if D.PAR.sesTask == 'Track'
+        % Manual track session set start quad to feeder pos
+        if D.PAR.sesCond == 'Manual_Training'
             
-            % Manual track session set start quad to feeder pos
-            if D.PAR.sesCond == 'Manual_Training'
-                
-                if D.PAR.ratFeedCnd == 'C1'
-                    D.PAR.ratStrQuad(:) = 'NW';
-                else
-                    D.PAR.ratStrQuad(:) = 'SE';
-                end
-                
-                % Set start quad to stored quad
+            if D.PAR.ratFeedCnd == 'C1'
+                D.PAR.ratStrQuad(:) = 'NW';
             else
-                
-                D.PAR.ratStrQuad = ... % [NE,SE,SW,NW]
-                    D.SS_IO_1.Start_Quadrant{D.PAR.ratIndSS}(D.PAR.sesNumAll);
+                D.PAR.ratStrQuad(:) = 'SE';
             end
             
-        end
-        
-        % For forage session always set start to 'NE'
-        if D.PAR.sesTask == 'Forage'
-            D.PAR.ratStrQuad(:) = 'NE';
+            % Set start quad to stored quad
+        else
+            
+            D.PAR.ratStrQuad = ... % [NE,SE,SW,NW]
+                D.SS_IO_1.Start_Quadrant{D.PAR.ratIndSS}(D.PAR.sesNumAll);
         end
         
         % Direction of rotation string
@@ -7193,6 +7183,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % START QUADRANT BOUNDS
         
         % Set 60 deg start quadrant bound to last lap bound
+        if D.PAR.sesTask == 'Track'
         D.PAR.strQuadBnds = [lapBndLocs(end) - 30, ...
             lapBndLocs(end) + 30];
         
@@ -7201,14 +7192,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.strQuadBnds = wrapTo2Pi(D.PAR.strQuadBnds);
         
         % FORAGE REWARD TARGET BOUNDS
-        
-        % [zone,min_max,rot_cond]
         D.PAR.rewTargBnds = NaN(length(D.PAR.frgTargDegArr),2);
         for z_targ = 1:length(D.PAR.frgTargDegArr)
             D.PAR.rewTargBnds(z_targ,:) = [...
                 Rad_Diff(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2)), ...
                 Rad_Sum(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2))];
-        end        
+        end
+        % [zone,min_max,rot_cond]
         D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
         
         %% SETUP ARENA FEATURES
@@ -7975,7 +7965,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Patch_State(D.UI.ptchStQ, 'Select');
         Safe_Set(D.UI.txtStQ, 'Visible', 'on');
         
-        % Get first target set to 180 deg from 'NE'
+        % Get first target set to south quad
         D.I.targ_now = ...
             find(round(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi))) == D.PAR.frgTargDegArr);
         Patch_State(D.UI.ptchRewTargBnds(D.I.targ_now), ...

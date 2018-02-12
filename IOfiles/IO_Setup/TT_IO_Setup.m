@@ -7,15 +7,14 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
 ratList = [...
-    {'r0000'} ...
-    {'r9999'} ...
+    {'r0495'} ...
     ];
 
 %% =========================== SETUP VARS =================================
 
 % Define categories
 human_cats = {'AWL', 'CB', 'Other'};
-bundle_cats = {'HIPP', 'Bndl_2'};
+bundle_cats = {'HIPP', 'MEC'};
 tetrode_cats = ...
     {'TT01','TT02','TT03','TT04','TT05','TT06', ...
     'TT07','TT08','TT09','TT10','TT11','TT12', ...
@@ -148,9 +147,20 @@ end
 % Copy sorted rat data
 TT_IO = sortrows(T, 'RowNames'); %#ok<NASGU>
 
+%% ========================= UPDATE SS_IO_1 ===============================
+
+% Load existing dataset
+if exist(fullfile(ioDir, 'SS_IO_1.mat'), 'file')
+    S = load(fullfile(ioDir, 'SS_IO_1.mat'));
+    SS_IO_1 = S.SS_IO_1;
+    
+    % Set implanted flag
+    SS_IO_1.Implanted(ismember(SS_IO_1.Properties.RowNames, ratList)) = true;
+end
 %% =========================== SAVE =======================================
 
-% Save out table
+% Save out tables
+save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1')
 save(fullfile(ioDir,'TT_IO'), 'TT_IO')
 
 %% =========================== TEMP =======================================
