@@ -1551,7 +1551,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % FORAGE TASK VARS
         
         % reward block dt
-        D.PAR.frgRewBlock = 5; % (sec) TEMP
+        D.PAR.frgRewBlock = 15; % (sec) 
         % pos occ bins
         D.PAR.frgBins = (D.UI.arnRad*2)/2 + 1;
         % occ bin edges
