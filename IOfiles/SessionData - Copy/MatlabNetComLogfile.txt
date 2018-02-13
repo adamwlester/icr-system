@@ -1,6 +1,0 @@
-NetCom Log File Opened - File Name:  MatlabNetComLogfile.txt
-Time Opened: (mm/dd/yyyy): 02/07/2018 At Time: 21:27:13
-NetCom Version 3.1.0
-
--*  ERROR  *- (mm/dd/yyyy): 02/07/2018 At Time: 21:27:14 - NetworkNodeClient::ConnectToServer - Error Connecting To Server, error code: WSAECONNREFUSED - The attempt to connect was forcefully rejected.
--*  ERROR  *- (mm/dd/yyyy): 02/07/2018 At Time: 21:27:15 - NetworkNodeClient::ConnectToServer - Error Connecting To Server, error code: WSAECONNREFUSED - The attempt to connect was forcefully rejected.

@@ -930,7 +930,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Start recording
-                    if D.F.cheetah_open
+                    if D.F.cheetah_open && ~D.PAR.sesType == 'TT_Turn'
                         Safe_Set(D.UI.toggRec,'Value', 1);
                         ToggRec(D.UI.toggRec);
                     end
@@ -14606,7 +14606,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Make sure rat is out
-            if ~D.F.rat_out
+            if ~D.F.rat_out && D.PAR.sesTask ~= 'Forage'
                 
                 dlg_h = dlgAWL(...
                     '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...

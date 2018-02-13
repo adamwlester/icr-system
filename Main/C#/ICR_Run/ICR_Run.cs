@@ -464,7 +464,7 @@ namespace ICR_Run
             csLog.Print("[Setup] RUNNING: Run Cheetah.exe...");
 
             // Check if this should be skipped
-            if (!fc.doSessionICR || fc.doSessionTurnTT)
+            if (!fc.doSessionICR && !fc.doSessionTurnTT)
             {
                 csLog.Print("[Setup] SKIPPED: Run Cheetah.exe");
             }
