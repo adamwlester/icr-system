@@ -14550,16 +14550,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         infstr = datestr(now, 'HH:MM:SS');
         Safe_Set(D.UI.editTimeInf(2), 'String', infstr)
         
-        % Halt robot if not already halted
-        if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
-            if (~D.F.halted)
-                Safe_Set(D.UI.toggHaltRob, 'Value', 1);
-                ToggHaltRob();
-            end
-        end
-        
-        % Check if rat is out of room for track run
+        % Hanle Track task
         if D.PAR.sesTask == 'Track'
+            
+            % Halt robot if not already halted
+            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
+                if (~D.F.halted)
+                    Safe_Set(D.UI.toggHaltRob, 'Value', 1);
+                    ToggHaltRob();
+                end
+            end
+            
+            % Check if rat is out of room for track run
             dlg_h = dlgAWL(...
                 'Take out rat', ...
                 'RAT OUT', ...
@@ -14571,22 +14573,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if ~strcmp(choice, ''); break; end
                 end
             end
+            
+            % Stop halt if still active
+            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
+                if (D.F.halted)
+                    Safe_Set(D.UI.toggHaltRob, 'Value', 0);
+                    ToggHaltRob();
+                end
+            end
+            
+            % Stop bulldoze if still active
+            if (get(D.UI.toggBulldoze, 'Value') == 1)
+                Safe_Set(D.UI.toggBulldoze, 'Value', 0);
+                PopBulldoze();
+            end
+            
         end
         
         % Post NLX event: rat out
         Send_M2NLX(D.NLX.rat_out_evt);
-        
-        % Stop halt if still active
-        if (D.F.halted)
-            Safe_Set(D.UI.toggHaltRob, 'Value', 0);
-            ToggHaltRob();
-        end
-        
-        % Stop bulldoze if still active
-        if (get(D.UI.toggBulldoze, 'Value') == 1)
-            Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-            PopBulldoze();
-        end
         
         % Save end time
         D.T.ses_end = Sec_DT(now);
