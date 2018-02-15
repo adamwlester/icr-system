@@ -1538,9 +1538,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % track width (cm)
         D.UI.trkWdt = 10;
         % random forrage radius (cm)
-        D.UI.frgRad = 60;
-        % rew zone width (cm)
-        D.UI.frgTargWdt = 15;
+        D.UI.frgRad = D.UI.arnRad - D.UI.trkWdt;
+        % rew target width (cm)
+        D.UI.frgTargWdt = 30;
         % track roh limits
         D.P.trackRohBnd(1) = 1 - (D.UI.trkWdt/D.UI.arnRad);
         D.P.trackRohBnd(2) = 1;
