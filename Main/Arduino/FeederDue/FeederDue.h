@@ -240,9 +240,10 @@ const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 // AUTODRIVER
 const double cm2stp = 200 / (9 * PI);
 const double stp2cm = (9 * PI) / 200;
-const float maxSpeed = 100; // (cm) 
-const float maxAcc = 80; // (cm) 
-const float maxDec = 160; // (cm)
+const float maxAccArr[2] = { 80, 10 }; // (cm/sec) 
+float maxAcc = maxAccArr[0]; // (cm/sec) 
+const float maxDec = 160; // (cm/sec)
+const float maxSpeed = 100; // (cm/sec) 
 double runSpeedNow = 0;
 char runDirNow = 'f';
 uint16_t adR_stat = 0x0;
@@ -291,6 +292,7 @@ const long armStepFreq = 1000; // (us)
 const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
+const float solOpenScaleArr[2] = { 1, 0.5 };
 
 // SOLONOIDS
 /*
@@ -319,7 +321,7 @@ float icNow = 0;
 
 // LEDs
 int trackLEDduty[2] = { 74, 255 }; // value between 0 and 255
-const int rewLEDmin[2] = { 0, 3};
+const int rewLEDmin[2] = { 0, 2};
 int rewLEDduty[2] = { rewLEDmin[0], 15 }; // value between 0 and 255
 
 // LCD

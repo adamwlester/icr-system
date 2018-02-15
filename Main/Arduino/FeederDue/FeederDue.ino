@@ -263,6 +263,7 @@ public:
 		-15,
 		-20,
 	};
+	int durationDefault = 2000; // (ms) 
 	static const int zoneLng =
 		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
 	double zoneBounds[zoneLng][2] = { { 0 } };
@@ -273,15 +274,15 @@ public:
 	uint32_t t_lastZoneCheck = 0;
 	char modeReward[10] = { 0 }; // ["None" "Free" "Cue" "Now"]
 	int occThresh = 0; // (ms)
-	int durationDefault = 1420; // (ms) 
 	int duration = 0; // (ms) 
+	float solOpenScale = 1;
 	byte durationByte = 0; // (ms) 
 	int zoneMin = 0;
 	int zoneMax = 0;
 	double boundMin = 0;
 	double boundMax = 0;
-	uint32_t t_rew_str = 0;
-	uint32_t t_rew_end = 0;
+	uint32_t t_rewStr = 0;
+	uint32_t t_rewEnd = 0;
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
 	uint32_t t_moveArmStr = 0;
@@ -515,10 +516,10 @@ bool SendPacket(R2 *r2);
 bool CheckResend(R2 *r2);
 
 // RESET AUTODRIVER BOARDS
-void AD_Reset(float max_speed = maxSpeed, float max_acc = maxAcc, float max_dec = maxDec);
+void AD_Reset(float max_acc, float max_dec, float max_speed);
 
 // CONFIGURE AUTODRIVER BOARDS
-void AD_Config(float max_speed, float max_acc, float max_dec);
+void AD_Config(float max_acc, float max_dec, float max_speed);
 
 // CHECK AUTODRIVER STATUS
 void AD_CheckOC(bool force_check = false);
@@ -1884,15 +1885,9 @@ void REWARD::StartRew()
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 
-	// Only run for non forage sessions
+	// Set motor hold time
 	if (!fc.isForageTask) {
-
-		// Set to extend feeder arm for track session
-		ExtendFeedArm();
-
-		// Set hold time
 		BlockMotorTill(dt_rewBlock);
-
 	}
 
 	// Hard stop
@@ -1903,7 +1898,7 @@ void REWARD::StartRew()
 		cnt_rew++;
 	}
 
-	// Store and send packet imediately if coms setup
+	// Send ard packet imediately
 	if (fc.isSesStarted) {
 		QueuePacket(&r2a, 'r', duration, cnt_rew);
 		SendPacket(&r2a);
@@ -1916,23 +1911,32 @@ void REWARD::StartRew()
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
 
-	// Compute reward end time
-	t_rew_str = millis();
-	t_closeSol = t_rew_str + duration;
+	// Extend feeder arm
+	if (!fc.isForageTask) {
+		ExtendFeedArm();
+	}
 
-	// Compute retract arm time for non-button reward
-	if (strcmp(modeReward, "Button") != 0) {
-		t_retractArm = t_rew_str + dt_rewBlock;
+	// Compute retract arm time
+	if (strcmp(modeReward, "Button") != 0 && 
+		!fc.isForageTask) {
+
+		// Compute time and set flag
+		t_retractArm = t_rewStr + dt_rewBlock;
 		doTimedRetract = true;
 	}
 	else {
 		doTimedRetract = false;
 	}
 
+	// Compute reward end time
+	t_rewStr = millis();
+	t_rewEnd = t_rewStr + duration;
+	t_closeSol = t_rewStr + (int)((float)duration*solOpenScale);
+
 	// Log/print 
-	sprintf(str, "RUNNING: \"%s\" Reward: cnt_rew=%d dt_rew=%dms dt_retract=%d...",
-		modeReward, cnt_rew, duration, doTimedRetract ? t_retractArm - t_rew_str : 0);
-	DebugFlow(__FUNCTION__, __LINE__, str, t_rew_str);
+	sprintf(str, "RUNNING: \"%s\" Reward: cnt_rew=%d dt_sol=%dms dt_rew=%dms dt_retract=%d...",
+		modeReward, cnt_rew, t_closeSol- t_rewStr, duration, doTimedRetract ? t_retractArm - t_rewStr : 0);
+	DebugFlow(__FUNCTION__, __LINE__, str, t_rewStr);
 
 
 	// Print to LCD for manual rewards
@@ -1956,29 +1960,44 @@ bool REWARD::EndRew()
 		return false;
 	}
 
-	// Bail if time not up
-	if (millis() < t_closeSol) {
-		return false;
-	}
-
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
+	// Check if not time to close solonoid
+	if (millis() < t_closeSol) {
+		return false;
+	}
+
 	// Close solenoid
-	digitalWrite(pin.Rel_Rew, LOW);
+	if (digitalRead(pin.Rel_Rew) == HIGH) {
+		digitalWrite(pin.Rel_Rew, LOW);
+
+		// Store actual time
+		t_closeSol = millis();
+
+		// Log/print
+		sprintf(str, "Closed Solonoid: \"%s\" Reward: cnt_rew=%d dt_sol=%dms",
+			modeReward, cnt_rew, t_closeSol - t_rewStr);
+		DebugFlow(__FUNCTION__, __LINE__, str, t_rewEnd);
+	}
+
+	// Bail if not time to end reward
+	if (millis() < t_rewEnd) {
+		return false;
+	}
 
 	// Turn off reward LED
 	analogWrite(pin.RewLED_R, rewLEDduty[0]);
 	analogWrite(pin.RewLED_C, rewLEDduty[0]);
 
-	// Store time
-	t_rew_end = millis();
+	// Store actual time
+	t_rewEnd = millis();
 
 	// Log/print
-	sprintf(str, "FINISHED: \"%s\" Reward: cnt_rew=%d dt_rew=%dms dt_retract=%d",
-		modeReward, cnt_rew, t_rew_end - t_rew_str, doTimedRetract ? t_retractArm - t_rew_str : 0);
-	DebugFlow(__FUNCTION__, __LINE__, str, t_rew_end);
+	sprintf(str, "FINISHED: \"%s\" Reward: cnt_rew=%d dt_sol=%dms dt_rew=%dms dt_retract=%d",
+		modeReward, cnt_rew, t_closeSol - t_rewStr, t_rewEnd - t_rewStr, doTimedRetract ? t_retractArm - t_rewStr : 0);
+	DebugFlow(__FUNCTION__, __LINE__, str, t_rewEnd);
 
 	// Clear LCD
 	if (strcmp(modeReward, "Button") == 0) {
@@ -2342,7 +2361,7 @@ void REWARD::CheckFeedArm()
 
 			// Log/print
 			sprintf(str, "Time to Retract Feeder Arm: dt_rew=%d",
-				millis() - t_rew_str);
+				millis() - t_rewStr);
 			DebugFlow(__FUNCTION__, __LINE__, str);
 
 			// Set to retract
@@ -4567,7 +4586,7 @@ bool CheckResend(R2 *r2)
 #pragma region --------MOVEMENT AND TRACKING---------
 
 // CONFIGURE AUTODRIVER BOARDS
-void AD_Config(float max_speed, float max_acc, float max_dec)
+void AD_Config(float max_acc, float max_dec, float max_speed)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4693,11 +4712,14 @@ void AD_Config(float max_speed, float max_acc, float max_dec)
 }
 
 // RESET AUTODRIVER BOARDS
-void AD_Reset(float max_speed, float max_acc, float max_dec)
+void AD_Reset(float max_acc, float max_dec, float max_speed)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
+
+	// Local vars
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 
 	// Reset each axis
 	AD_R.resetDev();
@@ -4705,7 +4727,7 @@ void AD_Reset(float max_speed, float max_acc, float max_dec)
 	delayMicroseconds(100);
 
 	// Configure each axis
-	AD_Config(max_speed, max_acc, max_dec);
+	AD_Config(max_acc, max_dec, max_speed);
 	delayMicroseconds(100);
 	AD_CheckOC(true);
 	delayMicroseconds(100);
@@ -4718,6 +4740,11 @@ void AD_Reset(float max_speed, float max_acc, float max_dec)
 		// Make sure motor is in correct impedance state
 		HardStop("AD_Reset");
 	}
+
+	// Log/print autodriver settings
+	sprintf(str, "Reset AD Boards: max_acc=%0.2f max_dec=%0.2f max_speed=%0.2f",
+		max_acc, max_dec, max_speed);
+	DebugFlow(__FUNCTION__, __LINE__, str);
 
 }
 
@@ -4769,7 +4796,7 @@ void AD_CheckOC(bool force_check)
 		DebugError(__FUNCTION__, __LINE__, str, true);
 
 		// Reset motors
-		AD_Reset();
+		AD_Reset(maxAcc, maxDec, maxSpeed);
 	}
 
 	// Store status
@@ -8158,7 +8185,7 @@ void setup() {
 	AD_F.SPIConfig();
 	delayMicroseconds(100);
 	// Reset boards
-	AD_Reset();
+	AD_Reset(maxAcc, maxDec, maxSpeed);
 	PrintLCD(true, "DONE SETUP", "AutoDriver");
 
 	// Make sure motor is stopped and in high impedance
@@ -8810,69 +8837,94 @@ void loop() {
 		cmd.soundCond = (byte)c2r.dat[2];
 		millis();
 
-		// Set session condition
+		// Reset flags
+		fc.isManualSes = false;
+		fc.isForageTask = false;
+
+		// Handle Manual session
 		if (cmd.sesCond == 1) {
 			DebugFlow(__FUNCTION__, __LINE__, "DO MANUAL SESSION");
+
+			// Set flag
 			fc.isManualSes = true;
 		}
-		else {
+
+		// Handle Behavior session
+		if (cmd.sesCond == 2) {
+			DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
 
 			// Set setpoint
-			if (cmd.sesCond == 2) {
-				Pid.setPoint = setPointBackpack;
-				DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
-			}
-			else if (cmd.sesCond == 3) {
-				Pid.setPoint = setPointImplant;
-				DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
-			}
-
-			// Unset flag
-			fc.isManualSes = false;
-
-			// Log/print set setpoint
-			sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", Pid.setPoint);
-			DebugFlow(__FUNCTION__, __LINE__, horeStr);
+			Pid.setPoint = setPointBackpack;
 		}
 
-		// Set task condition
-		if (cmd.taskCond == 2) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE SESSION");
-			fc.isForageTask = true;
+		// Setup Implant session
+		if (cmd.sesCond == 3) {
+			DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
+
+			// Set setpoint
+			Pid.setPoint = setPointImplant;
+		}
+
+		// Log/print set setpoint
+		sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", Pid.setPoint);
+		DebugFlow(__FUNCTION__, __LINE__, horeStr);
+
+		// Handle Track task
+		if (cmd.taskCond == 1) {
 
 			// Set rew led min
+			rewLEDduty[0] = rewLEDmin[0];
+
+			// Change autodriver max acc
+			maxAcc = maxAccArr[0];
+
+			// Change reward solonoid on scale
+			Reward.solOpenScale = solOpenScaleArr[0];
+		}
+
+		// Handle Forage task
+		if (cmd.taskCond == 2) {
+			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE SESSION");
+
+			// Set rew led forage min
 			rewLEDduty[0] = rewLEDmin[1];
 
 			// Set to min
 			analogWrite(pin.RewLED_R, rewLEDduty[0]);
 			analogWrite(pin.RewLED_C, rewLEDduty[0]);
-		}
-		else {
-			fc.isForageTask = false;
 
-			// Set rew led min
-			rewLEDduty[0] = rewLEDmin[0];
-		}
+			// Change autodriver max acc
+			maxAcc = maxAccArr[1];
 
-		// Doing tracking ses
-		if (!fc.isManualSes && !fc.isForageTask) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO TRACKING SESSION");
-			fc.isManualSes = false;
-			fc.isForageTask = false;
+			// Change reward solonoid on scale
+			Reward.solOpenScale = solOpenScaleArr[1];
+
+			// Set flag
+			fc.isForageTask = true;
 		}
 
-		// Set sound condition
+		// Update autodriver settings
+		AD_Reset(maxAcc, maxDec, maxSpeed);
+
+		// Handle no sound condition
 		if (cmd.soundCond == 0) {
+
 			// No sound
 			QueuePacket(&r2a, 's', 0);
 			DebugFlow(__FUNCTION__, __LINE__, "NO SOUND");
 		}
-		else if (cmd.soundCond == 1) {
+
+		// Handle white noise only condition
+		if (cmd.soundCond == 1) {
+
 			// Use white noise only
 			QueuePacket(&r2a, 's', 1);
 			DebugFlow(__FUNCTION__, __LINE__, "DONT DO TONE");
 		}
-		else if (cmd.soundCond == 2) {
+
+		// Handle white noise and reward tone condition
+		if (cmd.soundCond == 2) {
+
 			// Use white and reward noise
 			QueuePacket(&r2a, 's', 2);
 			DebugFlow(__FUNCTION__, __LINE__, "DO TONE");

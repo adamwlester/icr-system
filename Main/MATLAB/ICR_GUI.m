@@ -1790,9 +1790,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % track last pos update
         D.T.Rat.last_pos_update = Sec_DT(now);
         D.T.Rob.last_pos_update = Sec_DT(now);
-        % forage reward target tim
+        % forage reward in target tim
         D.T.frg_rew_inbnd_t1 = 0;
         D.T.frg_rew_inbnd_t2 = 0;
+        % forage reward out target tim
+        D.T.frg_rew_outbnd_t1 = 0;
+        D.T.frg_rew_outbnd_t2 = 0;
         % cube check
         D.T.cube_vcc_update = 0;
         
@@ -10467,13 +10470,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             end
             
+            % Reinitialize inbound time
+            D.T.frg_rew_inbnd_t1 = 0;
+            
             % Reset occ once 50% of area covered
             if sum(D.P.frgOccMatBinary(:))/sum(D.PAR.frgMask(:)) >= 0.5
                 % Set all to zero
                 D.P.frgOccMatBinary(:) = 0;
             end
             
-            % Send reward command
+            % Send reward now command
             r_pos = 0;
             r_cond = 1;
             z_ind = get(D.UI.popReward, 'Value');
@@ -10491,9 +10497,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Store last targ
             D.I.targ_last = D.I.targ_now;
             
-            % Reinitialize inbound time
-            D.T.frg_rew_inbnd_t1 = 0;
-            
             % Lighten patch
             Patch_State(D.UI.ptchRewTargBnds(D.I.targ_now), ...
                 'ShowAll');
@@ -10505,9 +10508,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             VT_Plot_Hist()
             
             % Log/print
-            Console_Write(sprintf('[Forage_Reward_Targ_Check] Rewarded at %ddeg', ...
-                D.PAR.frgTargDegArr(D.I.targ_last)));
-            
+            Console_Write(sprintf('[Forage_Reward_Targ_Check] Rewarded: targ=%ddeg dt_occ=%0.2fsec', ...
+                D.PAR.frgTargDegArr(D.I.targ_last), inbndTim));
+
             % Update UI
             Update_UI(0);
             D.F.ui_updated = true;
@@ -10525,11 +10528,52 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Check if rat still in last target bounds
         check_last_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewTargBnds(D.I.targ_last,:));
         
+        % Initialize flag
+        is_left_early = false;
+        
+        % Check if rat moved early
+        if Sec_DT(now) < D.T.frg_rew+D.PAR.frgRewBlock
+            
+            % Check for out of bound sampels
+            if ~any(check_last_inbound)
+                
+                % Get out of bound ts
+                if D.T.frg_rew_outbnd_t1 == 0
+                    D.T.frg_rew_outbnd_t1 = D.P.Rat.ts(find(~check_last_inbound, 1, 'first'));
+                else
+                    D.T.frg_rew_outbnd_t2 = D.P.Rat.ts(find(~check_last_inbound, 1, 'last'));
+                end
+                
+                % Compute time in seconds
+                outbndTim = (D.T.frg_rew_outbnd_t2 - D.T.frg_rew_outbnd_t1) / 10^6;
+                
+                % Check if rat has been out for min delay period
+                if outbndTim < 1
+                    return
+                end
+                
+                % Reinitialize time
+                D.T.frg_rew_outbnd_t1 = 0;
+                
+                % Set flag
+                is_left_early = true;
+                
+                % Log/print
+                Console_Write(sprintf('**WARNING** [Forage_Reward_Targ_Check] Rat Moved Out of Bounds Early: dt_rew=%0.2fsec dt_occ=%0.2fsec', ...
+                    Sec_DT(now) - D.T.frg_rew, outbndTim));
+                
+            else
+                % Reinitialize time
+                D.T.frg_rew_outbnd_t1 = 0;
+            end
+            
+        end
+        
         % Bail to leave time to select manual targ select and rat still
         % in old bounds and not time to move
         if (Sec_DT(now) < D.T.frg_rew+D.PAR.frgRewBlock || ...
                 get(D.UI.toggPickRewPos, 'Value') == 1) && ...
-                any(check_last_inbound)
+                ~is_left_early
             
             % Bail
             return
