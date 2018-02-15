@@ -8020,6 +8020,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Bypass if button pressed
         if get(D.UI.btnStart, 'Value') == 0
             
+            % Have to press button for forage task
+            if D.PAR.sesTask == 'Forage'
+                return
+            end
+            
             % Bail if no new data
             if all(isnan(D.P.Rat.rad))
                 return
