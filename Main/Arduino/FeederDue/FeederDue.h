@@ -240,7 +240,7 @@ const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 // AUTODRIVER
 const double cm2stp = 200 / (9 * PI);
 const double stp2cm = (9 * PI) / 200;
-const float maxAccArr[2] = { 80, 10 }; // (cm/sec) 
+const float maxAccArr[2] = { 80, 30 }; // (cm/sec) 
 float maxAcc = maxAccArr[0]; // (cm/sec) 
 const float maxDec = 160; // (cm/sec)
 const float maxSpeed = 100; // (cm/sec) 

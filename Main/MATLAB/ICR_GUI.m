@@ -1097,6 +1097,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 Console_Write('[Run:SubLoop] FINISHED: "Forage_Task_Setup()"');
                             end
                             
+                            % Show start button
+                            if strcmp(get(D.UI.btnStart, 'Enable'), 'off')
+                                
+                                % Enable button
+                                set(D.UI.btnStart, 'Visible', 'on');
+                                Button_State(D.UI.btnStart, 'Enable');
+                                [xbnd, ybnd] =  Get_Cart_Bnds(mean(D.PAR.strQuadBnds));
+                                
+                                % Set position
+                                D.UI.btnStart.Position(1:2) = ...
+                                    [D.UI.axH(3).Position(1) + D.UI.axH(3).Position(3)*((mean(xbnd)-D.UI.axH(3).XLim(1))/diff(D.UI.axH(3).XLim) - D.UI.btnStart.Position(3)), ...
+                                    D.UI.axH(3).Position(2) + D.UI.axH(3).Position(4)*((mean(ybnd)-D.UI.axH(3).YLim(1))/diff(D.UI.axH(3).YLim))- D.UI.btnStart.Position(4)/2];
+                                
+                            end
+                            
                             % Set flag
                             D.F.task_setup = true;
                             
@@ -1160,6 +1175,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Wait till at least 1000 VT samples collected
                             if ~ISMATSOLO && ...
                                     D.P.Rob.cnt_vtRec < 100
+                                continue;
+                            end
+                            
+                            % Wait for start button on forage task
+                            if D.PAR.sesTask == 'Forage' && ...
+                                    get(D.UI.btnStart, 'Value') == 0
                                 continue;
                             end
                             
@@ -1533,14 +1554,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.cm2pxl = D.UI.vtRes/140;
         
         % Pos lims
-        % arena radius (cm)
-        D.UI.arnRad = 70;
-        % track width (cm)
-        D.UI.trkWdt = 10;
-        % random forrage radius (cm)
-        D.UI.frgRad = D.UI.arnRad - D.UI.trkWdt;
-        % rew target width (cm)
-        D.UI.frgTargWdt = 30;
+        % arena radius 
+        D.UI.arnRad = 70; % (cm)
+        % track width
+        D.UI.trkWdt = 10; % (cm)
+        % random forrage radius
+        D.UI.frgRad = D.UI.arnRad - D.UI.trkWdt; % (cm)
+        % rew target depth
+        D.UI.frgTargDpth = 30; % (cm)
+        % reward target width
+        D.PAR.frgTargWdt = 50; % (deg)
         % track roh limits
         D.P.trackRohBnd(1) = 1 - (D.UI.trkWdt/D.UI.arnRad);
         D.P.trackRohBnd(2) = 1;
@@ -1548,7 +1571,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.P.trackRohCut(1) = D.P.trackRohBnd(1) - 10/D.UI.arnRad;
         D.P.trackRohCut(2) = D.P.trackRohBnd(2) + 10/D.UI.arnRad;
         % forage roh limits
-        D.P.frgRohBnd(1) = (D.UI.frgRad/D.UI.arnRad) - (D.UI.frgTargWdt/D.UI.arnRad);
+        D.P.frgRohBnd(1) = (D.UI.frgRad/D.UI.arnRad) - (D.UI.frgTargDpth/D.UI.arnRad);
         D.P.frgRohBnd(2) = D.UI.frgRad/D.UI.arnRad;
         
         % FORAGE TASK VARS
@@ -1560,20 +1583,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % occ bin edges
         D.PAR.frgBinEdgeX = linspace(D.UI.lowLeft(1), D.UI.lowLeft(1)+D.UI.vtRes, D.PAR.frgBins+1);
         D.PAR.frgBinEdgeY = linspace(D.UI.lowLeft(2), D.UI.lowLeft(2)+D.UI.vtRes, D.PAR.frgBins+1);
-        % distance between paths in degrees
-        D.PAR.pathDegDist = 5;
+        % distance between paths
+        D.PAR.frgPathSpace = 5; % (deg)
         % path width (deg)
-        D.PAR.pathTargWdt = 30;
+        D.PAR.frgPathWdt = 30; % (deg)
         % target angle array
-        D.PAR.frgTargDegArr = 0:D.PAR.pathDegDist:360-D.PAR.pathDegDist;
+        D.PAR.frgTargDegArr = 0:D.PAR.frgPathSpace:360-D.PAR.frgPathSpace;
         % path angle array
-        D.PAR.frgPathDegArr = linspace(-45,45,45/D.PAR.pathDegDist*2 + 1);
+        D.PAR.frgPathDegArr = linspace(-45,45,45/D.PAR.frgPathSpace*2 + 1);
         % target select subset
         D.PAR.frgTargSelectInd = [];
         % path select subset
         D.PAR.frgPathSelectInd = [];
         % number of posible paths from each targ
-        D.PAR.nPaths = 45/D.PAR.pathDegDist*2 + 1;
+        D.PAR.nPaths = 45/D.PAR.frgPathSpace*2 + 1;
         % path lenths
         D.PAR.pathLengthArr = zeros(1,D.PAR.nPaths);
         
@@ -1987,7 +2010,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % forage bound mask
         D.UI.imgFrgMaskH = [];
         % forage targ patch
-        D.UI.ptchRewTargBnds = gobjects(360/D.PAR.pathDegDist,1);
+        D.UI.ptchRewTargBnds = gobjects(360/D.PAR.frgPathSpace,1);
         % forage occ mat
         D.UI.imgFrgOcc = gobjects(1,1);
         
@@ -2399,7 +2422,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         y_mat(1:end-1,1) = out_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
         
         % Get inner bounds
-        [in_X,in_Y] = pol2cart(circ, ones(1,length(circ)) * (D.UI.frgRad-D.UI.frgTargWdt));
+        [in_X,in_Y] = pol2cart(circ, ones(1,length(circ)) * (D.UI.frgRad-D.UI.frgTargDpth));
         x_mat(1:end-1,2) = in_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
         y_mat(1:end-1,2) = in_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
         
@@ -7221,8 +7244,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.rewTargBnds = NaN(length(D.PAR.frgTargDegArr),2);
         for z_targ = 1:length(D.PAR.frgTargDegArr)
             D.PAR.rewTargBnds(z_targ,:) = [...
-                Rad_Diff(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2)), ...
-                Rad_Sum(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2))];
+                Rad_Diff(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.frgTargWdt/2)), ...
+                Rad_Sum(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.frgTargWdt/2))];
         end
         D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
         
@@ -7835,13 +7858,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         else
             
             % Deg bin var
-            n_targs = 360/D.PAR.pathDegDist;
+            n_targs = 360/D.PAR.frgPathSpace;
             
             % Number of bins in forage area
             path_bins = round(D.PAR.frgBins*(D.UI.frgRad / D.UI.arnRad));
             
             % Width of path
-            path_width = ((2*D.UI.frgRad*pi) * (D.PAR.pathTargWdt/360)) * ...
+            path_width = ((2*D.UI.frgRad*pi) * (D.PAR.frgPathWdt/360)) * ...
                 (D.PAR.frgBins / (D.UI.arnRad*2));
             % Make sure width is odd
             if (mod(floor(path_width),2) == 1)
@@ -7871,7 +7894,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
             
             % Compute mat for each pos condition
-            path_ang_arr = linspace(0,90,90/D.PAR.pathDegDist+1);
+            path_ang_arr = linspace(0,90,90/D.PAR.frgPathSpace+1);
             for c = 1:2
                 if c==1
                     mat_now = mat_p;
@@ -7899,9 +7922,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Store
                     for j = (1:n_targs)-1
                         if c==1
-                            D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                            D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
                         else
-                            D.DB.SIM.RatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.pathDegDist,'bilinear','crop');
+                            D.DB.SIM.RatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
                         end
                     end
                 end
@@ -7973,7 +7996,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'FaceAlpha', 0.1, ...
                 'LineWidth', 1, ...
                 'UserData', z_targ, ...
-                'Visible', 'off', ...
+                'Visible', 'off', ... 
                 'Parent', D.UI.axH(9));
         end
         
@@ -8000,22 +8023,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 % ----------------------------RAT IN CHECK-------------------------
     function Rat_In_Check()
-        
-        % Show start button
-        if strcmp(get(D.UI.btnStart, 'Enable'), 'off')
-            
-            % Enable button
-            set(D.UI.btnStart, 'Visible', 'on');
-            Button_State(D.UI.btnStart, 'Enable');
-            [xbnd, ybnd] =  Get_Cart_Bnds(mean(D.PAR.strQuadBnds));
-            %uistack(D.UI.btnStart, 'top')
-            
-            % Set position
-            D.UI.btnStart.Position(1:2) = ...
-                [D.UI.axH(3).Position(1) + D.UI.axH(3).Position(3)*((mean(xbnd)-D.UI.axH(3).XLim(1))/diff(D.UI.axH(3).XLim) - D.UI.btnStart.Position(3)), ...
-                D.UI.axH(3).Position(2) + D.UI.axH(3).Position(4)*((mean(ybnd)-D.UI.axH(3).YLim(1))/diff(D.UI.axH(3).YLim))- D.UI.btnStart.Position(4)/2];
-            
-        end
         
         % Bypass if button pressed
         if get(D.UI.btnStart, 'Value') == 0
@@ -11274,7 +11281,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     roh_diff = cm / D.UI.arnRad;
                     
                     % Path width/edge in rad
-                    path_wdth = 4*deg2rad(D.PAR.pathTargWdt);
+                    path_wdth = 4*deg2rad(D.PAR.frgPathWdt);
                     
                     % Get side to side movement
                     rad_diff = cm/path_wdth * D.DB.SIM.SwayDir;
@@ -15016,7 +15023,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if D.PAR.sesTask == 'Forage'
                 
                 % Get sorted index of subset of coresponding paths;
-                sub_path = D.PAR.frgPathDegArr(1:D.PAR.pathTargWdt/D.PAR.pathDegDist/2:end);
+                sub_path = D.PAR.frgPathDegArr(1:D.PAR.frgPathWdt/D.PAR.frgPathSpace/2:end);
                 D.PAR.frgPathSelectInd = find(ismember(D.PAR.frgPathDegArr, sub_path));
                 
                 % Get index of subset of targets;
