@@ -25,7 +25,7 @@ reference_tt_cats = {'R01_1','R01_2','R02_1','R02_2','CE01','CE02'};
 reference_eib_cats = {'R1','R2','R3','R4','R5','R6','R7','R8'};
 
 % Variable descriptions
-cap_weights_description = '["None", "Light", "Medium", "Heavy"]';
+cap_weights_description = '[Cap, Housing, Washer]';
 implant_coordinates_description = '[Bndl_1{A-P, M-L, D-V}, Bndl_2{A-P, M-L, D-V}]';
 implant_angle_description = '[Bndl_1{A-P, M-L, D-V}, Bndl_2{A-P, M-L, D-V}]';
 implant_configuration_description = '[Bndl_1{A-P, M-L}, Bndl_2{A-P, M-L}]';
@@ -41,7 +41,7 @@ T.Include_Run = true(length(ratList),1);
 
 T.Weight_Drive = nan(length(ratList),1);
 
-T.Cap_Weights = repmat({nan(1,4)},length(ratList),1);
+T.Cap_Weights = repmat({nan(1,3)},length(ratList),1);
 
 T.Implant_Coordinates = repmat({nan(1,3), nan(1,3)},length(ratList),1);
 

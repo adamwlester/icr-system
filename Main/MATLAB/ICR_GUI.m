@@ -99,13 +99,13 @@ D.DB.Implanted = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Manual_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
 
 % Other
 D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
 D.DB.Reward_Delay = '1.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
-D.DB.Cue_Condition = 'Half'; % ['All' 'Half' 'None']
+D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
 D.DB.Start_Quadrant = 'SE'; % ['NE' 'SE' 'SW' 'NW'];
@@ -442,7 +442,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Setup()
         
         % Start of setup
-        Console_Write('[Setup] BEGIN Setup()');
+        Console_Write('[Setup] BEGIN: Setup()');
         
         % ---------------------------- SET PARAMETERS ---------------------
         
@@ -523,6 +523,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Log dirs
         D.DIR.logFi = 'ICR_GUI_Log.csv';
         D.DIR.logTempDir = fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
+        m2c_dir = D.DIR.logTempDir;
         
         % ------------------------- SETUP TOP LEVEL VARS ------------------
         
@@ -778,7 +779,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Send_M2C('N', D.PAR.R, D.PAR.XC, D.PAR.YC);
         
         % End of setup
-        Console_Write('[Setup] END Setup()');
+        Console_Write('[Setup] END: Setup()');
         
     end
 
@@ -786,7 +787,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Run()
         
         % Start main run
-        Console_Write('[Run] BEGIN Run()');
+        Console_Write('[Run] BEGIN: Run()');
         
         % ---------------------------SETUP & RUN----------------------------------
         
@@ -930,7 +931,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Start recording
-                    if D.F.cheetah_open && ~D.PAR.sesType == 'TT_Turn'
+                    if D.F.cheetah_open && D.PAR.sesType ~= 'TT_Turn'
                         Safe_Set(D.UI.toggRec,'Value', 1);
                         ToggRec(D.UI.toggRec);
                     end
@@ -1339,14 +1340,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % End of Run
-        Console_Write('[Run] END Run()');
+        Console_Write('[Run] END: Run()');
     end
 
 % -----------------------------MAIN EXIT-----------------------------------
     function[] = Exit()
         
         % Start of exit
-        Console_Write('[Exit] BEGIN Exit()');
+        Console_Write('[Exit] BEGIN: Exit()');
         
         % Check if GUI was forced close
         if ~FORCECLOSE
@@ -1438,7 +1439,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
         
         % End of Exit
-        Console_Write('[Exit] END Exit()');
+        Console_Write('[Exit] END: Exit()');
     end
 
 
@@ -1503,6 +1504,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.listRotPos = categories(D.SS_IO_1.Rotation_Positions{1}); % [90,180,270];
         % bulldoze delay
         D.PAR.listBull = {'0 sec'; '5 sec'; '10 sec'; '30 sec'; '60 sec'; '120 sec'};
+        % cap weights
+        D.PAR.capWeightList = {'None'; 'Housing'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'};
         
         % RAT LIST
         
@@ -1551,7 +1554,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % FORAGE TASK VARS
         
         % reward block dt
-        D.PAR.frgRewBlock = 15; % (sec) 
+        D.PAR.frgRewBlock = 15; % (sec)
         % pos occ bins
         D.PAR.frgBins = (D.UI.arnRad*2)/2 + 1;
         % occ bin edges
@@ -1581,7 +1584,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % reward zone positions
         D.PAR.zoneLocs = 20:-5:-20;
         % cued zone
-        D.PAR.zoneCue = 0; 
+        D.PAR.zoneCue = 0;
         % reward zone reward durations
         D.PAR.zoneRewDur = ...
             [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
@@ -2067,7 +2070,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         fig_btm = 42;
         for z_m = 1:3
             if z_m > size(D.UI.monPos,1)
-               continue;
+                continue;
             end
             fig_lft = D.UI.monPos(D.UI.figMon(z_m),1) + (D.UI.monPos(D.UI.figMon(z_m),3)-fig_wh(1))/2;
             D.UI.figGrpPos{z_m} = [fig_lft, fig_btm, fig_wh(1), fig_wh(2)];
@@ -2137,7 +2140,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Fonts
         D.UI.btnFont = 'MS Sans Serif';
         D.UI.headFont = 'MS Sans Serif';
-        D.UI.popFont = 'MS Sans Serif';
+        D.UI.popFont = 'Monospaced';
         D.UI.txtFont = 'Courier New';
         D.UI.titleFont = 'Monospaced';
         
@@ -3144,7 +3147,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzTxtLrg(1), ...
-            'UserData', 1);
+            'UserData', [1, 0]);
         
         % Sleep 1 edit
         str = ...
@@ -3191,7 +3194,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.toggSleep(2) = copyobj(D.UI.toggSleep(1), D.UI.tabICR);
         Safe_Set(D.UI.toggSleep(2), ...
             'String', 'Sleep 2', ...
-            'UserData', 2, ...
+            'UserData', [2, 0], ...
             'Position', pos);
         
         % Sleep 2 edit
@@ -3579,7 +3582,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnMed(1), ...
             'Visible', 'off', ...
             'Value',0);
-
+        
         % MOUSE ACTIONS
         set(FIGH, 'WindowButtonMotionFcn', @MouseTrack)
         
@@ -4549,17 +4552,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get last corrected weight
         D.PAR.ratWeightLast = D.SS_IO_3.(D.PAR.ratLab).Weight_Corrected(end);
         
-        % Get cap weight list
-        list_str = D.TT_IO.Properties.VariableDescriptions{'Cap_Weights'};
-        D.PAR.capWeightList = regexp(list_str, '\w*', 'match');
-        
         % Get drive weight and cap weights
         if D.F.rat_implanted || D.PAR.sesType == 'TT_Turn'
             D.PAR.driveWeight = D.TT_IO.Weight_Drive(D.PAR.ratIndTT);
             D.PAR.capWeightArr = D.TT_IO.Cap_Weights{D.PAR.ratIndTT};
         else
             D.PAR.driveWeight = 0;
-            D.PAR.capWeightArr = zeros(size(D.PAR.capWeightList));
+            D.PAR.capWeight = 0;
         end
         
         % ADD WEIGHT OBJECTS
@@ -4772,7 +4771,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% CREATE MAIN NOTES TABLE OBJECTS
         
-                % Get list of included rats
+        % Get list of included rats
         rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
         rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
         D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
@@ -4884,7 +4883,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set panels disabled
         if ~D.F.rat_implanted && D.PAR.sesType ~= 'TT_Turn'
             
-            % Disable tt notes panel 
+            % Disable tt notes panel
             Panel_State(D.UI.panTTNotes, 'Disable');
             
         else
@@ -5026,7 +5025,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 x2,       @() strcmp(y{:}, 'NA'), ...
                 x3,       @() strcmp(y{:}, '<undefined>'), ...
                 true,     false);
-             exc_mat = arrayfun(@(x1, x2, x3, y) exc_na(x1, x2, x3, y), ...
+            exc_mat = arrayfun(@(x1, x2, x3, y) exc_na(x1, x2, x3, y), ...
                 repmat(num_ind, size(ui_table.Data, 1), 1), ...
                 repmat(char_ind, size(ui_table.Data, 1), 1), ...
                 repmat(cat_ind, size(ui_table.Data, 1), 1), ...
@@ -5059,7 +5058,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % --------------------------TT TRACKING SETUP----------------------
     function[was_ran] = TT_Track_Setup()
         
-        % ===================== IMPORT LOG TABLE DATA ===================== 
+        % ===================== IMPORT LOG TABLE DATA =====================
         
         % Bail if not implant or TT_track session
         if ~D.F.implant_session && D.PAR.sesType ~= 'TT_Turn'
@@ -5464,8 +5463,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.axBndlLegBack.Position = [lft , btm, wd, ht];
         
         % Orientation strings
-        D.PAR.dirVec = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
-            {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
+        D.PAR.orCardList = [...
+            {'N'}, {'NNW'},{'NW'},{'WNW'}, ...
+            {'W'},{'WSW'},{'SW'},{'SSW'}, ...
+            {'S'},{'SSE'},{'SE'},{'ESE'}, ....
+            {'E'},{'ENE'},{'NE'},{'NNE'}];
+        D.PAR.orFracList = [...
+            {'0/16'},{'1/16'},{'2/16'},{'3/16'}, ...
+            {'4/16'},{'5/16'},{'6/16'},{'7/16'}, ...
+            {'8/16'},{'9/16'},{'10/16'},{'11/16'}, ...
+            {'12/16'},{'13/16'},{'14/16'},{'15/16'}];
         
         % Move legend to top
         uistack(D.UI.axBndlLeg,'top')
@@ -5752,10 +5759,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.toggFlagTT.String = 'Flags';
         D.UI.toggFlagTT.Position(1) = sum(D.UI.toggMainActionTT(1).Position([1,3]));
         D.UI.toggFlagTT.Position(3) = wd/2;
-        D.UI.toggHearSourceTT(1).String = 'Sp';
+        D.UI.toggHearSourceTT(1).String = 'PC';
         D.UI.toggHearSourceTT(1).Position(1) = sum(D.UI.toggFlagTT.Position([1,3]));
         D.UI.toggHearSourceTT(1).Position(3) = wd/4;
-        D.UI.toggHearSourceTT(2).String = 'Hd';
+        D.UI.toggHearSourceTT(2).String = 'SX';
         D.UI.toggHearSourceTT(2).Position(1) = sum(D.UI.toggHearSourceTT(1).Position([1,3]));
         D.UI.toggHearSourceTT(2).Position(3) = wd/4;
         
@@ -5822,7 +5829,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Plot default hight
         dflt_ht = ((1-0.001)/10)*0.8;
         % Plot defualt left from pan
-        dflt_lf = [0.001, 0.5];
+        dflt_lf = [0.001, 0.45];
         % Plot defualt width
         dflt_wd = 1/2-0.002;
         % Plot default bottom pos vector
@@ -5845,7 +5852,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Visible', 'off');
         
         % Create enter orientation popup-menue object
-        pos = [dflt_lf(2), dflt_btm(2), dflt_wd, dflt_ht];
+        pos = [dflt_lf(2), dflt_btm(2), dflt_wd+0.05, dflt_ht];
         D.UI.popOr = uicontrol(...
             'Style', 'popupmenu',...
             'Parent', D.UI.panTrackTT,...
@@ -5854,9 +5861,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor', [1 1 1],...
             'FontSize', D.UI.fontSzPopLrg(1),...
             'Position', pos,...
-            'String', D.PAR.dirVec,...
+            'String', {' '},...
             'Enable', 'off', ...
             'Visible', 'off', ...
+            'UserData', ones(D.PAR.maxTT,1), ...
             'Value', 1);
         
         % Create enter number of rotations text
@@ -5866,7 +5874,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Position', pos,...
             'String', sprintf('Number of\r\nFull Turns'))
         % Create number of rotations popup-menue object
-        pos = [dflt_lf(2), dflt_btm(3), dflt_wd, dflt_ht];
+        pos = [dflt_lf(2), dflt_btm(3), dflt_wd+0.05, dflt_ht];
         D.UI.popTrn = uicontrol(...
             'Style', 'popupmenu',...
             'Parent', D.UI.panTrackTT,...
@@ -5888,7 +5896,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Position', pos,...
             'String', sprintf('TT Lowering\r\nDirection'))
         % Create direction popup-menue object
-        pos = [dflt_lf(2), dflt_btm(4), dflt_wd, dflt_ht];
+        pos = [dflt_lf(2), dflt_btm(4), dflt_wd+0.05, dflt_ht];
         D.UI.popDir = uicontrol(...
             'Style', 'popupmenu',...
             'Parent', D.UI.panTrackTT,...
@@ -5910,7 +5918,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Position', pos,...
             'String', sprintf('TT\r\nReference'))
         % Create ref popup-menue object
-        pos = [dflt_lf(2), dflt_btm(5), dflt_wd, dflt_ht];
+        pos = [dflt_lf(2), dflt_btm(5), dflt_wd+0.05, dflt_ht];
         D.UI.popRefTT = uicontrol(...
             'Style', 'popupmenu',...
             'Parent', D.UI.panTrackTT,...
@@ -6030,7 +6038,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.txtPanTT, 'ForegroundColor', D.UI.disabledCol)
         
         %% ===================== SETUP RAT TT STUFF =======================
-                
+        
         % -------------------SETUP BUNDLE CONFIG LEGENDS-------------------
         
         % Specify tt colors
@@ -6379,7 +6387,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% ====================== AUTO SET TT DEPTH =======================
         if (D.DB.doAutoSetTT)
             
-            % Switch tab 
+            % Switch tab
             TabGrpChange(D.UI.tabTT);
             
             % Enable buttons
@@ -6409,9 +6417,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Set turns to max
                 set(D.UI.popTrn, 'Value', turn_ind);
-                
-                % Set to random orientation
-                %set(D.UI.popOr,'Value', ceil(rand(1,1)*length(get(D.UI.popOr,'String'))))
                 
                 % Pause
                 pause(0.05);
@@ -6470,7 +6475,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Load behavior tracking config
             Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
-            Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Behavior_Tracking.cfg"');
+            Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Behavior_Tracking.cfg"');
             
         end
         
@@ -6488,19 +6493,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             [~, ~, das_types] = NlxGetDASObjectsAndTypes;
             if ~any(ismember(das_types, 'TTScAcqEnt'))
                 
-                % Load implant tracking config
-                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Task_Tracking.cfg');
-                Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Task_Tracking.cfg"');
+                % Load ephys sleep tracking config
+                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
                 
                 % Load acquisition entity config
                 Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
-                Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Setup.cfg"')
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Setup.cfg"')
                 
             end
             
             % Load plot setup config
             Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
-            Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Graphics.cfg"');
+            Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Graphics.cfg"');
             
         end
         
@@ -6522,13 +6527,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[Finish_NLX_Setup] RUNNING: Load Previous Cheetah Settings...');
             
             % Find last rec dir
-            if exist(D.DIR.nlxSaveTop, 'dir') > 0
+            if exist(D.DIR.nlxSaveTop, 'dir') > 0 && ...
+                    size(dir(D.DIR.nlxRecRat), 1) > 2
+                
+                % Get dir files
                 dirs = dir(D.DIR.nlxRecRat);
                 dirs = sort({dirs(3:end).name});
                 nlx_rec_dir_last = fullfile(D.DIR.nlxRecRat,dirs{end});
+                
+                % Store last config file path
                 nlx_cfg_file_last = ...
                     fullfile(nlx_rec_dir_last, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
             else
+                
+                % Skip if dir empty or nonexistant
                 nlx_cfg_file_last = [];
             end
             
@@ -7208,7 +7220,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.rewTargBnds(z_targ,:) = [...
                 Rad_Diff(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2)), ...
                 Rad_Sum(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.pathTargWdt/2))];
-        end        
+        end
         D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
         
         %% SETUP ARENA FEATURES
@@ -7439,7 +7451,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.PAR.sesCond == 'Manual_Training'
             % Manual session
             d1 = 1;
-        elseif ~D.F.implant_session 
+        elseif ~D.F.implant_session
             % Behavior session
             d1 = 2;
         else
@@ -7467,7 +7479,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % White and reward
             d3 = 2;
         end
-    
+        
         % Send setup info
         Send_M2C('S', d1, d2, d3);
         
@@ -8086,8 +8098,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         if inbndTim > 0
-        Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
-            inbndTim));
+            Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
+                inbndTim));
         else
             Console_Write('[Rat_In_Check] FINISHED: Rat In Check: Started Manually');
         end
@@ -8602,23 +8614,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if strcmp(fld, 'Rat')
                 
                 % Get store pos indeces
-                ind_str = D.P.Rat.posAll.indAll(2) + 1;
-                ind_end = ind_str+length(x)-1;
+                ind_set_str = D.P.Rat.posAll.indAll(2) + 1;
+                ind_set_end = ind_set_str+length(x)-1;
                 
                 % Store indeces
-                D.P.(fld).posAll.indAll(2) = ind_end;
-                D.P.(fld).posAll.indLap(2) = ind_end;
+                D.P.(fld).posAll.indAll(2) = ind_set_end;
+                D.P.(fld).posAll.indLap(2) = ind_set_end;
                 
                 % Store cart pos data
-                D.P.(fld).posAll.Cart(ind_str:ind_end, 1) = single(x);
-                D.P.(fld).posAll.Cart(ind_str:ind_end, 2) = single(y);
+                D.P.(fld).posAll.Cart(ind_set_str:ind_set_end, 1) = single(x);
+                D.P.(fld).posAll.Cart(ind_set_str:ind_set_end, 2) = single(y);
                 
                 % Store rad data
-                D.P.(fld).posAll.Pol(ind_str:ind_end, 1) = single(rad);
-                D.P.(fld).posAll.Pol(ind_str:ind_end, 2) = single(roh);
+                D.P.(fld).posAll.Pol(ind_set_str:ind_set_end, 1) = single(rad);
+                D.P.(fld).posAll.Pol(ind_set_str:ind_set_end, 2) = single(roh);
                 
                 % Store ts
-                D.P.(fld).posAll.TS(ind_str:ind_end) = ts;
+                D.P.(fld).posAll.TS(ind_set_str:ind_set_end) = ts;
             end
             
             %% TRANSFORM HD
@@ -8765,12 +8777,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get next vel hisory ind
-            vel_ind = D.P.(fld).velAll.indAll(2) + 1;
-            D.P.(fld).velAll.indAll(2) = vel_ind;
-            D.P.(fld).velAll.indLap(2) = vel_ind;
+            ind_set_str = D.P.(fld).velAll.indAll(2) + 1;
+            
+            % Store new ind
+            D.P.(fld).velAll.indAll(2) = ind_set_str;
+            D.P.(fld).velAll.indLap(2) = ind_set_str;
             
             % Store TS
-            D.P.(fld).velAll.TS(vel_ind) = ts(end);
+            D.P.(fld).velAll.TS(ind_set_str) = ts(end);
             
             % Check if we have usable data
             if isempty(vel) || isempty(D.P.(fld).velRad)
@@ -8779,8 +8793,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.(fld).new_vel_data = false;
                 
                 % Set to NaN to avoid jumps in plot
-                D.P.(fld).velAll.Cart(vel_ind,:) = single(NaN);
-                D.P.(fld).velAll.Pol(vel_ind,:) = single(NaN);
+                D.P.(fld).velAll.Cart(ind_set_str,:) = single(NaN);
+                D.P.(fld).velAll.Pol(ind_set_str,:) = single(NaN);
             else
                 
                 % Set to plot this vel if 'Track' session
@@ -8822,12 +8836,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     y =  y.*D.PAR.R + D.PAR.YC;
                     
                     % Store values
-                    D.P.(fld).velAll.Cart(vel_ind, 1) = single(x);
-                    D.P.(fld).velAll.Cart(vel_ind, 1) = single(y);
+                    D.P.(fld).velAll.Cart(ind_set_str, 1) = single(x);
+                    D.P.(fld).velAll.Cart(ind_set_str, 1) = single(y);
                 else
                     
                     % Set to NaN because rad diff to large
-                    D.P.(fld).velAll.Cart(vel_ind, :) = single(NaN);
+                    D.P.(fld).velAll.Cart(ind_set_str, :) = single(NaN);
                     D.P.(fld).velRad = NaN;
                     velRoh = NaN;
                     
@@ -8836,8 +8850,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Save pol history
-                D.P.(fld).velAll.Pol(vel_ind, 1) = single(D.P.(fld).velRad);
-                D.P.(fld).velAll.Pol(vel_ind, 2) = single(velRoh);
+                D.P.(fld).velAll.Pol(ind_set_str, 1) = single(D.P.(fld).velRad);
+                D.P.(fld).velAll.Pol(ind_set_str, 2) = single(velRoh);
                 
             end
             
@@ -8983,10 +8997,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.Rat.new_pos_data
             
             % Plot all VT data for this lap
-            ind_str = D.P.Rat.posAll.indLap(1);
-            ind_end = D.P.Rat.posAll.indLap(2);
-            x = D.P.Rat.posAll.Cart( ind_str: ind_end,1);
-            y = D.P.Rat.posAll.Cart( ind_str: ind_end,2);
+            ind_get_str = D.P.Rat.posAll.indLap(1);
+            ind_get_end = D.P.Rat.posAll.indLap(2);
+            x = D.P.Rat.posAll.Cart( ind_get_str: ind_get_end,1);
+            y = D.P.Rat.posAll.Cart( ind_get_str: ind_get_end,2);
             if ~isgraphics(D.UI.Rat.mrkPosLapH)
                 D.UI.Rat.mrkPosLapH = ...
                     line(x, y, ...
@@ -9041,10 +9055,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.Rob.new_vel_data
             
             % Get non-zero vals to plot
-            ind_str = D.P.Rob.velAll.indLap(1);
-            ind_end = D.P.Rob.velAll.indLap(2);
-            x = D.P.Rob.velAll.Cart(ind_str:ind_end, 1);
-            y = D.P.Rob.velAll.Cart(ind_str:ind_end, 2);
+            ind_get_str = D.P.Rob.velAll.indLap(1);
+            ind_get_end = D.P.Rob.velAll.indLap(2);
+            x = D.P.Rob.velAll.Cart(ind_get_str:ind_get_end, 1);
+            y = D.P.Rob.velAll.Cart(ind_get_str:ind_get_end, 2);
             % Plot
             if ~isgraphics(D.UI.Rob.linVelLapH)
                 D.UI.Rob.linVelLapH = ...
@@ -9065,10 +9079,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.Rat.new_vel_data
             
             % Get non-zero vals to plot
-            ind_str = D.P.Rat.velAll.indLap(1);
-            ind_end = D.P.Rat.velAll.indLap(2);
-            x = D.P.Rat.velAll.Cart(ind_str:ind_end, 1);
-            y = D.P.Rat.velAll.Cart(ind_str:ind_end, 2);
+            ind_get_str = D.P.Rat.velAll.indLap(1);
+            ind_get_end = D.P.Rat.velAll.indLap(2);
+            x = D.P.Rat.velAll.Cart(ind_get_str:ind_get_end, 1);
+            y = D.P.Rat.velAll.Cart(ind_get_str:ind_get_end, 2);
             % Plot
             if ~isgraphics(D.UI.Rat.linVelLapH)
                 D.UI.Rat.linVelLapH = ...
@@ -9186,10 +9200,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.P.Rob.vel_max_lap = 0;
         
         % Plot rat pos all
-        ind_str = D.P.Rat.posAll.indAll(1);
-        ind_end = D.P.Rat.posAll.indAll(2);
-        x = D.P.Rat.posAll.Cart(ind_str:ind_end,1);
-        y = D.P.Rat.posAll.Cart(ind_str:ind_end,2);
+        ind_get_str = D.P.Rat.posAll.indAll(1);
+        ind_get_end = D.P.Rat.posAll.indAll(2);
+        x = D.P.Rat.posAll.Cart(ind_get_str:ind_get_end,1);
+        y = D.P.Rat.posAll.Cart(ind_get_str:ind_get_end,2);
         % set big jumps to NaN
         exc = find(diff(x)/D.UI.cm2pxl > 10 | diff(y)/D.UI.cm2pxl > 10 == 1) + 1;
         x(exc) = NaN;
@@ -9226,10 +9240,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get all vel pol data
-            ind_str = D.P.(fld).velAll.indAll(1);
-            ind_end = D.P.(fld).velAll.indAll(2);
-            vel_rad = D.P.(fld).velAll.Pol(ind_str:ind_end, 1);
-            vel_roh = D.P.(fld).velAll.Pol(ind_str:ind_end, 2);
+            ind_get_str = D.P.(fld).velAll.indAll(1);
+            ind_get_end = D.P.(fld).velAll.indAll(2);
+            vel_rad = D.P.(fld).velAll.Pol(ind_get_str:ind_get_end, 1);
+            vel_roh = D.P.(fld).velAll.Pol(ind_get_str:ind_get_end, 2);
             
             % Sort by rad
             [vel_rad, s_ind] = sort(vel_rad);
@@ -9262,17 +9276,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Add to hist data
-            ind_str = D.P.(fld).velAll.indHist(1);
-            ind_end = D.P.(fld).velAll.indHist(2)+1;
-            D.P.(fld).velAll.Hist(ind_end,1:101,1) = rad_bins;
-            D.P.(fld).velAll.Hist(ind_end,1:101,2) = roh_interp;
+            ind_set_str = D.P.(fld).velAll.indHist(2) + 1;
+            D.P.(fld).velAll.Hist(ind_set_str,1:101,1) = rad_bins;
+            D.P.(fld).velAll.Hist(ind_set_str,1:101,2) = roh_interp;
             
             % Store ind
-            D.P.(fld).velAll.indHist(2) = ind_end;
+            D.P.(fld).velAll.indHist(2) = ind_set_str;
             
             % Get rad vel as 1D array
-            vel_rad = reshape(D.P.(fld).velAll.Hist(ind_str:ind_end,:,1)',1,[]);
-            vel_roh = reshape(D.P.(fld).velAll.Hist(ind_str:ind_end,:,2)',1,[]);
+            ind_get_str = D.P.(fld).velAll.indHist(1);
+            ind_get_end = ind_set_str;
+            vel_rad = reshape(D.P.(fld).velAll.Hist(ind_get_str:ind_get_end,:,1)',1,[]);
+            vel_roh = reshape(D.P.(fld).velAll.Hist(ind_get_str:ind_get_end,:,2)',1,[]);
             ind = ~isnan(vel_rad);
             
             % Plot all vel in cart space
@@ -9308,10 +9323,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get accross lap average
-            ind_str = D.P.(fld).velAll.indHist(1);
-            ind_end = D.P.(fld).velAll.indHist(2);
-            vel_rad = D.P.(fld).velAll.Hist(ind_str,:,1);
-            roh_avg = nanmean(D.P.(fld).velAll.Hist(ind_str:ind_end,:,2),1);
+            ind_get_str = D.P.(fld).velAll.indHist(1);
+            ind_get_end = D.P.(fld).velAll.indHist(2);
+            vel_rad = D.P.(fld).velAll.Hist(ind_get_str,:,1);
+            roh_avg = nanmean(D.P.(fld).velAll.Hist(ind_get_str:ind_get_end,:,2),1);
             
             % Plot avg vel in cart space
             [x, y] = pol2cart(vel_rad, roh_avg);
@@ -9669,10 +9684,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 n_samp = sum(inc_ind);
                 
                 % Get store start ind
-                ind_str = D.TT.posClust{tt_ind, clust_ind}.indAll(2) + 1;
+                ind_set_str = D.TT.posClust{tt_ind, clust_ind}.indAll(2) + 1;
                 
                 % Check for overflow
-                if isempty(ind_str)
+                if isempty(ind_set_str)
                     
                     % Shift values back half way
                     shft = round(size(D.TT.posClust{tt_ind, clust_ind}.Cart, 1)/2);
@@ -9684,23 +9699,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         circshift(D.TT.posClust{tt_ind, clust_ind}.TS, -1*shft, 1);
                     
                     % Set half of history to NaN
-                    ind_str = shft;
-                    D.TT.posClust{tt_ind, clust_ind}.Cart(ind_str:end,:) = NaN;
+                    ind_set_str = shft;
+                    D.TT.posClust{tt_ind, clust_ind}.Cart(ind_set_str:end,:) = NaN;
                 end
                 
                 % Get store end ind
-                ind_end = ind_str + n_samp-1;
+                ind_set_end = ind_set_str + n_samp-1;
                 
                 % Update store inds
-                D.TT.posClust{tt_ind, clust_ind}.indAll(2) = ind_end;
-                D.TT.posClust{tt_ind, clust_ind}.indLap(2) = ind_end;
+                D.TT.posClust{tt_ind, clust_ind}.indAll(2) = ind_set_end;
+                D.TT.posClust{tt_ind, clust_ind}.indLap(2) = ind_set_end;
                 
                 % Update pos values
-                D.TT.posClust{tt_ind, clust_ind}.Cart(ind_str:ind_end, 1) = clust_cart_mat(inc_ind,1);
-                D.TT.posClust{tt_ind, clust_ind}.Cart(ind_str:ind_end, 2) = clust_cart_mat(inc_ind,2);
-                D.TT.posClust{tt_ind, clust_ind}.Pol(ind_str:ind_end, 1) = clust_pol_mat(inc_ind,1);
-                D.TT.posClust{tt_ind, clust_ind}.Pol(ind_str:ind_end, 2) = clust_pol_mat(inc_ind,1);
-                D.TT.posClust{tt_ind, clust_ind}.TS(ind_str:ind_end) = ts_clust(inc_ind);
+                D.TT.posClust{tt_ind, clust_ind}.Cart(ind_set_str:ind_set_end, 1) = clust_cart_mat(inc_ind,1);
+                D.TT.posClust{tt_ind, clust_ind}.Cart(ind_set_str:ind_set_end, 2) = clust_cart_mat(inc_ind,2);
+                D.TT.posClust{tt_ind, clust_ind}.Pol(ind_set_str:ind_set_end, 1) = clust_pol_mat(inc_ind,1);
+                D.TT.posClust{tt_ind, clust_ind}.Pol(ind_set_str:ind_set_end, 2) = clust_pol_mat(inc_ind,1);
+                D.TT.posClust{tt_ind, clust_ind}.TS(ind_set_str:ind_set_end) = ts_clust(inc_ind);
                 
                 % Set flag
                 D.F.plot_clust(tt_ind, clust_ind) = any(clust_active_ind == clust_ind);
@@ -9757,19 +9772,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Get clust ind
                 clust_ind = clust_plot(z_c);
                 
-                % Get data to plot
-                ind_str = D.TT.posClust{tt_ind, clust_ind}.indLap(1);
-                ind_end = D.TT.posClust{tt_ind, clust_ind}.indLap(2);
-                
                 % Bail if no data to plot
-                if ind_end == 0
+                if D.TT.posClust{tt_ind, clust_ind}.indLap(2) == 0
                     continue
                 end
                 
+                % Get data to plot
+                ind_get_str = D.TT.posClust{tt_ind, clust_ind}.indLap(1);
+                ind_get_end = D.TT.posClust{tt_ind, clust_ind}.indLap(2);
+                
                 % Pull out values
-                x = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_str:ind_end,1);
-                y = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_str:ind_end,2);
-                rad = D.TT.posClust{tt_ind, clust_ind}.Pol(ind_str:ind_end,1);
+                x = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_get_str:ind_get_end,1);
+                y = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_get_str:ind_get_end,2);
+                rad = D.TT.posClust{tt_ind, clust_ind}.Pol(ind_get_str:ind_get_end,1);
                 
                 % Do spike position
                 if get(D.UI.toggPlotTypeTT(1),'Value') == 1
@@ -9800,8 +9815,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if D.PAR.sesTask == 'Track'
                         
                         % Get occ hist from rad data
+                        ind_get_str = D.P.Rat.posAll.indAll(1);
+                        ind_get_end = D.P.Rat.posAll.indAll(2);
                         rat_rad = ...
-                            D.P.Rat.posAll.Pol(D.P.Rat.posAll.indAll(1):D.P.Rat.posAll.indAll(2), 1);
+                            D.P.Rat.posAll.Pol(ind_get_str:ind_get_end, 1);
                         occ_hist = histc(rat_rad, D.PAR.tt1dBinEdge);
                         occ_hist = occ_hist(2:end);
                         
@@ -9907,9 +9924,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         sleep_dt = ...
             (Sec_DT(now) - D.T.sleep_str(sleep_phase));
         
+        % Check for sleep done button flag
+        is_done = D.UI.toggSleep(sleep_phase).UserData(2) == 0;
+        
         % Wait till time ellapsed
         if sleep_dt < D.PAR.sleepDur(sleep_phase) && ...
-                get(D.UI.toggSleep(sleep_phase), 'Value') == 1 && ...
+                ~is_done && ...
                 ~DOEXIT
             
             % Change button string
@@ -9927,6 +9947,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
+        % Unset sleep button if time elapsed
+        if sleep_dt >= D.PAR.sleepDur(sleep_phase)
+            Safe_Set(D.UI.toggSleep(sleep_phase), 'Value', 0);
+            ToggSleep(D.UI.toggSleep(sleep_phase));
+        end
+        
         % Set final button string
         if sleep_dt >= D.PAR.sleepDur(sleep_phase)
             str = ...
@@ -9936,44 +9962,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.editSleep(sleep_phase).String = str;
         end
         
-        % Send NLX end event
-        Send_M2NLX(D.NLX.sleep_end_evt{sleep_phase});
-        
-        % Stop recording and aquisition
-        Safe_Set(D.UI.toggAcq, 'Value', 0)
-        ToggAcq(D.UI.toggAcq);
-        Safe_Set(D.UI.toggRec,'Value', 0);
-        ToggRec(D.UI.toggRec);
-        
-        % Load sleep tracking config
-        Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Task_Tracking.cfg');
-        Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Task_Tracking.cfg"');
-        
-        % Start recording and aquisition
-        Safe_Set(D.UI.toggAcq, 'Value', 1)
-        ToggAcq(D.UI.toggAcq);
-        Safe_Set(D.UI.toggRec,'Value', 1);
-        ToggRec(D.UI.toggRec);
-        
-        % Store end time
-        D.T.sleep_end(sleep_phase) = Sec_DT(now);
-        
         % Set flag
         D.F.sleep_done(sleep_phase) = true;
         
-        % Handle Sleep 1
-        if sleep_phase == 1
-            
-            % Disable Sleep 1 stuff
-            Object_Group_State('Sleep1_Objects', 'Disable');
-            
-        end
-        
         % Handle Sleep 2
         if sleep_phase == 2
-            
-            % Disable Sleep 2 stuff
-            Object_Group_State('Sleep2_Objects', 'Disable');
             
             % Stop recording
             if D.F.rec
@@ -11390,10 +11383,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if D.F.Rob.new_pos_data
                     
                     % Add to history
-                    ind_str = find(isnan(D.DB.CALVT.PosHist(1,:)), 1, 'first');
-                    ind_end = ind_str + length(D.P.Rob.x) - 1;
-                    D.DB.CALVT.PosHist(1, ind_str:ind_end) = D.P.Rob.x;
-                    D.DB.CALVT.PosHist(2, ind_str:ind_end) = D.P.Rob.y;
+                    ind_set_str = find(isnan(D.DB.CALVT.PosHist(1,:)), 1, 'first');
+                    ind_set_end = ind_set_str + length(D.P.Rob.x) - 1;
+                    D.DB.CALVT.PosHist(1, ind_set_str:ind_set_end) = D.P.Rob.x;
+                    D.DB.CALVT.PosHist(2, ind_set_str:ind_set_end) = D.P.Rob.y;
                     
                     % Replot robot data
                     if isfield(D.UI, 'vtRobPltTest')
@@ -11415,9 +11408,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.CALVT.RecCnt = D.DB.CALVT.RecCnt + D.P.Rob.vtNRecs;
                 
                 % Store raw vt pos data
-                ind_str = find(isnan(D.DB.CALVT.VTHist), 1, 'first');
-                ind_end = ind_str + 2*D.P.Rob.vtNRecs - 1;
-                D.DB.CALVT.VTHist(ind_str:ind_end) = D.P.Rob.vtPos;
+                ind_set_str = find(isnan(D.DB.CALVT.VTHist), 1, 'first');
+                ind_set_end = ind_set_str + 2*D.P.Rob.vtNRecs - 1;
+                D.DB.CALVT.VTHist(ind_set_str:ind_set_end) = D.P.Rob.vtPos;
                 
             end
             
@@ -13230,7 +13223,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
             end
             
-            % Load epys pos cfg
+            % Load ephys pos cfg
             Send_M2NLX(['-ProcessConfigurationFile ', cfg_fi]);
             
         end
@@ -13763,7 +13756,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get cap weight
-        D.PAR.capWeight = D.PAR.capWeightArr(D.UI.popCapWeight.Value);
+        if D.F.rat_implanted || D.PAR.sesType == 'TT_Turn'
+            
+            % Get weight of cap
+            D.PAR.capWeight = D.PAR.capWeightArr(1);
+            
+            % Add aditional weights
+            if D.UI.popCapWeight.Value > 1
+                D.PAR.capWeight = D.PAR.capWeight + D.PAR.capWeightArr(2) + ...
+                    D.PAR.capWeightArr(3)*(D.UI.popCapWeight.Value-2);
+            end
+            
+        end
         
         % Calculate new corrected weight
         D.PAR.ratWeightCorrected = ...
@@ -14020,38 +14024,99 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function ToggSleep(hObject, ~, ~)
         
         % Get user data and value
-        sleep_phase = get(hObject, 'UserData');
+        user_data = get(hObject, 'UserData');
+        sleep_phase = user_data(1);
+        sleep_done = user_data(2);
         val = get(hObject, 'Value');
         
-        % Bail if unsetting
-        if val == 0
-            return;
+        % Bail already run
+        if sleep_done == 1
+            return
         end
         
         % Update button
         Button_State(D.UI.toggSleep(sleep_phase), 'Update');
         
-        % Store sleep start time
-        D.T.sleep_str(sleep_phase) = Sec_DT(now);
+        % Start of sleep
+        if val == 1
+            
+            % Store sleep start time
+            D.T.sleep_str(sleep_phase) = Sec_DT(now);
+            
+            % Send NLX sleep start event
+            Send_M2NLX(D.NLX.sleep_start_evt{sleep_phase});
+            
+            % Switch to sleep tracking for second sleep
+            if sleep_phase == 2
+                
+                % Log/print
+                Console_Write('[ToggSleep] RUNNING: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                
+                % Stop recording and aquisition
+                Safe_Set(D.UI.toggAcq, 'Value', 0)
+                ToggAcq(D.UI.toggAcq);
+                
+                % Load sleep tracking config
+                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                
+                % Start recording and aquisition
+                Safe_Set(D.UI.toggAcq, 'Value', 1)
+                ToggAcq(D.UI.toggAcq);
+                
+                % Log/print
+                Console_Write('[ToggSleep] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                
+            end
+            
+        end
         
-        % Send NLX start event
-        Send_M2NLX(D.NLX.sleep_start_evt{sleep_phase});
+        % End of sleep
+        if val == 0
+            
+            % Disable Sleep button
+            if sleep_phase == 1
+                Object_Group_State('Sleep1_Objects', 'Disable');
+            else
+                Object_Group_State('Sleep2_Objects', 'Disable');
+            end
+            
+            % Store end time
+            D.T.sleep_end(sleep_phase) = Sec_DT(now);
+            
+            % Send NLX sleep end event
+            Send_M2NLX(D.NLX.sleep_end_evt{sleep_phase});
+            
+            % Switch back to task tracking after first sleep
+            if sleep_phase == 1
+                
+                % Log/print
+                Console_Write('[ToggSleep] RUNNING: Load "AWL-ICR_Ephys_Task_Tracking.cfg"');
+                
+                % Stop recording and aquisition
+                Safe_Set(D.UI.toggAcq, 'Value', 0)
+                ToggAcq(D.UI.toggAcq);
+                
+                % Load sleep tracking config
+                pause(0.5);
+                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Task_Tracking.cfg');
+                
+                % Start recording and aquisition
+                Safe_Set(D.UI.toggAcq, 'Value', 1)
+                ToggAcq(D.UI.toggAcq);
+                
+                % Log/print
+                Console_Write('[ToggSleep] FINISHED: Load "AWL-ICR_Ephys_Task_Tracking.cfg"');
+                
+            end
+            
+            % Flag sleep done
+            D.UI.toggSleep(sleep_phase).UserData(2) = 1;
+            
+        end
         
-        % Stop recording and aquisition
-        Safe_Set(D.UI.toggAcq, 'Value', 0)
-        ToggAcq(D.UI.toggAcq);
-        Safe_Set(D.UI.toggRec,'Value', 0);
-        ToggRec(D.UI.toggRec);
-        
-        % Load sleep tracking config
-        Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
-        Console_Write('[Finish_NLX_Setup] Loaded "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
-        
-        % Start recording and aquisition
-        Safe_Set(D.UI.toggAcq, 'Value', 1)
-        ToggAcq(D.UI.toggAcq);
-        Safe_Set(D.UI.toggRec,'Value', 1);
-        ToggRec(D.UI.toggRec);
+        % Log/print
+        Console_Write(sprintf('[%s(%d)] Set to \"%d"', 'ToggSleep', sleep_phase, val));
         
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
@@ -14954,24 +15019,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'XData', NaN, 'YData', NaN);
         
         % Reset pos data indeces
-        D.P.Rat.posAll.indAll(1) = D.P.Rat.posAll.indAll(2);
-        D.P.Rob.posAll.indAll(1) = D.P.Rob.posAll.indAll(2);
+        D.P.Rat.posAll.indAll(1) = max(1, D.P.Rat.posAll.indAll(2));
+        D.P.Rob.posAll.indAll(1) = max(1, D.P.Rob.posAll.indAll(2));
         D.P.Rat.posAll.indLap = D.P.Rat.posAll.indAll;
         D.P.Rob.posAll.indLap = D.P.Rob.posAll.indAll;
         
         % Reset vel data indeces
-        D.P.Rat.velAll.indAll(1) = D.P.Rat.velAll.indAll(2);
-        D.P.Rob.velAll.indAll(1) = D.P.Rob.velAll.indAll(2);
+        D.P.Rat.velAll.indAll(1) = max(1, D.P.Rat.velAll.indAll(2));
+        D.P.Rob.velAll.indAll(1) = max(1, D.P.Rob.velAll.indAll(2));
         D.P.Rat.velAll.indLap = D.P.Rat.velAll.indAll;
         D.P.Rob.velAll.indLap = D.P.Rob.velAll.indAll;
         
         % Reset vel hitogram data
-        if D.P.Rat.velAll.indHist(2) > 0
-            D.P.Rat.velAll.indHist(1) = D.P.Rat.velAll.indHist(2);
-        end
-        if D.P.Rob.velAll.indHist(2) > 0
-            D.P.Rob.velAll.indHist(1) = D.P.Rob.velAll.indHist(2);
-        end
+        D.P.Rat.velAll.indHist(1) = max(1, D.P.Rat.velAll.indHist(2));
+        D.P.Rob.velAll.indHist(1) = max(1, D.P.Rob.velAll.indHist(2));
         
         % Log/print
         Update_Log(sprintf('[%s] Set to \"%d\"', 'BtnClrVT', get(D.UI.btnClrVT,'Value')));
@@ -15005,9 +15066,421 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
         
         % Reset data inds for active buttons
-        [D.TT.posClust{active_mat}.indAll(1)] =  D.TT.posClust{active_mat}.indAll(2);
-        [D.TT.posClust{active_mat}.indLap] =  D.TT.posClust{active_mat}.indAll;
+        for z_tt = 1:size(D.TT.posClust,1)
+            for z_c = 1:size(D.TT.posClust,2)
+                if active_mat(z_tt,z_c)
+                    D.TT.posClust{z_tt,z_c}.indAll(1) =  max(1,D.TT.posClust{z_tt,z_c}.indAll(2));
+                    D.TT.posClust{z_tt,z_c}.indLap =  D.TT.posClust{z_tt,z_c}.indAll;
+                end
+            end
+        end
+    end
+
+% ---------------------BUTTON PRESS TO LOAD TT DATA------------------------
+    function ToggSelectTT(hObject, ~, ~)
         
+        %% GET HANDLE VALUES
+        val = get(hObject, 'Value');
+        x = get(hObject, 'UserData');
+        tt_ind = x(1);
+        
+        % Get tt field
+        D.TT.ttFldNow = D.TT.ttList{tt_ind};
+        
+        % Check if not in 'Track TTs' or 'Plot Spikes' mode
+        if D.UI.toggMainActionTT(1).Value == 0 && ...
+                D.UI.toggMainActionTT(2).Value == 0
+            
+            % Set button back to deselect and bail
+            set(hObject, 'Value', 0)
+            return;
+        end
+        
+        %% HANDLE 'Plot Spikes'
+        
+        % Select/Deselect clust buttons if in 'Plot Spikes' mode
+        if D.UI.toggMainActionTT(2).Value == 1
+            
+            % Set ref button back to inactive and bail
+            if contains(D.TT.ttFldNow, 'R')
+                set(hObject, 'Value', 0)
+                return;
+            end
+            
+            % Get active clusters
+            stream_clusts = ...
+                find(D.F.stream_clust(tt_ind, :));
+            
+            % Set button back to inactive and bail
+            if isempty(stream_clusts)
+                set(hObject, 'Value', 0)
+                return;
+            end
+            
+            % Set cluster buttons
+            for z_c = 1:length(stream_clusts)
+                
+                % Set all buttons to val
+                Safe_Set(D.UI.toggSubPlotTT(tt_ind,z_c), 'Value', val);
+                ToggSubPlotTT(D.UI.toggSubPlotTT(tt_ind,z_c))
+            end
+            
+            % Bail
+            return;
+        end
+        
+        %% HANDLE 'Track TTs'
+        
+        % Enable tt panel objects
+        Object_Group_State('TT_Turn_Panel_Objects', 'Enable')
+        
+        % Turn on NLX audio on left side for all chan if on pc speakers
+        if D.UI.toggMainActionTT(1).Value == 1 && ...
+                D.UI.toggHearSourceTT(1).Value == 1
+            
+            % Turn on audio for this TT
+            if isempty(strfind(D.TT.ttFldNow, 'R')) && ...
+                    any([D.UI.toggHearSourceTT.Value] == 1)
+                
+                % Enable left audio for all but refs
+                lft_ind = ismember(Safe_Get(D.UI.toggSubHearSdTT(1,:), 'String'), 'L');
+                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,lft_ind), 'Value', 1)
+                
+                % Run callback
+                ToggSubHearTT(D.UI.toggSubHearSdTT(tt_ind,lft_ind));
+                
+            end
+            
+        end
+        
+        % Check if button disabled
+        if D.UI.toggMainActionTT(1).Value == 0
+            
+            % Re-enable all buttons
+            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
+            
+            % Disable tt panel objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            Button_State(D.UI.toggUpdateLogTT, 'Disable');
+            
+            % Show all tts
+            Show_Active_TT();
+            
+            % Update current TT select button
+            if D.F.tt_updated(tt_ind)
+                Button_State(D.UI.toggSelectTT(tt_ind), 'Update', D.UI.disabledCol);
+            else
+                Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
+            end
+            
+            % Turn off NLX audio on left side for all chan
+            if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,1), 'Value') == 1  && ...
+                    D.UI.toggHearSourceTT(1).Value == 1
+                
+                % Enable left audio
+                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,lft_ind), 'Value', 0)
+                
+                % Run callback
+                ToggSubHearTT(D.UI.toggSubHearSdTT(tt_ind,lft_ind));
+            end
+            
+        end
+        
+        % Bail here if button unset
+        if val == 0
+            
+            % Re-enable all buttons
+            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
+            
+            % Disable tt panel objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            Button_State(D.UI.toggUpdateLogTT, 'Disable');
+            
+            % Show all tts
+            Show_Active_TT();
+            
+            % Update current TT select button
+            if D.F.tt_updated(tt_ind)
+                Button_State(D.UI.toggSelectTT(tt_ind), 'Update', D.UI.disabledCol);
+            else
+                Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
+            end
+            
+            % Hack to get toggle color to update
+            for z_p = 1:2
+                pos = D.UI.panSelectTT(z_p).Position;
+                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                D.UI.panSelectTT(z_p).Position = pos;
+            end
+            
+            % Bail
+            return;
+            
+        end
+        
+        % Disable all buttons
+        Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'off');
+        
+        % Enable this button
+        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'on');
+        
+        % Show active tt
+        Show_Active_TT(tt_ind);
+        
+        % Make sure only 1 button active
+        Safe_Set(D.UI.toggSelectTT, 'Value', 0);
+        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Value', val);
+        
+        % Update all TT select button
+        Button_State(D.UI.toggSelectTT, 'Update');
+        
+        % Change color of all updated buttons
+        Safe_Set(D.UI.toggSelectTT(D.F.tt_updated), 'BackgroundColor', D.UI.disabledCol);
+        
+        % Update current TT select button
+        Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
+        
+        % TT has not been updated already
+        if ~D.F.tt_updated(tt_ind)
+            
+            % Panel and text to enabled
+            Panel_State(D.UI.panTrackTT, 'Enable');
+            Safe_Set(D.UI.txtPanTT, 'ForegroundColor', D.UI.enabledCol)
+            
+            % Set update button to inactive
+            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 0)
+            Button_State(D.UI.toggUpdateLogTT, 'Update');
+            
+        end
+        
+        % TT has been updated already
+        if D.F.tt_updated(tt_ind)
+            
+            % Show stored orientation
+            D.UI.popOr.Value = D.UI.popOr.UserData(tt_ind);
+            
+            % Show stored turns
+            D.UI.popTrn.Value = D.UI.popTrn.UserData(tt_ind);
+            
+            % Show stored direction
+            D.UI.popDir.Value = D.UI.popDir.UserData(tt_ind);
+            
+            % Show stored notes
+            D.UI.editNoteTT.String = D.TT.ttLogNew.([D.TT.ttFldNow,'_N']);
+            
+            % Disable objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            
+            % Set update button to active
+            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 1)
+            Button_State(D.UI.toggUpdateLogTT, 'Update');
+            
+        end
+        
+        % Get last orientation
+        if isundefined(D.TT.ttLogNew.([D.TT.ttFldNow,'_O']))
+            
+            % Use default orientation list for first session
+            or_card_list =  D.PAR.orCardList;
+        else
+            
+            % Change cardinal direction list
+            orind = find(ismember(D.PAR.orCardList, D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])) == 1);
+            or_card_list = circshift(D.PAR.orCardList, [0,-(orind-1)]);
+        end
+        
+        % Add 16ths measurements to orientation list
+        or_list = cellfun(@(x,y) [x, blanks(4-length(x)) , y], ...
+            or_card_list, D.PAR.orFracList, 'uni', false);
+        
+        % Get last depth
+        depths_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_D']);
+        
+        % Update pannel title
+        Safe_Set(D.UI.panTrackTT, ...
+            'Title',D.TT.ttFldNow)
+        
+        % Update orientation
+        Safe_Set(D.UI.popOr, ...
+            'String', or_list);
+        
+        % Update ref
+        D.UI.popRefTT.Value = ...
+            find(ismember(D.TT.refList, char(D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList, D.TT.ttFldNow)))));
+        
+        % Show last note in table
+        date_list = flip(D.TT.ttLogTable.Date);
+        date_list = regexp(date_list, '\S*(?=_)', 'match');
+        D.UI.tblNoteTT.Data = [[date_list{:}]', ...
+            flip(D.TT.ttLogTable.([D.TT.ttFldNow,'_N']))];
+        D.UI.tblNoteTT.ColumnWidth = {55, 1000};
+        
+        % Update TT update button object
+        Safe_Set(D.UI.toggUpdateLogTT, ...
+            'UserData',tt_ind,...
+            'String',['Update ', D.TT.ttFldNow]);
+        
+        % Update tt orientation text object
+        Safe_Set(D.UI.txtPanTT(6), ...
+            'String', or_card_list{1});
+        
+        % Update tt depth text object
+        Safe_Set(D.UI.txtPanTT(7), ...
+            'String', sprintf('%0.0f %sm', depths_last, char(181)));
+        
+        % Update pax view
+        Move_Pax_To_TT(tt_ind);
+        
+        % Hack to get toggle color to update
+        for z_p = 1:2
+            pos = D.UI.panSelectTT(z_p).Position;
+            D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+            D.UI.panSelectTT(z_p).Position = pos;
+        end
+        
+        % Update UI
+        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
+        
+    end
+
+% --------------------BUTTON PRESS TO SAVE TT ENTRIES----------------------
+    function ToggUpdateLogTT(~, ~, ~)
+        
+        % Get values
+        val = get(D.UI.toggUpdateLogTT, 'Value');
+        x = get(D.UI.toggUpdateLogTT, 'UserData');
+        tt_ind = x(1);
+        
+        % Check if data should be overwriten
+        if val == 0
+            
+            % Unset flag
+            D.F.tt_updated(tt_ind) = false;
+            
+            % Overwrite new entries
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_O']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_R']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_R'])(end);
+            
+            % Reset stored turns and lowering direction
+            D.UI.popTrn.UserData(tt_ind) = 1;
+            D.UI.popDir.UserData(tt_ind) = 1;
+            D.UI.popOr.UserData(tt_ind) = 1;
+            
+            % Rerun TT select callback
+            ToggSelectTT(D.UI.toggSelectTT(tt_ind));
+            
+        end
+        
+        % Update values
+        if val == 1
+            
+            % Set flag
+            D.F.tt_updated(tt_ind) = true;
+            
+            % Update tt select button color
+            Safe_Set(D.UI.toggSelectTT(tt_ind), 'BackgroundColor', D.UI.disabledCol)
+            Safe_Set(D.UI.ttBndlLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
+            Safe_Set(D.UI.ttDriveLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
+            
+            % Store number of turns and lowering direction
+            D.UI.popTrn.UserData(tt_ind) = D.UI.popTrn.Value;
+            D.UI.popDir.UserData(tt_ind) = D.UI.popDir.Value;
+            
+            % Disable objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            Button_State(D.UI.toggUpdateLogTT, 'Disable');
+            
+            % Reset tt select buttons
+            Safe_Set(D.UI.toggSelectTT, 'Value', 0);
+            % Reenable all buttons
+            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
+            % Show all tts
+            Show_Active_TT();
+            
+            % Orientation list
+            or_list = get(D.UI.popOr,'String');
+            or_list = regexp(or_list, '[NSEW]*(?=\s)', 'match');
+            or_list = [or_list{:}];
+            
+            % Store last and new orientation
+            or_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
+            or_new = char(or_list(get(D.UI.popOr,'Value')));
+            
+            % Get total turns
+            turn_list = get(D.UI.popTrn,'String');
+            turns = str2double(turn_list(get(D.UI.popTrn,'Value')));
+            
+            % Convert to um
+            turn_um = turns*D.UI.umPerTurn;
+            
+            % Get turn direction
+            direction_new = get(D.UI.popDir, 'Value');
+            if direction_new == 1
+                direction_new = 1;
+            else
+                direction_new = -1;
+            end
+            
+            % Update change in orientation
+            if any(ismember(or_list, or_last))
+                
+                % Compute delta orientation
+                delta_orientation =  ...
+                    (find(ismember(or_list, or_new) == 1)-1) / length(D.PAR.orCardList);
+                
+                % Convert to microns
+                delta_orientation = delta_orientation * D.UI.umPerTurn;
+                
+            else
+                delta_orientation = 0;
+            end
+            
+            % Add turns
+            delta_depth = direction_new * (delta_orientation + turn_um);
+            
+            % Get last depth
+            depths_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
+            
+            % Compute total depth
+            depth_new = delta_depth+depths_last;
+            
+            % Save values to temp table
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = or_new;
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
+            
+            % Get reference
+            ref_str = char(D.TT.refList(D.UI.popRefTT.Value));
+            
+            % Set all refs for this bundle
+            tt_list = D.TT.ttList(D.I.ttBndl==D.I.ttBndl(tt_ind));
+            for z_tt = 1:length(tt_list)
+                
+                % Save for session
+                tt_fld = tt_list{z_tt};
+                D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList,tt_fld)) = ref_str;
+                
+                % Save reference to table
+                D.TT.ttLogNew.([tt_fld,'_R'])(:) = ref_str;
+                
+            end
+            
+            % Update pannel display
+            Safe_Set(D.UI.txtPanTT(6), 'String', or_new);
+            txt = sprintf('%0.0f %sm', depth_new, char(181));
+            Safe_Set(D.UI.txtPanTT(7), 'String', txt);
+            
+        end
+        
+        % Update track plot
+        Plot_TT_Path(tt_ind);
+        
+        % Update pax view
+        Move_Pax_To_TT(tt_ind);
+        
+        % Update UI
+        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
     end
 
 % ----------------------------SELECT TT ACTION-----------------------------
@@ -15647,370 +16120,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
     end
 
-% ---------------------BUTTON PRESS TO LOAD TT DATA------------------------
-    function ToggSelectTT(hObject, ~, ~)
-        
-        %% GET HANDLE VALUES
-        val = get(hObject, 'Value');
-        x = get(hObject, 'UserData');
-        tt_ind = x(1);
-        
-        % Get tt field
-        D.TT.ttFldNow = D.TT.ttList{tt_ind};
-        
-        % Check if not in 'Track TTs' or 'Plot Spikes' mode
-        if D.UI.toggMainActionTT(1).Value == 0 && ...
-                D.UI.toggMainActionTT(2).Value == 0
-            
-            % Set button back to deselect and bail
-            set(hObject, 'Value', 0)
-            return;
-        end
-        
-        %% HANDLE 'Plot Spikes'
-        
-        % Select/Deselect clust buttons if in 'Plot Spikes' mode
-        if D.UI.toggMainActionTT(2).Value == 1
-            
-            % Set ref button back to inactive and bail
-            if contains(D.TT.ttFldNow, 'R')
-                set(hObject, 'Value', 0)
-                return;
-            end
-            
-            % Get active clusters
-            stream_clusts = ...
-                find(D.F.stream_clust(tt_ind, :));
-            
-            % Set button back to inactive and bail
-            if isempty(stream_clusts)
-                set(hObject, 'Value', 0)
-                return;
-            end
-            
-            % Set cluster buttons
-            for z_c = 1:length(stream_clusts)
-                
-                % Set all buttons to val
-                Safe_Set(D.UI.toggSubPlotTT(tt_ind,z_c), 'Value', val);
-                ToggSubPlotTT(D.UI.toggSubPlotTT(tt_ind,z_c))
-            end
-            
-            % Bail
-            return;
-        end
-        
-        %% HANDLE 'Track TTs'
-        
-        % Enable tt panel objects
-        Object_Group_State('TT_Turn_Panel_Objects', 'Enable')
-        
-        % Check if button disabled
-        if D.UI.toggMainActionTT(1).Value == 0
-            
-            % Re-enable all buttons
-            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
-            
-            % Disable tt panel objects
-            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
-            Button_State(D.UI.toggUpdateLogTT, 'Disable');
-            
-            % Show all tts
-            Show_Active_TT();
-            
-            % Update current TT select button
-            if D.F.tt_updated(tt_ind)
-                Button_State(D.UI.toggSelectTT(tt_ind), 'Update', D.UI.disabledCol);
-            else
-                Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
-            end
-            
-        end
-        
-        % Bail here if button unset
-        if val == 0
-            
-            % Hack to get toggle color to update
-            for z_p = 1:2
-                pos = D.UI.panSelectTT(z_p).Position;
-                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
-                D.UI.panSelectTT(z_p).Position = pos;
-            end
-            
-            % Bail
-            return;
-            
-        end
-        
-        % Disable all buttons
-        Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'off');
-        
-        % Enable this button
-        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'on');
-        
-        % Get last stored orientation
-        orientations_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_O']);
-        
-        % Handle first ses
-        if isundefined(orientations_last)
-            
-            % Set to specific string
-            orientations_last = '1st Rec';
-            
-            % Change orientation vector
-            orientation_list =  D.PAR.dirVec;
-            
-        else
-            
-            % Change to string
-            orientations_last = char(orientations_last);
-            
-            % change cardinal direction list
-            orind = find(ismember(D.PAR.dirVec, orientations_last) == 1);
-            orientation_list = circshift(D.PAR.dirVec, [0,-(orind-1)]);
-        end
-        
-        % Get last depth
-        depths_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_D']);
-        
-        % Show active tt
-        Show_Active_TT(tt_ind);
-        
-        % Make sure only 1 button active
-        Safe_Set(D.UI.toggSelectTT, 'Value', 0);
-        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Value', val);
-        
-        % Update all TT select button
-        Button_State(D.UI.toggSelectTT, 'Update');
-        
-        % Reset color of updated buttons
-        Safe_Set(D.UI.toggSelectTT(D.F.tt_updated), 'BackgroundColor', D.UI.disabledCol);
-        
-        % Update current TT select button
-        Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
-        
-        % Set appearance based on update status
-        if ~D.F.tt_updated(tt_ind)
-            
-            % Panel and text
-            Panel_State(D.UI.panTrackTT, 'Enable');
-            Safe_Set(D.UI.txtPanTT, 'ForegroundColor', D.UI.enabledCol)
-        end
-        
-        % Update pannel title
-        Safe_Set(D.UI.panTrackTT, ...
-            'Title',D.TT.ttFldNow)
-        
-        % Update orientation
-        Safe_Set(D.UI.popOr, ...
-            'String', orientation_list);
-        
-        % Update ref
-        D.UI.popRefTT.Value = ...
-            find(ismember(D.TT.refList, char(D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList, D.TT.ttFldNow)))));
-        
-        % Show last note in table
-        date_list = flip(D.TT.ttLogTable.Date);
-        date_list = regexp(date_list, '\S*(?=_)', 'match');
-        D.UI.tblNoteTT.Data = [[date_list{:}]', ...
-            flip(D.TT.ttLogTable.([D.TT.ttFldNow,'_N']))];
-        D.UI.tblNoteTT.ColumnWidth = {55, 1000};
-        
-        % Update TT update button object
-        Safe_Set(D.UI.toggUpdateLogTT, ...
-            'UserData',tt_ind,...
-            'String',['Update ', D.TT.ttFldNow]);
-        
-        % Check if TT alrady updated
-        if D.F.tt_updated(tt_ind)
-            
-            % Show stored turns
-            D.UI.popTrn.Value = D.UI.popTrn.UserData(tt_ind);
-            
-            % Show stored direction
-            D.UI.popDir.Value = D.UI.popDir.UserData(tt_ind);
-            
-            % Show stored notes
-            D.UI.editNoteTT.String = D.TT.ttLogNew.([D.TT.ttFldNow,'_N']);
-            
-            % Disable objects
-            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
-            
-            % Set update button to active and enabled
-            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 1)
-            Button_State(D.UI.toggUpdateLogTT, 'Update');
-            
-        else
-            
-            % Set update button to inactive
-            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 0)
-            Button_State(D.UI.toggUpdateLogTT, 'Update');
-            
-        end
-        
-        % Update tt orientation text object
-        Safe_Set(D.UI.txtPanTT(6), ...
-            'String', orientations_last);
-        
-        % Update tt depth text object
-        Safe_Set(D.UI.txtPanTT(7), ...
-            'String', sprintf('%0.0f %sm', depths_last, char(181)));
-        
-        % Update pax view
-        Move_Pax_To_TT(tt_ind);
-        
-        % Hack to get toggle color to update
-        for z_p = 1:2
-            pos = D.UI.panSelectTT(z_p).Position;
-            D.UI.panSelectTT(z_p).Position = [0,0,1,1];
-            D.UI.panSelectTT(z_p).Position = pos;
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% --------------------BUTTON PRESS TO SAVE TT ENTRIES----------------------
-    function ToggUpdateLogTT(~, ~, ~)
-        
-        % Get values
-        val = get(D.UI.toggUpdateLogTT, 'Value');
-        x = get(D.UI.toggUpdateLogTT, 'UserData');
-        tt_ind = x(1);
-        
-        % Set flag
-        D.F.tt_updated(tt_ind) = true;
-        
-        % Check if data should be overwriten
-        if val == 0
-            
-            % Unset flag
-            D.F.tt_updated(tt_ind) = false;
-            
-            % Overwrite new entries
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_O']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_R']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_R'])(end);
-            
-            % Reset stored turns and lowering direction
-            D.UI.popTrn.UserData(tt_ind) = 1;
-            D.UI.popDir.UserData(tt_ind) = 1;
-            
-            % Reenable objects to reset their values
-            Object_Group_State('TT_Turn_Panel_Objects', 'Enable')
-            
-            % Update tt select button color and markers
-            Safe_Set(D.UI.toggSelectTT(tt_ind), 'BackgroundColor', D.UI.enabledCol)
-            Safe_Set(D.UI.ttBndlLegMrk(tt_ind), 'MarkerFaceColor', D.UI.ttCol(tt_ind,:));
-            Safe_Set(D.UI.ttDriveLegMrk(tt_ind), 'MarkerFaceColor', D.UI.ttCol(tt_ind,:));
-        else
-            
-            % Update tt select button color
-            Safe_Set(D.UI.toggSelectTT(tt_ind), 'BackgroundColor', D.UI.disabledCol)
-            Safe_Set(D.UI.ttBndlLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
-            Safe_Set(D.UI.ttDriveLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
-            
-            % Store number of turns and lowering direction
-            D.UI.popTrn.UserData(tt_ind) = D.UI.popTrn.Value;
-            D.UI.popDir.UserData(tt_ind) = D.UI.popDir.Value;
-            
-            % Disable objects
-            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
-            Button_State(D.UI.toggUpdateLogTT, 'Disable');
-            % Redarken new depth/orientation text
-            Safe_Set(D.UI.txtPanTT(6:7), 'ForegroundColor', D.UI.enabledCol)
-            
-            % Reset tt select buttons
-            Safe_Set(D.UI.toggSelectTT, 'Value', 0);
-            % Reenable all buttons
-            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
-            % Show all tts
-            Show_Active_TT();
-            
-        end
-        
-        % Update Orientation
-        orientations_list = get(D.UI.popOr,'String');
-        orientations_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
-        orientations_new = char(orientations_list(get(D.UI.popOr,'Value')));
-        
-        % Get total turns
-        turn_list = get(D.UI.popTrn,'String');
-        turns = str2double(turn_list(get(D.UI.popTrn,'Value')));
-        
-        % Convert to um
-        turn_um = turns*D.UI.umPerTurn;
-        
-        % Get turn direction
-        direction_new = get(D.UI.popDir, 'Value');
-        if direction_new == 1
-            direction_new = 1;
-        else
-            direction_new = -1;
-        end
-        
-        % Update change in orientation
-        if any(ismember(orientations_list, orientations_last))
-            
-            % Compute delta orientation
-            delta_orientation =  ...
-                (find(ismember(orientations_list, orientations_new) == 1)-1) / length(D.PAR.dirVec);
-            
-            % Convert to microns
-            delta_orientation = delta_orientation * D.UI.umPerTurn;
-            
-        else
-            delta_orientation = 0;
-        end
-        
-        % Add turns
-        delta_depth = direction_new * (delta_orientation + turn_um);
-        
-        % Get last depth
-        depths_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
-        
-        % Compute total depth
-        depth_new = delta_depth+depths_last;
-        
-        % Save values to temp table
-        D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = orientations_new;
-        D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
-        D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
-        
-        % Get reference
-        ref_str = char(D.TT.refList(D.UI.popRefTT.Value));
-        
-        % Set all refs for this bundle
-        tt_list = D.TT.ttList(D.I.ttBndl==D.I.ttBndl(tt_ind));
-        for z_tt = 1:length(tt_list)
-            
-            % Save for session
-            tt_fld = tt_list{z_tt};
-            D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList,tt_fld)) = ref_str;
-            
-            % Save reference to table
-            D.TT.ttLogNew.([tt_fld,'_R'])(:) = ref_str;
-            
-        end
-        
-        % Update pannel display
-        Safe_Set(D.UI.txtPanTT(6), 'String', orientations_new);
-        txt = sprintf('%0.0f %sm', depth_new, char(181));
-        Safe_Set(D.UI.txtPanTT(7), 'String', txt);
-        
-        % Update track plot
-        Plot_TT_Path(tt_ind);
-        
-        % Update pax view
-        Move_Pax_To_TT(tt_ind);
-        
-        % Dedarken new depth/orientation text
-        Safe_Set(D.UI.txtPanTT(6:7), 'ForegroundColor', D.UI.enabledCol)
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
 % ---------------------------SET 3D PLOT VIEW------------------------------
     function Set3dView(hObject, ~, ~)
         
@@ -16636,9 +16745,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Button_State(D.UI.toggSleep(1), 'Update');
                     Button_State(D.UI.toggSleep(1), 'Disable');
                     
-                    % Enable edit box for cut and paist
-                    Safe_Set(D.UI.editSleep(1), 'Enable', 'on')
-                    
                 end
                 
                 
@@ -16674,9 +16780,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.UI.toggSleep(2).Value = 1;
                     Button_State(D.UI.toggSleep(2), 'Update');
                     Button_State(D.UI.toggSleep(2), 'Disable');
-                    
-                    % Enable edit box for cut and paist
-                    Safe_Set(D.UI.editSleep(1), 'Enable', 'on')
                     
                 end
                 
@@ -16965,7 +17068,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Safe_Set(D.UI.panTrackTT, 'Title', 'TTXX')
                     
                     % Reset orientation list
-                    Safe_Set(D.UI.popOr, 'String', D.PAR.dirVec);
+                    Safe_Set(D.UI.popOr, 'String', {' '});
                     
                     % Reset TT update button string
                     Safe_Set(D.UI.toggUpdateLogTT, ...
@@ -17370,9 +17473,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Note:
         %
         %   action_str = [
-        %       'Track TTs', 
-        %       'Flag TT', 
-        %       'Hear Chan', 
+        %       'Track TTs',
+        %       'Flag TT',
+        %       'Hear Chan',
         %       'Plot Spikes']
         %
         %   setting_str = ['Enable', 'Disable', 'Hide']
