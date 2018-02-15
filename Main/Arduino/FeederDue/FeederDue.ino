@@ -1911,6 +1911,11 @@ void REWARD::StartRew()
 	// Open solenoid
 	digitalWrite(pin.Rel_Rew, HIGH);
 
+	// Compute reward end time
+	t_rewStr = millis();
+	t_rewEnd = t_rewStr + duration;
+	t_closeSol = t_rewStr + (int)((float)duration*solOpenScale);
+
 	// Extend feeder arm
 	if (!fc.isForageTask) {
 		ExtendFeedArm();
@@ -1927,11 +1932,6 @@ void REWARD::StartRew()
 	else {
 		doTimedRetract = false;
 	}
-
-	// Compute reward end time
-	t_rewStr = millis();
-	t_rewEnd = t_rewStr + duration;
-	t_closeSol = t_rewStr + (int)((float)duration*solOpenScale);
 
 	// Log/print 
 	sprintf(str, "RUNNING: \"%s\" Reward: cnt_rew=%d dt_sol=%dms dt_rew=%dms dt_retract=%d...",
@@ -8871,6 +8871,7 @@ void loop() {
 
 		// Handle Track task
 		if (cmd.taskCond == 1) {
+			DebugFlow(__FUNCTION__, __LINE__, "DO TRACK TASK");
 
 			// Set rew led min
 			rewLEDduty[0] = rewLEDmin[0];
@@ -8884,7 +8885,7 @@ void loop() {
 
 		// Handle Forage task
 		if (cmd.taskCond == 2) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE SESSION");
+			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE TASK");
 
 			// Set rew led forage min
 			rewLEDduty[0] = rewLEDmin[1];
