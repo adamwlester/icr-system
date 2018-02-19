@@ -92,15 +92,15 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r9999'; %'r9999';
+D.DB.ratLab = 'r0495'; %'r9999';
 
 % Implant status
-D.DB.Implanted = false;
+D.DB.Implanted = true;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
-D.DB.Session_Task = 'Forage'; % ['Track' 'Forage']
+D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
 D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
@@ -466,7 +466,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Sleep 1/2 duration
         D.PAR.sleepDur = [15, 15]*60; % min
         % Wait to connect to Cheetah
-        D.PAR.cheetahConnectDel = 15; % sec
+        D.PAR.cheetahConnectDel = 5; % sec
         % Max tetrodes
         D.PAR.maxTT = 18;
         % Max clusters
@@ -654,7 +654,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Bail if exit initiated
         if DOEXIT
             Console_Write('**WARNING** [Setup] ABORTED: Wait for Session Type Selection');
-            return;
+            return
         else
             Console_Write('[Setup] FINISHED: Wait for Session Type Selection');
         end
@@ -756,7 +756,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         if DOEXIT
             Console_Write('**WARNING** [Setup] ABORTED: Wait for Handshake');
-            return;
+            return
         end
         
         % Set sync time
@@ -774,7 +774,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[Setup] FINISHED: "NLX_Setup()"');
         else
             Console_Write('**WARNING** [Setup] ABORTED: "NLX_Setup()"');
-            return;
+            return
         end
         Send_M2C('N', D.PAR.R, D.PAR.XC, D.PAR.YC);
         
@@ -811,7 +811,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % CHECK FOR EXIT
             if DOEXIT
-                continue;
+                continue
             end
             
             % PLOT POSITION
@@ -830,7 +830,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % CHECK FOR EXIT
             if DOEXIT
-                continue;
+                continue
             end
             
             % Store last case
@@ -872,7 +872,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 case 'WAIT FOR UI SETUP'
                     %% ---------------WAIT FOR UI SETUP----------------
-                    continue;
+                    continue
                     
                 case 'FINISH SESSION SETUP'
                     %% -----------------FINISH SESSION SETUP-------------------
@@ -953,7 +953,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.F.rat_out = true;
                         
                         % Bail
-                        continue;
+                        continue
                     end
                     
                     % Run ICR Session setup code
@@ -1035,7 +1035,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.F.sub_case_now = 'DO TASK CHECKS';
                             
                         else
-                            continue;
+                            continue
                         end
                         
                     elseif ~D.F.rat_out
@@ -1157,7 +1157,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             if DOEXIT
                                 Console_Write('**WARNING** [Run:SubLoop] ABORTED: Dump VT Recs');
-                                return;
+                                return
                             else
                                 Console_Write('[Run:SubLoop] FINISHED: Dump VT Recs');
                             end
@@ -1175,13 +1175,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Wait till at least 1000 VT samples collected
                             if ~ISMATSOLO && ...
                                     D.P.Rob.cnt_vtRec < 100
-                                continue;
+                                continue
                             end
                             
                             % Wait for start button on forage task
                             if D.PAR.sesTask == 'Forage' && ...
                                     get(D.UI.btnStart, 'Value') == 0
-                                continue;
+                                continue
                             end
                             
                             % Itterate move count
@@ -1273,7 +1273,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             
                         otherwise
-                            continue;
+                            continue
                             
                     end
                     
@@ -1352,10 +1352,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                 case 'WAIT FOR EXIT'
                     %% -------------WAIT FOR EXIT---------------
-                    continue;
+                    continue
                     
                 otherwise
-                    continue;
+                    continue
             end
             
         end
@@ -1554,7 +1554,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.cm2pxl = D.UI.vtRes/140;
         
         % Pos lims
-        % arena radius 
+        % arena radius
         D.UI.arnRad = 70; % (cm)
         % track width
         D.UI.trkWdt = 10; % (cm)
@@ -1679,8 +1679,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % nlx connected
         D.F.nlx_connected = false;
         % nlx streaming
-        D.F.vt_streaming(1) = false;
-        D.F.vt_streaming(2) = false;
+        D.F.vt_rat_streaming = false;
+        D.F.vt_rob_streaming  = false;
         D.F.evt_streaming = false;
         % robot setup
         D.F.rob_setup_confirmed = false;
@@ -2096,7 +2096,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         fig_btm = 42;
         for z_m = 1:3
             if z_m > size(D.UI.monPos,1)
-                continue;
+                continue
             end
             fig_lft = D.UI.monPos(D.UI.figMon(z_m),1) + (D.UI.monPos(D.UI.figMon(z_m),3)-fig_wh(1))/2;
             D.UI.figGrpPos{z_m} = [fig_lft, fig_btm, fig_wh(1), fig_wh(2)];
@@ -4203,13 +4203,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Bail
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Open Cheetah.exe');
-                return;
+                return
                 
             else
                 
                 % Bail
                 Console_Write('[NLX_Setup] SKIPPED: Open Cheetah.exe');
-                return;
+                return
                 
             end
             
@@ -4242,7 +4242,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 if DOEXIT
                     Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Open');
-                    return;
+                    return
                 else
                     Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Open');
                 end
@@ -4280,7 +4280,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             if DOEXIT
                 Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait to Connect to Cheetah.exe');
-                return;
+                return
             else
                 Console_Write('[NLX_Setup] FINISHED: Wait to Connect to Cheetah.exe');
             end
@@ -4318,7 +4318,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 if DOEXIT
                     Console_Write('**WARNING** [NLX_Setup] ABORTED: Connect to NLX');
-                    return;
+                    return
                 else
                     Console_Write('[NLX_Setup] FINISHED: Connect to NLX');
                 end
@@ -4348,7 +4348,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Set exit flag and bail
                 Console_Write('!!ERROR!! [NLX_Setup] FAILED: Confirm NLX Connection');
                 SetExit();
-                return;
+                return
             end
         else
             Console_Write('[NLX_Setup] SKIPPED: Confirm NLX Connection');
@@ -5091,7 +5091,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set output and bail
             was_ran = false;
-            return;
+            return
         end
         
         % Get implant coordinates
@@ -6139,7 +6139,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail for last loop
             if z_l == 3
-                continue;
+                continue
             end
             
             % Set axis lims
@@ -6347,7 +6347,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Safe_Set(D.UI.toggSubFlagTT(z_tt,z_f), ...
                     'String', set_flag_labs{z_f}, ...
                     'ForegroundColor', D.UI.enabledBtnFrgCol, ...
-                    'UserData', [z_tt,z_f,6], ...
+                    'UserData', [z_tt,z_f], ...
                     'Callback', {@ToggFlagTT}, ...
                     'Value', val);
                 
@@ -6455,7 +6455,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return;
+        return
         
     end
 
@@ -6467,7 +6467,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set output and bail
             was_ran = false;
-            return;
+            return
         end
         
         %% LOAD CONFIGURATION FILES AND SETTINGS
@@ -6600,7 +6600,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Bail
                 Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Load Previous Cheetah Settings');
-                return;
+                return
             else
                 
                 Console_Write('[Finish_NLX_Setup] SKIPPED: Load Previous Cheetah Settings');
@@ -6643,35 +6643,60 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if DOEXIT
             % Bail
             Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Open VT and Event Streams');
-            return;
+            return
+        end
+        
+        % Get all DAS objects
+        Console_Write('[Finish_NLX_Setup] RUNNING: "NlxGetDASObjectsAndTypes()"...');
+        [succeeded, D.NLX.das_objects, D.NLX.das_types] = NlxGetDASObjectsAndTypes();
+        if succeeded == 1
+            Console_Write('[Finish_NLX_Setup] FINISHED: "NlxGetDASObjectsAndTypes()"...');
+        else
+            Console_Write('!!ERROR!! [Finish_NLX_Setup] FAILED: "NlxGetDASObjectsAndTypes()"...');
         end
         
         % Open rat vt stream
-        D.F.vt_streaming(1) = NlxOpenStream(D.NLX.vt_rat_ent) == 1;
-        Console_Write(sprintf('[Finish_NLX_Setup] Open NLX "%s" Stream: status=%d', ...
-            D.NLX.vt_rat_ent, D.F.vt_streaming(1)));
+        if any(contains(D.NLX.das_objects, D.NLX.vt_rat_ent))
+            D.F.vt_rat_streaming = NlxOpenStream(D.NLX.vt_rat_ent) == 1;
+            Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+                D.NLX.vt_rat_ent, D.F.vt_rat_streaming ));
+        else
+            Console_Write(sprintf('!!ERROR!! [Finish_NLX_Setup] Missing DAS Object: "%s"', D.NLX.vt_rat_ent));
+        end
         
         % Open robot vt stream
-        D.F.vt_streaming(2) = NlxOpenStream(D.NLX.vt_rob_ent) == 1;
-        Console_Write(sprintf('[Finish_NLX_Setup] Open NLX "%s" Stream: status=%d', ...
-            D.NLX.vt_rob_ent, D.F.vt_streaming(2)));
+        if any(contains(D.NLX.das_objects, D.NLX.vt_rob_ent))
+            D.F.vt_rob_streaming = NlxOpenStream(D.NLX.vt_rob_ent) == 1;
+            Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+                D.NLX.vt_rob_ent, D.F.vt_rob_streaming ));
+        else
+            Console_Write(sprintf('!!ERROR!! [Finish_NLX_Setup] Missing DAS Object: "%s"', D.NLX.vt_rob_ent));
+        end
         
         % Open event vt stream
+        if any(contains(D.NLX.das_objects, D.NLX.event_ent))
+            D.F.evt_streaming = NlxOpenStream(D.NLX.event_ent) == 1;
+            Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+                D.NLX.event_ent, D.F.evt_streaming ));
+        else
+            Console_Write(sprintf('!!ERROR!! [Finish_NLX_Setup] Missing DAS Object: "%s"', D.NLX.event_ent));
+        end
+        
         D.F.evt_streaming = NlxOpenStream(D.NLX.event_ent) == 1;
-        Console_Write(sprintf('[Finish_NLX_Setup] Open NLX "%s" Stream: status=%d', ...
+        Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
             D.NLX.event_ent, D.F.evt_streaming));
         
         % Log/print stream status
-        if D.F.vt_streaming(1) && ...
-                D.F.vt_streaming(2) && ...
+        if D.F.vt_rat_streaming && ...
+                D.F.vt_rob_streaming  && ...
                 D.F.evt_streaming
             % All streaming
             Console_Write(sprintf('[Finish_NLX_Setup] FINISHED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
-                D.F.vt_streaming(1), D.F.vt_streaming(2), D.F.evt_streaming));
+                D.F.vt_rat_streaming , D.F.vt_rob_streaming , D.F.evt_streaming));
         else
             % Open stream failed
             Console_Write(sprintf('**WARING** [Finish_NLX_Setup] FAILED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
-                D.F.vt_streaming(1), D.F.vt_streaming(2), D.F.evt_streaming));
+                D.F.vt_rat_streaming , D.F.vt_rob_streaming , D.F.evt_streaming));
         end
         
         %% RUN SPIKESORT EXE
@@ -6722,7 +6747,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             if DOEXIT
                 Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Wait for SpikeSort3D.exe to Close');
-                return;
+                return
             else
                 Console_Write('[Finish_NLX_Setup] FINISHED: Wait for SpikeSort3D.exe to Close');
             end
@@ -6785,7 +6810,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             if DOEXIT
                 Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Wait for SpikeSort3D.exe to Open');
-                return;
+                return
             else
                 Console_Write('[Finish_NLX_Setup] FINISHED: Wait for SpikeSort3D.exe to Open');
             end
@@ -6801,7 +6826,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return;
+        return
         
         %% LOAD CONFIG SETTINGS FUNCTION
         function LoadConfigSettings(fipath)
@@ -6811,6 +6836,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 '-SetAcqEntProcessingEnabled', ...
                 '-SetInputRange', ...
                 '-SetSpikeThreshold', ...
+                '-SetPlotEnabled', ...
                 };
             
             % Read in text file
@@ -6841,7 +6867,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set output and bail
             was_ran = false;
-            return;
+            return
         end
         
         %% SETUP EPHYS PLOTTING
@@ -6993,7 +7019,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return;
+        return
         
     end
 
@@ -7996,7 +8022,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'FaceAlpha', 0.1, ...
                 'LineWidth', 1, ...
                 'UserData', z_targ, ...
-                'Visible', 'off', ... 
+                'Visible', 'off', ...
                 'Parent', D.UI.axH(9));
         end
         
@@ -8486,9 +8512,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bail if not streaming
-        if (strcmp(fld, 'Rat') && ~D.F.vt_streaming(1)) || ...
-                (strcmp(fld, 'Rob') && ~D.F.vt_streaming(2))
-            return;
+        if (strcmp(fld, 'Rat') && ~D.F.vt_rat_streaming ) || ...
+                (strcmp(fld, 'Rob') && ~D.F.vt_rob_streaming )
+            return
         end
         
         % Include head direction for implant sessions
@@ -8600,7 +8626,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.P.(fld).recs = NaN;
                 
                 % Exit function
-                return;
+                return
                 
             else
                 % Set new data flag
@@ -8879,7 +8905,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % BAIL IF SETUP NOT FINISHED
         if ~D.F.ses_setup_done
-            return;
+            return
         end
         
         % Store time
@@ -9251,7 +9277,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if no data collected
             if D.P.(fld).velAll.indAll(2) == 0
-                continue;
+                continue
             end
             
             % Get all vel pol data
@@ -9334,7 +9360,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if no data collected
             if D.P.(fld).velAll.indHist(2) == 0
-                continue;
+                continue
             end
             
             % Get accross lap average
@@ -9374,7 +9400,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if not streaming
         if ~D.F.evt_streaming
-            return;
+            return
         end
         
         % Read in event data
@@ -9654,7 +9680,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if no data left
             if sum(exc_ind) == D.TT.ttRecs{tt_ind}
-                continue;
+                continue
             end
             
             % Bail if no pos data
@@ -9675,7 +9701,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if no values in range
             if isempty(cart_mat)
-                continue;
+                continue
             end
             
             % Find associated postions from time stamps
@@ -9926,13 +9952,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set flag
             D.F.sleep_done(sleep_phase) = true;
-            return;
+            return
         end
         
         % Bail if sleep not started or finished
         if D.T.sleep_str(sleep_phase) == 0 || ...
                 D.F.sleep_done(sleep_phase)
-            return;
+            return
         end
         
         % Check time left
@@ -9940,7 +9966,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             (Sec_DT(now) - D.T.sleep_str(sleep_phase));
         
         % Check for sleep done button flag
-        is_done = D.UI.toggSleep(sleep_phase).UserData(2) == 0;
+        is_done = D.UI.toggSleep(sleep_phase).UserData(2) == 1;
         
         % Wait till time ellapsed
         if sleep_dt < D.PAR.sleepDur(sleep_phase) && ...
@@ -9958,7 +9984,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pause(0.1);
             
             % Exit function
-            return;
+            return
             
         end
         
@@ -10354,7 +10380,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if reset already done
             if D.F.rew_reset
-                return;
+                return
             end
             
             % Set reward reset flag
@@ -10522,13 +10548,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Log/print
             Console_Write(sprintf('[Forage_Reward_Targ_Check] Rewarded: targ=%ddeg dt_occ=%0.2fsec', ...
                 D.PAR.frgTargDegArr(D.I.targ_last), inbndTim));
-
+            
             % Update UI
             Update_UI(0);
             D.F.ui_updated = true;
             
             % Bail
-            return;
+            return
             
         end
         
@@ -10753,7 +10779,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ...
                 ~D.F.ses_setup_done || ...
                 Sec_DT(now) - D.T.info_txt_update < 0.1
-            return;
+            return
         end
         
         % Store time
@@ -10995,22 +11021,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if rat out
             if D.F.task_done || D.F.do_quit
-                return;
+                return
             end
             
             % Bail if robot not in place
             if c2m.('K').dat1 < 3
-                return;
+                return
             end
             
             % Bail if poll data not new
             if ~D.F.poll_new
-                return;
+                return
             end
             
             % Wait for 5 sec after setup
             if Sec_DT(now) - D.T.rec_tim < 5
-                return;
+                return
             end
             
             % Check for reward
@@ -11107,7 +11133,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Send_M2C('T', SYSTEST(1), 0, 0);
                 
                 % Close rat stream
-                D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
+                D.F.vt_rat_streaming = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
                 
                 % Unset flag
                 D.DB.isTestStarted = true;
@@ -11124,7 +11150,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if pass == 1
                     ts_now = int64(str2double(ts_string)) - D.T.poll_str_nlx;
                 else
-                    return;
+                    return
                 end
                 
             else
@@ -11137,7 +11163,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if too little time ellapsed
             if dt_sec < (1/30) * 0.75
-                return;
+                return
             end
             
             % Store last time
@@ -11396,7 +11422,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if poll data not new
             if ~D.F.poll_new
-                return;
+                return
             end
             
             % Send begin test if robot in place
@@ -11407,7 +11433,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.CALVT.RunEnd = Sec_DT(now) + D.DB.CALVT.RunDur*60;
                 
                 % Close rat stream
-                D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
+                D.F.vt_rat_streaming = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
                 
                 % Trigger start
                 D.P.Rat.rad = mean(D.PAR.strQuadBnds);
@@ -11432,7 +11458,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Bail if no new recs
                 if D.P.Rob.vtNRecs == 0
-                    return;
+                    return
                 end
                 
                 % Store processed data
@@ -11750,7 +11776,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTImg;
                 
                 % Bail
-                return;
+                return
             end
             
             % DO IR IMAGE TEST
@@ -11851,7 +11877,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.cntSensor = 1;
                         
                         % Bail
-                        return;
+                        return
                     end
                     
                     % Get new image
@@ -11902,7 +11928,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Bail
-                return;
+                return
                 
             end
             
@@ -12058,12 +12084,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.WALIR.isIRTestDone = true;
                     
                     % Bail
-                    return;
+                    return
                     
                 end
                 
                 % Bail
-                return;
+                return
             end
             
             % END OF TEST
@@ -12078,7 +12104,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.t5_doWallIRTimingTest = false;
                 
                 % Bail
-                return;
+                return
                 
             end
             
@@ -12121,7 +12147,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Send_M2C('T', SYSTEST(1), 0, 0);
                 
                 % Bail
-                return;
+                return
             end
             
             % RUN TEST
@@ -12196,7 +12222,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         end
                         
                         % Bail
-                        return;
+                        return
                     end
                     
                 end
@@ -12237,7 +12263,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Bail
-                return;
+                return
                 
             end
             
@@ -12248,7 +12274,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if session not setup
             if ~D.F.ses_setup_done
-                return;
+                return
             end
             
             % BEGIN TEST
@@ -12319,7 +12345,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if vcc == 0
             if D.PAR.cube_vcc == 0
-                return;
+                return
             end
             
             % Setup
@@ -12332,7 +12358,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Wait 10 seconds to actually start
                 if Sec_DT(now) - D.DB.CVCC.t_start < 10
-                    return;
+                    return
                 end
                 
                 % Set start vcc and dt
@@ -12526,7 +12552,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set output and bail
             was_ran = false;
-            return;
+            return
             
         end
         
@@ -12740,7 +12766,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return;
+        return
         
     end
 
@@ -12752,7 +12778,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set output and bail
             was_ran = false;
-            return;
+            return
             
         end
         
@@ -12777,7 +12803,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             case 'No'
                 % Set output and bail
                 was_ran = false;
-                return;
+                return
         end
         
         % Log/print
@@ -12879,7 +12905,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         if DOEXIT
             Console_Write('**WARNING** [Save_Cheetah_Data] ABORTED: Wait for NLX Programs to Close');
-            return;
+            return
         else
             Console_Write('[Save_Cheetah_Data] FINISHED: Wait for NLX Programs to Close');
         end
@@ -12911,7 +12937,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return;
+        return
         
     end
 
@@ -12923,7 +12949,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set output and bail
             was_ran = false;
-            return;
+            return
         end
         
         % Store 'Session'
@@ -12951,7 +12977,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return;
+        return
         
     end
 
@@ -12979,14 +13005,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if isfield(D.NLX, 'vt_rat_ent')
                         
                         % Close rat vt stream
-                        D.F.vt_streaming(1) = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
+                        D.F.vt_rat_streaming = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
                         Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
-                            D.NLX.vt_rat_ent, ~D.F.vt_streaming(1)));
+                            D.NLX.vt_rat_ent, ~D.F.vt_rat_streaming ));
                         
                         % Close robot vt stream
-                        D.F.vt_streaming(2) = NlxCloseStream(D.NLX.vt_rob_ent) ~= 1;
+                        D.F.vt_rob_streaming  = NlxCloseStream(D.NLX.vt_rob_ent) ~= 1;
                         Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
-                            D.NLX.vt_rob_ent, ~D.F.vt_streaming(2)));
+                            D.NLX.vt_rob_ent, ~D.F.vt_rob_streaming ));
                     end
                     
                     % Close event stream
@@ -13136,7 +13162,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if exist('DOEXIT', 'var')
             if isa(DOEXIT, 'logical')
                 if DOEXIT
-                    return;
+                    return
                 end
             end
         end
@@ -13222,7 +13248,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail here if not final clear
         if ~clear_all
-            return;
+            return
         end
         
         % Clear every var in workspace but status
@@ -13252,7 +13278,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Can only set to select
         if val == 0 && all([D.UI.toggMon(:).Value] == 0)
             hObject.Value = 1;
-            return;
+            return
         end
         
         % Move windows based on session type
@@ -13324,7 +13350,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'BackgroundColor',D.UI.figBckCol, ...
                 'ForegroundColor', D.UI.enabledCol);
             
-            return;
+            return
         end
         
         % Change to active color
@@ -13334,7 +13360,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail here if called by pop
         if strcmp(get(hObject, 'Style'),'popupmenu')
-            return;
+            return
         end
         
         % Disable pop and button
@@ -13372,7 +13398,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if nothing selected
         if get(D.UI.popRat,'Value') == 1
-            return;
+            return
         end
         
         % Change to active color
@@ -13501,7 +13527,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if nothing selected
         if get(D.UI.popHuman,'Value') == 1
-            return;
+            return
         end
         
         % Change to active color
@@ -13521,7 +13547,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if nothing selected
         if get(D.UI.popCond,'Value') == 1
-            return;
+            return
         end
         
         % Change to active color
@@ -13593,7 +13619,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if nothing selected
         if get(D.UI.popTask,'Value') == 1
-            return;
+            return
         end
         
         % Change to active color
@@ -13638,7 +13664,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if nothing selected
         if get(D.UI.popRewDel,'Value') == 1
-            return;
+            return
         end
         
         % Change to active color
@@ -13808,7 +13834,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Unset button and bail if value bad
         if isnan(D.PAR.ratWeightNew)
             Safe_Set(D.UI.toggUpdateWeight, 'Value', 0)
-            return;
+            return
         end
         
         % Get cap weight
@@ -13870,7 +13896,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Unset and bail if any bad values
         if any(isnan([D.PAR.feedPellets, D.PAR.feedMash, D.PAR.feedEnsure, D.PAR.feedSTAT]))
             Safe_Set(D.UI.toggUpdateFed, 'Value', 0)
-            return;
+            return
         end
         
         % Update button
@@ -13978,7 +14004,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Bail
-            return;
+            return
         else
             D.UI.toggStreamTTs.UserData = 1;
         end
@@ -13998,6 +14024,33 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if ref
             if contains(tt_lab, 'R')
+                continue
+            end
+            
+            % Open tt stream
+            if any(contains(D.NLX.das_objects, tt_lab))
+                succeeded = NlxOpenStream(tt_lab) == 1;
+                Console_Write(sprintf('[ToggStreamTTs] FINISHED: Open NLX "%s" Stream: status=%d', ...
+                    tt_lab, succeeded));
+            else
+                Console_Write(sprintf('!!ERROR!! [ToggStreamTTs] Missing DAS Object: "%s"', tt_lab));
+            end
+            
+            % Check status
+            if (succeeded)
+                
+                % Log/print success
+                Console_Write(sprintf('[ToggStreamTTs] FINISHED: Open \"%s\" Stream', tt_lab));
+                
+                % Set flag
+                D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  true;
+                
+            else
+                
+                % Log/print error
+                Console_Write(sprintf('**WARNING** [ToggStreamTTs] FAILED: Open \"%s\" Stream', tt_lab));
+                
+                % Bail
                 continue
             end
             
@@ -14028,18 +14081,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
             end
             
-            % Attempt open
-            succeeded = NlxOpenStream(tt_lab);
-            
-            % Set flag
-            D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  true;
-            
-            % Print status
-            if (succeeded)
-                Console_Write(sprintf('[ToggStreamTTs] FINISHED: Open \"%s\" Stream', tt_lab));
-            else
-                Console_Write(sprintf('**WARNING** [ToggStreamTTs] FAILED: Open \"%s\" Stream', tt_lab));
-            end
         end
         
         % Set callback
@@ -14241,7 +14282,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if monitor not present
             if z_m > size(D.UI.monPos,1)
-                continue;
+                continue
             end
             
             % Move left
@@ -14262,7 +14303,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 ToggMon(D.UI.toggMon(mon_new_ind));
                 
                 % Bail
-                return;
+                return
                 
             end
             
@@ -14278,7 +14319,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Block callback re-entry
         s = dbstack();
         if sum(cell2mat(cellfun(@(x) any(strfind(x, 'MouseTrack')), {s.name}, 'uni', false))) > 1
-            return;
+            return
         end
         
         % Bail if no buttons active
@@ -14287,7 +14328,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 all([D.UI.toggICR.Value] == 0)) || ...
                 (strcmp(get(D.UI.toggPickRewPos, 'Enable'), 'off') && ...
                 all(ismember({D.UI.toggICR.Enable}, 'off')))
-            return;
+            return
         end
         
         % Get new mouse data
@@ -15154,7 +15195,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set button back to deselect and bail
             set(hObject, 'Value', 0)
-            return;
+            return
         end
         
         %% HANDLE 'Plot Spikes'
@@ -15165,7 +15206,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set ref button back to inactive and bail
             if contains(D.TT.ttFldNow, 'R')
                 set(hObject, 'Value', 0)
-                return;
+                return
             end
             
             % Get active clusters
@@ -15175,7 +15216,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set button back to inactive and bail
             if isempty(stream_clusts)
                 set(hObject, 'Value', 0)
-                return;
+                return
             end
             
             % Set cluster buttons
@@ -15187,7 +15228,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Bail
-            return;
+            return
         end
         
         %% HANDLE 'Track TTs'
@@ -15275,7 +15316,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Bail
-            return;
+            return
             
         end
         
@@ -15629,7 +15670,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Changing channel
             do_action_change = false;
             tt_ind = x(1);
-            flag_btn_ind = x(3);
+            flag_btn_ind = x(2);
         end
         
         % Reset everything
@@ -15765,7 +15806,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Bail
-            return;
+            return
         end
         
         % Get button values on this side
@@ -16254,14 +16295,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if D deleted
             if ~exist('D', 'var')
-                return;
+                return
             elseif ~isfield(D, 'UI')
                 return
             end
             
             % Bail if c2m deleted or not initialized
             if ~exist('c2m', 'var')
-                return;
+                return
             elseif isempty(c2m)
                 return
             end
@@ -16407,14 +16448,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if figure closed
             if ~exist('FIGH', 'var')
-                return;
+                return
             elseif ~ishandle(FIGH)
                 return
             end
             
             % Bail if UI field not exist
             if ~exist('D', 'var')
-                return;
+                return
             elseif ~isfield(D, 'UI')
                 return
             end
@@ -16536,14 +16577,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if figure closed
             if ~exist('FIGH', 'var')
-                return;
+                return
             elseif ~ishandle(FIGH)
                 return
             end
             
             % Bail if UI field not exist
             if ~exist('D', 'var')
-                return;
+                return
             elseif ~isfield(D, 'UI')
                 return
             end
@@ -16594,7 +16635,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if 'TABLE' tab not setup
             if ~D.F.table_tab_setup
-                return;
+                return
             end
             
             % Get last tab
@@ -16610,7 +16651,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if on 'TABLE' tab 'TT TRACK' not setup
             if strcmp(tab_now.Title, 'TABLE') || ~D.F.tt_tab_setup
-                return;
+                return
             end
             
             % Enable/Disable axis rotations
@@ -17229,7 +17270,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if no handles
         if isempty(hand)
-            return;
+            return
         end
         
         % Loop through each handle
@@ -17238,7 +17279,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Bail if setting to 'Update' or 'Disable' and 'Enable' = 'off'
             if (strcmp(setting_str, 'Update') || strcmp(setting_str, 'Disable')) && ...
                     strcmp(get(hand(z_h), 'Enable'), 'off')
-                continue;
+                continue
             end
             
             % Set Enable = 'on' if doing 'Enable'
@@ -17352,7 +17393,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if no handles
         if isempty(hand)
-            return;
+            return
         end
         
         % Loop through each handle
@@ -17420,7 +17461,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if no handles
         if isempty(hand)
-            return;
+            return
         end
         
         % Loop through each handle
@@ -18129,10 +18170,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if vars not setup
         if ~isstruct(D)
-            return;
+            return
         end
         if ~isfield(D, 'T')
-            return;
+            return
         end
         
         % Check if UI should be updated
@@ -18143,7 +18184,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Track redraw time
             if ~isfield(D, 'DB')
-                return;
+                return
             end
             D.DB.draw(1) = (Sec_DT(now) - t_now) * 1000;
             D.DB.draw(2) = min(D.DB.draw(1), D.DB.draw(2));
@@ -18204,7 +18245,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
             end
             if ~exist('m2c_pack', 'var')
-                return;
+                return
             end
             
             % Log/print issues
@@ -18263,9 +18304,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if not tcpip object
         if ~exist('TCPIP', 'var')
-            return;
+            return
         elseif ~isvalid(TCPIP)
-            return;
+            return
         end
         
         % Send data
@@ -18293,7 +18334,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set outputs and bail
             pass = 0;
             arg_out = {[]};
-            return;
+            return
             
         end
         
@@ -18308,7 +18349,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if not printing
         if ~do_print
-            return;
+            return
         end
         
         % Get out argument
@@ -18339,7 +18380,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Check if global already cleared
         if ~exist('startTime', 'var')
             t_sec = (t_now-0)*24*60*60;
-            return;
+            return
         end
         
         % Convert from days to seconds

@@ -8,6 +8,26 @@ D.NLX.vt_rat_ent = 'VT1';
 D.NLX.vt_rob_ent = 'VT2';
 D.NLX.event_ent = 'Events';
 
+% TT objects
+D.TT.ttList = { ...
+    'TT01', ...
+    'TT02', ...
+    'TT03', ...
+    'TT04', ...
+    'TT05', ...
+    'TT06', ...
+    'TT07', ...
+    'TT08', ...
+    'TT09', ...
+    'TT10', ...
+    'TT11', ...
+    'TT12', ...
+    'TT13', ...
+    'TT14', ...
+    'TT15', ...
+    'TT16' ...
+    };
+
 %% START CHEETAH NORMALLY
    
 % NLX setup
@@ -20,6 +40,7 @@ not_running = strfind(result, 'INFO');
 if not_running == 1
     cd('C:\Program Files\Neuralynx\Cheetah');
     system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
+    %cd(curdir)
 end
 
 %% START CHEETAH FOR RAW DATA PLAYBACK
@@ -27,7 +48,7 @@ end
 %   Can run this then run ICR_GUI    
    
 % NLX setup
-top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
+%top_cfg_fi = 'z_AWL_Test_Cheetah-Raw_Cube_Playback.cfg';
 
 % Open Cheetah
 curdir = pwd;
@@ -36,6 +57,7 @@ not_running = strfind(result, 'INFO');
 if not_running == 1
     cd('C:\Program Files\Neuralynx\Cheetah');
     system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
+    cd(curdir)
 end
 
 % OPTIONAL CONFIGS
@@ -46,7 +68,7 @@ end
 % NlxSendCommand('-ProcessConfigurationFile AWL-WinPos_Ephys_M1.cfg');
 
 %% CONNECT TO NETCOM
-
+succeeded = NlxDisconnectFromServer()
 % Connect
 D.NLX.connected = false;
 if NlxAreWeConnected() ~= 1
@@ -65,38 +87,66 @@ if NlxAreWeConnected() ~= 1
     end
 end
 
-%% LOAD CONFIG FILE
+%% LOAD BEHAVIOR FILES
+
 
 % Load behavior tracking config
 %   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
 
+% Window pos
+%   cfg_fi = 'AWL-WinPos_Behavior_M1.cfg';
+%   cfg_fi = 'AWL-WinPos_Behavior_M3.cfg';
+%   NlxSendCommand(['-ProcessConfigurationFile ', cfg_fi])
+
+%% LOAD CONFIG FILE
+
+
 % Load implant tracking config
-%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Tracking.cfg');
+   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Tracking.cfg');
 
 % Load ephys setup
-%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
+   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
 
 % Load ephys graphics
-%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
+   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
 
 % Window pos
-%   cfg_fi = 'AWL-WinPos_VT_M1.cfg';
-%   cfg_fi = 'AWL-WinPos_VT_M3.cfg';
-%   cfg_fi = 'AWL-WinPos_Ephys_M1.cfg';
+   cfg_fi = 'AWL-WinPos_Ephys_M1.cfg';
 %   cfg_fi = 'AWL-WinPos_Ephys_M3.cfg';
-%   NlxSendCommand(['-ProcessConfigurationFile ', cfg_fi])
+   NlxSendCommand(['-ProcessConfigurationFile ', cfg_fi])
 
 %% OPEN STREAM
 
-% Open the data stream for the VT acquisition entities
+% Get list of DAS objects
+[succeeded, dasObjects, dasTypes] = NlxGetDASObjectsAndTypes();
+
+% VT 
 NlxOpenStream(D.NLX.vt_rat_ent);
 NlxOpenStream(D.NLX.vt_rob_ent);
+
+% Events
 NlxOpenStream(D.NLX.event_ent);
+
+% TT
+for z_tt = 1:length(D.TT.ttList)
+    succeeded = NlxOpenStream(D.TT.ttList{z_tt});
+    if succeeded == 1
+        fprintf('SUCCEEDED NlxOpenStream(%s)\n', D.TT.ttList{z_tt});
+    else
+        fprintf('!!FAILED!! NlxOpenStream(%s)\n', D.TT.ttList{z_tt});
+    end
+    pause(0.1);
+end
 
 %% CUBE SETUP
 
 % Pair Cube headstage (Should be commented out unless router has been unpluged)
 %NlxSendCommand('-SendLynxSXCommand AcqSystem1 -InitWHSPairing 30')
+
+%TEMP
+% Check if cube sending data
+NlxSendCommand('-SendLynxSXCommand -GetDataTransmissionEnabled AcqSystem1')
+NlxSendCommand('-SendLynxSXCommand -GetHardwareSubSystemInformation "AcqSystem1"')
 
 % Turn on Cube LEDs
 NlxSendCommand('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1');
