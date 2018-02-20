@@ -17580,8 +17580,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Unset any active tt select buttons
                 active_ind = find(Safe_Get(D.UI.toggSelectTT, 'Value'));
                 if isempty(active_ind)
-                    active_ind = 1;
-                end
+                active_ind = max(1
                 Safe_Set(D.UI.toggSelectTT(active_ind), 'Value', 0)
                 
                 % This will reset plot buttons

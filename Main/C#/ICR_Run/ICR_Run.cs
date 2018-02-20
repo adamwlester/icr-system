@@ -1122,6 +1122,8 @@ namespace ICR_Run
                     csLog.Print(String.Format("SET RECORDING DIR TO \"{0}\"", nlxRecDir));
 
                 }
+                else if (fc.isGUIquit)
+                    fc.LogWarning("**WARNING** [Exit] ABORTED: WAIT FOR: ICR_GUI to Save");
                 else
                 {
                     fc.LogError("!!ERROR!! [Exit] ABORTED: WAIT FOR: ICR_GUI to Save");
