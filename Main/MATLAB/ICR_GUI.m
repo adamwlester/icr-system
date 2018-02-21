@@ -1710,6 +1710,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.rat_out = false;
         % flag to do save
         D.F.do_save = false;
+        % flag to do save cheetah data
+        D.F.do_nlx_save = false;
         % session save done
         D.F.ses_save_done = false;
         % flag quit
@@ -4579,7 +4581,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.ratWeightLast = D.SS_IO_3.(D.PAR.ratLab).Weight_Corrected(end);
         
         % Get drive weight and cap weights
-        if D.F.rat_implanted 
+        if D.F.rat_implanted
             D.PAR.driveWeight = D.TT_IO.Weight_Drive(D.PAR.ratIndTT);
             D.PAR.capWeightArr = D.TT_IO.Cap_Weights{D.PAR.ratIndTT};
         else
@@ -4635,7 +4637,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Visible', 'on');
         
         % Enable if implanted
-        if D.F.rat_implanted 
+        if D.F.rat_implanted
             Safe_Set(D.UI.popCapWeight, 'Enable', 'On');
         end
         
@@ -4884,9 +4886,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Enable','on',...
             'Visible', 'on');
         
-        % Keep only notes and dates entry
+        % Get notes and exclude empty entries
         notes_ind = ismember(D.UI.tblSSIO3.ColumnName, 'Notes');
-        D.UI.tblGenNotes.Data = D.UI.tblSSIO3.Data(:,notes_ind);
+        notes = D.UI.tblSSIO3.Data(:,notes_ind);
+        notes = notes(cell2mat(cellfun(@(x) ~isempty(x), notes, 'uni', false)));
+        notes = notes(~ismember(notes, 'NA'));
+        
+        % Keep only notes and dates entry
+        D.UI.tblGenNotes.Data = notes;
         D.UI.tblGenNotes.ColumnName = {[]};
         D.UI.tblGenNotes.ColumnWidth = D.UI.tblSSIO3.ColumnWidth(notes_ind);
         
@@ -4926,9 +4933,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % New tt notes edit
             D.UI.editTTNotes = copyobj(D.UI.editGenNotes, D.UI.panTTNotes);
             
-            % Keep only notes entry
+            % Get notes and exclude empty entries
             notes_ind = ismember(D.UI.tblTTIO.ColumnName, 'Notes');
-            D.UI.tblTTNotes.Data = D.UI.tblTTIO.Data(:,notes_ind);
+            notes = D.UI.tblTTIO.Data(:,notes_ind);
+            notes = notes(cell2mat(cellfun(@(x) ~isempty(x), notes, 'uni', false)));
+            notes = notes(~ismember(notes, 'NA'));
+            
+            % Keep only notes entry
+            D.UI.tblTTNotes.Data = notes;
             D.UI.tblTTNotes.ColumnName = {[]};
             D.UI.tblTTNotes.ColumnWidth = D.UI.tblTTIO.ColumnWidth(notes_ind);
             
@@ -6552,29 +6564,54 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Log/print
             Console_Write('[Finish_NLX_Setup] RUNNING: Load Previous Cheetah Settings...');
             
+            % Get all ephys rec files from SS_IO_2
+            ind = ...
+                D.SS_IO_2.(D.PAR.ratLab).Session_Condition == 'Rotation' | ...
+                D.SS_IO_2.(D.PAR.ratLab).Session_Condition == 'Implant_Training';
+            rec_fi_list = ...
+                D.SS_IO_2.(D.PAR.ratLab).Recording_File(ind);
+            
+            % Add all TT_Turn recs
+            rec_fi_list = [D.TT.ttLogTable.Recording_File; rec_fi_list];
+            
+            % Initialize file
+            nlx_cfg_last = [];
+            
             % Find last rec dir
             if exist(D.DIR.nlxSaveTop, 'dir') > 0 && ...
                     size(dir(D.DIR.nlxRecRat), 1) > 2
                 
-                % Get dir files
+                % Get stored dir files
                 dirs = dir(D.DIR.nlxRecRat);
                 dirs = sort({dirs(3:end).name});
-                nlx_rec_dir_last = fullfile(D.DIR.nlxRecRat,dirs{end});
+                nlx_rec_list = dirs;
                 
-                % Store last config file path
-                nlx_cfg_file_last = ...
-                    fullfile(nlx_rec_dir_last, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
-            else
+                % Check for match
+                nlx_rec_list = nlx_rec_list(ismember(nlx_rec_list, rec_fi_list));
                 
-                % Skip if dir empty or nonexistant
-                nlx_cfg_file_last = [];
+                % Get most current
+                if ~isempty(nlx_rec_list)
+                    
+                    % Convert to date number
+                    date_num = datenum(nlx_rec_list, 'yyyy-mm-dd_HH-MM-SS');
+                    
+                    % Keep most recent
+                    ind = max(date_num) == date_num;
+                    nlx_rec_last = nlx_rec_list{ind};
+                    
+                    % Store last config file path
+                    nlx_cfg_last = ...
+                        fullfile(D.DIR.nlxRecRat, nlx_rec_last, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
+                    
+                end
+                
             end
             
             % Propt to load last configuration file
-            if ~isempty(nlx_cfg_file_last)
+            if ~isempty(nlx_cfg_last)
                 
                 dlg_h = dlgAWL(...
-                    sprintf('Load previous Cheetah settings from:\n"%s"?', nlx_rec_dir_last), ...
+                    sprintf('Load previous Cheetah settings from:\n"%s"?', nlx_rec_last), ...
                     'END SESSION', ...
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
@@ -6593,7 +6630,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if strcmp(choice, 'Yes') && ~DOEXIT
                 
                 % Run local function
-                LoadConfigSettings(nlx_cfg_file_last)
+                LoadConfigSettings(nlx_cfg_last)
                 Console_Write('[Finish_NLX_Setup] FINISHED: Load Previous Cheetah Settings');
                 
             elseif DOEXIT
@@ -12570,13 +12607,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get date
         date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
         
-        % Get recording file string
-        if D.F.cheetah_open
-            rec_file = D.DIR.recFi;
-        else
-            rec_file = '';
-        end
-        
         % Store 'Include_Analysis'
         D.SS_IO_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
         
@@ -12587,7 +12617,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_2.(D.PAR.ratLab).Date{rowInd} = date;
         
         % Store 'Recording File'
-        D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = rec_file;
+        if D.F.do_nlx_save
+            D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = D.DIR.recFi;
+        else
+            D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = '';
+        end
         
         % Store 'Human'
         D.SS_IO_2.(D.PAR.ratLab).Human(rowInd) = D.PAR.sesHuman;
@@ -12770,11 +12804,59 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
+% -------------------------SAVE TT TRACK DATA---------------------------
+    function[was_ran] = Save_TT_Track_Data()
+        
+        % Bail if not implant or TT_track session
+        if ~D.F.implant_session
+            
+            % Set output and bail
+            was_ran = false;
+            return
+        end
+        
+        % Store 'Session'
+        D.TT.ttLogNew.Session = D.TT.Ses;
+        
+        % Store 'Date'
+        D.TT.ttLogNew.Date = {datestr(startTime, 'yyyy-mm-dd_HH-MM-SS')};
+        
+        % Store 'Recording File'
+         % Store 'Recording File'
+        if D.F.do_nlx_save
+            D.TT.ttLogNew.Recording_File{:} = D.DIR.recFi;
+        else
+            D.TT.ttLogNew.Recording_File{:} = '';
+        end
+        
+        % Store 'Human'
+        D.TT.ttLogNew.Human = D.PAR.sesHuman;
+        
+        % Store 'Notes'
+        D.TT.ttLogNew.Notes{:} = D.UI.editTTNotes.String;
+        
+        % Save back to main table
+        if D.TT.Ses == 1
+            D.TT_IO.Turn_Log{D.PAR.ratIndTT} = D.TT.ttLogNew;
+        else
+            D.TT_IO.Turn_Log{D.PAR.ratIndTT} = [D.TT_IO.Turn_Log{D.PAR.ratIndTT}; D.TT.ttLogNew];
+        end
+        
+        % Save out data
+        TT_IO = D.TT_IO; %#ok<NASGU>
+        save(D.DIR.TT_IO, 'TT_IO');
+        
+        % Set output and bail
+        was_ran = true;
+        return
+        
+    end
+
 % -------------------------SAVE CHEETAH DATA---------------------------
     function[was_ran] = Save_Cheetah_Data()
         
-        % Bail if Cheetah not open
-        if ~D.F.cheetah_open
+        % Bail if not saving
+        if ~D.F.do_nlx_save
             
             % Set output and bail
             was_ran = false;
@@ -12784,27 +12866,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Disconect NetCom
         Disconnect_NLX()
-        
-        % Check if cheetah data should be saved
-        dlg_h = dlgAWL( ...
-            'Save Cheetah Data?', ...
-            'SAVE CHEETAH', ...
-            'Yes', 'No', [], 'No', ...
-            D.UI.dlgPos{4}, ...
-            'question');
-        while ~DOEXIT; Update_UI(10); pause(0.001);
-            if ~DOEXIT; choice = dlg_h.UserData;
-                if ~strcmp(choice, ''); break; end
-            end
-        end
-        
-        % Handle response
-        switch choice
-            case 'No'
-                % Set output and bail
-                was_ran = false;
-                return
-        end
         
         % Log/print
         Console_Write('[Save_Cheetah_Data] RUNNING: Wait for Cheetah Close...');
@@ -12934,46 +12995,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Log/print end
         Console_Write(sprintf('[Save_Cheetah_Data] FINISHED: Copy Cheetah File: file=%s size=%0.2fGB', ...
             D.DIR.recFi, fiGigs));
-        
-        % Set output and bail
-        was_ran = true;
-        return
-        
-    end
-
-% -------------------------SAVE TT TRACK DATA---------------------------
-    function[was_ran] = Save_TT_Track_Data()
-        
-        % Bail if not implant or TT_track session
-        if ~D.F.implant_session
-            
-            % Set output and bail
-            was_ran = false;
-            return
-        end
-        
-        % Store 'Session'
-        D.TT.ttLogNew.Session = D.TT.Ses;
-        
-        % Store 'Date'
-        D.TT.ttLogNew.Date = {datestr(startTime, 'yyyy-mm-dd_HH-MM-SS')};
-        
-        % Store 'Human'
-        D.TT.ttLogNew.Human = D.PAR.sesHuman;
-        
-        % Store 'Notes'
-        D.TT.ttLogNew.Notes{:} = D.UI.editTTNotes.String;
-        
-        % Save back to main table
-        if D.TT.Ses == 1
-            D.TT_IO.Turn_Log{D.PAR.ratIndTT} = D.TT.ttLogNew;
-        else
-            D.TT_IO.Turn_Log{D.PAR.ratIndTT} = [D.TT_IO.Turn_Log{D.PAR.ratIndTT}; D.TT.ttLogNew];
-        end
-        
-        % Save out data
-        TT_IO = D.TT_IO; %#ok<NASGU>
-        save(D.DIR.TT_IO, 'TT_IO');
         
         % Set output and bail
         was_ran = true;
@@ -13372,6 +13393,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set flag
         D.F.ses_type_confirmed = true;
+        
+        % Use default rat list
+        if D.PAR.sesType ~= 'TT_Turn'
+            Safe_Set(D.UI.popRat, 'String', [{''}; D.PAR.listRat])
+        end
         
         % Include only implanted rats in popRat list
         if D.PAR.sesType == 'TT_Turn'
@@ -13829,7 +13855,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get cap weight
-        if D.F.rat_implanted 
+        if D.F.rat_implanted
             
             % Get weight of cap
             D.PAR.capWeight = D.PAR.capWeightArr(1);
@@ -14143,7 +14169,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Log/print
                 Console_Write('[ToggSleep] RUNNING: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
                 
-                % Stop recording and aquisition
+                % Stop aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 0)
                 ToggAcq(D.UI.toggAcq);
                 
@@ -14151,7 +14177,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
                 Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
                 
-                % Start recording and aquisition
+                % Start aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 1)
                 ToggAcq(D.UI.toggAcq);
                 
@@ -14728,6 +14754,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set flag to save at end of main loop
         D.F.do_save = true;
         
+        % Check if cheetah data should be saved
+        if D.F.cheetah_open
+            
+            % Show dialogue
+            dlg_h = dlgAWL( ...
+                'Save Cheetah Data?', ...
+                'SAVE CHEETAH', ...
+                'Yes', 'No', [], 'No', ...
+                D.UI.dlgPos{4}, ...
+                'question');
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
+            
+            % Handle response
+            switch choice
+                case 'Yes'
+                    % Set flag
+                    D.F.do_nlx_save = true;
+            end
+            
+        end
+        
         % Log/print
         Console_Write(sprintf('[%s] Set to \"%d\"', 'ToggSave', get(D.UI.toggSave,'Value')));
         
@@ -15252,12 +15303,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if val == 0
                 
                 % Turn left audio off
-                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,1), 'Value', 0)
-                ToggSubHearTT(D.UI.toggSubHearSdTT(tt_ind,1));
+                if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,1), 'Value') == 1
+                    Safe_Set(D.UI.toggSubHearSdTT(tt_ind,1), 'Value', 0)
+                    ToggSubHearTT(D.UI.toggSubHearSdTT(tt_ind,1));
+                end
                 
                 % Turn right audio off
-                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,2), 'Value', 0)
-                ToggSubHearTT(D.UI.toggSubHearSdTT(tt_ind,2));
+                if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,2), 'Value') == 1
+                    Safe_Set(D.UI.toggSubHearSdTT(tt_ind,2), 'Value', 0)
+                    ToggSubHearTT(D.UI.toggSubHearSdTT(tt_ind,2));
+                end
                 
             end
             
@@ -15385,11 +15440,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.popRefTT.Value = ...
             find(ismember(D.TT.refList, char(D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList, D.TT.ttFldNow)))));
         
+        % Get notes and exclude empty entries
+        notes = D.TT.ttLogTable.([D.TT.ttFldNow,'_N']);
+        notes = notes(cell2mat(cellfun(@(x) ~isempty(x), notes, 'uni', false)));
+        notes = notes(~ismember(notes, 'NA'));
+        inc_ind = ismember(D.TT.ttLogTable.([D.TT.ttFldNow,'_N']), notes);
+        notes = flip(notes);
+        
         % Show last note in table
-        date_list = flip(D.TT.ttLogTable.Date);
+        date_list = flip(D.TT.ttLogTable.Date(inc_ind));
         date_list = regexp(date_list, '\S*(?=_)', 'match');
-        D.UI.tblNoteTT.Data = [[date_list{:}]', ...
-            flip(D.TT.ttLogTable.([D.TT.ttFldNow,'_N']))];
+        D.UI.tblNoteTT.Data = [[date_list{:}]', notes];
         D.UI.tblNoteTT.ColumnWidth = {55, 1000};
         
         % Update TT update button object
@@ -15595,7 +15656,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Enable/dissable button and tt plot objects
         if strcmp('Plot Spikes', action_str)
-           
+            
             if val == 1
                 
                 % Avtivate/Show all 'Plot Spikes' objects
