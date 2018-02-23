@@ -435,6 +435,8 @@ T.Cue_Condition = categorical({'<undefined>'}, ...
 
 T.Sound_Conditions =  [false, false];
 
+T.PID_Setpoint = nan;
+
 T.Start_Quadrant = categorical({'<undefined>'}, ...
     start_quadrant_cats);
 
@@ -456,6 +458,8 @@ T.Zones_Rewarded = {[]};
 
 T.Cued_Rewards = {[]};
 
+T.Rewards_Missed = nan;
+
 T.Rewards_Standard = {[]};
 
 T.Rewards_40_Deg = {[]};
@@ -476,6 +480,7 @@ T.Properties.VariableUnits{'Camera_Orientation'} = 'deg';
 T.Properties.VariableUnits{'Image_Orientation'} = 'deg';
 T.Properties.VariableUnits{'Total_Time'} = 'min';
 T.Properties.VariableUnits{'Reward_Delay'} = 'sec';
+T.Properties.VariableUnits{'PID_Setpoint'} = 'cm';
 
 % Set variable descriptions
 T.Properties.VariableDescriptions{'Session_Manual_Training'} = session_number_description;

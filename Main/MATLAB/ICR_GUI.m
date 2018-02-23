@@ -92,10 +92,10 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0495'; %'r9999';
+D.DB.ratLab = 'r9999'; %'r9999';
 
 % Implant status
-D.DB.Implanted = true;
+D.DB.Implanted = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
@@ -104,7 +104,7 @@ D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
 D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
-D.DB.Reward_Delay = '1.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
 D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
@@ -453,8 +453,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Min time in start quad (sec)
         D.PAR.strQdDel = 0.5;
         % PID setPoint
-        D.PAR.setPointBackpack = 50;
-        D.PAR.setPointImplant = 56;
+        D.PAR.setPointBackpack = 60;
+        D.PAR.setPointImplant = 66;
         D.PAR.setPointCM = D.PAR.setPointBackpack;
         D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
         % Robot guard dist
@@ -961,6 +961,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     ICR_Session_Setup();
                     Console_Write('[Run:MainLoop] FINISHED: "ICR_Session_Setup()"');
                     
+                    % Send first setup info packet
+                    Send_M2C('S', 1, D.PAR.sesMsg(1,1), D.PAR.sesMsg(1,2));
+                    
+                    % Send second setup info packet
+                    Send_M2C('S', 2, D.PAR.sesMsg(2,1), D.PAR.sesMsg(2,2));
+                    
                     % Enable Run panel stuff
                     if D.F.implant_session
                         Object_Group_State('Sleep1_Objects', 'Enable')
@@ -1017,10 +1023,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     elseif ~D.F.task_setup
                         D.F.sub_case_now = 'SETUP TASK';
                         
-                    elseif ~D.F.rob_setup_confirmed
+                    elseif ~D.F.rob_setup
                         D.F.sub_case_now = 'WAIT FOR ROBOT SETUP';
                         
-                    elseif ~D.F.rob_streaming_confirmed
+                    elseif ~D.F.matlab_streaming
+                        D.F.sub_case_now = 'WAIT FOR MATLAB STREAMING';
+                        
+                    elseif ~D.F.rob_streaming
                         D.F.sub_case_now = 'WAIT FOR ROBOT STREAMING';
                         
                     elseif ~(D.F.task_done || D.F.do_quit)
@@ -1051,7 +1060,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % PRINT CHANGE IN FLOW
                     if ~strcmp(D.F.sub_case_now, D.F.sub_case_last)
-                        Console_Write(sprintf('[Run:SubLoop] SWITCH FROM "%s"" TO "%s""', D.F.sub_case_last, D.F.sub_case_now));
+                        Console_Write(sprintf('[Run:SubLoop] SWITCH FROM "%s" TO "%s"', D.F.sub_case_last, D.F.sub_case_now));
                     end
                     
                     % HANDLE CASE
@@ -1069,7 +1078,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             Console_Write('[Run:SubLoop] CONFIRMED ROBOT SETUP');
                             
                             % Set flag
-                            D.F.rob_setup_confirmed = true;
+                            D.F.rob_setup = true;
                             
                         case 'RUN SLEEP 1'
                             %% ------------------RUN SLEEP 1-------------------
@@ -1118,11 +1127,28 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Refresh UI
                             Update_UI(0);
                             
+                        case 'WAIT FOR MATLAB STREAMING'
+                            
+                            %% ----------WAIT FOR MATLAB STREAMING-----------
+                            
+                            % Bail if not streaming data received
+                            if ~D.F.vt_rat_streaming && ...
+                                    ~D.F.vt_rat_streaming && ...
+                                    ~D.F.vt_rat_streaming
+                                continue
+                            end
+                            
+                            % Log/print
+                            Console_Write('[Run:SubLoop] CONFIRMED MATLAB STREAMING');
+                            
+                            % Set flag
+                            D.F.matlab_streaming = true;
+                            
                         case 'WAIT FOR ROBOT STREAMING'
                             
                             %% ----------WAIT FOR ROBOT STREAMING-----------
                             
-                            % Bail if streaming not confirmed
+                            % Bail if robot streaming not confirmed
                             if c2m.('K').dat1 < 2
                                 continue
                             end
@@ -1163,7 +1189,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             end
                             
                             % Set flags
-                            D.F.rob_streaming_confirmed = true;
+                            D.F.rob_streaming = true;
                             D.F.poll_nlx = true;
                             
                             % Begin main loop
@@ -1679,11 +1705,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % nlx connected
         D.F.nlx_connected = false;
         % nlx streaming
+        D.F.matlab_streaming = false;
         D.F.vt_rat_streaming = false;
         D.F.vt_rob_streaming  = false;
         D.F.evt_streaming = false;
         % robot setup
-        D.F.rob_setup_confirmed = false;
+        D.F.rob_setup = false;
         % sleep done
         D.F.sleep_done = [false, false];
         % ses data loaded
@@ -1693,7 +1720,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % setup finished
         D.F.task_setup = false;
         % robot streaming
-        D.F.rob_streaming_confirmed = false;
+        D.F.rob_streaming = false;
         % polling nlx
         D.F.poll_nlx = false;
         % new nlx data
@@ -1966,6 +1993,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.SIM.RatPathMat = D.P.pathMat;
         
         % OTHER
+        % session message
+        D.PAR.sesMsg = NaN(2,2);
         % bulldoze defaults
         D.PAR.bullDel = 30;
         D.PAR.bullSpeed = 10;
@@ -7537,39 +7566,51 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Session condition
         if D.PAR.sesCond == 'Manual_Training'
+            
             % Manual session
-            d1 = 1;
+            D.PAR.sesMsg(1,1) = 1;
         elseif ~D.F.implant_session
+            
             % Behavior session
-            d1 = 2;
+            D.PAR.sesMsg(1,1) = 2;
         else
+            
             % Implant session
-            d1 = 3;
+            D.PAR.sesMsg(1,1) = 3;
         end
         
         % Task condition
         if D.PAR.sesTask == 'Track'
+            
             % Track task
-            d2 = 1;
+            D.PAR.sesMsg(1,2) = 1;
         elseif D.PAR.sesTask == 'Forage'
+            
             % Forage task
-            d2 = 2;
+            D.PAR.sesMsg(1,2) = 2;
         end
         
         % Sound condition
         if all(~D.F.sound)
+            
             % No sound
-            d3 = 0;
+            D.PAR.sesMsg(2,1) = 0;
         elseif ~D.F.sound(2)
+            
             % White noise
-            d3 = 1;
+            D.PAR.sesMsg(2,1) = 1;
         else
+            
             % White and reward
-            d3 = 2;
+            D.PAR.sesMsg(2,1) = 2;
         end
         
-        % Send setup info
-        Send_M2C('S', d1, d2, d3);
+        % Pid setpoint
+        if ~D.F.implant_session
+            D.PAR.sesMsg(2,2) = D.PAR.setPointBackpack;
+        else
+            D.PAR.sesMsg(2,2) = D.PAR.setPointImplant;
+        end
         
         % Start timer
         start(D.timer_graphics);
@@ -8446,7 +8487,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         if DOAUTOLOAD
             
-            % Set and run load pop
+            % Set and run ses type pop
             Safe_Set(D.UI.popType, 'Value', ...
                 find(ismember(D.UI.popType.String,  D.DB.Session_Type)));
             Safe_Set(D.UI.toggType, 'Value', 1);
@@ -8464,7 +8505,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_1.Human(ratInd) = {'AWL'};
             
             % Remaining vars
-            if D.PAR.sesType == 'ICR_Sesion'
+            if D.PAR.sesType == 'ICR_Session'
                 
                 % Set session condition
                 D.SS_IO_1.Session_Condition(ratInd) = D.DB.Session_Condition;
@@ -12680,6 +12721,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'Sound_Conditions'
         D.SS_IO_2.(D.PAR.ratLab).Sound_Conditions(rowInd,:) = D.F.sound;
         
+        % Store 'PID_Setpoint'
+        D.SS_IO_2.(D.PAR.ratLab).PID_Setpoint(rowInd) = D.PAR.setPointCM;
+        
         % Store 'Start_Quadrant'
         D.SS_IO_2.(D.PAR.ratLab).Start_Quadrant(rowInd) = D.PAR.ratStrQuad;
         
@@ -12692,6 +12736,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Store 'Cued_Rewards'
         D.SS_IO_2.(D.PAR.ratLab).Cued_Rewards{rowInd} = D.PAR.cued_rew;
+        
+        % Store 'Rewards_Missed'
+        D.SS_IO_2.(D.PAR.ratLab).Rewards_Missed(rowInd) = sum(D.C.missed_rew_cnt);
         
         % Store 'Rewards_Standard'
         D.SS_IO_2.(D.PAR.ratLab).Rewards_Standard{rowInd} = sum(D.C.rew_cnt{3});

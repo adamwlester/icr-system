@@ -303,7 +303,7 @@ public:
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
 	bool isArmExtended = true;
-	const byte armExtStps = 160;
+	const byte armExtStps = 130; // 160
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -8832,103 +8832,119 @@ void loop() {
 	if (c2r.idNow == 'S' && c2r.isNew)
 	{
 		// Store message data
-		cmd.sesCond = (byte)c2r.dat[0];
-		cmd.taskCond = (byte)c2r.dat[1];
-		cmd.soundCond = (byte)c2r.dat[2];
-		millis();
+		cmd.sesMsg = (byte)c2r.dat[0];
 
-		// Reset flags
-		fc.isManualSes = false;
-		fc.isForageTask = false;
-
-		// Handle Manual session
-		if (cmd.sesCond == 1) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO MANUAL SESSION");
-
-			// Set flag
-			fc.isManualSes = true;
+		// Store info from first 'S' packet
+		if (cmd.sesMsg == 1) {
+			cmd.sesCond = (byte)c2r.dat[1];
+			cmd.sesTask = (byte)c2r.dat[2];
 		}
 
-		// Handle Behavior session
-		if (cmd.sesCond == 2) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
-
-			// Set setpoint
-			Pid.setPoint = setPointBackpack;
+		// Store info from second 'S' packet
+		if (cmd.sesMsg == 2) {
+			cmd.sesSound = (byte)c2r.dat[1];
+			cmd.sesSetpoint = c2r.dat[2];
 		}
 
-		// Setup Implant session
-		if (cmd.sesCond == 3) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
+		// Handle first 'S' packet
+		if (cmd.sesMsg == 1) {
 
-			// Set setpoint
-			Pid.setPoint = setPointImplant;
+			// Reset flags
+			fc.isManualSes = false;
+			fc.isForageTask = false;
+
+			// Handle Manual session
+			if (cmd.sesCond == 1) {
+				DebugFlow(__FUNCTION__, __LINE__, "DO MANUAL SESSION");
+
+				// Set flag
+				fc.isManualSes = true;
+			}
+
+			// Handle Behavior session
+			if (cmd.sesCond == 2) {
+				DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
+			}
+
+			// Handle Implant session
+			if (cmd.sesCond == 3) {
+				DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
+			}
+
+			// Handle Track task
+			if (cmd.sesTask == 1) {
+				DebugFlow(__FUNCTION__, __LINE__, "DO TRACK TASK");
+
+				// Set rew led min
+				rewLEDduty[0] = rewLEDmin[0];
+
+				// Change autodriver max acc
+				maxAcc = maxAccArr[0];
+
+				// Change reward solonoid on scale
+				Reward.solOpenScale = solOpenScaleArr[0];
+			}
+
+			// Handle Forage task
+			if (cmd.sesTask == 2) {
+				DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE TASK");
+
+				// Set rew led forage min
+				rewLEDduty[0] = rewLEDmin[1];
+
+				// Set to min
+				analogWrite(pin.RewLED_R, rewLEDduty[0]);
+				analogWrite(pin.RewLED_C, rewLEDduty[0]);
+
+				// Change autodriver max acc
+				maxAcc = maxAccArr[1];
+
+				// Change reward solonoid on scale
+				Reward.solOpenScale = solOpenScaleArr[1];
+
+				// Set flag
+				fc.isForageTask = true;
+			}
+
+			// Update autodriver settings
+			AD_Reset(maxAcc, maxDec, maxSpeed);
+
 		}
 
-		// Log/print set setpoint
-		sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", Pid.setPoint);
-		DebugFlow(__FUNCTION__, __LINE__, horeStr);
+		// Handle second 'S' packet
+		if (cmd.sesMsg == 2) {
 
-		// Handle Track task
-		if (cmd.taskCond == 1) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO TRACK TASK");
+			// Handle no sound condition
+			if (cmd.sesSound == 0) {
 
-			// Set rew led min
-			rewLEDduty[0] = rewLEDmin[0];
+				// No sound
+				QueuePacket(&r2a, 's', 0);
+				DebugFlow(__FUNCTION__, __LINE__, "NO SOUND");
+			}
 
-			// Change autodriver max acc
-			maxAcc = maxAccArr[0];
+			// Handle white noise only condition
+			if (cmd.sesSound == 1) {
 
-			// Change reward solonoid on scale
-			Reward.solOpenScale = solOpenScaleArr[0];
-		}
+				// Use white noise only
+				QueuePacket(&r2a, 's', 1);
+				DebugFlow(__FUNCTION__, __LINE__, "DONT DO TONE");
+			}
 
-		// Handle Forage task
-		if (cmd.taskCond == 2) {
-			DebugFlow(__FUNCTION__, __LINE__, "DO FORAGE TASK");
+			// Handle white noise and reward tone condition
+			if (cmd.sesSound == 2) {
 
-			// Set rew led forage min
-			rewLEDduty[0] = rewLEDmin[1];
+				// Use white and reward noise
+				QueuePacket(&r2a, 's', 2);
+				DebugFlow(__FUNCTION__, __LINE__, "DO TONE");
+			}
 
-			// Set to min
-			analogWrite(pin.RewLED_R, rewLEDduty[0]);
-			analogWrite(pin.RewLED_C, rewLEDduty[0]);
+			// Store pid setpoint
+			Pid.setPoint = cmd.sesSetpoint;
 
-			// Change autodriver max acc
-			maxAcc = maxAccArr[1];
+			// Log/print set setpoint
+			sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", Pid.setPoint);
+			DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
-			// Change reward solonoid on scale
-			Reward.solOpenScale = solOpenScaleArr[1];
-
-			// Set flag
-			fc.isForageTask = true;
-		}
-
-		// Update autodriver settings
-		AD_Reset(maxAcc, maxDec, maxSpeed);
-
-		// Handle no sound condition
-		if (cmd.soundCond == 0) {
-
-			// No sound
-			QueuePacket(&r2a, 's', 0);
-			DebugFlow(__FUNCTION__, __LINE__, "NO SOUND");
-		}
-
-		// Handle white noise only condition
-		if (cmd.soundCond == 1) {
-
-			// Use white noise only
-			QueuePacket(&r2a, 's', 1);
-			DebugFlow(__FUNCTION__, __LINE__, "DONT DO TONE");
-		}
-
-		// Handle white noise and reward tone condition
-		if (cmd.soundCond == 2) {
-
-			// Use white and reward noise
-			QueuePacket(&r2a, 's', 2);
-			DebugFlow(__FUNCTION__, __LINE__, "DO TONE");
 		}
 
 	}

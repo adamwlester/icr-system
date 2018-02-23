@@ -16,12 +16,13 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % EXAMPLE
 %   Weight_Baseline = NaN;
 %   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, 'Yoke_Mate', '', 'g');
+% 
+Rewards_Missed = nan;
+SS_IO_2 = AddNewVar(SS_IO_2, Rewards_Missed, 'Cued_Rewards');
 
-% Camera_Orientation = nan;
-% SS_IO_2 = AddNewVar(SS_IO_2, Camera_Orientation, 'VT_Pixel_Coordinates', '', 'deg');
-% Image_Orientation = {nan(1,2)};
-% SS_IO_2 = AddNewVar(SS_IO_2, Image_Orientation, 'Camera_Orientation', '', 'deg');
 
+PID_Setpoint = 50;
+SS_IO_2 = AddNewVar(SS_IO_2, PID_Setpoint, 'Sound_Conditions', '', 'cm');
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
 % % Specify inputs
@@ -38,13 +39,13 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % ------------------------ MOVE DELETE VAR ENTRY --------------------------
 
-% % Specify inputs
-var_move = 'Implanted';
-var_before = 'Include_Analysis';
-remove = false;
-% 
-% % Make changes
-SS_IO_1 = MoveVarEntries(SS_IO_1, var_move, var_before, remove);
+% % % Specify inputs
+% var_move = 'Implanted';
+% var_before = 'Include_Analysis';
+% remove = false;
+% % 
+% % % Make changes
+% SS_IO_1 = MoveVarEntries(SS_IO_1, var_move, var_before, remove);
 
 %% =========================== SAVE TABLES ================================
 

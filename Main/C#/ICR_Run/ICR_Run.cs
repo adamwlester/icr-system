@@ -643,7 +643,7 @@ namespace ICR_Run
             csLog.Print("[Setup] RUNNING: Hardware Test...");
 
             // Wait for x pings
-            pass = WaitForSerial(id: 't', dat: r2c.datMat[r2c.ID_Ind('h')][0] + 1, chk_rcv: true, do_abort: true, timeout: 20000);
+            pass = WaitForSerial(id: 't', dat1: r2c.datMat[r2c.ID_Ind('h')][0] + 1, chk_rcv: true, do_abort: true, timeout: 20000);
             if (pass)
             {
                 // Log/print success
@@ -742,10 +742,10 @@ namespace ICR_Run
             // WAIT FOR SESSION SETUP CONFIRMATION
 
             csLog.Print("[Setup] RUNNING: WAIT FOR...: Setup Parameters from MATLAB...");
-            pass = WaitForMCOM(id: 'S', chk_rcv: true, do_abort: true);
+            pass = WaitForMCOM(id: 'S', dat1:2, chk_rcv: true, do_abort: true);
             if (pass)
             {
-                pass = WaitForSerial(id: 'S', chk_send: true, chk_conf: true, do_abort: true);
+                pass = WaitForSerial(id: 'S', dat1: 2, chk_send: true, chk_conf: true, do_abort: true);
                 if (pass)
                     csLog.Print("[Setup] SUCCEEDED: WAIT FOR: Setup Parameters");
                 else
@@ -909,7 +909,7 @@ namespace ICR_Run
                 RepeatSendPack_Thread(id: 'M', dat1: 0, dat2: move_to, do_check_done: true);
 
                 // Wait for confirmation from robot
-                pass = WaitForSerial(id: 'M', dat: 0, chk_send: true, chk_conf: true, chk_done: true, timeout: 10000);
+                pass = WaitForSerial(id: 'M', dat1: 0, chk_send: true, chk_conf: true, chk_done: true, timeout: 10000);
                 if (pass)
                 {
                     csLog.Print("[Run] SUCCEEDED: MoveTo South");
@@ -1543,7 +1543,7 @@ namespace ICR_Run
         }
 
         // WAIT FOR R2C CONFIRMATION
-        public static bool WaitForSerial(char id, bool chk_send = false, bool chk_rcv = false, bool chk_conf = false, bool chk_done = false, double dat = double.NaN, bool do_abort = false, long timeout = long.MaxValue)
+        public static bool WaitForSerial(char id, double dat1 = double.NaN, bool chk_send = false, bool chk_rcv = false, bool chk_conf = false, bool chk_done = false, bool do_abort = false, long timeout = long.MaxValue)
         {
             // Local vars
             long t_start = sw_main.ElapsedMilliseconds;
@@ -1554,10 +1554,10 @@ namespace ICR_Run
 
             // Create wait list strings
             string[] wait_list =
-                new string[5] { "Send", "Rcv", "Conf", "Done", String.Format("Dat={0:0.00}", dat) };
+                new string[5] { "Send", "Rcv", "Conf", "Done", String.Format("Dat={0:0.00}", dat1) };
 
             // Track check flags
-            bool chk_dat = !Double.IsNaN(dat);
+            bool chk_dat = !Double.IsNaN(dat1);
             bool[] check_4 = new bool[5] { chk_send, chk_rcv, chk_conf, chk_done, chk_dat };
 
             // Track wait flags
@@ -1604,10 +1604,10 @@ namespace ICR_Run
                     bool wait_other = wait_4_now[0] || wait_4_now[1] || wait_4_now[2] || wait_4_now[3];
                     // Check for r2c dat match
                     if (chk_rcv)
-                        wait_4_now[4] = wait_4_now[4] ? wait_other || r2c.datMat[r2c.ID_Ind(id)][0] != dat : wait_4_now[4];
+                        wait_4_now[4] = wait_4_now[4] ? wait_other || r2c.datMat[r2c.ID_Ind(id)][0] != dat1 : wait_4_now[4];
                     // Check cor c2r dat dat match
                     else
-                        wait_4_now[4] = wait_4_now[4] ? wait_other || c2r.datMat[r2c.ID_Ind(id)][0] != dat : wait_4_now[4];
+                        wait_4_now[4] = wait_4_now[4] ? wait_other || c2r.datMat[r2c.ID_Ind(id)][0] != dat1 : wait_4_now[4];
 
                 }
 
@@ -2831,7 +2831,7 @@ namespace ICR_Run
         }
 
         // WAIT FOR M2C CONFIRMATION
-        public static bool WaitForMCOM(char id, double dat = double.NaN, bool chk_send = false, bool chk_rcv = false, bool do_abort = false, long timeout = long.MaxValue)
+        public static bool WaitForMCOM(char id, double dat1 = double.NaN, bool chk_send = false, bool chk_rcv = false, bool do_abort = false, long timeout = long.MaxValue)
         {
             // Local vars
             long t_start = sw_main.ElapsedMilliseconds;
@@ -2842,10 +2842,10 @@ namespace ICR_Run
 
             // Create wait list strings
             string[] wait_list =
-                new string[3] { "Send", "Rcv", String.Format("Dat={0:0.00}", dat) };
+                new string[3] { "Send", "Rcv", String.Format("Dat={0:0.00}", dat1) };
 
             // Track check flags
-            bool chk_dat = !Double.IsNaN(dat);
+            bool chk_dat = !Double.IsNaN(dat1);
             bool[] check_4 = new bool[3] { chk_send, chk_rcv, chk_dat };
 
             // Track wait flags
@@ -2875,7 +2875,7 @@ namespace ICR_Run
                 if (chk_dat)
                 {
                     bool wait_other = wait_4_now[0] || wait_4_now[1];
-                    wait_4_now[2] = wait_4_now[2] ? wait_other || m2c.datMat[m2c.ID_Ind(id)][0] != dat : wait_4_now[2];
+                    wait_4_now[2] = wait_4_now[2] ? wait_other || m2c.datMat[m2c.ID_Ind(id)][0] != dat1 : wait_4_now[2];
                 }
 
                 // Format check for string

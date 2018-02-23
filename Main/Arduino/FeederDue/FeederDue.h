@@ -277,8 +277,6 @@ struct KAL
 kal;
 
 // PID SETTINGS
-const float setPointBackpack = 50;
-const float setPointImplant = 56;
 const float guardDist = 4.5;
 const float feedDist = 66;
 
@@ -393,9 +391,11 @@ struct CMD
 	byte testCond = 0;
 	byte testRun = 0;
 	byte testDat = 0;
+	byte sesMsg = 0;
 	byte sesCond = 0;
-	byte taskCond = 0;
-	byte soundCond = 0;
+	byte sesTask = 0;
+	byte sesSound = 0;
+	float sesSetpoint = 0;
 	byte vtEnt = 0;
 	float vtCM[2] = { 0,0 };
 	uint32_t vtTS[2] = { 0,0 };
