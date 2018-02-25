@@ -92,14 +92,14 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r9999'; %'r9999';
+D.DB.ratLab = 'r0000'; %'r9999';
 
 % Implant status
-D.DB.Implanted = false;
+D.DB.Implanted = true;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -462,7 +462,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Robot butt dist
         D.PAR.buttDistRad = 18 * ((2 * pi)/(140 * pi));
         % Feeder dist from rob tracker
-        D.PAR.feedDistRad = 66 * ((2 * pi)/(140 * pi));
+        D.PAR.feedDistRad = 70 * ((2 * pi)/(140 * pi));
         % Sleep 1/2 duration
         D.PAR.sleepDur = [15, 15]*60; % min
         % Wait to connect to Cheetah
@@ -6541,8 +6541,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
             
             % Load behavior tracking config
-            Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
-            Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Behavior_Tracking.cfg"');
+            Send_M2NLX('-ProcessConfigurationFile ICR_Behavior_Tracking.cfg');
+            Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Behavior_Tracking.cfg"');
             
         end
         
@@ -6561,18 +6561,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if ~any(ismember(das_types, 'TTScAcqEnt'))
                 
                 % Load ephys sleep tracking config
-                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
-                Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Sleep_Tracking.cfg');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Sleep_Tracking.cfg"');
                 
                 % Load acquisition entity config
-                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
-                Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Setup.cfg"')
+                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Setup.cfg');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Setup.cfg"')
                 
             end
             
             % Load plot setup config
-            Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
-            Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Graphics.cfg"');
+            Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Graphics.cfg');
+            Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Graphics.cfg"');
             
         end
         
@@ -13357,18 +13357,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Move Ephys windows
                 if mon_ind == 1 || mon_ind == 2
-                    cfg_fi = 'AWL-WinPos_Ephys_M1.cfg';
+                    cfg_fi = 'ICR_WinPos_Ephys_M1.cfg';
                 else
-                    cfg_fi = 'AWL-WinPos_Ephys_M3.cfg';
+                    cfg_fi = 'ICR_WinPos_Ephys_M3.cfg';
                 end
                 
             else
                 
                 % Move Behavior windows
                 if mon_ind == 1 || mon_ind == 2
-                    cfg_fi = 'AWL-WinPos_Behavior_M1.cfg';
+                    cfg_fi = 'ICR_WinPos_Behavior_M1.cfg';
                 else
-                    cfg_fi = 'AWL-WinPos_Behavior_M3.cfg';
+                    cfg_fi = 'ICR_WinPos_Behavior_M3.cfg';
                 end
                 
             end
@@ -14214,22 +14214,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if sleep_phase == 2
                 
                 % Log/print
-                Console_Write('[ToggSleep] RUNNING: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                Console_Write('[ToggSleep] RUNNING: Load "ICR_Ephys_Sleep_Tracking.cfg"');
                 
                 % Stop aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 0)
                 ToggAcq(D.UI.toggAcq);
                 
                 % Load sleep tracking config
-                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Sleep_Tracking.cfg');
-                Console_Write('[Finish_NLX_Setup] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Sleep_Tracking.cfg');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Sleep_Tracking.cfg"');
                 
                 % Start aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 1)
                 ToggAcq(D.UI.toggAcq);
                 
                 % Log/print
-                Console_Write('[ToggSleep] FINISHED: Load "AWL-ICR_Ephys_Sleep_Tracking.cfg"');
+                Console_Write('[ToggSleep] FINISHED: Load "ICR_Ephys_Sleep_Tracking.cfg"');
                 
             end
             
@@ -14255,7 +14255,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if sleep_phase == 1
                 
                 % Log/print
-                Console_Write('[ToggSleep] RUNNING: Load "AWL-ICR_Ephys_Task_Tracking.cfg"');
+                Console_Write('[ToggSleep] RUNNING: Load "ICR_Ephys_Task_Tracking.cfg"');
                 
                 % Stop recording and aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 0)
@@ -14263,14 +14263,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Load sleep tracking config
                 pause(0.5);
-                Send_M2NLX('-ProcessConfigurationFile AWL-ICR_Ephys_Task_Tracking.cfg');
+                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Task_Tracking.cfg');
                 
                 % Start recording and aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 1)
                 ToggAcq(D.UI.toggAcq);
                 
                 % Log/print
-                Console_Write('[ToggSleep] FINISHED: Load "AWL-ICR_Ephys_Task_Tracking.cfg"');
+                Console_Write('[ToggSleep] FINISHED: Load "ICR_Ephys_Task_Tracking.cfg"');
                 
             end
             

@@ -47,12 +47,9 @@ end
 % NOTE:
 %   Can run this then run ICR_GUI    
    
-% NLX 'Cheetah' file
-%top_cfg_fi = 'Test_Raw_Cube_Playback_Cheetah.cfg';
-top_cfg_fi = 'Test_ICR_Ephys_Cheetah.cfg';
-
-% Get path to test config directory
-cfg_path = fullfile('C:\Users\Public\Documents\Cheetah\Configuration\Testing',top_cfg_fi);
+% NLX setup
+top_cfg_fi = 'Test_Raw_Cube_Playback_Cheetah.cfg';
+cfg_path = fullfile(C:\Program Files\Neuralynx\Test\
 
 % Open Cheetah
 curdir = pwd;
@@ -60,9 +57,16 @@ curdir = pwd;
 not_running = strfind(result, 'INFO');
 if not_running == 1
     cd('C:\Program Files\Neuralynx\Cheetah');
-    system(['Cheetah.exe ', cfg_path, '&']);
+    system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
     cd(curdir)
 end
+
+% OPTIONAL CONFIGS
+% % Load graphics setup
+% NlxConnectToServer(D.NLX.ServerIP);
+% pause(1);
+% NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
+% NlxSendCommand('-ProcessConfigurationFile AWL-WinPos_Ephys_M1.cfg');
 
 %% CONNECT TO NETCOM
 succeeded = NlxDisconnectFromServer()
@@ -88,28 +92,28 @@ end
 
 
 % Load behavior tracking config
-%   NlxSendCommand('-ProcessConfigurationFile ICR_Behavior_Tracking.cfg');
+%   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Behavior_Tracking.cfg');
 
 % Window pos
-%   cfg_fi = 'ICR_WinPos_Behavior_M1.cfg';
-%   cfg_fi = 'ICR_WinPos_Behavior_M3.cfg';
+%   cfg_fi = 'AWL-WinPos_Behavior_M1.cfg';
+%   cfg_fi = 'AWL-WinPos_Behavior_M3.cfg';
 %   NlxSendCommand(['-ProcessConfigurationFile ', cfg_fi])
 
 %% LOAD CONFIG FILE
 
 
 % Load implant tracking config
-   NlxSendCommand('-ProcessConfigurationFile ICR_Ephys_Tracking.cfg');
+   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Tracking.cfg');
 
 % Load ephys setup
-   NlxSendCommand('-ProcessConfigurationFile ICR_Ephys_Setup.cfg');
+   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Setup.cfg');
 
 % Load ephys graphics
-   NlxSendCommand('-ProcessConfigurationFile ICR_Ephys_Graphics.cfg');
+   NlxSendCommand('-ProcessConfigurationFile AWL-ICR_Ephys_Graphics.cfg');
 
 % Window pos
-   cfg_fi = 'ICR_WinPos_Ephys_M1.cfg';
-%   cfg_fi = 'ICR_WinPos_Ephys_M3.cfg';
+   cfg_fi = 'AWL-WinPos_Ephys_M1.cfg';
+%   cfg_fi = 'AWL-WinPos_Ephys_M3.cfg';
    NlxSendCommand(['-ProcessConfigurationFile ', cfg_fi])
 
 %% OPEN STREAM
