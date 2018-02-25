@@ -465,8 +465,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.feedDistRad = 70 * ((2 * pi)/(140 * pi));
         % Sleep 1/2 duration
         D.PAR.sleepDur = [15, 15]*60; % min
-        % Wait to connect to Cheetah
-        D.PAR.cheetahConnectDel = 15; % sec
         % Max tetrodes
         D.PAR.maxTT = 18;
         % Max clusters
@@ -765,19 +763,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
         end
         
-        % ------------------------- SETUP/CONNECT NXL ---------------------
-        
-        % Run NLX setup code
-        Console_Write('[Setup] RUNNING: "NLX_Setup()"...');
-        NLX_Setup();
-        if ~DOEXIT
-            Console_Write('[Setup] FINISHED: "NLX_Setup()"');
-        else
-            Console_Write('**WARNING** [Setup] ABORTED: "NLX_Setup()"');
-            return
-        end
-        Send_M2C('N', D.PAR.R, D.PAR.XC, D.PAR.YC);
-        
         % End of setup
         Console_Write('[Setup] END: Setup()');
         
@@ -880,6 +865,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Flag setup done flag
                     D.F.ses_setup_done = true;
                     
+                    % Setup NXL
+                    Console_Write('[Run:MainLoop] RUNNING: "NLX_Setup()"...');
+                    NLX_Setup();
+                    Console_Write('[Run:MainLoop] FINISHED: "NLX_Setup()"');
+                    
+                    % Send NLX setup confirmation
+                    Send_M2C('N', D.PAR.R, D.PAR.XC, D.PAR.YC);
+                    
                     % Run Table Setup code
                     Console_Write('[Run:MainLoop] RUNNING: "Table_Setup()"...');
                     Table_Setup();
@@ -896,22 +889,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Console_Write('[TT_Track_Setup] SKIPPED: "TT_Track_Setup()"');
                     end
                     
-                    % Run Finish NLX Setup code
+                    % Run Finish NLX Setup
                     Console_Write('[Run:MainLoop] RUNNING: "Finish_NLX_Setup()"...');
                     was_ran = Finish_NLX_Setup();
                     if was_ran
                         Console_Write('[Run:MainLoop] FINISHED: "Finish_NLX_Setup()"');
                     else
-                        Console_Write('[Run:MainLoop] SKIPPED: "Finish_NLX_Setup()"');
-                    end
-                    
-                    % Run Finish Ephys Setup code
-                    Console_Write('[Run:MainLoop] RUNNING: "Finish_Ephys_Setup()"...');
-                    was_ran = Finish_Ephys_Setup();
-                    if was_ran
-                        Console_Write('[Run:MainLoop] FINISHED: "Finish_Ephys_Setup()"');
-                    else
-                        Console_Write('[Finish_Ephys_Setup] SKIPPED: "Finish_Ephys_Setup()"');
+                        Console_Write('[Finish_NLX_Setup] SKIPPED: "Finish_NLX_Setup()"');
                     end
                     
                     % Enable TT_Track Objects
@@ -925,16 +909,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Console_Write('[Run:MainLoop] FINISHED: "Finish_AC_Setup()"');
                     
                     % Start aquisition
-                    if D.F.cheetah_open
+                    if D.F.cheetah_running
                         Safe_Set(D.UI.toggAcq, 'Value', 1)
                         ToggAcq(D.UI.toggAcq);
                     end
                     
                     % Start recording
-                    if D.F.cheetah_open && D.PAR.sesType ~= 'TT_Turn'
+                    if D.F.cheetah_running && D.PAR.sesType ~= 'TT_Turn'
                         Safe_Set(D.UI.toggRec,'Value', 1);
                         ToggRec(D.UI.toggRec);
                     end
+                    
+                    % Update/refresh window positions
+                    ToggMon(D.UI.toggMon(D.UI.monDefault));
                     
                     % Bail here if running TT Track or Table solo
                     if D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update'
@@ -979,6 +966,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Show all objects on 'ICR ARENA' tab
                     TabGrpChange(D.UI.tabICR);
+                    
+                    % Update/refresh window positions
+                    ToggMon(D.UI.toggMon(D.UI.monDefault));
                     
                 case 'RUN ICR TASK'
                     %% ------------------RUN ICR TASK-------------------
@@ -1497,7 +1487,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 %% ============================= SETUP FUNCTIONS ==========================
 
 % ------------------------------VAR SETUP--------------------------
-    function Var_Setup()
+    function[] = Var_Setup()
         
         %% TOP LEVEL PARAMETERS
         
@@ -1697,7 +1687,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.sub_case_now = 'NULL';
         D.F.sub_case_last = 'NULL';
         % status of Cheetah.exe
-        D.F.cheetah_open = false;
+        D.F.cheetah_running = false;
         % status of SpikeSort3D.exe
         D.F.spikesort_open = false;
         % cube connection status
@@ -4187,32 +4177,40 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check if Cheetah open
         [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
-        D.F.cheetah_open = ~any(strfind(result, 'INFO'));
+        D.F.cheetah_running = ~any(strfind(result, 'INFO'));
         
-        % Only run if Matlab solo not running Table_Update solo
-        if ISMATSOLO && ~D.F.cheetah_open && D.PAR.sesType ~= 'Table_Update'
+        % Only run if not running Table_Update solo
+        if ~D.F.cheetah_running && D.PAR.sesType ~= 'Table_Update'
             
             % Log/print
             Console_Write('[NLX_Setup] RUNNING: Open Cheetah.exe...');
             
-            % Check if Cheetah should be run
-            dlg_h = dlgAWL(...
-                'Do you want to run Cheetah.exe?', ...
-                'RUN CHEETAH?', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'question');
-            while ~DOEXIT; Update_UI(10); pause(0.001);
-                if ~DOEXIT; choice = dlg_h.UserData;
-                    if ~strcmp(choice, ''); break; end
+            % Check if Cheetah should be run for solo session
+            if ISMATSOLO
+                dlg_h = dlgAWL(...
+                    'Do you want to run Cheetah.exe?', ...
+                    'RUN CHEETAH?', ...
+                    'Yes', 'No', [], 'No', ...
+                    D.UI.dlgPos{4}, ...
+                    'question');
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
                 end
+            else
+                choice = 'Yes';
             end
             
             % Open Cheetah
             if strcmp(choice, 'Yes') && ~DOEXIT
                 
                 % NLX setup config
-                top_cfg_fi = 'Cheetah.cfg';
+                if D.F.implant_session
+                    top_cfg_fi = 'Cheetah_ICR_Ephys.cfg';
+                else
+                    top_cfg_fi = 'Cheetah_ICR_Behavior.cfg';
+                end
                 
                 % Store current directory
                 curdir = pwd;
@@ -4220,218 +4218,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Run EXE with specified config
                 cd('C:\Program Files\Neuralynx\Cheetah');
                 system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
-                
-                % Set flag
-                D.F.cheetah_wait = true;
-                
+    
                 % Log/print
-                Console_Write('[NLX_Setup] FINISHED: Open Cheetah.exe');
+                Console_Write(sprintf('[NLX_Setup] FINISHED: Run Cheetah.exe "%s"', top_cfg_fi));
                 
                 % Revert back to main dir
                 cd(curdir);
                 
+                % Set flag
+                D.F.cheetah_running = true;
+                
             elseif DOEXIT
                 
                 % Bail
-                Console_Write('**WARNING** [NLX_Setup] ABORTED: Open Cheetah.exe');
+                Console_Write('**WARNING** [NLX_Setup] ABORTED: Run Cheetah.exe');
                 return
                 
             else
                 
                 % Bail
-                Console_Write('[NLX_Setup] SKIPPED: Open Cheetah.exe');
+                Console_Write('[NLX_Setup] SKIPPED: Run Cheetah.exe');
                 return
                 
             end
             
-        end
-        
-        %% CONNECT TO NETCOM
-        
-        % Wait for Cheetah to open
-        Console_Write('[NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
-        if D.PAR.sesType == 'ICR_Session' || D.PAR.sesType == 'TT_Turn'
-            if ~D.F.cheetah_open
-                
-                % Keep checking for x seconds
-                Console_Write('[NLX_Setup] RUNNING: Wait for Cheetah.exe to Open...');
-                while ~DOEXIT
-                    Update_UI(10);
-                    pause(0.001);
-                    
-                    % Check for flag
-                    if ~DOEXIT
-                        
-                        % Check EXE status
-                        [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
-                        D.F.cheetah_open = any(strfind(result, 'Cheetah.exe'));
-                        
-                        if D.F.cheetah_open
-                            break;
-                        end
-                    end
-                end
-                if DOEXIT
-                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait for Cheetah.exe to Open');
-                    return
-                else
-                    Console_Write('[NLX_Setup] FINISHED: Wait for Cheetah.exe to Open');
-                end
-                
-            else
-                Console_Write('[NLX_Setup] FINISHED: Confirm Cheetah.exe Already Running');
-            end
-            
-        else
-            Console_Write('[NLX_Setup] SKIPPED: Confirm Cheetah.exe Running');
-        end
-        
-        % Pause before connecting
-        if strcmp('ICRCHEETAH', getenv('computername')) && ...
-                D.F.cheetah_open && ...
-                ~DOEXIT
-            
-            % Specify wait time
-            t_wait = Sec_DT(now) + D.PAR.cheetahConnectDel;
-            
-            % Wait to connect=
-            Console_Write(sprintf('[NLX_Setup] RUNNING: Wait %d sec to Connect to Cheetah...',D.PAR.cheetahConnectDel));
-            
-            % Loop here
-            while ~DOEXIT
-                Update_UI(10);
-                pause(0.001);
-                
-                % Check for flag
-                if ~DOEXIT
-                    if Sec_DT(now) >= t_wait
-                        break;
-                    end
-                end
-            end
-            if DOEXIT
-                Console_Write('**WARNING** [NLX_Setup] ABORTED: Wait to Connect to Cheetah.exe');
-                return
-            else
-                Console_Write('[NLX_Setup] FINISHED: Wait to Connect to Cheetah.exe');
-            end
-            
-        else
-            Console_Write('[NLX_Setup] SKIPPED: Wait to Connect to Cheetah.exe');
-        end
-        
-        % Load NetCom into Matlab, and connect to the NetCom server if we aren’t connected
-        Console_Write(sprintf('[NLX_Setup] RUNNING: Connect to NLX IP=%s...', ...
-            D.NLX.ServerIP));
-        
-        % Skip if Cheetah not running
-        if D.F.cheetah_open
-            
-            % Run if not connected already
-            D.F.nlx_connected = NlxAreWeConnected() == 1;
-            if ~D.F.nlx_connected
-                
-                % Keep attempting till success
-                while ~DOEXIT
-                    Update_UI(10);
-                    pause(0.001);
-                    
-                    % Check for flag
-                    if ~DOEXIT
-                        % Attempt connection
-                        D.F.nlx_connected = NlxConnectToServer(D.NLX.ServerIP) == 1;
-                        if D.F.nlx_connected
-                            % Identify id to server
-                            NlxSetApplicationName('ICR_GUI');
-                            break;
-                        end
-                    end
-                end
-                if DOEXIT
-                    Console_Write('**WARNING** [NLX_Setup] ABORTED: Connect to NLX');
-                    return
-                else
-                    Console_Write('[NLX_Setup] FINISHED: Connect to NLX');
-                end
-                
-            else
-                % Log/print
-                Console_Write('[NLX_Setup] FINISHED: Connect to NLX: Already Connected');
-            end
-            
-        else
-            Console_Write('[NLX_Setup] SKIPPED: Connect to NLX');
-        end
-        
-        % Bail if exit initiated
-        if DOEXIT
-            return
-        end
-        
-        % Send test command to confirm connected and get first ts
-        Console_Write('[NLX_Setup] RUNNING: Confirm NLX Connection');
-        if D.F.cheetah_open
-            [pass, ts_string] = Send_M2NLX('-GetTimestamp');
-            if pass == 1
-                D.T.poll_str_nlx = int64(str2double(ts_string));
-                Console_Write('[NLX_Setup] FINISHED: Confirm NLX Connection');
-            else
-                % Set exit flag and bail
-                Console_Write('!!ERROR!! [NLX_Setup] FAILED: Confirm NLX Connection');
-                SetExit();
-                return
-            end
-        else
-            Console_Write('[NLX_Setup] SKIPPED: Confirm NLX Connection');
-        end
-        
-        %% CONFIGURE DIGITAL IO
-        
-        % Log/print
-        Console_Write(sprintf('[NLX_Setup] RUNNING: Configure NLX...'));
-        
-        % SETUP PORTS
-        
-        % Set port directions
-        Send_M2NLX(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', D.NLX.port_0, ' Input']);
-        Send_M2NLX(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', D.NLX.port_1, ' Input']);
-        
-        % Enable digital io events
-        Send_M2NLX(['-SetDigitalIOEventsEnabled ', D.NLX.DevTTL, ' ', D.NLX.port_0, ' True']);
-        Send_M2NLX(['-SetDigitalIOEventsEnabled ', D.NLX.DevTTL, ' ', D.NLX.port_1, ' True']);
-        
-        % CONFIGURE TTL EVENTS
-        
-        % Audio channels
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.snd_rt_wn_bit{1}, ' ', D.NLX.snd_rt_wn_bit{2}, ' ', D.NLX.snd_rt_wn_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.snd_lft_rt_bit{1}, ' ', D.NLX.snd_lft_rt_bit{2}, ' ', D.NLX.snd_lft_rt_str]);
-        
-        % Reward
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.rew_on_bit{1}, ' ', D.NLX.rew_on_bit{2}, ' ', D.NLX.rew_on_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.rew_off_bit{1}, ' ', D.NLX.rew_off_bit{2}, ' ', D.NLX.rew_off_str]);
-        
-        % Pid state
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.pid_run_bit{1}, ' ', D.NLX.pid_run_bit{2}, ' ', D.NLX.pid_run_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.pid_stop_bit{1}, ' ', D.NLX.pid_stop_bit{2}, ' ', D.NLX.pid_stop_str]);
-        
-        % Bulldozer state
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.bull_run_bit{1}, ' ', D.NLX.bull_run_bit{2}, ' ', D.NLX.bull_run_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.bull_stop_bit{1}, ' ', D.NLX.bull_stop_bit{2}, ' ', D.NLX.bull_stop_str]);
-        
-        % Photo transdicers
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.north_bit{1}, ' ', D.NLX.north_bit{2}, ' ', D.NLX.north_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.west_bit{1}, ' ', D.NLX.west_bit{2}, ' ', D.NLX.west_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.south_bit{1}, ' ', D.NLX.south_bit{2}, ' ', D.NLX.south_str]);
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.east_bit{1}, ' ', D.NLX.east_bit{2}, ' ', D.NLX.east_str]);
-        
-        % IR time sync LED
-        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.ir_sync_bit{1}, ' ', D.NLX.ir_sync_bit{2}, ' ', D.NLX.ir_ts_str]);
-        
-        % Bail if exit initiated
-        if DOEXIT
-            return
-        else
-            Console_Write('[NLX_Setup] FINISHED: Configure NLX');
         end
         
     end
@@ -6500,18 +6310,157 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% --------------------------FINISH NLX SETUP------------------------
+% --------------------------FINISH EPHYS SETUP------------------------
     function[was_ran] = Finish_NLX_Setup()
         
-        %% BAIL IF CHEETAH NOT OPEN
-        if ~D.F.cheetah_open
+        %% BAIL IF CHEETAH NOT RUNNING
+        if ~D.F.cheetah_running
             
             % Set output and bail
             was_ran = false;
             return
         end
         
-        %% LOAD CONFIGURATION FILES AND SETTINGS
+        %% CONNECT TO NETCOM
+        
+        % Wait for Cheetah to open
+        Console_Write('[Finish_NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
+        while ~DOEXIT
+            Update_UI(10);
+            pause(0.001);
+            
+            % Check for flag
+            if ~DOEXIT
+                
+                % Check EXE status
+                [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+                D.F.cheetah_running = any(strfind(result, 'Cheetah.exe'));
+                
+                if D.F.cheetah_running
+                    break;
+                end
+            end
+        end
+        if DOEXIT
+            Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Wait for Cheetah.exe to Open');
+            return
+        else
+            Console_Write('[Finish_NLX_Setup] FINISHED: Wait for Cheetah.exe to Open');
+        end
+        
+        % Connect to NetCom
+        Console_Write(sprintf('[Finish_NLX_Setup] RUNNING: Connect to NLX IP=%s...', ...
+            D.NLX.ServerIP));
+        
+        % Run if not connected already
+        D.F.nlx_connected = NlxAreWeConnected() == 1;
+        if ~D.F.nlx_connected
+            
+            % Keep attempting till success
+            while ~DOEXIT
+                Update_UI(10);
+                pause(0.001);
+                
+                % Check for flag
+                if ~DOEXIT
+                    % Attempt connection
+                    D.F.nlx_connected = NlxConnectToServer(D.NLX.ServerIP) == 1;
+                    if D.F.nlx_connected
+                        % Identify id to server
+                        NlxSetApplicationName('ICR_GUI');
+                        break;
+                    end
+                end
+            end
+            if DOEXIT
+                Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Connect to NLX');
+                return
+            else
+                Console_Write('[Finish_NLX_Setup] FINISHED: Connect to NLX');
+            end
+            
+        else
+            % Log/print
+            Console_Write('[Finish_NLX_Setup] FINISHED: Connect to NLX: Already Connected');
+        end
+        
+        % Bail if exit initiated
+        if DOEXIT
+            return
+        end
+        
+        % Send test command to confirm connected and get first ts
+        [pass, ts_string] = Send_M2NLX('-GetTimestamp');
+        if pass == 1
+            D.T.poll_str_nlx = int64(str2double(ts_string));
+        else
+            
+            % Unset flag
+            D.F.nlx_connected = false;
+        end
+        
+        % Check if successful
+        if D.F.nlx_connected
+            
+            Console_Write('[Finish_NLX_Setup] FINISHED: Confirm NLX Connection');
+        else
+            
+            % Set exit flag and bail
+            Console_Write('!!ERROR!! [Finish_NLX_Setup] FAILED: Confirm NLX Connection');
+            SetExit();
+            return
+        end
+        
+        %% CONFIGURE DIGITAL IO
+        
+        % Log/print
+        Console_Write(sprintf('[Finish_NLX_Setup] RUNNING: Configure NLX...'));
+        
+        % SETUP PORTS
+        
+        % Set port directions
+        Send_M2NLX(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', D.NLX.port_0, ' Input']);
+        Send_M2NLX(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', D.NLX.port_1, ' Input']);
+        
+        % Enable digital io events
+        Send_M2NLX(['-SetDigitalIOEventsEnabled ', D.NLX.DevTTL, ' ', D.NLX.port_0, ' True']);
+        Send_M2NLX(['-SetDigitalIOEventsEnabled ', D.NLX.DevTTL, ' ', D.NLX.port_1, ' True']);
+        
+        % CONFIGURE TTL EVENTS
+        
+        % Audio channels
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.snd_rt_wn_bit{1}, ' ', D.NLX.snd_rt_wn_bit{2}, ' ', D.NLX.snd_rt_wn_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.snd_lft_rt_bit{1}, ' ', D.NLX.snd_lft_rt_bit{2}, ' ', D.NLX.snd_lft_rt_str]);
+        
+        % Reward
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.rew_on_bit{1}, ' ', D.NLX.rew_on_bit{2}, ' ', D.NLX.rew_on_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.rew_off_bit{1}, ' ', D.NLX.rew_off_bit{2}, ' ', D.NLX.rew_off_str]);
+        
+        % Pid state
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.pid_run_bit{1}, ' ', D.NLX.pid_run_bit{2}, ' ', D.NLX.pid_run_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.pid_stop_bit{1}, ' ', D.NLX.pid_stop_bit{2}, ' ', D.NLX.pid_stop_str]);
+        
+        % Bulldozer state
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.bull_run_bit{1}, ' ', D.NLX.bull_run_bit{2}, ' ', D.NLX.bull_run_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.bull_stop_bit{1}, ' ', D.NLX.bull_stop_bit{2}, ' ', D.NLX.bull_stop_str]);
+        
+        % Photo transdicers
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.north_bit{1}, ' ', D.NLX.north_bit{2}, ' ', D.NLX.north_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.west_bit{1}, ' ', D.NLX.west_bit{2}, ' ', D.NLX.west_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.south_bit{1}, ' ', D.NLX.south_bit{2}, ' ', D.NLX.south_str]);
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.east_bit{1}, ' ', D.NLX.east_bit{2}, ' ', D.NLX.east_str]);
+        
+        % IR time sync LED
+        Send_M2NLX(['-SetNamedTTLEvent ', D.NLX.DevTTL, ' ', D.NLX.ir_sync_bit{1}, ' ', D.NLX.ir_sync_bit{2}, ' ', D.NLX.ir_ts_str]);
+        
+        % Bail if exit initiated
+        if DOEXIT
+            return
+        else
+            Console_Write('[Finish_NLX_Setup] FINISHED: Configure NLX');
+        end
+        
+        %% LOAD PREVIOUS CONFIGURATION SETTINGS
         
         % Find current NLX recording directory
         dirs = dir(D.DIR.nlxTempTop);
@@ -6529,63 +6478,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 exist(D.DIR.nlxSaveTop, 'dir') == 1
             mkdir(D.DIR.nlxRecRat);
         end
-        
-        % Log/print
-        Console_Write('[Finish_NLX_Setup] RUNNING: Load Cheetah Configs...');
-        
-        % Load behavior config files
-        if ~D.F.implant_session
-            
-            % Specify setpoint
-            D.PAR.setPointCM = D.PAR.setPointBackpack;
-            D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
-            
-            % Load behavior tracking config
-            Send_M2NLX('-ProcessConfigurationFile ICR_Behavior_Tracking.cfg');
-            Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Behavior_Tracking.cfg"');
-            
-        end
-        
-        % Load ephys config files
-        if D.F.implant_session
-            
-            % Specify setpoint
-            D.PAR.setPointCM = D.PAR.setPointImplant;
-            D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
-            
-            % Set stream hd flag
-            D.F.stream_hd = true;
-            
-            % Load main ephys configs
-            [~, ~, das_types] = NlxGetDASObjectsAndTypes;
-            if ~any(ismember(das_types, 'TTScAcqEnt'))
-                
-                % Load ephys sleep tracking config
-                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Sleep_Tracking.cfg');
-                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Sleep_Tracking.cfg"');
-                
-                % Load acquisition entity config
-                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Setup.cfg');
-                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Setup.cfg"')
-                
-            end
-            
-            % Load plot setup config
-            Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Graphics.cfg');
-            Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Graphics.cfg"');
-            
-        end
-        
-        % Update/refresh window positions
-        ToggMon(D.UI.toggMon(D.UI.monDefault));
-        
-        % Log/print
-        Console_Write('[Finish_NLX_Setup] FINISHED: Load Cheetah Configs');
-        
-        % Bring GUI back to top
-        set(FIGH,'WindowStyle','modal')
-        pause(0.1)
-        set(FIGH,'WindowStyle','normal')
         
         % Load previous settings
         if D.F.implant_session
@@ -6636,7 +6528,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
             end
             
-            % Propt to load last configuration file
+            % Prompt to load last configuration file
             if ~isempty(nlx_cfg_last)
                 
                 dlg_h = dlgAWL(...
@@ -6658,8 +6550,31 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Load last settings
             if strcmp(choice, 'Yes') && ~DOEXIT
                 
+                % List of commands to pars
+                parse_list = { ...
+                    '-SetAcqEntProcessingEnabled', ...
+                    '-SetInputRange', ...
+                    '-SetSpikeThreshold', ...
+                    '-SetPlotEnabled', ...
+                    };
+                
+                % Read in text file
+                fi_imp = fileread(nlx_cfg_last);
+                
+                % Parse file
+                for z_cmd = 1:length(parse_list)
+                    
+                    % Get matching commands
+                    msg_list = regexp(fi_imp, ['(', parse_list{z_cmd}, '[^\r\n\f]*)(?=\r|\n|\f)'], 'match');
+                    for i_msg = 1:length(msg_list)
+                        
+                        % Send each command
+                        Send_M2NLX(msg_list{i_msg});
+                        
+                    end
+                end
+                
                 % Run local function
-                LoadConfigSettings(nlx_cfg_last)
                 Console_Write('[Finish_NLX_Setup] FINISHED: Load Previous Cheetah Settings');
                 
             elseif DOEXIT
@@ -6765,6 +6680,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.vt_rat_streaming , D.F.vt_rob_streaming , D.F.evt_streaming));
         end
         
+        % Update/refresh window positions
+        ToggMon(D.UI.toggMon(D.UI.monDefault));
+        
         %% RUN SPIKESORT EXE
         Console_Write('[Finish_NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
         
@@ -6821,7 +6739,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Check if SpikeSort should be run
-        if D.F.cheetah_open && D.F.implant_session
+        if D.F.cheetah_running && D.F.implant_session
             
             dlg_h = dlgAWL(...
                 'Do you want to run SpikeSort3D.exe?', ...
@@ -6893,199 +6811,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         was_ran = true;
         return
         
-        %% LOAD CONFIG SETTINGS FUNCTION
-        function LoadConfigSettings(fipath)
-            
-            % List of commands to pars
-            parse_list = { ...
-                '-SetAcqEntProcessingEnabled', ...
-                '-SetInputRange', ...
-                '-SetSpikeThreshold', ...
-                '-SetPlotEnabled', ...
-                };
-            
-            % Read in text file
-            fi_imp = fileread(fipath);
-            
-            % Parse file
-            for z_cmd = 1:length(parse_list)
-                
-                % Get matching commands
-                msg_list = regexp(fi_imp, ['(', parse_list{z_cmd}, '[^\r\n\f]*)(?=\r|\n|\f)'], 'match');
-                for i_msg = 1:length(msg_list)
-                    
-                    % Send each command
-                    Send_M2NLX(msg_list{i_msg});
-                    
-                end
-            end
-            
-        end
-        
-    end
-
-% --------------------------FINISH EPHYS SETUP------------------------
-    function[was_ran] = Finish_Ephys_Setup()
-        
-        %% BAIL IF NOT IMPLANT OR TT TRACK SESSIONo
-        if ~D.F.implant_session
-            
-            % Set output and bail
-            was_ran = false;
-            return
-        end
-        
-        %% SETUP EPHYS PLOTTING
-        
-        % SETUP FIRING RATE AXES
-        Console_Write('[Finish_Ephys_Setup] RUNNING: Setup Cluster Rate Patches...');
-        
-        % Calculate patch bounds
-        ptch_bounds = arrayfun(@(x) [x, x+((2*pi)/D.PAR.tt1dBins)], ...
-            D.PAR.tt1dBinEdge', 'Uni', false);
-        ptch_bounds = cell2mat(ptch_bounds);
-        ptch_bounds = flip(ptch_bounds, 1);
-        ptch_bounds = wrapTo2Pi(ptch_bounds);
-        
-        % Create rate patch objects
-        if D.PAR.sesTask == 'Track'
-            for z_c = 1:D.PAR.maxClust
-                
-                % Create/copy rate patch objects
-                if z_c == 1
-                    
-                    % Create patch object
-                    for z_p = 1:D.PAR.tt1dBins
-                        [xbnd, ybnd] =  ...
-                            Get_Cart_Bnds(ptch_bounds(z_p,:));
-                        D.UI.ptchClustH(z_c,z_p) = ...
-                            patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
-                            [ybnd(1,:),fliplr(ybnd(2,:))], ...
-                            D.UI.disabledCol, ...
-                            'EdgeAlpha', 0, ...
-                            'FaceAlpha', 0, ...
-                            'Visible', 'on', ...
-                            'Parent', D.UI.axClstH(z_c));
-                    end
-                else
-                    
-                    % Copy patch object
-                    for z_p = 1:D.PAR.tt1dBins
-                        D.UI.ptchClustH(z_c,z_p) = ...
-                            copyobj(D.UI.ptchClustH(1,z_p), D.UI.axClstH(z_c));
-                    end
-                end
-                
-            end
-            
-        end
-        
-        % Rescale axis for hist data
-        if D.PAR.sesTask == 'Forage'
-            
-            % Rescale axis for hist data
-            Safe_Set(D.UI.axClstH, ...
-                'YDir', 'reverse', ...
-                'Position', D.UI.axH(5).Position, ...
-                'XLim', [0,D.PAR.tt2dBins], ...
-                'YLim', [0,D.PAR.tt2dBins]);
-        end
-        
-        % Set axis user data properties
-        Safe_Set(D.UI.axClstH, ...
-            'CLim',[0,1], ...
-            'UserData', 0);
-        
-        % Add bottom axes as semi tranparent layer
-        D.UI.axH(7).Position = D.UI.axH(1).Position;
-        D.UI.axH(7).XLim = D.UI.axH(1).XLim;
-        D.UI.axH(7).YLim = D.UI.axH(1).YLim;
-        mask_img = uint8(abs(double(D.UI.wall_mask)-double(max(D.UI.wall_mask))));
-        mask_img = repmat(mask_img, [1, 1, 3]);
-        D.UI.ttMask = image(mask_img, 'Parent', D.UI.axH(7), 'Visible', 'off');
-        alph = double(mask_img(:,:,1)>0) * 0.5;
-        Safe_Set(D.UI.ttMask, 'AlphaData', alph);
-        
-        % SETUP PLOT COLOR MAP
-        Console_Write('[Finish_Ephys_Setup] RUNNING: Setup Cluster Colormaps...');
-        
-        % Colorbar legend pos
-        ax_pos = [...
-            D.UI.tim_inf_pan_pos(1), ...
-            D.UI.cnsl_pan_pos(4), ...
-            D.UI.tim_inf_pan_pos(3), ...
-            0.115];
-        
-        % Setup legend axis
-        set(D.UI.axColLeg, ...
-            'Position', ax_pos,...
-            'Color', [1 1 1],...
-            'XLim', [0,1], ...
-            'YLim', [0, D.PAR.maxClust], ...
-            'XTick', [], ...
-            'YTick', [])
-        
-        % Setup clust color map legend
-        for z_c = 1:D.PAR.maxClust
-            
-            % Set axis to default colormap
-            colormap(D.UI.axClstH(z_c), D.UI.disabledCol)
-            
-            % Add 'colorbar'
-            y_max = size(D.UI.linColBarH,2);
-            x = repmat(linspace(1/y_max/2,1-1/y_max/2,size(D.UI.linColBarH,2)),2,1);
-            y = repmat([0;1], 1, size(D.UI.linColBarH,2)) + D.PAR.maxClust-z_c;
-            
-            % Add 'colorbar'
-            D.UI.linColBarH(z_c,:) = ...
-                line(...
-                x, y, ...
-                'LineWidth', 4, ...
-                'Parent',D.UI.axColLeg, ...
-                'Visible', 'off');
-            
-            % Add text
-            btm = sum(ax_pos([2,4])) - (ax_pos(4)/D.PAR.maxClust)*z_c;
-            pos_txt = [ax_pos(1)-ax_pos(3)/3, btm, ax_pos(3)/3, ax_pos(4)/D.PAR.maxClust];
-            D.UI.txtColBarH(z_c) = uicontrol('Style', 'text',...
-                'Parent', D.UI.tabICR, ...
-                'Units', 'Normalized', ...
-                'BackgroundColor', D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledCol, ...
-                'FontSize', 8, ...
-                'FontWeight', 'Bold', ...
-                'String',sprintf('TTxx-%d', z_c-1),...
-                'Visible', 'off',...
-                'Position', pos_txt);
-            
-        end
-        
-        % Create legend outline
-        y_max = D.PAR.maxClust;
-        x = [0, 0, NaN, 1, 1, NaN];
-        y = [0, y_max, NaN, y_max, 0, NaN];
-        y = [y, reshape([0:y_max; 0:y_max; NaN(1,y_max+1)], 1, [])];
-        x = [x, repmat([0,1,NaN], 1, y_max+1)];
-        
-        % Plot outline
-        line(...
-            x, y, ...
-            'Color', 'k', ...
-            'LineWidth', 0.5, ...
-            'Parent',D.UI.axColLeg);
-        
-        % Set legend to default col
-        set(D.UI.linColBarH, ...
-            'Color', D.UI.disabledCol, ...
-            'Visible', 'on');
-        
-        % Log/print
-        Console_Write('[Finish_Ephys_Setup] FINISHED: Setup Cluster Objects');
-        
-        % Set output and bail
-        was_ran = true;
-        return
-        
     end
 
 % --------------------------FINISH AC SETUP------------------------
@@ -7118,6 +6843,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function ICR_Session_Setup()
         
         %% UPDATE SESSION SPECIFIC VARS
+        
+        % Handle inplant session
+        if D.F.implant_session
+            
+            % Specify inplant setpoint
+            D.PAR.setPointCM = D.PAR.setPointImplant;
+            D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
+            
+            % Set stream hd flag
+            D.F.stream_hd = true;
+            
+        else
+            
+            % Specify behavior setpoint
+            D.PAR.setPointCM = D.PAR.setPointBackpack;
+            D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
+        end
         
         % Get session number
         var_ind = ...
@@ -7562,6 +7304,162 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Selectable Items
         uistack(D.UI.axH(9),'top');
         
+        %% SETUP EPHYS PLOTTING
+        
+        % Bail here if TT TRACK SESSION
+        if D.F.implant_session
+            
+            % SETUP FIRING RATE AXES
+            Console_Write('[Finish_NLX_Setup] RUNNING: Setup Cluster Rate Patches...');
+            
+            % Calculate patch bounds
+            ptch_bounds = arrayfun(@(x) [x, x+((2*pi)/D.PAR.tt1dBins)], ...
+                D.PAR.tt1dBinEdge', 'Uni', false);
+            ptch_bounds = cell2mat(ptch_bounds);
+            ptch_bounds = flip(ptch_bounds, 1);
+            ptch_bounds = wrapTo2Pi(ptch_bounds);
+            
+            % Create rate patch objects
+            if D.PAR.sesTask == 'Track'
+                for z_c = 1:D.PAR.maxClust
+                    
+                    % Create/copy rate patch objects
+                    if z_c == 1
+                        
+                        % Create patch object
+                        for z_p = 1:D.PAR.tt1dBins
+                            [xbnd, ybnd] =  ...
+                                Get_Cart_Bnds(ptch_bounds(z_p,:));
+                            D.UI.ptchClustH(z_c,z_p) = ...
+                                patch([xbnd(1,:),fliplr(xbnd(2,:))], ...
+                                [ybnd(1,:),fliplr(ybnd(2,:))], ...
+                                D.UI.disabledCol, ...
+                                'EdgeAlpha', 0, ...
+                                'FaceAlpha', 0, ...
+                                'Visible', 'on', ...
+                                'Parent', D.UI.axClstH(z_c));
+                        end
+                    else
+                        
+                        % Copy patch object
+                        for z_p = 1:D.PAR.tt1dBins
+                            D.UI.ptchClustH(z_c,z_p) = ...
+                                copyobj(D.UI.ptchClustH(1,z_p), D.UI.axClstH(z_c));
+                        end
+                    end
+                    
+                end
+                
+            end
+            
+            % Rescale axis for hist data
+            if D.PAR.sesTask == 'Forage'
+                
+                % Rescale axis for hist data
+                Safe_Set(D.UI.axClstH, ...
+                    'YDir', 'reverse', ...
+                    'Position', D.UI.axH(5).Position, ...
+                    'XLim', [0,D.PAR.tt2dBins], ...
+                    'YLim', [0,D.PAR.tt2dBins]);
+            end
+            
+            % Set axis user data properties
+            Safe_Set(D.UI.axClstH, ...
+                'CLim',[0,1], ...
+                'UserData', 0);
+            
+            % Add bottom axes as semi tranparent layer
+            D.UI.axH(7).Position = D.UI.axH(1).Position;
+            D.UI.axH(7).XLim = D.UI.axH(1).XLim;
+            D.UI.axH(7).YLim = D.UI.axH(1).YLim;
+            mask_img = uint8(abs(double(D.UI.wall_mask)-double(max(D.UI.wall_mask))));
+            mask_img = repmat(mask_img, [1, 1, 3]);
+            D.UI.ttMask = image(mask_img, 'Parent', D.UI.axH(7), 'Visible', 'off');
+            alph = double(mask_img(:,:,1)>0) * 0.5;
+            Safe_Set(D.UI.ttMask, 'AlphaData', alph);
+            
+            % SETUP PLOT COLOR MAP
+            Console_Write('[Finish_NLX_Setup] RUNNING: Setup Cluster Colormaps...');
+            
+            % Colorbar legend pos
+            ax_pos = [...
+                D.UI.tim_inf_pan_pos(1), ...
+                D.UI.cnsl_pan_pos(4), ...
+                D.UI.tim_inf_pan_pos(3), ...
+                0.115];
+            
+            % Setup legend axis
+            set(D.UI.axColLeg, ...
+                'Position', ax_pos,...
+                'Color', [1 1 1],...
+                'XLim', [0,1], ...
+                'YLim', [0, D.PAR.maxClust], ...
+                'XTick', [], ...
+                'YTick', [])
+            
+            % Setup clust color map legend
+            for z_c = 1:D.PAR.maxClust
+                
+                % Set axis to default colormap
+                colormap(D.UI.axClstH(z_c), D.UI.disabledCol)
+                
+                % Add 'colorbar'
+                y_max = size(D.UI.linColBarH,2);
+                x = repmat(linspace(1/y_max/2,1-1/y_max/2,size(D.UI.linColBarH,2)),2,1);
+                y = repmat([0;1], 1, size(D.UI.linColBarH,2)) + D.PAR.maxClust-z_c;
+                
+                % Add 'colorbar'
+                D.UI.linColBarH(z_c,:) = ...
+                    line(...
+                    x, y, ...
+                    'LineWidth', 4, ...
+                    'Parent',D.UI.axColLeg, ...
+                    'Visible', 'off');
+                
+                % Add text
+                btm = sum(ax_pos([2,4])) - (ax_pos(4)/D.PAR.maxClust)*z_c;
+                pos_txt = [ax_pos(1)-ax_pos(3)/3, btm, ax_pos(3)/3, ax_pos(4)/D.PAR.maxClust];
+                D.UI.txtColBarH(z_c) = uicontrol('Style', 'text',...
+                    'Parent', D.UI.tabICR, ...
+                    'Units', 'Normalized', ...
+                    'BackgroundColor', D.UI.figBckCol, ...
+                    'ForegroundColor', D.UI.enabledCol, ...
+                    'FontSize', 8, ...
+                    'FontWeight', 'Bold', ...
+                    'String',sprintf('TTxx-%d', z_c-1),...
+                    'Visible', 'off',...
+                    'Position', pos_txt);
+                
+            end
+            
+            % Create legend outline
+            y_max = D.PAR.maxClust;
+            x = [0, 0, NaN, 1, 1, NaN];
+            y = [0, y_max, NaN, y_max, 0, NaN];
+            y = [y, reshape([0:y_max; 0:y_max; NaN(1,y_max+1)], 1, [])];
+            x = [x, repmat([0,1,NaN], 1, y_max+1)];
+            
+            % Plot outline
+            line(...
+                x, y, ...
+                'Color', 'k', ...
+                'LineWidth', 0.5, ...
+                'Parent',D.UI.axColLeg);
+            
+            % Set legend to default col
+            set(D.UI.linColBarH, ...
+                'Color', D.UI.disabledCol, ...
+                'Visible', 'on');
+            
+            % Log/print
+            Console_Write('[Finish_NLX_Setup] FINISHED: Setup Cluster Objects');
+            
+        else
+            
+            Console_Write('[Finish_NLX_Setup] SKIPPED: Setup Cluster Objects');
+            
+        end
+
         %% SEND SETUP COMMAND TO ROBOT
         
         % Session condition
@@ -8676,6 +8574,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Combine exclusion criteria
             exc_ind = exc_1 | exc_2 | exc_3;
             
+            % TEMP
+            %exc_ind = false(size(rad,1), 1);
+            
             % Set bad recs to empty
             rad(exc_ind) = [];
             roh(exc_ind) = [];
@@ -9700,12 +9601,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             tt_lab = D.TT.ttList{tt_ind};
             
             % Get new data
-            [~, ~, D.TT.ttTS{tt_ind}, ~, D.TT.ttClust{tt_ind}, ~, D.TT.ttRecs{tt_ind}, ~ ] = ...
+            [succeeded, ~, D.TT.ttTS{tt_ind}, ~, D.TT.ttClust{tt_ind}, ~, D.TT.ttRecs{tt_ind}, ~ ] = ...
                 NlxGetNewTTData(tt_lab);
             
             % Center ts at poll start
             if ~isempty(D.TT.ttTS{tt_ind})
                 D.TT.ttTS{tt_ind} = D.TT.ttTS{tt_ind} - D.T.poll_str_nlx;
+            end
+            
+            % Check if streaming failed
+            if succeeded ~= 1
+                Console_Write(sprintf('**WARNING** [TT_Get] NlxGetNewTTData(%s) FAILED', tt_lab));
             end
             
         end
@@ -11219,7 +11125,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get Cheetah time stamp
-            if D.F.cheetah_open
+            if D.F.cheetah_running
                 
                 % Get time stamp
                 [pass, ts_string] = Send_M2NLX('-GetTimestamp', false);
@@ -12869,7 +12775,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.ttLogNew.Date = {datestr(startTime, 'yyyy-mm-dd_HH-MM-SS')};
         
         % Store 'Recording File'
-         % Store 'Recording File'
+        % Store 'Recording File'
         if D.F.do_nlx_save
             D.TT.ttLogNew.Recording_File{:} = D.DIR.recFi;
         else
@@ -12918,12 +12824,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Save_Cheetah_Data] RUNNING: Wait for Cheetah Close...');
         
         % Confirm that Cheetah is closed
-        if D.F.cheetah_open || D.F.spikesort_open
+        if D.F.cheetah_running || D.F.spikesort_open
             
             % Get message string
-            if D.F.cheetah_open && D.F.spikesort_open
+            if D.F.cheetah_running && D.F.spikesort_open
                 msg = 'Close Cheetah & SpikeSort3D';
-            elseif D.F.cheetah_open
+            elseif D.F.cheetah_running
                 msg = 'Close Cheetah';
             elseif D.F.spikesort_open
                 msg = 'Close SpikeSort3D';
@@ -12966,9 +12872,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 cnt_prompt = cnt_prompt+1;
                 
                 % Get message
-                if D.F.cheetah_open && D.F.spikesort_open
+                if D.F.cheetah_running && D.F.spikesort_open
                     msg = '!!WARNING: CHEETAH && SPIKESORT3D OPEN!!';
-                elseif D.F.cheetah_open
+                elseif D.F.cheetah_running
                     msg = '!!WARNING: CHEETAH OPEN!!';
                 elseif D.F.spikesort_open
                     msg = '!!WARNING: SPIKESORT3D OPEN!!';
@@ -12999,14 +12905,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check Cheetah.EXE status
             [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
-            D.F.cheetah_open = any(strfind(result, 'Cheetah.exe'));
+            D.F.cheetah_running = any(strfind(result, 'Cheetah.exe'));
             
             % Check SpikeSort3D.EXE status
             [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
             D.F.spikesort_open = any(strfind(result, 'SpikeSort3D.exe'));
             
             % Bail once open
-            if ~D.F.cheetah_open && ~D.F.spikesort_open
+            if ~D.F.cheetah_running && ~D.F.spikesort_open
                 break
             end
             
@@ -13342,6 +13248,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get user data
         mon_ind = get(hObject, 'UserData');
         val = hObject.Value;
+        
+        % Make sure GUI back on top
+        set(FIGH,'WindowStyle','modal')
+        pause(0.01)
+        set(FIGH,'WindowStyle','normal')
         
         % Can only set to select
         if val == 0 && all([D.UI.toggMon(:).Value] == 0)
@@ -14802,7 +14713,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.do_save = true;
         
         % Check if cheetah data should be saved
-        if D.F.cheetah_open
+        if D.F.cheetah_running
             
             % Show dialogue
             dlg_h = dlgAWL( ...
@@ -18407,7 +18318,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Check if Cheetah open
-        if ~D.F.cheetah_open
+        if ~D.F.cheetah_running
             
             % Log/print skipping
             Console_Write(sprintf('[Send_M2NLX] SKIPPED: m2nlx: msg="%s"', msg));

@@ -56,8 +56,6 @@ namespace ICR_Run
             public bool do_printRobLog;
             // Print cheetahdue log
             public bool do_printDueLog;
-            // Is Cheetah already running
-            public bool is_cheetahAlreadyOpen;
             // Flag if doing any debugging
             public bool is_debugRun;
 
@@ -81,7 +79,6 @@ namespace ICR_Run
                 do_printSentRobVT = do_print_sent_rob_vt;
                 do_printRobLog = do_print_rob_log;
                 do_printDueLog = do_print_due_log;
-                is_cheetahAlreadyOpen = false;
                 is_debugRun = system_test != 0 || break_debug > 0 || do_autoload_ui;
             }
         }
@@ -457,41 +454,6 @@ namespace ICR_Run
                 fc.LogWarning("**WARINING**  [Setup] ABORTED: WAIT FOR: ICR_GUI to Load");
                 fc.isMatComActive = false;
                 return false;
-            }
-
-            // START CHEETAH IF NOT RUNNING
-
-            csLog.Print("[Setup] RUNNING: Run Cheetah.exe...");
-
-            // Check if this should be skipped
-            if (!fc.doSessionICR && !fc.doSessionTurnTT)
-            {
-                csLog.Print("[Setup] SKIPPED: Run Cheetah.exe");
-            }
-
-            // Run Cheetah
-            else
-            {
-                // Flag if already open
-                db.is_cheetahAlreadyOpen = IsProcessOpen("Cheetah");
-
-                // Keep attempting open
-                while (!IsProcessOpen("Cheetah") && !fc.doAbortCS)
-                {
-                    OpenCheetah("Cheetah.cfg");
-                }
-                if (IsProcessOpen("Cheetah"))
-                    csLog.Print("[Setup] SUCCEEDED: Run Cheetah.exe");
-                else
-                {
-                    if (!fc.doAbortCS)
-                    {
-                        fc.LogError("!!ERROR!! [Setup] FAILED: Run Cheetah.exe");
-                    }
-                    else
-                        fc.LogError("!!ERROR!! [Setup] ABORTED: Run Cheetah.exe");
-                    return false;
-                }
             }
 
             // WAIT FOR MATLAB TO CONNECT TO AC COMPUTER
