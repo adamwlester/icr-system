@@ -516,7 +516,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
         D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
         D.DIR.recFi = '0000-00-00_00-00-00';
-        D.DIR.nlxSS3DTop = 'C:\Program Files (x86)\Neuralynx\SpikeSort 3D';
+        D.DIR.nlxSS3DTop = 'C:\Program Files (x86)\Neuralynx\SpikeSort3D';
         
         % Log dirs
         D.DIR.logFi = 'ICR_GUI_Log.csv';
@@ -1400,8 +1400,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check if GUI was forced close
         if ~FORCECLOSE
-            
-            % Log/print
             Console_Write('[ICR_GUI] RUNNING: Normal Exit Procedure...');
             
             % Pause then shut it all down
@@ -13981,7 +13979,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
         D.TT.clust_files = dir(clust_fi_dir);
         D.TT.clust_files = {D.TT.clust_files.name};
-        D.TT.clust_files = regexp(D.TT.clust_files,'TT\d\d.ncf','match');
+        D.TT.clust_files = regexp(D.TT.clust_files,'TT\d\d.NCF','match');
         D.TT.clust_files = [D.TT.clust_files{:}];
         
         % Open stream
@@ -13993,6 +13991,41 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Bail if ref
             if contains(tt_lab, 'R')
                 continue
+            end
+            
+            % Parse clust file
+            if val == 1
+                
+                % Check if file exists
+                fi_ind = find(ismember(D.TT.clust_files, [tt_lab, '.NCF']));
+                if ~isempty(fi_ind)
+                    
+                    % Read in file text
+                    file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
+                    file_str = fread(file_id,'*char')';
+                    fclose(file_id);
+                    
+                    % Parse file for number of clusters
+                    clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
+                    
+                    % Store number of clusters
+                    D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
+                    
+                end
+                
+                % Include cluster 0 in count
+                D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
+                
+                % Include cluster 0 in all streaming tts
+                D.F.stream_clust(z_tt, 1) = val == 1;
+                
+                % Enable clust buttons
+                Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
+                for z_c = 1:D.TT.nClust(z_tt)
+                    Safe_Set(D.UI.toggSubPlotTT(z_tt,z_c), ...
+                        'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
+                end
+                
             end
             
             % Initialize flag
@@ -14036,41 +14069,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 continue
             end
             
-            % Parse clust file
-            if val == 1
-                
-                % Check if file exists
-                fi_ind = find(ismember(D.TT.clust_files, [tt_lab, '.ncf']));
-                if ~isempty(fi_ind)
-                    
-                    % Read in file text
-                    file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
-                    file_str = fread(file_id,'*char')';
-                    fclose(file_id);
-                    
-                    % Parse file for number of clusters
-                    clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
-                    
-                    % Store number of clusters
-                    D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
-                    
-                end
-                
-                % Include cluster 0 in count
-                D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
-                
-                % Include cluster 0 in all streaming tts
-                D.F.stream_clust(z_tt, 1) = val == 1;
-                
-                % Enable clust buttons
-                Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
-                for z_c = 1:D.TT.nClust(z_tt)
-                    Safe_Set(D.UI.toggSubPlotTT(z_tt,z_c), ...
-                        'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
-                end
-                
-            end
-            
         end
         
         % Enable/setup plotting
@@ -14098,6 +14096,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Disable all flags
             D.F.stream_clust(:) = false;
+            
+            % Reset count
+            D.TT.nClust(:) = 0;
             
             % Disable ephys plottng objects
             Object_Group_State('TT_Plot_Objects', 'Disable')

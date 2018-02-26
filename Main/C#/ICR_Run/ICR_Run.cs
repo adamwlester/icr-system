@@ -704,7 +704,7 @@ namespace ICR_Run
             // WAIT FOR SESSION SETUP CONFIRMATION
 
             csLog.Print("[Setup] RUNNING: WAIT FOR...: Setup Parameters from MATLAB...");
-            pass = WaitForMCOM(id: 'S', dat1:2, chk_rcv: true, do_abort: true);
+            pass = WaitForMCOM(id: 'S', dat1: 2, chk_rcv: true, do_abort: true);
             if (pass)
             {
                 pass = WaitForSerial(id: 'S', dat1: 2, chk_send: true, chk_conf: true, do_abort: true);
@@ -2611,7 +2611,7 @@ namespace ICR_Run
                 if (!fc.isSesSaved)
                 {
                     // Start exiting early
-                    fc.doAbortCS = true;
+                    fc.SetAbort(set_abort_cs: true);
 
                     // Print warning
                     if (!fc.isGUIquit)
@@ -2622,8 +2622,8 @@ namespace ICR_Run
                 if (dat[0] == 2)
                 {
                     // Start exiting early
-                    fc.doAbortCS = true;
-
+                    fc.SetAbort(set_abort_cs: true);
+                    
                     // Print error
                     csLog.Print_Thread("**WARNING** [DoWork_MatCOM] ICR_GUI FORCED QUIT");
                 }
@@ -3250,7 +3250,7 @@ namespace ICR_Run
             if (set_abort_cs)
             {
                 doAbortCS = true;
-                LogWarning("**WARNING** [Flow_Control\\SetAbort] SET ABORT CS");
+                LogWarning("**WARNING** [Flow_Control::SetAbort] SET ABORT CS");
             }
 
             // Set received check flag
@@ -3264,14 +3264,14 @@ namespace ICR_Run
                 {
                     doHardAbortMat = true;
                     doAbortCS = true;
-                    LogWarning("**WARNING** [Flow_Control\\SetAbort] SET HARD ABORT MATLAB");
+                    LogWarning("**WARNING** [Flow_Control::SetAbort] SET HARD ABORT MATLAB");
                 }
 
                 // Attempt to save data
                 else if (isRatInArena && !isGUIquit)
                 {
                     doSoftAbortMat = true;
-                    LogWarning("**WARNING** [Flow_Control\\SetAbort] SET SOFT ABORT MATLAB");
+                    LogWarning("**WARNING** [Flow_Control::SetAbort] SET SOFT ABORT MATLAB");
                 }
 
             }
@@ -3282,7 +3282,7 @@ namespace ICR_Run
                 isMatFailed = true;
                 doAbortCS = true;
                 doAbortMat = true;
-                LogError("!!ERROR!! [Flow_Control\\SetAbort] MATLAB HAS FAILED/CRASHED");
+                LogError("!!ERROR!! [Flow_Control::SetAbort] MATLAB HAS FAILED/CRASHED");
             }
 
             // Set main flag
@@ -3309,7 +3309,9 @@ namespace ICR_Run
             bool do_cont = isMatComActive && !isMatFailed && !doExit;
             if (!do_cont)
             {
-                LogWarning("**WARNING** [Flow_Control\\ContinueMatCom] RETURNED DISCONTINUE");
+                string flag_str = String.Format("isMatComActive={0} isMatFailed={1} doExit={2}",
+                    isMatComActive, isMatFailed, doExit);
+                _csLog.Print("   [Flow_Control::ContinueMatCom] RETURNED DISCONTINUE FLAG: " + flag_str);
             }
             return do_cont;
         }
@@ -3320,7 +3322,9 @@ namespace ICR_Run
             bool do_cont = isRobComActive && !doExit;
             if (!do_cont)
             {
-                LogWarning("**WARNING** [Flow_Control\\ContinueRobCom] RETURNED DISCONTINUE");
+                string flag_str = String.Format("isRobComActive={0} doExit={1}",
+                    isRobComActive, doExit);
+                _csLog.Print("   [Flow_Control::ContinueRobCom] RETURNED DISCONTINUE FLAG: " + flag_str);
             }
             return do_cont;
         }
@@ -3331,7 +3335,9 @@ namespace ICR_Run
             bool do_cont = isArdComActive && !doExit;
             if (!do_cont)
             {
-                LogWarning("**WARNING** [Flow_Control\\ContinueArdCom] RETURNED DISCONTINUE");
+                string flag_str = String.Format("isArdComActive={0} doExit={1}", 
+                    isArdComActive, doExit);
+                _csLog.Print("   [Flow_Control::ContinueArdCom] RETURNED DISCONTINUE FLAG: " + flag_str);
             }
             return do_cont;
         }
@@ -3430,7 +3436,7 @@ namespace ICR_Run
                 lock (_lock_isDone)
                     _isDone[id_ind] = state;
             }
-            
+
         }
 
         // Get check status
