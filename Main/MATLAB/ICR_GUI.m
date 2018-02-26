@@ -1310,6 +1310,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if D.F.do_save
                         Console_Write('[Run:MainLoop] SAVE INITIATED');
                         
+                        % Stop recording and aquisition
+                        if D.F.cheetah_running
+                            if Safe_Get(D.UI.toggRec,'Value') == 1
+                                Safe_Set(D.UI.toggRec,'Value', 0);
+                                ToggRec(D.UI.toggRec);
+                            end
+                            if Safe_Get(D.UI.toggAcq,'Value') == 1
+                                Safe_Set(D.UI.toggAcq, 'Value', 0)
+                                ToggAcq(D.UI.toggAcq);
+                            end
+                        end
+                        
                         % Save health and general data
                         Console_Write('[Run:MainLoop] RUNNING: "Save_General_Data()"...');
                         Save_General_Data();
@@ -12965,11 +12977,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Console_Write('[Disconnect_NLX] RUNNING: Disconnect from NLX...');
                     
                     % Stop recording and aquisition
-                    if ISMATSOLO
-                        Send_M2NLX('-StopRecording');
-                        Send_M2NLX('-StopAcquisition');
-                        pause(0.1);
-                    end
+                    Send_M2NLX('-StopRecording');
+                    Send_M2NLX('-StopAcquisition');
+                    pause(0.1);
                     
                     % Close VT stream
                     if isfield(D.NLX, 'vt_rat_ent')
@@ -17794,7 +17804,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Button_State(D.UI.toggPlotTypeTT, 'Disable');
                 
                 % Hide semitransparent backround
-                if D.F.implant_session
+                if D.F.implant_session && D.PAR.sesType == 'ICR_Session'
                     Safe_Set(D.UI.ttMask, 'Visible', 'off')
                 end
                 

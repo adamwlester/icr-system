@@ -963,7 +963,11 @@ namespace ICR_Run
 
             // SHUT DOWN NETCOM
 
-            if (IsProcessOpen("Cheetah"))
+            if (!fc.doSessionICR || !IsProcessOpen("Cheetah"))
+            {
+                csLog.Print("[Exit] SKIPPED: NetCom Disconnect");
+            }
+            else
             {
                 csLog.Print("[Exit] RUNNING: NetCom Disconnect...");
                 //// Stop recording aquisition
