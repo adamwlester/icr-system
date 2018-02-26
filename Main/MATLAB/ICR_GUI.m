@@ -790,7 +790,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % UPDATE GUI
             if ~D.F.ui_updated
-                Update_UI(10);
+                Update_UI(30);
             end
             D.F.ui_updated = false;
             
@@ -1115,7 +1115,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.F.task_setup = true;
                             
                             % Refresh UI
-                            Update_UI(0);
+                            Update_UI(11);
                             
                         case 'WAIT FOR MATLAB STREAMING'
                             
@@ -1563,7 +1563,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Pixel width/height
         D.UI.vtRes = round(D.PAR.R*2);
         
-        % Rrack plot bounds [left, bottom]
+        % Track plot bounds [left, bottom]
         D.UI.lowLeft = round([D.PAR.XC-D.PAR.R, D.PAR.YC-D.PAR.R]);
         
         % Calculate pixel to cm conversion factors
@@ -1589,6 +1589,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % forage roh limits
         D.P.frgRohBnd(1) = (D.UI.frgRad/D.UI.arnRad) - (D.UI.frgTargDpth/D.UI.arnRad);
         D.P.frgRohBnd(2) = D.UI.frgRad/D.UI.arnRad;
+        % vel exlcude
+        D.P.velExc = 300;
         
         % FORAGE TASK VARS
         
@@ -1915,9 +1917,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % pos rad
         D.P.Rat.rad = NaN;
         D.P.Rob.rad = NaN;
-        % last valid rad
+        % last valid rad and ts
         D.P.Rat.radLast = NaN;
         D.P.Rob.radLast = NaN;
+        D.P.Rat.tsLast = NaN;
+        D.P.Rob.tsLast = NaN;
         % vel radian
         D.P.Rat.velRad = NaN;
         D.P.Rob.velRad = NaN;
@@ -4207,9 +4211,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % NLX setup config
                 if D.F.implant_session
-                    top_cfg_fi = 'Cheetah_ICR_Ephys.cfg';
+                    top_cfg_fi = 'ICR_Cheetah_Ephys.cfg';
                 else
-                    top_cfg_fi = 'Cheetah_ICR_Behavior.cfg';
+                    top_cfg_fi = 'ICR_Cheetah_Behavior.cfg';
                 end
                 
                 % Store current directory
@@ -7077,8 +7081,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.rewTargBnds = NaN(length(D.PAR.frgTargDegArr),2);
         for z_targ = 1:length(D.PAR.frgTargDegArr)
             D.PAR.rewTargBnds(z_targ,:) = [...
-                Rad_Diff(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.frgTargWdt/2)), ...
-                Rad_Sum(deg2rad(D.PAR.frgTargDegArr(z_targ)), deg2rad(D.PAR.frgTargWdt/2))];
+                Rad_Diff(deg2rad(D.PAR.frgTargWdt/2), deg2rad(D.PAR.frgTargDegArr(z_targ)), 'wrap'), ...
+                Rad_Sum(deg2rad(D.PAR.frgTargWdt/2), deg2rad(D.PAR.frgTargDegArr(z_targ)))];
         end
         D.PAR.rewTargBnds = wrapTo2Pi(D.PAR.rewTargBnds);
         
@@ -8016,7 +8020,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get first target set to 180 deg from 'NE'
         D.I.targ_now = ...
-            find(round(rad2deg(Rad_Sum(mean(D.PAR.strQuadBnds), pi))) == D.PAR.frgTargDegArr);
+            find(round(rad2deg(Rad_Sum(pi, mean(D.PAR.strQuadBnds)))) == D.PAR.frgTargDegArr);
         Patch_State(D.UI.ptchRewTargBnds(D.I.targ_now), ...
             'Active', D.UI.activeCol);
         
@@ -8151,6 +8155,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DB.SIM.SldVelLast = NaN;
             D.DB.SIM.t_resumeRun = 0;
             D.DB.isTestStarted = false;
+            
+            % Set streaming flag
+            D.F.vt_rat_streaming = true;
             
             % Create rat velocity slider object
             pos_sld = [D.UI.ses_inf_pan_pos(1)-0.185, 1-0.025, 0.175, 0.02];
@@ -8548,17 +8555,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 exc_1 = roh > D.P.frgRohBnd(2) | roh < 0;
             end
             
-            % Exclude values based on current sample diff
-            rad_diff = abs(diff([D.P.(fld).radLast; rad]));
-            exc_2 = ...
-                rad_diff > (1/8)*0.9*(2 * pi) &...
-                rad_diff < 0.9*(2 * pi);
+            % Exclude velocity values based on each preceding record
+            vel_1 = Rad_Vel([D.P.(fld).radLast; rad], [D.P.(fld).radLast; ts]);
+            exc_2 = vel_1 > D.P.velMax;
             
-            % Exclude values based last used sample diff
-            rad_diff_last = abs(rad - D.P.(fld).radLast);
-            exc_3 = ...
-                rad_diff_last > (1/8)*0.9*(2 * pi) &...
-                rad_diff_last < 0.9*(2 * pi);
+            % Exclude values based on last used record
+            vel_2 = Rad_Vel(...
+                reshape([repmat(D.P.(fld).radLast, 1, length(rad)); rad'], [], 1), ...
+                reshape([repmat(D.P.(fld).tsLast, 1, length(ts)); ts'], [], 1));
+            exc_3 = vel_2(1:2:end) > D.P.velMax;
             
             % Do not use exc_2/3 if "Forage" run
             if  (D.PAR.sesTask == 'Forage' && strcmp(fld, 'Rat'))
@@ -8573,9 +8578,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Combine exclusion criteria
             exc_ind = exc_1 | exc_2 | exc_3;
-            
-            % TEMP
-            %exc_ind = false(size(rad,1), 1);
             
             % Set bad recs to empty
             rad(exc_ind) = [];
@@ -8613,8 +8615,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Keep track of updates
                 D.T.(fld).last_pos_update = Sec_DT(now);
                 
-                % Save last usable rad value
+                % Save last usable rad and ts value
                 D.P.(fld).radLast = rad(end);
+                D.P.(fld).tsLast = ts(end);
                 
                 % Save last
                 D.P.(fld).xLast = x(end);
@@ -8750,7 +8753,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.P.(fld).velRad = D.P.Rob.setRad;
             else
                 % Use rat pos and check for rad 'jumps'
-                if abs(angdiff(D.P.(fld).velRad,D.P.Rat.radLast)) > deg2rad(20)
+                if Rad_Diff(D.P.(fld).velRad, D.P.Rat.radLast, 'min') > deg2rad(20)
                     set_vel_nan = true;
                 end
                 D.P.(fld).velRad = D.P.Rat.radLast;
@@ -8788,11 +8791,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if length(rad_arr) < 1
                 vel = [];
             else
-                rad_diff = min(2*pi - abs(diff(rad_arr)), ...
-                    abs(diff(rad_arr)));
-                dt = double(diff(ts_arr)) / 10^6;
-                cm = rad_diff * ((140 * pi)/(2 * pi));
-                vel = cm./dt;
+                vel = Rad_Vel(rad_arr, ts_arr);
             end
             
             % Get next vel hisory ind
@@ -9183,17 +9182,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.plot(4) = D.DB.plot(1) + D.DB.plot(4);
         D.DB.plot(5) = D.DB.plot(5) + 1;
         
-        % Flag just plotted
-        D.F.ui_updated = ...
-            D.F.Rob.new_pos_data || ...
-            D.F.Rob.new_pos_data || ...
-            D.F.Rob.new_vel_data || ...
-            D.F.Rob.new_vel_data || ...
-            D.F.Rat.new_hd_data;
-        
         % Update UI
-        if D.F.ui_updated
-            Update_UI(0);
+        if ...
+            D.F.Rob.new_pos_data || ...
+            D.F.Rob.new_pos_data || ...
+            D.F.Rob.new_vel_data || ...
+            D.F.Rob.new_vel_data || ...
+            D.F.Rat.new_hd_data
+        
+            Update_UI(11);
         end
         
         % Reset flags
@@ -9922,8 +9919,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update UI
-        D.F.ui_updated = true;
-        Update_UI(0);
+        Update_UI(11);
         
     end
 
@@ -10328,8 +10324,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 sum([D.C.rew_cnt{:}]), D.PAR.zone_hist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
             
             % Update UI
-            Update_UI(0);
-            D.F.ui_updated = true;
+            Update_UI(11);
             
         end
         
@@ -10446,8 +10441,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('[Track_Reward_Zone_Check] Crossed Reward Bounds: cross_cnt=%d', D.C.rew_cross_cnt));
             
             % Update UI
-            Update_UI(0);
-            D.F.ui_updated = true;
+            Update_UI(11);
             
         end
         
@@ -10533,8 +10527,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.PAR.frgTargDegArr(D.I.targ_last), inbndTim));
             
             % Update UI
-            Update_UI(0);
-            D.F.ui_updated = true;
+            Update_UI(11);
             
             % Bail
             return
@@ -10750,8 +10743,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.lap_str = Sec_DT(now);
         
         % Update UI
-        Update_UI(0);
-        D.F.ui_updated = true;
+        Update_UI(11);
         
     end
 
@@ -10945,8 +10937,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.DB.loop(3) >= 999; D.DB.loop(3) = 0; end
         
         % Update UI
-        D.F.ui_updated = true;
-        Update_UI(0)
+        Update_UI(11)
         
     end
 
@@ -11074,6 +11065,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     D.DB.SIM.RunRad = deg2rad(ang_new);
                     
+                    % Set start button active
+                    Safe_Set(D.UI.btnStart, 'Value', 1)
+                    
                     % Store forage roh
                     roh_now = mean(D.P.frgRohBnd);
                 else
@@ -11200,7 +11194,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Compute rad change
                     rad_diff = cm / ((140 * pi)/(2 * pi));
-                    rad_now = Rad_Diff(D.DB.SIM.RadLast, rad_diff);
+                    rad_now = Rad_Diff(rad_diff, D.DB.SIM.RadLast, 'wrap');
                     D.DB.SIM.RadLast = rad_now;
                     
                     % Get side to side movement
@@ -11245,7 +11239,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.SIM.RohLast = roh_now;
                     
                     % Convert rad back to cart
-                    xy_pos = Pol_2_VT(wrapTo2Pi(rad_now), roh_now);
+                    xy_pos = Pol_2_VT(rad_now, roh_now);
                     D.DB.SIM.XY = reshape(xy_pos', 1, []);
                     
                 elseif D.PAR.sesTask == 'Forage'
@@ -11317,7 +11311,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     rad_diff = rad_diff*scale;
                     
                     % Get total rad diff
-                    rad_now = Rad_Sum(D.DB.SIM.RadLast, rad_diff);
+                    rad_now = D.DB.SIM.RadLast + rad_diff;
                     
                     % Change direction
                     thresh = rand(1,1)*0.5;
@@ -11339,11 +11333,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.SIM.RadLast = rad_now;
                     
                     % Orient to current run direction
-                    rad_now = Rad_Sum(D.DB.SIM.RunRad, rad_now);
+                    rad_now = ...
+                        Rad_Sum(D.DB.SIM.RunRad, rad_now);
                     
                     % Convert to cart
                     %rad_now = D.DB.SIM.RunRad;
-                    rad = wrapTo2Pi(rad_now);
+                    rad = rad_now;
                     rad = abs(rad - 2*pi);
                     rad = wrapToPi(rad);
                     
@@ -11631,7 +11626,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Save and print halt error
                 % Store halt error
-                halt_err = Rad_Diff(D.P.Rob.radLast, D.DB.HALT.SendPos) * ((140*pi)/(2*pi));
+                halt_err = ...
+                    Rad_Diff(D.P.Rob.radLast, D.DB.HALT.SendPos, 'min') * ((140*pi)/(2*pi));
                 D.DB.HALT.error(1) = halt_err;
                 D.DB.HALT.error(2) = min(D.DB.HALT.error(1), D.DB.HALT.error(2));
                 D.DB.HALT.error(3) = min(999, max(D.DB.HALT.error(1), D.DB.HALT.error(3)));
@@ -12997,12 +12993,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Close TT stream
-                    if get(D.UI.toggStreamTTs, 'Value') == 1
-                        for z_tt = 1:length(D.TT.clust_files)
-                            stt = NlxCloseStream(D.TT.clust_files{z_tt}(1:4));
-                            Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
-                                D.TT.clust_files{z_tt}(1:4), stt));
-                        end
+                    if Safe_Get(D.UI.toggStreamTTs, 'Value') == 1
+                        
+                        % Unset stream tt and run callback
+                        Safe_Set(D.UI.toggStreamTTs, 'Value', 0)
+                        ToggStreamTTs(D.UI.toggStreamTTs);
                     end
                     
                     % Disconnect from the NLX server
@@ -13268,18 +13263,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Move Ephys windows
                 if mon_ind == 1 || mon_ind == 2
-                    cfg_fi = 'ICR_WinPos_Ephys_M1.cfg';
+                    cfg_fi = 'ICR_Set_Window_Position_Ephys_M1.cfg';
                 else
-                    cfg_fi = 'ICR_WinPos_Ephys_M3.cfg';
+                    cfg_fi = 'ICR_Set_Window_Position_Ephys_M3.cfg';
                 end
                 
             else
                 
                 % Move Behavior windows
                 if mon_ind == 1 || mon_ind == 2
-                    cfg_fi = 'ICR_WinPos_Behavior_M1.cfg';
+                    cfg_fi = 'ICR_Set_Window_Position_Behavior_M1.cfg';
                 else
-                    cfg_fi = 'ICR_WinPos_Behavior_M3.cfg';
+                    cfg_fi = 'ICR_Set_Window_Position_Behavior_M3.cfg';
                 end
                 
             end
@@ -13963,26 +13958,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ----------------------------CELLS CUT BUTTON-----------------------------
-    function ToggStreamTTs(~, ~, ~)
+    function ToggStreamTTs(hObject, ~, ~)
+        
+        % Get handle values
+        val = get(hObject, 'Value');
+        %is_ran = get(hObject, 'UserData') == 1;
         
         % Upate button
         Button_State(D.UI.toggStreamTTs, 'Update');
-        
-        % Only run once
-        if D.UI.toggStreamTTs.UserData == 1
-            
-            % Enable/Disable ephys objects
-            if D.UI.toggStreamTTs.Value == 1
-                Object_Group_State('TT_Plot_Objects', 'Enable')
-            else
-                Object_Group_State('TT_Plot_Objects', 'Disable')
-            end
-            
-            % Bail
-            return
-        else
-            D.UI.toggStreamTTs.UserData = 1;
-        end
         
         % Get a list of ncf files
         clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
@@ -13991,7 +13974,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.clust_files = regexp(D.TT.clust_files,'TT\d\d.ncf','match');
         D.TT.clust_files = [D.TT.clust_files{:}];
         
-        % Parse cluster file
+        % Open stream
         for z_tt = 1:length(D.TT.ttList)
             
             % Get tt label
@@ -14002,76 +13985,114 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 continue
             end
             
+            % Initialize flag
+            succeeded = false;
+            
             % Open tt stream
-            if any(contains(D.NLX.das_objects, tt_lab))
-                succeeded = NlxOpenStream(tt_lab) == 1;
-                Console_Write(sprintf('[ToggStreamTTs] FINISHED: Open NLX "%s" Stream: status=%d', ...
-                    tt_lab, succeeded));
-            else
-                Console_Write(sprintf('!!ERROR!! [ToggStreamTTs] Missing DAS Object: "%s"', tt_lab));
+            if val == 1
+                msg = sprintf('Open \"%s\" Stream', tt_lab);
+                if any(contains(D.NLX.das_objects, tt_lab))
+                    succeeded = NlxOpenStream(tt_lab) == 1;
+                end
+            end
+            
+            % Close tt stream
+            if val == 0
+                msg = sprintf('Close \"%s\" Stream', tt_lab);
+                if any(contains(D.NLX.das_objects, tt_lab))
+                    succeeded = NlxCloseStream(tt_lab) == 1;
+                end
             end
             
             % Check status
             if succeeded
                 
                 % Log/print success
-                Console_Write(sprintf('[ToggStreamTTs] FINISHED: Open \"%s\" Stream', tt_lab));
+                Console_Write(sprintf('[ToggStreamTTs] FINISHED: %s', msg));
                 
                 % Set flag
-                D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  true;
+                D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
                 
             else
                 
-                % Log/print error
-                Console_Write(sprintf('**WARNING** [ToggStreamTTs] FAILED: Open \"%s\" Stream', tt_lab));
+                % Check for missing das
+                if ~any(contains(D.NLX.das_objects, tt_lab))
+                    Console_Write(sprintf('**WARNING** [ToggStreamTTs] ABORTED: %s: Missing DAS Object', msg));
+                else
+                    Console_Write(sprintf('**WARNING** [ToggStreamTTs] FAILED: %s', msg));
+                end
                 
                 % Bail
                 continue
             end
             
-            % Check if file exists
-            fi_ind = find(ismember(D.TT.clust_files, [tt_lab, '.ncf']));
-            if ~isempty(fi_ind)
+            % Parse clust file
+            if val == 1
                 
-                % Read in file text
-                file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
-                file_str = fread(file_id,'*char')';
-                fclose(file_id);
+                % Check if file exists
+                fi_ind = find(ismember(D.TT.clust_files, [tt_lab, '.ncf']));
+                if ~isempty(fi_ind)
+                    
+                    % Read in file text
+                    file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
+                    file_str = fread(file_id,'*char')';
+                    fclose(file_id);
+                    
+                    % Parse file for number of clusters
+                    clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
+                    
+                    % Store number of clusters
+                    D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
+                    
+                end
                 
-                % Parse file for number of clusters
-                clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
+                % Include cluster 0 in count
+                D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
                 
-                % Store number of clusters
-                D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
+                % Include cluster 0 in all streaming tts
+                D.F.stream_clust(z_tt, 1) = val == 1;
                 
-            end
-            
-            % Include cluster 0 in count
-            D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
-            
-            % Include cluster 0 in all streaming tts
-            D.F.stream_clust(z_tt, 1) = true;
-            
-            % Enable clust buttons
-            Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
-            for z_c = 1:D.TT.nClust(z_tt)
-                Safe_Set(D.UI.toggSubPlotTT(z_tt,z_c), ...
-                    'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
+                % Enable clust buttons
+                Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
+                for z_c = 1:D.TT.nClust(z_tt)
+                    Safe_Set(D.UI.toggSubPlotTT(z_tt,z_c), ...
+                        'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
+                end
+                
             end
             
         end
         
-        % Set callback
-        Safe_Set(D.UI.toggSubPlotTT, ...
-            'Callback', {@ToggSubPlotTT})
+        % Enable/setup plotting
+        if val == 1
+            
+            % Set callback
+            Safe_Set(D.UI.toggSubPlotTT, ...
+                'Callback', {@ToggSubPlotTT})
+            
+            % Initialize clust pos vals
+            [D.TT.posClust{D.F.stream_clust}] =  deal(cell2struct( ...
+                {[1,0], [1,0], single(NaN(120*60*33,2)), single(NaN(120*60*33,2)), NaN(120*60*33,1)}, ...
+                {'indLap', 'indAll', 'Cart', 'Pol', 'TS'}, 2));
+            
+            % Enable ephys plottng objects
+                Object_Group_State('TT_Plot_Objects', 'Enable')
+            
+            % Set ran flag
+            D.UI.toggStreamTTs.UserData = 1;
+            
+        end
         
-        % Initialize clust pos vals
-        [D.TT.posClust{D.F.stream_clust}] =  deal(cell2struct( ...
-            {[1,0], [1,0], single(NaN(120*60*33,2)), single(NaN(120*60*33,2)), NaN(120*60*33,1)}, ...
-            {'indLap', 'indAll', 'Cart', 'Pol', 'TS'}, 2));
-        
-        % Enable ephys objects
-        Object_Group_State('TT_Plot_Objects', 'Enable')
+        % Disable plotting
+        if val == 0
+            
+            % Disable all flags
+            D.F.stream_clust(:) = false;
+            
+            % Disable ephys plottng objects
+            Object_Group_State('TT_Plot_Objects', 'Disable')
+            
+        end
         
         % Update UI
         if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
@@ -14125,22 +14146,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if sleep_phase == 2
                 
                 % Log/print
-                Console_Write('[ToggSleep] RUNNING: Load "ICR_Ephys_Sleep_Tracking.cfg"');
+                Console_Write('[ToggSleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
                 % Stop aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 0)
                 ToggAcq(D.UI.toggAcq);
                 
                 % Load sleep tracking config
-                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Sleep_Tracking.cfg');
-                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Ephys_Sleep_Tracking.cfg"');
+                Send_M2NLX('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Sleep.cfg');
+                Console_Write('[Finish_NLX_Setup] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
                 % Start aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 1)
                 ToggAcq(D.UI.toggAcq);
                 
                 % Log/print
-                Console_Write('[ToggSleep] FINISHED: Load "ICR_Ephys_Sleep_Tracking.cfg"');
+                Console_Write('[ToggSleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
             end
             
@@ -14166,7 +14187,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if sleep_phase == 1
                 
                 % Log/print
-                Console_Write('[ToggSleep] RUNNING: Load "ICR_Ephys_Task_Tracking.cfg"');
+                Console_Write('[ToggSleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
                 
                 % Stop recording and aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 0)
@@ -14174,14 +14195,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Load sleep tracking config
                 pause(0.5);
-                Send_M2NLX('-ProcessConfigurationFile ICR_Ephys_Task_Tracking.cfg');
+                Send_M2NLX('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Task.cfg');
                 
                 % Start recording and aquisition
                 Safe_Set(D.UI.toggAcq, 'Value', 1)
                 ToggAcq(D.UI.toggAcq);
                 
                 % Log/print
-                Console_Write('[ToggSleep] FINISHED: Load "ICR_Ephys_Task_Tracking.cfg"');
+                Console_Write('[ToggSleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
                 
             end
             
@@ -15972,10 +15993,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         [tt_active_ind, clust_active_ind] = find(active_mat);
         
         % Set plot flag
-        D.F.plot_clust(tt_active_ind, clust_active_ind) = ...
-            val ~= 0 && ...
-            D.TT.posClust{tt_active_ind, clust_active_ind}.indLap(2) > ...
-            D.TT.posClust{tt_active_ind, clust_active_ind}.indLap(1);
+        for z_tt = 1:length(tt_active_ind)
+            for z_c = 1:length(clust_active_ind)
+                D.F.plot_clust(tt_active_ind(z_tt), clust_active_ind(z_c)) = ...
+                    val ~= 0 && ...
+                    D.TT.posClust{tt_active_ind(z_tt), clust_active_ind(z_c)}.indLap(2) > ...
+                    D.TT.posClust{tt_active_ind(z_tt), clust_active_ind(z_c)}.indLap(1);
+            end
+        end
         
         % Update buttons
         Button_State(D.UI.toggPlotTypeTT, 'Update');
@@ -17109,8 +17134,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     set(D.UI.btnClrTT, 'Visible', 'on');
                     Button_State(D.UI.btnClrTT, 'Enable');
                     
-                    % Enable TT plot type
-                    Button_State(D.UI.toggMainActionTT, 'Enable');
+                    % Enable TT plot action
+                    Button_State(D.UI.toggMainActionTT(2), 'Enable');
+                    
+                    % Enable TT plot type select
+                    Button_State(D.UI.toggPlotTypeTT, 'Enable');
                     
                     % Show Color bars
                     Safe_Set(D.UI.linColBarH, 'Visible', 'on')
@@ -17123,8 +17151,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Disable Clear TT
                     Button_State(D.UI.btnClrTT, 'Disable');
                     
-                    % Disable TT plot type
-                    Button_State(D.UI.toggMainActionTT, 'Disable');
+                    % Unset active plotting
+                    if D.UI.toggMainActionTT(2).Value == 1
+                        D.UI.toggMainActionTT(2).Value = 0;
+                        ToggMainActionTT(D.UI.toggMainActionTT(2));
+                    end
+                    
+                    % Disable TT plot action
+                    Button_State(D.UI.toggMainActionTT(2), 'Disable');
+                    
+                    % Disable TT plot type select
+                    Button_State(D.UI.toggPlotTypeTT, 'Disable');
                     
                     % Hide Color bars
                     Safe_Set(D.UI.linColBarH, 'Visible', 'off')
@@ -18171,8 +18208,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Check if UI should be updated
         t_now = Sec_DT(now);
         if t_now-D.T.ui_update >= dt_min
+            
+            % Run drawn now
             drawnow;
+            
+            % Store time
             D.T.ui_update = t_now;
+            
+            % Set flag
+            D.F.ui_updated = true;
             
             % Track redraw time
             if ~isfield(D, 'DB')
@@ -18428,19 +18472,56 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ------------------------COMPUTE RAD DIFF---------------------------------
-    function [rad_diff] = Rad_Diff(rad1, rad2)
-        rad_diff = rad1-rad2;
-        if rad_diff < 0
-            rad_diff = rad_diff + 2*pi;
+    function [rad_diff] = Rad_Diff(rad1, rad2, type)
+        
+        % Handle inputs
+        if isempty(rad2)
+            rd = diff(rad1);
+        else
+            rd = rad2 - rad1;
+        end
+        
+        % Compute min distance
+        if strcmp(type, 'min')
+            rad_diff = min(2*pi - abs(rd), abs(rd));
+        end
+        
+        % Subtract and keep in range [0, 2*pi]
+        if strcmp(type, 'wrap')
+            rad_diff = wrapTo2Pi(rd);
         end
     end
 
 % ------------------------COMPUTE RAD SUM----------------------------------
     function [rad_sum] = Rad_Sum(rad1, rad2)
-        rad_sum = rad1+rad2;
-        if rad_sum > 2*pi
-            rad_sum = rad_sum - 2*pi;
+         
+        % Handle inputs
+        if nargin < 2
+            rs = sum(rad1);
+        else
+            rs = rad2 + rad1;
         end
+        
+        % Keep in range [0, 2*pi]
+        rad_sum = wrapTo2Pi(rs);
+        
+        
+    end
+
+% ----------------------COMPUTE RAD VELOCITY-------------------------------
+    function [vel_arr] = Rad_Vel(rad_arr, ts_arr)
+        
+        % Compute rad diff
+        rad_diff = Rad_Diff(rad_arr, [], 'min');
+        
+        % Convert to cm
+        cm_arr = rad_diff * ((140 * pi)/(2 * pi));
+        
+        % Get dt and convert from us to sec
+        dt_arr = double(diff(ts_arr)) / 10^6;
+        
+        % Compute velocity
+        vel_arr = cm_arr./dt_arr;
     end
 
 % ----------------------GET CARTESIAN BOUNDS-------------------------------
@@ -18464,7 +18545,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if radbnds(1) > radbnds(2)
                 radbnds = wrapToPi(radbnds);
             end
-            radDist = min(2*pi - abs(radbnds(2)-radbnds(1)), abs(radbnds(2)-radbnds(1)));
+            radDist = Rad_Diff(radbnds, [], 'min');
             nPoints =  round(360 * (radDist/(2*pi))); % 360 pnts per 2*pi
             radbnds = linspace(radbnds(1), radbnds(2), nPoints);
         end

@@ -1,0 +1,78 @@
+NetCom Log File Opened - File Name:  MatlabNetComLogfile.txt
+Time Opened: (mm/dd/yyyy): 02/25/2018 At Time: 23:43:39
+NetCom Version 3.1.0
+
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:43:40 - NetworkNodeClient::ConnectToServer - Error Connecting To Server, error code: WSAECONNREFUSED - The attempt to connect was forcefully rejected.
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:43:41 - NetworkNodeClient::ConnectToServer - NetCom client connected to server 192.168.3.100 on port 26100.
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:43:41 - NodeConnectionClient::InitServerStream - Error Binding Socket, error code: UNKNOWN. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:43:46 - NodeConnectionClient::AddStreamObject - Object VT1 has been added to our stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:43:46 - NodeConnectionClient::AddStreamObject - Object VT2 has been added to our stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:43:46 - NodeConnectionClient::AddStreamObject - Object EVENTS has been added to our stream list. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT01 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT02 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT03 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT04 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT05 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT06 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT07 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT08 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:02 - NodeConnectionClient::AddStreamObject - Object TT09 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT10 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT11 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT12 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT13 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT14 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT15 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:03 - NodeConnectionClient::AddStreamObject - Object TT16 has been added to our stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object VT1 stream reference count has been decremented to 0. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object VT1 has been removed from the stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object VT2 stream reference count has been decremented to 0. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object VT2 has been removed from the stream list. Stream Type: Video
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object EVENTS stream reference count has been decremented to 0. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object EVENTS has been removed from the stream list. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT01 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT01 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT02 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT02 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT03 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT03 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT04 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT04 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT05 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT05 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT06 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT06 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT07 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT07 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT08 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT08 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT09 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT09 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT10 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:09 - NodeConnectionClient::RemoveStreamObject - Object TT10 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT11 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT11 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT12 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT12 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT13 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT13 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT14 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT14 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT15 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT15 has been removed from the stream list. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT16 stream reference count has been decremented to 0. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::RemoveStreamObject - Object TT16 has been removed from the stream list. Stream Type: Tetrode
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: SingleElectrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for SingleElectrode stream processing thread. Stream Type: SingleElectrode
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Stereotrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Stereotrode stream processing thread. Stream Type: Stereotrode
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Tetrode
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Tetrode stream processing thread. Stream Type: Tetrode
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: CSC
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for CSC stream processing thread. Stream Type: CSC
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::CloseServerStream - Error closing socket, error code: WSAENOTSOCK - The descriptor is not a socket. Stream Type: Video
+-*  ERROR  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Event stream processing thread. Stream Type: Event
+-* NOTICE  *- (mm/dd/yyyy): 02/25/2018 At Time: 23:44:10 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
+Log File Closed - End of File
+

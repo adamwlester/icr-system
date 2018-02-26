@@ -28,31 +28,15 @@ D.TT.ttList = { ...
     'TT16' ...
     };
 
-%% START CHEETAH NORMALLY
+%% START CHEETAH WITH SPECIFIED CONFIG
    
 % NLX setup
-top_cfg_fi = 'Cheetah.cfg';
-
-% Open Cheetah
-curdir = pwd;
-[~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
-not_running = strfind(result, 'INFO');
-if not_running == 1
-    cd('C:\Program Files\Neuralynx\Cheetah');
-    system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
-    %cd(curdir)
-end
-
-%% START CHEETAH WITH TEST SETUP CONFIG
-% NOTE:
-%   Can run this then run ICR_GUI    
-   
-% NLX 'Cheetah' file
-%top_cfg_fi = 'Test_Raw_Cube_Playback_Cheetah.cfg';
-top_cfg_fi = 'Test_ICR_Ephys_Cheetah.cfg';
+%cfg_sub_dir = 'Cheetah.cfg';
+%cfg_sub_dir = 'Testing\Cheetah_Raw_Playback.cfg';
+cfg_sub_dir = 'ICR_Cheetah_Ephys.cfg';
 
 % Get path to test config directory
-cfg_path = fullfile('C:\Users\Public\Documents\Cheetah\Configuration\Testing',top_cfg_fi);
+cfg_path = fullfile('C:\Users\Public\Documents\Cheetah\Configuration',cfg_sub_dir);
 
 % Open Cheetah
 curdir = pwd;
