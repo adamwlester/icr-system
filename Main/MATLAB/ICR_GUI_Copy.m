@@ -49,9 +49,6 @@ global TCPIP; % tcp object
 global FUNNOW; % current top level function
 global STATUS; % store status
 
-% TEMP
-global dlg_h
-
 % Matlab to CS communication
 global m2c; % local data struct
 global m2c_pack; % message out to CS
@@ -60,7 +57,7 @@ global m2c_dir; % current cheetah directory
 % CS to Matlab communication
 global c2m; % data struct
 
-% Initialize to computer time
+% Get start time
 startTime = now;
 
 % Initialize globals
@@ -640,14 +637,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Wait for ses type selection
         Console_Write('[Setup] RUNNING: Wait for Session Type Selection...');
-        while true
-            [abort, pass] = ...
-                Check_Flag(DOEXIT, D.F.ses_type_confirmed);
-            if abort || pass; break; end
+        while ~DOEXIT
+            Update_UI(10);
+            pause(0.001);
+            
+            % Check for flag
+            if ~DOEXIT
+                if D.F.ses_type_confirmed
+                    break;
+                end
+            end
         end
         
-        % Check status
-        if abort
+        % Bail if exit initiated
+        if DOEXIT
             Console_Write('**WARNING** [Setup] ABORTED: Wait for Session Type Selection');
             return
         else
@@ -728,27 +731,36 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % -------------------------- SETUP HANDSHAKE ----------------------
         
-        % Tell CS ready for handshake
-        Send_M2C('i');
-        
         % Wait for sync time
         Console_Write('[Setup] RUNNING: Wait for Handshake...');
         if ~ISMATSOLO
-            while true
-                [abort, pass] = ...
-                    Check_Flag(DOEXIT, c2m.('h').dat1 == 0);
-                if abort || pass; break; end
-            end
             
-            % Check status
-            if abort
-                Console_Write('**WARNING** [Setup] ABORTED: Wait for Handshake');
-                return
-            elseif pass
-                Console_Write('[Setup] FINISHED: Wait for Handshake');
-                Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
-            end
+            % Tell CS ready for handshake
+            Send_M2C('i');
             
+            % Wait for setup handshake
+            while ~DOEXIT
+                Update_UI(10);
+                pause(0.001);
+                
+                % Check for flag
+                if ~DOEXIT
+                    if c2m.('h').dat1 == 0
+                        break;
+                    end
+                end
+            end
+        end
+        
+        if DOEXIT
+            Console_Write('**WARNING** [Setup] ABORTED: Wait for Handshake');
+            return
+        end
+        
+        % Set sync time
+        if (c2m.('h').dat1 ~= 0)
+            Console_Write('[Setup] FINISHED: Wait for Handshake');
+            Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
         end
         
         % End of setup
@@ -1135,29 +1147,34 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             Console_Write('[Run:SubLoop] CONFIRMED ROBOT STREAMING');
                             
                             % Dump initial vt recs
-                            Console_Write('[Run:SubLoop] RUNNING: Dump First VT Recs...');
-                            while true
+                            Console_Write('[Run:SubLoop] RUNNING: Dump VT Recs...');
+                            while ~DOEXIT
+                                Update_UI(10);
+                                pause(0.001);
                                 
-                                % Get recs
+                                % Bail if exit initiated
+                                if DOEXIT
+                                    break;
+                                end
+                                
+                                % Get stream data
                                 VT_Get('Rat');
                                 VT_Get('Rob');
                                 Evt_Get();
                                 
-                                % Run till no new recs
-                                [abort, pass] = ...
-                                    Check_Flag(DOEXIT, ...
-                                    D.P.Rat.vtNRecs == 0 && ...
-                                    D.P.Rat.vtNRecs == 0 && ...
-                                    D.E.evtNRecs == 0);
-                                if abort || pass; break; end
-                                
+                                % Check if no new recs
+                                if ...
+                                        D.P.Rat.vtNRecs == 0 && ...
+                                        D.P.Rat.vtNRecs == 0 && ...
+                                        D.E.evtNRecs == 0
+                                    break;
+                                end
                             end
                             
-                            % Check status
-                            if abort
+                            if DOEXIT
                                 Console_Write('**WARNING** [Run:SubLoop] ABORTED: Dump VT Recs');
                                 return
-                            elseif pass
+                            else
                                 Console_Write('[Run:SubLoop] FINISHED: Dump VT Recs');
                             end
                             
@@ -1455,16 +1472,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Wait for recieved confirmation
         Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
         while exist('c2m', 'var')
-            [abort, pass] = ...
-                Check_Flag(exist('c2m', 'var'), ...
-                c2m.('C').dat1 == 1);
-            if abort || pass; break; end
+            Update_UI(10);
+            pause(0.001);
+            
+            % Check for c2m id
+            if exist('c2m', 'var')
+                if c2m.('C').dat1 == 1
+                    break;
+                end
+            end
+            
         end
-        if abort
-            Console_Write('**WARNING** [ICR_GUI] ABORTED: Wait for GUI Closed Confirm');
-        else
-            Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
-        end
+        Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
         
         % End of Exit
         Console_Write('[Exit] END: Exit()');
@@ -1682,7 +1701,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % status of Cheetah.exe
         D.F.cheetah_running = false;
         % status of SpikeSort3D.exe
-        D.F.spikesort_running = false;
+        D.F.spikesort_open = false;
         % cube connection status
         D.F.cube_connected = false;
         % nlx connected
@@ -4171,7 +4190,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% START CHEETAH
         
         % Check if Cheetah open
-        D.F.cheetah_running = Check_EXE('Cheetah.exe');
+        [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+        D.F.cheetah_running = ~any(strfind(result, 'INFO'));
         
         % Only run if not running Table_Update solo
         if ~D.F.cheetah_running && D.PAR.sesType ~= 'Table_Update'
@@ -4187,8 +4207,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
-                choice = Dlg_Wait(dlg_h);
-                
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
             else
                 choice = 'Yes';
             end
@@ -4209,7 +4232,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Run EXE with specified config
                 cd('C:\Program Files\Neuralynx\Cheetah');
                 system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [top_cfg_fi,'&']));
-                
+    
                 % Log/print
                 Console_Write(sprintf('[NLX_Setup] FINISHED: Run Cheetah.exe "%s"', top_cfg_fi));
                 
@@ -6316,21 +6339,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Wait for Cheetah to open
         Console_Write('[Finish_NLX_Setup] RUNNING: Confirm Cheetah.exe Running...');
-        while true
-            % Check EXE status
-            D.F.cheetah_running = Check_EXE('Cheetah.exe');
+        while ~DOEXIT
+            Update_UI(10);
+            pause(0.001);
             
-            % Get status
-            [abort, pass] = ...
-                Check_Flag(DOEXIT, D.F.cheetah_running);
-            if abort || pass; break; end
+            % Check for flag
+            if ~DOEXIT
+                
+                % Check EXE status
+                [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+                D.F.cheetah_running = any(strfind(result, 'Cheetah.exe'));
+                
+                if D.F.cheetah_running
+                    break;
+                end
+            end
         end
-        
-        % Check status
-        if abort
+        if DOEXIT
             Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Wait for Cheetah.exe to Open');
             return
-        elseif pass
+        else
             Console_Write('[Finish_NLX_Setup] FINISHED: Wait for Cheetah.exe to Open');
         end
         
@@ -6338,28 +6366,36 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write(sprintf('[Finish_NLX_Setup] RUNNING: Connect to NLX IP=%s...', ...
             D.NLX.ServerIP));
         
-        % Check if connection already established
+        % Run if not connected already
         D.F.nlx_connected = NlxAreWeConnected() == 1;
-        
-        % Keep attempting till success
-        while true
+        if ~D.F.nlx_connected
             
-            % Get status
-            [abort, pass] = ...
-                Check_Flag(DOEXIT, D.F.nlx_connected);
-            if abort || pass; break; end
+            % Keep attempting till success
+            while ~DOEXIT
+                Update_UI(10);
+                pause(0.001);
+                
+                % Check for flag
+                if ~DOEXIT
+                    % Attempt connection
+                    D.F.nlx_connected = NlxConnectToServer(D.NLX.ServerIP) == 1;
+                    if D.F.nlx_connected
+                        % Identify id to server
+                        NlxSetApplicationName('ICR_GUI');
+                        break;
+                    end
+                end
+            end
+            if DOEXIT
+                Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Connect to NLX');
+                return
+            else
+                Console_Write('[Finish_NLX_Setup] FINISHED: Connect to NLX');
+            end
             
-            % Attempt connection
-            D.F.nlx_connected = NlxConnectToServer(D.NLX.ServerIP) == 1;
-            
-        end
-        
-        % Check status
-        if abort
-            Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Connect to NLX');
-            return
-        elseif pass
-            Console_Write('[Finish_NLX_Setup] FINISHED: Connect to NLX');
+        else
+            % Log/print
+            Console_Write('[Finish_NLX_Setup] FINISHED: Connect to NLX: Already Connected');
         end
         
         % Bail if exit initiated
@@ -6515,7 +6551,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
-                choice = Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
             else
                 choice = 'No';
@@ -6658,12 +6698,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         ToggMon(D.UI.toggMon(D.UI.monDefault));
         
         %% RUN SPIKESORT EXE
+        Console_Write('[Finish_NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
         
-        % Get EXE status
-        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
+        % Check if already open
+        [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
+        D.F.spikesort_open = any(strfind(result, 'SpikeSort3D.exe'));
         
         % Prompt to close
-        if D.F.spikesort_running
+        if D.F.spikesort_open
             
             % Show prompt
             dlg_h = dlgAWL( ...
@@ -6672,7 +6714,41 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
-            Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
+            
+            % Get check time
+            dt_wait = 1;
+            t_wait = Sec_DT(now) + dt_wait;
+            
+            % Keep checking for x seconds
+            Console_Write(sprintf('[Finish_NLX_Setup] RUNNING: Wait %d sec for SpikeSort3D.exe to Close...', dt_wait));
+            while ~DOEXIT
+                Update_UI(10);
+                pause(0.001);
+                
+                % Check for flag
+                if ~DOEXIT
+                    
+                    % Check EXE status
+                    [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
+                    D.F.spikesort_open = any(strfind(result, 'SpikeSort3D.exe'));
+                    
+                    if D.F.spikesort_open || ...
+                            Sec_DT(now) >= t_wait
+                        break;
+                    end
+                end
+            end
+            if DOEXIT
+                Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Wait for SpikeSort3D.exe to Close');
+                return
+            else
+                Console_Write('[Finish_NLX_Setup] FINISHED: Wait for SpikeSort3D.exe to Close');
+            end
             
         end
         
@@ -6685,30 +6761,63 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
                 'question');
-            choice = Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
         else
             choice = 'No';
         end
         
-        % Recheck EXE status
-        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-        
         % Run SpikeSort3D.exe
-        if strcmp('Yes', choice) && ...
-                ~D.F.spikesort_running && ...
-                ~DOEXIT
-            
-            Console_Write('[Finish_NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
+        if strcmp('Yes', choice) && ~DOEXIT
             
             % Run exe
-            curdir = pwd;
-            cd(D.DIR.nlxSS3DTop);
-            system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
-            cd(curdir);
+            if ~D.F.spikesort_open
+                curdir = pwd;
+                cd(D.DIR.nlxSS3DTop);
+                system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
+                cd(curdir);
+            end
             
-            Console_Write('[Finish_NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
+            % Specify wait time
+            dt_wait = 5;
+            t_wait = Sec_DT(now) + dt_wait;
+            
+            % Keep checking for x seconds
+            Console_Write(sprintf('[Finish_NLX_Setup] RUNNING: Wait %d sec for SpikeSort3D.exe to Open...', dt_wait));
+            while ~DOEXIT
+                Update_UI(10);
+                pause(0.001);
+                
+                % Check for flag
+                if ~DOEXIT
+                    
+                    % Check EXE status
+                    [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
+                    D.F.spikesort_open = any(strfind(result, 'SpikeSort3D.exe'));
+                    
+                    if ~D.F.spikesort_open || ...
+                            Sec_DT(now) >= t_wait
+                        break;
+                    end
+                end
+            end
+            if DOEXIT
+                Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Wait for SpikeSort3D.exe to Open');
+                return
+            else
+                Console_Write('[Finish_NLX_Setup] FINISHED: Wait for SpikeSort3D.exe to Open');
+            end
+            
+        elseif DOEXIT
+            
+            % Bail
+            Console_Write('**WARNING** [Finish_NLX_Setup] ABORTED: Open SpikeSort3D.exe');
         else
+            
             Console_Write('[Finish_NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
         end
         
@@ -7364,7 +7473,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[Finish_NLX_Setup] SKIPPED: Setup Cluster Objects');
             
         end
-        
+
         %% SEND SETUP COMMAND TO ROBOT
         
         % Session condition
@@ -9085,12 +9194,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update UI
         if ...
-                D.F.Rob.new_pos_data || ...
-                D.F.Rob.new_pos_data || ...
-                D.F.Rob.new_vel_data || ...
-                D.F.Rob.new_vel_data || ...
-                D.F.Rat.new_hd_data
-            
+            D.F.Rob.new_pos_data || ...
+            D.F.Rob.new_pos_data || ...
+            D.F.Rob.new_vel_data || ...
+            D.F.Rob.new_vel_data || ...
+            D.F.Rat.new_hd_data
+        
             Update_UI(11);
         end
         
@@ -11450,7 +11559,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
-                choice = Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Rescale track plot axes
                 if strcmp(choice, 'Yes')
@@ -11480,7 +11593,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Yes', 'No', [], 'No', ...
                     D.UI.dlgPos{4}, ...
                     'question');
-                choice = Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Delete plots
                 delete(plot_new_h)
@@ -11636,7 +11753,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'default');
-                Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Send setup command
                 Send_M2C('T', SYSTEST(1), 0, 0);
@@ -11704,7 +11825,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'OK', [], [], 'OK', ...
                             D.UI.dlgPos{4}, ...
                             'default');
-                        Dlg_Wait(dlg_h);
+                        while ~DOEXIT; Update_UI(10); pause(0.001);
+                            if ~DOEXIT; choice = dlg_h.UserData;
+                                if ~strcmp(choice, ''); break; end
+                            end
+                        end
                         
                         % Close figure
                         if(isgraphics(fg))
@@ -11731,7 +11856,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'OK', [], [], 'OK', ...
                             D.UI.dlgPos{4}, ...
                             'default');
-                        Dlg_Wait(dlg_h);
+                        while ~DOEXIT; Update_UI(10); pause(0.001);
+                            if ~DOEXIT; choice = dlg_h.UserData;
+                                if ~strcmp(choice, ''); break; end
+                            end
+                        end
                         
                         % Set time and sensor
                         D.DB.WALIR.t_next = Sec_DT(now) + D.DB.WALIR.DTSensor;
@@ -11930,7 +12059,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
                         'default');
-                    Dlg_Wait(dlg_h);
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
                     
                     % Close figure
                     if(isgraphics(fg))
@@ -11994,7 +12127,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'default');
-                Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Send setup command
                 Send_M2C('T', SYSTEST(1), 0, 0);
@@ -12063,7 +12200,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'OK', [], [], 'OK', ...
                             D.UI.dlgPos{4}, ...
                             'default');
-                        Dlg_Wait(dlg_h);
+                        while ~DOEXIT; Update_UI(10); pause(0.001);
+                            if ~DOEXIT; choice = dlg_h.UserData;
+                                if ~strcmp(choice, ''); break; end
+                            end
+                        end
                         
                         % Close figure
                         if(isgraphics(fg))
@@ -12135,7 +12276,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
-            Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Set delay
             dt_send = 2;
@@ -12281,7 +12426,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'default');
-                Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
                 % Close figure
                 close(D.DB.CVCC.fg);
@@ -12677,28 +12826,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Disconect NetCom
         Disconnect_NLX()
         
-        % Confirm that NLX Programs closed
-        Console_Write('[Save_Cheetah_Data] RUNNNING: Wait for NLX Programs to Close..');
-        while true
-            
-            % Check Cheetah.EXE status
-            D.F.cheetah_running = Check_EXE('Cheetah.exe');
-            
-            % Check SpikeSort3D.EXE status
-            D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-            
-            % Check if all closed
-            [abort, pass] = ...
-                Check_Flag(DOEXIT, ...
-                ~D.F.cheetah_running && ~D.F.spikesort_running);
-            if abort || pass; break; end
+        % Log/print
+        Console_Write('[Save_Cheetah_Data] RUNNING: Wait for Cheetah Close...');
+        
+        % Confirm that Cheetah is closed
+        if D.F.cheetah_running || D.F.spikesort_open
             
             % Get message string
-            if D.F.cheetah_running && D.F.spikesort_running
+            if D.F.cheetah_running && D.F.spikesort_open
                 msg = 'Close Cheetah & SpikeSort3D';
             elseif D.F.cheetah_running
                 msg = 'Close Cheetah';
-            elseif D.F.spikesort_running
+            elseif D.F.spikesort_open
                 msg = 'Close SpikeSort3D';
             end
             
@@ -12709,15 +12848,82 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
-            Dlg_Wait(dlg_h);
-            
-            % Pause for 1 sec
-            pause(1);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
         end
         
-        % Bail if cheetah still running
-        if D.F.cheetah_running
+        % Get check start time
+        t_prompt = Sec_DT(now) + 10;
+        cnt_prompt = 0;
+        
+        % Keep checking
+        Console_Write('[Save_Cheetah_Data] RUNNNING: Wait for NLX Programs to Close');
+        while ~DOEXIT()
+            Update_UI(10);
+            pause(0.001);
+            
+            % Bail if exit triggered
+            if DOEXIT
+                break
+            end
+            
+            % Send warning after x seconds
+            if (Sec_DT(now) > t_prompt)
+                
+                % Itterate count
+                cnt_prompt = cnt_prompt+1;
+                
+                % Get message
+                if D.F.cheetah_running && D.F.spikesort_open
+                    msg = '!!WARNING: CHEETAH && SPIKESORT3D OPEN!!';
+                elseif D.F.cheetah_running
+                    msg = '!!WARNING: CHEETAH OPEN!!';
+                elseif D.F.spikesort_open
+                    msg = '!!WARNING: SPIKESORT3D OPEN!!';
+                end
+                
+                % Reprompt once
+                if cnt_prompt<=1
+                    
+                    dlg_h = dlgAWL( ...
+                        msg, ...
+                        'CHEETAH NOT CLOSED', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.dlgPos{4}, ...
+                        'warning');
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
+                    
+                else
+                    break
+                end
+                
+                % Reset prompt
+                t_prompt = Sec_DT(now) + 10;
+            end
+            
+            % Check Cheetah.EXE status
+            [~,result] = system('tasklist /FI "imagename eq cheetah.exe" /fo table /nh');
+            D.F.cheetah_running = any(strfind(result, 'Cheetah.exe'));
+            
+            % Check SpikeSort3D.EXE status
+            [~,result] = system('tasklist /FI "imagename eq SpikeSort3D.exe" /fo table /nh');
+            D.F.spikesort_open = any(strfind(result, 'SpikeSort3D.exe'));
+            
+            % Bail once open
+            if ~D.F.cheetah_running && ~D.F.spikesort_open
+                break
+            end
+            
+        end
+        if DOEXIT
             Console_Write('**WARNING** [Save_Cheetah_Data] ABORTED: Wait for NLX Programs to Close');
             return
         else
@@ -12803,15 +13009,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Disconnect from the NLX server
-                    while true
+                    NlxDisconnectFromServer();
+                    while NlxAreWeConnected() == 1
+                        Update_UI(10);
                         NlxDisconnectFromServer();
-                        [abort, pass] = ...
-                            Check_Flag([], ~NlxAreWeConnected());
-                        if abort || pass; break; end
                     end
                     
                     % Show status disconnected
-                    if pass
+                    if NlxAreWeConnected() ~= 1
                         Console_Write('[Disconnect_NLX] FINISHED: Disconnect from NLX');
                     else
                         Console_Write('**WARNING** [Disconnect_NLX] ABORTED: Disconnect from NLX');
@@ -13559,13 +13764,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'warning');
-            Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
-            % Unset button
-            Safe_Set(D.UI.toggSetupDone, 'Value', 0);
-            
-            % Bail
-            return
+            % Bail out of function
+            switch choice
+                case 'OK'
+                    
+                    % Unset button
+                    Safe_Set(D.UI.toggSetupDone, 'Value', 0);
+                    
+                    % Bail
+                    return
+            end
             
         end
         
@@ -13870,7 +14084,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 {'indLap', 'indAll', 'Cart', 'Pol', 'TS'}, 2));
             
             % Enable ephys plottng objects
-            Object_Group_State('TT_Plot_Objects', 'Enable')
+                Object_Group_State('TT_Plot_Objects', 'Enable')
             
             % Set ran flag
             D.UI.toggStreamTTs.UserData = 1;
@@ -14421,7 +14635,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Yes', 'No', [], 'No', ...
             D.UI.dlgPos{4}, ...
             'question');
-        choice = Dlg_Wait(dlg_h);
+        while ~DOEXIT; Update_UI(10); pause(0.001);
+            if ~DOEXIT; choice = dlg_h.UserData;
+                if ~strcmp(choice, ''); break; end
+            end
+        end
         
         % Handle response
         switch choice
@@ -14457,7 +14675,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'default');
-            Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Stop halt if still active
             if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
@@ -14532,12 +14754,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
                 'question');
-            choice = Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Handle response
-            if strcmp(choice, 'Yes')
-                % Set flag
-                D.F.do_nlx_save = true;
+            switch choice
+                case 'Yes'
+                    % Set flag
+                    D.F.do_nlx_save = true;
             end
             
         end
@@ -14567,12 +14794,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Yes', 'No', [], 'No', ...
                 D.UI.dlgPos{4}, ...
                 'warning');
-            choice = Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
             % Handle response
-            if strcmp(choice, 'No')
-                % Bail
-                return
+            switch choice
+                case 'Yes'
+                case 'No'
+                    return
             end
             
             % Make sure rat is out
@@ -14584,7 +14816,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'OK', [], [], 'OK', ...
                     D.UI.dlgPos{4}, ...
                     'warning');
-                Dlg_Wait(dlg_h);
+                while ~DOEXIT; Update_UI(10); pause(0.001);
+                    if ~DOEXIT; choice = dlg_h.UserData;
+                        if ~strcmp(choice, ''); break; end
+                    end
+                end
                 
             end
             
@@ -14637,7 +14873,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
                 'warning');
-            Dlg_Wait(dlg_h);
+            while ~DOEXIT; Update_UI(10); pause(0.001);
+                if ~DOEXIT; choice = dlg_h.UserData;
+                    if ~strcmp(choice, ''); break; end
+                end
+            end
             
         end
         
@@ -16143,7 +16383,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         'OK', [], [], 'OK', ...
                         D.UI.dlgPos{4}, ...
                         'error');
-                    Dlg_Wait(dlg_h);
+                    while ~DOEXIT; Update_UI(10); pause(0.001);
+                        if ~DOEXIT; choice = dlg_h.UserData;
+                            if ~strcmp(choice, ''); break; end
+                        end
+                    end
                     
                     % Write to console
                     Console_Write(err_str, now, true);
@@ -18032,26 +18276,29 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Wait a max of 1 sec for last message to clear
         if ~ISMATSOLO
             
-            % Check for 1 sec
-            t_str = Sec_DT(now) + 1;
-            dt_check = 1; % (sec)
+            % Get current time
+            t_start = Sec_DT(now);
             
             % Check for pack to reset
-            while true
-                [abort, pass] = ...
-                    Check_Flag(~exist('m2c_pack', 'var'), ...
-                    m2c_pack(6) == 0 || Sec_DT(now) >= t_str + dt_check);
-                if abort || pass; break; end
+            while exist('m2c_pack', 'var')
+                Update_UI(10);
+                pause(0.001);
+                
+                if exist('m2c_pack', 'var')
+                    if m2c_pack(6) == 0 || ...
+                            Sec_DT(now) >= t_start + 1
+                        break
+                    end
+                end
+            end
+            if ~exist('m2c_pack', 'var')
+                return
             end
             
-            % Check status
-            if abort
-                Console_Write('**WARNING** [Setup] ABORTED: Wait For m2c Packet Reset');
-                return
-            elseif ~pass
-                % Force reset packet
+            % Log/print issues
+            if m2c_pack(6) ~= 0
                 m2c_pack(6) = 0;
-                Console_Write(sprintf('**WARNING** [Send_M2C] Forced Reset m2c Packet: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
+                Console_Write(sprintf('**WARNING** [Send_M2C] CS Failed to Reset m2c Packet: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
                     id, dat1, dat2, dat3, round((Sec_DT(now) - t_start)*1000)));
             end
             
@@ -18177,58 +18424,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ---------------------------GET TIME NOW-------------------------------
     function [t_sec] = Sec_DT(t_now)
         
+        % Check if global already cleared
+        if ~exist('startTime', 'var')
+            t_sec = (t_now-0)*24*60*60;
+            return
+        end
+        
         % Convert from days to seconds
         t_sec = (t_now-startTime)*24*60*60;
         
-    end
-
-% --------------------------HOLD FOR CONDITION-----------------------------
-    function[abort, pass] = Check_Flag(abort_cond, pass_cond)
-        
-        % Handle inputs
-        if isempty(abort_cond)
-            abort_cond = false;
-        end
-        
-        % Initialize flags
-        abort = false;
-        pass = false;
-        
-        % Check for abort cond cond
-        if abort_cond
-            abort = true;
-        end
-        
-        % Check for pass cond
-        if ~abort_cond && pass_cond
-            pass = true;
-        end
-        
-        % Pause and update
-        Update_UI(0);
-        pause(0.001);
-    end
-
-% ----------------------HOLD FOR DIALOGUE RESPONSE-------------------------
-    function[choice] = Dlg_Wait(dlg_h)
-        
-        % Keep checking for response
-        while true
-            choice = dlg_h.UserData;
-            [abort, pass] = Check_Flag(DOEXIT, ~strcmp(choice, ''));
-            if abort || pass; break; end
-        end
-    end
-
-% ----------------------CHECK FOR EXE RUN CONDITION------------------------
-    function[is_running] = Check_EXE(exe_str)
-        
-        % Get EXE status
-        cmd_str = sprintf('tasklist /FI "imagename eq %s" /fo table /nh', exe_str);
-        [~,result] = system(cmd_str);
-        
-        % Check for any instance
-        is_running = any(strfind(result, exe_str));
     end
 
 % ---------------------CONVERT VT POS TO RAD POS---------------------------
@@ -18301,7 +18505,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 % ------------------------COMPUTE RAD SUM----------------------------------
     function [rad_sum] = Rad_Sum(rad1, rad2)
-        
+         
         % Handle inputs
         if nargin < 2
             rs = sum(rad1);
