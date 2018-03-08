@@ -18191,17 +18191,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
     end
 
-% % TEMP
-% % --------------------------RUN NLX FUNCTION-------------------------------
-%     function[pass, arg_out] = Run_NLX_Fun(fun_str, do_print)
-%         
-%         % Handle input args
-%         if nargin == 1
-%             do_print = true;
-%         end
-%         
-%         % Do function
-%     end
+
+% --------------------------RUN NLX FUNCTION-------------------------------
+    function[pass, arg_out] = Run_NLX_Fun(fun_str, do_print)
+        
+        % Handle input args
+        if nargin == 1
+            do_print = true;
+        end
+        
+        % Do function
+    end
 
 
 %% ========================== MINOR SUPPORT FUNCTIONS =====================
