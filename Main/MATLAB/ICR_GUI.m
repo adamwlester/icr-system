@@ -1242,8 +1242,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             % LAP CHECK
                             Lap_Check();
-                            
-                            
+                                                       
                         case 'SEND TASK DONE CONFIRMATION'
                             %% --------SEND TASK DONE CONFIRMATION-----------
                             
@@ -4317,7 +4316,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_ht];
         
         %% CREATE TEMPLATE OBJECTS
-        
+         Console_Write('[Table_Setup] RUNNING: Create Template Objects');
+         
         % Create tab group
         D.UI.tblTabSubGrp = ...
             uitabgroup(D.UI.tabTBL, ...
@@ -4410,7 +4410,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         %% CREATE WEIGHT PANEL OBJECTS
-        
+         Console_Write('[Table_Setup] RUNNING: Create Weight Panel Objects');
+         
         % GET WEIGHT VALUES
         
         % Get baseline weight
@@ -4544,6 +4545,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.txtPercentageWeight(2).String = 'XX%';
         
         %% CREATE FOOD PANEL OBJECTS
+        Console_Write('[Table_Setup] RUNNING: Create Food Panel Objects');
         
         % Food Panel
         D.UI.panFeed = copyobj(D.UI.panTemplate, D.UI.tabTBL);
@@ -4637,6 +4639,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggUpdateFed, 'Enable');
         
         %% CREATE MAIN NOTES TABLE OBJECTS
+        Console_Write('[Table_Setup] RUNNING: Create Tab Table Objects');
         
         % Get list of included rats
         rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
@@ -4659,12 +4662,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Format SS_IO_3 table
         D.UI.tblSSIO3 = FormatTable(D.SS_IO_3.(D.PAR.ratLab), D.UI.tbleSSIO3tab);
         
-        
-        % Add TT_IO tab
+        % Add TT_IO tab and table
         if D.F.implant_session
+            
+            % Add TT_IO tab
             D.UI.tbleTTIOtab = uitab(D.UI.tblTabSubGrp, ...
                 'Title', 'TT', ...
                 'BackgroundColor', [1, 1, 1]);
+               
+            % Format TT_IO table
+            D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.tbleTTIOtab);
+            
         end
         
         % Add SS_IO_2 tab for each rat
@@ -4692,6 +4700,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set tab to health
         D.UI.tblTabSubGrp.SelectedTab = D.UI.tbleSSIO3tab;
+        
+        %% CREATE SESSION NOTES OBJECTS
+        Console_Write('[Table_Setup] RUNNING: Create Session Notes Objects');
         
         % Create notes panel
         D.UI.panGenNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
@@ -4743,7 +4754,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblSSIO2(1).Data(:,notes_ind) = [];
         D.UI.tblSSIO2(1).ColumnName(notes_ind) = [];
         
-        %% CREATE TT TABLE OBJECTS
+        %% CREATE TT NOTES OBJECTS
+        Console_Write('[Table_Setup] RUNNING: Create TT Notes Objects');
         
         % TT Notes Panel
         D.UI.panTTNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
@@ -4759,9 +4771,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Panel_State(D.UI.panTTNotes, 'Disable');
             
         else
-            
-            % Format SS_IO_2 table
-            D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.tbleTTIOtab);
             
             % Old tt notes table
             D.UI.tblTTNotes = copyobj(D.UI.tblGenNotes, D.UI.panTTNotes);
@@ -13969,17 +13978,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Log/print
                 Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
-                % Stop aquisition
-                Safe_Set(D.UI.toggAcq, 'Value', 0)
-                Togg_Acq(D.UI.toggAcq);
-                
                 % Load sleep tracking config
                 Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Sleep.cfg');
                 Console_Write('[NLX_Setup] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
-                
-                % Start aquisition
-                Safe_Set(D.UI.toggAcq, 'Value', 1)
-                Togg_Acq(D.UI.toggAcq);
                 
                 % Log/print
                 Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
@@ -14010,17 +14011,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Log/print
                 Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
                 
-                % Stop recording and aquisition
-                Safe_Set(D.UI.toggAcq, 'Value', 0)
-                Togg_Acq(D.UI.toggAcq);
-                
                 % Load sleep tracking config
                 pause(0.5);
                 Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Task.cfg');
-                
-                % Start recording and aquisition
-                Safe_Set(D.UI.toggAcq, 'Value', 1)
-                Togg_Acq(D.UI.toggAcq);
                 
                 % Log/print
                 Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
@@ -18202,6 +18195,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 %         
 %         % Do function
 %     end
+
+
+
+
 
 
 %% ========================== MINOR SUPPORT FUNCTIONS =====================
