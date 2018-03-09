@@ -46,11 +46,10 @@ global ISCRASH; % crash flag
 global FIGH; % ui figure group
 global D; % main data struct
 global TCPIP; % tcp object
-global FUNNOW; % current top level function
+global UPDATENOW; % update ui imediately
 global STATUS; % store status
-
-% TEMP
-global dlg_h
+global TIMSTRLOCAL; % local time
+global DTHANDSHAKE; % handshake time
 
 % Matlab to CS communication
 global m2c; % local data struct
@@ -60,15 +59,14 @@ global m2c_dir; % current cheetah directory
 % CS to Matlab communication
 global c2m; % data struct
 
-% Initialize to computer time
-startTime = now;
-
 % Initialize globals
+TIMSTRLOCAL = now;
+DTHANDSHAKE = 0;
 ME = [];
 DOEXIT = false;
 FORCECLOSE = false;
 ISCRASH = false;
-FUNNOW = 'None';
+UPDATENOW = true;
 STATUS = 'failed';
 
 % ------------------------ HANDLE INPUT ARGUMENTS -------------------------
@@ -295,25 +293,20 @@ if BREAKDEBUG > 0
     % ------------------------- RUN IN DEBUG MODE -------------------------
     
     % RUN MAIN SETUP
-    FUNNOW = 'Setup';
     if ~DOEXIT
         Setup();
     else
         Console_Write('**WARNING** [ICR_GUI] SKIPPED: ICR/Setup');
     end
-    FUNNOW = 'None';
     
     % RUN MAIN RUN
-    FUNNOW = 'Run';
     if ~DOEXIT
         Run();
     else
         Console_Write('**WARNING** [ICR_GUI] SKIPPED: ICR/Run');
     end
-    FUNNOW = 'None';
     
     % RUN MAIN EXIT
-    FUNNOW = 'Exit';
     if ~ISCRASH
         Exit();
     else
@@ -322,7 +315,6 @@ if BREAKDEBUG > 0
         catch ME
         end
     end
-    FUNNOW = 'None';
     
     % SET STATUS
     if ~ISCRASH
@@ -334,8 +326,8 @@ if BREAKDEBUG > 0
 else
     
     % ---------------------- RUN IN CATCH ERROR MODE ----------------------
+    
     % RUN MAIN SETUP
-    FUNNOW = 'Setup';
     try
         if ~DOEXIT
             Setup();
@@ -345,10 +337,8 @@ else
     catch ME
         SetExit()
     end
-    FUNNOW = 'None';
     
     % RUN MAIN RUN
-    FUNNOW = 'Run';
     try
         if ~DOEXIT && isempty(ME)
             Run();
@@ -358,10 +348,8 @@ else
     catch ME
         SetExit()
     end
-    FUNNOW = 'None';
     
     % RUN MAIN EXIT
-    FUNNOW = 'Exit';
     try
         if isempty(ME)
             Exit();
@@ -377,7 +365,6 @@ else
     catch ME
         SetExit()
     end
-    FUNNOW = 'None';
     
 end
 
@@ -746,7 +733,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             elseif pass
                 Console_Write('[Setup] FINISHED: Wait for Handshake');
-                Console_Write(sprintf('SET SYNC TIME: %ddays',startTime));
             end
             
         end
@@ -778,7 +764,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % UPDATE GUI
             if ~D.F.ui_updated
-                Update_UI(30);
+                Update_UI(0, 'limitrate');
             end
             D.F.ui_updated = false;
             
@@ -917,8 +903,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Togg_Rec(D.UI.toggRec);
                     end
                     
-                    % Update/refresh window positions
-                    Togg_Mon(D.UI.toggMon(D.UI.monDefault));
+                    % Force update ui
+                    Update_UI(0, 'force');
                     
                     % Bail here if running TT Track or Table solo
                     if D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update'
@@ -964,8 +950,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Show all objects on 'ICR ARENA' tab
                     Tab_GrpChange(D.UI.tabICR);
                     
-                    % Update/refresh window positions
-                    Togg_Mon(D.UI.toggMon(D.UI.monDefault));
+                    % Force update ui
+                    Update_UI(0, 'force');
                     
                 case 'RUN ICR TASK'
                     %% ------------------RUN ICR TASK-------------------
@@ -1111,8 +1097,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Set flag
                             D.F.task_setup = true;
                             
-                            % Refresh UI
-                            Update_UI(11);
+                            % Force  update UI
+                            Update_UI(0, 'force');
                             
                         case 'WAIT FOR MATLAB STREAMING'
                             
@@ -1173,6 +1159,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Set flags
                             D.F.rob_streaming = true;
                             D.F.poll_nlx = true;
+                            UPDATENOW = false;
                             
                             % Begin main loop
                             Console_Write('[Run:SubLoop] READY TO ROCK!');
@@ -1242,7 +1229,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             % LAP CHECK
                             Lap_Check();
-                                                       
+                            
                         case 'SEND TASK DONE CONFIRMATION'
                             %% --------SEND TASK DONE CONFIRMATION-----------
                             
@@ -1261,6 +1248,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 
                                 % Set flags
                                 D.F.task_done_confirmed = true;
+                                UPDATENOW = true;
                                 
                                 % Enable Sleep 2 objects
                                 if D.F.implant_session
@@ -1787,8 +1775,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.poll_last = Sec_DT(now);
         % last ui redraw
         D.T.ui_update = Sec_DT(now);
-        % last text info update
-        D.T.info_txt_update = Sec_DT(now);
         % time session starts
         D.T.ses_str = Sec_DT(now);
         % first nxl ts
@@ -1815,6 +1801,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.lap_str = 0;
         % track lap times total
         D.T.lap_tot = 0;
+        % last text info update
+        D.T.info_txt_update = Sec_DT(now);
+        % last reset of db info max reset
+        D.T.info_db_reset = Sec_DT(now);
         % track manual reward sent time
         D.T.btn_rew_sent = 0;
         % track last reward time
@@ -1982,8 +1972,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.inf = [0, inf, 0, 0, 0];
         % halt error [now, min, max, sum, count]
         D.DB.HALT.error = [0, inf, 0, 0, 0];
-        % simulated rat forage data
-        D.DB.SIM.RatPathMat = D.P.pathMat;
         
         % OTHER
         % session message
@@ -2003,6 +1991,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % AXIS HANDLES
         D.UI.axH = gobjects(7,1);
+        D.UI.axZoneH = gobjects(2,1);
+        D.UI.axClstH = gobjects(D.PAR.maxClust,1);
         
         % TRACK TASK HANDLES
         
@@ -2031,8 +2021,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % forage bound line handles
         D.UI.linFrgH = gobjects(2,1);
-        % forage bound mask
-        D.UI.imgFrgMaskH = [];
         % forage targ patch
         D.UI.ptchRewTargBnds = gobjects(360/D.PAR.frgPathSpace,1);
         % forage occ mat
@@ -2298,26 +2286,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.axH(4) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
-        % RF Mask
-        % Note: mask for imagesc occ plot
+        % Random Forage Task OCC Data
+        % Note: used for occ imagesc
         D.UI.axH(5) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
-        % Random Forage Task OCC Data
-        % Note: used for occ imagesc
+        % Real Time TT Position/OCC Data
         D.UI.axH(6) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
-        % Semitranparent TT Backround
-        D.UI.axH(7) = copyobj(D.UI.axH(1), D.UI.tabICR);
-        hold on;
-        
-        % Real Time TT Position/OCC Data
-        D.UI.axH(8) = copyobj(D.UI.axH(1), D.UI.tabICR);
-        hold on;
-        
         % Selectable Items
-        D.UI.axH(9) = copyobj(D.UI.axH(1), D.UI.tabICR);
+        D.UI.axH(7) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
         % Copy object for tt clust legend
@@ -2560,36 +2539,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             0.04, ...
             pan_wd/2, ...
             pan_ht];
-        
-        % Get scaled up pixel vals
-        rad_pxl = ceil(D.UI.frgRad*D.UI.cm2pxl)*4;
-        lim_pxl = D.UI.vtRes*4;
-        pad_pxl = round((lim_pxl-(rad_pxl*2))/2);
-        
-        % Make mask
-        [colNums, rowNums] = meshgrid(1:rad_pxl*2, 1:rad_pxl*2);
-        D.PAR.frgMask = ...
-            (rowNums - rad_pxl).^2 + (colNums - rad_pxl).^2 <= rad_pxl.^2;
-        D.PAR.frgMask = ~padarray(D.PAR.frgMask, [pad_pxl, pad_pxl]);
-        
-        % Set lims
-        Safe_Set(D.UI.axH(5), ...
-            'XLim', [1,size(D.PAR.frgMask,1)],...
-            'YLim', [1,size(D.PAR.frgMask,2)]);
-        
-        % Show mask
-        D.UI.imgFrgMaskH = ...
-            imshow(ones(size(D.PAR.frgMask,1),size(D.PAR.frgMask,2)), ...
-            'Parent',D.UI.axH(5));
-        Safe_Set(D.UI.imgFrgMaskH, ...
-            'AlphaData', D.PAR.frgMask, ...
-            'Visible', 'off');
-        
-        % Store path mask
-        D.PAR.frgMask = imresize(~D.PAR.frgMask, [D.PAR.frgBins,D.PAR.frgBins]);
-        
-        % Clear vars
-        clear rad_pxl lim_pxl pad_pxl mask;
         
         % MAKE WALL IMAGES
         
@@ -4316,8 +4265,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_ht];
         
         %% CREATE TEMPLATE OBJECTS
-         Console_Write('[Table_Setup] RUNNING: Create Template Objects');
-         
+        Console_Write('[Table_Setup] RUNNING: Create Template Objects');
+        
         % Create tab group
         D.UI.tblTabSubGrp = ...
             uitabgroup(D.UI.tabTBL, ...
@@ -4410,8 +4359,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         %% CREATE WEIGHT PANEL OBJECTS
-         Console_Write('[Table_Setup] RUNNING: Create Weight Panel Objects');
-         
+        Console_Write('[Table_Setup] RUNNING: Create Weight Panel Objects');
+        
         % GET WEIGHT VALUES
         
         % Get baseline weight
@@ -4638,13 +4587,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Enable button
         Button_State(D.UI.toggUpdateFed, 'Enable');
         
-        %% CREATE MAIN NOTES TABLE OBJECTS
+        %% CREATE TAB TABLE OBJECTS
         Console_Write('[Table_Setup] RUNNING: Create Tab Table Objects');
-        
-        % Get list of included rats
-        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
-        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
-        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
         
         % Add SS_IO_1 tab
         D.UI.tbleSSIO1tab = uitab(D.UI.tblTabSubGrp, ...
@@ -4669,11 +4613,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.tbleTTIOtab = uitab(D.UI.tblTabSubGrp, ...
                 'Title', 'TT', ...
                 'BackgroundColor', [1, 1, 1]);
-               
+            
             % Format TT_IO table
             D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.tbleTTIOtab);
             
         end
+        
+        % Get list of included rats
+        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
+        
+        % Put current rat at start of list
+        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
+        
+        % Make a tab for current rat only unless unless doing 'Table_Update'
+        if D.PAR.sesType ~= 'Table_Update'
+            rat_list = rat_list(1);
+        end
+        
+        % Initialize tab objects
+        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
         
         % Add SS_IO_2 tab for each rat
         for z_r = 1:length(rat_list)
@@ -4692,7 +4650,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~isempty(D.UI.tblSSIO3.RowName)
             D.UI.tblSSIO3.Data = [D.UI.tblSSIO3.Data(1,:); D.UI.tblSSIO3.Data];
         end
-        D.UI.tblSSIO3.RowName = [{datestr(startTime, 'yyyy-mm-dd')}; D.UI.tblSSIO3.RowName];
+        D.UI.tblSSIO3.RowName = [{datestr(TIMSTRLOCAL, 'yyyy-mm-dd')}; D.UI.tblSSIO3.RowName];
         
         % Clear non health feilds
         var_ind = ~contains(D.UI.tblSSIO3.ColumnName,'Health');
@@ -4827,7 +4785,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Add date for first day
                 if isempty(io_table.Date{1})
-                    io_table.Date{1} = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+                    io_table.Date{1} = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
                 end
                 
                 % Get dates for row names
@@ -7177,7 +7135,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Start time
         infstr = sprintf('Start: ');
         Safe_Set(D.UI.txtTimeInf(2), 'String', infstr)
-        infstr = datestr(startTime, 'HH:MM:SS');
+        infstr = datestr(TIMSTRLOCAL, 'HH:MM:SS');
         Safe_Set(D.UI.editTimeInf(1), 'String', infstr)
         
         % End time
@@ -7204,13 +7162,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% SPECIFY AXIS UI STACK ORDER
         
         % Random Forage Task OCC Data
-        uistack(D.UI.axH(6),'top');
+        uistack(D.UI.axH(5),'top');
         
         % Pos/Vel History Data
         uistack(D.UI.axH(2),'top');
-        
-        % RF Mask
-        uistack(D.UI.axH(5),'top');
         
         % Real Time Track Task Data
         uistack(D.UI.axH(3),'top');
@@ -7222,9 +7177,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Wall Image
         uistack(D.UI.axH(1),'top');
         
-        % Semitranparent TT Backround
-        uistack(D.UI.axH(7),'top');
-        
         % Arena Features
         uistack(D.UI.axH(4),'top');
         
@@ -7235,10 +7187,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         uistack(D.UI.axColLeg,'top');
         
         % Real Time TT Position/OCC Data
-        uistack(D.UI.axH(8),'top');
+        uistack(D.UI.axH(6),'top');
         
         % Selectable Items
-        uistack(D.UI.axH(9),'top');
+        uistack(D.UI.axH(7),'top');
         
         %% SETUP EPHYS PLOTTING
         
@@ -7303,16 +7255,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Safe_Set(D.UI.axClstH, ...
                 'CLim',[0,1], ...
                 'UserData', 0);
-            
-            % Add bottom axes as semi tranparent layer
-            D.UI.axH(7).Position = D.UI.axH(1).Position;
-            D.UI.axH(7).XLim = D.UI.axH(1).XLim;
-            D.UI.axH(7).YLim = D.UI.axH(1).YLim;
-            mask_img = uint8(abs(double(D.UI.wall_mask)-double(max(D.UI.wall_mask))));
-            mask_img = repmat(mask_img, [1, 1, 3]);
-            D.UI.ttMask = image(mask_img, 'Parent', D.UI.axH(7), 'Visible', 'off');
-            alph = double(mask_img(:,:,1)>0) * 0.5;
-            Safe_Set(D.UI.ttMask, 'AlphaData', alph);
             
             % SETUP PLOT COLOR MAP
             Console_Write('[NLX_Setup] RUNNING: Setup Cluster Colormaps...');
@@ -7589,7 +7531,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'LineWidth', 1, ...
                     'Visible', 'off', ...
                     'UserData', [z_rot, z_zone], ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
                 
                 % Add reward duration text
                 str = ...
@@ -7604,7 +7546,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'FontWeight', 'bold', ...
                     'Visible', 'off', ...
                     'UserData', [z_rot, z_zone], ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
             end
         end
         % bring text to top of stack
@@ -7692,7 +7634,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'UserData', [z_rot, z_pos], ...
                     'ButtonDownFcn', {@Mouse_SelectRot}, ...
                     'HitTest', 'off', ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
                 
                 % Text
                 str = ...
@@ -7708,7 +7650,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'UserData', [z_rot, z_pos], ...
                     'ButtonDownFcn', {@Mouse_SelectRot}, ...
                     'HitTest', 'off', ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
             end
         end
         
@@ -7777,7 +7719,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Forage_Task_Setup()
         
         % Set axis lims
-        Safe_Set(D.UI.axH(6), ...
+        Safe_Set(D.UI.axH(5), ...
             'YDir', 'reverse', ...
             'XLim', [0,D.PAR.frgBins], ...
             'YLim', [0,D.PAR.frgBins]);
@@ -7789,9 +7731,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Store in struct
             D.P.pathMat = double(path_mat); %#ok<NODEF>
-            D.DB.SIM.RatPathMat = double(sim_rat_path_mat); %#ok<NODEF>
             D.PAR.pathLengthArr = path_length_arr;  %#ok<NODEF>
-            clear path_mat sim_rat_path_mat path_length_arr;
+            D.PAR.frgMask = forage_mask;  %#ok<NODEF>
+
         else
             
             % Deg bin var
@@ -7827,67 +7769,72 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
             end
             
-            % Setup temp sim rat mat
-            mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
-            
             % Compute mat for each pos condition
             path_ang_arr = linspace(0,90,90/D.PAR.frgPathSpace+1);
-            for c = 1:2
-                if c==1
-                    mat_now = mat_p;
-                else
-                    mat_now = mat_r;
+            
+            for i = 1:D.PAR.nPaths
+                
+                % Store angle
+                deg = path_ang_arr(i);
+                
+                % Rotate
+                mat_rot = imrotate(mat_p,deg,'bilinear','crop');
+                
+                % Cut and pad
+                rind = floor(size(mat_eye,1)/2)-floor(path_bins/2):floor(size(mat_eye,1)/2)+floor(path_bins/2);
+                cind = floor(size(mat_eye,2)/2):floor(size(mat_eye,1)/2)+path_bins-1;
+                mat_rot = mat_rot(rind,cind);
+                
+                % Flip
+                mat_rot = flip(mat_rot,2);
+                mat_rot = flip(mat_rot,1);
+                
+                % Pad to full size
+                pad_lng = round((D.PAR.frgBins - path_bins)/2);
+                mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
+                
+                % Store in 4D mat
+                for j = (1:n_targs)-1
+                    D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
                 end
                 
-                for i = 1:D.PAR.nPaths
-                    
-                    deg = path_ang_arr(i);
-                    % Rotate
-                    mat_rot = imrotate(mat_now,deg,'bilinear','crop');
-                    % Cut and pad
-                    rind = floor(size(mat_eye,1)/2)-floor(path_bins/2):floor(size(mat_eye,1)/2)+floor(path_bins/2);
-                    cind = floor(size(mat_eye,2)/2):floor(size(mat_eye,1)/2)+path_bins-1;
-                    mat_rot = mat_rot(rind,cind);
-                    % Flip
-                    mat_rot = flip(mat_rot,2);
-                    mat_rot = flip(mat_rot,1);
-                    
-                    % Pad to full size
-                    pad_lng = round((D.PAR.frgBins - path_bins)/2);
-                    mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
-                    
-                    % Store
-                    for j = (1:n_targs)-1
-                        if c==1
-                            D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
-                        else
-                            D.DB.SIM.RatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
-                        end
-                    end
-                end
             end
+            
+            % Get scaled up pixel vals
+            rad_pxl = ceil(D.UI.frgRad*D.UI.cm2pxl)*4;
+            lim_pxl = D.UI.vtRes*4;
+            pad_pxl = round((lim_pxl-(rad_pxl*2))/2);
+            
+            % Make forage mask to remove values outside bounds
+            [colNums, rowNums] = meshgrid(1:rad_pxl*2, 1:rad_pxl*2);
+            D.PAR.frgMask = ...
+                (rowNums - rad_pxl).^2 + (colNums - rad_pxl).^2 <= rad_pxl.^2;
+            D.PAR.frgMask = ~padarray(D.PAR.frgMask, [pad_pxl, pad_pxl]);
+            
+            % Scale to occ mat
+            D.PAR.frgMask = imresize(~D.PAR.frgMask, [D.PAR.frgBins,D.PAR.frgBins]);
+            
+            % Copy to local var
+            forage_mask = D.PAR.frgMask; %#ok<NASGU>
             
             % Mask values outside circle
             mask = repmat(D.PAR.frgMask,[1,1,D.PAR.nPaths,n_targs]);
             D.P.pathMat = D.P.pathMat.*mask;
-            D.DB.SIM.RatPathMat = D.DB.SIM.RatPathMat.*mask;
             
             % Nomalize
             D.P.pathMat(D.P.pathMat>0) = 1;
-            %D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.PAR.frgBins,D.PAR.frgBins,1,1]);
-            D.DB.SIM.RatPathMat(D.DB.SIM.RatPathMat>0) = 1;
             
             % Plot path averages
-            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
+            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(5));
             pause(1);
             delete(ih);
             
             % Plot accross pos and paths
-            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
+            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(5));
             pause(1);
             delete(ih);
             for i = 1:D.PAR.nPaths
-                ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(6));
+                ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(5));
                 pause(0.1);
                 delete(ih);
             end
@@ -7902,19 +7849,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Store path info
             path_mat = single(D.P.pathMat); %#ok<NASGU>
-            sim_rat_path_mat = single(D.DB.SIM.RatPathMat); %#ok<NASGU>
             
             % Save path info
             fi_path = D.DIR.frgPath;
-            save(fi_path, 'path_mat', 'sim_rat_path_mat', 'path_length_arr');
+            save(fi_path, 'path_mat', 'path_length_arr', 'forage_mask');
             
             % Save second copy with date
             fi_name = sprintf('forage_path_%s.mat',datestr(now, 'yymmdd'));
             fi_path = regexprep(fi_path, 'forage_path.mat', fi_name);
-            save(fi_path, 'path_mat', 'sim_rat_path_mat', 'path_length_arr');
+            save(fi_path, 'path_mat', 'path_length_arr', 'forage_mask');
             
-            % Clear variables
-            clear path_mat sim_rat_path_mat path_length_arr;
         end
         
         % Create target patches
@@ -7934,19 +7878,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'LineWidth', 1, ...
                 'UserData', z_targ, ...
                 'Visible', 'off', ...
-                'Parent', D.UI.axH(9));
+                'Parent', D.UI.axH(7));
         end
         
         % Set color lims
-        Safe_Set(D.UI.axH(6), 'CLim', [0,1]);
+        Safe_Set(D.UI.axH(5), 'CLim', [0,1]);
         
         % Plot occ
         D.UI.imgFrgOcc = imagesc(D.P.frgOccMatScale+D.P.pathNowMat, ...
-            'Parent', D.UI.axH(6));
+            'Parent', D.UI.axH(5));
         
         % Set other plot features to visible
         Safe_Set(D.UI.linFrgH, 'Visible', 'on');
-        Safe_Set(D.UI.imgFrgMaskH, 'Visible', 'on');
         Patch_State(D.UI.ptchStQ, 'Select');
         Safe_Set(D.UI.txtStQ, 'Visible', 'on');
         
@@ -8990,7 +8933,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 cdat = D.P.frgOccMatScale+D.P.pathNowMat;
                 if ~isgraphics(D.UI.imgFrgOcc)
                     D.UI.imgFrgOcc = imagesc(cdat, ...
-                        'Parent', D.UI.axH(6));
+                        'Parent', D.UI.axH(5));
                 else
                     Safe_Set(D.UI.imgFrgOcc, 'CData', cdat);
                 end
@@ -9121,7 +9064,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.Rob.new_vel_data || ...
                 D.F.Rat.new_hd_data
             
-            Update_UI(11);
+            Update_UI(0, 'limitrate');
         end
         
         % Reset flags
@@ -9751,7 +9694,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'MarkerFaceColor', D.UI.clustCol(tt_ind,clust_ind,:), ...
                             'MarkerEdgeColor', [0,0,0], ... % 'MarkerEdgeColor', 'none', ...
                             'MarkerSize', 3, ...
-                            'Parent', D.UI.axH(8));
+                            'Parent', D.UI.axH(6));
                     else
                         Safe_Set(D.UI.mrkClustH(tt_ind, clust_ind), ...
                             'XData', x, ...
@@ -9850,7 +9793,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update UI
-        Update_UI(11);
+        Update_UI(0, 'limitrate');
         
     end
 
@@ -10255,7 +10198,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 sum([D.C.rew_cnt{:}]), D.PAR.zone_hist(sum([D.C.rew_cnt{:}])), D.P.Rat.vel));
             
             % Update UI
-            Update_UI(11);
+            Update_UI(0, 'limitrate');
             
         end
         
@@ -10372,7 +10315,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('[Track_Reward_Zone_Check] Crossed Reward Bounds: cross_cnt=%d', D.C.rew_cross_cnt));
             
             % Update UI
-            Update_UI(11);
+            Update_UI(0, 'limitrate');
             
         end
         
@@ -10458,7 +10401,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.PAR.frgTargDegArr(D.I.targ_last), inbndTim));
             
             % Update UI
-            Update_UI(11);
+            Update_UI(0, 'limitrate');
             
             % Bail
             return
@@ -10674,201 +10617,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.lap_str = Sec_DT(now);
         
         % Update UI
-        Update_UI(11);
-        
-    end
-
-% -------------------------PRINT SES INFO--------------------------
-    function Inf_Print()
-        
-        %% BAIL IF SETUP NOT FINISHED OR DT NOT REACHED
-        if ...
-                ~D.F.ses_setup_done || ...
-                Sec_DT(now) - D.T.info_txt_update < 0.1
-            return
-        end
-        
-        % Store time
-        t_now = Sec_DT(now);
-        
-        %% PRINT PERFORMANCE INFO
-        
-        % total
-        infstr = sprintf([...
-            'Laps______All:%s%d\n', ...
-            'Rewards___All:%s%d\n', ...
-            'Rotations_All:%s%d\n', ...
-            'Missed_Rewards_:%s%d|%d\n',...
-            'Bulldozings____:%s%d'], ...
-            repmat('_',1,1), sum([D.C.lap_cnt{:}]), ...
-            repmat('_',1,1), sum([D.C.rew_cnt{:}]), ...
-            repmat('_',1,1), D.C.rot_cnt, ...
-            repmat('_',1,1), D.C.missed_rew_cnt(1),sum(D.C.missed_rew_cnt), ...
-            repmat('_',1,1), D.C.bull_cnt);
-        Safe_Set(D.UI.txtPerfInf(4), 'String', infstr)
-        
-        % standard
-        infstr = sprintf([...
-            'Laps______Stand:%s%d\n', ...
-            'Rewards___Stand:%s%d'], ...
-            repmat('_',1,1), D.C.lap_cnt{3}(end), ...
-            repmat('_',1,1), D.C.rew_cnt{3}(end));
-        Safe_Set(D.UI.txtPerfInf(1), 'String', infstr)
-        
-        % 40 deg
-        infstr = sprintf([...
-            'Laps______40%c:%s%d|%d\n', ...
-            'Rewards___40%c:%s%d|%d'], ...
-            char(176), repmat('_',1,3), D.C.lap_cnt{2}(end), sum(D.C.lap_cnt{2}), ...
-            char(176), repmat('_',1,3), D.C.rew_cnt{2}(end), sum(D.C.rew_cnt{2}));
-        Safe_Set(D.UI.txtPerfInf(2), 'String', infstr)
-        
-        % 0 deg
-        infstr = sprintf([...
-            'Laps______0%c:%s%d|%d\n', ...
-            'Rewards___0%c:%s%d|%d'], ...
-            char(176), repmat('_',1,4), D.C.lap_cnt{1}(end), sum(D.C.lap_cnt{1}), ...
-            char(176), repmat('_',1,4), D.C.rew_cnt{1}(end), sum(D.C.rew_cnt{1}));
-        Safe_Set(D.UI.txtPerfInf(3), 'String', infstr)
-        
-        % Rat vel
-        infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
-            D.P.Rat.vel, D.P.Rat.vel_max_lap, D.P.Rat.vel_max_all);
-        Safe_Set(D.UI.txtPerfInf(5), 'String', infstr)
-        
-        % Robot vel
-        infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
-            D.P.Rob.vel, D.P.Rob.vel_max_lap, D.P.Rob.vel_max_all);
-        Safe_Set(D.UI.txtPerfInf(6), 'String', infstr)
-        
-        % Get robot battery voltage
-        if c2m.('J').dat1 ~= 0
-            
-            % Update vcc
-            D.PAR.rob_vcc_last = D.PAR.rob_vcc;
-            D.PAR.rob_vcc = c2m.('J').dat1;
-            
-            % Format string
-            infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
-            Safe_Set(D.UI.txtPerfInf(7), 'String', infstr)
-        end
-        
-        % Get cube battery voltage
-        if D.F.cube_connected && D.F.implant_session
-            
-            % Get new vcc if enough time ellapsed
-            if Sec_DT(now) >= D.T.cube_vcc_update
-                
-                % Store last value
-                D.PAR.cube_vcc_last = D.PAR.cube_vcc;
-                
-                % Send NLX command
-                [pass, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
-                
-                % Parce nxl string
-                if pass
-                    nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
-                end
-                
-                % Check if parsed
-                if pass && ~isempty(nlx_str)
-                    D.PAR.cube_vcc = str2double(nlx_str{:});
-                else
-                    pass = false;
-                end
-                
-            else
-                pass = false;
-            end
-            
-            
-            % Make sure arg returned
-            if pass
-                
-                % Wait 30 sec for next check
-                D.T.cube_vcc_update = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
-                
-                % Format string
-                infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
-                Safe_Set(D.UI.txtPerfInf(8), 'String', infstr)
-                
-            end
-            
-        end
-        
-        %% PRINT TIME INFO
-        
-        % Get session time
-        nowTim(1) =  Sec_DT(now) - D.T.ses_str;
-        
-        % Get recording elapsed time plus saved time
-        if  D.F.rec
-            nowTim(2) = (Sec_DT(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
-        else
-            nowTim(2) = D.T.rec_tot_tim; % keep showing save time
-        end
-        
-        % Get lap time
-        if D.F.rat_in
-            nowTim(3) = Sec_DT(now) - D.T.lap_str;
-        else
-            nowTim(3) = 0;
-        end
-        
-        % Run time
-        if D.F.rat_in && ~D.F.task_done
-            nowTim(4) = Sec_DT(now) - D.T.task_str;
-        else
-            nowTim(4) = 0;
-        end
-        
-        % Make string
-        infstr = sprintf([ ...
-            'SES:%s%s\n', ...
-            'REC:%s%s\n', ...
-            'LAP:%s%s\n'...
-            'RUN:%s%s\n'], ...
-            repmat('_',1,1), datestr(nowTim(1)/(24*60*60), 'HH:MM:SS'), ...
-            repmat('_',1,1), datestr(nowTim(2)/(24*60*60), 'HH:MM:SS'), ...
-            repmat('_',1,1), datestr(nowTim(3)/(24*60*60), 'HH:MM:SS'), ...
-            repmat('_',1,1), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
-        
-        % Print time
-        Safe_Set(D.UI.txtTimeInf(1), 'String', infstr)
-        
-        % Save current time to UserData
-        Safe_Set(D.UI.txtTimeInf(1), 'UserData', nowTim)
-        
-        % Update time
-        D.DB.inf(1) = (Sec_DT(now) - t_now) * 1000;
-        D.DB.inf(2) = min(D.DB.inf(1), D.DB.inf(2));
-        D.DB.inf(3) = min(999, max(D.DB.inf(1), D.DB.inf(3)));
-        D.DB.inf(4) = D.DB.inf(1) + D.DB.inf(4);
-        D.DB.inf(5) = D.DB.inf(5) + 1;
-        
-        % Loop time info
-        infstr = sprintf( ...
-            [...
-            'Inf: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'Plt: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'Drw: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'Lop: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            ], ...
-            D.DB.inf(1), D.DB.inf(2), D.DB.inf(3), D.DB.inf(4)/D.DB.inf(5), ...
-            D.DB.plot(1), D.DB.plot(2), D.DB.plot(3), D.DB.plot(4)/D.DB.plot(5), ...
-            D.DB.draw(1), D.DB.draw(2), D.DB.draw(3), D.DB.draw(4)/D.DB.draw(5), ...
-            D.DB.loop(1), D.DB.loop(2), D.DB.loop(3), D.DB.loop(4)/D.DB.loop(5) ...
-            );
-        Safe_Set(D.UI.txtPerfInf(9), 'String', infstr)
-        
-        % Reset max
-        if D.DB.inf(3) >= 999; D.DB.inf(3) = 0; end
-        if D.DB.plot(3) >= 999; D.DB.plot(3) = 0; end
-        if D.DB.draw(3) >= 999; D.DB.draw(3) = 0; end
-        if D.DB.loop(3) >= 999; D.DB.loop(3) = 0; end
-        
-        % Update UI
-        Update_UI(11)
+        Update_UI(0, 'limitrate');
         
     end
 
@@ -12347,7 +12096,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get date
-        date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+        date = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
         
         % Store 'Date'
         D.SS_IO_3.(D.PAR.ratLab).Date{rowInd} = date;
@@ -12356,7 +12105,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.SS_IO_3.(D.PAR.ratLab).Human(rowInd) = D.PAR.sesHuman;
         
         % Store 'Start_Time'
-        D.SS_IO_3.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
+        D.SS_IO_3.(D.PAR.ratLab).Start_Time{rowInd} = datestr(TIMSTRLOCAL, 'HH:MM:SS');
         
         % Store 'Total_Time'
         D.SS_IO_3.(D.PAR.ratLab).Total_Time(rowInd) = Sec_DT(now) / 60;
@@ -12439,7 +12188,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get date
-        date = datestr(startTime, 'yyyy-mm-dd_HH-MM-SS');
+        date = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
         
         % Store 'Include_Analysis'
         D.SS_IO_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
@@ -12474,7 +12223,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Store 'Start_Time'
-        D.SS_IO_2.(D.PAR.ratLab).Start_Time{rowInd} = datestr(startTime, 'HH:MM:SS');
+        D.SS_IO_2.(D.PAR.ratLab).Start_Time{rowInd} = datestr(TIMSTRLOCAL, 'HH:MM:SS');
         
         % Store 'Total_Time'
         D.SS_IO_2.(D.PAR.ratLab).Total_Time(rowInd) = (D.T.ses_end - D.T.ses_str) / 60;
@@ -12659,7 +12408,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.ttLogNew.Session = D.TT.Ses;
         
         % Store 'Date'
-        D.TT.ttLogNew.Date = {datestr(startTime, 'yyyy-mm-dd_HH-MM-SS')};
+        D.TT.ttLogNew.Date = {datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS')};
         
         % Store 'Recording File'
         % Store 'Recording File'
@@ -13068,3460 +12817,224 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 
 
-%% ============================ CALLBACK FUNCTIONS ========================
-
-% -----------------------------SWITCH MONITOR------------------------------
-    function Togg_Mon(hObject, ~, ~)
-        
-        % Get user data
-        mon_ind = get(hObject, 'UserData');
-        val = hObject.Value;
-        
-        % Make sure GUI back on top
-        set(FIGH,'WindowStyle','modal')
-        pause(0.01)
-        set(FIGH,'WindowStyle','normal')
-        
-        % Can only set to select
-        if val == 0 && all([D.UI.toggMon(:).Value] == 0)
-            hObject.Value = 1;
-            return
-        end
-        
-        % Move windows based on session type
-        if NlxAreWeConnected() == 1
-            
-            % Dont move unless using
-            if D.F.implant_session
-                
-                % Move Ephys windows
-                if mon_ind == 1 || mon_ind == 2
-                    cfg_fi = 'ICR_Set_Window_Position_Ephys_M1.cfg';
-                else
-                    cfg_fi = 'ICR_Set_Window_Position_Ephys_M3.cfg';
-                end
-                
-            else
-                
-                % Move Behavior windows
-                if mon_ind == 1 || mon_ind == 2
-                    cfg_fi = 'ICR_Set_Window_Position_Behavior_M1.cfg';
-                else
-                    cfg_fi = 'ICR_Set_Window_Position_Behavior_M3.cfg';
-                end
-                
-            end
-            
-            % Load ephys pos cfg
-            Send_NLX_Cmd(['-ProcessConfigurationFile ', cfg_fi]);
-            
-        end
-        
-        % Update current pos
-        D.UI.figGrpPos{4} = D.UI.figGrpPos{mon_ind};
-        D.UI.dlgPos{4} = D.UI.dlgPos{mon_ind};
-        
-        % Set Figure postion
-        FIGH.Position = D.UI.figGrpPos{4};
-        
-        % Bring UI to top
-        uistack(FIGH, 'top')
-        
-        % Unset other buttons
-        Safe_Set(D.UI.toggMon(1:3~=mon_ind), 'Value', 0);
-        
-        % Update buttons
-        Button_State(D.UI.toggMon, 'Update');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% -----------------------------LOAD SELECTION------------------------------
-    function Togg_Type(hObject, ~, ~)
-        
-        % Bail if nothing selected
-        if (strcmp(get(hObject, 'Style'),'popupmenu') && get(D.UI.popType,'Value') == 1) || ...
-                (strcmp(get(hObject, 'Style'),'togglebutton') && get(D.UI.toggType,'Value') == 0)
-            
-            % Unset both
-            Safe_Set(D.UI.popType,'Value', 1)
-            Safe_Set(D.UI.toggType,'Value', 0)
-            
-            % Update button
-            Button_State(D.UI.toggType, 'Update');
-            
-            % Update pop
-            Safe_Set(D.UI.popType, ...
-                'BackgroundColor',D.UI.figBckCol, ...
-                'ForegroundColor', D.UI.enabledCol);
-            
-            return
-        end
-        
-        % Change to active color
-        Safe_Set(D.UI.popType, ...
-            'BackgroundColor', D.UI.activeCol, ...
-            'ForegroundColor', D.UI.enabledBtnFrgCol);
-        
-        % Bail here if called by pop
-        if strcmp(get(hObject, 'Style'),'popupmenu')
-            return
-        end
-        
-        % Disable pop and button
-        Safe_Set(D.UI.popType, 'Enable', 'off')
-        Button_State(D.UI.toggType, 'Disable');
-        
-        % Store selected session type
-        D.PAR.sesType(:) = D.UI.popType.String{get(D.UI.popType, 'Value')};
-        
-        % Set flag
-        D.F.ses_type_confirmed = true;
-        
-        % Use default rat list
-        if D.PAR.sesType ~= 'TT_Turn'
-            Safe_Set(D.UI.popRat, 'String', [{''}; D.PAR.listRat])
-        end
-        
-        % Include only implanted rats in popRat list
-        if D.PAR.sesType == 'TT_Turn'
-            
-            % Get ind of rats to include
-            inc_ind = ismember(D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run), ...
-                D.TT_IO.Properties.RowNames(D.TT_IO.Include_Run));
-            tt_rat_list = regexprep(D.PAR.listRat(inc_ind), 'r', '');
-            
-            % Update pop menu
-            Safe_Set(D.UI.popRat, 'String', [{''}; tt_rat_list])
-            
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% ------------------------------RAT SELECTION------------------------------
-    function Pop_Rat(~, ~, ~)
-        
-        % Bail if nothing selected
-        if get(D.UI.popRat,'Value') == 1
-            return
-        end
-        
-        % Change to active color
-        Safe_Set(D.UI.popRat, ...
-            'BackgroundColor', D.UI.activeCol, ...
-            'ForegroundColor', D.UI.enabledBtnFrgCol);
-        
-        % Get Rat label
-        D.PAR.ratLab = ... % ('r####')
-            ['r',D.UI.popRat.String{get(D.UI.popRat,'Value')}(1:4)];
-        
-        % Get rat number
-        D.PAR.ratNum = ... % (####)
-            str2double(D.PAR.ratLab(2:end));
-        
-        % Get rat index in D.SS_IO_1
-        D.PAR.ratIndSS = ...
-            find(ismember(D.SS_IO_1.Properties.RowNames, D.PAR.ratLab));
-        
-        % Get rat index in D.TT_IO
-        D.PAR.ratIndTT = ...
-            find(ismember(D.TT_IO.Properties.RowNames, D.PAR.ratLab));
-        
-        % Get rat implant status
-        D.F.rat_implanted = D.SS_IO_1.Implanted(D.PAR.ratIndSS);
-        
-        % Setup ICR Session stuff
-        if D.PAR.sesType == 'ICR_Session'
-            
-            % Get rat age
-            D.PAR.ratAgeGrp = ... % [Young,Old]
-                D.SS_IO_1.Age_Group(D.PAR.ratIndSS);
-            
-            % Get rat dob
-            D.PAR.ratDOB = ...
-                D.SS_IO_1.DOB(D.PAR.ratIndSS);
-            
-            % Get feeder condition
-            D.PAR.ratFeedCnd = ... % [C1 C2]
-                D.SS_IO_1.Feeder_Condition(D.PAR.ratIndSS);
-            
-            % Get feeder condition number
-            D.PAR.ratFeedCnd_Num = ... % [1 2]
-                find(D.PAR.listFeedCnd == D.PAR.ratFeedCnd);
-            
-        end
-        
-        % SET UI TO LAST SESSION
-        
-        % Set human
-        D.PAR.sesHuman = ...
-            D.SS_IO_1.Human(D.PAR.ratIndSS);
-        Safe_Set(D.UI.popHuman, 'Value', ...
-            find(ismember(D.UI.popHuman.String, D.PAR.sesHuman)));
-        Pop_Human();
-        
-        % Setup ICR Session stuff
-        if D.PAR.sesType == 'ICR_Session'
-            
-            % Set cue condition
-            D.PAR.sesCue = ...
-                D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS);
-            Safe_Set(D.UI.toggCue( ...
-                ismember(D.PAR.listCueCond, D.PAR.sesCue)), 'Value', 1);
-            % Set all others to off
-            Safe_Set(D.UI.toggCue( ...
-                ~ismember(D.PAR.listCueCond, D.PAR.sesCue)), 'Value', 0);
-            Togg_Cue();
-            
-            % Set reward delay
-            D.PAR.sesRewDel = ...
-                D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS);
-            Safe_Set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.popRewDel.String, D.PAR.sesRewDel)));
-            % run callback
-            Pop_RewDel();
-            
-            % Set sound conditions
-            D.F.sound(1:2) = logical(...
-                D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,1:2));
-            Safe_Set(D.UI.toggSnd(D.F.sound(1:2)), 'Value', 1);
-            Togg_Sound();
-            
-            % Set Session Condition
-            D.PAR.sesCond = ...
-                D.SS_IO_1.Session_Condition(D.PAR.ratIndSS);
-            val_ind = find(ismember(D.UI.popCond.String, D.PAR.sesCond));
-            if ~isempty(val_ind)
-                Safe_Set(D.UI.popCond, 'Value', val_ind);
-                % run callback
-                Pop_Cond();
-            end
-            
-            % Set Session Task
-            D.PAR.sesTask = ...
-                D.SS_IO_1.Session_Task(D.PAR.ratIndSS);
-            Safe_Set(D.UI.popTask, 'Value', ...
-                find(ismember(D.UI.popTask.String, D.PAR.sesTask)));
-            % run callback
-            Pop_Task();
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Rat', D.PAR.ratLab));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% ---------------------------SESSION CONDITION-----------------------------
-    function Pop_Human(~, ~, ~)
-        
-        % Bail if nothing selected
-        if get(D.UI.popHuman,'Value') == 1
-            return
-        end
-        
-        % Change to active color
-        Safe_Set(D.UI.popHuman, ...
-            'BackgroundColor', D.UI.activeCol, ...
-            'ForegroundColor', D.UI.enabledBtnFrgCol);
-        
-        % Store value
-        D.PAR.sesHuman(:) = D.UI.popHuman.String(get(D.UI.popHuman, 'Value'));
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Human', char(D.PAR.sesHuman)));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------SESSION CONDITION-----------------------------
-    function Pop_Cond(~, ~, ~)
-        
-        % Bail if nothing selected
-        if get(D.UI.popCond,'Value') == 1
-            return
-        end
-        
-        % Change to active color
-        Safe_Set(D.UI.popCond, ...
-            'BackgroundColor', D.UI.activeCol, ...
-            'ForegroundColor', D.UI.enabledBtnFrgCol);
-        
-        % Store value
-        D.PAR.sesCond(:) = D.UI.popCond.String(get(D.UI.popCond, 'Value'));
-        
-        % Change other buttons for manual training
-        if D.PAR.sesCond == 'Manual_Training'
-            
-            % Set to minimum reward delay
-            Safe_Set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
-            % run callback
-            Pop_RewDel();
-            
-            % Set cue condition
-            Safe_Set(D.UI.toggCue( ...
-                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
-            % Set all others to off
-            Safe_Set(D.UI.toggCue( ...
-                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
-            Togg_Cue();
-            
-            % Change other buttons for rot cond
-        elseif D.PAR.sesCond == 'Rotation'
-            
-            % Set Session Task to Track
-            Safe_Set(D.UI.popTask, 'Value', ...
-                find(ismember(D.UI.popTask.String, 'Track')));
-            % run callback
-            Pop_Task();
-            
-            % Set to maximum reward delay
-            Safe_Set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(end))));
-            % run callback
-            Pop_RewDel();
-            
-            % Set cue condition
-            Safe_Set(D.UI.toggCue( ...
-                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
-            % Set all others to off
-            Safe_Set(D.UI.toggCue( ...
-                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
-            Togg_Cue();
-            
-            % Set sound condition
-            Safe_Set(D.UI.toggSnd(D.F.sound(1:2)), 'Value', 1);
-            Togg_Sound();
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Cond', char(D.PAR.sesCond)));
-        
-        % Check settings
-        Check_Setup_Defaults();
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -----------------------------SESSION TASK--------------------------------
-    function Pop_Task(~, ~, ~)
-        
-        % Bail if nothing selected
-        if get(D.UI.popTask,'Value') == 1
-            return
-        end
-        
-        % Change to active color
-        Safe_Set(D.UI.popTask, ...
-            'BackgroundColor', D.UI.activeCol, ...
-            'ForegroundColor', D.UI.enabledBtnFrgCol);
-        
-        % Store value
-        D.PAR.sesTask(:) = D.UI.popTask.String(get(D.UI.popTask, 'Value'));
-        
-        % Change settings for 'Forage'
-        if D.PAR.sesTask == 'Forage'
-            
-            % Set to minimum reward delay
-            Safe_Set(D.UI.popRewDel, 'Value', ...
-                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
-            % run callback
-            Pop_RewDel();
-            
-            % Set cue condition
-            Safe_Set(D.UI.toggCue( ...
-                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
-            % Set all others to off
-            Safe_Set(D.UI.toggCue( ...
-                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
-            Togg_Cue();
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Task', char(D.PAR.sesTask)));
-        
-        % Check settings
-        Check_Setup_Defaults();
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -----------------------------REWARD DELAY--------------------------------
-    function Pop_RewDel(~, ~, ~)
-        
-        % Bail if nothing selected
-        if get(D.UI.popRewDel,'Value') == 1
-            return
-        end
-        
-        % Change to active color
-        Safe_Set(D.UI.popRewDel, ...
-            'BackgroundColor', D.UI.activeCol, ...
-            'ForegroundColor', D.UI.enabledBtnFrgCol);
-        
-        % Store as cat
-        D.PAR.sesRewDel(:) = D.UI.popRewDel.String{get(D.UI.popRewDel,'Value'),:};
-        
-        % Convert to number
-        D.PAR.rewDel = str2double(char(D.PAR.sesRewDel));
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_RewDel', char(D.PAR.sesRewDel)));
-        
-        % Check settings
-        Check_Setup_Defaults();
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -----------------------------CUE CONDITION-------------------------------
-    function Togg_Cue(hObject, ~, ~)
-        
-        % Get trigger button
-        cue_cond = find(cell2mat(get(D.UI.toggCue, 'Value')) == 1);
-        
-        % Switching buttons
-        if length(cue_cond)>1
-            cue_cond = get(hObject, 'UserData');
-        end
-        
-        % Change to active
-        if get(D.UI.toggCue(cue_cond), 'Value') == 1
-            
-            % Store string
-            cue_str = get(D.UI.toggCue(cue_cond), 'String');
-            
-            % Activate current button
-            Button_State(D.UI.toggCue(cue_cond), 'Enable');
-            
-            % Inactivate other buttons
-            Safe_Set(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Value',0);
-            Button_State(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Update');
-            
-            % Save data
-            D.PAR.sesCue(:) = cue_str;
-            
-            % Change to inactive
-        else
-            Safe_Set(D.UI.toggCue(cue_cond), 'Value',0);
-            Button_State(D.UI.toggCue(cue_cond), 'Update');
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%s\"', 'Togg_Cue', char(D.PAR.sesCue)));
-        
-        % Check settings
-        Check_Setup_Defaults();
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------SOUND CONDITION------------------------------
-    function Togg_Sound(~, ~, ~)
-        
-        % Note: D.F.sound format
-        %         {'White'}
-        %         {'Reward'}
-        
-        for z_sa = 1:2
-            
-            % Get button ID and state value
-            D.F.soundVal = get(D.UI.toggSnd(z_sa), 'Value');
-            D.F.soundID = get(D.UI.toggSnd(z_sa), 'UserData');
-            
-            % Store logical
-            if D.F.soundVal == 1
-                D.F.sound(z_sa) = true;
-            else
-                D.F.sound(z_sa) = false;
-            end
-        end
-        
-        % Turn off all sound if white noise is off
-        if D.F.sound(1) == false
-            D.F.sound(2) = false;
-            Safe_Set(D.UI.toggSnd(2), 'Value', 0);
-        end
-        
-        % Update buttons
-        Button_State(D.UI.toggSnd, 'Update');
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\" \"%d\"', 'Togg_Sound', ...
-            get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
-        
-        % Check settings
-        Check_Setup_Defaults();
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------------SETUP DONE--------------------------------
-    function Togg_SetupDone(~, ~, ~)
-        
-        % Confirm UI entries
-        if ...
-                get(D.UI.popRat,'Value') == 1 || ...
-                get(D.UI.popHuman,'Value') == 1 || ...
-                (D.PAR.sesType == 'ICR_Session' && ...
-                (get(D.UI.popCond,'Value') == 1 || ...
-                get(D.UI.popTask,'Value') == 1 || ...
-                get(D.UI.popRewDel,'Value') == 1 || ...
-                all(cell2mat(get(D.UI.toggCue,'Value')) == 0)))
-            
-            dlg_h = dlgAWL(...
-                '!!WARNING: MISSING ENTRY!!', ...
-                'MISSING SETUP ENTRIES', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'warning');
-            Dlg_Wait(dlg_h);
-            
-            % Unset button
-            Safe_Set(D.UI.toggSetupDone, 'Value', 0);
-            
-            % Bail
-            return
-            
-        end
-        
-        % Disable Setup panel objects
-        Button_State(D.UI.toggSetupDone, 'Update');
-        Object_Group_State('Setup_Objects', 'Disable')
-        
-        % Flag if implant session
-        D.F.implant_session = D.PAR.sesType == 'TT_Turn' || ...
-            (D.F.rat_implanted && ...
-            (D.PAR.sesCond == 'Rotation' || D.PAR.sesCond == 'Implant_Training'));
-        
-        % Set flag
-        D.F.ses_data_loaded = true;
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_SetupDone', get(D.UI.toggSetupDone,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% ----------------------------UPDATE RAT WEIGHT----------------------------
-    function Togg_UpdateWeight(~, ~, ~)
-        
-        % Get new weight
-        D.PAR.ratWeightNew = str2double(D.UI.editNewWeight.String);
-        
-        % Unset button and bail if value bad
-        if isnan(D.PAR.ratWeightNew)
-            Safe_Set(D.UI.toggUpdateWeight, 'Value', 0)
-            return
-        end
-        
-        % Get cap weight
-        if D.F.rat_implanted
-            
-            % Get weight of cap
-            D.PAR.capWeight = D.PAR.capWeightArr(1);
-            
-            % Add aditional weights
-            if D.UI.popCapWeight.Value > 1
-                D.PAR.capWeight = D.PAR.capWeight + D.PAR.capWeightArr(2) + ...
-                    D.PAR.capWeightArr(3)*(D.UI.popCapWeight.Value-2);
-            end
-            
-        end
-        
-        % Calculate new corrected weight
-        D.PAR.ratWeightCorrected = ...
-            D.PAR.ratWeightNew - D.PAR.driveWeight - D.PAR.capWeight;
-        
-        % Check for missing baseling
-        if isnan(D.PAR.ratWeightBaseline)
-            D.PAR.ratWeightBaseline =  D.PAR.ratWeightCorrected;
-        end
-        
-        % Calculate weight proportion
-        D.PAR.ratWeightProportion = ...
-            D.PAR.ratWeightCorrected / D.PAR.ratWeightBaseline;
-        weight_prcnt = round(D.PAR.ratWeightProportion*100);
-        
-        % Print new values
-        D.UI.txtBaselineWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightBaseline);
-        D.UI.txtCorrectedWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightCorrected);
-        D.UI.txtLastWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightLast);
-        D.UI.txtPercentageWeight(2).String = sprintf('%0.0f%%', weight_prcnt);
-        
-        % Update button
-        Button_State(D.UI.toggUpdateWeight, 'Update');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------------------SAVE FOOD INFO-----------------------------
-    function Togg_UpdateFed(~, ~, ~)
-        
-        % Get pellet entry
-        D.PAR.feedPellets = str2double(D.UI.editFeedPellets.String);
-        
-        % Get mash entry
-        D.PAR.feedMash = str2double(D.UI.editFeedMash.String);
-        
-        % Get ensure entry
-        D.PAR.feedEnsure = str2double(D.UI.editFeedEnsure.String);
-        
-        % Get stat entry
-        D.PAR.feedSTAT = str2double(D.UI.editFeedSTAT.String);
-        
-        % Unset and bail if any bad values
-        if any(isnan([D.PAR.feedPellets, D.PAR.feedMash, D.PAR.feedEnsure, D.PAR.feedSTAT]))
-            Safe_Set(D.UI.toggUpdateFed, 'Value', 0)
-            return
-        end
-        
-        % Update button
-        Button_State(D.UI.toggUpdateFed, 'Update');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------------ACQ BUTTON--------------------------------
-    function Togg_Acq(~, ~, ~)
-        
-        % Bail if recording
-        if get(D.UI.toggRec,'Value') == 1
-            
-            % Bail if aqc active
-            if get(D.UI.toggAcq,'Value') == 1
-                return
-            end
-            
-            % Enable acq
-            Safe_Set(D.UI.toggAcq,'Value',1)
-        end
-        
-        % Start aquisition
-        if get(D.UI.toggAcq,'Value') == 1
-            Send_NLX_Cmd('-StartAcquisition');
-        else
-            Send_NLX_Cmd('-StopAcquisition');
-        end
-        
-        % Update button
-        Button_State(D.UI.toggAcq, 'Update');
-        
-        % Set time tracking variables
-        if D.F.acq
-            % save out time before stopping
-            D.T.acq_tot_tim = (Sec_DT(now) - D.T.acq_tim) + D.T.acq_tot_tim;
-        end
-        
-        % Change aquiring status
-        D.F.acq = ~D.F.acq;
-        
-        % Reset temp now
-        D.T.acq_tim = Sec_DT(now);
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Acq', get(D.UI.toggAcq,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------------REC BUTTON--------------------------------
-    function Togg_Rec(~, ~, ~)
-        
-        % Start acq if not running
-        if get(D.UI.toggRec,'Value') == 1 && ...
-                get(D.UI.toggAcq,'Value') == 0
-            
-            % run ToggAcq
-            Togg_Acq(D.UI.toggAcq);
-            
-        end
-        
-        % Start recording
-        if get(D.UI.toggRec,'Value') == 1
-            Send_NLX_Cmd('-StartRecording');
-        else
-            Send_NLX_Cmd('-StopRecording');
-        end
-        
-        % Update button
-        Button_State(D.UI.toggRec, 'Update');
-        
-        % Set time tracking variables
-        if  D.F.rec
-            % save out time before stopping
-            D.T.rec_tot_tim = (Sec_DT(now) - D.T.rec_tim) + D.T.rec_tot_tim;
-        end
-        D.F.rec = ~ D.F.rec;
-        D.T.rec_tim = Sec_DT(now);
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Rec', get(D.UI.toggRec,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------CELLS CUT BUTTON-----------------------------
-    function Togg_StreamTTs(hObject, ~, ~)
-        
-        % Get handle values
-        val = get(hObject, 'Value');
-        %is_ran = get(hObject, 'UserData') == 1;
-        
-        % Upate button
-        Button_State(D.UI.toggStreamTTs, 'Update');
-        
-        % Get a list of ncf files
-        clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
-        D.TT.clust_files = dir(clust_fi_dir);
-        D.TT.clust_files = {D.TT.clust_files.name};
-        D.TT.clust_files = regexp(D.TT.clust_files,'TT\d\d.NCF','match');
-        D.TT.clust_files = [D.TT.clust_files{:}];
-        
-        % Open stream
-        for z_tt = 1:length(D.TT.ttList)
-            
-            % Get tt label
-            tt_lab = D.TT.ttList{z_tt};
-            
-            % Bail if ref
-            if contains(tt_lab, 'R')
-                continue
-            end
-            
-            % Parse clust file
-            if val == 1
-                
-                % Check if file exists
-                fi_ind = find(ismember(D.TT.clust_files, [tt_lab, '.NCF']));
-                if ~isempty(fi_ind)
-                    
-                    % Read in file text
-                    file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
-                    file_str = fread(file_id,'*char')';
-                    fclose(file_id);
-                    
-                    % Parse file for number of clusters
-                    clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
-                    
-                    % Store number of clusters
-                    D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
-                    
-                end
-                
-                % Include cluster 0 in count
-                D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
-                
-                % Include cluster 0 in all streaming tts
-                D.F.stream_clust(z_tt, 1) = val == 1;
-                
-                % Enable clust buttons
-                Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
-                for z_c = 1:D.TT.nClust(z_tt)
-                    Safe_Set(D.UI.toggSubPlotTT(z_tt,z_c), ...
-                        'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
-                end
-                
-            end
-            
-            % Initialize flag
-            succeeded = false;
-            
-            % Open tt stream
-            if val == 1
-                msg = sprintf('Open \"%s\" Stream', tt_lab);
-                if any(contains(D.NLX.das_objects, tt_lab))
-                    succeeded = NlxOpenStream(tt_lab) == 1;
-                end
-            end
-            
-            % Close tt stream
-            if val == 0
-                msg = sprintf('Close \"%s\" Stream', tt_lab);
-                if any(contains(D.NLX.das_objects, tt_lab))
-                    succeeded = NlxCloseStream(tt_lab) == 1;
-                end
-            end
-            
-            % Check status
-            if succeeded
-                
-                % Log/print success
-                Console_Write(sprintf('[Togg_StreamTTs] FINISHED: %s', msg));
-                
-                % Set flag
-                D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
-                
-            else
-                
-                % Check for missing das
-                if ~any(contains(D.NLX.das_objects, tt_lab))
-                    Console_Write(sprintf('**WARNING** [Togg_StreamTTs] ABORTED: %s: Missing DAS Object', msg));
-                else
-                    Console_Write(sprintf('**WARNING** [Togg_StreamTTs] FAILED: %s', msg));
-                end
-                
-                % Bail
-                continue
-            end
-            
-        end
-        
-        % Enable/setup plotting
-        if val == 1
-            
-            % Set callback
-            Safe_Set(D.UI.toggSubPlotTT, ...
-                'Callback', {@Togg_SubPlotTT})
-            
-            % Initialize clust pos vals
-            [D.TT.posClust{D.F.stream_clust}] =  deal(cell2struct( ...
-                {[1,0], [1,0], single(NaN(120*60*33,2)), single(NaN(120*60*33,2)), NaN(120*60*33,1)}, ...
-                {'indLap', 'indAll', 'Cart', 'Pol', 'TS'}, 2));
-            
-            % Enable ephys plottng objects
-            Object_Group_State('TT_Plot_Objects', 'Enable')
-            
-            % Set ran flag
-            D.UI.toggStreamTTs.UserData = 1;
-            
-        end
-        
-        % Disable plotting
-        if val == 0
-            
-            % Disable all flags
-            D.F.stream_clust(:) = false;
-            
-            % Reset count
-            D.TT.nClust(:) = 0;
-            
-            % Disable ephys plottng objects
-            Object_Group_State('TT_Plot_Objects', 'Disable')
-            
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------CELLS CUT BUTTON-----------------------------
-    function Togg_CubeLED(~, ~, ~)
-        
-        % Upate button
-        Button_State(D.UI.toggCubeLED, 'Update');
-        
-        % Turn on Cube LEDs
-        if get(D.UI.toggCubeLED, 'Value') == 1
-            Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1');
-        end
-        
-        % Turn off Cube LEDs
-        if get(D.UI.toggCubeLED, 'Value') == 0
-            Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 0');
-        end
-        
-    end
-
-% -----------------------------SLEEP BUTTON--------------------------------
-    function Togg_Sleep(hObject, ~, ~)
-        
-        % Get user data and value
-        user_data = get(hObject, 'UserData');
-        sleep_phase = user_data(1);
-        sleep_done = user_data(2);
-        val = get(hObject, 'Value');
-        
-        % Bail already run
-        if sleep_done == 1
-            return
-        end
-        
-        % Update button
-        Button_State(D.UI.toggSleep(sleep_phase), 'Update');
-        
-        % Start of sleep
-        if val == 1
-            
-            % Store sleep start time
-            D.T.sleep_str(sleep_phase) = Sec_DT(now);
-            
-            % Send NLX sleep start event
-            Send_NLX_Cmd(D.NLX.sleep_start_evt{sleep_phase});
-            
-            % Switch to sleep tracking for second sleep
-            if sleep_phase == 2
-                
-                % Log/print
-                Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
-                
-                % Load sleep tracking config
-                Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Sleep.cfg');
-                Console_Write('[NLX_Setup] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
-                
-                % Log/print
-                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
-                
-            end
-            
-        end
-        
-        % End of sleep
-        if val == 0
-            
-            % Disable Sleep button
-            if sleep_phase == 1
-                Object_Group_State('Sleep1_Objects', 'Disable');
-            else
-                Object_Group_State('Sleep2_Objects', 'Disable');
-            end
-            
-            % Store end time
-            D.T.sleep_end(sleep_phase) = Sec_DT(now);
-            
-            % Send NLX sleep end event
-            Send_NLX_Cmd(D.NLX.sleep_end_evt{sleep_phase});
-            
-            % Switch back to task tracking after first sleep
-            if sleep_phase == 1
-                
-                % Log/print
-                Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
-                
-                % Load sleep tracking config
-                pause(0.5);
-                Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Task.cfg');
-                
-                % Log/print
-                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
-                
-            end
-            
-            % Flag sleep done
-            D.UI.toggSleep(sleep_phase).UserData(2) = 1;
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s(%d)] Set to \"%d"', 'Togg_Sleep', sleep_phase, val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------ROTATION BUTTON-------------------------------
-    function Togg_ICR(hObject, ~, ~)
-        
-        % Get value
-        val = get(hObject, 'Value');
-        
-        % Get next rot ind
-        rotNext = [1, 2] ~=  D.I.rot;
-        
-        % Enable rot pos select
-        if (val==1)
-            
-            % Show rot pos options
-            Patch_State(D.UI.ptchRtBnds(rotNext,:), ...
-                'ShowAll', D.UI.rotCol(rotNext,:));
-            Safe_Set(D.UI.ptchRtBnds(rotNext,:), ...
-                'HitTest', 'on');
-            Safe_Set(D.UI.txtRtBnds(rotNext, :), ...
-                'Visible', 'on', ...
-                'HitTest', 'on');
-            
-            % Make line width of preffered pos thicker
-            pref_ind = D.UI.rotCatInd == str2double(char(D.PAR.rotPosList(D.C.rot_cnt+1)));
-            Safe_Set(D.UI.ptchRtBnds(rotNext, pref_ind), ...
-                'LineWidth', 3);
-            
-            % Update button to active color
-            Button_State(D.UI.toggICR(rotNext), 'Update');
-            
-        else
-            
-            % Hide rot pos options
-            Patch_State(D.UI.ptchRtBnds(rotNext,:), ...
-                'Hide', D.UI.rotCol(rotNext,:));
-            Safe_Set(D.UI.ptchRtBnds(rotNext,:), ...
-                'HitTest', 'off');
-            Safe_Set(D.UI.txtRtBnds(rotNext, :), ...
-                'Visible', 'off', ...
-                'HitTest', 'off');
-            
-            % Update button color back to default
-            Button_State(D.UI.toggICR(rotNext), 'Update', D.UI.rotCol(rotNext,:));
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d"', 'Togg_ICR', val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------UPDATE UI POS---------------------------------
-    function SizeChanged_GetPosUI(~, ~, ~)
-        
-        % Initialzie
-        mon_new_ind = 0;
-        
-        % Find moninotor window in
-        for z_m = 1:3
-            
-            % Bail if monitor not present
-            if z_m > size(D.UI.monPos,1)
-                continue
-            end
-            
-            % Move left
-            if FIGH.Position(1) == D.UI.monPos(z_m, 1) + 1
-                mon_new_ind = z_m - 1;
-            end
-            
-            % Move right
-            if sum(FIGH.Position([1,3])) == sum(D.UI.monPos(z_m, [1,3])) - 1
-                mon_new_ind = z_m + 1;
-            end
-            
-            % Check for change
-            if mon_new_ind > 0 && mon_new_ind <= size(D.UI.monPos,1)
-                
-                % Update pos
-                D.UI.toggMon(mon_new_ind).Value = 1;
-                Togg_Mon(D.UI.toggMon(mon_new_ind));
-                
-                % Bail
-                return
-                
-            end
-            
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------GET MOUSE POSITION------------------------------
-    function Mouse_Track(~, ~, ~)
-        
-        % Block callback re-entry
-        s = dbstack();
-        if sum(cell2mat(cellfun(@(x) any(strfind(x, 'MouseTrack')), {s.name}, 'uni', false))) > 1
-            return
-        end
-        
-        % Bail if no buttons active
-        if ...
-                (get(D.UI.toggPickRewPos, 'Value') == 0 && ...
-                all([D.UI.toggICR.Value] == 0)) || ...
-                (strcmp(get(D.UI.toggPickRewPos, 'Enable'), 'off') && ...
-                all(ismember({D.UI.toggICR.Enable}, 'off')))
-            return
-        end
-        
-        % Get new mouse data
-        C = get (D.UI.axH(3), 'CurrentPoint');
-        
-        % Get cart coord
-        x = C(1,1);
-        y = C(1,2);
-        
-        % Get normalized pos data
-        x_norm = (x-D.PAR.XC)./D.PAR.R;
-        y_norm = (y-D.PAR.YC)./D.PAR.R;
-        
-        % Get position in radians
-        [mouse_rad,mouse_roh] = cart2pol(x_norm, y_norm);
-        
-        % Convert radians between [0, 2*pi]
-        mouse_rad = wrapTo2Pi(mouse_rad);
-        
-        % Track reward zone select
-        if D.PAR.sesTask == 'Track' && ...
-                get(D.UI.toggPickRewPos, 'Value') == 1
-            
-            % Run sub function
-            doZoneSelect(mouse_rad, mouse_roh);
-        end
-        
-        % Forage reward target select
-        if D.PAR.sesTask == 'Forage' && ...
-                get(D.UI.toggPickRewPos, 'Value') == 1
-            
-            % Run sub function
-            doTargSelect(mouse_rad, mouse_roh);
-        end
-        
-        % Rotation select
-        if D.PAR.sesCond == 'Rotation' && ...
-                any([D.UI.toggICR.Value] == 1)
-            
-            % Run sub function
-            doRotSelect(mouse_rad, mouse_roh);
-        end
-        
-        % Select track reward zone
-        function doZoneSelect(rad, roh)
-            
-            % Check if mouse over any targ
-            if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
-                Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
-                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-                    'ShowAll', D.UI.rotCol(D.I.rot,:));
-                return
-            end
-            
-            % Check each zone bounds
-            for z_ptch = 1:size(D.PAR.rewZoneBnds,1)
-                if any(Check_Pol_Bnds(rad, roh, D.PAR.rewZoneBnds(z_ptch,:,D.I.rot)))
-                    
-                    % Darken patch
-                    Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-                        'ShowAll', D.UI.rotCol(D.I.rot,:));
-                    Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, z_ptch), ...
-                        'Select', D.UI.rotCol(D.I.rot,:));
-                    
-                    % Show text
-                    Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
-                    Safe_Set(D.UI.txtFdDurH(D.I.rot, z_ptch), 'Visible', 'on');
-                    
-                    % Bail
-                    break
-                    
-                else
-                    Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
-                    Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-                        'ShowAll', D.UI.rotCol(D.I.rot,:));
-                end
-            end
-            
-        end
-        
-        % Select forrage reward target
-        function doTargSelect(rad, roh)
-            
-            % Check if mouse over any targ
-            if ~(roh > D.P.frgRohBnd(1) && roh < D.P.frgRohBnd(2))
-                Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
-                    'ShowAll');
-                return
-            end
-            
-            % Check each bound
-            for z_ptch = 1:length(D.PAR.frgTargSelectInd)
-                
-                % Get current targ and path ind
-                path_ind = D.PAR.frgPathSelectInd(z_ptch);
-                targ_ind = D.PAR.frgTargSelectInd(z_ptch);
-                
-                if any(Check_Pol_Bnds(rad, roh, D.PAR.rewTargBnds(targ_ind,:)))
-                    
-                    % Darken patch
-                    Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
-                        'ShowAll');
-                    Patch_State(D.UI.ptchRewTargBnds(targ_ind), ...
-                        'Select');
-                    
-                    % Get path
-                    D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
-                    D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
-                    
-                    % Plot path
-                    cdat = D.P.frgOccMatScale+D.P.pathNowMat;
-                    if ~isgraphics(D.UI.imgFrgOcc)
-                        D.UI.imgFrgOcc = imagesc(cdat, ...
-                            'Parent', D.UI.axH(6));
-                    else
-                        Safe_Set(D.UI.imgFrgOcc, 'CData', cdat);
-                    end
-                    
-                    % Bail
-                    break
-                    
-                else
-                    Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
-                        'ShowAll');
-                end
-            end
-            
-            
-        end
-        
-        % Select rot pos
-        function doRotSelect(rad, roh)
-            
-            % Get next rot ind
-            rotNext = [1, 2] ~=  D.I.rot;
-            
-            % Check if mouse over track
-            if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
-                Patch_State(D.UI.ptchRtBnds(rotNext, :), ...
-                    'ShowAll', D.UI.rotCol(rotNext,:));
-                return
-            end
-            
-            % Check each rot bounds
-            for z_ptch = 1:size(D.UI.rotBnds,1)
-                if any(Check_Pol_Bnds(rad, roh, D.UI.rotBnds(z_ptch,:,rotNext)))
-                    
-                    % Darken patch
-                    Patch_State(D.UI.ptchRtBnds(rotNext, :), ...
-                        'ShowAll', D.UI.rotCol(rotNext,:));
-                    Patch_State(D.UI.ptchRtBnds(rotNext, z_ptch), ...
-                        'Select', D.UI.rotCol(rotNext,:));
-                    
-                    % Bail
-                    break
-                else
-                    Patch_State(D.UI.ptchRtBnds(rotNext, :), ...
-                        'ShowAll', D.UI.rotCol(rotNext,:));
-                end
-            end
-            
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------MOUSE CLICK TRACK REW ZONE SELECT----------------------
-    function Mouse_SelectRewZone(hObject, ~, ~)
-        
-        % Bail if not checking for zone selection
-        if D.PAR.sesTask ~= 'Track' || ...
-                get(D.UI.toggPickRewPos, 'Value') == 0
-            return
-        end
-        
-        % Get patch user data
-        user_data = get(hObject, 'UserData');
-        D.I.zone_select = user_data(2);
-        
-        % Update active zone
-        D.I.zone_active(D.I.zone_select) = true;
-        
-        % Update graphics
-        Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
-        Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-            'ShowAll', D.UI.rotCol(D.I.rot,:));
-        Safe_Set(D.UI.txtFdDurH(D.I.rot, D.I.zone_select), 'Visible', 'on');
-        Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, D.I.zone_select), ...
-            'Active', D.UI.rotCol(D.I.rot,:));
-        
-        % Reset button
-        Safe_Set(D.UI.toggPickRewPos, 'Value', 0)
-        Button_State(D.UI.toggPickRewPos, 'Disable');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------MOUSE CLICK FORAGE REW ZONE SELECT---------------------
-    function Mouse_SelectRewTarg(hObject, ~, ~)
-        
-        % Bail if not checking for target selection
-        if D.PAR.sesTask ~= 'Forage' || ...
-                get(D.UI.toggPickRewPos, 'Value') == 0
-            return
-        end
-        
-        % Get patch user data
-        targ_ind_new = get(hObject, 'UserData');
-        
-        % Get current targ and path ind
-        path_ind = D.PAR.frgPathSelectInd(D.PAR.frgTargSelectInd == targ_ind_new);
-        
-        % Store path mat for plotting
-        D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
-        D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
-        
-        % Update patches
-        Patch_State(D.UI.ptchRewTargBnds, ...
-            'Hide');
-        Patch_State(D.UI.ptchRewTargBnds(targ_ind_new), ...
-            'Active', D.UI.activeCol);
-        
-        % Reset button
-        Safe_Set(D.UI.toggPickRewPos, 'Value', 0)
-        Button_State(D.UI.toggPickRewPos, 'Disable');
-        
-        % Store new targ
-        D.I.targ_now = targ_ind_new;
-        
-        % Log/print
-        Console_Write(sprintf('[Mouse_SelectRewTarg] Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
-            D.PAR.frgTargDegArr(D.I.targ_last), D.PAR.frgTargDegArr(D.I.targ_now)));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------MOUSE CLICK ROT POS SELECT-------------------------
-    function Mouse_SelectRot(hObject, ~, ~)
-        
-        % Bail if not checking for rotaion
-        if D.PAR.sesCond ~= 'Rotation' || ...
-                all([D.UI.toggICR.Value] == 0)
-            return
-        end
-        
-        % Get patch user data
-        user_data = get(hObject, 'UserData');
-        rot_ind = user_data(1);
-        pos_ind = user_data(2);
-        
-        % Store next rotaion bounds
-        D.UI.rotBndNext = D.PAR.rotBnds(pos_ind, :, rot_ind);
-        
-        % Store rot pos
-        D.PAR.rotPos = [D.PAR.rotPos, D.PAR.rotDistDeg(pos_ind)];
-        
-        % Set flag
-        D.F.rotate = true;
-        
-        % Hide all patches and text
-        Safe_Set(D.UI.txtRtBnds(:,:), ...
-            'Visible', 'off', ...
-            'HitTest', 'off');
-        Patch_State(D.UI.ptchRtBnds(1, :), ...
-            'Hide', D.UI.rotCol(1,:));
-        Patch_State(D.UI.ptchRtBnds(2, :), ...
-            'Hide', D.UI.rotCol(2,:));
-        Safe_Set(D.UI.ptchRtBnds, 'HitTest', 'off')
-        
-        % Show active rote bounds patch and text
-        Safe_Set(D.UI.txtRtBnds(rot_ind, pos_ind), ...
-            'Visible', 'on');
-        Patch_State(D.UI.ptchRtBnds(rot_ind, pos_ind), ...
-            'Active', D.UI.rotCol(rot_ind,:));
-        
-        % Reset button
-        Safe_Set(D.UI.toggICR(rot_ind), 'Value', 0)
-        Button_State(D.UI.toggICR(rot_ind), 'Disable', D.UI.rotCol(rot_ind,:));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------TASK DONE--------------------------------
-    function Togg_TaskDone(~, ~, ~)
-        
-        % Check if session is done
-        dlg_h = dlgAWL(...
-            'End Task Run?', ...
-            'END TASK RUN', ...
-            'Yes', 'No', [], 'No', ...
-            D.UI.dlgPos{4}, ...
-            'question');
-        choice = Dlg_Wait(dlg_h);
-        
-        % Handle response
-        switch choice
-            case 'Yes'
-                % Post NLX event: session end
-                Send_NLX_Cmd(D.NLX.ses_end_evt);
-            case 'No'
-                return
-        end
-        
-        % Set flag
-        D.F.task_done = true;
-        
-        % Print end time
-        infstr = datestr(now, 'HH:MM:SS');
-        Safe_Set(D.UI.editTimeInf(2), 'String', infstr)
-        
-        % Hanle Track task
-        if D.PAR.sesTask == 'Track'
-            
-            % Halt robot if not already halted
-            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
-                if (~D.F.halted)
-                    Safe_Set(D.UI.toggHaltRob, 'Value', 1);
-                    Togg_HaltRob();
-                end
-            end
-            
-            % Check if rat is out of room for track run
-            dlg_h = dlgAWL(...
-                'Take out rat', ...
-                'RAT OUT', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'default');
-            Dlg_Wait(dlg_h);
-            
-            % Stop halt if still active
-            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
-                if (D.F.halted)
-                    Safe_Set(D.UI.toggHaltRob, 'Value', 0);
-                    Togg_HaltRob();
-                end
-            end
-            
-            % Stop bulldoze if still active
-            if (get(D.UI.toggBulldoze, 'Value') == 1)
-                Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-                Pop_Bulldoze();
-            end
-            
-        end
-        
-        % Post NLX event: rat out
-        Send_NLX_Cmd(D.NLX.rat_out_evt);
-        
-        % Save end time
-        D.T.ses_end = Sec_DT(now);
-        
-        % Disable Run objects
-        Object_Group_State('Task_Objects', 'Disable')
-        
-        % Disable recording objects
-        if ~D.F.implant_session
-            
-            % Stop recording
-            if D.F.rec
-                Safe_Set(D.UI.toggRec,'Value', 0)
-                Togg_Rec(D.UI.toggRec);
-            end
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_TaskDone', get(D.UI.toggTaskDone,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------SAVE SESSION DATA-------------------------------
-    function Togg_Save(~, ~, ~)
-        
-        % Only run once
-        if get(D.UI.toggSave, 'UserData') > 0
-            return
-        end
-        
-        % "Disable" save button so only pressed once
-        Safe_Set(D.UI.toggSave, 'UserData', 1);
-        
-        % Update button
-        Button_State(D.UI.toggSave, 'Update');
-        
-        % Start save status timer
-        start(D.timer_save);
-        
-        % Set flag to save at end of main loop
-        D.F.do_save = true;
-        
-        % Check if cheetah data should be saved
-        if D.F.cheetah_running
-            
-            % Show dialogue
-            dlg_h = dlgAWL( ...
-                'Save Cheetah Data?', ...
-                'SAVE CHEETAH', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'question');
-            choice = Dlg_Wait(dlg_h);
-            
-            % Handle response
-            if strcmp(choice, 'Yes')
-                % Set flag
-                D.F.do_nlx_save = true;
-            end
-            
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Save', get(D.UI.toggSave,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------------------QUIT ALL-----------------------------------
-    function Togg_Quit(~, ~, ~)
-        
-        % Only run once
-        if get(D.UI.toggQuit, 'UserData') > 0
-            return
-        end
-        
-        % Check for save unless quit before setup done
-        if (D.F.ses_data_loaded && ~D.F.ses_save_done)
-            
-            % Construct a questdlg with two options
-            dlg_h = dlgAWL( ...
-                '!!WARNING: QUIT WITHOUT SAVING?!!', ...
-                'ABBORT RUN', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'warning');
-            choice = Dlg_Wait(dlg_h);
-            
-            % Handle response
-            if strcmp(choice, 'No')
-                % Bail
-                return
-            end
-            
-            % Make sure rat is out
-            if ~D.F.rat_out && D.PAR.sesTask ~= 'Forage'
-                
-                dlg_h = dlgAWL(...
-                    '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
-                    'RAT OUT', ...
-                    'OK', [], [], 'OK', ...
-                    D.UI.dlgPos{4}, ...
-                    'warning');
-                Dlg_Wait(dlg_h);
-                
-            end
-            
-        end
-        
-        % "Disable" save button so only pressed once
-        Safe_Set(D.UI.toggQuit, 'UserData', 1);
-        
-        % Update button
-        Button_State(D.UI.toggQuit, 'Update');
-        
-        % Start quit status timer
-        start(D.timer_quit);
-        
-        % Print session aborting
-        if ~D.F.ses_save_done
-            Console_Write('**WARNING** [Togg_Quit] ABORTING SESSION...');
-        end
-        
-        % Stop halt if still active
-        if (D.F.halted)
-            Safe_Set(D.UI.toggHaltRob, 'Value', 0);
-            Togg_HaltRob();
-        end
-        
-        % Stop bulldoze if still active
-        if (get(D.UI.toggBulldoze, 'Value') == 1)
-            Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-            Pop_Bulldoze();
-        end
-        
-        % Stop recording
-        if D.F.rec
-            Safe_Set(D.UI.toggRec,'Value', 0)
-            Togg_Rec(D.UI.toggRec);
-        end
-        
-        % Check if battery should be replaced
-        if ...
-                c2m.('J').dat1 > 0 && ...
-                c2m.('J').dat1 <= D.PAR.robVccReplace
-            
-            % Confirm that Cheetah is closed
-            warn_str = ...
-                sprintf('**WARNING** BATTERY IS AT %0.2fV AND NEEDS TO BE REPLACED', c2m.('J').dat1);
-            
-            dlg_h = dlgAWL(...
-                warn_str, ...
-                'BATTERY LOW', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'warning');
-            Dlg_Wait(dlg_h);
-            
-        end
-        
-        % Tell C# to begin quit
-        Send_CS_Com('X', 1);
-        
-        % Set flag
-        D.F.do_quit = true;
-        
-        % Shut down if matlab run alone
-        if ISMATSOLO
-            SetExit()
-        end
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Quit', get(D.UI.toggQuit,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -----------------------------HALT ROBOT----------------------------------
-    function Togg_HaltRob(~, ~, ~)
-        
-        if (get(D.UI.toggHaltRob, 'Value') == 1)
-            
-            % Change backround color and text
-            Safe_Set(D.UI.toggHaltRob, 'String', 'Halted...');
-            
-            % Tell CS to Halt Robot
-            Send_CS_Com('H', 1);
-            
-            % Set flag
-            D.F.halted = true;
-            
-        else
-            
-            % Change backround color and text
-            Safe_Set(D.UI.toggHaltRob, 'String', 'Halt Robot')
-            
-            % Tell CS to stop halting
-            Send_CS_Com('H', 0);
-            
-            % Set flag
-            D.F.halted = false;
-            
-        end
-        
-        % Update button
-        Button_State(D.UI.toggHaltRob, 'Update');
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_HaltRob', get(D.UI.toggHaltRob,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------BULLDOZE RAT---------------------------------
-    function Pop_Bulldoze(~, ~, ~)
-        
-        if (get(D.UI.toggBulldoze, 'Value') == 1)
-            
-            % Get bulldoze delay
-            delStr = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
-            delStr = regexp(delStr, '\d*', 'match');
-            D.PAR.bullDel = str2double(delStr{:});
-            D.PAR.bullSpeed = str2double(get(D.UI.editBulldoze, 'String'));
-            
-            % Change backround text
-            Safe_Set(D.UI.toggBulldoze, 'String', sprintf('Bulldoze (%ds)', D.PAR.bullDel));
-            
-            % Tell CS to bulldoze
-            Send_CS_Com('B', D.PAR.bullDel, D.PAR.bullSpeed);
-            
-        else
-            
-            % Change backround text
-            Safe_Set(D.UI.toggBulldoze, 'String', 'Ceasefire');
-            
-            % Tell CS to stop bulldozing
-            Send_CS_Com('B', 0, 0);
-            
-        end
-        
-        % Update button
-        Button_State(D.UI.toggBulldoze, 'Update');
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\" \"%d\"', 'Pop_Bulldoze', D.PAR.bullDel, D.PAR.bullSpeed));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------------REWARD------------------------------------
-    function Btn_Reward(~, ~, ~)
-        
-        % Set reward pos and cond
-        r_pos = 0;
-        r_cond = 1;
-        
-        % Get reward zone/duration from dropdown handle
-        z_ind = get(D.UI.popReward, 'Value');
-        
-        % Tell CS to trigger reward
-        Send_CS_Com('R', r_pos, r_cond, z_ind);
-        
-        % Track round trip time
-        D.T.btn_rew_sent = Sec_DT(now);
-        
-        % Log/print
-        Console_Write(sprintf('[%s] Set to \"%d\"', 'Btn_Reward', get(D.UI.btnReward,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------------DO CUE------------------------------------
-    function Togg_DoCue(~, ~, ~)
-        
-        % Update button
-        Button_State(D.UI.toggDoCue, 'Update');
-        
-        % Set other buttons
-        if get(D.UI.toggDoCue, 'Value') == 1
-            
-            % Unset block cue
-            Safe_Set(D.UI.toggBlockCue, 'Value',0);
-            Togg_BlockCue();
-            
-            % Enable pick rew zone
-            Button_State(D.UI.toggPickRewPos, 'Enable');
-            
-        else
-            
-            % Unset force cue
-            Safe_Set(D.UI.toggForceCue, 'Value',0);
-            Togg_ForceCue();
-            
-            % Unset and disable pick cue pos
-            Safe_Set(D.UI.toggPickRewPos, 'Value', 0);
-            Button_State(D.UI.toggPickRewPos, 'Disable');
-            
-        end
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_DoCue', get(D.UI.toggDoCue,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------------------BLOCK CUE----------------------------------
-    function Togg_BlockCue(~, ~, ~)
-        
-        % Update button
-        Button_State(D.UI.toggBlockCue, 'Update');
-        
-        if (get(D.UI.toggBlockCue, 'Value') == 1)
-            
-            % Reset zone patches
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-                'ShowAll', D.UI.rotCol(D.I.rot,:));
-            
-            % Set button to not cue
-            Safe_Set(D.UI.toggDoCue, 'Value', 0);
-            Togg_DoCue();
-        end
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_BlockCue', get(D.UI.toggBlockCue,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------------------FORCE CUE----------------------------------
-    function Togg_ForceCue(~, ~, ~)
-        
-        % Update button
-        Button_State(D.UI.toggForceCue, 'Update');
-        
-        if (get(D.UI.toggForceCue, 'Value') == 1)
-            
-            % Set button to cue
-            Safe_Set(D.UI.toggDoCue, 'Value', 1);
-            Togg_DoCue();
-            
-        end
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_ForceCue', get(D.UI.toggForceCue,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -------------------------PICK REWARD ZONE/TARG---------------------------
-    function Togg_PickRewPos(~, ~, ~)
-        
-        % Update button
-        Button_State(D.UI.toggPickRewPos, 'Update');
-        
-        if (get(D.UI.toggPickRewPos, 'Value') == 1)
-            
-            % Darken zone patches
-            if D.PAR.sesTask == 'Track'
-                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-                    'ShowAll', D.UI.rotCol(D.I.rot,:));
-                
-                % Bring to top
-                uistack(D.UI.ptchRewZoneBndsH(D.I.rot, :), 'top');
-                uistack(D.UI.txtFdDurH(D.I.rot, :), 'top');
-                
-            end
-            
-            % Show forage targ patches
-            if D.PAR.sesTask == 'Forage'
-                
-                % Get sorted index of subset of coresponding paths;
-                sub_path = D.PAR.frgPathDegArr(1:D.PAR.frgPathWdt/D.PAR.frgPathSpace/2:end);
-                D.PAR.frgPathSelectInd = find(ismember(D.PAR.frgPathDegArr, sub_path));
-                
-                % Get index of subset of targets;
-                sub_targ = wrapTo360(D.PAR.frgTargDegArr(D.I.targ_now) + 180 + D.PAR.frgPathDegArr(D.PAR.frgPathSelectInd)*2);
-                D.PAR.frgTargSelectInd = find(ismember(D.PAR.frgTargDegArr, sub_targ));
-                
-                % Sort paths to match targets
-                path_sort = cell2mat(arrayfun(@(x) find(sub_targ == x), D.PAR.frgTargDegArr(D.PAR.frgTargSelectInd), 'uni', false));
-                D.PAR.frgPathSelectInd = D.PAR.frgPathSelectInd(path_sort);
-                
-                % Make subset of targets visible
-                Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
-                    'ShowAll');
-                
-                % Reset path mat
-                D.P.pathNowMat = zeros(size(D.P.pathNowMat));
-                
-            end
-            
-        else
-            
-            % Lighten zone patches
-            if D.PAR.sesTask == 'Track'
-                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
-                    'ShowAll', D.UI.rotCol(D.I.rot,:));
-            end
-            
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------CLEAR VT BUTTON------------------------------
-    function Btn_ClrVT(~, ~, ~)
-        
-        % Reset handle data
-        
-        Safe_Set(D.UI.Rat.mrkPosLapH, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rat.linVelLapH, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rob.linVelLapH, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rat.linPosAll, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rat.linVelAll, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rob.linVelAll, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rat.linVelAvgH, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.Rob.linVelAvgH, ...
-            'XData', NaN, 'YData', NaN);
-        
-        % Reset pos data indeces
-        D.P.Rat.posAll.indAll(1) = max(1, D.P.Rat.posAll.indAll(2));
-        D.P.Rob.posAll.indAll(1) = max(1, D.P.Rob.posAll.indAll(2));
-        D.P.Rat.posAll.indLap = D.P.Rat.posAll.indAll;
-        D.P.Rob.posAll.indLap = D.P.Rob.posAll.indAll;
-        
-        % Reset vel data indeces
-        D.P.Rat.velAll.indAll(1) = max(1, D.P.Rat.velAll.indAll(2));
-        D.P.Rob.velAll.indAll(1) = max(1, D.P.Rob.velAll.indAll(2));
-        D.P.Rat.velAll.indLap = D.P.Rat.velAll.indAll;
-        D.P.Rob.velAll.indLap = D.P.Rob.velAll.indAll;
-        
-        % Reset vel hitogram data
-        D.P.Rat.velAll.indHist(1) = max(1, D.P.Rat.velAll.indHist(2));
-        D.P.Rob.velAll.indHist(1) = max(1, D.P.Rob.velAll.indHist(2));
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set to \"%d\"', 'Btn_ClrVT', get(D.UI.btnClrVT,'Value')));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------CLEAR VT BUTTON------------------------------
-    function Btn_ClrTT(~, ~, ~)
-        
-        % Bail if cells not cut
-        if get(D.UI.toggStreamTTs, 'Value') == 0
-            return
-        end
-        
-        % Bail if not connected
-        if ~D.F.nlx_connected
-            return
-        end
-        
-        % Get list of active tt/clust
-        active_mat = ...
-            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
-        
-        % Reset all plots
-        Safe_Set(D.UI.mrkClustH, ...
-            'XData', NaN, 'YData', NaN);
-        Safe_Set(D.UI.imgClustH, ...
-            'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
-            'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
-        
-        % Reset data inds for active buttons
-        for z_tt = 1:size(D.TT.posClust,1)
-            for z_c = 1:size(D.TT.posClust,2)
-                if active_mat(z_tt,z_c)
-                    D.TT.posClust{z_tt,z_c}.indAll(1) =  max(1,D.TT.posClust{z_tt,z_c}.indAll(2));
-                    D.TT.posClust{z_tt,z_c}.indLap =  D.TT.posClust{z_tt,z_c}.indAll;
-                end
-            end
-        end
-    end
-
-% ---------------------BUTTON PRESS TO LOAD TT DATA------------------------
-    function Togg_SelectTT(hObject, ~, ~)
-        
-        %% GET HANDLE VALUES
-        val = get(hObject, 'Value');
-        x = get(hObject, 'UserData');
-        tt_ind = x(1);
-        
-        % Get tt field
-        D.TT.ttFldNow = D.TT.ttList{tt_ind};
-        
-        % Check if not in 'Track TTs' or 'Plot Spikes' mode
-        if D.UI.toggMainActionTT(1).Value == 0 && ...
-                D.UI.toggMainActionTT(2).Value == 0
-            
-            % Set button back to deselect and bail
-            set(hObject, 'Value', 0)
-            return
-        end
-        
-        %% HANDLE 'Plot Spikes'
-        
-        % Select/Deselect clust buttons if in 'Plot Spikes' mode
-        if D.UI.toggMainActionTT(2).Value == 1
-            
-            % Set ref button back to inactive and bail
-            if contains(D.TT.ttFldNow, 'R')
-                set(hObject, 'Value', 0)
-                return
-            end
-            
-            % Get active clusters
-            stream_clusts = ...
-                find(D.F.stream_clust(tt_ind, :));
-            
-            % Set button back to inactive and bail
-            if isempty(stream_clusts)
-                set(hObject, 'Value', 0)
-                return
-            end
-            
-            % Set cluster buttons
-            for z_c = 1:length(stream_clusts)
-                
-                % Set all buttons to val
-                Safe_Set(D.UI.toggSubPlotTT(tt_ind,z_c), 'Value', val);
-                Togg_SubPlotTT(D.UI.toggSubPlotTT(tt_ind,z_c))
-            end
-            
-            % Bail
-            return
-        end
-        
-        %% HANDLE 'Track TTs'
-        
-        % Enable tt panel objects
-        Object_Group_State('TT_Turn_Panel_Objects', 'Enable')
-        
-        % Turn on/off NLX audio on left and right side for all chan if on pc speakers
-        if D.UI.toggMainActionTT(1).Value == 1 && ...
-                D.UI.toggHearSourceTT(1).Value == 1 && ...
-                isempty(strfind(D.TT.ttFldNow, 'R'))
-            
-            % Turn on audio for this tt
-            if val == 1
-                
-                % Play left audio for this tt
-                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,1), 'Value', 1)
-                Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,1));
-                
-                % Play right audio for this tt
-                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,2), 'Value', 1)
-                Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,2));
-                
-            end
-            
-            % Turn off audio for this tt
-            if val == 0
-                
-                % Turn left audio off
-                if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,1), 'Value') == 1
-                    Safe_Set(D.UI.toggSubHearSdTT(tt_ind,1), 'Value', 0)
-                    Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,1));
-                end
-                
-                % Turn right audio off
-                if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,2), 'Value') == 1
-                    Safe_Set(D.UI.toggSubHearSdTT(tt_ind,2), 'Value', 0)
-                    Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,2));
-                end
-                
-            end
-            
-        end
-        
-        % Bail here if button unset
-        if val == 0
-            
-            % Re-enable all buttons
-            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
-            
-            % Disable tt panel objects
-            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
-            Button_State(D.UI.toggUpdateLogTT, 'Disable');
-            
-            % Show all tts
-            Show_Active_TT();
-            
-            % Update current TT select button
-            if D.F.tt_updated(tt_ind)
-                Button_State(D.UI.toggSelectTT(tt_ind), 'Update', D.UI.disabledCol);
-            else
-                Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
-            end
-            
-            % Hack to get toggle color to update
-            for z_p = 1:2
-                pos = D.UI.panSelectTT(z_p).Position;
-                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
-                D.UI.panSelectTT(z_p).Position = pos;
-            end
-            
-            % Bail
-            return
-            
-        end
-        
-        % Disable all buttons
-        Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'off');
-        
-        % Enable this button
-        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'on');
-        
-        % Show active tt
-        Show_Active_TT(tt_ind);
-        
-        % Make sure only 1 button active
-        Safe_Set(D.UI.toggSelectTT, 'Value', 0);
-        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Value', val);
-        
-        % Update all TT select button
-        Button_State(D.UI.toggSelectTT, 'Update');
-        
-        % Change color of all updated buttons
-        Safe_Set(D.UI.toggSelectTT(D.F.tt_updated), 'BackgroundColor', D.UI.disabledCol);
-        
-        % Update current TT select button
-        Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
-        
-        % TT has not been updated already
-        if ~D.F.tt_updated(tt_ind)
-            
-            % Panel and text to enabled
-            Panel_State(D.UI.panTrackTT, 'Enable');
-            Safe_Set(D.UI.txtPanTT, 'ForegroundColor', D.UI.enabledCol)
-            
-            % Set update button to inactive
-            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 0)
-            Button_State(D.UI.toggUpdateLogTT, 'Update');
-            
-        end
-        
-        % TT has been updated already
-        if D.F.tt_updated(tt_ind)
-            
-            % Show stored orientation
-            D.UI.popOr.Value = D.UI.popOr.UserData(tt_ind);
-            
-            % Show stored turns
-            D.UI.popTrn.Value = D.UI.popTrn.UserData(tt_ind);
-            
-            % Show stored direction
-            D.UI.popDir.Value = D.UI.popDir.UserData(tt_ind);
-            
-            % Show stored notes
-            D.UI.editNoteTT.String = D.TT.ttLogNew.([D.TT.ttFldNow,'_N']);
-            
-            % Disable objects
-            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
-            
-            % Set update button to active
-            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 1)
-            Button_State(D.UI.toggUpdateLogTT, 'Update');
-            
-        end
-        
-        % Get last orientation
-        if isundefined(D.TT.ttLogNew.([D.TT.ttFldNow,'_O']))
-            
-            % Use default orientation list for first session
-            or_card_list =  D.PAR.orCardList;
-        else
-            
-            % Change cardinal direction list
-            orind = find(ismember(D.PAR.orCardList, D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])) == 1);
-            or_card_list = circshift(D.PAR.orCardList, [0,-(orind-1)]);
-        end
-        
-        % Add 16ths measurements to orientation list
-        or_list = cellfun(@(x,y) [x, blanks(4-length(x)) , y], ...
-            or_card_list, D.PAR.orFracList, 'uni', false);
-        
-        % Get last depth
-        depths_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_D']);
-        
-        % Update pannel title
-        Safe_Set(D.UI.panTrackTT, ...
-            'Title',D.TT.ttFldNow)
-        
-        % Update orientation
-        Safe_Set(D.UI.popOr, ...
-            'String', or_list);
-        
-        % Update ref
-        D.UI.popRefTT.Value = ...
-            find(ismember(D.TT.refList, char(D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList, D.TT.ttFldNow)))));
-        
-        % Get notes and exclude empty entries
-        notes = D.TT.ttLogTable.([D.TT.ttFldNow,'_N']);
-        notes = notes(cell2mat(cellfun(@(x) ~isempty(x), notes, 'uni', false)));
-        notes = notes(~ismember(notes, 'NA'));
-        inc_ind = ismember(D.TT.ttLogTable.([D.TT.ttFldNow,'_N']), notes);
-        notes = flip(notes);
-        
-        % Show last note in table
-        date_list = flip(D.TT.ttLogTable.Date(inc_ind));
-        date_list = regexp(date_list, '\S*(?=_)', 'match');
-        D.UI.tblNoteTT.Data = [[date_list{:}]', notes];
-        D.UI.tblNoteTT.ColumnWidth = {55, 1000};
-        
-        % Update TT update button object
-        Safe_Set(D.UI.toggUpdateLogTT, ...
-            'UserData',tt_ind,...
-            'String',['Update ', D.TT.ttFldNow]);
-        
-        % Update tt orientation text object
-        Safe_Set(D.UI.txtPanTT(6), ...
-            'String', or_card_list{1});
-        
-        % Update tt depth text object
-        Safe_Set(D.UI.txtPanTT(7), ...
-            'String', sprintf('%0.0f %sm', depths_last, char(181)));
-        
-        % Update pax view
-        Move_Pax_To_TT(tt_ind);
-        
-        % Hack to get toggle color to update
-        for z_p = 1:2
-            pos = D.UI.panSelectTT(z_p).Position;
-            D.UI.panSelectTT(z_p).Position = [0,0,1,1];
-            D.UI.panSelectTT(z_p).Position = pos;
-        end
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% --------------------BUTTON PRESS TO SAVE TT ENTRIES----------------------
-    function Togg_UpdateLogTT(~, ~, ~)
-        
-        % Get values
-        val = get(D.UI.toggUpdateLogTT, 'Value');
-        x = get(D.UI.toggUpdateLogTT, 'UserData');
-        tt_ind = x(1);
-        
-        % Check if data should be overwriten
-        if val == 0
-            
-            % Unset flag
-            D.F.tt_updated(tt_ind) = false;
-            
-            % Overwrite new entries
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_O']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_R']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_R'])(end);
-            
-            % Reset stored turns and lowering direction
-            D.UI.popTrn.UserData(tt_ind) = 1;
-            D.UI.popDir.UserData(tt_ind) = 1;
-            D.UI.popOr.UserData(tt_ind) = 1;
-            
-            % Rerun TT select callback
-            Togg_SelectTT(D.UI.toggSelectTT(tt_ind));
-            
-        end
-        
-        % Update values
-        if val == 1
-            
-            % Set flag
-            D.F.tt_updated(tt_ind) = true;
-            
-            % Update tt select button color
-            Safe_Set(D.UI.toggSelectTT(tt_ind), 'BackgroundColor', D.UI.disabledCol)
-            Safe_Set(D.UI.ttBndlLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
-            Safe_Set(D.UI.ttDriveLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
-            
-            % Store number of turns and lowering direction
-            D.UI.popTrn.UserData(tt_ind) = D.UI.popTrn.Value;
-            D.UI.popDir.UserData(tt_ind) = D.UI.popDir.Value;
-            
-            % Disable objects
-            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
-            Button_State(D.UI.toggUpdateLogTT, 'Disable');
-            
-            % Reset tt select buttons
-            Safe_Set(D.UI.toggSelectTT, 'Value', 0);
-            % Reenable all buttons
-            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
-            % Show all tts
-            Show_Active_TT();
-            
-            % Orientation list
-            or_list = get(D.UI.popOr,'String');
-            or_list = regexp(or_list, '[NSEW]*(?=\s)', 'match');
-            or_list = [or_list{:}];
-            
-            % Store last and new orientation
-            or_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
-            or_new = char(or_list(get(D.UI.popOr,'Value')));
-            
-            % Get total turns
-            turn_list = get(D.UI.popTrn,'String');
-            turns = str2double(turn_list(get(D.UI.popTrn,'Value')));
-            
-            % Convert to um
-            turn_um = turns*D.UI.umPerTurn;
-            
-            % Get turn direction
-            direction_new = get(D.UI.popDir, 'Value');
-            if direction_new == 1
-                direction_new = 1;
-            else
-                direction_new = -1;
-            end
-            
-            % Update change in orientation
-            if any(ismember(or_list, or_last))
-                
-                % Compute delta orientation
-                delta_orientation =  ...
-                    (find(ismember(or_list, or_new) == 1)-1) / length(D.PAR.orCardList);
-                
-                % Convert to microns
-                delta_orientation = delta_orientation * D.UI.umPerTurn;
-                
-            else
-                delta_orientation = 0;
-            end
-            
-            % Add turns
-            delta_depth = direction_new * (delta_orientation + turn_um);
-            
-            % Get last depth
-            depths_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
-            
-            % Compute total depth
-            depth_new = delta_depth+depths_last;
-            
-            % Save values to temp table
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = or_new;
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
-            
-            % Get reference
-            ref_str = char(D.TT.refList(D.UI.popRefTT.Value));
-            
-            % Set all refs for this bundle
-            tt_list = D.TT.ttList(D.I.ttBndl==D.I.ttBndl(tt_ind));
-            for z_tt = 1:length(tt_list)
-                
-                % Save for session
-                tt_fld = tt_list{z_tt};
-                D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList,tt_fld)) = ref_str;
-                
-                % Save reference to table
-                D.TT.ttLogNew.([tt_fld,'_R'])(:) = ref_str;
-                
-            end
-            
-            % Update pannel display
-            Safe_Set(D.UI.txtPanTT(6), 'String', or_new);
-            txt = sprintf('%0.0f %sm', depth_new, char(181));
-            Safe_Set(D.UI.txtPanTT(7), 'String', txt);
-            
-        end
-        
-        % Update track plot
-        Plot_TT_Path(tt_ind);
-        
-        % Update pax view
-        Move_Pax_To_TT(tt_ind);
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------SELECT TT ACTION-----------------------------
-    function Togg_MainActionTT(hObject, ~, ~)
-        
-        % Handle args
-        if nargin < 1
-            action_str = 'none';
-            val = 0;
-        else
-            action_str = get(hObject, 'String');
-            val = get(hObject, 'Value');
-        end
-        
-        % Get button ind
-        btn_ind = ismember({D.UI.toggMainActionTT(:).String}, action_str);
-        
-        % Enable/dissable button and turn objects
-        if strcmp('Track TTs', action_str)
-            
-            if val == 1
-                
-                % Avtivate/Show all 'Track TTs' objects
-                Change_TT_Action('Track TTs', 'Enable');
-                
-                % Hide all 'Plot Spikes' objects
-                Change_TT_Action('Plot Spikes', 'Disable');
-                
-            else
-                % Hide all 'Track TTs' objects
-                Change_TT_Action('Track TTs', 'Disable');
-                
-            end
-        end
-        
-        % Enable/dissable button and tt plot objects
-        if strcmp('Plot Spikes', action_str)
-            
-            if val == 1
-                
-                % Avtivate/Show all 'Plot Spikes' objects
-                Change_TT_Action('Plot Spikes', 'Enable');
-                
-                % Hide all 'Track TTs' objects
-                Change_TT_Action('Track TTs', 'Disable');
-                
-            else
-                % Hide all 'Plot Spikes' objects
-                Change_TT_Action('Plot Spikes', 'Disable');
-            end
-            
-        end
-        
-        % Update buttons
-        Safe_Set(D.UI.toggMainActionTT(btn_ind), 'Value', val);
-        Safe_Set(D.UI.toggMainActionTT(~btn_ind), 'Value', 0);
-        Button_State(D.UI.toggMainActionTT, 'Update');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------FLAG TT FEATURES------------------------------
-    function Togg_FlagTT(hObject, ~, ~)
-        
-        % Get user data
-        btn_str = get(hObject, 'String');
-        val = get(hObject, 'Value');
-        x = get(hObject, 'UserData');
-        
-        % Handle user data
-        if strcmp(btn_str, 'Flags')
-            
-            % Set flag indecating device change
-            do_action_change = true;
-            
-        else
-            
-            % Changing channel
-            do_action_change = false;
-            tt_ind = x(1);
-            flag_btn_ind = x(2);
-        end
-        
-        % Reset everything
-        if do_action_change
-            
-            % Turn off other button groups
-            if val == 1
-                
-                % Hide other hear buttons
-                Change_TT_Action('Hear Chan', 'Hide');
-                
-                % Show flag sub buttons
-                Change_TT_Action('Flag TT', 'Enable');
-                
-            end
-            
-            % Hide flag sub buttons
-            if val == 0
-                Change_TT_Action('Flag TT', 'Disable')
-            end
-            
-        end
-        
-        % Update flag data
-        if ~do_action_change
-            
-            % Update tt log value
-            D.TT.ttLogNew.([D.TT.ttList{tt_ind},'_F'])(flag_btn_ind) = logical(val);
-            
-            % Update sub buttons
-            Button_State(D.UI.toggSubFlagTT, 'Update');
-        end
-        
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_FlagTT', btn_str, val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% -----------------------SELECT TT SOUND SOURCE--------------------------
-    function Togg_HearSourceTT(hObject, ~, ~)
-        
-        % Get user data
-        btn_str = get(hObject, 'String');
-        val = get(hObject, 'Value');
-        btn_ind = get(hObject, 'UserData');
-        btn_ind = btn_ind{1};
-        
-        % Turn off other button groups
-        if val == 1
-            
-            % Hide flag sub buttons
-            Change_TT_Action('Flag TT', 'Hide');
-            
-            % Avtivate/Show hear sub buttons
-            Change_TT_Action('Hear Chan', 'Enable');
-            
-            % Turn off other hear buttons
-            Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 0);
-            
-        end
-        
-        % Ensure one hear active if 'Track TTs' active and 'Flag' not
-        % active
-        if val == 0 && ...
-                get(D.UI.toggMainActionTT(1), 'Value') == 1 && ...
-                get(D.UI.toggFlagTT, 'Value') == 0
-            Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 1);
-        end
-        
-        % Reset/update sub buttons
-        Safe_Set(D.UI.toggSubHearSdTT, 'Value', 0)
-        Button_State(D.UI.toggSubHearSdTT, 'Update');
-        Safe_Set(D.UI.toggSubHearChTT, 'Value', 0)
-        Button_State(D.UI.toggSubHearChTT, 'Update');
-        
-        % Disable headphone
-        Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Left None');
-        Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Right None');
-        
-        % Disable speaker
-        Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Left None');
-        Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Right None');
-        
-        % Update buttons
-        Button_State(D.UI.toggFlagTT, 'Update');
-        Button_State(D.UI.toggHearSourceTT, 'Update');
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_HearSourceTT', btn_str, val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% -----------------------SELECT TT CHANNEL TO HEAR--------------------------
-    function Togg_SubHearTT(hObject, ~, ~)
-        
-        % Get user data
-        btn_str = get(hObject, 'String');
-        val = get(hObject, 'Value');
-        x = get(hObject, 'UserData');
-        tt_ind = x(1);
-        chan_ind = x(2);
-        side_ind = x(3);
-        
-        % Create list of channels to turn on and off
-        ent_set = ' ';
-        chan_set_on = false(1,4);
-        side_str = {'Left', 'Right'};
-        
-        % Check what audio device to use
-        if D.UI.toggHearSourceTT(1).Value == 1
-            
-            % Set device to speaker
-            dev_str = '"Primary Sound Driver"';
-            dev_btn_ind = 1;
-            
-        elseif D.UI.toggHearSourceTT(2).Value == 1
-            
-            % Set device to headphone
-            dev_str = '"AcqSystem1_Audio0"';
-            dev_btn_ind = 1;
-            
-        else
-            % Reset button if no sound source selected
-            if length(x) > 1
-                val = 0;
-                set(hObject, 'Value', val);
-            end
-            
-            % Bail
-            return
-        end
-        
-        % Get button values on this side
-        val_mat = Safe_Get(D.UI.toggSubHearChTT(:,:,side_ind), 'Value');
-        val_mat = reshape(val_mat, size(D.UI.toggSubHearChTT(:,:,side_ind)));
-        is_on_mat = logical(val_mat);
-        
-        % Handle select side button
-        if strcmp(hObject.String, 'L') || strcmp(hObject.String, 'R')
-            
-            % Unset all buttons for this side
-            Safe_Set(D.UI.toggSubHearSdTT(:,side_ind),'Value',0)
-            Safe_Set(D.UI.toggSubHearChTT(:,:,side_ind),'Value',0)
-            
-            if val == 0
-                
-                % Check if chanels need to be turned off
-                if any(is_on_mat(:))
-                    ent_set = 'None';
-                end
-                
-            elseif val == 1
-                
-                % Set side and all channels for this TT active
-                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,side_ind),'Value',1)
-                Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,side_ind),'Value',1)
-                
-                % Flag to turn on all chanels
-                ent_set = D.TT.ttList{tt_ind};
-                chan_set_on(:) = true;
-                
-            end
-            
-            % Handle indevidual channels
-        else
-            
-            if val == 0
-                
-                % Get this button channel to turn off
-                ent_set = D.TT.ttList{tt_ind};
-                chan_set_on(chan_ind) = false;
-                
-                % Check if all chan on this side off
-                if ~any(is_on_mat(:))
-                    Safe_Set(D.UI.toggSubHearSdTT(:,:,side_ind),'Value',0)
-                    ent_set = 'None';
-                end
-                
-            elseif val == 1
-                
-                % Get chan to turn on
-                ent_set = D.TT.ttList{tt_ind};
-                chan_set_on(chan_ind) = true;
-                
-                % Unset side select button
-                Safe_Set(D.UI.toggSubHearSdTT(:,side_ind),'Value',0)
-                
-                % Unset all chanels on this side that arent on this tt
-                off_ind = true(size(D.UI.toggSubHearChTT(:,:,:)));
-                off_ind(:,:,[1,2]~=side_ind) = false;
-                off_ind(tt_ind,:,side_ind) = false;
-                Safe_Set(D.UI.toggSubHearChTT(off_ind),'Value',0)
-                
-                % Reset active side select button
-                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,side_ind),'Value',1)
-                
-            end
-            
-        end
-        
-        % Get device, side and entity to set
-        msg_str = sprintf('%s %s %s', dev_str, side_str{side_ind}, ent_set);
-        
-        % Set device, side and entity
-        Send_NLX_Cmd(['-SetAudioSource ', msg_str]);
-        
-        % Check for channels to be turned on/off
-        chan_are_on = D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(side_ind,:);
-        chan_changed = find(chan_set_on ~= chan_are_on);
-        
-        % Check if any channels need setting
-        if ~strcmp(ent_set, 'None')
-            
-            % Set each channel for this tt
-            for z_chn = chan_changed
-                
-                % Make state string
-                if chan_set_on(z_chn)
-                    state_str = 'true';
-                else
-                    state_str = 'false';
-                end
-                
-                % Update chanel flag
-                D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(side_ind, z_chn) = chan_set_on(z_chn);
-                
-                % Create chan setting string
-                msg_str = sprintf('%s %s %d %s', ...
-                    dev_str, side_str{side_ind}, z_chn-1, state_str);
-                
-                % Send command
-                Send_NLX_Cmd(['-SetAudioStreamEnabled ', msg_str]);
-                
-            end
-            
-        end
-        
-        % Update buttons
-        Button_State(D.UI.toggFlagTT, 'Update');
-        Button_State(D.UI.toggSubHearSdTT, 'Update');
-        Button_State(D.UI.toggSubHearChTT, 'Update');
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_SubHearTT', btn_str, val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ------------------------TOGGLE TYPE OF TT PLOT---------------------------
-    function Togg_PlotTypeTT(hObject, ~, ~)
-        
-        % Get user data
-        btn_str = get(hObject, 'String');
-        val = get(hObject, 'Value');
-        btn_ind = get(hObject, 'UserData');
-        
-        % Make sure one button set if plot tt active
-        if D.UI.toggMainActionTT(2).Value == 1
-            if val == 0
-                Safe_Set(D.UI.toggPlotTypeTT([1,2]~=btn_ind), 'Value', 1);
-            end
-        end
-        
-        % Clear pos plots
-        if D.UI.toggMainActionTT(2).Value == 0 || ...
-                D.UI.toggPlotTypeTT(1).Value == 0
-            
-            % Clear all marker data
-            Safe_Set(D.UI.mrkClustH, ...
-                'XData', NaN, 'YData', NaN);
-        end
-        
-        % Clear rate plots
-        if D.UI.toggMainActionTT(2).Value == 0 || ...
-                D.UI.toggPlotTypeTT(2).Value == 0
-            
-            % Hide 2D data
-            Safe_Set(D.UI.imgClustH, ...
-                'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
-                'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
-            
-            % Hide 1D patches
-            Safe_Set(D.UI.ptchClustH, 'FaceAlpha', 0);
-        end
-        
-        % Reset axes and legends
-        if D.UI.toggMainActionTT(2).Value == 0
-            
-            % Remove all axes associations
-            Safe_Set(D.UI.axClstH, 'UserData', 0)
-            
-            % Unset all legends and text
-            for z_ax = 1:size(D.UI.axClstH)
-                colormap(D.UI.axClstH(z_ax), D.UI.disabledCol)
-            end
-            Safe_Set(D.UI.linColBarH, 'Color', D.UI.disabledCol)
-            Safe_Set(D.UI.txtColBarH, 'Visible', 'off')
-            
-        end
-        
-        % Get list of active tt/clust
-        active_mat = ...
-            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
-        [tt_active_ind, clust_active_ind] = find(active_mat);
-        
-        % Set plot flag
-        for z_tt = 1:length(tt_active_ind)
-            for z_c = 1:length(clust_active_ind)
-                D.F.plot_clust(tt_active_ind(z_tt), clust_active_ind(z_c)) = ...
-                    val ~= 0 && ...
-                    D.TT.posClust{tt_active_ind(z_tt), clust_active_ind(z_c)}.indLap(2) > ...
-                    D.TT.posClust{tt_active_ind(z_tt), clust_active_ind(z_c)}.indLap(1);
-            end
-        end
-        
-        % Update buttons
-        Button_State(D.UI.toggPlotTypeTT, 'Update');
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_PlotTypeTT', btn_str, val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% -----------------------------TOGGLE PLOT TT------------------------------
-    function Togg_SubPlotTT(hObject, ~, ~)
-        
-        % Get user data
-        btn_str = get(hObject, 'String');
-        val = get(hObject, 'Value');
-        user_dat = get(hObject, 'UserData');
-        tt_ind = user_dat(1);
-        clust_ind = user_dat(2);
-        
-        % Get axes in use
-        active_ax = Safe_Get(D.UI.axClstH, 'UserData');
-        
-        % Make sure no more than 10 clust active
-        if all(active_ax) && val == 1
-            
-            % Change value to 0
-            val = 0;
-            Safe_Set(D.UI.toggSubPlotTT(tt_ind, clust_ind), 'Value', val)
-            
-        end
-        
-        % Activate cluster
-        if val == 1
-            
-            % Get index of next free axis
-            ax_ind = find(active_ax == 0, 1, 'first');
-            
-            % Take over new axes
-            D.UI.ttClustAxNow(tt_ind, clust_ind) = D.UI.axClstH(ax_ind);
-            
-            % Change color map
-            map = squeeze(D.UI.clustColMap(tt_ind,clust_ind,:,:));
-            colormap(D.UI.axClstH(ax_ind), map)
-            map = mat2cell(map, ones(size(map,1),1), 3);
-            [D.UI.linColBarH(ax_ind,:).Color] = map{:};
-            
-            % Set patch color
-            Safe_Set(D.UI.ptchClustH(ax_ind,:), ...
-                'FaceColor', D.UI.clustCol(tt_ind,clust_ind,:));
-            
-            % Change text
-            set(D.UI.txtColBarH(ax_ind), ...
-                'Visible', 'on', ...
-                'ForegroundColor', D.UI.clustCol(tt_ind,clust_ind,:), ...
-                'String', sprintf('%s-%d', D.TT.ttList{tt_ind}, clust_ind-1));
-            
-            % Flag axis as in use
-            set(D.UI.axClstH(ax_ind), 'UserData', 1);
-            
-            % Make sure TT Select button active
-            set(D.UI.toggSelectTT(tt_ind), 'Value', 1);
-        end
-        
-        % Inactivate cluster
-        if val == 0
-            
-            % Get index of axis
-            ax_ind = find(D.UI.axClstH == D.UI.ttClustAxNow(tt_ind, clust_ind));
-            
-            % Make sure value valid
-            if ~isempty(ax_ind)
-                
-                % Set axis to disabled colormap
-                colormap(D.UI.axClstH(ax_ind), D.UI.disabledCol)
-                set(D.UI.linColBarH(ax_ind,:), 'Color', D.UI.disabledCol)
-                
-                % Reset patches
-                Safe_Set(D.UI.ptchClustH(ax_ind,:), 'FaceAlpha', 0);
-                
-                % Hide text
-                set(D.UI.txtColBarH(ax_ind), 'Visible', 'off')
-                
-                % Flag axis as free
-                set(D.UI.axClstH(ax_ind), 'UserData', 0);
-                
-            end
-            
-            % Check if all cluster off for this tt
-            active_clust = Safe_Get(D.UI.toggSubPlotTT(tt_ind,:), 'Value');
-            if all(active_clust == 0)
-                set(D.UI.toggSelectTT(tt_ind), 'Value', 0);
-            end
-            
-            % Clear associated plots
-            Safe_Set(D.UI.mrkClustH(tt_ind, clust_ind), ...
-                'XData', NaN, 'YData', NaN);
-            Safe_Set(D.UI.imgClustH(tt_ind, clust_ind), ...
-                'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
-                'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
-            
-        end
-        
-        % Set plot flag
-        D.F.plot_clust(tt_ind, clust_ind) = ...
-            val ~= 0 && ...
-            D.TT.posClust{tt_ind, clust_ind}.indLap(2) > ...
-            D.TT.posClust{tt_ind, clust_ind}.indLap(1);
-        
-        % Update current clust button
-        Button_State(D.UI.toggSubPlotTT(tt_ind, clust_ind), 'Update');
-        
-        % Update tt select button
-        Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
-        
-        % Log/print
-        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_SubPlotTT', btn_str, val));
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-        
-    end
-
-% ----------------------SLIDER SWITCH PAXANOS IMAGES-----------------------
-    function Sld_SwtchImg(hObject, ~, ~)
-        
-        % Get user data
-        user_dat = get(hObject, 'UserData');
-        obj_ind = user_dat(1);
-        img_ind = round(get(hObject, 'Value'));
-        
-        % Change image visibility
-        [D.UI.h_paxImg{obj_ind}(:).Visible] = deal('off');
-        D.UI.h_paxImg{obj_ind}(img_ind).Visible = 'on';
-        
-        % Get coord sine
-        if D.TT.imgCoor{obj_ind}(img_ind) == abs(D.TT.imgCoor{obj_ind}(img_ind))
-            sin_str = '+';
-        else
-            sin_str = '-';
-        end
-        
-        % Update image coordinates
-        print_str = sprintf('%s%0.2f', sin_str, abs(D.TT.imgCoor{obj_ind}(img_ind)));
-        Safe_Set(D.UI.txtImgCorr(obj_ind),'String',print_str)
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------ENABLE/DISABLE TT----------------------------
-    function Togg_IncludeTT(hObject, ~, ~)
-        
-        % Get values
-        val = get(hObject, 'Value');
-        x = get(hObject, 'UserData');
-        tt_ind = x(1);
-        
-        % Endable/Disable button if not set to active
-        if val == 1
-            Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'off')
-            Safe_Set(D.UI.toggSubPlotTT(tt_ind,:), ...
-                'Value', 0, ...
-                'Enable', 'off')
-            Safe_Set(D.UI.toggSubFlagTT(tt_ind,:), ...
-                'Value', 0, ...
-                'Enable', 'off')
-            Safe_Set(D.UI.toggSubHearSdTT(tt_ind,:), ...
-                'Value', 0, ...
-                'Enable', 'off')
-            Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,:), ...
-                'Value', 0, ...
-                'Enable', 'off')
-        else
-            
-            % Enable buttons
-            Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'on')
-            Safe_Set(D.UI.toggSubFlagTT(tt_ind,:), 'Enable', 'on')
-            Safe_Set(D.UI.toggSubHearSdTT(tt_ind,:), 'Enable', 'on')
-            Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,:), 'Enable', 'on')
-            
-            % Enable streaming clusters
-            clust_inc = D.F.stream_clust(tt_ind, :);
-            Safe_Set(D.UI.toggSubPlotTT(tt_ind,clust_inc), 'Enable', 'on')
-            
-            % Hack to get toggle color to updae
-            for z_p = 1:2
-                pos = D.UI.panSelectTT(z_p).Position;
-                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
-                D.UI.panSelectTT(z_p).Position = pos;
-            end
-            
-        end
-        
-        % Store value
-        D.TT.ttInclude(tt_ind) = ~val;
-        D.TT_IO.TT_Include{D.PAR.ratIndTT,:} = D.TT.ttInclude;
-        
-        % Update buttons
-        Button_State(D.UI.toggIncludeTT(tt_ind), 'Update');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ----------------------------HIDE SHOW BUNDLE-----------------------------
-    function Togg_HideShowBndl(hObject, ~, ~)
-        
-        % Get user data
-        bndl_ind = get(hObject, 'UserData');
-        
-        % Handles
-        tt_inc = ttBndl == bndl_ind;
-        rod_arr_h = D.UI.ttTrkLin(tt_inc);
-        sph_arr_h = D.UI.ttTrkMrk(tt_inc, :);
-        
-        % Set visibility
-        if get(hObject, 'Value') == 0
-            Safe_Set(rod_arr_h, 'Visible', 'on')
-            Safe_Set(sph_arr_h, 'Visible', 'on')
-        else
-            Safe_Set(rod_arr_h, 'Visible', 'off')
-            Safe_Set(sph_arr_h, 'Visible', 'off')
-        end
-        
-        % Update button
-        Button_State(D.UI.toggHideTT, 'Update');
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------SET 3D PLOT VIEW------------------------------
-    function Sld_Set3dView(hObject, ~, ~)
-        
-        % Get user data
-        user_dat = get(hObject,'UserData');
-        
-        % Handle empty value
-        if isempty(user_dat)
-            user_dat = 0;
-        end
-        
-        % Set view
-        if user_dat == 1
-            
-            % Set to saggital
-            Safe_Set(D.UI.sldYaw, 'Value', 0);
-            Safe_Set(D.UI.sldPitch, 'Value', 0);
-            
-        elseif user_dat == 2
-            
-            % Set to corronal
-            Safe_Set(D.UI.sldYaw, 'Value', 90);
-            Safe_Set(D.UI.sldPitch, 'Value', 0);
-            
-        elseif user_dat == 3
-            
-            % Set to horizontal
-            Safe_Set(D.UI.sldYaw, 'Value', 90);
-            Safe_Set(D.UI.sldPitch, 'Value', -90);
-            
-        elseif user_dat == 4
-            
-            % Set to orthoginal
-            Safe_Set(D.UI.sldYaw, 'Value', 45);
-            Safe_Set(D.UI.sldPitch, 'Value', -45);
-            
-        elseif strcmp(hObject.Type, 'figure')
-            
-            % Get view
-            view_now = -1*D.UI.axe3dH.View;
-            
-            % Keep in slider lims
-            view_now(view_now>90) = 90;
-            view_now(view_now<-90) = -90;
-            
-            % Set sliders
-            Safe_Set(D.UI.sldYaw, 'Value', view_now(1));
-            Safe_Set(D.UI.sldPitch, 'Value', view_now(2));
-            
-        end
-        
-        % Get values
-        view_now(1) = -1*get(D.UI.sldYaw, 'Value');
-        view_now(2) = -1*get(D.UI.sldPitch, 'Value');
-        
-        % Set toggle
-        Safe_Set(D.UI.btnSetView(1:4 ~= user_dat), 'Value', 0);
-        
-        % Set axis view
-        view(D.UI.axe3dH, view_now);
-        
-        % Update UI
-        if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-    end
-
-% ---------------------------CHECK FOR NEW C2M-----------------------------
-    function TimerFcn_GetCSCom(~,~)
-        
-        % Have to explicitely catch errors
-        try
-            
-            % Bail if D deleted
-            if ~exist('D', 'var')
-                return
-            elseif ~isfield(D, 'UI')
-                return
-            end
-            
-            % Bail if c2m deleted or not initialized
-            if ~exist('c2m', 'var')
-                return
-            elseif isempty(c2m)
-                return
-            end
-            
-            % Check for new packet
-            c2m_mat = reshape(cell2mat(struct2cell(c2m)),1,[]);
-            new_ind = [c2m_mat.pack] ~= [c2m_mat.packLast];
-            
-            % Bail if no new packets
-            if ~any(new_ind)
-                return
-            end
-            
-            % Store new id
-            id = c2m_mat(new_ind).id;
-            
-            % Check for handshake flag
-            if ...
-                    strcmp(id, 'h') && ...
-                    c2m.(id).dat1 == 1
-                
-                % Set start time
-                startTime = now;
-                
-                % Log/print handshake received
-                Console_Write(sprintf('   [RCVD] CS HANDSHAKE COMMAND: id=''%s'' dat1=%d', ...
-                    id, c2m.(id).dat1), now);
-            end
-            
-            % Check for exit/error flag
-            if strcmp(id, 'E')
-                
-                % Check if this is exit flag
-                if c2m.(id).dat1 == 1
-                    
-                    % Set exit flag
-                    SetExit()
-                    
-                    % Log/print exit received
-                    Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                        id, c2m.(id).dat1), now);
-                end
-                
-                % Check for save abort
-                if c2m.(id).dat1 == 2
-                    
-                    % Format err string
-                    err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
-                    
-                    % Display message
-                    dlg_h = dlgAWL(...
-                        err_str, ...
-                        '!!ERROR!!', ...
-                        'OK', [], [], 'OK', ...
-                        D.UI.dlgPos{4}, ...
-                        'error');
-                    Dlg_Wait(dlg_h);
-                    
-                    % Write to console
-                    Console_Write(err_str, now, true);
-                    
-                end
-                
-                % Check for forced abort
-                if c2m.(id).dat1 == 3
-                    
-                    % Format err string
-                    err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
-                    
-                    % Display message
-                    dlgAWL(...
-                        err_str, ...
-                        '!!ERROR!!', ...
-                        'OK', [], [], 'OK', ...
-                        D.UI.dlgPos{4}, ...
-                        'error');
-                    
-                    % Set exit flag
-                    SetExit()
-                    
-                    % Write to console
-                    Console_Write(err_str, now, true);
-                    
-                    % Pause for message to show
-                    pause(1);
-                end
-            end
-            
-            %Print new data
-            if ~ischar(c2m.(id).dat1)
-                str = '   [RCVD] c2m: id=''%s'' dat1=%d pack=%d';
-            else
-                str = '   [RCVD] c2m: id=''%s'' dat1=''%s'' pack=%d';
-            end
-            Console_Write(sprintf(str, ...
-                c2m.(id).id, c2m.(id).dat1, c2m.(id).pack), now);
-            
-            % Update packet info
-            c2m.(id).packLast = c2m.(id).pack;
-            
-            % Update recieve time
-            c2m.(id).t_rcvd = Sec_DT(now);
-            
-            % Check for resend request
-            if ~strcmp('g', c2m.(id).id)
-                return
-            end
-            
-            % Get id to resend
-            id_send = c2m.(id).dat1;
-            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', ...
-                id, id_send), now);
-            
-            % Send again if any history of this id
-            if m2c.(id_send).pack > 0
-                Send_CS_Com( ...
-                    m2c.(id_send).id, ...
-                    m2c.(id_send).dat1, ...
-                    m2c.(id_send).dat2, ...
-                    m2c.(id_send).dat3, ...
-                    m2c.(id_send).pack);
-            end
-            
-            % Update UI
-            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-            
-        catch ME
-            Console_Write('!!ERROR!! [Timer_FcnGetCSCom] FAILED', now);
-            SetExit()
-        end
-        
-    end
-
-% ------------------------BUTTON STATUS RUN TIMER--------------------------
-    function TimerFcn_Graphics(~, ~, agent)
-        
-        % Have to explicitely catch errors
-        try
-            
-            % Bail if figure closed
-            if ~exist('FIGH', 'var')
-                return
-            elseif ~ishandle(FIGH)
-                return
-            end
-            
-            % Bail if UI field not exist
-            if ~exist('D', 'var')
-                return
-            elseif ~isfield(D, 'UI')
-                return
-            end
-            
-            % Handle input
-            switch agent
-                
-                % Update Vcc text
-                case 'Other'
-                    
-                    % Check for low robot voltage
-                    if D.PAR.rob_vcc <= D.PAR.robVccWarning && D.PAR.rob_vcc > 0
-                        
-                        % Set to warning color
-                        Safe_Set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
-                        
-                        % Flicker
-                        if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
-                            Safe_Set(D.UI.txtPerfInf(7), 'Visible', 'off')
-                        else
-                            Safe_Set(D.UI.txtPerfInf(7), 'Visible', 'on')
-                        end
-                        
-                        % Highlight new value
-                    elseif c2m.('J').t_rcvd < 5.5
-                        
-                        % Check if printing a new value is new
-                        if Sec_DT(now) - c2m.('J').t_rcvd < 5
-                            
-                            % Set to attention color
-                            Safe_Set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.attentionCol);
-                        else
-                            
-                            % Set back to default color
-                            Safe_Set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledCol);
-                        end
-                    end
-                    
-                    % Check for low cube voltage
-                    if D.PAR.cube_vcc <= D.PAR.cubeVccWarning && D.PAR.cube_vcc > 0
-                        
-                        % Set to warning color
-                        Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.warningCol);
-                        
-                        % Flicker
-                        if strcmp(get(D.UI.txtPerfInf(8), 'Visible'), 'on')
-                            Safe_Set(D.UI.txtPerfInf(8), 'Visible', 'off')
-                        else
-                            Safe_Set(D.UI.txtPerfInf(8), 'Visible', 'on')
-                        end
-                        
-                        % Highlight new value
-                    elseif Sec_DT(now) - D.T.cube_vcc_update < 5.5
-                        
-                        % Check if printing a new value is new
-                        if Sec_DT(now) - D.T.cube_vcc_update < 5
-                            
-                            % Set to attention color
-                            Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.attentionCol);
-                        else
-                            
-                            % Set back to default color
-                            Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.enabledCol);
-                        end
-                    end
-                    
-                    % Update Quit button
-                case 'Quit'
-                    
-                    % Itterate count
-                    D.UI.toggQuit.UserData = D.UI.toggQuit.UserData +1;
-                    if D.UI.toggQuit.UserData>4
-                        D.UI.toggQuit.UserData = 1;
-                    end
-                    
-                    % Change button string
-                    bnt_str = ...
-                        sprintf('%s%s%s', agent, ...
-                        repmat('.',1,D.UI.toggQuit.UserData), ...
-                        blanks(4-D.UI.toggQuit.UserData));
-                    Safe_Set(D.UI.toggQuit, ...
-                        'String', bnt_str);
-                    
-                    % Update Save button
-                case 'Save'
-                    
-                    % Itterate count
-                    D.UI.toggSave.UserData = D.UI.toggSave.UserData +1;
-                    if D.UI.toggSave.UserData>4
-                        D.UI.toggSave.UserData = 1;
-                    end
-                    
-                    % Change button string
-                    bnt_str = ...
-                        sprintf('%s%s%s', agent, ...
-                        repmat('.',1,D.UI.toggSave.UserData), ...
-                        blanks(4-D.UI.toggSave.UserData));
-                    Safe_Set(D.UI.toggSave, ...
-                        'String', bnt_str);
-                    Safe_Set(D.UI.toggSave, ...
-                        'String', bnt_str);
-            end
-            
-            % Update UI
-            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-            
-        catch ME
-            Console_Write('!!ERROR!! [Timer_FcnGraphics] FAILED', now);
-            SetExit()
-        end
-        
-    end
-
-% -----------------------BUTTON STATUS STOP TIMER--------------------------
-    function TimerStop_BtnStatus(~, ~, btn_str)
-        
-        % Have to explicitely catch errors
-        try
-            
-            % Bail if figure closed
-            if ~exist('FIGH', 'var')
-                return
-            elseif ~ishandle(FIGH)
-                return
-            end
-            
-            % Bail if UI field not exist
-            if ~exist('D', 'var')
-                return
-            elseif ~isfield(D, 'UI')
-                return
-            end
-            
-            if (strcmp(btn_str,'Quit'))
-                % Disable quit button
-                if isfield(D.UI, 'toggQuit')
-                    if ishandle(D.UI.toggQuit)
-                        Safe_Set(D.UI.toggQuit, 'String', btn_str);
-                        Button_State(D.UI.toggQuit, 'Disable');
-                    end
-                end
-            end
-            
-            if (strcmp(btn_str,'Save'))
-                % Disable save button
-                if isfield(D.UI, 'toggSave')
-                    if ishandle(D.UI.toggSave)
-                        Safe_Set(D.UI.toggSave, 'String', btn_str);
-                        Button_State(D.UI.toggSave, 'Disable');
-                    end
-                end
-            end
-            
-            % Update UI
-            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-            
-        catch ME
-            Console_Write('!!ERROR!! [Timer_StopBtnStatus] FAILED', now);
-            SetExit()
-        end
-        
-    end
-
-% -------------------CHANGE FEATURES WITH TAB CHANGE-----------------------
-    function Tab_GrpChange(hObject, ~, ~)
-        
-        % Have to explicitely catch errors
-        try
-            
-            % Handle input
-            if isa(hObject, 'matlab.ui.container.TabGroup')
-                tab_now =  D.UI.tabgp.SelectedTab;
-            else
-                tab_now = hObject;
-                D.UI.tabgp.SelectedTab = hObject;
-            end
-            
-            % Bail if 'TABLE' tab not setup
-            if ~D.F.table_tab_setup
-                return
-            end
-            
-            % Get last tab
-            %tab_last = get(D.UI.tabgp, 'UserData');
-            
-            % Update last tab
-            Safe_Set(D.UI.tabgp, 'UserData', tab_now)
-            
-            % Change main shared button parent
-            Safe_Set(D.UI.toggMon, 'Parent', tab_now)
-            Safe_Set(D.UI.toggSave, 'Parent', tab_now)
-            Safe_Set(D.UI.toggQuit, 'Parent', tab_now)
-            
-            % Bail if on 'TABLE' tab 'TT TRACK' not setup
-            if strcmp(tab_now.Title, 'TABLE') || ~D.F.tt_tab_setup
-                return
-            end
-            
-            % Enable/Disable axis rotations
-            if strcmp(tab_now.Title, 'TT TRACK')
-                set(D.UI.mouseRotView, 'Enable', 'on')
-            else
-                set(D.UI.mouseRotView, 'Enable', 'off')
-            end
-            
-            % Change tt select objects parent
-            Safe_Set(D.UI.panSelectTT, 'Parent', tab_now)
-            Safe_Set(D.UI.toggMainActionTT, 'Parent', tab_now)
-            Safe_Set(D.UI.toggFlagTT, 'Parent', tab_now)
-            Safe_Set(D.UI.toggHearSourceTT, 'Parent', tab_now)
-            Safe_Set(D.UI.toggPlotTypeTT, 'Parent', tab_now)
-            
-            % Set button and panel positions
-            if strcmp(tab_now.Title, 'ICR ARENA')
-                
-                % Move panel
-                for z_p = 1:2
-                    D.UI.panSelectTT(z_p).Position = D.UI.tab_1_tt_select_pan_pos(z_p,:);
-                end
-                
-                % Move action type buttons
-                for z_p = 1:2
-                    D.UI.toggMainActionTT(z_p).Position = D.UI.tab_1_main_act_pos(z_p,:);
-                end
-                
-                % Move action select buttons
-                D.UI.toggFlagTT.Position = D.UI.tab_1_flag_tt_pos;
-                for z_p = 1:2
-                    D.UI.toggHearSourceTT(z_p).Position = D.UI.tab_1_hear_pos(z_p,:);
-                    D.UI.toggPlotTypeTT(z_p).Position = D.UI.tab_1_plot_pos(z_p,:);
-                end
-                
-            elseif strcmp(tab_now.Title, 'TT TRACK')
-                
-                % Move panel
-                for z_p = 1:2
-                    D.UI.panSelectTT(z_p).Position = D.UI.tab_2_tt_select_pan_pos(z_p,:);
-                end
-                
-                % Move action type buttons
-                for z_p = 1:2
-                    D.UI.toggMainActionTT(z_p).Position = D.UI.tab_2_main_act_pos(z_p,:);
-                end
-                
-                % Move action select buttons
-                D.UI.toggFlagTT.Position = D.UI.tab_2_flag_tt_pos;
-                for z_p = 1:2
-                    D.UI.toggHearSourceTT(z_p).Position = D.UI.tab_2_hear_pos(z_p,:);
-                    D.UI.toggPlotTypeTT(z_p).Position = D.UI.tab_2_plot_pos(z_p,:);
-                end
-                
-            end
-            
-            % Update UI
-            if ~strcmp(FUNNOW, 'Run'); Update_UI(10); end
-            
-        catch ME
-            Console_Write('!!ERROR!! [Tab_GrpChange] FAILED', now);
-            SetExit()
-        end
-        
-    end
-
-
-
-
-
-
 %% ========================== UI/GRAPHICS FUNCTIONS =======================
+
+% -------------------------PRINT SES INFO--------------------------
+    function Inf_Print()
+        
+        %% BAIL IF SETUP NOT FINISHED OR DT NOT REACHED
+        if ...
+                ~D.F.ses_setup_done || ...
+                Sec_DT(now) - D.T.info_txt_update < 0.1
+            return
+        end
+        
+        % Store time
+        t_now = Sec_DT(now);
+        
+        %% PRINT PERFORMANCE INFO
+        
+        % total
+        infstr = sprintf([...
+            'Laps______All:%s%d\n', ...
+            'Rewards___All:%s%d\n', ...
+            'Rotations_All:%s%d\n', ...
+            'Missed_Rewards_:%s%d|%d\n',...
+            'Bulldozings____:%s%d'], ...
+            repmat('_',1,1), sum([D.C.lap_cnt{:}]), ...
+            repmat('_',1,1), sum([D.C.rew_cnt{:}]), ...
+            repmat('_',1,1), D.C.rot_cnt, ...
+            repmat('_',1,1), D.C.missed_rew_cnt(1),sum(D.C.missed_rew_cnt), ...
+            repmat('_',1,1), D.C.bull_cnt);
+        if ~strcmp(D.UI.txtPerfInf(4).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(4), 'String', infstr)
+        end
+        
+        % standard
+        infstr = sprintf([...
+            'Laps______Stand:%s%d\n', ...
+            'Rewards___Stand:%s%d'], ...
+            repmat('_',1,1), D.C.lap_cnt{3}(end), ...
+            repmat('_',1,1), D.C.rew_cnt{3}(end));
+        if ~strcmp(D.UI.txtPerfInf(1).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(1), 'String', infstr)
+        end
+        
+        % 40 deg
+        infstr = sprintf([...
+            'Laps______40%c:%s%d|%d\n', ...
+            'Rewards___40%c:%s%d|%d'], ...
+            char(176), repmat('_',1,3), D.C.lap_cnt{2}(end), sum(D.C.lap_cnt{2}), ...
+            char(176), repmat('_',1,3), D.C.rew_cnt{2}(end), sum(D.C.rew_cnt{2}));
+        if ~strcmp(D.UI.txtPerfInf(2).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(2), 'String', infstr)
+        end
+        
+        % 0 deg
+        infstr = sprintf([...
+            'Laps______0%c:%s%d|%d\n', ...
+            'Rewards___0%c:%s%d|%d'], ...
+            char(176), repmat('_',1,4), D.C.lap_cnt{1}(end), sum(D.C.lap_cnt{1}), ...
+            char(176), repmat('_',1,4), D.C.rew_cnt{1}(end), sum(D.C.rew_cnt{1}));
+        if ~strcmp(D.UI.txtPerfInf(3).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(3), 'String', infstr)
+        end
+        
+        % Rat vel
+        infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
+            D.P.Rat.vel, D.P.Rat.vel_max_lap, D.P.Rat.vel_max_all);
+        if ~strcmp(D.UI.txtPerfInf(5).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(5), 'String', infstr)
+        end
+        
+        % Robot vel
+        infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
+            D.P.Rob.vel, D.P.Rob.vel_max_lap, D.P.Rob.vel_max_all);
+        if ~strcmp(D.UI.txtPerfInf(6).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(6), 'String', infstr)
+        end
+        
+        %% PRINT VOLTAGE INFO
+        
+        % Get robot battery voltage
+        if c2m.('J').dat1 ~= 0
+            
+            % Update vcc
+            D.PAR.rob_vcc_last = D.PAR.rob_vcc;
+            D.PAR.rob_vcc = c2m.('J').dat1;
+            
+            % Format and show string
+            if D.PAR.rob_vcc ~= D.PAR.rob_vcc_last
+                infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
+                Safe_Set(D.UI.txtPerfInf(7), 'String', infstr)
+            end
+        end
+        
+        % Get cube battery voltage
+        if D.F.cube_connected && D.F.implant_session
+            
+            % Get new vcc if enough time ellapsed
+            if Sec_DT(now) >= D.T.cube_vcc_update
+                
+                % Store last value
+                D.PAR.cube_vcc_last = D.PAR.cube_vcc;
+                
+                % Send NLX command
+                [pass, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
+                
+                % Wait 30 sec for next check
+                D.T.cube_vcc_update = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
+                
+                % Parce nxl string
+                if pass
+                    nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
+                end
+                
+                % Check if parsed
+                if pass && ~isempty(nlx_str)
+                    D.PAR.cube_vcc = str2double(nlx_str{:});
+                else
+                    pass = false;
+                end
+                
+            else
+                pass = false;
+            end
+            
+            
+            % Make sure arg returned
+            if pass
+                
+                % Format and show string
+                if D.PAR.cube_vcc ~= D.PAR.cube_vcc_last
+                    infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
+                    Safe_Set(D.UI.txtPerfInf(8), 'String', infstr)
+                end
+                
+            end
+            
+        end
+        
+        %% PRINT TIME INFO
+        
+        % Get session time
+        nowTim(1) =  Sec_DT(now) - D.T.ses_str;
+        
+        % Get recording elapsed time plus saved time
+        if  D.F.rec
+            nowTim(2) = (Sec_DT(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
+        else
+            nowTim(2) = D.T.rec_tot_tim; % keep showing save time
+        end
+        
+        % Get lap time
+        if D.F.rat_in
+            nowTim(3) = Sec_DT(now) - D.T.lap_str;
+        else
+            nowTim(3) = 0;
+        end
+        
+        % Run time
+        if D.F.rat_in && ~D.F.task_done
+            nowTim(4) = Sec_DT(now) - D.T.task_str;
+        else
+            nowTim(4) = 0;
+        end
+        
+        % Make string
+        infstr = sprintf([ ...
+            'SES:%s%s\n', ...
+            'REC:%s%s\n', ...
+            'LAP:%s%s\n'...
+            'RUN:%s%s\n'], ...
+            repmat('_',1,1), datestr(nowTim(1)/(24*60*60), 'HH:MM:SS'), ...
+            repmat('_',1,1), datestr(nowTim(2)/(24*60*60), 'HH:MM:SS'), ...
+            repmat('_',1,1), datestr(nowTim(3)/(24*60*60), 'HH:MM:SS'), ...
+            repmat('_',1,1), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
+        
+        % Print timers
+        Safe_Set(D.UI.txtTimeInf(1), 'String', infstr)
+        
+        % Save current time to UserData
+        Safe_Set(D.UI.txtTimeInf(1), 'UserData', nowTim)
+        
+        % Update info print time
+        D.DB.inf(1) = (Sec_DT(now) - t_now) * 1000;
+        D.DB.inf(2) = min(D.DB.inf(1), D.DB.inf(2));
+        D.DB.inf(3) = min(999, max(D.DB.inf(1), D.DB.inf(3)));
+        D.DB.inf(4) = D.DB.inf(1) + D.DB.inf(4);
+        D.DB.inf(5) = D.DB.inf(5) + 1;
+        
+        %% PRINT DEBUG INFO
+        
+        % Loop time info
+        infstr = sprintf( ...
+            [...
+            'Inf: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
+            'Plt: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
+            'Drw: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
+            'Lop: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
+            ], ...
+            D.DB.inf(1), D.DB.inf(2), D.DB.inf(3), D.DB.inf(4)/D.DB.inf(5), ...
+            D.DB.plot(1), D.DB.plot(2), D.DB.plot(3), D.DB.plot(4)/D.DB.plot(5), ...
+            D.DB.draw(1), D.DB.draw(2), D.DB.draw(3), D.DB.draw(4)/D.DB.draw(5), ...
+            D.DB.loop(1), D.DB.loop(2), D.DB.loop(3), D.DB.loop(4)/D.DB.loop(5) ...
+            );
+        Safe_Set(D.UI.txtPerfInf(9), 'String', infstr)
+        
+        % Reset timers every 10 sec
+        if Sec_DT(now) - D.T.info_db_reset > 10
+            D.DB.inf = [0, inf, 0, 0, 0];
+            D.DB.plot = [0, inf, 0, 0, 0];
+            D.DB.draw = [0, inf, 0, 0, 0];
+            D.DB.loop = [0, inf, 0, 0, 0];
+            D.T.info_db_reset = Sec_DT(now);
+        end
+        
+        % Update UI
+        Update_UI(0, 'limitrate');
+        
+    end
 
 % ------------------------SET CUE BUTTONS----------------------------------
     function Object_Group_State(set_case, setting_str)
@@ -17549,11 +14062,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Safe_Set(D.UI.toggSubPlotTT, ...
                     'Visible', 'on')
                 
-                % Show semitransparent backround
-                if D.F.implant_session
-                    Safe_Set(D.UI.ttMask, 'Visible', 'on')
-                end
-                
                 % Enable plot type toggles
                 Safe_Set(D.UI.toggPlotTypeTT(1), 'Value', 1)
                 Safe_Set(D.UI.toggPlotTypeTT(2), 'Value', 0)
@@ -17576,11 +14084,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Disable plot type toggles
                 Safe_Set(D.UI.toggPlotTypeTT, 'Value', 0)
                 Button_State(D.UI.toggPlotTypeTT, 'Disable');
-                
-                % Hide semitransparent backround
-                if D.F.implant_session && D.PAR.sesType == 'ICR_Session'
-                    Safe_Set(D.UI.ttMask, 'Visible', 'off')
-                end
                 
                 % Run callback to reset plot features
                 Togg_PlotTypeTT(D.UI.toggPlotTypeTT(1));
@@ -17889,8 +14392,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             is_err = false;
         end
         
-        % Get time
+        % Get time centered to handshake time
         t_s = Sec_DT(t_now);
+        t_s = t_s - DTHANDSHAKE;
         
         % Add to string array
         msg = sprintf('\r%0.2f %s', t_s, str);
@@ -17930,10 +14434,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update UI imediately if not running task
-        if ~D.F.poll_nlx || D.F.task_done_confirmed
-            Update_UI(0);
+        if UPDATENOW
+            Update_UI(0, 'force');
         else
-            Update_UI(100);
+            Update_UI(10, 'force');
         end
         
     end
@@ -17946,8 +14450,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             t_now = now;
         end
         
-        % Get time
+        % Get time centered to handshake time
         t_s = Sec_DT(t_now);
+        t_s = t_s - DTHANDSHAKE;
         t_m = round(t_s*1000);
         
         % Write to Matlab window
@@ -17971,15 +14476,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ---------------------------UPDATE UI-----------------------------
-    function Update_UI(dt_min)
-        
-        % Default to 50 ms min delay
-        if nargin < 1
-            dt_min = 100;
-        end
-        
-        % Convert to seconds
-        dt_min = dt_min/1000;
+    function Update_UI(dt_min, arg_str)
         
         % Bail if vars not setup
         if ~isstruct(D)
@@ -17989,12 +14486,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
-        % Check if UI should be updated
+        % Convert to seconds
+        dt_min = dt_min/1000;
+        
+        % Get current time
         t_now = Sec_DT(now);
+        
+        % Check if UI should be updated
         if t_now-D.T.ui_update >= dt_min
             
-            % Run drawn now
-            drawnow;
+            % Run drawnnow
+            if strcmp(arg_str, 'force')
+                drawnow;
+            elseif strcmp(arg_str, 'limitrate')
+                drawnow limitrate;
+            end
             
             % Store time
             D.T.ui_update = t_now;
@@ -18184,18 +14690,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
     end
 
-% % TEMP
-% % --------------------------RUN NLX FUNCTION-------------------------------
-%     function[pass, arg_out] = Run_NLX_Fun(fun_str, do_print)
-%         
-%         % Handle input args
-%         if nargin == 1
-%             do_print = true;
-%         end
-%         
-%         % Do function
-%     end
-
 
 
 
@@ -18207,7 +14701,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function [t_sec] = Sec_DT(t_now)
         
         % Convert from days to seconds
-        t_sec = (t_now-startTime)*24*60*60;
+        t_sec = (t_now-TIMSTRLOCAL)*24*60*60;
         
     end
 
@@ -18234,7 +14728,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Pause and update
-        Update_UI(0);
+        Update_UI(0, 'limitrate');
         pause(0.001);
     end
 
@@ -18243,8 +14737,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Keep checking for response
         while true
+            
+            % Get current choice
             choice = dlg_h.UserData;
             [abort, pass] = Check_Flag(DOEXIT, ~strcmp(choice, ''));
+            
+            % Make sure GUI and dialogue top windows
+            if isvalid(FIGH)
+                set(FIGH,'WindowStyle','modal')
+                set(dlg_h,'WindowStyle','modal')
+                set(FIGH,'WindowStyle','normal')
+                set(dlg_h,'WindowStyle','normal')
+            end
+            
+            % Bail if done
             if abort || pass; break; end
         end
     end
@@ -18601,24 +15107,3479 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Log/print
         if (is_del_changed)
             Update_Log('[Check_Setup_Defaults] Changed Reward Delay');
-            Update_UI(10);
+            Update_UI(0, 'force');
         end
         if (is_cue_changed)
             Update_Log('[Check_Setup_Defaults] Changed Cue Condition');
-            Update_UI(10);
+            Update_UI(0, 'force');
         end
         if (is_task_changed)
             Update_Log('[Check_Setup_Defaults] Changed Task Condition');
-            Update_UI(10);
+            Update_UI(0, 'force');
         end
         if (is_sound_changed)
             Update_Log('[Check_Setup_Defaults] Changed Sound Condition');
-            Update_UI(10);
+            Update_UI(0, 'force');
         end
         
     end
 
 %%=========================================================================
+
+
+
+
+
+
+%% ============================ CALLBACK FUNCTIONS ========================
+
+% -----------------------------SWITCH MONITOR------------------------------
+    function Togg_Mon(hObject, ~, ~)
+        
+        % Get user data
+        mon_ind = get(hObject, 'UserData');
+        val = hObject.Value;
+        
+        % Make sure GUI back on top
+        set(FIGH,'WindowStyle','modal')
+        pause(0.01)
+        set(FIGH,'WindowStyle','normal')
+        
+        % Can only set to select
+        if val == 0 && all([D.UI.toggMon(:).Value] == 0)
+            hObject.Value = 1;
+            return
+        end
+        
+        % Move windows based on session type
+        if NlxAreWeConnected() == 1
+            
+            % Dont move unless using
+            if D.F.implant_session
+                
+                % Move Ephys windows
+                if mon_ind == 1 || mon_ind == 2
+                    cfg_fi = 'ICR_Set_Window_Position_Ephys_M1.cfg';
+                else
+                    cfg_fi = 'ICR_Set_Window_Position_Ephys_M3.cfg';
+                end
+                
+            else
+                
+                % Move Behavior windows
+                if mon_ind == 1 || mon_ind == 2
+                    cfg_fi = 'ICR_Set_Window_Position_Behavior_M1.cfg';
+                else
+                    cfg_fi = 'ICR_Set_Window_Position_Behavior_M3.cfg';
+                end
+                
+            end
+            
+            % Load ephys pos cfg
+            Send_NLX_Cmd(['-ProcessConfigurationFile ', cfg_fi]);
+            
+        end
+        
+        % Update current pos
+        D.UI.figGrpPos{4} = D.UI.figGrpPos{mon_ind};
+        D.UI.dlgPos{4} = D.UI.dlgPos{mon_ind};
+        
+        % Set Figure postion
+        FIGH.Position = D.UI.figGrpPos{4};
+        
+        % Bring UI to top
+        uistack(FIGH, 'top')
+        
+        % Unset other buttons
+        Safe_Set(D.UI.toggMon(1:3~=mon_ind), 'Value', 0);
+        
+        % Update buttons
+        Button_State(D.UI.toggMon, 'Update');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% -----------------------------LOAD SELECTION------------------------------
+    function Togg_Type(hObject, ~, ~)
+        
+        % Bail if nothing selected
+        if (strcmp(get(hObject, 'Style'),'popupmenu') && get(D.UI.popType,'Value') == 1) || ...
+                (strcmp(get(hObject, 'Style'),'togglebutton') && get(D.UI.toggType,'Value') == 0)
+            
+            % Unset both
+            Safe_Set(D.UI.popType,'Value', 1)
+            Safe_Set(D.UI.toggType,'Value', 0)
+            
+            % Update button
+            Button_State(D.UI.toggType, 'Update');
+            
+            % Update pop
+            Safe_Set(D.UI.popType, ...
+                'BackgroundColor',D.UI.figBckCol, ...
+                'ForegroundColor', D.UI.enabledCol);
+            
+            return
+        end
+        
+        % Change to active color
+        Safe_Set(D.UI.popType, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Bail here if called by pop
+        if strcmp(get(hObject, 'Style'),'popupmenu')
+            return
+        end
+        
+        % Disable pop and button
+        Safe_Set(D.UI.popType, 'Enable', 'off')
+        Button_State(D.UI.toggType, 'Disable');
+        
+        % Store selected session type
+        D.PAR.sesType(:) = D.UI.popType.String{get(D.UI.popType, 'Value')};
+        
+        % Set flag
+        D.F.ses_type_confirmed = true;
+        
+        % Use default rat list
+        if D.PAR.sesType ~= 'TT_Turn'
+            Safe_Set(D.UI.popRat, 'String', [{''}; D.PAR.listRat])
+        end
+        
+        % Include only implanted rats in popRat list
+        if D.PAR.sesType == 'TT_Turn'
+            
+            % Get ind of rats to include
+            inc_ind = ismember(D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run), ...
+                D.TT_IO.Properties.RowNames(D.TT_IO.Include_Run));
+            tt_rat_list = regexprep(D.PAR.listRat(inc_ind), 'r', '');
+            
+            % Update pop menu
+            Safe_Set(D.UI.popRat, 'String', [{''}; tt_rat_list])
+            
+        end
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% ------------------------------RAT SELECTION------------------------------
+    function Pop_Rat(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popRat,'Value') == 1
+            return
+        end
+        
+        % Change to active color
+        Safe_Set(D.UI.popRat, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Get Rat label
+        D.PAR.ratLab = ... % ('r####')
+            ['r',D.UI.popRat.String{get(D.UI.popRat,'Value')}(1:4)];
+        
+        % Get rat number
+        D.PAR.ratNum = ... % (####)
+            str2double(D.PAR.ratLab(2:end));
+        
+        % Get rat index in D.SS_IO_1
+        D.PAR.ratIndSS = ...
+            find(ismember(D.SS_IO_1.Properties.RowNames, D.PAR.ratLab));
+        
+        % Get rat index in D.TT_IO
+        D.PAR.ratIndTT = ...
+            find(ismember(D.TT_IO.Properties.RowNames, D.PAR.ratLab));
+        
+        % Get rat implant status
+        D.F.rat_implanted = D.SS_IO_1.Implanted(D.PAR.ratIndSS);
+        
+        % Setup ICR Session stuff
+        if D.PAR.sesType == 'ICR_Session'
+            
+            % Get rat age
+            D.PAR.ratAgeGrp = ... % [Young,Old]
+                D.SS_IO_1.Age_Group(D.PAR.ratIndSS);
+            
+            % Get rat dob
+            D.PAR.ratDOB = ...
+                D.SS_IO_1.DOB(D.PAR.ratIndSS);
+            
+            % Get feeder condition
+            D.PAR.ratFeedCnd = ... % [C1 C2]
+                D.SS_IO_1.Feeder_Condition(D.PAR.ratIndSS);
+            
+            % Get feeder condition number
+            D.PAR.ratFeedCnd_Num = ... % [1 2]
+                find(D.PAR.listFeedCnd == D.PAR.ratFeedCnd);
+            
+        end
+        
+        % SET UI TO LAST SESSION
+        
+        % Set human
+        D.PAR.sesHuman = ...
+            D.SS_IO_1.Human(D.PAR.ratIndSS);
+        Safe_Set(D.UI.popHuman, 'Value', ...
+            find(ismember(D.UI.popHuman.String, D.PAR.sesHuman)));
+        Pop_Human();
+        
+        % Setup ICR Session stuff
+        if D.PAR.sesType == 'ICR_Session'
+            
+            % Set cue condition
+            D.PAR.sesCue = ...
+                D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS);
+            Safe_Set(D.UI.toggCue( ...
+                ismember(D.PAR.listCueCond, D.PAR.sesCue)), 'Value', 1);
+            % Set all others to off
+            Safe_Set(D.UI.toggCue( ...
+                ~ismember(D.PAR.listCueCond, D.PAR.sesCue)), 'Value', 0);
+            Togg_Cue();
+            
+            % Set reward delay
+            D.PAR.sesRewDel = ...
+                D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS);
+            Safe_Set(D.UI.popRewDel, 'Value', ...
+                find(ismember(D.UI.popRewDel.String, D.PAR.sesRewDel)));
+            % run callback
+            Pop_RewDel();
+            
+            % Set sound conditions
+            D.F.sound(1:2) = logical(...
+                D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,1:2));
+            Safe_Set(D.UI.toggSnd(D.F.sound(1:2)), 'Value', 1);
+            Togg_Sound();
+            
+            % Set Session Condition
+            D.PAR.sesCond = ...
+                D.SS_IO_1.Session_Condition(D.PAR.ratIndSS);
+            val_ind = find(ismember(D.UI.popCond.String, D.PAR.sesCond));
+            if ~isempty(val_ind)
+                Safe_Set(D.UI.popCond, 'Value', val_ind);
+                % run callback
+                Pop_Cond();
+            end
+            
+            % Set Session Task
+            D.PAR.sesTask = ...
+                D.SS_IO_1.Session_Task(D.PAR.ratIndSS);
+            Safe_Set(D.UI.popTask, 'Value', ...
+                find(ismember(D.UI.popTask.String, D.PAR.sesTask)));
+            % run callback
+            Pop_Task();
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Rat', D.PAR.ratLab));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% ---------------------------SESSION CONDITION-----------------------------
+    function Pop_Human(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popHuman,'Value') == 1
+            return
+        end
+        
+        % Change to active color
+        Safe_Set(D.UI.popHuman, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Store value
+        D.PAR.sesHuman(:) = D.UI.popHuman.String(get(D.UI.popHuman, 'Value'));
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Human', char(D.PAR.sesHuman)));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------SESSION CONDITION-----------------------------
+    function Pop_Cond(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popCond,'Value') == 1
+            return
+        end
+        
+        % Change to active color
+        Safe_Set(D.UI.popCond, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Store value
+        D.PAR.sesCond(:) = D.UI.popCond.String(get(D.UI.popCond, 'Value'));
+        
+        % Change other buttons for manual training
+        if D.PAR.sesCond == 'Manual_Training'
+            
+            % Set to minimum reward delay
+            Safe_Set(D.UI.popRewDel, 'Value', ...
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
+            % run callback
+            Pop_RewDel();
+            
+            % Set cue condition
+            Safe_Set(D.UI.toggCue( ...
+                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
+            % Set all others to off
+            Safe_Set(D.UI.toggCue( ...
+                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
+            Togg_Cue();
+            
+            % Change other buttons for rot cond
+        elseif D.PAR.sesCond == 'Rotation'
+            
+            % Set Session Task to Track
+            Safe_Set(D.UI.popTask, 'Value', ...
+                find(ismember(D.UI.popTask.String, 'Track')));
+            % run callback
+            Pop_Task();
+            
+            % Set to maximum reward delay
+            Safe_Set(D.UI.popRewDel, 'Value', ...
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(end))));
+            % run callback
+            Pop_RewDel();
+            
+            % Set cue condition
+            Safe_Set(D.UI.toggCue( ...
+                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
+            % Set all others to off
+            Safe_Set(D.UI.toggCue( ...
+                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
+            Togg_Cue();
+            
+            % Set sound condition
+            Safe_Set(D.UI.toggSnd(D.F.sound(1:2)), 'Value', 1);
+            Togg_Sound();
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Cond', char(D.PAR.sesCond)));
+        
+        % Check settings
+        Check_Setup_Defaults();
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% -----------------------------SESSION TASK--------------------------------
+    function Pop_Task(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popTask,'Value') == 1
+            return
+        end
+        
+        % Change to active color
+        Safe_Set(D.UI.popTask, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Store value
+        D.PAR.sesTask(:) = D.UI.popTask.String(get(D.UI.popTask, 'Value'));
+        
+        % Change settings for 'Forage'
+        if D.PAR.sesTask == 'Forage'
+            
+            % Set to minimum reward delay
+            Safe_Set(D.UI.popRewDel, 'Value', ...
+                find(ismember(D.UI.popRewDel.String, D.UI.popRewDel.String(2))));
+            % run callback
+            Pop_RewDel();
+            
+            % Set cue condition
+            Safe_Set(D.UI.toggCue( ...
+                ismember(D.PAR.listCueCond, 'None')), 'Value', 1);
+            % Set all others to off
+            Safe_Set(D.UI.toggCue( ...
+                ~ismember(D.PAR.listCueCond, 'None')), 'Value', 0);
+            Togg_Cue();
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_Task', char(D.PAR.sesTask)));
+        
+        % Check settings
+        Check_Setup_Defaults();
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -----------------------------REWARD DELAY--------------------------------
+    function Pop_RewDel(~, ~, ~)
+        
+        % Bail if nothing selected
+        if get(D.UI.popRewDel,'Value') == 1
+            return
+        end
+        
+        % Change to active color
+        Safe_Set(D.UI.popRewDel, ...
+            'BackgroundColor', D.UI.activeCol, ...
+            'ForegroundColor', D.UI.enabledBtnFrgCol);
+        
+        % Store as cat
+        D.PAR.sesRewDel(:) = D.UI.popRewDel.String{get(D.UI.popRewDel,'Value'),:};
+        
+        % Convert to number
+        D.PAR.rewDel = str2double(char(D.PAR.sesRewDel));
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'Pop_RewDel', char(D.PAR.sesRewDel)));
+        
+        % Check settings
+        Check_Setup_Defaults();
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -----------------------------CUE CONDITION-------------------------------
+    function Togg_Cue(hObject, ~, ~)
+        
+        % Get trigger button
+        cue_cond = find(cell2mat(get(D.UI.toggCue, 'Value')) == 1);
+        
+        % Switching buttons
+        if length(cue_cond)>1
+            cue_cond = get(hObject, 'UserData');
+        end
+        
+        % Change to active
+        if get(D.UI.toggCue(cue_cond), 'Value') == 1
+            
+            % Store string
+            cue_str = get(D.UI.toggCue(cue_cond), 'String');
+            
+            % Activate current button
+            Button_State(D.UI.toggCue(cue_cond), 'Enable');
+            
+            % Inactivate other buttons
+            Safe_Set(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Value',0);
+            Button_State(D.UI.toggCue(([1,2,3] ~= cue_cond)), 'Update');
+            
+            % Save data
+            D.PAR.sesCue(:) = cue_str;
+            
+            % Change to inactive
+        else
+            Safe_Set(D.UI.toggCue(cue_cond), 'Value',0);
+            Button_State(D.UI.toggCue(cue_cond), 'Update');
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%s\"', 'Togg_Cue', char(D.PAR.sesCue)));
+        
+        % Check settings
+        Check_Setup_Defaults();
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------SOUND CONDITION------------------------------
+    function Togg_Sound(~, ~, ~)
+        
+        % Note: D.F.sound format
+        %         {'White'}
+        %         {'Reward'}
+        
+        for z_sa = 1:2
+            
+            % Get button ID and state value
+            D.F.soundVal = get(D.UI.toggSnd(z_sa), 'Value');
+            D.F.soundID = get(D.UI.toggSnd(z_sa), 'UserData');
+            
+            % Store logical
+            if D.F.soundVal == 1
+                D.F.sound(z_sa) = true;
+            else
+                D.F.sound(z_sa) = false;
+            end
+        end
+        
+        % Turn off all sound if white noise is off
+        if D.F.sound(1) == false
+            D.F.sound(2) = false;
+            Safe_Set(D.UI.toggSnd(2), 'Value', 0);
+        end
+        
+        % Update buttons
+        Button_State(D.UI.toggSnd, 'Update');
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\" \"%d\"', 'Togg_Sound', ...
+            get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
+        
+        % Check settings
+        Check_Setup_Defaults();
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------------SETUP DONE--------------------------------
+    function Togg_SetupDone(~, ~, ~)
+        
+        % Confirm UI entries
+        if ...
+                get(D.UI.popRat,'Value') == 1 || ...
+                get(D.UI.popHuman,'Value') == 1 || ...
+                (D.PAR.sesType == 'ICR_Session' && ...
+                (get(D.UI.popCond,'Value') == 1 || ...
+                get(D.UI.popTask,'Value') == 1 || ...
+                get(D.UI.popRewDel,'Value') == 1 || ...
+                all(cell2mat(get(D.UI.toggCue,'Value')) == 0)))
+            
+            dlg_h = dlgAWL(...
+                '!!WARNING: MISSING ENTRY!!', ...
+                'MISSING SETUP ENTRIES', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'warning');
+            Dlg_Wait(dlg_h);
+            
+            % Unset button
+            Safe_Set(D.UI.toggSetupDone, 'Value', 0);
+            
+            % Bail
+            return
+            
+        end
+        
+        % Disable Setup panel objects
+        Button_State(D.UI.toggSetupDone, 'Update');
+        Object_Group_State('Setup_Objects', 'Disable')
+        
+        % Flag if implant session
+        D.F.implant_session = D.PAR.sesType == 'TT_Turn' || ...
+            (D.F.rat_implanted && ...
+            (D.PAR.sesCond == 'Rotation' || D.PAR.sesCond == 'Implant_Training'));
+        
+        % Set flag
+        D.F.ses_data_loaded = true;
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_SetupDone', get(D.UI.toggSetupDone,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% ----------------------------UPDATE RAT WEIGHT----------------------------
+    function Togg_UpdateWeight(~, ~, ~)
+        
+        % Get new weight
+        D.PAR.ratWeightNew = str2double(D.UI.editNewWeight.String);
+        
+        % Unset button and bail if value bad
+        if isnan(D.PAR.ratWeightNew)
+            Safe_Set(D.UI.toggUpdateWeight, 'Value', 0)
+            return
+        end
+        
+        % Get cap weight
+        if D.F.rat_implanted
+            
+            % Get weight of cap
+            D.PAR.capWeight = D.PAR.capWeightArr(1);
+            
+            % Add aditional weights
+            if D.UI.popCapWeight.Value > 1
+                D.PAR.capWeight = D.PAR.capWeight + D.PAR.capWeightArr(2) + ...
+                    D.PAR.capWeightArr(3)*(D.UI.popCapWeight.Value-2);
+            end
+            
+        end
+        
+        % Calculate new corrected weight
+        D.PAR.ratWeightCorrected = ...
+            D.PAR.ratWeightNew - D.PAR.driveWeight - D.PAR.capWeight;
+        
+        % Check for missing baseling
+        if isnan(D.PAR.ratWeightBaseline)
+            D.PAR.ratWeightBaseline =  D.PAR.ratWeightCorrected;
+        end
+        
+        % Calculate weight proportion
+        D.PAR.ratWeightProportion = ...
+            D.PAR.ratWeightCorrected / D.PAR.ratWeightBaseline;
+        weight_prcnt = round(D.PAR.ratWeightProportion*100);
+        
+        % Print new values
+        D.UI.txtBaselineWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightBaseline);
+        D.UI.txtCorrectedWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightCorrected);
+        D.UI.txtLastWeight(2).String = sprintf('%0.0f', D.PAR.ratWeightLast);
+        D.UI.txtPercentageWeight(2).String = sprintf('%0.0f%%', weight_prcnt);
+        
+        % Update button
+        Button_State(D.UI.toggUpdateWeight, 'Update');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------------------SAVE FOOD INFO-----------------------------
+    function Togg_UpdateFed(~, ~, ~)
+        
+        % Get pellet entry
+        D.PAR.feedPellets = str2double(D.UI.editFeedPellets.String);
+        
+        % Get mash entry
+        D.PAR.feedMash = str2double(D.UI.editFeedMash.String);
+        
+        % Get ensure entry
+        D.PAR.feedEnsure = str2double(D.UI.editFeedEnsure.String);
+        
+        % Get stat entry
+        D.PAR.feedSTAT = str2double(D.UI.editFeedSTAT.String);
+        
+        % Unset and bail if any bad values
+        if any(isnan([D.PAR.feedPellets, D.PAR.feedMash, D.PAR.feedEnsure, D.PAR.feedSTAT]))
+            Safe_Set(D.UI.toggUpdateFed, 'Value', 0)
+            return
+        end
+        
+        % Update button
+        Button_State(D.UI.toggUpdateFed, 'Update');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------------ACQ BUTTON--------------------------------
+    function Togg_Acq(~, ~, ~)
+        
+        % Bail if recording
+        if get(D.UI.toggRec,'Value') == 1
+            
+            % Bail if aqc active
+            if get(D.UI.toggAcq,'Value') == 1
+                return
+            end
+            
+            % Enable acq
+            Safe_Set(D.UI.toggAcq,'Value',1)
+        end
+        
+        % Start aquisition
+        if get(D.UI.toggAcq,'Value') == 1
+            Send_NLX_Cmd('-StartAcquisition');
+        else
+            Send_NLX_Cmd('-StopAcquisition');
+        end
+        
+        % Update button
+        Button_State(D.UI.toggAcq, 'Update');
+        
+        % Set time tracking variables
+        if D.F.acq
+            % save out time before stopping
+            D.T.acq_tot_tim = (Sec_DT(now) - D.T.acq_tim) + D.T.acq_tot_tim;
+        end
+        
+        % Change aquiring status
+        D.F.acq = ~D.F.acq;
+        
+        % Reset temp now
+        D.T.acq_tim = Sec_DT(now);
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Acq', get(D.UI.toggAcq,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------------REC BUTTON--------------------------------
+    function Togg_Rec(~, ~, ~)
+        
+        % Start acq if not running
+        if get(D.UI.toggRec,'Value') == 1 && ...
+                get(D.UI.toggAcq,'Value') == 0
+            
+            % run ToggAcq
+            Togg_Acq(D.UI.toggAcq);
+            
+        end
+        
+        % Start recording
+        if get(D.UI.toggRec,'Value') == 1
+            Send_NLX_Cmd('-StartRecording');
+        else
+            Send_NLX_Cmd('-StopRecording');
+        end
+        
+        % Update button
+        Button_State(D.UI.toggRec, 'Update');
+        
+        % Set time tracking variables
+        if  D.F.rec
+            % save out time before stopping
+            D.T.rec_tot_tim = (Sec_DT(now) - D.T.rec_tim) + D.T.rec_tot_tim;
+        end
+        D.F.rec = ~ D.F.rec;
+        D.T.rec_tim = Sec_DT(now);
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Rec', get(D.UI.toggRec,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------CELLS CUT BUTTON-----------------------------
+    function Togg_StreamTTs(hObject, ~, ~)
+        
+        % Get handle values
+        val = get(hObject, 'Value');
+        %is_ran = get(hObject, 'UserData') == 1;
+        
+        % Upate button
+        Button_State(D.UI.toggStreamTTs, 'Update');
+        
+        % Get a list of ncf files
+        clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
+        D.TT.clust_files = dir(clust_fi_dir);
+        D.TT.clust_files = {D.TT.clust_files.name};
+        D.TT.clust_files = regexp(D.TT.clust_files,'TT\d\d.NCF','match');
+        D.TT.clust_files = [D.TT.clust_files{:}];
+        
+        % Open stream
+        for z_tt = 1:length(D.TT.ttList)
+            
+            % Get tt label
+            tt_lab = D.TT.ttList{z_tt};
+            
+            % Bail if ref
+            if contains(tt_lab, 'R')
+                continue
+            end
+            
+            % Parse clust file
+            if val == 1
+                
+                % Check if file exists
+                fi_ind = find(ismember(D.TT.clust_files, [tt_lab, '.NCF']));
+                if ~isempty(fi_ind)
+                    
+                    % Read in file text
+                    file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
+                    file_str = fread(file_id,'*char')';
+                    fclose(file_id);
+                    
+                    % Parse file for number of clusters
+                    clusts = regexp(file_str, sprintf('"%s" (\\d)', tt_lab), 'tokens');
+                    
+                    % Store number of clusters
+                    D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
+                    
+                end
+                
+                % Include cluster 0 in count
+                D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
+                
+                % Include cluster 0 in all streaming tts
+                D.F.stream_clust(z_tt, 1) = val == 1;
+                
+                % Enable clust buttons
+                Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
+                for z_c = 1:D.TT.nClust(z_tt)
+                    Safe_Set(D.UI.toggSubPlotTT(z_tt,z_c), ...
+                        'ForegroundColor', D.UI.clustCol(z_tt, z_c,:));
+                end
+                
+            end
+            
+            % Initialize flag
+            succeeded = false;
+            
+            % Open tt stream
+            if val == 1
+                msg = sprintf('Open \"%s\" Stream', tt_lab);
+                if any(contains(D.NLX.das_objects, tt_lab))
+                    succeeded = NlxOpenStream(tt_lab) == 1;
+                end
+            end
+            
+            % Close tt stream
+            if val == 0
+                msg = sprintf('Close \"%s\" Stream', tt_lab);
+                if any(contains(D.NLX.das_objects, tt_lab))
+                    succeeded = NlxCloseStream(tt_lab) == 1;
+                end
+            end
+            
+            % Check status
+            if succeeded
+                
+                % Log/print success
+                Console_Write(sprintf('[Togg_StreamTTs] FINISHED: %s', msg));
+                
+                % Set flag
+                D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
+                
+            else
+                
+                % Check for missing das
+                if ~any(contains(D.NLX.das_objects, tt_lab))
+                    Console_Write(sprintf('**WARNING** [Togg_StreamTTs] ABORTED: %s: Missing DAS Object', msg));
+                else
+                    Console_Write(sprintf('**WARNING** [Togg_StreamTTs] FAILED: %s', msg));
+                end
+                
+                % Bail
+                continue
+            end
+            
+        end
+        
+        % Enable/setup plotting
+        if val == 1
+            
+            % Set callback
+            Safe_Set(D.UI.toggSubPlotTT, ...
+                'Callback', {@Togg_SubPlotTT})
+            
+            % Initialize clust pos vals
+            [D.TT.posClust{D.F.stream_clust}] =  deal(cell2struct( ...
+                {[1,0], [1,0], single(NaN(120*60*33,2)), single(NaN(120*60*33,2)), NaN(120*60*33,1)}, ...
+                {'indLap', 'indAll', 'Cart', 'Pol', 'TS'}, 2));
+            
+            % Enable ephys plottng objects
+            Object_Group_State('TT_Plot_Objects', 'Enable')
+            
+            % Set ran flag
+            D.UI.toggStreamTTs.UserData = 1;
+            
+        end
+        
+        % Disable plotting
+        if val == 0
+            
+            % Disable all flags
+            D.F.stream_clust(:) = false;
+            
+            % Reset count
+            D.TT.nClust(:) = 0;
+            
+            % Disable ephys plottng objects
+            Object_Group_State('TT_Plot_Objects', 'Disable')
+            
+        end
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------CELLS CUT BUTTON-----------------------------
+    function Togg_CubeLED(~, ~, ~)
+        
+        % Upate button
+        Button_State(D.UI.toggCubeLED, 'Update');
+        
+        % Turn on Cube LEDs
+        if get(D.UI.toggCubeLED, 'Value') == 1
+            Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 1');
+        end
+        
+        % Turn off Cube LEDs
+        if get(D.UI.toggCubeLED, 'Value') == 0
+            Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSSetTrackingLED 1 0');
+        end
+        
+    end
+
+% -----------------------------SLEEP BUTTON--------------------------------
+    function Togg_Sleep(hObject, ~, ~)
+        
+        % Get user data and value
+        user_data = get(hObject, 'UserData');
+        sleep_phase = user_data(1);
+        sleep_done = user_data(2);
+        val = get(hObject, 'Value');
+        
+        % Bail already run
+        if sleep_done == 1
+            return
+        end
+        
+        % Update button
+        Button_State(D.UI.toggSleep(sleep_phase), 'Update');
+        
+        % Start of sleep
+        if val == 1
+            
+            % Store sleep start time
+            D.T.sleep_str(sleep_phase) = Sec_DT(now);
+            
+            % Send NLX sleep start event
+            Send_NLX_Cmd(D.NLX.sleep_start_evt{sleep_phase});
+            
+            % Switch to sleep tracking for second sleep
+            if sleep_phase == 2
+                
+                % Log/print
+                Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                
+                % Load sleep tracking config
+                Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Sleep.cfg');
+                Console_Write('[NLX_Setup] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                
+                % Log/print
+                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                
+            end
+            
+        end
+        
+        % End of sleep
+        if val == 0
+            
+            % Disable Sleep button
+            if sleep_phase == 1
+                Object_Group_State('Sleep1_Objects', 'Disable');
+            else
+                Object_Group_State('Sleep2_Objects', 'Disable');
+            end
+            
+            % Store end time
+            D.T.sleep_end(sleep_phase) = Sec_DT(now);
+            
+            % Send NLX sleep end event
+            Send_NLX_Cmd(D.NLX.sleep_end_evt{sleep_phase});
+            
+            % Switch back to task tracking after first sleep
+            if sleep_phase == 1
+                
+                % Log/print
+                Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
+                
+                % Load sleep tracking config
+                pause(0.5);
+                Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Task.cfg');
+                
+                % Log/print
+                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
+                
+            end
+            
+            % Flag sleep done
+            D.UI.toggSleep(sleep_phase).UserData(2) = 1;
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s(%d)] Set to \"%d"', 'Togg_Sleep', sleep_phase, val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------ROTATION BUTTON-------------------------------
+    function Togg_ICR(hObject, ~, ~)
+        
+        % Get value
+        val = get(hObject, 'Value');
+        
+        % Get next rot ind
+        rotNext = [1, 2] ~=  D.I.rot;
+        
+        % Enable rot pos select
+        if (val==1)
+            
+            % Show rot pos options
+            Patch_State(D.UI.ptchRtBnds(rotNext,:), ...
+                'ShowAll', D.UI.rotCol(rotNext,:));
+            Safe_Set(D.UI.ptchRtBnds(rotNext,:), ...
+                'HitTest', 'on');
+            Safe_Set(D.UI.txtRtBnds(rotNext, :), ...
+                'Visible', 'on', ...
+                'HitTest', 'on');
+            
+            % Make line width of preffered pos thicker
+            pref_ind = D.UI.rotCatInd == str2double(char(D.PAR.rotPosList(D.C.rot_cnt+1)));
+            Safe_Set(D.UI.ptchRtBnds(rotNext, pref_ind), ...
+                'LineWidth', 3);
+            
+            % Update button to active color
+            Button_State(D.UI.toggICR(rotNext), 'Update');
+            
+        else
+            
+            % Hide rot pos options
+            Patch_State(D.UI.ptchRtBnds(rotNext,:), ...
+                'Hide', D.UI.rotCol(rotNext,:));
+            Safe_Set(D.UI.ptchRtBnds(rotNext,:), ...
+                'HitTest', 'off');
+            Safe_Set(D.UI.txtRtBnds(rotNext, :), ...
+                'Visible', 'off', ...
+                'HitTest', 'off');
+            
+            % Update button color back to default
+            Button_State(D.UI.toggICR(rotNext), 'Update', D.UI.rotCol(rotNext,:));
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d"', 'Togg_ICR', val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------UPDATE UI POS---------------------------------
+    function SizeChanged_GetPosUI(~, ~, ~)
+        
+        % Initialzie
+        mon_new_ind = 0;
+        
+        % Find moninotor window in
+        for z_m = 1:3
+            
+            % Bail if monitor not present
+            if z_m > size(D.UI.monPos,1)
+                continue
+            end
+            
+            % Move left
+            if FIGH.Position(1) == D.UI.monPos(z_m, 1) + 1
+                mon_new_ind = z_m - 1;
+            end
+            
+            % Move right
+            if sum(FIGH.Position([1,3])) == sum(D.UI.monPos(z_m, [1,3])) - 1
+                mon_new_ind = z_m + 1;
+            end
+            
+            % Check for change
+            if mon_new_ind > 0 && mon_new_ind <= size(D.UI.monPos,1)
+                
+                % Update pos
+                D.UI.toggMon(mon_new_ind).Value = 1;
+                Togg_Mon(D.UI.toggMon(mon_new_ind));
+                
+                % Bail
+                return
+                
+            end
+            
+        end
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------GET MOUSE POSITION------------------------------
+    function Mouse_Track(~, ~, ~)
+        
+        % Block callback re-entry
+        s = dbstack();
+        if sum(cell2mat(cellfun(@(x) any(strfind(x, 'MouseTrack')), {s.name}, 'uni', false))) > 1
+            return
+        end
+        
+        % Bail if no buttons active
+        if ...
+                (get(D.UI.toggPickRewPos, 'Value') == 0 && ...
+                all([D.UI.toggICR.Value] == 0)) || ...
+                (strcmp(get(D.UI.toggPickRewPos, 'Enable'), 'off') && ...
+                all(ismember({D.UI.toggICR.Enable}, 'off')))
+            return
+        end
+        
+        % Get new mouse data
+        C = get (D.UI.axH(3), 'CurrentPoint');
+        
+        % Get cart coord
+        x = C(1,1);
+        y = C(1,2);
+        
+        % Get normalized pos data
+        x_norm = (x-D.PAR.XC)./D.PAR.R;
+        y_norm = (y-D.PAR.YC)./D.PAR.R;
+        
+        % Get position in radians
+        [mouse_rad,mouse_roh] = cart2pol(x_norm, y_norm);
+        
+        % Convert radians between [0, 2*pi]
+        mouse_rad = wrapTo2Pi(mouse_rad);
+        
+        % Track reward zone select
+        if D.PAR.sesTask == 'Track' && ...
+                get(D.UI.toggPickRewPos, 'Value') == 1
+            
+            % Run sub function
+            doZoneSelect(mouse_rad, mouse_roh);
+        end
+        
+        % Forage reward target select
+        if D.PAR.sesTask == 'Forage' && ...
+                get(D.UI.toggPickRewPos, 'Value') == 1
+            
+            % Run sub function
+            doTargSelect(mouse_rad, mouse_roh);
+        end
+        
+        % Rotation select
+        if D.PAR.sesCond == 'Rotation' && ...
+                any([D.UI.toggICR.Value] == 1)
+            
+            % Run sub function
+            doRotSelect(mouse_rad, mouse_roh);
+        end
+        
+        % Select track reward zone
+        function doZoneSelect(rad, roh)
+            
+            % Check if mouse over any targ
+            if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
+                Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
+                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+                    'ShowAll', D.UI.rotCol(D.I.rot,:));
+                return
+            end
+            
+            % Check each zone bounds
+            for z_ptch = 1:size(D.PAR.rewZoneBnds,1)
+                if any(Check_Pol_Bnds(rad, roh, D.PAR.rewZoneBnds(z_ptch,:,D.I.rot)))
+                    
+                    % Darken patch
+                    Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+                        'ShowAll', D.UI.rotCol(D.I.rot,:));
+                    Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, z_ptch), ...
+                        'Select', D.UI.rotCol(D.I.rot,:));
+                    
+                    % Show text
+                    Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
+                    Safe_Set(D.UI.txtFdDurH(D.I.rot, z_ptch), 'Visible', 'on');
+                    
+                    % Bail
+                    break
+                    
+                else
+                    Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
+                    Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+                        'ShowAll', D.UI.rotCol(D.I.rot,:));
+                end
+            end
+            
+        end
+        
+        % Select forrage reward target
+        function doTargSelect(rad, roh)
+            
+            % Check if mouse over any targ
+            if ~(roh > D.P.frgRohBnd(1) && roh < D.P.frgRohBnd(2))
+                Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
+                    'ShowAll');
+                return
+            end
+            
+            % Check each bound
+            for z_ptch = 1:length(D.PAR.frgTargSelectInd)
+                
+                % Get current targ and path ind
+                path_ind = D.PAR.frgPathSelectInd(z_ptch);
+                targ_ind = D.PAR.frgTargSelectInd(z_ptch);
+                
+                if any(Check_Pol_Bnds(rad, roh, D.PAR.rewTargBnds(targ_ind,:)))
+                    
+                    % Darken patch
+                    Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
+                        'ShowAll');
+                    Patch_State(D.UI.ptchRewTargBnds(targ_ind), ...
+                        'Select');
+                    
+                    % Get path
+                    D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
+                    D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
+                    
+                    % Plot path
+                    cdat = D.P.frgOccMatScale+D.P.pathNowMat;
+                    if ~isgraphics(D.UI.imgFrgOcc)
+                        D.UI.imgFrgOcc = imagesc(cdat, ...
+                            'Parent', D.UI.axH(5));
+                    else
+                        Safe_Set(D.UI.imgFrgOcc, 'CData', cdat);
+                    end
+                    
+                    % Bail
+                    break
+                    
+                else
+                    Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
+                        'ShowAll');
+                end
+            end
+            
+            
+        end
+        
+        % Select rot pos
+        function doRotSelect(rad, roh)
+            
+            % Get next rot ind
+            rotNext = [1, 2] ~=  D.I.rot;
+            
+            % Check if mouse over track
+            if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
+                Patch_State(D.UI.ptchRtBnds(rotNext, :), ...
+                    'ShowAll', D.UI.rotCol(rotNext,:));
+                return
+            end
+            
+            % Check each rot bounds
+            for z_ptch = 1:size(D.UI.rotBnds,1)
+                if any(Check_Pol_Bnds(rad, roh, D.UI.rotBnds(z_ptch,:,rotNext)))
+                    
+                    % Darken patch
+                    Patch_State(D.UI.ptchRtBnds(rotNext, :), ...
+                        'ShowAll', D.UI.rotCol(rotNext,:));
+                    Patch_State(D.UI.ptchRtBnds(rotNext, z_ptch), ...
+                        'Select', D.UI.rotCol(rotNext,:));
+                    
+                    % Bail
+                    break
+                else
+                    Patch_State(D.UI.ptchRtBnds(rotNext, :), ...
+                        'ShowAll', D.UI.rotCol(rotNext,:));
+                end
+            end
+            
+        end
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------MOUSE CLICK TRACK REW ZONE SELECT----------------------
+    function Mouse_SelectRewZone(hObject, ~, ~)
+        
+        % Bail if not checking for zone selection
+        if D.PAR.sesTask ~= 'Track' || ...
+                get(D.UI.toggPickRewPos, 'Value') == 0
+            return
+        end
+        
+        % Get patch user data
+        user_data = get(hObject, 'UserData');
+        D.I.zone_select = user_data(2);
+        
+        % Update active zone
+        D.I.zone_active(D.I.zone_select) = true;
+        
+        % Update graphics
+        Safe_Set(D.UI.txtFdDurH(D.I.rot, ~D.I.zone_active), 'Visible', 'off');
+        Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+            'ShowAll', D.UI.rotCol(D.I.rot,:));
+        Safe_Set(D.UI.txtFdDurH(D.I.rot, D.I.zone_select), 'Visible', 'on');
+        Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, D.I.zone_select), ...
+            'Active', D.UI.rotCol(D.I.rot,:));
+        
+        % Reset button
+        Safe_Set(D.UI.toggPickRewPos, 'Value', 0)
+        Button_State(D.UI.toggPickRewPos, 'Disable');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------MOUSE CLICK FORAGE REW ZONE SELECT---------------------
+    function Mouse_SelectRewTarg(hObject, ~, ~)
+        
+        % Bail if not checking for target selection
+        if D.PAR.sesTask ~= 'Forage' || ...
+                get(D.UI.toggPickRewPos, 'Value') == 0
+            return
+        end
+        
+        % Get patch user data
+        targ_ind_new = get(hObject, 'UserData');
+        
+        % Get current targ and path ind
+        path_ind = D.PAR.frgPathSelectInd(D.PAR.frgTargSelectInd == targ_ind_new);
+        
+        % Store path mat for plotting
+        D.P.pathNowMat = D.P.pathMat(:,:,path_ind,D.I.targ_now);
+        D.P.pathNowMat(D.P.pathNowMat>0) = 0.05;
+        
+        % Update patches
+        Patch_State(D.UI.ptchRewTargBnds, ...
+            'Hide');
+        Patch_State(D.UI.ptchRewTargBnds(targ_ind_new), ...
+            'Active', D.UI.activeCol);
+        
+        % Reset button
+        Safe_Set(D.UI.toggPickRewPos, 'Value', 0)
+        Button_State(D.UI.toggPickRewPos, 'Disable');
+        
+        % Store new targ
+        D.I.targ_now = targ_ind_new;
+        
+        % Log/print
+        Console_Write(sprintf('[Mouse_SelectRewTarg] Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
+            D.PAR.frgTargDegArr(D.I.targ_last), D.PAR.frgTargDegArr(D.I.targ_now)));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------MOUSE CLICK ROT POS SELECT-------------------------
+    function Mouse_SelectRot(hObject, ~, ~)
+        
+        % Bail if not checking for rotaion
+        if D.PAR.sesCond ~= 'Rotation' || ...
+                all([D.UI.toggICR.Value] == 0)
+            return
+        end
+        
+        % Get patch user data
+        user_data = get(hObject, 'UserData');
+        rot_ind = user_data(1);
+        pos_ind = user_data(2);
+        
+        % Store next rotaion bounds
+        D.UI.rotBndNext = D.PAR.rotBnds(pos_ind, :, rot_ind);
+        
+        % Store rot pos
+        D.PAR.rotPos = [D.PAR.rotPos, D.PAR.rotDistDeg(pos_ind)];
+        
+        % Set flag
+        D.F.rotate = true;
+        
+        % Hide all patches and text
+        Safe_Set(D.UI.txtRtBnds(:,:), ...
+            'Visible', 'off', ...
+            'HitTest', 'off');
+        Patch_State(D.UI.ptchRtBnds(1, :), ...
+            'Hide', D.UI.rotCol(1,:));
+        Patch_State(D.UI.ptchRtBnds(2, :), ...
+            'Hide', D.UI.rotCol(2,:));
+        Safe_Set(D.UI.ptchRtBnds, 'HitTest', 'off')
+        
+        % Show active rote bounds patch and text
+        Safe_Set(D.UI.txtRtBnds(rot_ind, pos_ind), ...
+            'Visible', 'on');
+        Patch_State(D.UI.ptchRtBnds(rot_ind, pos_ind), ...
+            'Active', D.UI.rotCol(rot_ind,:));
+        
+        % Reset button
+        Safe_Set(D.UI.toggICR(rot_ind), 'Value', 0)
+        Button_State(D.UI.toggICR(rot_ind), 'Disable', D.UI.rotCol(rot_ind,:));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------TASK DONE--------------------------------
+    function Togg_TaskDone(~, ~, ~)
+        
+        % Check if session is done
+        dlg_h = dlgAWL(...
+            'End Task Run?', ...
+            'END TASK RUN', ...
+            'Yes', 'No', [], 'No', ...
+            D.UI.dlgPos{4}, ...
+            'question');
+        choice = Dlg_Wait(dlg_h);
+        
+        % Handle response
+        switch choice
+            case 'Yes'
+                % Post NLX event: session end
+                Send_NLX_Cmd(D.NLX.ses_end_evt);
+            case 'No'
+                return
+        end
+        
+        % Set flag
+        D.F.task_done = true;
+        
+        % Print end time
+        infstr = datestr(now, 'HH:MM:SS');
+        Safe_Set(D.UI.editTimeInf(2), 'String', infstr)
+        
+        % Hanle Track task
+        if D.PAR.sesTask == 'Track'
+            
+            % Halt robot if not already halted
+            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
+                if (~D.F.halted)
+                    Safe_Set(D.UI.toggHaltRob, 'Value', 1);
+                    Togg_HaltRob();
+                end
+            end
+            
+            % Check if rat is out of room for track run
+            dlg_h = dlgAWL(...
+                'Take out rat', ...
+                'RAT OUT', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            Dlg_Wait(dlg_h);
+            
+            % Stop halt if still active
+            if strcmp(get(D.UI.toggHaltRob, 'Enable'), 'on')
+                if (D.F.halted)
+                    Safe_Set(D.UI.toggHaltRob, 'Value', 0);
+                    Togg_HaltRob();
+                end
+            end
+            
+            % Stop bulldoze if still active
+            if (get(D.UI.toggBulldoze, 'Value') == 1)
+                Safe_Set(D.UI.toggBulldoze, 'Value', 0);
+                Pop_Bulldoze();
+            end
+            
+        end
+        
+        % Post NLX event: rat out
+        Send_NLX_Cmd(D.NLX.rat_out_evt);
+        
+        % Save end time
+        D.T.ses_end = Sec_DT(now);
+        
+        % Disable Run objects
+        Object_Group_State('Task_Objects', 'Disable')
+        
+        % Disable recording objects
+        if ~D.F.implant_session
+            
+            % Stop recording
+            if D.F.rec
+                Safe_Set(D.UI.toggRec,'Value', 0)
+                Togg_Rec(D.UI.toggRec);
+            end
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_TaskDone', get(D.UI.toggTaskDone,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------SAVE SESSION DATA-------------------------------
+    function Togg_Save(~, ~, ~)
+        
+        % Only run once
+        if get(D.UI.toggSave, 'UserData') > 0
+            return
+        end
+        
+        % "Disable" save button so only pressed once
+        Safe_Set(D.UI.toggSave, 'UserData', 1);
+        
+        % Update button
+        Button_State(D.UI.toggSave, 'Update');
+        
+        % Start save status timer
+        start(D.timer_save);
+        
+        % Set flag to save at end of main loop
+        D.F.do_save = true;
+        
+        % Check if cheetah data should be saved
+        if D.F.cheetah_running
+            
+            % Show dialogue
+            dlg_h = dlgAWL( ...
+                'Save Cheetah Data?', ...
+                'SAVE CHEETAH', ...
+                'Yes', 'No', [], 'No', ...
+                D.UI.dlgPos{4}, ...
+                'question');
+            choice = Dlg_Wait(dlg_h);
+            
+            % Handle response
+            if strcmp(choice, 'Yes')
+                % Set flag
+                D.F.do_nlx_save = true;
+            end
+            
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Save', get(D.UI.toggSave,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------------------QUIT ALL-----------------------------------
+    function Togg_Quit(~, ~, ~)
+        
+        % Only run once
+        if get(D.UI.toggQuit, 'UserData') > 0
+            return
+        end
+        
+        % Check for save unless quit before setup done
+        if (D.F.ses_data_loaded && ~D.F.ses_save_done)
+            
+            % Construct a questdlg with two options
+            dlg_h = dlgAWL( ...
+                '!!WARNING: QUIT WITHOUT SAVING?!!', ...
+                'ABBORT RUN', ...
+                'Yes', 'No', [], 'No', ...
+                D.UI.dlgPos{4}, ...
+                'warning');
+            choice = Dlg_Wait(dlg_h);
+            
+            % Handle response
+            if strcmp(choice, 'No')
+                % Bail
+                return
+            end
+            
+            % Make sure rat is out
+            if ~D.F.rat_out && D.PAR.sesTask ~= 'Forage'
+                
+                dlg_h = dlgAWL(...
+                    '!!WARNING: TAKE OUT RAT BEFORE PRECEDING!!', ...
+                    'RAT OUT', ...
+                    'OK', [], [], 'OK', ...
+                    D.UI.dlgPos{4}, ...
+                    'warning');
+                Dlg_Wait(dlg_h);
+                
+            end
+            
+        end
+        
+        % "Disable" save button so only pressed once
+        Safe_Set(D.UI.toggQuit, 'UserData', 1);
+        
+        % Update button
+        Button_State(D.UI.toggQuit, 'Update');
+        
+        % Start quit status timer
+        start(D.timer_quit);
+        
+        % Print session aborting
+        if ~D.F.ses_save_done
+            Console_Write('**WARNING** [Togg_Quit] ABORTING SESSION...');
+        end
+        
+        % Stop halt if still active
+        if (D.F.halted)
+            Safe_Set(D.UI.toggHaltRob, 'Value', 0);
+            Togg_HaltRob();
+        end
+        
+        % Stop bulldoze if still active
+        if (get(D.UI.toggBulldoze, 'Value') == 1)
+            Safe_Set(D.UI.toggBulldoze, 'Value', 0);
+            Pop_Bulldoze();
+        end
+        
+        % Stop recording
+        if D.F.rec
+            Safe_Set(D.UI.toggRec,'Value', 0)
+            Togg_Rec(D.UI.toggRec);
+        end
+        
+        % Check if battery should be replaced
+        if ...
+                c2m.('J').dat1 > 0 && ...
+                c2m.('J').dat1 <= D.PAR.robVccReplace
+            
+            % Confirm that Cheetah is closed
+            warn_str = ...
+                sprintf('**WARNING** BATTERY IS AT %0.2fV AND NEEDS TO BE REPLACED', c2m.('J').dat1);
+            
+            dlg_h = dlgAWL(...
+                warn_str, ...
+                'BATTERY LOW', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'warning');
+            Dlg_Wait(dlg_h);
+            
+        end
+        
+        % Tell C# to begin quit
+        Send_CS_Com('X', 1);
+        
+        % Set flag
+        D.F.do_quit = true;
+        
+        % Shut down if matlab run alone
+        if ISMATSOLO
+            SetExit()
+        end
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Togg_Quit', get(D.UI.toggQuit,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -----------------------------HALT ROBOT----------------------------------
+    function Togg_HaltRob(~, ~, ~)
+        
+        if (get(D.UI.toggHaltRob, 'Value') == 1)
+            
+            % Change backround color and text
+            Safe_Set(D.UI.toggHaltRob, 'String', 'Halted...');
+            
+            % Tell CS to Halt Robot
+            Send_CS_Com('H', 1);
+            
+            % Set flag
+            D.F.halted = true;
+            
+        else
+            
+            % Change backround color and text
+            Safe_Set(D.UI.toggHaltRob, 'String', 'Halt Robot')
+            
+            % Tell CS to stop halting
+            Send_CS_Com('H', 0);
+            
+            % Set flag
+            D.F.halted = false;
+            
+        end
+        
+        % Update button
+        Button_State(D.UI.toggHaltRob, 'Update');
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_HaltRob', get(D.UI.toggHaltRob,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------BULLDOZE RAT---------------------------------
+    function Pop_Bulldoze(~, ~, ~)
+        
+        if (get(D.UI.toggBulldoze, 'Value') == 1)
+            
+            % Get bulldoze delay
+            delStr = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
+            delStr = regexp(delStr, '\d*', 'match');
+            D.PAR.bullDel = str2double(delStr{:});
+            D.PAR.bullSpeed = str2double(get(D.UI.editBulldoze, 'String'));
+            
+            % Change backround text
+            Safe_Set(D.UI.toggBulldoze, 'String', sprintf('Bulldoze (%ds)', D.PAR.bullDel));
+            
+            % Tell CS to bulldoze
+            Send_CS_Com('B', D.PAR.bullDel, D.PAR.bullSpeed);
+            
+        else
+            
+            % Change backround text
+            Safe_Set(D.UI.toggBulldoze, 'String', 'Ceasefire');
+            
+            % Tell CS to stop bulldozing
+            Send_CS_Com('B', 0, 0);
+            
+        end
+        
+        % Update button
+        Button_State(D.UI.toggBulldoze, 'Update');
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set to \"%d\" \"%d\"', 'Pop_Bulldoze', D.PAR.bullDel, D.PAR.bullSpeed));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------------REWARD------------------------------------
+    function Btn_Reward(~, ~, ~)
+        
+        % Set reward pos and cond
+        r_pos = 0;
+        r_cond = 1;
+        
+        % Get reward zone/duration from dropdown handle
+        z_ind = get(D.UI.popReward, 'Value');
+        
+        % Tell CS to trigger reward
+        Send_CS_Com('R', r_pos, r_cond, z_ind);
+        
+        % Track round trip time
+        D.T.btn_rew_sent = Sec_DT(now);
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Set to \"%d\"', 'Btn_Reward', get(D.UI.btnReward,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------------DO CUE------------------------------------
+    function Togg_DoCue(~, ~, ~)
+        
+        % Update button
+        Button_State(D.UI.toggDoCue, 'Update');
+        
+        % Set other buttons
+        if get(D.UI.toggDoCue, 'Value') == 1
+            
+            % Unset block cue
+            Safe_Set(D.UI.toggBlockCue, 'Value',0);
+            Togg_BlockCue();
+            
+            % Enable pick rew zone
+            Button_State(D.UI.toggPickRewPos, 'Enable');
+            
+        else
+            
+            % Unset force cue
+            Safe_Set(D.UI.toggForceCue, 'Value',0);
+            Togg_ForceCue();
+            
+            % Unset and disable pick cue pos
+            Safe_Set(D.UI.toggPickRewPos, 'Value', 0);
+            Button_State(D.UI.toggPickRewPos, 'Disable');
+            
+        end
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_DoCue', get(D.UI.toggDoCue,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------------------BLOCK CUE----------------------------------
+    function Togg_BlockCue(~, ~, ~)
+        
+        % Update button
+        Button_State(D.UI.toggBlockCue, 'Update');
+        
+        if (get(D.UI.toggBlockCue, 'Value') == 1)
+            
+            % Reset zone patches
+            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+                'ShowAll', D.UI.rotCol(D.I.rot,:));
+            
+            % Set button to not cue
+            Safe_Set(D.UI.toggDoCue, 'Value', 0);
+            Togg_DoCue();
+        end
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_BlockCue', get(D.UI.toggBlockCue,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------------------FORCE CUE----------------------------------
+    function Togg_ForceCue(~, ~, ~)
+        
+        % Update button
+        Button_State(D.UI.toggForceCue, 'Update');
+        
+        if (get(D.UI.toggForceCue, 'Value') == 1)
+            
+            % Set button to cue
+            Safe_Set(D.UI.toggDoCue, 'Value', 1);
+            Togg_DoCue();
+            
+        end
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'Togg_ForceCue', get(D.UI.toggForceCue,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------PICK REWARD ZONE/TARG---------------------------
+    function Togg_PickRewPos(~, ~, ~)
+        
+        % Update button
+        Button_State(D.UI.toggPickRewPos, 'Update');
+        
+        if (get(D.UI.toggPickRewPos, 'Value') == 1)
+            
+            % Darken zone patches
+            if D.PAR.sesTask == 'Track'
+                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+                    'ShowAll', D.UI.rotCol(D.I.rot,:));
+                
+                % Bring to top
+                uistack(D.UI.ptchRewZoneBndsH(D.I.rot, :), 'top');
+                uistack(D.UI.txtFdDurH(D.I.rot, :), 'top');
+                
+            end
+            
+            % Show forage targ patches
+            if D.PAR.sesTask == 'Forage'
+                
+                % Get sorted index of subset of coresponding paths;
+                sub_path = D.PAR.frgPathDegArr(1:D.PAR.frgPathWdt/D.PAR.frgPathSpace/2:end);
+                D.PAR.frgPathSelectInd = find(ismember(D.PAR.frgPathDegArr, sub_path));
+                
+                % Get index of subset of targets;
+                sub_targ = wrapTo360(D.PAR.frgTargDegArr(D.I.targ_now) + 180 + D.PAR.frgPathDegArr(D.PAR.frgPathSelectInd)*2);
+                D.PAR.frgTargSelectInd = find(ismember(D.PAR.frgTargDegArr, sub_targ));
+                
+                % Sort paths to match targets
+                path_sort = cell2mat(arrayfun(@(x) find(sub_targ == x), D.PAR.frgTargDegArr(D.PAR.frgTargSelectInd), 'uni', false));
+                D.PAR.frgPathSelectInd = D.PAR.frgPathSelectInd(path_sort);
+                
+                % Make subset of targets visible
+                Patch_State(D.UI.ptchRewTargBnds(D.PAR.frgTargSelectInd), ...
+                    'ShowAll');
+                
+                % Reset path mat
+                D.P.pathNowMat = zeros(size(D.P.pathNowMat));
+                
+            end
+            
+        else
+            
+            % Lighten zone patches
+            if D.PAR.sesTask == 'Track'
+                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot, ~D.I.zone_active), ...
+                    'ShowAll', D.UI.rotCol(D.I.rot,:));
+            end
+            
+        end
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------CLEAR VT BUTTON------------------------------
+    function Btn_ClrVT(~, ~, ~)
+        
+        % Reset handle data
+        
+        Safe_Set(D.UI.Rat.mrkPosLapH, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rat.linVelLapH, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rob.linVelLapH, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rat.linPosAll, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rat.linVelAll, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rob.linVelAll, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rat.linVelAvgH, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.Rob.linVelAvgH, ...
+            'XData', NaN, 'YData', NaN);
+        
+        % Reset pos data indeces
+        D.P.Rat.posAll.indAll(1) = max(1, D.P.Rat.posAll.indAll(2));
+        D.P.Rob.posAll.indAll(1) = max(1, D.P.Rob.posAll.indAll(2));
+        D.P.Rat.posAll.indLap = D.P.Rat.posAll.indAll;
+        D.P.Rob.posAll.indLap = D.P.Rob.posAll.indAll;
+        
+        % Reset vel data indeces
+        D.P.Rat.velAll.indAll(1) = max(1, D.P.Rat.velAll.indAll(2));
+        D.P.Rob.velAll.indAll(1) = max(1, D.P.Rob.velAll.indAll(2));
+        D.P.Rat.velAll.indLap = D.P.Rat.velAll.indAll;
+        D.P.Rob.velAll.indLap = D.P.Rob.velAll.indAll;
+        
+        % Reset vel hitogram data
+        D.P.Rat.velAll.indHist(1) = max(1, D.P.Rat.velAll.indHist(2));
+        D.P.Rob.velAll.indHist(1) = max(1, D.P.Rob.velAll.indHist(2));
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set to \"%d\"', 'Btn_ClrVT', get(D.UI.btnClrVT,'Value')));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------CLEAR VT BUTTON------------------------------
+    function Btn_ClrTT(~, ~, ~)
+        
+        % Bail if cells not cut
+        if get(D.UI.toggStreamTTs, 'Value') == 0
+            return
+        end
+        
+        % Bail if not connected
+        if ~D.F.nlx_connected
+            return
+        end
+        
+        % Get list of active tt/clust
+        active_mat = ...
+            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
+        
+        % Reset all plots
+        Safe_Set(D.UI.mrkClustH, ...
+            'XData', NaN, 'YData', NaN);
+        Safe_Set(D.UI.imgClustH, ...
+            'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
+            'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
+        
+        % Reset data inds for active buttons
+        for z_tt = 1:size(D.TT.posClust,1)
+            for z_c = 1:size(D.TT.posClust,2)
+                if active_mat(z_tt,z_c)
+                    D.TT.posClust{z_tt,z_c}.indAll(1) =  max(1,D.TT.posClust{z_tt,z_c}.indAll(2));
+                    D.TT.posClust{z_tt,z_c}.indLap =  D.TT.posClust{z_tt,z_c}.indAll;
+                end
+            end
+        end
+    end
+
+% ---------------------BUTTON PRESS TO LOAD TT DATA------------------------
+    function Togg_SelectTT(hObject, ~, ~)
+        
+        %% GET HANDLE VALUES
+        val = get(hObject, 'Value');
+        x = get(hObject, 'UserData');
+        tt_ind = x(1);
+        
+        % Get tt field
+        D.TT.ttFldNow = D.TT.ttList{tt_ind};
+        
+        % Check if not in 'Track TTs' or 'Plot Spikes' mode
+        if D.UI.toggMainActionTT(1).Value == 0 && ...
+                D.UI.toggMainActionTT(2).Value == 0
+            
+            % Set button back to deselect and bail
+            set(hObject, 'Value', 0)
+            return
+        end
+        
+        %% HANDLE 'Plot Spikes'
+        
+        % Select/Deselect clust buttons if in 'Plot Spikes' mode
+        if D.UI.toggMainActionTT(2).Value == 1
+            
+            % Set ref button back to inactive and bail
+            if contains(D.TT.ttFldNow, 'R')
+                set(hObject, 'Value', 0)
+                return
+            end
+            
+            % Get active clusters
+            stream_clusts = ...
+                find(D.F.stream_clust(tt_ind, :));
+            
+            % Set button back to inactive and bail
+            if isempty(stream_clusts)
+                set(hObject, 'Value', 0)
+                return
+            end
+            
+            % Set cluster buttons
+            for z_c = 1:length(stream_clusts)
+                
+                % Set all buttons to val
+                Safe_Set(D.UI.toggSubPlotTT(tt_ind,z_c), 'Value', val);
+                Togg_SubPlotTT(D.UI.toggSubPlotTT(tt_ind,z_c))
+            end
+            
+            % Bail
+            return
+        end
+        
+        %% HANDLE 'Track TTs'
+        
+        % Enable tt panel objects
+        Object_Group_State('TT_Turn_Panel_Objects', 'Enable')
+        
+        % Turn on/off NLX audio on left and right side for all chan if on pc speakers
+        if D.UI.toggMainActionTT(1).Value == 1 && ...
+                D.UI.toggHearSourceTT(1).Value == 1 && ...
+                isempty(strfind(D.TT.ttFldNow, 'R'))
+            
+            % Turn on audio for this tt
+            if val == 1
+                
+                % Play left audio for this tt
+                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,1), 'Value', 1)
+                Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,1));
+                
+                % Play right audio for this tt
+                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,2), 'Value', 1)
+                Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,2));
+                
+            end
+            
+            % Turn off audio for this tt
+            if val == 0
+                
+                % Turn left audio off
+                if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,1), 'Value') == 1
+                    Safe_Set(D.UI.toggSubHearSdTT(tt_ind,1), 'Value', 0)
+                    Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,1));
+                end
+                
+                % Turn right audio off
+                if Safe_Get(D.UI.toggSubHearSdTT(tt_ind,2), 'Value') == 1
+                    Safe_Set(D.UI.toggSubHearSdTT(tt_ind,2), 'Value', 0)
+                    Togg_SubHearTT(D.UI.toggSubHearSdTT(tt_ind,2));
+                end
+                
+            end
+            
+        end
+        
+        % Bail here if button unset
+        if val == 0
+            
+            % Re-enable all buttons
+            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
+            
+            % Disable tt panel objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            Button_State(D.UI.toggUpdateLogTT, 'Disable');
+            
+            % Show all tts
+            Show_Active_TT();
+            
+            % Update current TT select button
+            if D.F.tt_updated(tt_ind)
+                Button_State(D.UI.toggSelectTT(tt_ind), 'Update', D.UI.disabledCol);
+            else
+                Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
+            end
+            
+            % Hack to get toggle color to update
+            for z_p = 1:2
+                pos = D.UI.panSelectTT(z_p).Position;
+                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                D.UI.panSelectTT(z_p).Position = pos;
+            end
+            
+            % Bail
+            return
+            
+        end
+        
+        % Disable all buttons
+        Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'off');
+        
+        % Enable this button
+        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'on');
+        
+        % Show active tt
+        Show_Active_TT(tt_ind);
+        
+        % Make sure only 1 button active
+        Safe_Set(D.UI.toggSelectTT, 'Value', 0);
+        Safe_Set(D.UI.toggSelectTT(tt_ind), 'Value', val);
+        
+        % Update all TT select button
+        Button_State(D.UI.toggSelectTT, 'Update');
+        
+        % Change color of all updated buttons
+        Safe_Set(D.UI.toggSelectTT(D.F.tt_updated), 'BackgroundColor', D.UI.disabledCol);
+        
+        % Update current TT select button
+        Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
+        
+        % TT has not been updated already
+        if ~D.F.tt_updated(tt_ind)
+            
+            % Panel and text to enabled
+            Panel_State(D.UI.panTrackTT, 'Enable');
+            Safe_Set(D.UI.txtPanTT, 'ForegroundColor', D.UI.enabledCol)
+            
+            % Set update button to inactive
+            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 0)
+            Button_State(D.UI.toggUpdateLogTT, 'Update');
+            
+        end
+        
+        % TT has been updated already
+        if D.F.tt_updated(tt_ind)
+            
+            % Show stored orientation
+            D.UI.popOr.Value = D.UI.popOr.UserData(tt_ind);
+            
+            % Show stored turns
+            D.UI.popTrn.Value = D.UI.popTrn.UserData(tt_ind);
+            
+            % Show stored direction
+            D.UI.popDir.Value = D.UI.popDir.UserData(tt_ind);
+            
+            % Show stored notes
+            D.UI.editNoteTT.String = D.TT.ttLogNew.([D.TT.ttFldNow,'_N']);
+            
+            % Disable objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            
+            % Set update button to active
+            Safe_Set(D.UI.toggUpdateLogTT, 'Value', 1)
+            Button_State(D.UI.toggUpdateLogTT, 'Update');
+            
+        end
+        
+        % Get last orientation
+        if isundefined(D.TT.ttLogNew.([D.TT.ttFldNow,'_O']))
+            
+            % Use default orientation list for first session
+            or_card_list =  D.PAR.orCardList;
+        else
+            
+            % Change cardinal direction list
+            orind = find(ismember(D.PAR.orCardList, D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])) == 1);
+            or_card_list = circshift(D.PAR.orCardList, [0,-(orind-1)]);
+        end
+        
+        % Add 16ths measurements to orientation list
+        or_list = cellfun(@(x,y) [x, blanks(4-length(x)) , y], ...
+            or_card_list, D.PAR.orFracList, 'uni', false);
+        
+        % Get last depth
+        depths_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_D']);
+        
+        % Update pannel title
+        Safe_Set(D.UI.panTrackTT, ...
+            'Title',D.TT.ttFldNow)
+        
+        % Update orientation
+        Safe_Set(D.UI.popOr, ...
+            'String', or_list);
+        
+        % Update ref
+        D.UI.popRefTT.Value = ...
+            find(ismember(D.TT.refList, char(D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList, D.TT.ttFldNow)))));
+        
+        % Get notes and exclude empty entries
+        notes = D.TT.ttLogTable.([D.TT.ttFldNow,'_N']);
+        notes = notes(cell2mat(cellfun(@(x) ~isempty(x), notes, 'uni', false)));
+        notes = notes(~ismember(notes, 'NA'));
+        inc_ind = ismember(D.TT.ttLogTable.([D.TT.ttFldNow,'_N']), notes);
+        notes = flip(notes);
+        
+        % Show last note in table
+        date_list = flip(D.TT.ttLogTable.Date(inc_ind));
+        date_list = regexp(date_list, '\S*(?=_)', 'match');
+        D.UI.tblNoteTT.Data = [[date_list{:}]', notes];
+        D.UI.tblNoteTT.ColumnWidth = {55, 1000};
+        
+        % Update TT update button object
+        Safe_Set(D.UI.toggUpdateLogTT, ...
+            'UserData',tt_ind,...
+            'String',['Update ', D.TT.ttFldNow]);
+        
+        % Update tt orientation text object
+        Safe_Set(D.UI.txtPanTT(6), ...
+            'String', or_card_list{1});
+        
+        % Update tt depth text object
+        Safe_Set(D.UI.txtPanTT(7), ...
+            'String', sprintf('%0.0f %sm', depths_last, char(181)));
+        
+        % Update pax view
+        Move_Pax_To_TT(tt_ind);
+        
+        % Hack to get toggle color to update
+        for z_p = 1:2
+            pos = D.UI.panSelectTT(z_p).Position;
+            D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+            D.UI.panSelectTT(z_p).Position = pos;
+        end
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% --------------------BUTTON PRESS TO SAVE TT ENTRIES----------------------
+    function Togg_UpdateLogTT(~, ~, ~)
+        
+        % Get values
+        val = get(D.UI.toggUpdateLogTT, 'Value');
+        x = get(D.UI.toggUpdateLogTT, 'UserData');
+        tt_ind = x(1);
+        
+        % Check if data should be overwriten
+        if val == 0
+            
+            % Unset flag
+            D.F.tt_updated(tt_ind) = false;
+            
+            % Overwrite new entries
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_O']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_R']) = D.TT.ttLogTable.([D.TT.ttFldNow,'_R'])(end);
+            
+            % Reset stored turns and lowering direction
+            D.UI.popTrn.UserData(tt_ind) = 1;
+            D.UI.popDir.UserData(tt_ind) = 1;
+            D.UI.popOr.UserData(tt_ind) = 1;
+            
+            % Rerun TT select callback
+            Togg_SelectTT(D.UI.toggSelectTT(tt_ind));
+            
+        end
+        
+        % Update values
+        if val == 1
+            
+            % Set flag
+            D.F.tt_updated(tt_ind) = true;
+            
+            % Update tt select button color
+            Safe_Set(D.UI.toggSelectTT(tt_ind), 'BackgroundColor', D.UI.disabledCol)
+            Safe_Set(D.UI.ttBndlLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
+            Safe_Set(D.UI.ttDriveLegMrk(tt_ind), 'MarkerFaceColor', D.UI.disabledCol);
+            
+            % Store number of turns and lowering direction
+            D.UI.popTrn.UserData(tt_ind) = D.UI.popTrn.Value;
+            D.UI.popDir.UserData(tt_ind) = D.UI.popDir.Value;
+            
+            % Disable objects
+            Object_Group_State('TT_Turn_Panel_Objects', 'Disable')
+            Button_State(D.UI.toggUpdateLogTT, 'Disable');
+            
+            % Reset tt select buttons
+            Safe_Set(D.UI.toggSelectTT, 'Value', 0);
+            % Reenable all buttons
+            Safe_Set(D.UI.toggSelectTT(~([D.UI.toggIncludeTT.Value])), 'Enable', 'on');
+            % Show all tts
+            Show_Active_TT();
+            
+            % Orientation list
+            or_list = get(D.UI.popOr,'String');
+            or_list = regexp(or_list, '[NSEW]*(?=\s)', 'match');
+            or_list = [or_list{:}];
+            
+            % Store last and new orientation
+            or_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_O'])(end);
+            or_new = char(or_list(get(D.UI.popOr,'Value')));
+            
+            % Get total turns
+            turn_list = get(D.UI.popTrn,'String');
+            turns = str2double(turn_list(get(D.UI.popTrn,'Value')));
+            
+            % Convert to um
+            turn_um = turns*D.UI.umPerTurn;
+            
+            % Get turn direction
+            direction_new = get(D.UI.popDir, 'Value');
+            if direction_new == 1
+                direction_new = 1;
+            else
+                direction_new = -1;
+            end
+            
+            % Update change in orientation
+            if any(ismember(or_list, or_last))
+                
+                % Compute delta orientation
+                delta_orientation =  ...
+                    (find(ismember(or_list, or_new) == 1)-1) / length(D.PAR.orCardList);
+                
+                % Convert to microns
+                delta_orientation = delta_orientation * D.UI.umPerTurn;
+                
+            else
+                delta_orientation = 0;
+            end
+            
+            % Add turns
+            delta_depth = direction_new * (delta_orientation + turn_um);
+            
+            % Get last depth
+            depths_last = D.TT.ttLogTable.([D.TT.ttFldNow,'_D'])(end);
+            
+            % Compute total depth
+            depth_new = delta_depth+depths_last;
+            
+            % Save values to temp table
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = or_new;
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
+            
+            % Get reference
+            ref_str = char(D.TT.refList(D.UI.popRefTT.Value));
+            
+            % Set all refs for this bundle
+            tt_list = D.TT.ttList(D.I.ttBndl==D.I.ttBndl(tt_ind));
+            for z_tt = 1:length(tt_list)
+                
+                % Save for session
+                tt_fld = tt_list{z_tt};
+                D.TT_IO.TT_Reference{D.PAR.ratIndTT,:}(ismember(D.TT.ttList,tt_fld)) = ref_str;
+                
+                % Save reference to table
+                D.TT.ttLogNew.([tt_fld,'_R'])(:) = ref_str;
+                
+            end
+            
+            % Update pannel display
+            Safe_Set(D.UI.txtPanTT(6), 'String', or_new);
+            txt = sprintf('%0.0f %sm', depth_new, char(181));
+            Safe_Set(D.UI.txtPanTT(7), 'String', txt);
+            
+        end
+        
+        % Update track plot
+        Plot_TT_Path(tt_ind);
+        
+        % Update pax view
+        Move_Pax_To_TT(tt_ind);
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------SELECT TT ACTION-----------------------------
+    function Togg_MainActionTT(hObject, ~, ~)
+        
+        % Handle args
+        if nargin < 1
+            action_str = 'none';
+            val = 0;
+        else
+            action_str = get(hObject, 'String');
+            val = get(hObject, 'Value');
+        end
+        
+        % Get button ind
+        btn_ind = ismember({D.UI.toggMainActionTT(:).String}, action_str);
+        
+        % Enable/dissable button and turn objects
+        if strcmp('Track TTs', action_str)
+            
+            if val == 1
+                
+                % Avtivate/Show all 'Track TTs' objects
+                Change_TT_Action('Track TTs', 'Enable');
+                
+                % Hide all 'Plot Spikes' objects
+                Change_TT_Action('Plot Spikes', 'Disable');
+                
+            else
+                % Hide all 'Track TTs' objects
+                Change_TT_Action('Track TTs', 'Disable');
+                
+            end
+        end
+        
+        % Enable/dissable button and tt plot objects
+        if strcmp('Plot Spikes', action_str)
+            
+            if val == 1
+                
+                % Avtivate/Show all 'Plot Spikes' objects
+                Change_TT_Action('Plot Spikes', 'Enable');
+                
+                % Hide all 'Track TTs' objects
+                Change_TT_Action('Track TTs', 'Disable');
+                
+            else
+                % Hide all 'Plot Spikes' objects
+                Change_TT_Action('Plot Spikes', 'Disable');
+            end
+            
+        end
+        
+        % Update buttons
+        Safe_Set(D.UI.toggMainActionTT(btn_ind), 'Value', val);
+        Safe_Set(D.UI.toggMainActionTT(~btn_ind), 'Value', 0);
+        Button_State(D.UI.toggMainActionTT, 'Update');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------FLAG TT FEATURES------------------------------
+    function Togg_FlagTT(hObject, ~, ~)
+        
+        % Get user data
+        btn_str = get(hObject, 'String');
+        val = get(hObject, 'Value');
+        x = get(hObject, 'UserData');
+        
+        % Handle user data
+        if strcmp(btn_str, 'Flags')
+            
+            % Set flag indecating device change
+            do_action_change = true;
+            
+        else
+            
+            % Changing channel
+            do_action_change = false;
+            tt_ind = x(1);
+            flag_btn_ind = x(2);
+        end
+        
+        % Reset everything
+        if do_action_change
+            
+            % Turn off other button groups
+            if val == 1
+                
+                % Hide other hear buttons
+                Change_TT_Action('Hear Chan', 'Hide');
+                
+                % Show flag sub buttons
+                Change_TT_Action('Flag TT', 'Enable');
+                
+            end
+            
+            % Hide flag sub buttons
+            if val == 0
+                Change_TT_Action('Flag TT', 'Disable')
+            end
+            
+        end
+        
+        % Update flag data
+        if ~do_action_change
+            
+            % Update tt log value
+            D.TT.ttLogNew.([D.TT.ttList{tt_ind},'_F'])(flag_btn_ind) = logical(val);
+            
+            % Update sub buttons
+            Button_State(D.UI.toggSubFlagTT, 'Update');
+        end
+        
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_FlagTT', btn_str, val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -----------------------SELECT TT SOUND SOURCE--------------------------
+    function Togg_HearSourceTT(hObject, ~, ~)
+        
+        % Get user data
+        btn_str = get(hObject, 'String');
+        val = get(hObject, 'Value');
+        btn_ind = get(hObject, 'UserData');
+        btn_ind = btn_ind{1};
+        
+        % Turn off other button groups
+        if val == 1
+            
+            % Hide flag sub buttons
+            Change_TT_Action('Flag TT', 'Hide');
+            
+            % Avtivate/Show hear sub buttons
+            Change_TT_Action('Hear Chan', 'Enable');
+            
+            % Turn off other hear buttons
+            Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 0);
+            
+        end
+        
+        % Ensure one hear active if 'Track TTs' active and 'Flag' not
+        % active
+        if val == 0 && ...
+                get(D.UI.toggMainActionTT(1), 'Value') == 1 && ...
+                get(D.UI.toggFlagTT, 'Value') == 0
+            Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 1);
+        end
+        
+        % Reset/update sub buttons
+        Safe_Set(D.UI.toggSubHearSdTT, 'Value', 0)
+        Button_State(D.UI.toggSubHearSdTT, 'Update');
+        Safe_Set(D.UI.toggSubHearChTT, 'Value', 0)
+        Button_State(D.UI.toggSubHearChTT, 'Update');
+        
+        % Disable headphone
+        Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Left None');
+        Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Right None');
+        
+        % Disable speaker
+        Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Left None');
+        Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Right None');
+        
+        % Update buttons
+        Button_State(D.UI.toggFlagTT, 'Update');
+        Button_State(D.UI.toggHearSourceTT, 'Update');
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_HearSourceTT', btn_str, val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% -----------------------SELECT TT CHANNEL TO HEAR--------------------------
+    function Togg_SubHearTT(hObject, ~, ~)
+        
+        % Get user data
+        btn_str = get(hObject, 'String');
+        val = get(hObject, 'Value');
+        x = get(hObject, 'UserData');
+        tt_ind = x(1);
+        chan_ind = x(2);
+        side_ind = x(3);
+        
+        % Create list of channels to turn on and off
+        ent_set = ' ';
+        chan_set_on = false(1,4);
+        side_str = {'Left', 'Right'};
+        
+        % Check what audio device to use
+        if D.UI.toggHearSourceTT(1).Value == 1
+            
+            % Set device to speaker
+            dev_str = '"Primary Sound Driver"';
+            dev_btn_ind = 1;
+            
+        elseif D.UI.toggHearSourceTT(2).Value == 1
+            
+            % Set device to headphone
+            dev_str = '"AcqSystem1_Audio0"';
+            dev_btn_ind = 1;
+            
+        else
+            % Reset button if no sound source selected
+            if length(x) > 1
+                val = 0;
+                set(hObject, 'Value', val);
+            end
+            
+            % Bail
+            return
+        end
+        
+        % Get button values on this side
+        val_mat = Safe_Get(D.UI.toggSubHearChTT(:,:,side_ind), 'Value');
+        val_mat = reshape(val_mat, size(D.UI.toggSubHearChTT(:,:,side_ind)));
+        is_on_mat = logical(val_mat);
+        
+        % Handle select side button
+        if strcmp(hObject.String, 'L') || strcmp(hObject.String, 'R')
+            
+            % Unset all buttons for this side
+            Safe_Set(D.UI.toggSubHearSdTT(:,side_ind),'Value',0)
+            Safe_Set(D.UI.toggSubHearChTT(:,:,side_ind),'Value',0)
+            
+            if val == 0
+                
+                % Check if chanels need to be turned off
+                if any(is_on_mat(:))
+                    ent_set = 'None';
+                end
+                
+            elseif val == 1
+                
+                % Set side and all channels for this TT active
+                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,side_ind),'Value',1)
+                Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,side_ind),'Value',1)
+                
+                % Flag to turn on all chanels
+                ent_set = D.TT.ttList{tt_ind};
+                chan_set_on(:) = true;
+                
+            end
+            
+            % Handle indevidual channels
+        else
+            
+            if val == 0
+                
+                % Get this button channel to turn off
+                ent_set = D.TT.ttList{tt_ind};
+                chan_set_on(chan_ind) = false;
+                
+                % Check if all chan on this side off
+                if ~any(is_on_mat(:))
+                    Safe_Set(D.UI.toggSubHearSdTT(:,:,side_ind),'Value',0)
+                    ent_set = 'None';
+                end
+                
+            elseif val == 1
+                
+                % Get chan to turn on
+                ent_set = D.TT.ttList{tt_ind};
+                chan_set_on(chan_ind) = true;
+                
+                % Unset side select button
+                Safe_Set(D.UI.toggSubHearSdTT(:,side_ind),'Value',0)
+                
+                % Unset all chanels on this side that arent on this tt
+                off_ind = true(size(D.UI.toggSubHearChTT(:,:,:)));
+                off_ind(:,:,[1,2]~=side_ind) = false;
+                off_ind(tt_ind,:,side_ind) = false;
+                Safe_Set(D.UI.toggSubHearChTT(off_ind),'Value',0)
+                
+                % Reset active side select button
+                Safe_Set(D.UI.toggSubHearSdTT(tt_ind,side_ind),'Value',1)
+                
+            end
+            
+        end
+        
+        % Get device, side and entity to set
+        msg_str = sprintf('%s %s %s', dev_str, side_str{side_ind}, ent_set);
+        
+        % Set device, side and entity
+        Send_NLX_Cmd(['-SetAudioSource ', msg_str]);
+        
+        % Check for channels to be turned on/off
+        chan_are_on = D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(side_ind,:);
+        chan_changed = find(chan_set_on ~= chan_are_on);
+        
+        % Check if any channels need setting
+        if ~strcmp(ent_set, 'None')
+            
+            % Set each channel for this tt
+            for z_chn = chan_changed
+                
+                % Make state string
+                if chan_set_on(z_chn)
+                    state_str = 'true';
+                else
+                    state_str = 'false';
+                end
+                
+                % Update chanel flag
+                D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(side_ind, z_chn) = chan_set_on(z_chn);
+                
+                % Create chan setting string
+                msg_str = sprintf('%s %s %d %s', ...
+                    dev_str, side_str{side_ind}, z_chn-1, state_str);
+                
+                % Send command
+                Send_NLX_Cmd(['-SetAudioStreamEnabled ', msg_str]);
+                
+            end
+            
+        end
+        
+        % Update buttons
+        Button_State(D.UI.toggFlagTT, 'Update');
+        Button_State(D.UI.toggSubHearSdTT, 'Update');
+        Button_State(D.UI.toggSubHearChTT, 'Update');
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_SubHearTT', btn_str, val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ------------------------TOGGLE TYPE OF TT PLOT---------------------------
+    function Togg_PlotTypeTT(hObject, ~, ~)
+        
+        % Get user data
+        btn_str = get(hObject, 'String');
+        val = get(hObject, 'Value');
+        btn_ind = get(hObject, 'UserData');
+        
+        % Make sure one button set if plot tt active
+        if D.UI.toggMainActionTT(2).Value == 1
+            if val == 0
+                Safe_Set(D.UI.toggPlotTypeTT([1,2]~=btn_ind), 'Value', 1);
+            end
+        end
+        
+        % Clear pos plots
+        if D.UI.toggMainActionTT(2).Value == 0 || ...
+                D.UI.toggPlotTypeTT(1).Value == 0
+            
+            % Clear all marker data
+            Safe_Set(D.UI.mrkClustH, ...
+                'XData', NaN, 'YData', NaN);
+        end
+        
+        % Clear rate plots
+        if D.UI.toggMainActionTT(2).Value == 0 || ...
+                D.UI.toggPlotTypeTT(2).Value == 0
+            
+            % Hide 2D data
+            Safe_Set(D.UI.imgClustH, ...
+                'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
+                'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
+            
+            % Hide 1D patches
+            Safe_Set(D.UI.ptchClustH, 'FaceAlpha', 0);
+        end
+        
+        % Reset axes and legends
+        if D.UI.toggMainActionTT(2).Value == 0
+            
+            % Remove all axes associations
+            Safe_Set(D.UI.axClstH, 'UserData', 0)
+            
+            % Unset all legends and text
+            for z_ax = 1:size(D.UI.axClstH)
+                colormap(D.UI.axClstH(z_ax), D.UI.disabledCol)
+            end
+            Safe_Set(D.UI.linColBarH, 'Color', D.UI.disabledCol)
+            Safe_Set(D.UI.txtColBarH, 'Visible', 'off')
+            
+        end
+        
+        % Get list of active tt/clust
+        active_mat = ...
+            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
+        [tt_active_ind, clust_active_ind] = find(active_mat);
+        
+        % Set plot flag
+        for z_tt = 1:length(tt_active_ind)
+            for z_c = 1:length(clust_active_ind)
+                D.F.plot_clust(tt_active_ind(z_tt), clust_active_ind(z_c)) = ...
+                    val ~= 0 && ...
+                    D.TT.posClust{tt_active_ind(z_tt), clust_active_ind(z_c)}.indLap(2) > ...
+                    D.TT.posClust{tt_active_ind(z_tt), clust_active_ind(z_c)}.indLap(1);
+            end
+        end
+        
+        % Update buttons
+        Button_State(D.UI.toggPlotTypeTT, 'Update');
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_PlotTypeTT', btn_str, val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% -----------------------------TOGGLE PLOT TT------------------------------
+    function Togg_SubPlotTT(hObject, ~, ~)
+        
+        % Get user data
+        btn_str = get(hObject, 'String');
+        val = get(hObject, 'Value');
+        user_dat = get(hObject, 'UserData');
+        tt_ind = user_dat(1);
+        clust_ind = user_dat(2);
+        
+        % Get axes in use
+        active_ax = Safe_Get(D.UI.axClstH, 'UserData');
+        
+        % Make sure no more than 10 clust active
+        if all(active_ax) && val == 1
+            
+            % Change value to 0
+            val = 0;
+            Safe_Set(D.UI.toggSubPlotTT(tt_ind, clust_ind), 'Value', val)
+            
+        end
+        
+        % Activate cluster
+        if val == 1
+            
+            % Get index of next free axis
+            ax_ind = find(active_ax == 0, 1, 'first');
+            
+            % Take over new axes
+            D.UI.ttClustAxNow(tt_ind, clust_ind) = D.UI.axClstH(ax_ind);
+            
+            % Change color map
+            map = squeeze(D.UI.clustColMap(tt_ind,clust_ind,:,:));
+            colormap(D.UI.axClstH(ax_ind), map)
+            map = mat2cell(map, ones(size(map,1),1), 3);
+            [D.UI.linColBarH(ax_ind,:).Color] = map{:};
+            
+            % Set patch color
+            Safe_Set(D.UI.ptchClustH(ax_ind,:), ...
+                'FaceColor', D.UI.clustCol(tt_ind,clust_ind,:));
+            
+            % Change text
+            set(D.UI.txtColBarH(ax_ind), ...
+                'Visible', 'on', ...
+                'ForegroundColor', D.UI.clustCol(tt_ind,clust_ind,:), ...
+                'String', sprintf('%s-%d', D.TT.ttList{tt_ind}, clust_ind-1));
+            
+            % Flag axis as in use
+            set(D.UI.axClstH(ax_ind), 'UserData', 1);
+            
+            % Make sure TT Select button active
+            set(D.UI.toggSelectTT(tt_ind), 'Value', 1);
+        end
+        
+        % Inactivate cluster
+        if val == 0
+            
+            % Get index of axis
+            ax_ind = find(D.UI.axClstH == D.UI.ttClustAxNow(tt_ind, clust_ind));
+            
+            % Make sure value valid
+            if ~isempty(ax_ind)
+                
+                % Set axis to disabled colormap
+                colormap(D.UI.axClstH(ax_ind), D.UI.disabledCol)
+                set(D.UI.linColBarH(ax_ind,:), 'Color', D.UI.disabledCol)
+                
+                % Reset patches
+                Safe_Set(D.UI.ptchClustH(ax_ind,:), 'FaceAlpha', 0);
+                
+                % Hide text
+                set(D.UI.txtColBarH(ax_ind), 'Visible', 'off')
+                
+                % Flag axis as free
+                set(D.UI.axClstH(ax_ind), 'UserData', 0);
+                
+            end
+            
+            % Check if all cluster off for this tt
+            active_clust = Safe_Get(D.UI.toggSubPlotTT(tt_ind,:), 'Value');
+            if all(active_clust == 0)
+                set(D.UI.toggSelectTT(tt_ind), 'Value', 0);
+            end
+            
+            % Clear associated plots
+            Safe_Set(D.UI.mrkClustH(tt_ind, clust_ind), ...
+                'XData', NaN, 'YData', NaN);
+            Safe_Set(D.UI.imgClustH(tt_ind, clust_ind), ...
+                'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
+                'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
+            
+        end
+        
+        % Set plot flag
+        D.F.plot_clust(tt_ind, clust_ind) = ...
+            val ~= 0 && ...
+            D.TT.posClust{tt_ind, clust_ind}.indLap(2) > ...
+            D.TT.posClust{tt_ind, clust_ind}.indLap(1);
+        
+        % Update current clust button
+        Button_State(D.UI.toggSubPlotTT(tt_ind, clust_ind), 'Update');
+        
+        % Update tt select button
+        Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
+        
+        % Log/print
+        Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_SubPlotTT', btn_str, val));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
+% ----------------------SLIDER SWITCH PAXANOS IMAGES-----------------------
+    function Sld_SwtchImg(hObject, ~, ~)
+        
+        % Get user data
+        user_dat = get(hObject, 'UserData');
+        obj_ind = user_dat(1);
+        img_ind = round(get(hObject, 'Value'));
+        
+        % Change image visibility
+        [D.UI.h_paxImg{obj_ind}(:).Visible] = deal('off');
+        D.UI.h_paxImg{obj_ind}(img_ind).Visible = 'on';
+        
+        % Get coord sine
+        if D.TT.imgCoor{obj_ind}(img_ind) == abs(D.TT.imgCoor{obj_ind}(img_ind))
+            sin_str = '+';
+        else
+            sin_str = '-';
+        end
+        
+        % Update image coordinates
+        print_str = sprintf('%s%0.2f', sin_str, abs(D.TT.imgCoor{obj_ind}(img_ind)));
+        Safe_Set(D.UI.txtImgCorr(obj_ind),'String',print_str)
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------ENABLE/DISABLE TT----------------------------
+    function Togg_IncludeTT(hObject, ~, ~)
+        
+        % Get values
+        val = get(hObject, 'Value');
+        x = get(hObject, 'UserData');
+        tt_ind = x(1);
+        
+        % Endable/Disable button if not set to active
+        if val == 1
+            Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'off')
+            Safe_Set(D.UI.toggSubPlotTT(tt_ind,:), ...
+                'Value', 0, ...
+                'Enable', 'off')
+            Safe_Set(D.UI.toggSubFlagTT(tt_ind,:), ...
+                'Value', 0, ...
+                'Enable', 'off')
+            Safe_Set(D.UI.toggSubHearSdTT(tt_ind,:), ...
+                'Value', 0, ...
+                'Enable', 'off')
+            Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,:), ...
+                'Value', 0, ...
+                'Enable', 'off')
+        else
+            
+            % Enable buttons
+            Safe_Set(D.UI.toggSelectTT(tt_ind), 'Enable', 'on')
+            Safe_Set(D.UI.toggSubFlagTT(tt_ind,:), 'Enable', 'on')
+            Safe_Set(D.UI.toggSubHearSdTT(tt_ind,:), 'Enable', 'on')
+            Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,:), 'Enable', 'on')
+            
+            % Enable streaming clusters
+            clust_inc = D.F.stream_clust(tt_ind, :);
+            Safe_Set(D.UI.toggSubPlotTT(tt_ind,clust_inc), 'Enable', 'on')
+            
+            % Hack to get toggle color to updae
+            for z_p = 1:2
+                pos = D.UI.panSelectTT(z_p).Position;
+                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                D.UI.panSelectTT(z_p).Position = pos;
+            end
+            
+        end
+        
+        % Store value
+        D.TT.ttInclude(tt_ind) = ~val;
+        D.TT_IO.TT_Include{D.PAR.ratIndTT,:} = D.TT.ttInclude;
+        
+        % Update buttons
+        Button_State(D.UI.toggIncludeTT(tt_ind), 'Update');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ----------------------------HIDE SHOW BUNDLE-----------------------------
+    function Togg_HideShowBndl(hObject, ~, ~)
+        
+        % Get user data
+        bndl_ind = get(hObject, 'UserData');
+        
+        % Handles
+        tt_inc = ttBndl == bndl_ind;
+        rod_arr_h = D.UI.ttTrkLin(tt_inc);
+        sph_arr_h = D.UI.ttTrkMrk(tt_inc, :);
+        
+        % Set visibility
+        if get(hObject, 'Value') == 0
+            Safe_Set(rod_arr_h, 'Visible', 'on')
+            Safe_Set(sph_arr_h, 'Visible', 'on')
+        else
+            Safe_Set(rod_arr_h, 'Visible', 'off')
+            Safe_Set(sph_arr_h, 'Visible', 'off')
+        end
+        
+        % Update button
+        Button_State(D.UI.toggHideTT, 'Update');
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------SET 3D PLOT VIEW------------------------------
+    function Sld_Set3dView(hObject, ~, ~)
+        
+        % Get user data
+        user_dat = get(hObject,'UserData');
+        
+        % Handle empty value
+        if isempty(user_dat)
+            user_dat = 0;
+        end
+        
+        % Set view
+        if user_dat == 1
+            
+            % Set to saggital
+            Safe_Set(D.UI.sldYaw, 'Value', 0);
+            Safe_Set(D.UI.sldPitch, 'Value', 0);
+            
+        elseif user_dat == 2
+            
+            % Set to corronal
+            Safe_Set(D.UI.sldYaw, 'Value', 90);
+            Safe_Set(D.UI.sldPitch, 'Value', 0);
+            
+        elseif user_dat == 3
+            
+            % Set to horizontal
+            Safe_Set(D.UI.sldYaw, 'Value', 90);
+            Safe_Set(D.UI.sldPitch, 'Value', -90);
+            
+        elseif user_dat == 4
+            
+            % Set to orthoginal
+            Safe_Set(D.UI.sldYaw, 'Value', 45);
+            Safe_Set(D.UI.sldPitch, 'Value', -45);
+            
+        elseif strcmp(hObject.Type, 'figure')
+            
+            % Get view
+            view_now = -1*D.UI.axe3dH.View;
+            
+            % Keep in slider lims
+            view_now(view_now>90) = 90;
+            view_now(view_now<-90) = -90;
+            
+            % Set sliders
+            Safe_Set(D.UI.sldYaw, 'Value', view_now(1));
+            Safe_Set(D.UI.sldPitch, 'Value', view_now(2));
+            
+        end
+        
+        % Get values
+        view_now(1) = -1*get(D.UI.sldYaw, 'Value');
+        view_now(2) = -1*get(D.UI.sldPitch, 'Value');
+        
+        % Set toggle
+        Safe_Set(D.UI.btnSetView(1:4 ~= user_dat), 'Value', 0);
+        
+        % Set axis view
+        view(D.UI.axe3dH, view_now);
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% ---------------------------CHECK FOR NEW C2M-----------------------------
+    function TimerFcn_GetCSCom(~,~)
+        
+        % Have to explicitely catch errors
+        try
+            
+            % Bail if D deleted
+            if ~exist('D', 'var')
+                return
+            elseif ~isfield(D, 'UI')
+                return
+            end
+            
+            % Bail if c2m deleted or not initialized
+            if ~exist('c2m', 'var')
+                return
+            elseif isempty(c2m)
+                return
+            end
+            
+            % Check for new packet
+            c2m_mat = reshape(cell2mat(struct2cell(c2m)),1,[]);
+            new_ind = [c2m_mat.pack] ~= [c2m_mat.packLast];
+            
+            % Bail if no new packets
+            if ~any(new_ind)
+                return
+            end
+            
+            % Store new id
+            id = c2m_mat(new_ind).id;
+            
+            % Check for handshake flag
+            if ...
+                    strcmp(id, 'h') && ...
+                    c2m.(id).dat1 == 1
+                
+                % Store handshake time
+                DTHANDSHAKE = Sec_DT(now);
+                
+                % Log/print handshake received
+                Console_Write(sprintf('   [RCVD] CS HANDSHAKE COMMAND: id=''%s'' dat1=%d', ...
+                    id, c2m.(id).dat1), now);
+                Console_Write(sprintf('SET SYNC TIME: %ddays',DTHANDSHAKE));
+            end
+            
+            % Check for exit/error flag
+            if strcmp(id, 'E')
+                
+                % Check if this is exit flag
+                if c2m.(id).dat1 == 1
+                    
+                    % Set exit flag
+                    SetExit()
+                    
+                    % Log/print exit received
+                    Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                        id, c2m.(id).dat1), now);
+                end
+                
+                % Check for save abort
+                if c2m.(id).dat1 == 2
+                    
+                    % Format err string
+                    err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
+                    
+                    % Display message
+                    dlg_h = dlgAWL(...
+                        err_str, ...
+                        '!!ERROR!!', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.dlgPos{4}, ...
+                        'error');
+                    Dlg_Wait(dlg_h);
+                    
+                    % Write to console
+                    Console_Write(err_str, now, true);
+                    
+                end
+                
+                % Check for forced abort
+                if c2m.(id).dat1 == 3
+                    
+                    % Format err string
+                    err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
+                    
+                    % Display message
+                    dlgAWL(...
+                        err_str, ...
+                        '!!ERROR!!', ...
+                        'OK', [], [], 'OK', ...
+                        D.UI.dlgPos{4}, ...
+                        'error');
+                    
+                    % Set exit flag
+                    SetExit()
+                    
+                    % Write to console
+                    Console_Write(err_str, now, true);
+                    
+                    % Pause for message to show
+                    pause(1);
+                end
+            end
+            
+            %Print new data
+            if ~ischar(c2m.(id).dat1)
+                str = '   [RCVD] c2m: id=''%s'' dat1=%d pack=%d';
+            else
+                str = '   [RCVD] c2m: id=''%s'' dat1=''%s'' pack=%d';
+            end
+            Console_Write(sprintf(str, ...
+                c2m.(id).id, c2m.(id).dat1, c2m.(id).pack), now);
+            
+            % Update packet info
+            c2m.(id).packLast = c2m.(id).pack;
+            
+            % Update recieve time
+            c2m.(id).t_rcvd = Sec_DT(now);
+            
+            % Check for resend request
+            if ~strcmp('g', c2m.(id).id)
+                return
+            end
+            
+            % Get id to resend
+            id_send = c2m.(id).dat1;
+            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', ...
+                id, id_send), now);
+            
+            % Send again if any history of this id
+            if m2c.(id_send).pack > 0
+                Send_CS_Com( ...
+                    m2c.(id_send).id, ...
+                    m2c.(id_send).dat1, ...
+                    m2c.(id_send).dat2, ...
+                    m2c.(id_send).dat3, ...
+                    m2c.(id_send).pack);
+            end
+            
+            % Update UI
+            if UPDATENOW; Update_UI(0, 'force'); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [Timer_FcnGetCSCom] FAILED', now);
+            SetExit()
+        end
+        
+    end
+
+% ------------------------BUTTON STATUS RUN TIMER--------------------------
+    function TimerFcn_Graphics(~, ~, agent)
+        
+        % Have to explicitely catch errors
+        try
+            
+            % Bail if figure closed
+            if ~exist('FIGH', 'var')
+                return
+            elseif ~ishandle(FIGH)
+                return
+            end
+            
+            % Bail if UI field not exist
+            if ~exist('D', 'var')
+                return
+            elseif ~isfield(D, 'UI')
+                return
+            end
+            
+            % Handle input
+            switch agent
+                
+                % Update Vcc text
+                case 'Other'
+                    
+                    % Check for low robot voltage
+                    if D.PAR.rob_vcc <= D.PAR.robVccWarning && D.PAR.rob_vcc > 0
+                        
+                        % Set to warning color
+                        Safe_Set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.warningCol);
+                        
+                        % Flicker
+                        if strcmp(get(D.UI.txtPerfInf(7), 'Visible'), 'on')
+                            Safe_Set(D.UI.txtPerfInf(7), 'Visible', 'off')
+                        else
+                            Safe_Set(D.UI.txtPerfInf(7), 'Visible', 'on')
+                        end
+                        
+                        % Highlight new value
+                    elseif c2m.('J').t_rcvd < 5.5
+                        
+                        % Check if printing a new value is new
+                        if Sec_DT(now) - c2m.('J').t_rcvd < 5
+                            
+                            % Set to attention color
+                            Safe_Set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.attentionCol);
+                        else
+                            
+                            % Set back to default color
+                            Safe_Set(D.UI.txtPerfInf(7), 'ForegroundColor', D.UI.enabledCol);
+                        end
+                    end
+                    
+                    % Check for low cube voltage
+                    if D.PAR.cube_vcc <= D.PAR.cubeVccWarning && D.PAR.cube_vcc > 0
+                        
+                        % Set to warning color
+                        Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.warningCol);
+                        
+                        % Flicker
+                        if strcmp(get(D.UI.txtPerfInf(8), 'Visible'), 'on')
+                            Safe_Set(D.UI.txtPerfInf(8), 'Visible', 'off')
+                        else
+                            Safe_Set(D.UI.txtPerfInf(8), 'Visible', 'on')
+                        end
+                        
+                        % Highlight new value
+                    elseif Sec_DT(now) - D.T.cube_vcc_update < 5.5
+                        
+                        % Check if printing a new value is new
+                        if Sec_DT(now) - D.T.cube_vcc_update < 5
+                            
+                            % Set to attention color
+                            Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.attentionCol);
+                        else
+                            
+                            % Set back to default color
+                            Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.enabledCol);
+                        end
+                    end
+                    
+                    % Update Quit button
+                case 'Quit'
+                    
+                    % Itterate count
+                    D.UI.toggQuit.UserData = D.UI.toggQuit.UserData +1;
+                    if D.UI.toggQuit.UserData>4
+                        D.UI.toggQuit.UserData = 1;
+                    end
+                    
+                    % Change button string
+                    bnt_str = ...
+                        sprintf('%s%s%s', agent, ...
+                        repmat('.',1,D.UI.toggQuit.UserData), ...
+                        blanks(4-D.UI.toggQuit.UserData));
+                    Safe_Set(D.UI.toggQuit, ...
+                        'String', bnt_str);
+                    
+                    % Update Save button
+                case 'Save'
+                    
+                    % Itterate count
+                    D.UI.toggSave.UserData = D.UI.toggSave.UserData +1;
+                    if D.UI.toggSave.UserData>4
+                        D.UI.toggSave.UserData = 1;
+                    end
+                    
+                    % Change button string
+                    bnt_str = ...
+                        sprintf('%s%s%s', agent, ...
+                        repmat('.',1,D.UI.toggSave.UserData), ...
+                        blanks(4-D.UI.toggSave.UserData));
+                    Safe_Set(D.UI.toggSave, ...
+                        'String', bnt_str);
+                    Safe_Set(D.UI.toggSave, ...
+                        'String', bnt_str);
+            end
+            
+            % Update UI
+            if UPDATENOW; Update_UI(0, 'force'); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [Timer_FcnGraphics] FAILED', now);
+            SetExit()
+        end
+        
+    end
+
+% -----------------------BUTTON STATUS STOP TIMER--------------------------
+    function TimerStop_BtnStatus(~, ~, btn_str)
+        
+        % Have to explicitely catch errors
+        try
+            
+            % Bail if figure closed
+            if ~exist('FIGH', 'var')
+                return
+            elseif ~ishandle(FIGH)
+                return
+            end
+            
+            % Bail if UI field not exist
+            if ~exist('D', 'var')
+                return
+            elseif ~isfield(D, 'UI')
+                return
+            end
+            
+            if (strcmp(btn_str,'Quit'))
+                % Disable quit button
+                if isfield(D.UI, 'toggQuit')
+                    if ishandle(D.UI.toggQuit)
+                        Safe_Set(D.UI.toggQuit, 'String', btn_str);
+                        Button_State(D.UI.toggQuit, 'Disable');
+                    end
+                end
+            end
+            
+            if (strcmp(btn_str,'Save'))
+                % Disable save button
+                if isfield(D.UI, 'toggSave')
+                    if ishandle(D.UI.toggSave)
+                        Safe_Set(D.UI.toggSave, 'String', btn_str);
+                        Button_State(D.UI.toggSave, 'Disable');
+                    end
+                end
+            end
+            
+            % Update UI
+            if UPDATENOW; Update_UI(0, 'force'); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [Timer_StopBtnStatus] FAILED', now);
+            SetExit()
+        end
+        
+    end
+
+% -------------------CHANGE FEATURES WITH TAB CHANGE-----------------------
+    function Tab_GrpChange(hObject, ~, ~)
+        
+        % Have to explicitely catch errors
+        try
+            
+            % Handle input
+            if isa(hObject, 'matlab.ui.container.TabGroup')
+                tab_now =  D.UI.tabgp.SelectedTab;
+            else
+                tab_now = hObject;
+                D.UI.tabgp.SelectedTab = hObject;
+            end
+            
+            % Bail if 'TABLE' tab not setup
+            if ~D.F.table_tab_setup
+                return
+            end
+            
+            % Get last tab
+            %tab_last = get(D.UI.tabgp, 'UserData');
+            
+            % Update last tab
+            Safe_Set(D.UI.tabgp, 'UserData', tab_now)
+            
+            % Change main shared button parent
+            Safe_Set(D.UI.toggMon, 'Parent', tab_now)
+            Safe_Set(D.UI.toggSave, 'Parent', tab_now)
+            Safe_Set(D.UI.toggQuit, 'Parent', tab_now)
+            
+            % Bail if on 'TABLE' tab 'TT TRACK' not setup
+            if strcmp(tab_now.Title, 'TABLE') || ~D.F.tt_tab_setup
+                return
+            end
+            
+            % Enable/Disable axis rotations
+            if strcmp(tab_now.Title, 'TT TRACK')
+                set(D.UI.mouseRotView, 'Enable', 'on')
+            else
+                set(D.UI.mouseRotView, 'Enable', 'off')
+            end
+            
+            % Change tt select objects parent
+            Safe_Set(D.UI.panSelectTT, 'Parent', tab_now)
+            Safe_Set(D.UI.toggMainActionTT, 'Parent', tab_now)
+            Safe_Set(D.UI.toggFlagTT, 'Parent', tab_now)
+            Safe_Set(D.UI.toggHearSourceTT, 'Parent', tab_now)
+            Safe_Set(D.UI.toggPlotTypeTT, 'Parent', tab_now)
+            
+            % Set button and panel positions
+            if strcmp(tab_now.Title, 'ICR ARENA')
+                
+                % Move panel
+                for z_p = 1:2
+                    D.UI.panSelectTT(z_p).Position = D.UI.tab_1_tt_select_pan_pos(z_p,:);
+                end
+                
+                % Move action type buttons
+                for z_p = 1:2
+                    D.UI.toggMainActionTT(z_p).Position = D.UI.tab_1_main_act_pos(z_p,:);
+                end
+                
+                % Move action select buttons
+                D.UI.toggFlagTT.Position = D.UI.tab_1_flag_tt_pos;
+                for z_p = 1:2
+                    D.UI.toggHearSourceTT(z_p).Position = D.UI.tab_1_hear_pos(z_p,:);
+                    D.UI.toggPlotTypeTT(z_p).Position = D.UI.tab_1_plot_pos(z_p,:);
+                end
+                
+            elseif strcmp(tab_now.Title, 'TT TRACK')
+                
+                % Move panel
+                for z_p = 1:2
+                    D.UI.panSelectTT(z_p).Position = D.UI.tab_2_tt_select_pan_pos(z_p,:);
+                end
+                
+                % Move action type buttons
+                for z_p = 1:2
+                    D.UI.toggMainActionTT(z_p).Position = D.UI.tab_2_main_act_pos(z_p,:);
+                end
+                
+                % Move action select buttons
+                D.UI.toggFlagTT.Position = D.UI.tab_2_flag_tt_pos;
+                for z_p = 1:2
+                    D.UI.toggHearSourceTT(z_p).Position = D.UI.tab_2_hear_pos(z_p,:);
+                    D.UI.toggPlotTypeTT(z_p).Position = D.UI.tab_2_plot_pos(z_p,:);
+                end
+                
+            end
+            
+            % Update UI
+            if UPDATENOW; Update_UI(0, 'force'); end
+            
+        catch ME
+            Console_Write('!!ERROR!! [Tab_GrpChange] FAILED', now);
+            SetExit()
+        end
+        
+    end
 
 
 
