@@ -833,7 +833,7 @@ namespace ICR_Run
 
             // WAIT FOR TASK DONE CONFIRMATION FROM MATLAB
 
-            if (fc.isRatInArena && !fc.isTaskDone && !fc.isGUIquit)
+            if (!fc.isTaskDone && !fc.isGUIclosed)
             {
                 csLog.Print("[Run] RUNNING: WAIT FOR...: Task Finished...");
                 pass = WaitForMatCom(id: 'O', chk_rcv: true, timeout: !fc.isAbortRun ? 30000 : 10000);
@@ -857,21 +857,18 @@ namespace ICR_Run
             // Wait for task done recieve confirmation
             if (fc.isTaskDone)
             {
-                csLog.Print("[Run] RUNNING: WAIT FOR...: Confirmation Task Finished Received...");
+                csLog.Print("[Run] RUNNING: WAIT FOR...: Confirmation Task Finished Received by Robot...");
                 pass = WaitForRobCom(id: 'O', chk_send: true, chk_conf: true, timeout: 5000);
                 if (pass)
-                {
-                    // Wait for all the other crap to be relayed from Matlab
-                    csLog.Print("[Run] SUCCEEDED: WAIT FOR: Confirmation Task Finished");
-                }
+                    csLog.Print("[Run] SUCCEEDED: WAIT FOR: Confirmation Task Finished Received by Robot");
                 else
                 {
-                    fc.LogError("!!ERROR!! [Run] ABORTED: WAIT FOR: Confirmation Task Finished");
+                    fc.LogError("!!ERROR!! [Run] ABORTED: WAIT FOR: Confirmation Task Finished Received by Robot");
                     run_pass = false;
                 }
             }
             else
-                fc.LogWarning("**WARNING** [Run] SKIPPED: WAIT FOR: Confirmation Task Finished");
+                fc.LogWarning("**WARNING** [Run] SKIPPED: WAIT FOR: Confirmation Task Finished Received by Robot");
 
             // SEND/WAIT FOR FINAL MOVE TO COMPLETE
 
@@ -908,13 +905,21 @@ namespace ICR_Run
 
             // SEND TASK DONE CONFIRMATION TO MATLAB
 
-            if (fc.isTaskDone && !fc.isGUIquit)
+            if (fc.isTaskDone)
             {
+                // Send task done confirmation to Matlab
                 SendMatCom_Thread(id: 'Y', dat1: 1);
-                csLog.Print("[Run] SUCCEEDED: Send Task Done Confirmation");
+
+                // Wait for send and store time
+                csLog.Print("[Setup] RUNNING: WAIT FOR...: Send ICR_GUI Confirmation Task Finished...");
+                pass = WaitForMatCom(id: 'h', chk_send: true, do_abort: true);
+                if (pass)
+                    csLog.Print("[Setup] SUCCEEDED: WAIT FOR: Send ICR_GUI Confirmation Task Finished");
+                else
+                    fc.LogWarning("**WARINING** [Setup] ABORTED: WAIT ICR_GUI: Send ICR Confirmation Task Finished");
             }
             else
-                fc.LogWarning("**WARNING** [Run] SKIPPED: Send Task Done Confirmation");
+                fc.LogWarning("**WARNING** [Run] SKIPPED: Send ICR_GUI Confirmation Task Finished");
 
 
             // RETURN RUN STATUS

@@ -101,7 +101,7 @@ D.DB.Implanted = true;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -7685,10 +7685,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Show reward zone plot and children
         Safe_Set(D.UI.axZoneH, 'Visible', 'on');
-        ch_h = Safe_Get(D.UI.axZoneH, 'Children')';
-        for i = 1:length(ch_h)
-            Safe_Set(ch_h{i}, 'Visible', 'on');
-        end
+        btm = Safe_Get(D.UI.axZoneH, 'Children');
+        btm = [btm{:}];
+        Safe_Set(btm, 'Visible', 'on');
         
         % Bulldoze default
         if D.PAR.sesCond ~= 'Manual_Training'
