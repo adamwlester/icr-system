@@ -58,7 +58,7 @@ global m2c_dir; % current cheetah directory
 
 % CS to Matlab communication
 global c2m; % local data struct
-global c2m_pack; % message in from CS
+global c2m_com; % message in from CS
 
 % Initialize globals
 TIMSTRLOCAL = now;
@@ -563,8 +563,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast', 't_rcvd'}, 2);
         end
         
-        % m2c_pack array [id, dat1, dat2, dat3, pack, flag]
-        c2m_pack(1:6) = 0;
+        % c2m struct shared with cs
+        c2m_com = c2m;
         
         % Bypass some things if running solo
         if ISMATSOLO
@@ -12890,7 +12890,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Clear all global variables but return var
         if clear_all
-            vars_exc = {'STATUS', 'c2m_pack'};
+            vars_exc = {'STATUS', 'c2m_com'};
         end
         
         % Log/print vars cleared
@@ -18301,35 +18301,36 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Have to explicitely catch errors
         try
             
-            % Bail if c2m_pack deleted or not initialized
-            if ~exist('c2m_pack', 'var')
+            % Bail if c2m_com deleted or not initialized
+            if ~exist('c2m_com', 'var')
                 return
-            elseif isempty(c2m_pack)
+            elseif isempty(c2m_com)
                 return
             end
             
-            % Check for new packet flag
-            new_pack = c2m_pack(6) == 1;
+            % Check for new packet
+            c2m_com_mat = reshape(cell2mat(struct2cell(c2m_com)),1,[]);
+            c2m_mat = reshape(cell2mat(struct2cell(c2m)),1,[]);
+            new_ind = [c2m_com_mat.pack] ~= [c2m_mat.packLast];
             
             % Bail if no new packets
-            if ~new_pack
+            if ~any(new_ind)
                 return
             end
             
-            % Get current packet id
-            id = native2unicode(c2m_pack(1),'UTF-8');
+            % Process oldest message
+            id_ind = [c2m_com_mat.pack] == min([c2m_com_mat(new_ind).pack]);
             
-            % Store new data
-            c2m.(id).id = id;
-            c2m.(id).dat1 = c2m_pack(2);
-            c2m.(id).dat2 = c2m_pack(3);
-            c2m.(id).dat3 = c2m_pack(4);
-            c2m.(id).pack = c2m_pack(5);
+            % Get new id
+            id = c2m_com_mat(id_ind).id;
             
-            % Reset flag
-            c2m_pack(6) = 0;
+            % Copy over data
+            c2m.(id).dat1 = c2m_com.(id).dat1;
+            c2m.(id).dat2 = c2m_com.(id).dat2;
+            c2m.(id).dat3 = c2m_com.(id).dat3;
+            c2m.(id).pack = c2m_com.(id).pack;
             
-            % Update packet info
+            % Update last packet
             c2m.(id).packLast = c2m.(id).pack;
             
             % Update recieve time

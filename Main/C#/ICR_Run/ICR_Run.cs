@@ -154,10 +154,6 @@ namespace ICR_Run
         private static string csLogFi = @"ICR_Run_Log.csv"; // log file for ICR_Run
         private static string matLogFi = @"ICR_GUI_Log.csv"; // log file for ICR_Run
 
-        // Define Matlab variables
-        private static System.Array c2m_pack = new double[6] { 0, 0, 0, 0, 0, 0 };
-        private static System.Array m2c_pack = new double[6] { 0, 0, 0, 0, 0, 0 };
-
         // Matlab to CS
         private static Com_Track m2c = new Com_Track(
             obj_id: "m2c",
@@ -378,7 +374,7 @@ namespace ICR_Run
             // INITIALIZE MATLAB GLOBAL VARS
 
             csLog.Print("[Setup] RUNNNING: Create mCOM Global Variables...");
-            com_Matlab.PutWorkspaceData("c2m_pack", "global", c2m_pack);
+            System.Array m2c_pack = new double[6] { 0, 0, 0, 0, 0, 0 };
             com_Matlab.PutWorkspaceData("m2c_pack", "global", m2c_pack);
             com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
             csLog.Print("[Setup] FINISHED: Create mCOM Global Variables");
@@ -2551,7 +2547,7 @@ namespace ICR_Run
 
                     // Set pack and flag back to zero
                     lock (lock_m2cPack)
-                        com_Matlab.PutWorkspaceData("m2c_pack", "global", m2c_pack);
+                        SendMatCom(msg: "m2c_pack(6) = 0;", do_print: false);
 
                 }
 
@@ -2755,7 +2751,6 @@ namespace ICR_Run
             // Local vars
             long t_queued = sw_main.ElapsedMilliseconds;
             string dat_str = " ";
-            double flag = 0;
 
             // Sending packet data
             if (id != ' ')
@@ -2772,30 +2767,19 @@ namespace ICR_Run
                         csLog.Print_Thread(String.Format("   [QUEUED] c2m: {0} dt_send={1} dt_q={2}",
                             dat_str, c2m.DT_SentRcvd(sw_main.ElapsedMilliseconds), sw_main.ElapsedMilliseconds - t_queued));
 
-                    // Format packet data 
-                    c2m_pack.SetValue((double)id, 0);
-                    c2m_pack.SetValue(dat1, 1);
-                    c2m_pack.SetValue(dat2, 2);
-                    c2m_pack.SetValue(dat3, 3);
-                    c2m_pack.SetValue(pack, 4);
-
-                    // Set new pack flag
-                    c2m_pack.SetValue(1, 5);
-
                     // Wait for flag to be reset
-                    do
+                    while (c2m.DT_SentRcvd(sw_main.ElapsedMilliseconds) < c2m.dt_minSentRcvd)
                     {
-                        dynamic _c2m_pack;
-                        lock (lock_c2mPack)
-                            _c2m_pack = com_Matlab.GetVariable("c2m_pack", "global");
-                        flag = (double)_c2m_pack.GetValue(0, 5);
                         Thread.Sleep(10);
                     }
-                    while (flag == 1);
 
-                    // Send packet data
+                    // Create message string
+                    msg = String.Format("[c2m_com.{0}.dat1, c2m_com.{0}.dat2, c2m_com.{0}.dat3, c2m_com.{0}.pack] =  deal({1}, {2}, {3}, {4});",
+                            id, dat1, dat2, dat3, pack);
+
+                    // Update Matlab variable
                     lock (lock_c2mPack)
-                        com_Matlab.PutWorkspaceData("c2m_pack", "global", c2m_pack);
+                        com_Matlab.Execute(msg);
 
                     // Update sent
                     double[] dat = new double[3] { dat1, 0, 0 };
