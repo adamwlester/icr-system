@@ -46,18 +46,19 @@ global ISCRASH; % crash flag
 global FIGH; % ui figure group
 global D; % main data struct
 global TCPIP; % tcp object
-global UPDATENOW; % update ui imediately
 global STATUS; % store status
+global UPDATENOW; % update ui imediately
 global TIMSTRLOCAL; % local time
 global DTHANDSHAKE; % handshake time
 
 % Matlab to CS communication
-global m2c; % local data struct
+global m2c; % global data struct
 global m2c_pack; % message out to CS
 global m2c_dir; % current cheetah directory
 
 % CS to Matlab communication
-global c2m; % data struct
+global c2m; % local data struct
+global c2m_pack; % message in from CS
 
 % Initialize globals
 TIMSTRLOCAL = now;
@@ -100,7 +101,7 @@ D.DB.Implanted = true;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -459,16 +460,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.maxTT = 18;
         % Max clusters
         D.PAR.maxClust = 10;
-        % Warning battery voltage level(V)
-        D.PAR.robVccWarning = 11.6;
-        % Replace battery voltage level (C)
-        D.PAR.robVccReplace = 11.8;
-        % Warning battery voltage level (%)
-        D.PAR.cubeVccWarning = 30;
+        % Warning battery voltage level
+        D.PAR.robVccWarning = 11.6; % (V)
+        % Replace battery voltage level
+        D.PAR.robVccReplace = 11.8; % (V)
+        % Warning battery voltage level
+        D.PAR.cubeVccWarning = 30; % (%)
         % Cube battery type ["C": Small, "A": Medium]
         D.PAR.cubeBatteryType = 'A';
         % Cube battery check
-        D.PAR.dtCubeBatteryCheck = 10;
+        D.PAR.dtCubeBatteryCheck = 60; % (sec)
         
         % DIRECTORIES
         
@@ -548,7 +549,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % c2m struct
         id_list = [ ...
-            'g', ... % request m2c data
             'h', ... % setup handshake
             'J', ... % battery voltage
             'Z', ... % reward zone
@@ -559,9 +559,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             ];
         for z_id = 1:length(id_list)
             c2m.(id_list(z_id)) = cell2struct( ...
-                {id_list(z_id), 0, 0, 0, 0}, ...
-                {'id', 'dat1', 'pack', 'packLast', 't_rcvd'}, 2);
+                {id_list(z_id), 0, 0, 0, 0, 0, 0}, ...
+                {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast', 't_rcvd'}, 2);
         end
+        
+        % m2c_pack array [id, dat1, dat2, dat3, pack, flag]
+        c2m_pack(1:6) = 0;
         
         % Bypass some things if running solo
         if ISMATSOLO
@@ -574,7 +577,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.timer_c2m = timer;
         D.timer_c2m.ExecutionMode = 'fixedRate';
         D.timer_c2m.Period = 0.1;
-        D.timer_c2m.TimerFcn = @TimerFcn_GetCSCom;
+        D.timer_c2m.TimerFcn = @TimerFcn_CheckCSCom;
         start(D.timer_c2m);
         
         % Dynamic graphics timer
@@ -601,7 +604,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Generate figure tab group
         FIGH = figure('Visible', 'Off', ...
-            'DeleteFcn', {@ForceClose});
+            'DeleteFcn', {@DeleteFcn_ForceClose});
         
         % Run variable setup code
         Console_Write('[Setup] RUNNING: "Var_Setup()"...');
@@ -723,7 +726,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~ISMATSOLO
             while true
                 [abort, pass] = ...
-                    Check_Flag(DOEXIT, c2m.('h').dat1 == 0);
+                    Check_Flag(DOEXIT, c2m.('h').dat1 ~= 0);
                 if abort || pass; break; end
             end
             
@@ -733,6 +736,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             elseif pass
                 Console_Write('[Setup] FINISHED: Wait for Handshake');
+                
+                % Log/print sync time
+                Console_Write(sprintf('SET SYNC TIME: %dms', round(DTHANDSHAKE*1000)));
             end
             
         end
@@ -779,6 +785,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % PLOT TT DATA
             TT_Plot();
             
+            % CHECK HARDWARE
+            Hardware_Check();
+            
             % PRINT SES INFO
             Inf_Print();
             
@@ -800,16 +809,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.main_case_now = 'WAIT FOR UI SETUP';
                 
                 % Finish Setup
-            elseif ~D.F.ses_setup_done
+            elseif ~D.F.do_quit && ~D.F.ses_setup_done
                 D.F.main_case_now = 'FINISH SESSION SETUP';
                 
                 % Run Task
-            elseif (~D.F.task_done_confirmed || ~all(D.F.sleep_done)) && ...
+            elseif ~D.F.do_quit && ...
+                    (~D.F.task_done_confirmed || ~all(D.F.sleep_done)) && ...
                     ~(D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update')
                 D.F.main_case_now = 'RUN ICR TASK';
                 
                 % Wait for save
-            elseif ~D.F.ses_save_done && ~D.F.do_quit
+            elseif ~D.F.do_quit && ~D.F.ses_save_done
                 D.F.main_case_now = 'WAIT FOR SAVE';
                 
             elseif ~D.F.do_quit
@@ -1359,6 +1369,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                 case 'WAIT FOR EXIT'
                     %% -------------WAIT FOR EXIT---------------
+                    Update_UI(0, 'force');
+                    pause(0.01);
                     continue
                     
                 otherwise
@@ -1476,7 +1488,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ------------------------------VAR SETUP--------------------------
     function[] = Var_Setup()
         
-        %% TOP LEVEL PARAMETERS
+        %% RUN PARAMETERS
         
         % LOAD DATA TABLES
         T = load(D.DIR.SS_IO_1);
@@ -1829,8 +1841,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % forage reward out target tim
         D.T.frg_rew_outbnd_t1 = 0;
         D.T.frg_rew_outbnd_t2 = 0;
-        % cube check
-        D.T.cube_vcc_update = 0;
+        % cube status check
+        D.T.cube_status_check = 0;
+        % cube vc check
+        D.T.cube_vcc_check = 0;
         
         % INDEXING
         
@@ -6555,30 +6569,74 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        % Setup Cube
+        %% RUN SPIKESORT EXE
+        
+        % Get EXE status
+        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
+        
+        % Prompt to close
+        if D.F.spikesort_running
+            
+            % Show prompt
+            dlg_h = dlgAWL( ...
+                'Close SpikeSort3D', ...
+                'CLOSE SPIKESORT3D', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            Dlg_Wait(dlg_h);
+            
+        end
+        
+        % Check if SpikeSort should be run
+        if D.F.cheetah_running && D.F.implant_session
+            
+            dlg_h = dlgAWL(...
+                'Do you want to run SpikeSort3D.exe?', ...
+                'RUN SS3D?', ...
+                'Yes', 'No', [], 'No', ...
+                D.UI.dlgPos{4}, ...
+                'question');
+            choice = Dlg_Wait(dlg_h);
+            
+        else
+            choice = 'No';
+        end
+        
+        % Recheck EXE status
+        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
+        
+        % Run SpikeSort3D.exe
+        if strcmp('Yes', choice) && ...
+                ~D.F.spikesort_running && ...
+                ~DOEXIT
+            
+            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
+            
+            % Run exe
+            curdir = pwd;
+            cd(D.DIR.nlxSS3DTop);
+            system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
+            cd(curdir);
+            
+            Console_Write('[NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
+        else
+            Console_Write('[NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
+        end
+        
+        %% DISPLAY PROMPT TO POWER ON CUBE
+        
+        % Start Cube
         if D.F.implant_session
             
-            % Log/print
-            Console_Write('[NLX_Setup] RUNNING: Setup Cube');
-            
-            % Start with Cube LED off
-            Safe_Set(D.UI.toggCubeLED, 'Value', 0)
-            Togg_CubeLED(D.UI.toggCubeLED);
-            
-            % Set Cube battery type
-            %   Note:
-            %       "C": Small (green dot)
-            %       "A": Medium (blue dot)
-            D.F.cube_connected = ...
-                Send_NLX_Cmd(sprintf('-SendLynxSXCommand AcqSystem1 -SetBatteryType "%s"', D.PAR.cubeBatteryType));
-            D.F.cube_connected = D.F.cube_connected==1;
-            
-            % Print Cube status
-            if D.F.cube_connected
-                Console_Write('[NLX_Setup] FINISHED: Setup Cube');
-            else
-                Console_Write('**WARNING** [NLX_Setup] FAILED: Setup Cube');
-            end
+            % Prompt to turn on cube
+            dlg_h = dlgAWL( ...
+                'Power on Cube', ...
+                'START CUBE', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            Dlg_Wait(dlg_h);
             
         end
         
@@ -6649,61 +6707,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update/refresh window positions
         Togg_Mon(D.UI.toggMon(D.UI.monDefault));
-        
-        %% RUN SPIKESORT EXE
-        
-        % Get EXE status
-        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-        
-        % Prompt to close
-        if D.F.spikesort_running
-            
-            % Show prompt
-            dlg_h = dlgAWL( ...
-                'Close SpikeSort3D', ...
-                'CLOSE SPIKESORT3D', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'default');
-            Dlg_Wait(dlg_h);
-            
-        end
-        
-        % Check if SpikeSort should be run
-        if D.F.cheetah_running && D.F.implant_session
-            
-            dlg_h = dlgAWL(...
-                'Do you want to run SpikeSort3D.exe?', ...
-                'RUN SS3D?', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'question');
-            choice = Dlg_Wait(dlg_h);
-            
-        else
-            choice = 'No';
-        end
-        
-        % Recheck EXE status
-        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-        
-        % Run SpikeSort3D.exe
-        if strcmp('Yes', choice) && ...
-                ~D.F.spikesort_running && ...
-                ~DOEXIT
-            
-            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
-            
-            % Run exe
-            curdir = pwd;
-            cd(D.DIR.nlxSS3DTop);
-            system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
-            cd(curdir);
-            
-            Console_Write('[NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
-        else
-            Console_Write('[NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
-        end
         
     end
 
@@ -7733,7 +7736,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.P.pathMat = double(path_mat); %#ok<NODEF>
             D.PAR.pathLengthArr = path_length_arr;  %#ok<NODEF>
             D.PAR.frgMask = forage_mask;  %#ok<NODEF>
-
+            
         else
             
             % Deg bin var
@@ -9794,6 +9797,103 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update UI
         Update_UI(0, 'limitrate');
+        
+    end
+
+% ------------------CHECK CUBE AND ROBOT STATUS--------------------
+    function Hardware_Check()
+        
+        % GET ROBOT VOLTAGE
+        if c2m.('J').dat1 ~= 0
+            
+            % Update vcc
+            D.PAR.rob_vcc_last = D.PAR.rob_vcc;
+            D.PAR.rob_vcc = c2m.('J').dat1;
+            
+        end
+        
+        % CHECK CUBE STATUS
+        
+        % Bail if not implant session or Cheetah not running
+        if ~D.F.implant_session || ~D.F.cheetah_running
+            return
+        end
+        
+        % See if cube ready for setup
+        if ~D.F.cube_connected && Sec_DT(now) >= D.T.cube_status_check
+            
+            % Use any command to get status
+            [succeeded, ~] = ...
+                Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetHardwareSubSystemInformation AcqSystem1', false);
+            
+            % Bail if not succeeded
+            if succeeded ~= 1
+                
+                % Update check time
+                D.T.cube_status_check = Sec_DT(now) + 1;
+                
+                % Bail
+                return;
+            end
+            
+            % Set flag
+            D.F.cube_connected = true;
+            
+            % Start with Cube LED off
+            Safe_Set(D.UI.toggCubeLED, 'Value', 0)
+            Togg_CubeLED(D.UI.toggCubeLED);
+            
+            % Set Cube battery type
+            %   Note:
+            %       "C": Small (green dot)
+            %       "A": Medium (blue dot)
+            Send_NLX_Cmd(sprintf('-SendLynxSXCommand AcqSystem1 -SetBatteryType "%s"', D.PAR.cubeBatteryType));
+            
+            % Create message
+            msg = sprintf('CUBE CONNECTED: Battery Type is "%s"', D.PAR.cubeBatteryType);
+            
+            % Prompt cube connected
+            dlgAWL( ...
+                msg, ...
+                'CUBE CONNECTED', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            
+            % Print Cube status
+            Console_Write(['[Hardware_Check] ', msg]);
+            
+        end
+        
+        % GET CUBE VOLTAGE
+        
+        % Bail if not connected or not time to check vcc
+        if ~D.F.cube_connected || Sec_DT(now) < D.T.cube_vcc_check
+            return
+        end
+        
+        % Store last value
+        D.PAR.cube_vcc_last = D.PAR.cube_vcc;
+        
+        % Send NLX command
+        [succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
+        %[succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetBatteryRemaining AcqSystem1', false);
+        
+        % Update check time
+        D.T.cube_vcc_check = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
+        
+        % Bail if command failed
+        if succeeded ~= 1
+            return
+        end
+        
+        % Parce nxl string
+        nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
+        
+        % Check if parsed
+        if ~isempty(nlx_str)
+            D.PAR.cube_vcc = str2double(nlx_str{:});
+        end
         
     end
 
@@ -12653,18 +12753,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
     end
 
-% ------------------------------FORCE QUIT---------------------------------
-    function ForceClose(~, ~, ~)
-        
-        % Dont run if global vars already deleted
-        if size(who('global'),1) == 0
-            return
-        end
-        
-        % Dont run if gui closed in correct sequence
-        if D.F.close
-            return
-        end
+% -----------------------------FORCE CLOSE---------------------------------
+    function ForceClose()
         
         % Log/print
         Console_Write('**WARNING** [ForceClose] RUNNING: ForceClose Exit Procedure...');
@@ -12689,7 +12779,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         SetExit()
         FORCECLOSE = true;
         
-        % Send force close signal to CS
+        % Send force close signal to CS and set quit flag
+        D.F.do_quit = true;
         Send_CS_Com('X', 2);
         pause(1);
         
@@ -12699,8 +12790,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Clear and close
         if ISCRASH
-            Console_Write('**WARNING** [ForceClose] CLEARING AND CLOSING');
-            ClearCloseAll()
+            Console_Write('**WARNING** [ForceClose] MATLAB CRASHED: CLEARING AND CLOSING');
+            ClearCloseAll(false)
         end
         
         return
@@ -12728,11 +12819,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -------------------------CLEAR AND CLOSE ALL-----------------------------
     function ClearCloseAll(clear_all)
         
-        % Handle inputs
-        if nargin < 1
-            clear_all = false;
-        end
-        
         % Stop/delete c2m timer
         if exist('D', 'var')
             if isfield(D, 'timer_c2m')
@@ -12740,8 +12826,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if isvalid(D.timer_c2m)
                         if strcmp(D.timer_c2m.Running, 'on')
                             stop(D.timer_c2m);
+                            Console_Write('[ClearCloseAll] Stopped "timer_c2m"');
                         end
                         delete(D.timer_c2m);
+                        Console_Write('[ClearCloseAll] Deleted "timer_c2m"');
                     end
                 end
             end
@@ -12789,26 +12877,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        % Clear all global variables but "DOEXIT" and "ME"
-        if clear_all
-            clearvars -global -except STATUS;
-        else
-            clearvars -global -except STATUS DOEXIT FORCECLOSE ISCRASH ME;
-        end
-        close all;
+        % Specify variables to be cleared
+        vars = whos;
+        vars_list = {vars.name};
+        vars_list = vars_list([vars.global]);
         
-        % Bail here if not final clear
+        % Clear only a subset of global vars
         if ~clear_all
-            return
+            vars_clear = {'D', 'TCPIP'};
+            vars_exc = vars_list(~ismember(vars_list, vars_clear));
         end
         
-        % Clear every var in workspace but status
-        Vars=whos;
-        Vars={Vars.name};
-        Vars(ismember(Vars,'STATUS')) = [];
+        % Clear all global variables but return var
+        if clear_all
+            vars_exc = {'STATUS', 'c2m_pack'};
+        end
         
-        % Run clear
-        clear(Vars{:});
+        % Log/print vars cleared
+        Console_Write(['[ClearCloseAll] CLEARING ALL VARS BUT:', sprintf(' "%s"', vars_exc{:})]);
+        
+        % Clear variables
+        clearvars('-global', '-except', vars_exc{:});
+        
+        % Close anything else
+        close all;
         
     end
 
@@ -12896,63 +12988,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% PRINT VOLTAGE INFO
         
-        % Get robot battery voltage
-        if c2m.('J').dat1 ~= 0
-            
-            % Update vcc
-            D.PAR.rob_vcc_last = D.PAR.rob_vcc;
-            D.PAR.rob_vcc = c2m.('J').dat1;
-            
-            % Format and show string
-            if D.PAR.rob_vcc ~= D.PAR.rob_vcc_last
-                infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
-                Safe_Set(D.UI.txtPerfInf(7), 'String', infstr)
-            end
+        % Print robot voltage
+        if D.PAR.rob_vcc ~= D.PAR.rob_vcc_last
+            infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
+            Safe_Set(D.UI.txtPerfInf(7), 'String', infstr)
         end
         
-        % Get cube battery voltage
-        if D.F.cube_connected && D.F.implant_session
+        % Print cube battery voltage
+        if D.F.cube_connected && ...
+                D.F.implant_session && ...
+                D.PAR.cube_vcc ~= D.PAR.cube_vcc_last
             
-            % Get new vcc if enough time ellapsed
-            if Sec_DT(now) >= D.T.cube_vcc_update
-                
-                % Store last value
-                D.PAR.cube_vcc_last = D.PAR.cube_vcc;
-                
-                % Send NLX command
-                [pass, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
-                
-                % Wait 30 sec for next check
-                D.T.cube_vcc_update = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
-                
-                % Parce nxl string
-                if pass
-                    nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
-                end
-                
-                % Check if parsed
-                if pass && ~isempty(nlx_str)
-                    D.PAR.cube_vcc = str2double(nlx_str{:});
-                else
-                    pass = false;
-                end
-                
-            else
-                pass = false;
-            end
-            
-            
-            % Make sure arg returned
-            if pass
-                
-                % Format and show string
-                if D.PAR.cube_vcc ~= D.PAR.cube_vcc_last
-                    infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
-                    Safe_Set(D.UI.txtPerfInf(8), 'String', infstr)
-                end
-                
-            end
-            
+            infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
+            Safe_Set(D.UI.txtPerfInf(8), 'String', infstr)
         end
         
         %% PRINT TIME INFO
@@ -14392,15 +14440,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             is_err = false;
         end
         
+        % Update log
+        Update_Log(str, t_now);
+        
         % Get time centered to handshake time
         t_s = Sec_DT(t_now);
         t_s = t_s - DTHANDSHAKE;
         
         % Add to string array
         msg = sprintf('\r%0.2f %s', t_s, str);
-        
-        % Update log
-        Update_Log(str, t_now);
         
         % Bail if following conditions not met
         if ~exist('D','var'); return; end
@@ -14617,6 +14665,95 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
+% ------------------------PROCESS CS COMMAND-------------------------------
+    function[] = Proc_CS_Com(id)
+        
+        % Check for handshake flag
+        if ...
+                strcmp(id, 'h') && ...
+                c2m.(id).dat1 ~= 0
+            
+            % Store handshake time
+            DTHANDSHAKE = Sec_DT(now);
+            
+        end
+        
+        % Check for exit/error flag
+        if strcmp(id, 'E')
+            
+            % Check if this is exit flag
+            if c2m.(id).dat1 == 1
+                
+                % Set exit flag
+                SetExit()
+                
+                % Log/print exit received
+                Console_Write(sprintf('[Proc_CS_Com] RECIEVED CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                    id, c2m.(id).dat1), now);
+            end
+            
+            % Check for save abort
+            if c2m.(id).dat1 == 2
+                
+                % Format err string
+                err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
+                
+                % Display message
+                if exist('D', 'var')
+                    if ~isfield(D, 'UI')
+                        dlg_h = dlgAWL(...
+                            err_str, ...
+                            '!!ERROR!!', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'error');
+                        Dlg_Wait(dlg_h);
+                    end
+                end
+                
+                % Write to console
+                Console_Write(err_str, now, true);
+                
+            end
+            
+            % Check for forced abort
+            if c2m.(id).dat1 == 3
+                
+                % Format err string
+                err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
+                
+                % Display message
+                if exist('D', 'var')
+                    if ~isfield(D, 'UI')
+                        dlgAWL(...
+                            err_str, ...
+                            '!!ERROR!!', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'error');
+                    end
+                end
+                
+                % Set exit flag
+                SetExit()
+                
+                % Write to console
+                Console_Write(err_str, now, true);
+                
+                % Pause for message to show
+                pause(1);
+            end
+        end
+        
+        %Print new data
+        Console_Write(sprintf('   [RCVD] c2m: id=''%s'' dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%0.0f', ...
+            c2m.(id).id, c2m.(id).dat1, c2m.(id).dat2, c2m.(id).dat3, c2m.(id).pack), now);
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
 % --------------------------SEND DATA TO AC--------------------------------
     function[] = Send_AC_Com()
         
@@ -14742,17 +14879,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             choice = dlg_h.UserData;
             [abort, pass] = Check_Flag(DOEXIT, ~strcmp(choice, ''));
             
-            % Make sure GUI and dialogue top windows
-            if isvalid(FIGH)
-                set(FIGH,'WindowStyle','modal')
-                set(dlg_h,'WindowStyle','modal')
-                set(FIGH,'WindowStyle','normal')
-                set(dlg_h,'WindowStyle','normal')
+            % Bail if done
+            if abort || pass
+                break
             end
             
-            % Bail if done
-            if abort || pass; break; end
+            % Make sure window stays on top
+            set(dlg_h,'WindowStyle','modal')
         end
+        
+        % Make sure GUI is back on top
+        if isvalid(FIGH)
+            set(FIGH,'WindowStyle','modal')
+            Update_UI(0, 'force')
+            set(FIGH,'WindowStyle','normal')
+            Update_UI(0, 'force')
+        end
+        
     end
 
 % ----------------------CHECK FOR EXE RUN CONDITION------------------------
@@ -18153,118 +18296,38 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ---------------------------CHECK FOR NEW C2M-----------------------------
-    function TimerFcn_GetCSCom(~,~)
+    function TimerFcn_CheckCSCom(~,~)
         
         % Have to explicitely catch errors
         try
             
-            % Bail if D deleted
-            if ~exist('D', 'var')
+            % Bail if c2m_pack deleted or not initialized
+            if ~exist('c2m_pack', 'var')
                 return
-            elseif ~isfield(D, 'UI')
-                return
-            end
-            
-            % Bail if c2m deleted or not initialized
-            if ~exist('c2m', 'var')
-                return
-            elseif isempty(c2m)
+            elseif isempty(c2m_pack)
                 return
             end
             
-            % Check for new packet
-            c2m_mat = reshape(cell2mat(struct2cell(c2m)),1,[]);
-            new_ind = [c2m_mat.pack] ~= [c2m_mat.packLast];
+            % Check for new packet flag
+            new_pack = c2m_pack(6) == 1;
             
             % Bail if no new packets
-            if ~any(new_ind)
+            if ~new_pack
                 return
             end
             
-            % Store new id
-            id = c2m_mat(new_ind).id;
+            % Get current packet id
+            id = native2unicode(c2m_pack(1),'UTF-8');
             
-            % Check for handshake flag
-            if ...
-                    strcmp(id, 'h') && ...
-                    c2m.(id).dat1 == 1
-                
-                % Store handshake time
-                DTHANDSHAKE = Sec_DT(now);
-                
-                % Log/print handshake received
-                Console_Write(sprintf('   [RCVD] CS HANDSHAKE COMMAND: id=''%s'' dat1=%d', ...
-                    id, c2m.(id).dat1), now);
-                Console_Write(sprintf('SET SYNC TIME: %ddays',DTHANDSHAKE));
-            end
+            % Store new data
+            c2m.(id).id = id;
+            c2m.(id).dat1 = c2m_pack(2);
+            c2m.(id).dat2 = c2m_pack(3);
+            c2m.(id).dat3 = c2m_pack(4);
+            c2m.(id).pack = c2m_pack(5);
             
-            % Check for exit/error flag
-            if strcmp(id, 'E')
-                
-                % Check if this is exit flag
-                if c2m.(id).dat1 == 1
-                    
-                    % Set exit flag
-                    SetExit()
-                    
-                    % Log/print exit received
-                    Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                        id, c2m.(id).dat1), now);
-                end
-                
-                % Check for save abort
-                if c2m.(id).dat1 == 2
-                    
-                    % Format err string
-                    err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
-                    
-                    % Display message
-                    dlg_h = dlgAWL(...
-                        err_str, ...
-                        '!!ERROR!!', ...
-                        'OK', [], [], 'OK', ...
-                        D.UI.dlgPos{4}, ...
-                        'error');
-                    Dlg_Wait(dlg_h);
-                    
-                    % Write to console
-                    Console_Write(err_str, now, true);
-                    
-                end
-                
-                % Check for forced abort
-                if c2m.(id).dat1 == 3
-                    
-                    % Format err string
-                    err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
-                    
-                    % Display message
-                    dlgAWL(...
-                        err_str, ...
-                        '!!ERROR!!', ...
-                        'OK', [], [], 'OK', ...
-                        D.UI.dlgPos{4}, ...
-                        'error');
-                    
-                    % Set exit flag
-                    SetExit()
-                    
-                    % Write to console
-                    Console_Write(err_str, now, true);
-                    
-                    % Pause for message to show
-                    pause(1);
-                end
-            end
-            
-            %Print new data
-            if ~ischar(c2m.(id).dat1)
-                str = '   [RCVD] c2m: id=''%s'' dat1=%d pack=%d';
-            else
-                str = '   [RCVD] c2m: id=''%s'' dat1=''%s'' pack=%d';
-            end
-            Console_Write(sprintf(str, ...
-                c2m.(id).id, c2m.(id).dat1, c2m.(id).pack), now);
+            % Reset flag
+            c2m_pack(6) = 0;
             
             % Update packet info
             c2m.(id).packLast = c2m.(id).pack;
@@ -18272,28 +18335,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Update recieve time
             c2m.(id).t_rcvd = Sec_DT(now);
             
-            % Check for resend request
-            if ~strcmp('g', c2m.(id).id)
-                return
-            end
-            
-            % Get id to resend
-            id_send = c2m.(id).dat1;
-            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', ...
-                id, id_send), now);
-            
-            % Send again if any history of this id
-            if m2c.(id_send).pack > 0
-                Send_CS_Com( ...
-                    m2c.(id_send).id, ...
-                    m2c.(id_send).dat1, ...
-                    m2c.(id_send).dat2, ...
-                    m2c.(id_send).dat3, ...
-                    m2c.(id_send).pack);
-            end
-            
-            % Update UI
-            if UPDATENOW; Update_UI(0, 'force'); end
+            % Process data
+            Proc_CS_Com(id)
             
         catch ME
             Console_Write('!!ERROR!! [Timer_FcnGetCSCom] FAILED', now);
@@ -18370,10 +18413,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         end
                         
                         % Highlight new value
-                    elseif Sec_DT(now) - D.T.cube_vcc_update < 5.5
+                    elseif Sec_DT(now) - D.T.cube_vcc_check < 5.5
                         
                         % Check if printing a new value is new
-                        if Sec_DT(now) - D.T.cube_vcc_update < 5
+                        if Sec_DT(now) - D.T.cube_vcc_check < 5
                             
                             % Set to attention color
                             Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.attentionCol);
@@ -18578,6 +18621,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('!!ERROR!! [Tab_GrpChange] FAILED', now);
             SetExit()
         end
+        
+    end
+
+% -----------------------------FORCE CLOSE---------------------------------
+    function DeleteFcn_ForceClose(~, ~, ~)
+        
+        % Dont run if global vars already deleted
+        if size(who('global'),1) == 0
+            return
+        end
+        
+        % Dont run if gui closed in correct sequence
+        if D.F.close
+            return
+        end
+        
+        % Run ForceClose function
+        ForceClose();
         
     end
 

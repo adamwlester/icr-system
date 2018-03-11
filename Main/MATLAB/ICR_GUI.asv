@@ -46,18 +46,19 @@ global ISCRASH; % crash flag
 global FIGH; % ui figure group
 global D; % main data struct
 global TCPIP; % tcp object
-global UPDATENOW; % update ui imediately
 global STATUS; % store status
+global UPDATENOW; % update ui imediately
 global TIMSTRLOCAL; % local time
 global DTHANDSHAKE; % handshake time
 
 % Matlab to CS communication
-global m2c; % local data struct
+global m2c; % global data struct
 global m2c_pack; % message out to CS
 global m2c_dir; % current cheetah directory
 
 % CS to Matlab communication
-global c2m; % data struct
+global c2m; % local data struct
+global c2m_pack; % message in from CS
 
 % Initialize globals
 TIMSTRLOCAL = now;
@@ -69,6 +70,8 @@ ISCRASH = false;
 UPDATENOW = true;
 STATUS = 'failed';
 
+% TEMP
+cnt_temp = 0;
 % ------------------------ HANDLE INPUT ARGUMENTS -------------------------
 
 % Set inputs
@@ -100,7 +103,7 @@ D.DB.Implanted = true;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -459,16 +462,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.maxTT = 18;
         % Max clusters
         D.PAR.maxClust = 10;
-        % Warning battery voltage level(V)
-        D.PAR.robVccWarning = 11.6;
-        % Replace battery voltage level (C)
-        D.PAR.robVccReplace = 11.8;
-        % Warning battery voltage level (%)
-        D.PAR.cubeVccWarning = 30;
+        % Warning battery voltage level
+        D.PAR.robVccWarning = 11.6; % (V)
+        % Replace battery voltage level
+        D.PAR.robVccReplace = 11.8; % (V)
+        % Warning battery voltage level
+        D.PAR.cubeVccWarning = 30; % (%)
         % Cube battery type ["C": Small, "A": Medium]
         D.PAR.cubeBatteryType = 'A';
         % Cube battery check
-        D.PAR.dtCubeBatteryCheck = 10;
+        D.PAR.dtCubeBatteryCheck = 60; % (sec)
         
         % DIRECTORIES
         
@@ -548,7 +551,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % c2m struct
         id_list = [ ...
-            'g', ... % request m2c data
             'h', ... % setup handshake
             'J', ... % battery voltage
             'Z', ... % reward zone
@@ -559,9 +561,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             ];
         for z_id = 1:length(id_list)
             c2m.(id_list(z_id)) = cell2struct( ...
-                {id_list(z_id), 0, 0, 0, 0}, ...
-                {'id', 'dat1', 'pack', 'packLast', 't_rcvd'}, 2);
+                {id_list(z_id), 0, 0, 0, 0, 0, 0}, ...
+                {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast', 't_rcvd'}, 2);
         end
+        
+        % m2c_pack array [id, dat1, dat2, dat3, pack, flag]
+        c2m_pack(1:6) = 0;
         
         % Bypass some things if running solo
         if ISMATSOLO
@@ -574,7 +579,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.timer_c2m = timer;
         D.timer_c2m.ExecutionMode = 'fixedRate';
         D.timer_c2m.Period = 0.1;
-        D.timer_c2m.TimerFcn = @TimerFcn_GetCSCom;
+        D.timer_c2m.TimerFcn = @TimerFcn_CheckCSCom;
         start(D.timer_c2m);
         
         % Dynamic graphics timer
@@ -601,7 +606,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Generate figure tab group
         FIGH = figure('Visible', 'Off', ...
-            'DeleteFcn', {@ForceClose});
+            'DeleteFcn', {@DeleteFcn_ForceClose});
         
         % Run variable setup code
         Console_Write('[Setup] RUNNING: "Var_Setup()"...');
@@ -723,7 +728,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~ISMATSOLO
             while true
                 [abort, pass] = ...
-                    Check_Flag(DOEXIT, c2m.('h').dat1 == 0);
+                    Check_Flag(DOEXIT, c2m.('h').dat1 ~= 0);
                 if abort || pass; break; end
             end
             
@@ -733,6 +738,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             elseif pass
                 Console_Write('[Setup] FINISHED: Wait for Handshake');
+                
+                % Log/print sync time
+                Console_Write(sprintf('SET SYNC TIME: %dms', round(DTHANDSHAKE*1000)));
             end
             
         end
@@ -779,6 +787,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % PLOT TT DATA
             TT_Plot();
             
+            % CHECK HARDWARE
+            Hardware_Check();
+            
             % PRINT SES INFO
             Inf_Print();
             
@@ -800,16 +811,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.main_case_now = 'WAIT FOR UI SETUP';
                 
                 % Finish Setup
-            elseif ~D.F.ses_setup_done
+            elseif ~D.F.do_quit && ~D.F.ses_setup_done
                 D.F.main_case_now = 'FINISH SESSION SETUP';
                 
                 % Run Task
-            elseif (~D.F.task_done_confirmed || ~all(D.F.sleep_done)) && ...
+            elseif ~D.F.do_quit && ...
+                    (~D.F.task_done_confirmed || ~all(D.F.sleep_done)) && ...
                     ~(D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update')
                 D.F.main_case_now = 'RUN ICR TASK';
                 
                 % Wait for save
-            elseif ~D.F.ses_save_done && ~D.F.do_quit
+            elseif ~D.F.do_quit && ~D.F.ses_save_done
                 D.F.main_case_now = 'WAIT FOR SAVE';
                 
             elseif ~D.F.do_quit
@@ -1359,6 +1371,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                 case 'WAIT FOR EXIT'
                     %% -------------WAIT FOR EXIT---------------
+                    Update_UI(0, 'force');
+                    pause(0.01);
                     continue
                     
                 otherwise
@@ -1476,7 +1490,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ------------------------------VAR SETUP--------------------------
     function[] = Var_Setup()
         
-        %% TOP LEVEL PARAMETERS
+        %% RUN PARAMETERS
         
         % LOAD DATA TABLES
         T = load(D.DIR.SS_IO_1);
@@ -1829,8 +1843,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % forage reward out target tim
         D.T.frg_rew_outbnd_t1 = 0;
         D.T.frg_rew_outbnd_t2 = 0;
-        % cube check
-        D.T.cube_vcc_update = 0;
+        % cube status check
+        D.T.cube_status_check = 0;
+        % cube vc check
+        D.T.cube_vcc_check = 0;
         
         % INDEXING
         
@@ -1972,8 +1988,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.inf = [0, inf, 0, 0, 0];
         % halt error [now, min, max, sum, count]
         D.DB.HALT.error = [0, inf, 0, 0, 0];
-        % simulated rat forage data
-        D.DB.SIM.RatPathMat = D.P.pathMat;
         
         % OTHER
         % session message
@@ -1993,6 +2007,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % AXIS HANDLES
         D.UI.axH = gobjects(7,1);
+        D.UI.axZoneH = gobjects(2,1);
+        D.UI.axClstH = gobjects(D.PAR.maxClust,1);
         
         % TRACK TASK HANDLES
         
@@ -2021,8 +2037,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % forage bound line handles
         D.UI.linFrgH = gobjects(2,1);
-        % forage bound mask
-        D.UI.imgFrgMaskH = [];
         % forage targ patch
         D.UI.ptchRewTargBnds = gobjects(360/D.PAR.frgPathSpace,1);
         % forage occ mat
@@ -2288,26 +2302,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.axH(4) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
-        % RF Mask
-        % Note: mask for imagesc occ plot
+        % Random Forage Task OCC Data
+        % Note: used for occ imagesc
         D.UI.axH(5) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
-        % Random Forage Task OCC Data
-        % Note: used for occ imagesc
+        % Real Time TT Position/OCC Data
         D.UI.axH(6) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
-        % Semitranparent TT Backround
-        D.UI.axH(7) = copyobj(D.UI.axH(1), D.UI.tabICR);
-        hold on;
-        
-        % Real Time TT Position/OCC Data
-        D.UI.axH(8) = copyobj(D.UI.axH(1), D.UI.tabICR);
-        hold on;
-        
         % Selectable Items
-        D.UI.axH(9) = copyobj(D.UI.axH(1), D.UI.tabICR);
+        D.UI.axH(7) = copyobj(D.UI.axH(1), D.UI.tabICR);
         hold on;
         
         % Copy object for tt clust legend
@@ -2550,36 +2555,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             0.04, ...
             pan_wd/2, ...
             pan_ht];
-        
-        % Get scaled up pixel vals
-        rad_pxl = ceil(D.UI.frgRad*D.UI.cm2pxl)*4;
-        lim_pxl = D.UI.vtRes*4;
-        pad_pxl = round((lim_pxl-(rad_pxl*2))/2);
-        
-        % Make mask
-        [colNums, rowNums] = meshgrid(1:rad_pxl*2, 1:rad_pxl*2);
-        D.PAR.frgMask = ...
-            (rowNums - rad_pxl).^2 + (colNums - rad_pxl).^2 <= rad_pxl.^2;
-        D.PAR.frgMask = ~padarray(D.PAR.frgMask, [pad_pxl, pad_pxl]);
-        
-        % Set lims
-        Safe_Set(D.UI.axH(5), ...
-            'XLim', [1,size(D.PAR.frgMask,1)],...
-            'YLim', [1,size(D.PAR.frgMask,2)]);
-        
-        % Show mask
-        D.UI.imgFrgMaskH = ...
-            imshow(ones(size(D.PAR.frgMask,1),size(D.PAR.frgMask,2)), ...
-            'Parent',D.UI.axH(5));
-        Safe_Set(D.UI.imgFrgMaskH, ...
-            'AlphaData', D.PAR.frgMask, ...
-            'Visible', 'off');
-        
-        % Store path mask
-        D.PAR.frgMask = imresize(~D.PAR.frgMask, [D.PAR.frgBins,D.PAR.frgBins]);
-        
-        % Clear vars
-        clear rad_pxl lim_pxl pad_pxl mask;
         
         % MAKE WALL IMAGES
         
@@ -4631,11 +4606,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% CREATE TAB TABLE OBJECTS
         Console_Write('[Table_Setup] RUNNING: Create Tab Table Objects');
         
-        % Get list of included rats
-        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
-        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
-        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
-        
         % Add SS_IO_1 tab
         D.UI.tbleSSIO1tab = uitab(D.UI.tblTabSubGrp, ...
             'Title', 'All', ...
@@ -4664,6 +4634,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.tblTTIO = FormatTable(D.TT_IO.Turn_Log{D.PAR.ratIndTT}, D.UI.tbleTTIOtab);
             
         end
+        
+        % Get list of included rats
+        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
+        
+        % Put current rat at start of list
+        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
+        
+        % Make a tab for current rat only unless unless doing 'Table_Update'
+        if D.PAR.sesType ~= 'Table_Update'
+            rat_list = rat_list(1);
+        end
+        
+        % Initialize tab objects
+        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
         
         % Add SS_IO_2 tab for each rat
         for z_r = 1:length(rat_list)
@@ -4694,9 +4678,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% CREATE SESSION NOTES OBJECTS
         Console_Write('[Table_Setup] RUNNING: Create Session Notes Objects');
         
-        % TEMP
-        tic
-        
         % Create notes panel
         D.UI.panGenNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
         Safe_Set(D.UI.panGenNotes, ...
@@ -4711,9 +4692,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         botm_edit = ht_tbl;
         lft = 0;
         wd =  1;
-        
-        % TEMP
-        disp(toc)
         
         % Old task notes table
         D.UI.tblGenNotes = copyobj(D.UI.tblSSIO3,D.UI.panGenNotes);
@@ -4732,25 +4710,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Enable','on',...
             'Visible', 'on');
         
-        % TEMP
-        disp(toc)
-        
         % Get notes and exclude empty entries
         notes_ind = ismember(D.UI.tblSSIO3.ColumnName, 'Notes');
         notes = D.UI.tblSSIO3.Data(:,notes_ind);
         notes = notes(cell2mat(cellfun(@(x) ~isempty(x), notes, 'uni', false)));
         notes = notes(~ismember(notes, 'NA'));
         
-        % TEMP
-        disp(toc)
-        
         % Keep only notes and dates entry
         D.UI.tblGenNotes.Data = notes;
         D.UI.tblGenNotes.ColumnName = {[]};
         D.UI.tblGenNotes.ColumnWidth = D.UI.tblSSIO3.ColumnWidth(notes_ind);
-        
-        % TEMP
-        disp(toc)
         
         % Remove notes from main tables
         D.UI.tblSSIO3.ColumnName(notes_ind) = [];
@@ -6602,30 +6571,74 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        % Setup Cube
+        %% RUN SPIKESORT EXE
+        
+        % Get EXE status
+        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
+        
+        % Prompt to close
+        if D.F.spikesort_running
+            
+            % Show prompt
+            dlg_h = dlgAWL( ...
+                'Close SpikeSort3D', ...
+                'CLOSE SPIKESORT3D', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            Dlg_Wait(dlg_h);
+            
+        end
+        
+        % Check if SpikeSort should be run
+        if D.F.cheetah_running && D.F.implant_session
+            
+            dlg_h = dlgAWL(...
+                'Do you want to run SpikeSort3D.exe?', ...
+                'RUN SS3D?', ...
+                'Yes', 'No', [], 'No', ...
+                D.UI.dlgPos{4}, ...
+                'question');
+            choice = Dlg_Wait(dlg_h);
+            
+        else
+            choice = 'No';
+        end
+        
+        % Recheck EXE status
+        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
+        
+        % Run SpikeSort3D.exe
+        if strcmp('Yes', choice) && ...
+                ~D.F.spikesort_running && ...
+                ~DOEXIT
+            
+            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
+            
+            % Run exe
+            curdir = pwd;
+            cd(D.DIR.nlxSS3DTop);
+            system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
+            cd(curdir);
+            
+            Console_Write('[NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
+        else
+            Console_Write('[NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
+        end
+        
+        %% DISPLAY PROMPT TO POWER ON CUBE
+        
+        % Start Cube
         if D.F.implant_session
             
-            % Log/print
-            Console_Write('[NLX_Setup] RUNNING: Setup Cube');
-            
-            % Start with Cube LED off
-            Safe_Set(D.UI.toggCubeLED, 'Value', 0)
-            Togg_CubeLED(D.UI.toggCubeLED);
-            
-            % Set Cube battery type
-            %   Note:
-            %       "C": Small (green dot)
-            %       "A": Medium (blue dot)
-            D.F.cube_connected = ...
-                Send_NLX_Cmd(sprintf('-SendLynxSXCommand AcqSystem1 -SetBatteryType "%s"', D.PAR.cubeBatteryType));
-            D.F.cube_connected = D.F.cube_connected==1;
-            
-            % Print Cube status
-            if D.F.cube_connected
-                Console_Write('[NLX_Setup] FINISHED: Setup Cube');
-            else
-                Console_Write('**WARNING** [NLX_Setup] FAILED: Setup Cube');
-            end
+            % Prompt to turn on cube
+            dlg_h = dlgAWL( ...
+                'Power on Cube', ...
+                'START CUBE', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            Dlg_Wait(dlg_h);
             
         end
         
@@ -6696,61 +6709,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update/refresh window positions
         Togg_Mon(D.UI.toggMon(D.UI.monDefault));
-        
-        %% RUN SPIKESORT EXE
-        
-        % Get EXE status
-        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-        
-        % Prompt to close
-        if D.F.spikesort_running
-            
-            % Show prompt
-            dlg_h = dlgAWL( ...
-                'Close SpikeSort3D', ...
-                'CLOSE SPIKESORT3D', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'default');
-            Dlg_Wait(dlg_h);
-            
-        end
-        
-        % Check if SpikeSort should be run
-        if D.F.cheetah_running && D.F.implant_session
-            
-            dlg_h = dlgAWL(...
-                'Do you want to run SpikeSort3D.exe?', ...
-                'RUN SS3D?', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'question');
-            choice = Dlg_Wait(dlg_h);
-            
-        else
-            choice = 'No';
-        end
-        
-        % Recheck EXE status
-        D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-        
-        % Run SpikeSort3D.exe
-        if strcmp('Yes', choice) && ...
-                ~D.F.spikesort_running && ...
-                ~DOEXIT
-            
-            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
-            
-            % Run exe
-            curdir = pwd;
-            cd(D.DIR.nlxSS3DTop);
-            system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
-            cd(curdir);
-            
-            Console_Write('[NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
-        else
-            Console_Write('[NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
-        end
         
     end
 
@@ -7209,13 +7167,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% SPECIFY AXIS UI STACK ORDER
         
         % Random Forage Task OCC Data
-        uistack(D.UI.axH(6),'top');
+        uistack(D.UI.axH(5),'top');
         
         % Pos/Vel History Data
         uistack(D.UI.axH(2),'top');
-        
-        % RF Mask
-        uistack(D.UI.axH(5),'top');
         
         % Real Time Track Task Data
         uistack(D.UI.axH(3),'top');
@@ -7227,9 +7182,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Wall Image
         uistack(D.UI.axH(1),'top');
         
-        % Semitranparent TT Backround
-        uistack(D.UI.axH(7),'top');
-        
         % Arena Features
         uistack(D.UI.axH(4),'top');
         
@@ -7240,10 +7192,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         uistack(D.UI.axColLeg,'top');
         
         % Real Time TT Position/OCC Data
-        uistack(D.UI.axH(8),'top');
+        uistack(D.UI.axH(6),'top');
         
         % Selectable Items
-        uistack(D.UI.axH(9),'top');
+        uistack(D.UI.axH(7),'top');
         
         %% SETUP EPHYS PLOTTING
         
@@ -7308,16 +7260,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Safe_Set(D.UI.axClstH, ...
                 'CLim',[0,1], ...
                 'UserData', 0);
-            
-            % Add bottom axes as semi tranparent layer
-            D.UI.axH(7).Position = D.UI.axH(1).Position;
-            D.UI.axH(7).XLim = D.UI.axH(1).XLim;
-            D.UI.axH(7).YLim = D.UI.axH(1).YLim;
-            mask_img = uint8(abs(double(D.UI.wall_mask)-double(max(D.UI.wall_mask))));
-            mask_img = repmat(mask_img, [1, 1, 3]);
-            D.UI.ttMask = image(mask_img, 'Parent', D.UI.axH(7), 'Visible', 'off');
-            alph = double(mask_img(:,:,1)>0) * 0.5;
-            Safe_Set(D.UI.ttMask, 'AlphaData', alph);
             
             % SETUP PLOT COLOR MAP
             Console_Write('[NLX_Setup] RUNNING: Setup Cluster Colormaps...');
@@ -7594,7 +7536,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'LineWidth', 1, ...
                     'Visible', 'off', ...
                     'UserData', [z_rot, z_zone], ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
                 
                 % Add reward duration text
                 str = ...
@@ -7609,7 +7551,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'FontWeight', 'bold', ...
                     'Visible', 'off', ...
                     'UserData', [z_rot, z_zone], ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
             end
         end
         % bring text to top of stack
@@ -7697,7 +7639,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'UserData', [z_rot, z_pos], ...
                     'ButtonDownFcn', {@Mouse_SelectRot}, ...
                     'HitTest', 'off', ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
                 
                 % Text
                 str = ...
@@ -7713,7 +7655,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'UserData', [z_rot, z_pos], ...
                     'ButtonDownFcn', {@Mouse_SelectRot}, ...
                     'HitTest', 'off', ...
-                    'Parent', D.UI.axH(9));
+                    'Parent', D.UI.axH(7));
             end
         end
         
@@ -7782,7 +7724,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Forage_Task_Setup()
         
         % Set axis lims
-        Safe_Set(D.UI.axH(6), ...
+        Safe_Set(D.UI.axH(5), ...
             'YDir', 'reverse', ...
             'XLim', [0,D.PAR.frgBins], ...
             'YLim', [0,D.PAR.frgBins]);
@@ -7794,9 +7736,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Store in struct
             D.P.pathMat = double(path_mat); %#ok<NODEF>
-            D.DB.SIM.RatPathMat = double(sim_rat_path_mat); %#ok<NODEF>
             D.PAR.pathLengthArr = path_length_arr;  %#ok<NODEF>
-            clear path_mat sim_rat_path_mat path_length_arr;
+            D.PAR.frgMask = forage_mask;  %#ok<NODEF>
+            
         else
             
             % Deg bin var
@@ -7832,67 +7774,72 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
             end
             
-            % Setup temp sim rat mat
-            mat_r = mat_p + padarray(mat_eye(1+1:end,:),[1,0],'post');
-            
             % Compute mat for each pos condition
             path_ang_arr = linspace(0,90,90/D.PAR.frgPathSpace+1);
-            for c = 1:2
-                if c==1
-                    mat_now = mat_p;
-                else
-                    mat_now = mat_r;
+            
+            for i = 1:D.PAR.nPaths
+                
+                % Store angle
+                deg = path_ang_arr(i);
+                
+                % Rotate
+                mat_rot = imrotate(mat_p,deg,'bilinear','crop');
+                
+                % Cut and pad
+                rind = floor(size(mat_eye,1)/2)-floor(path_bins/2):floor(size(mat_eye,1)/2)+floor(path_bins/2);
+                cind = floor(size(mat_eye,2)/2):floor(size(mat_eye,1)/2)+path_bins-1;
+                mat_rot = mat_rot(rind,cind);
+                
+                % Flip
+                mat_rot = flip(mat_rot,2);
+                mat_rot = flip(mat_rot,1);
+                
+                % Pad to full size
+                pad_lng = round((D.PAR.frgBins - path_bins)/2);
+                mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
+                
+                % Store in 4D mat
+                for j = (1:n_targs)-1
+                    D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
                 end
                 
-                for i = 1:D.PAR.nPaths
-                    
-                    deg = path_ang_arr(i);
-                    % Rotate
-                    mat_rot = imrotate(mat_now,deg,'bilinear','crop');
-                    % Cut and pad
-                    rind = floor(size(mat_eye,1)/2)-floor(path_bins/2):floor(size(mat_eye,1)/2)+floor(path_bins/2);
-                    cind = floor(size(mat_eye,2)/2):floor(size(mat_eye,1)/2)+path_bins-1;
-                    mat_rot = mat_rot(rind,cind);
-                    % Flip
-                    mat_rot = flip(mat_rot,2);
-                    mat_rot = flip(mat_rot,1);
-                    
-                    % Pad to full size
-                    pad_lng = round((D.PAR.frgBins - path_bins)/2);
-                    mat_rot = padarray(mat_rot, [pad_lng,pad_lng]);
-                    
-                    % Store
-                    for j = (1:n_targs)-1
-                        if c==1
-                            D.P.pathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
-                        else
-                            D.DB.SIM.RatPathMat(:,:,i,j+1) = imrotate(mat_rot,j*D.PAR.frgPathSpace,'bilinear','crop');
-                        end
-                    end
-                end
             end
+            
+            % Get scaled up pixel vals
+            rad_pxl = ceil(D.UI.frgRad*D.UI.cm2pxl)*4;
+            lim_pxl = D.UI.vtRes*4;
+            pad_pxl = round((lim_pxl-(rad_pxl*2))/2);
+            
+            % Make forage mask to remove values outside bounds
+            [colNums, rowNums] = meshgrid(1:rad_pxl*2, 1:rad_pxl*2);
+            D.PAR.frgMask = ...
+                (rowNums - rad_pxl).^2 + (colNums - rad_pxl).^2 <= rad_pxl.^2;
+            D.PAR.frgMask = ~padarray(D.PAR.frgMask, [pad_pxl, pad_pxl]);
+            
+            % Scale to occ mat
+            D.PAR.frgMask = imresize(~D.PAR.frgMask, [D.PAR.frgBins,D.PAR.frgBins]);
+            
+            % Copy to local var
+            forage_mask = D.PAR.frgMask; %#ok<NASGU>
             
             % Mask values outside circle
             mask = repmat(D.PAR.frgMask,[1,1,D.PAR.nPaths,n_targs]);
             D.P.pathMat = D.P.pathMat.*mask;
-            D.DB.SIM.RatPathMat = D.DB.SIM.RatPathMat.*mask;
             
             % Nomalize
             D.P.pathMat(D.P.pathMat>0) = 1;
-            %D.P.pathMat = D.P.pathMat ./ repmat(sum(sum(D.P.pathMat,1),2),[D.PAR.frgBins,D.PAR.frgBins,1,1]);
-            D.DB.SIM.RatPathMat(D.DB.SIM.RatPathMat>0) = 1;
             
             % Plot path averages
-            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
+            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(5));
             pause(1);
             delete(ih);
             
             % Plot accross pos and paths
-            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(6));
+            ih = imagesc(sum(D.P.pathMat(:,:,:,1),3), 'Parent', D.UI.axH(5));
             pause(1);
             delete(ih);
             for i = 1:D.PAR.nPaths
-                ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(6));
+                ih = imagesc(D.P.pathMat(:,:,i,1), 'Parent', D.UI.axH(5));
                 pause(0.1);
                 delete(ih);
             end
@@ -7907,19 +7854,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Store path info
             path_mat = single(D.P.pathMat); %#ok<NASGU>
-            sim_rat_path_mat = single(D.DB.SIM.RatPathMat); %#ok<NASGU>
             
             % Save path info
             fi_path = D.DIR.frgPath;
-            save(fi_path, 'path_mat', 'sim_rat_path_mat', 'path_length_arr');
+            save(fi_path, 'path_mat', 'path_length_arr', 'forage_mask');
             
             % Save second copy with date
             fi_name = sprintf('forage_path_%s.mat',datestr(now, 'yymmdd'));
             fi_path = regexprep(fi_path, 'forage_path.mat', fi_name);
-            save(fi_path, 'path_mat', 'sim_rat_path_mat', 'path_length_arr');
+            save(fi_path, 'path_mat', 'path_length_arr', 'forage_mask');
             
-            % Clear variables
-            clear path_mat sim_rat_path_mat path_length_arr;
         end
         
         % Create target patches
@@ -7939,19 +7883,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'LineWidth', 1, ...
                 'UserData', z_targ, ...
                 'Visible', 'off', ...
-                'Parent', D.UI.axH(9));
+                'Parent', D.UI.axH(7));
         end
         
         % Set color lims
-        Safe_Set(D.UI.axH(6), 'CLim', [0,1]);
+        Safe_Set(D.UI.axH(5), 'CLim', [0,1]);
         
         % Plot occ
         D.UI.imgFrgOcc = imagesc(D.P.frgOccMatScale+D.P.pathNowMat, ...
-            'Parent', D.UI.axH(6));
+            'Parent', D.UI.axH(5));
         
         % Set other plot features to visible
         Safe_Set(D.UI.linFrgH, 'Visible', 'on');
-        Safe_Set(D.UI.imgFrgMaskH, 'Visible', 'on');
         Patch_State(D.UI.ptchStQ, 'Select');
         Safe_Set(D.UI.txtStQ, 'Visible', 'on');
         
@@ -8995,7 +8938,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 cdat = D.P.frgOccMatScale+D.P.pathNowMat;
                 if ~isgraphics(D.UI.imgFrgOcc)
                     D.UI.imgFrgOcc = imagesc(cdat, ...
-                        'Parent', D.UI.axH(6));
+                        'Parent', D.UI.axH(5));
                 else
                     Safe_Set(D.UI.imgFrgOcc, 'CData', cdat);
                 end
@@ -9756,7 +9699,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'MarkerFaceColor', D.UI.clustCol(tt_ind,clust_ind,:), ...
                             'MarkerEdgeColor', [0,0,0], ... % 'MarkerEdgeColor', 'none', ...
                             'MarkerSize', 3, ...
-                            'Parent', D.UI.axH(8));
+                            'Parent', D.UI.axH(6));
                     else
                         Safe_Set(D.UI.mrkClustH(tt_ind, clust_ind), ...
                             'XData', x, ...
@@ -9856,6 +9799,103 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update UI
         Update_UI(0, 'limitrate');
+        
+    end
+
+% ------------------CHECK CUBE AND ROBOT STATUS--------------------
+    function Hardware_Check()
+        
+        % GET ROBOT VOLTAGE
+        if c2m.('J').dat1 ~= 0
+            
+            % Update vcc
+            D.PAR.rob_vcc_last = D.PAR.rob_vcc;
+            D.PAR.rob_vcc = c2m.('J').dat1;
+            
+        end
+        
+        % CHECK CUBE STATUS
+        
+        % Bail if not implant session or Cheetah not running
+        if ~D.F.implant_session || ~D.F.cheetah_running
+            return
+        end
+        
+        % See if cube ready for setup
+        if ~D.F.cube_connected && Sec_DT(now) >= D.T.cube_status_check
+            
+            % Use any command to get status
+            [succeeded, ~] = ...
+                Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetHardwareSubSystemInformation AcqSystem1', false);
+            
+            % Bail if not succeeded
+            if succeeded ~= 1
+                
+                % Update check time
+                D.T.cube_status_check = Sec_DT(now) + 1;
+                
+                % Bail
+                return;
+            end
+            
+            % Set flag
+            D.F.cube_connected = true;
+            
+            % Start with Cube LED off
+            Safe_Set(D.UI.toggCubeLED, 'Value', 0)
+            Togg_CubeLED(D.UI.toggCubeLED);
+            
+            % Set Cube battery type
+            %   Note:
+            %       "C": Small (green dot)
+            %       "A": Medium (blue dot)
+            Send_NLX_Cmd(sprintf('-SendLynxSXCommand AcqSystem1 -SetBatteryType "%s"', D.PAR.cubeBatteryType));
+            
+            % Create message
+            msg = sprintf('CUBE CONNECTED: Battery Type is "%s"', D.PAR.cubeBatteryType);
+            
+            % Prompt cube connected
+            dlgAWL( ...
+                msg, ...
+                'CUBE CONNECTED', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            
+            % Print Cube status
+            Console_Write(['[Hardware_Check] ', msg]);
+            
+        end
+        
+        % GET CUBE VOLTAGE
+        
+        % Bail if not connected or not time to check vcc
+        if ~D.F.cube_connected || Sec_DT(now) < D.T.cube_vcc_check
+            return
+        end
+        
+        % Store last value
+        D.PAR.cube_vcc_last = D.PAR.cube_vcc;
+        
+        % Send NLX command
+        [succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
+        %[succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetBatteryRemaining AcqSystem1', false);
+        
+        % Update check time
+        D.T.cube_vcc_check = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
+        
+        % Bail if command failed
+        if succeeded ~= 1
+            return
+        end
+        
+        % Parce nxl string
+        nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
+        
+        % Check if parsed
+        if ~isempty(nlx_str)
+            D.PAR.cube_vcc = str2double(nlx_str{:});
+        end
         
     end
 
@@ -12715,18 +12755,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
     end
 
-% ------------------------------FORCE QUIT---------------------------------
-    function ForceClose(~, ~, ~)
-        
-        % Dont run if global vars already deleted
-        if size(who('global'),1) == 0
-            return
-        end
-        
-        % Dont run if gui closed in correct sequence
-        if D.F.close
-            return
-        end
+% -----------------------------FORCE CLOSE---------------------------------
+    function ForceClose()
         
         % Log/print
         Console_Write('**WARNING** [ForceClose] RUNNING: ForceClose Exit Procedure...');
@@ -12751,7 +12781,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         SetExit()
         FORCECLOSE = true;
         
-        % Send force close signal to CS
+        % Send force close signal to CS and set quit flag
+        D.F.do_quit = true;
         Send_CS_Com('X', 2);
         pause(1);
         
@@ -12761,8 +12792,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Clear and close
         if ISCRASH
-            Console_Write('**WARNING** [ForceClose] CLEARING AND CLOSING');
-            ClearCloseAll()
+            Console_Write('**WARNING** [ForceClose] MATLAB CRASHED: CLEARING AND CLOSING');
+            ClearCloseAll(false)
         end
         
         return
@@ -12790,11 +12821,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -------------------------CLEAR AND CLOSE ALL-----------------------------
     function ClearCloseAll(clear_all)
         
-        % Handle inputs
-        if nargin < 1
-            clear_all = false;
-        end
-        
         % Stop/delete c2m timer
         if exist('D', 'var')
             if isfield(D, 'timer_c2m')
@@ -12802,8 +12828,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     if isvalid(D.timer_c2m)
                         if strcmp(D.timer_c2m.Running, 'on')
                             stop(D.timer_c2m);
+                            Console_Write('[ClearCloseAll] Stopped "timer_c2m"');
                         end
                         delete(D.timer_c2m);
+                        Console_Write('[ClearCloseAll] Deleted "timer_c2m"');
                     end
                 end
             end
@@ -12851,26 +12879,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        % Clear all global variables but "DOEXIT" and "ME"
-        if clear_all
-            clearvars -global -except STATUS;
-        else
-            clearvars -global -except STATUS DOEXIT FORCECLOSE ISCRASH ME;
-        end
-        close all;
+        % Specify variables to be cleared
+        vars = whos;
+        vars_list = {vars.name};
+        vars_list = vars_list([vars.global]);
         
-        % Bail here if not final clear
+        % Clear only a subset of global vars
         if ~clear_all
-            return
+            vars_clear = {'D', 'TCPIP'};
+            vars_exc = vars_list(~ismember(vars_list, vars_clear));
         end
         
-        % Clear every var in workspace but status
-        Vars=whos;
-        Vars={Vars.name};
-        Vars(ismember(Vars,'STATUS')) = [];
+        % Clear all global variables but return var
+        if clear_all
+            vars_exc = {'STATUS', 'c2m_pack'};
+        end
         
-        % Run clear
-        clear(Vars{:});
+        % Log/print vars cleared
+        Console_Write(['[ClearCloseAll] CLEARING ALL VARS BUT:', sprintf(' "%s"', vars_exc{:})]);
+        
+        % Clear variables
+        clearvars('-global', '-except', vars_exc{:});
+        
+        % Close anything else
+        close all;
         
     end
 
@@ -12894,176 +12926,134 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store time
         t_now = Sec_DT(now);
         
-%         %% PRINT PERFORMANCE INFO
-%         
-%         % total
-%         infstr = sprintf([...
-%             'Laps______All:%s%d\n', ...
-%             'Rewards___All:%s%d\n', ...
-%             'Rotations_All:%s%d\n', ...
-%             'Missed_Rewards_:%s%d|%d\n',...
-%             'Bulldozings____:%s%d'], ...
-%             repmat('_',1,1), sum([D.C.lap_cnt{:}]), ...
-%             repmat('_',1,1), sum([D.C.rew_cnt{:}]), ...
-%             repmat('_',1,1), D.C.rot_cnt, ...
-%             repmat('_',1,1), D.C.missed_rew_cnt(1),sum(D.C.missed_rew_cnt), ...
-%             repmat('_',1,1), D.C.bull_cnt);
-%         if ~strcmp(D.UI.txtPerfInf(4).String, infstr)
-%             Safe_Set(D.UI.txtPerfInf(4), 'String', infstr)
-%         end
-%         
-%         % standard
-%         infstr = sprintf([...
-%             'Laps______Stand:%s%d\n', ...
-%             'Rewards___Stand:%s%d'], ...
-%             repmat('_',1,1), D.C.lap_cnt{3}(end), ...
-%             repmat('_',1,1), D.C.rew_cnt{3}(end));
-%         if ~strcmp(D.UI.txtPerfInf(1).String, infstr)
-%             Safe_Set(D.UI.txtPerfInf(1), 'String', infstr)
-%         end
-%         
-%         % 40 deg
-%         infstr = sprintf([...
-%             'Laps______40%c:%s%d|%d\n', ...
-%             'Rewards___40%c:%s%d|%d'], ...
-%             char(176), repmat('_',1,3), D.C.lap_cnt{2}(end), sum(D.C.lap_cnt{2}), ...
-%             char(176), repmat('_',1,3), D.C.rew_cnt{2}(end), sum(D.C.rew_cnt{2}));
-%         if ~strcmp(D.UI.txtPerfInf(2).String, infstr)
-%             Safe_Set(D.UI.txtPerfInf(2), 'String', infstr)
-%         end
-%         
-%         % 0 deg
-%         infstr = sprintf([...
-%             'Laps______0%c:%s%d|%d\n', ...
-%             'Rewards___0%c:%s%d|%d'], ...
-%             char(176), repmat('_',1,4), D.C.lap_cnt{1}(end), sum(D.C.lap_cnt{1}), ...
-%             char(176), repmat('_',1,4), D.C.rew_cnt{1}(end), sum(D.C.rew_cnt{1}));
-%         if ~strcmp(D.UI.txtPerfInf(3).String, infstr)
-%             Safe_Set(D.UI.txtPerfInf(3), 'String', infstr)
-%         end
-%         
-%         % Rat vel
-%         infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
-%             D.P.Rat.vel, D.P.Rat.vel_max_lap, D.P.Rat.vel_max_all);
-%         if ~strcmp(D.UI.txtPerfInf(5).String, infstr)
-%             Safe_Set(D.UI.txtPerfInf(5), 'String', infstr)
-%         end
-%         
-%         % Robot vel
-%         infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
-%             D.P.Rob.vel, D.P.Rob.vel_max_lap, D.P.Rob.vel_max_all);
-%         if ~strcmp(D.UI.txtPerfInf(6).String, infstr)
-%             Safe_Set(D.UI.txtPerfInf(6), 'String', infstr)
-%         end
-%         
-%         % Get robot battery voltage
-%         if c2m.('J').dat1 ~= 0
-%             
-%             % Update vcc
-%             D.PAR.rob_vcc_last = D.PAR.rob_vcc;
-%             D.PAR.rob_vcc = c2m.('J').dat1;
-%             
-%             % Format and show string
-%             if D.PAR.rob_vcc ~= D.PAR.rob_vcc_last
-%                 infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
-%                 Safe_Set(D.UI.txtPerfInf(7), 'String', infstr)
-%             end
-%         end
-%         
-%         % Get cube battery voltage
-%         if D.F.cube_connected && D.F.implant_session
-%             
-%             % Get new vcc if enough time ellapsed
-%             if Sec_DT(now) >= D.T.cube_vcc_update
-%                 
-%                 % Store last value
-%                 D.PAR.cube_vcc_last = D.PAR.cube_vcc;
-%                 
-%                 % Send NLX command
-%                 [pass, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
-%                 
-%                 % Parce nxl string
-%                 if pass
-%                     nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
-%                 end
-%                 
-%                 % Check if parsed
-%                 if pass && ~isempty(nlx_str)
-%                     D.PAR.cube_vcc = str2double(nlx_str{:});
-%                 else
-%                     pass = false;
-%                 end
-%                 
-%             else
-%                 pass = false;
-%             end
-%             
-%             
-%             % Make sure arg returned
-%             if pass
-%                 
-%                 % Wait 30 sec for next check
-%                 D.T.cube_vcc_update = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
-%                 
-%                 % Format and show string
-%                 if D.PAR.cube_vcc ~= D.PAR.cube_vcc_last
-%                     infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
-%                     Safe_Set(D.UI.txtPerfInf(8), 'String', infstr)
-%                 end
-%                 
-%             end
-%             
-%         end
-%         
-%         %% PRINT TIME INFO
-%         
-%         % Get session time
-%         nowTim(1) =  Sec_DT(now) - D.T.ses_str;
-%         
-%         % Get recording elapsed time plus saved time
-%         if  D.F.rec
-%             nowTim(2) = (Sec_DT(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
-%         else
-%             nowTim(2) = D.T.rec_tot_tim; % keep showing save time
-%         end
-%         
-%         % Get lap time
-%         if D.F.rat_in
-%             nowTim(3) = Sec_DT(now) - D.T.lap_str;
-%         else
-%             nowTim(3) = 0;
-%         end
-%         
-%         % Run time
-%         if D.F.rat_in && ~D.F.task_done
-%             nowTim(4) = Sec_DT(now) - D.T.task_str;
-%         else
-%             nowTim(4) = 0;
-%         end
-%         
-%         % Make string
-%         infstr = sprintf([ ...
-%             'SES:%s%s\n', ...
-%             'REC:%s%s\n', ...
-%             'LAP:%s%s\n'...
-%             'RUN:%s%s\n'], ...
-%             repmat('_',1,1), datestr(nowTim(1)/(24*60*60), 'HH:MM:SS'), ...
-%             repmat('_',1,1), datestr(nowTim(2)/(24*60*60), 'HH:MM:SS'), ...
-%             repmat('_',1,1), datestr(nowTim(3)/(24*60*60), 'HH:MM:SS'), ...
-%             repmat('_',1,1), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
-%   
-%         % Print timers
-%         Safe_Set(D.UI.txtTimeInf(1), 'String', infstr)
-%         
-%         % Save current time to UserData
-%         Safe_Set(D.UI.txtTimeInf(1), 'UserData', nowTim)
-%         
-%         % Update info print time
-%         D.DB.inf(1) = (Sec_DT(now) - t_now) * 1000;
-%         D.DB.inf(2) = min(D.DB.inf(1), D.DB.inf(2));
-%         D.DB.inf(3) = min(999, max(D.DB.inf(1), D.DB.inf(3)));
-%         D.DB.inf(4) = D.DB.inf(1) + D.DB.inf(4);
-%         D.DB.inf(5) = D.DB.inf(5) + 1;
+        %% PRINT PERFORMANCE INFO
+        
+        % total
+        infstr = sprintf([...
+            'Laps______All:%s%d\n', ...
+            'Rewards___All:%s%d\n', ...
+            'Rotations_All:%s%d\n', ...
+            'Missed_Rewards_:%s%d|%d\n',...
+            'Bulldozings____:%s%d'], ...
+            repmat('_',1,1), sum([D.C.lap_cnt{:}]), ...
+            repmat('_',1,1), sum([D.C.rew_cnt{:}]), ...
+            repmat('_',1,1), D.C.rot_cnt, ...
+            repmat('_',1,1), D.C.missed_rew_cnt(1),sum(D.C.missed_rew_cnt), ...
+            repmat('_',1,1), D.C.bull_cnt);
+        if ~strcmp(D.UI.txtPerfInf(4).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(4), 'String', infstr)
+        end
+        
+        % standard
+        infstr = sprintf([...
+            'Laps______Stand:%s%d\n', ...
+            'Rewards___Stand:%s%d'], ...
+            repmat('_',1,1), D.C.lap_cnt{3}(end), ...
+            repmat('_',1,1), D.C.rew_cnt{3}(end));
+        if ~strcmp(D.UI.txtPerfInf(1).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(1), 'String', infstr)
+        end
+        
+        % 40 deg
+        infstr = sprintf([...
+            'Laps______40%c:%s%d|%d\n', ...
+            'Rewards___40%c:%s%d|%d'], ...
+            char(176), repmat('_',1,3), D.C.lap_cnt{2}(end), sum(D.C.lap_cnt{2}), ...
+            char(176), repmat('_',1,3), D.C.rew_cnt{2}(end), sum(D.C.rew_cnt{2}));
+        if ~strcmp(D.UI.txtPerfInf(2).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(2), 'String', infstr)
+        end
+        
+        % 0 deg
+        infstr = sprintf([...
+            'Laps______0%c:%s%d|%d\n', ...
+            'Rewards___0%c:%s%d|%d'], ...
+            char(176), repmat('_',1,4), D.C.lap_cnt{1}(end), sum(D.C.lap_cnt{1}), ...
+            char(176), repmat('_',1,4), D.C.rew_cnt{1}(end), sum(D.C.rew_cnt{1}));
+        if ~strcmp(D.UI.txtPerfInf(3).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(3), 'String', infstr)
+        end
+        
+        % Rat vel
+        infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
+            D.P.Rat.vel, D.P.Rat.vel_max_lap, D.P.Rat.vel_max_all);
+        if ~strcmp(D.UI.txtPerfInf(5).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(5), 'String', infstr)
+        end
+        
+        % Robot vel
+        infstr = sprintf('Velocity:_%0.2f(%0.0f/%0.0f)', ...
+            D.P.Rob.vel, D.P.Rob.vel_max_lap, D.P.Rob.vel_max_all);
+        if ~strcmp(D.UI.txtPerfInf(6).String, infstr)
+            Safe_Set(D.UI.txtPerfInf(6), 'String', infstr)
+        end
+        
+        %% PRINT VOLTAGE INFO
+        
+        % Print robot voltage
+        if D.PAR.rob_vcc ~= D.PAR.rob_vcc_last
+            infstr = sprintf('Rob_Battery_:_%0.1fV', D.PAR.rob_vcc);
+            Safe_Set(D.UI.txtPerfInf(7), 'String', infstr)
+        end
+        
+        % Print cube battery voltage
+        if D.F.cube_connected && ...
+                D.F.implant_session && ...
+                D.PAR.cube_vcc ~= D.PAR.cube_vcc_last
+            
+            infstr = sprintf('Cube_Battery:_%d%%', D.PAR.cube_vcc);
+            Safe_Set(D.UI.txtPerfInf(8), 'String', infstr)
+        end
+        
+        %% PRINT TIME INFO
+        
+        % Get session time
+        nowTim(1) =  Sec_DT(now) - D.T.ses_str;
+        
+        % Get recording elapsed time plus saved time
+        if  D.F.rec
+            nowTim(2) = (Sec_DT(now) - D.T.rec_tim)  + D.T.rec_tot_tim;
+        else
+            nowTim(2) = D.T.rec_tot_tim; % keep showing save time
+        end
+        
+        % Get lap time
+        if D.F.rat_in
+            nowTim(3) = Sec_DT(now) - D.T.lap_str;
+        else
+            nowTim(3) = 0;
+        end
+        
+        % Run time
+        if D.F.rat_in && ~D.F.task_done
+            nowTim(4) = Sec_DT(now) - D.T.task_str;
+        else
+            nowTim(4) = 0;
+        end
+        
+        % Make string
+        infstr = sprintf([ ...
+            'SES:%s%s\n', ...
+            'REC:%s%s\n', ...
+            'LAP:%s%s\n'...
+            'RUN:%s%s\n'], ...
+            repmat('_',1,1), datestr(nowTim(1)/(24*60*60), 'HH:MM:SS'), ...
+            repmat('_',1,1), datestr(nowTim(2)/(24*60*60), 'HH:MM:SS'), ...
+            repmat('_',1,1), datestr(nowTim(3)/(24*60*60), 'HH:MM:SS'), ...
+            repmat('_',1,1), datestr(nowTim(4)/(24*60*60), 'HH:MM:SS'));
+        
+        % Print timers
+        Safe_Set(D.UI.txtTimeInf(1), 'String', infstr)
+        
+        % Save current time to UserData
+        Safe_Set(D.UI.txtTimeInf(1), 'UserData', nowTim)
+        
+        % Update info print time
+        D.DB.inf(1) = (Sec_DT(now) - t_now) * 1000;
+        D.DB.inf(2) = min(D.DB.inf(1), D.DB.inf(2));
+        D.DB.inf(3) = min(999, max(D.DB.inf(1), D.DB.inf(3)));
+        D.DB.inf(4) = D.DB.inf(1) + D.DB.inf(4);
+        D.DB.inf(5) = D.DB.inf(5) + 1;
         
         %% PRINT DEBUG INFO
         
@@ -14122,11 +14112,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Safe_Set(D.UI.toggSubPlotTT, ...
                     'Visible', 'on')
                 
-                % Show semitransparent backround
-                if D.F.implant_session
-                    Safe_Set(D.UI.ttMask, 'Visible', 'on')
-                end
-                
                 % Enable plot type toggles
                 Safe_Set(D.UI.toggPlotTypeTT(1), 'Value', 1)
                 Safe_Set(D.UI.toggPlotTypeTT(2), 'Value', 0)
@@ -14149,11 +14134,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Disable plot type toggles
                 Safe_Set(D.UI.toggPlotTypeTT, 'Value', 0)
                 Button_State(D.UI.toggPlotTypeTT, 'Disable');
-                
-                % Hide semitransparent backround
-                if D.F.implant_session && D.PAR.sesType == 'ICR_Session'
-                    Safe_Set(D.UI.ttMask, 'Visible', 'off')
-                end
                 
                 % Run callback to reset plot features
                 Togg_PlotTypeTT(D.UI.toggPlotTypeTT(1));
@@ -14462,15 +14442,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             is_err = false;
         end
         
+        % Update log
+        Update_Log(str, t_now);
+        
         % Get time centered to handshake time
         t_s = Sec_DT(t_now);
         t_s = t_s - DTHANDSHAKE;
         
         % Add to string array
         msg = sprintf('\r%0.2f %s', t_s, str);
-        
-        % Update log
-        Update_Log(str, t_now);
         
         % Bail if following conditions not met
         if ~exist('D','var'); return; end
@@ -14687,6 +14667,95 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
+% ------------------------PROCESS CS COMMAND-------------------------------
+    function[] = Proc_CS_Com(id)
+        
+        % Check for handshake flag
+        if ...
+                strcmp(id, 'h') && ...
+                c2m.(id).dat1 ~= 0
+            
+            % Store handshake time
+            DTHANDSHAKE = Sec_DT(now);
+            
+        end
+        
+        % Check for exit/error flag
+        if strcmp(id, 'E')
+            
+            % Check if this is exit flag
+            if c2m.(id).dat1 == 1
+                
+                % Set exit flag
+                SetExit()
+                
+                % Log/print exit received
+                Console_Write(sprintf('[Proc_CS_Com] RECIEVED CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                    id, c2m.(id).dat1), now);
+            end
+            
+            % Check for save abort
+            if c2m.(id).dat1 == 2
+                
+                % Format err string
+                err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
+                
+                % Display message
+                if exist('D', 'var')
+                    if ~isfield(D, 'UI')
+                        dlg_h = dlgAWL(...
+                            err_str, ...
+                            '!!ERROR!!', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'error');
+                        Dlg_Wait(dlg_h);
+                    end
+                end
+                
+                % Write to console
+                Console_Write(err_str, now, true);
+                
+            end
+            
+            % Check for forced abort
+            if c2m.(id).dat1 == 3
+                
+                % Format err string
+                err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
+                
+                % Display message
+                if exist('D', 'var')
+                    if ~isfield(D, 'UI')
+                        dlgAWL(...
+                            err_str, ...
+                            '!!ERROR!!', ...
+                            'OK', [], [], 'OK', ...
+                            D.UI.dlgPos{4}, ...
+                            'error');
+                    end
+                end
+                
+                % Set exit flag
+                SetExit()
+                
+                % Write to console
+                Console_Write(err_str, now, true);
+                
+                % Pause for message to show
+                pause(1);
+            end
+        end
+        
+        %Print new data
+        Console_Write(sprintf('   [RCVD] c2m: id=''%s'' dat1=%d dat2=%d dat3=%d pack=%d', ...
+            c2m.(id).id, c2m.(id).dat1, c2m.(id).dat2, c2m.(id).dat3, c2m.(id).pack), now);
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
+        
+    end
+
 % --------------------------SEND DATA TO AC--------------------------------
     function[] = Send_AC_Com()
         
@@ -14812,17 +14881,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             choice = dlg_h.UserData;
             [abort, pass] = Check_Flag(DOEXIT, ~strcmp(choice, ''));
             
-            % Make sure GUI and dialogue top windows
-            if isvalid(FIGH)
-                set(FIGH,'WindowStyle','modal')
-                set(dlg_h,'WindowStyle','modal')
-                set(FIGH,'WindowStyle','normal')
-                set(dlg_h,'WindowStyle','normal')
+            % Bail if done
+            if abort || pass
+                break
             end
             
-            % Bail if done
-            if abort || pass; break; end
+            % Make sure window stays on top
+            set(dlg_h,'WindowStyle','modal')
         end
+        
+        % Make sure GUI is back on top
+        if isvalid(FIGH)
+            set(FIGH,'WindowStyle','modal')
+            Update_UI(0, 'force')
+            set(FIGH,'WindowStyle','normal')
+            Update_UI(0, 'force')
+        end
+        
     end
 
 % ----------------------CHECK FOR EXE RUN CONDITION------------------------
@@ -16389,7 +16464,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     cdat = D.P.frgOccMatScale+D.P.pathNowMat;
                     if ~isgraphics(D.UI.imgFrgOcc)
                         D.UI.imgFrgOcc = imagesc(cdat, ...
-                            'Parent', D.UI.axH(6));
+                            'Parent', D.UI.axH(5));
                     else
                         Safe_Set(D.UI.imgFrgOcc, 'CData', cdat);
                     end
@@ -18223,118 +18298,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ---------------------------CHECK FOR NEW C2M-----------------------------
-    function TimerFcn_GetCSCom(~,~)
+    function TimerFcn_CheckCSCom(~,~)
         
         % Have to explicitely catch errors
         try
             
-            % Bail if D deleted
-            if ~exist('D', 'var')
+            % Bail if c2m_pack deleted or not initialized
+            if ~exist('c2m_pack', 'var')
                 return
-            elseif ~isfield(D, 'UI')
-                return
-            end
-            
-            % Bail if c2m deleted or not initialized
-            if ~exist('c2m', 'var')
-                return
-            elseif isempty(c2m)
+            elseif isempty(c2m_pack)
                 return
             end
             
-            % Check for new packet
-            c2m_mat = reshape(cell2mat(struct2cell(c2m)),1,[]);
-            new_ind = [c2m_mat.pack] ~= [c2m_mat.packLast];
+            %TEMP
+            cnt_temp = cnt_temp+1;
+            disp(cnt_temp)
+            
+            % Check for new packet flag
+            new_pack = c2m_pack(6) == 1;
             
             % Bail if no new packets
-            if ~any(new_ind)
+            if ~new_pack
                 return
             end
             
-            % Store new id
-            id = c2m_mat(new_ind).id;
+            % Get current packet id
+            id = native2unicode(c2m_pack(1),'UTF-8');
             
-            % Check for handshake flag
-            if ...
-                    strcmp(id, 'h') && ...
-                    c2m.(id).dat1 == 1
-                
-                % Store handshake time
-                DTHANDSHAKE = Sec_DT(now);
-                
-                % Log/print handshake received
-                Console_Write(sprintf('   [RCVD] CS HANDSHAKE COMMAND: id=''%s'' dat1=%d', ...
-                    id, c2m.(id).dat1), now);
-                Console_Write(sprintf('SET SYNC TIME: %ddays',DTHANDSHAKE));
-            end
+            % Store new data
+            c2m.(id).id = id;
+            c2m.(id).dat1 = c2m_pack(2);
+            c2m.(id).dat2 = c2m_pack(3);
+            c2m.(id).dat3 = c2m_pack(4);
+            c2m.(id).pack = c2m_pack(5);
             
-            % Check for exit/error flag
-            if strcmp(id, 'E')
-                
-                % Check if this is exit flag
-                if c2m.(id).dat1 == 1
-                    
-                    % Set exit flag
-                    SetExit()
-                    
-                    % Log/print exit received
-                    Console_Write(sprintf('   [RCVD] CS EXIT COMMAND: id=''%s'' dat1=%d', ...
-                        id, c2m.(id).dat1), now);
-                end
-                
-                % Check for save abort
-                if c2m.(id).dat1 == 2
-                    
-                    % Format err string
-                    err_str = '!!ERROR: RUNTIME ERROR: CLICK DONE AND ATTEMPT SAVE!!';
-                    
-                    % Display message
-                    dlg_h = dlgAWL(...
-                        err_str, ...
-                        '!!ERROR!!', ...
-                        'OK', [], [], 'OK', ...
-                        D.UI.dlgPos{4}, ...
-                        'error');
-                    Dlg_Wait(dlg_h);
-                    
-                    % Write to console
-                    Console_Write(err_str, now, true);
-                    
-                end
-                
-                % Check for forced abort
-                if c2m.(id).dat1 == 3
-                    
-                    % Format err string
-                    err_str = '!!ERROR: RUNTIME ERROR: SHUTTING DOWN!!';
-                    
-                    % Display message
-                    dlgAWL(...
-                        err_str, ...
-                        '!!ERROR!!', ...
-                        'OK', [], [], 'OK', ...
-                        D.UI.dlgPos{4}, ...
-                        'error');
-                    
-                    % Set exit flag
-                    SetExit()
-                    
-                    % Write to console
-                    Console_Write(err_str, now, true);
-                    
-                    % Pause for message to show
-                    pause(1);
-                end
-            end
-            
-            %Print new data
-            if ~ischar(c2m.(id).dat1)
-                str = '   [RCVD] c2m: id=''%s'' dat1=%d pack=%d';
-            else
-                str = '   [RCVD] c2m: id=''%s'' dat1=''%s'' pack=%d';
-            end
-            Console_Write(sprintf(str, ...
-                c2m.(id).id, c2m.(id).dat1, c2m.(id).pack), now);
+            % Reset flag
+            c2m_pack(6) = 0;
             
             % Update packet info
             c2m.(id).packLast = c2m.(id).pack;
@@ -18342,28 +18341,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Update recieve time
             c2m.(id).t_rcvd = Sec_DT(now);
             
-            % Check for resend request
-            if ~strcmp('g', c2m.(id).id)
-                return
-            end
-            
-            % Get id to resend
-            id_send = c2m.(id).dat1;
-            Console_Write(sprintf('   [RCVD] Send/Resend Requested: id=%s dat1=%s', ...
-                id, id_send), now);
-            
-            % Send again if any history of this id
-            if m2c.(id_send).pack > 0
-                Send_CS_Com( ...
-                    m2c.(id_send).id, ...
-                    m2c.(id_send).dat1, ...
-                    m2c.(id_send).dat2, ...
-                    m2c.(id_send).dat3, ...
-                    m2c.(id_send).pack);
-            end
-            
-            % Update UI
-            if UPDATENOW; Update_UI(0, 'force'); end
+            % Process data
+            Proc_CS_Com(id)
             
         catch ME
             Console_Write('!!ERROR!! [Timer_FcnGetCSCom] FAILED', now);
@@ -18440,10 +18419,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         end
                         
                         % Highlight new value
-                    elseif Sec_DT(now) - D.T.cube_vcc_update < 5.5
+                    elseif Sec_DT(now) - D.T.cube_vcc_check < 5.5
                         
                         % Check if printing a new value is new
-                        if Sec_DT(now) - D.T.cube_vcc_update < 5
+                        if Sec_DT(now) - D.T.cube_vcc_check < 5
                             
                             % Set to attention color
                             Safe_Set(D.UI.txtPerfInf(8), 'ForegroundColor', D.UI.attentionCol);
@@ -18648,6 +18627,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('!!ERROR!! [Tab_GrpChange] FAILED', now);
             SetExit()
         end
+        
+    end
+
+% -----------------------------FORCE CLOSE---------------------------------
+    function DeleteFcn_ForceClose(~, ~, ~)
+        
+        % Dont run if global vars already deleted
+        if size(who('global'),1) == 0
+            return
+        end
+        
+        % Dont run if gui closed in correct sequence
+        if D.F.close
+            return
+        end
+        
+        % Run ForceClose function
+        ForceClose();
         
     end
 
