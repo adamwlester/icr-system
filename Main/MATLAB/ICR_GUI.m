@@ -439,11 +439,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % MAIN RUN PARAMETERS
         
-        % Poll fs 
+        % Poll fs
         D.PAR.polRate = 1/30; % (sec)
-        % Min dt loop 
+        % Min dt loop
         D.PAR.dtMinLoop = 10; % (ms)
-        % Min time in start quad 
+        % Min time in start quad
         D.PAR.strQdDel = 0.5; % (sec)
         % PID setPoint
         D.PAR.setPointBackpack = 60;
@@ -470,8 +470,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.cubeVccWarning = 30; % (%)
         % Cube battery type ["C": Small, "A": Medium]
         D.PAR.cubeBatteryType = 'A';
-        % Cube battery check
-        D.PAR.dtCubeBatteryCheck = 60; % (sec)
         
         % DIRECTORIES
         
@@ -655,9 +653,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % ------------------------ SETUP AC CONNECTION --------------------
         Console_Write('[Setup] RUNNING: Connect to AC Computer...');
         
-        % Set flag
-        D.AC.connected = false;
-        
         % Setup communication with ARENACONTROLLER
         D.AC.IP = '172.17.0.3';
         
@@ -673,7 +668,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.AC.data = int8(D.AC.data);
         
         % Initialize flag
-        D.AC.connected = false;
+        D.F.ac_connected = false;
         
         % Skip if updating table
         if D.PAR.sesType ~= 'Table_Update'
@@ -692,14 +687,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Establish connection
             if strcmp('ICRCHEETAH', getenv('computername'))
                 fopen(TCPIP);
-                D.AC.connected = true;
+                D.F.ac_connected = true;
             end
             
             % Restart timer
             start(D.timer_c2m);
             
             % Print that AC computer is connected
-            if (D.AC.connected)
+            if (D.F.ac_connected)
                 Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer IP=%s', ...
                     D.AC.IP));
             else
@@ -1676,6 +1671,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % FLAGS
         
+        % ac computer connected
+        D.F.ac_connected = false;
         % ui updated
         D.F.ui_updated = false;
         % session type selected
@@ -1777,8 +1774,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.Rob.new_vel_data = false;
         % new hd data processed
         D.F.Rat.new_hd_data = false;
-        % track clusters being streemed
-        D.F.stream_clust = false(D.PAR.maxTT,D.PAR.maxClust);
+        % track clusters that are loaded
+        D.F.clust_loaded = false(D.PAR.maxTT,D.PAR.maxClust);
+        % track tts that are actively streaming
+        D.F.tt_streaming = false(D.PAR.maxTT,1);
         % plot clusters
         D.F.plot_clust = false(D.PAR.maxTT,D.PAR.maxClust);
         % flag for update status of each tt
@@ -1848,7 +1847,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.frg_rew_outbnd_t2 = 0;
         % cube status check
         D.T.cube_status_check = 0;
-        % cube vc check
+        % Last time cube vcc checked
         D.T.cube_vcc_check = 0;
         
         % INDEXING
@@ -3095,10 +3094,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         wd = (pos_wd_dflt-2*pos_lft_dflt)/2;
         lft = pos_lft_dflt*2;
         pos = [lft, btm, wd, ht];
-        D.UI.toggStreamTTs = uicontrol('Style','togglebutton', ...
+        D.UI.toggLoadClust = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
-            'String','Stream TTs', ...
-            'Callback', {@Togg_StreamTTs}, ...
+            'String','Load Clust', ...
+            'Callback', {@Togg_LoadClust}, ...
             'Enable', 'off', ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -3111,10 +3110,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Cube LED
         lft = lft + wd;
-        pos = [lft, btm, wd, ht];
+        pos = [lft, btm, wd/2, ht];
         D.UI.toggCubeLED = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
-            'String','Cube LED', ...
+            'String','QLED', ...
             'Callback', {@Togg_CubeLED}, ...
             'Enable', 'off', ...
             'Units','Normalized', ...
@@ -3123,8 +3122,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.disabledBtnFrgCol, ...
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzBtnLrg(1), ...
+            'FontSize', D.UI.fontSzBtnMed(1), ...
             'UserData', 0);
+        
+        % Cube VCC Update
+        lft = lft + wd/2;
+        pos = [lft, btm, wd/2, ht];
+        D.UI.toggCubeVcc = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'String','QVCC', ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzBtnMed(1), ...
+            'UserData', 0);
+        f = @(x,y) (Button_State(x,y));
+        set(D.UI.toggCubeVcc, 'Callback', @(x,y)f(D.UI.toggCubeVcc,'Update'));
         
         % Set to pan bottom
         btm = D.UI.spanNLX.Position(2);
@@ -5579,7 +5596,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         btm = D.UI.tab_2_tt_select_pan_pos(1,2) - ht;
         wd = D.UI.main_ax_bounds(1)/2;
         pos = [lft, btm, wd, ht];
-        D.UI.toggMainActionTT(1) = uicontrol('style','togglebutton', ...
+        D.UI.toggDoTrackTT = uicontrol('style','togglebutton', ...
             'Parent', D.UI.tabTT, ...
             'Units', 'Normalized', ...
             'Enable', 'off', ...
@@ -5591,39 +5608,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1));
         
         % Copy main button
-        D.UI.toggMainActionTT(2) = copyobj(D.UI.toggMainActionTT(1), D.UI.tabTT);
+        D.UI.toggDoPlotTT = copyobj(D.UI.toggDoTrackTT, D.UI.tabTT);
         
         % Set main position
-        D.UI.toggMainActionTT(2).Position(2) = D.UI.toggMainActionTT(1).Position(2) - ht;
+        D.UI.toggDoPlotTT.Position(2) = D.UI.toggDoTrackTT.Position(2) - ht;
         
         % Set main stuff
-        Safe_Set(D.UI.toggMainActionTT(1), ...
+        Safe_Set(D.UI.toggDoTrackTT, ...
             'UserData', 1, ...
             'String', 'Track TTs')
-        Safe_Set(D.UI.toggMainActionTT(2), ...
+        Safe_Set(D.UI.toggDoPlotTT, ...
             'UserData', 2, ...
             'String', 'Plot Spikes')
         
         % Set callback
-        Safe_Set(D.UI.toggMainActionTT, 'Callback', {@Togg_MainActionTT})
+        Safe_Set(D.UI.toggDoTrackTT, 'Callback', {@Togg_MainActionTT})
+        Safe_Set(D.UI.toggDoPlotTT, 'Callback', {@Togg_MainActionTT})
         
         % Copy for sub buttons
-        D.UI.toggFlagTT = copyobj(D.UI.toggMainActionTT(1), D.UI.tabTT);
-        D.UI.toggHearSourceTT(1) = copyobj(D.UI.toggMainActionTT(1), D.UI.tabTT);
-        D.UI.toggHearSourceTT(2) = copyobj(D.UI.toggMainActionTT(1), D.UI.tabTT);
-        D.UI.toggPlotTypeTT(1) = copyobj(D.UI.toggMainActionTT(2), D.UI.tabTT);
-        D.UI.toggPlotTypeTT(2) = copyobj(D.UI.toggMainActionTT(2), D.UI.tabTT);
+        D.UI.toggFlagTT = copyobj(D.UI.toggDoTrackTT, D.UI.tabTT);
+        D.UI.toggHearSourceTT(1) = copyobj(D.UI.toggDoTrackTT, D.UI.tabTT);
+        D.UI.toggHearSourceTT(2) = copyobj(D.UI.toggDoTrackTT, D.UI.tabTT);
+        D.UI.toggPlotTypeTT(1) = copyobj(D.UI.toggDoPlotTT, D.UI.tabTT);
+        D.UI.toggPlotTypeTT(2) = copyobj(D.UI.toggDoPlotTT, D.UI.tabTT);
+        
         
         % Set user data
+        chan_flag = false(D.PAR.maxTT,4,2);
         D.UI.toggFlagTT.UserData = 1;
-        D.UI.toggHearSourceTT(1).UserData = [{1}, {true(2,4)}];
-        D.UI.toggHearSourceTT(2).UserData = [{2}, {true(2,4)}];
+        D.UI.toggHearSourceTT(1).UserData = [{1}, {chan_flag}];
+        D.UI.toggHearSourceTT(2).UserData = [{2}, {chan_flag}];
         D.UI.toggPlotTypeTT(1).UserData = 1;
         D.UI.toggPlotTypeTT(2).UserData = 2;
         
         % Set postions and strings for 'Track TTs' sub button
         D.UI.toggFlagTT.String = 'Flags';
-        D.UI.toggFlagTT.Position(1) = sum(D.UI.toggMainActionTT(1).Position([1,3]));
+        D.UI.toggFlagTT.Position(1) = sum(D.UI.toggDoTrackTT.Position([1,3]));
         D.UI.toggFlagTT.Position(3) = wd/2;
         D.UI.toggHearSourceTT(1).String = 'PC';
         D.UI.toggHearSourceTT(1).Position(1) = sum(D.UI.toggFlagTT.Position([1,3]));
@@ -5634,7 +5654,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set postions and strings for 'Plot Spikes' sub button
         D.UI.toggPlotTypeTT(1).String = 'Clust';
-        D.UI.toggPlotTypeTT(1).Position(1) = sum(D.UI.toggMainActionTT(2).Position([1,3]));
+        D.UI.toggPlotTypeTT(1).Position(1) = sum(D.UI.toggDoPlotTT.Position([1,3]));
         D.UI.toggPlotTypeTT(1).Position(3) = wd/2;
         D.UI.toggPlotTypeTT(2).String = 'Rate';
         D.UI.toggPlotTypeTT(2).Position(1) = D.UI.toggPlotTypeTT(2).Position(1) + 1.5*wd;
@@ -5650,8 +5670,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         btm_shft = D.UI.tab_1_tt_select_pan_pos(1,2) - D.UI.tab_2_tt_select_pan_pos(1,2);
         
         % Move action type buttons
+        D.UI.tab_2_main_act_pos = [D.UI.toggDoTrackTT.Position; D.UI.toggDoPlotTT.Position];
         for z_p = 1:2
-            D.UI.tab_2_main_act_pos(z_p,:) = D.UI.toggMainActionTT(z_p).Position;
             D.UI.tab_1_main_act_pos(z_p,:) = [D.UI.tab_2_main_act_pos(z_p,1:2) + [lft_shft, btm_shft], ...
                 D.UI.tab_2_main_act_pos(z_p,3:end)];
         end
@@ -6258,8 +6278,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Enable buttons
             Object_Group_State('TT_Track_Objects', 'Enable');
-            Safe_Set(D.UI.toggMainActionTT(1), 'Value', 1);
-            Togg_MainActionTT(D.UI.toggMainActionTT(1));
+            Safe_Set(D.UI.toggDoTrackTT, 'Value', 1);
+            Togg_MainActionTT(D.UI.toggDoTrackTT);
             
             % Number of turns
             turns = D.DB.autoSetTTturns;
@@ -6652,7 +6672,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get all DAS objects
         Console_Write('[NLX_Setup] RUNNING: "NlxGetDASObjectsAndTypes()"...');
-        [succeeded, D.NLX.das_objects, D.NLX.das_types] = NlxGetDASObjectsAndTypes();
+        [succeeded, D.NLX.das_objects, ~] = NlxGetDASObjectsAndTypes();
         if succeeded == 1
             Console_Write('[NLX_Setup] FINISHED: "NlxGetDASObjectsAndTypes()"...');
         else
@@ -8263,9 +8283,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DB.CVCC.ax.YLabel.String = 'Vcc (%)';
             D.DB.CVCC.ax.XLabel.String = 'DT Start (min)';
             
-            % Change Cube battery check
-            D.PAR.dtCubeBatteryCheck = 5;
-            
             % Change implanted flag
             D.DB.Implanted = true;
             % Change condition and Task
@@ -9454,7 +9471,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function TT_Get()
         
         % Bail if cells not cut
-        if get(D.UI.toggStreamTTs, 'Value') == 0
+        if get(D.UI.toggLoadClust, 'Value') == 0
             return
         end
         
@@ -9463,15 +9480,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
-        % Get list of active tt/clust
-        active_mat = ...
-            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
-        [tt_active_ind, ~] = find(active_mat);
-        
         % Bail if nothing to stream
-        if isempty(tt_active_ind)
+        if ~any(D.F.tt_streaming)
             return
         end
+        
+        % Get list of active tt
+        tt_active_ind = find(D.F.tt_streaming);
         
         % Loop through and get new tt data
         for z_tt = 1:length(tt_active_ind)
@@ -9502,7 +9517,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function TT_Proc()
         
         % Bail if cells not cut
-        if get(D.UI.toggStreamTTs, 'Value') == 0
+        if get(D.UI.toggLoadClust, 'Value') == 0
             return
         end
         
@@ -9511,15 +9526,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
-        % Get list of active tt/clust
-        active_mat = ...
-            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
-        [tt_active_ind, clust_active_ind] = find(active_mat);
-        
         % Bail if nothing to stream
-        if isempty(tt_active_ind)
+        if ~any(D.F.tt_streaming)
             return
         end
+        
+        % Get list of active tt
+        tt_active_ind = find(D.F.tt_streaming);
         
         % Loop through and check for new tt data
         for z_tt = 1:length(tt_active_ind)
@@ -9621,8 +9634,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.TT.posClust{tt_ind, clust_ind}.Pol(ind_set_str:ind_set_end, 2) = clust_pol_mat(inc_ind,1);
                 D.TT.posClust{tt_ind, clust_ind}.TS(ind_set_str:ind_set_end) = ts_clust(inc_ind);
                 
-                % Set flag
-                D.F.plot_clust(tt_ind, clust_ind) = any(clust_active_ind == clust_ind);
+                % Set plot flag
+                D.F.plot_clust(tt_ind, clust_ind) = ...
+                    Safe_Get(D.UI.toggSubPlotTT(tt_ind,clust_ind), 'Value') == 1;
                 
             end
             
@@ -9643,7 +9657,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bail if cells not cut
-        if get(D.UI.toggStreamTTs, 'Value') == 0
+        if get(D.UI.toggLoadClust, 'Value') == 0
             return
         end
         
@@ -9656,7 +9670,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get list of tts to plot
         tt_plot = find(any(D.F.plot_clust, 2));
         
-        % Bail if still nothing to plot
+        % Bail if nothing new to plot
         if isempty(tt_plot)
             return
         end
@@ -9828,12 +9842,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % See if cube ready for setup
         if ~D.F.cube_connected && Sec_DT(now) >= D.T.cube_status_check
             
-            % Use any command to get status
-            [succeeded, ~] = ...
-                Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetHardwareSubSystemInformation AcqSystem1', false);
+            % Try to get cube vcc
+            [pass, vcc] = Get_Cube_Vcc();
             
-            % Bail if not succeeded
-            if succeeded ~= 1
+            % Bail if not succeeded or vcc = 0
+            if ~pass || vcc == 0
                 
                 % Update check time
                 D.T.cube_status_check = Sec_DT(now) + 1;
@@ -9844,6 +9857,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set flag
             D.F.cube_connected = true;
+            
+            % Enable buttons
+            Button_State(D.UI.toggLoadClust, 'Enable');
+            Button_State(D.UI.toggCubeLED, 'Enable');
+            Button_State(D.UI.toggCubeVcc, 'Enable');
+            
+            % Set button to get first cube vcc
+            Safe_Set(D.UI.toggCubeVcc, 'Value', 1);
+            Button_State(D.UI.toggCubeVcc, 'Update');
             
             % Start with Cube LED off
             Safe_Set(D.UI.toggCubeLED, 'Value', 0)
@@ -9873,32 +9895,60 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % GET CUBE VOLTAGE
         
-        % Bail if not connected or not time to check vcc
-        if ~D.F.cube_connected || Sec_DT(now) < D.T.cube_vcc_check
+        % Bail if not connected or button not pressed
+        if ~D.F.cube_connected || Safe_Get(D.UI.toggCubeVcc, 'Value') ~= 1
+            return
+        end
+        
+        % Unset button
+        Safe_Set(D.UI.toggCubeVcc, 'Value', 0);
+        Button_State(D.UI.toggCubeVcc, 'Update');
+        
+        % Run nested function
+        [pass, vcc] = Get_Cube_Vcc();
+        
+        % Bail if failed
+        if ~pass
             return
         end
         
         % Store last value
         D.PAR.cube_vcc_last = D.PAR.cube_vcc;
         
-        % Send NLX command
-        [succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
-        %[succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetBatteryRemaining AcqSystem1', false);
+        % Store new value
+        D.PAR.cube_vcc = vcc;
         
         % Update check time
-        D.T.cube_vcc_check = Sec_DT(now) + D.PAR.dtCubeBatteryCheck;
+        D.T.cube_vcc_check = Sec_DT(now);
         
-        % Bail if command failed
-        if succeeded ~= 1
-            return
-        end
-        
-        % Parce nxl string
-        nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
-        
-        % Check if parsed
-        if ~isempty(nlx_str)
-            D.PAR.cube_vcc = str2double(nlx_str{:});
+        % GET CUBE VOLTAGE FUNCTION
+        function[pass, vcc] = Get_Cube_Vcc()
+            
+            % Initialize output
+            pass = false;
+            vcc = 0;
+            
+            % Send NLX command
+            [succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -WHSGetStateOfCharge 1', false);
+            %[succeeded, nlx_str] = Send_NLX_Cmd('-SendLynxSXCommand AcqSystem1 -GetBatteryRemaining AcqSystem1', false);
+            
+            % Bail if command failed
+            if succeeded ~= 1
+                return
+            else
+                pass = true;
+            end
+            
+            % Parce nxl string
+            nlx_str = regexp(nlx_str{:}, '\d*$', 'match');
+            
+            % Check if parsed
+            if ~isempty(nlx_str)
+                vcc = str2double(nlx_str{:});
+            else
+                pass = false;
+            end
+            
         end
         
     end
@@ -11428,7 +11478,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.DB.HALT.NowStep = D.DB.HALT.NowStep+1;
                     
                     % Incriment vel
-                    if D.DB.HALT.NowStep <= length(D.DB.HALT.VelSteps);
+                    if D.DB.HALT.NowStep <= length(D.DB.HALT.VelSteps)
                         D.DB.HALT.NowVel = D.DB.HALT.VelSteps(D.DB.HALT.NowStep);
                     else
                         % End test
@@ -12649,7 +12699,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Bail if not connected
-        if ~D.AC.connected
+        if ~D.F.ac_connected
             Console_Write('[Disconnect_AC] SKIPPED: Disconnect from AC Computer...');
             return
         end
@@ -12698,7 +12748,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Unset flag
-        D.AC.connected = false;
+        D.F.ac_connected = false;
         
     end
 
@@ -12754,11 +12804,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Close TT stream
-        if Safe_Get(D.UI.toggStreamTTs, 'Value') == 1
+        if Safe_Get(D.UI.toggLoadClust, 'Value') == 1
             
             % Unset stream tt and run callback
-            Safe_Set(D.UI.toggStreamTTs, 'Value', 0)
-            Togg_StreamTTs(D.UI.toggStreamTTs);
+            Safe_Set(D.UI.toggLoadClust, 'Value', 0)
+            Togg_LoadClust(D.UI.toggLoadClust);
         end
         
         % Disconnect from the NLX server
@@ -13211,12 +13261,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Button_State(D.UI.toggAcq, 'Enable');
                     Button_State(D.UI.toggRec, 'Enable');
                     
-                    % Enable stream tt toggle
-                    Button_State(D.UI.toggStreamTTs, 'Enable');
-                    
-                    % Enable toggle cube led
-                    Button_State(D.UI.toggCubeLED, 'Enable');
-                    
                     % Enable sleep 1 button and show in red
                     Button_State(D.UI.toggSleep(1), 'Enable', D.UI.attentionCol);
                     
@@ -13436,7 +13480,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Safe_Set(D.UI.toggSelectTT(tt_exc), 'Enable', 'off');
                     
                     % Enable tt action buttons
-                    Button_State(D.UI.toggMainActionTT(1), 'Enable');
+                    Button_State(D.UI.toggDoTrackTT, 'Enable');
                     
                     % Enable flag feature buttons
                     Safe_Set(D.UI.toggSubFlagTT, 'Enable', 'on');
@@ -13472,7 +13516,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Safe_Set(D.UI.toggSelectTT, 'Visible', 'off');
                     
                     % Disable tt action buttons
-                    Button_State(D.UI.toggMainActionTT(1), 'Disable');
+                    Button_State(D.UI.toggDoTrackTT, 'Disable');
                     
                     % Disable flag feature buttons
                     Button_State(D.UI.toggSubFlagTT, 'Disable');
@@ -13489,7 +13533,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Hack to get toggle color to updae
                 for z_p = 1:2
                     pos = D.UI.panSelectTT(z_p).Position;
-                    D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                    D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
                     D.UI.panSelectTT(z_p).Position = pos;
                 end
                 
@@ -13505,7 +13549,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Button_State(D.UI.btnClrTT, 'Enable');
                     
                     % Enable TT plot action
-                    Button_State(D.UI.toggMainActionTT(2), 'Enable');
+                    Button_State(D.UI.toggDoPlotTT, 'Enable');
                     
                     % Enable TT plot type select
                     Button_State(D.UI.toggPlotTypeTT, 'Enable');
@@ -13522,13 +13566,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Button_State(D.UI.btnClrTT, 'Disable');
                     
                     % Unset active plotting
-                    if D.UI.toggMainActionTT(2).Value == 1
-                        D.UI.toggMainActionTT(2).Value = 0;
-                        Togg_MainActionTT(D.UI.toggMainActionTT(2));
+                    if D.UI.toggDoPlotTT.Value == 1
+                        D.UI.toggDoPlotTT.Value = 0;
+                        Togg_MainActionTT(D.UI.toggDoPlotTT);
                     end
                     
                     % Disable TT plot action
-                    Button_State(D.UI.toggMainActionTT(2), 'Disable');
+                    Button_State(D.UI.toggDoPlotTT, 'Disable');
                     
                     % Disable TT plot type select
                     Button_State(D.UI.toggPlotTypeTT, 'Disable');
@@ -13541,7 +13585,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Hack to get toggle color to updae
                 for z_p = 1:2
                     pos = D.UI.panSelectTT(z_p).Position;
-                    D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                    D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
                     D.UI.panSelectTT(z_p).Position = pos;
                 end
                 
@@ -13605,7 +13649,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Hack to get toggle color to updae
                 for z_p = 1:2
                     pos = D.UI.panSelectTT(z_p).Position;
-                    D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                    D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
                     D.UI.panSelectTT(z_p).Position = pos;
                 end
                 
@@ -13961,215 +14005,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'YData', y);
             end
             
-        end
-        
-    end
-
-% ---------------------SHOW HIDE HEAR OBJECTS------------------------------
-    function Change_TT_Action(action_str, setting_str)
-        % Note:
-        %
-        %   action_str = [
-        %       'Track TTs',
-        %       'Flag TT',
-        %       'Hear Chan',
-        %       'Plot Spikes']
-        %
-        %   setting_str = ['Enable', 'Disable', 'Hide']
-        
-        % Set 'Track TTs' objects
-        if strcmp(action_str, 'Track TTs')
-            
-            % Set to 'Enable'
-            if strcmp(setting_str, 'Enable')
-                
-                % Enable/show TT panel objects
-                Panel_State(D.UI.panTrackTT, 'Enable');
-                Safe_Set(D.UI.txtPanTT, 'Visible', 'on')
-                Safe_Set(D.UI.spanTrackTT, 'Visible', 'on')
-                Safe_Set(D.UI.popOr, 'Visible', 'on')
-                Safe_Set(D.UI.popTrn, 'Visible', 'on')
-                Safe_Set(D.UI.popDir, 'Visible', 'on')
-                Safe_Set(D.UI.popRefTT, 'Visible', 'on')
-                Safe_Set(D.UI.tblNoteTT, 'Visible', 'on')
-                Safe_Set(D.UI.editNoteTT, 'Visible', 'on')
-                Safe_Set(D.UI.toggUpdateLogTT, 'Visible', 'on')
-                
-                % Enable action buttons
-                Button_State(D.UI.toggFlagTT, 'Enable');
-                Button_State(D.UI.toggHearSourceTT, 'Enable');
-            end
-            
-            % Set to 'Disable'
-            if strcmp(setting_str, 'Disable')
-                
-                % Unset any active tt select buttons
-                active_ind = find(Safe_Get(D.UI.toggSelectTT, 'Value'));
-                if isempty(active_ind)
-                    active_ind = 1;
-                end
-                Safe_Set(D.UI.toggSelectTT(active_ind), 'Value', 0)
-                
-                % This will reset plot buttons
-                D.UI.toggMainActionTT(1).Value = 1;
-                Togg_SelectTT(D.UI.toggSelectTT(active_ind));
-                D.UI.toggMainActionTT(1).Value = 0;
-                
-                % Disable and hide TT panel stuff
-                Panel_State(D.UI.panTrackTT, 'Disable');
-                Safe_Set(D.UI.txtPanTT, 'Visible', 'off')
-                Safe_Set(D.UI.spanTrackTT, 'Visible', 'off')
-                Safe_Set(D.UI.popOr, 'Visible', 'off')
-                Safe_Set(D.UI.popTrn, 'Visible', 'off')
-                Safe_Set(D.UI.popDir, 'Visible', 'off')
-                Safe_Set(D.UI.popRefTT, 'Visible', 'off')
-                Safe_Set(D.UI.tblNoteTT, 'Visible', 'off')
-                Safe_Set(D.UI.editNoteTT, 'Visible', 'off')
-                Safe_Set(D.UI.toggUpdateLogTT, 'Visible', 'off')
-                
-                % Inactivate/hide/disable flag objects
-                Safe_Set(D.UI.toggFlagTT, 'Value', 0)
-                Button_State(D.UI.toggFlagTT, 'Disable');
-                
-                % Hide flag sub buttons
-                Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'off')
-                
-                % Inactivate/hide/disable hear objects
-                Safe_Set(D.UI.toggHearSourceTT, 'Value', 0)
-                Button_State(D.UI.toggHearSourceTT, 'Disable');
-                
-                % Hide/inactivate hear sub buttons
-                Safe_Set(D.UI.toggSubHearSdTT, ...
-                    'Value', 0, 'Visible', 'off')
-                Safe_Set(D.UI.toggSubHearChTT, ...
-                    'Value', 0, 'Visible', 'off')
-                
-                % Run callback to turn off all sound
-                Togg_HearSourceTT(D.UI.toggHearSourceTT(1));
-                
-            end
-            
-        end
-        
-        % Set 'Flag TT' objects
-        if strcmp(action_str, 'Flag TT')
-            
-            % Set to 'Enable'
-            if strcmp(setting_str, 'Enable')
-                
-                % Enable/activate flag features toggle
-                Safe_Set(D.UI.toggFlagTT, 'Value', 1)
-                Button_State(D.UI.toggFlagTT, 'Enable');
-                
-                % Show flag sub buttons
-                Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'on')
-                Button_State(D.UI.toggSubFlagTT, 'Update');
-                
-            end
-            
-            % Set to 'Hide'
-            if strcmp(setting_str, 'Hide') || strcmp(setting_str, 'Disable')
-                
-                % Hide flag sub buttons
-                Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'off')
-                
-                % Inactivate flag action buttons
-                Safe_Set(D.UI.toggFlagTT, 'Value', 0)
-                Button_State(D.UI.toggFlagTT, 'Update');
-                
-            end
-            
-        end
-        
-        % Set 'Hear Chan' objects
-        if strcmp(action_str, 'Hear Chan')
-            
-            % Set to 'Enable'
-            if strcmp(setting_str, 'Enable')
-                
-                % Enable hear action buttons
-                Button_State(D.UI.toggHearSourceTT, 'Enable');
-                
-                % Show hear sub buttons
-                Safe_Set(D.UI.toggSubHearChTT, 'Visible', 'on')
-                Safe_Set(D.UI.toggSubHearSdTT, 'Visible', 'on')
-                Button_State(D.UI.toggSubHearSdTT, 'Update');
-                
-            end
-            
-            % Set to 'Hide'
-            if strcmp(setting_str, 'Hide') || strcmp(setting_str, 'Disable')
-                
-                % Hide flag sub buttons
-                Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'off')
-                
-                % Hide hear sub buttons
-                Safe_Set(D.UI.toggSubHearSdTT, ...
-                    'Value', 0, 'Visible', 'off')
-                Safe_Set(D.UI.toggSubHearChTT, ...
-                    'Value', 0, 'Visible', 'off')
-                
-                % Inactivate hear action buttons
-                Safe_Set(D.UI.toggHearSourceTT, 'Value', 0)
-                Button_State(D.UI.toggHearSourceTT, 'Update');
-                
-            end
-            
-            % Set to 'Disable'
-            if strcmp(setting_str, 'Disable')
-                
-                % Run callback to turn off all sound
-                Togg_HearSourceTT(D.UI.toggHearSourceTT(1));
-                
-            end
-            
-        end
-        
-        % Set 'Plot Spikes' objects
-        if strcmp(action_str, 'Plot Spikes')
-            
-            % Set to 'Enable'
-            if strcmp(setting_str, 'Enable')
-                
-                % Show clust select toggles
-                Safe_Set(D.UI.toggSubPlotTT, ...
-                    'Visible', 'on')
-                
-                % Enable plot type toggles
-                Safe_Set(D.UI.toggPlotTypeTT(1), 'Value', 1)
-                Safe_Set(D.UI.toggPlotTypeTT(2), 'Value', 0)
-                Button_State(D.UI.toggPlotTypeTT, 'Enable');
-            end
-            
-            % Set to 'Disable'
-            if strcmp(setting_str, 'Disable')
-                
-                % Unset all all tt select buttons
-                Safe_Set(D.UI.toggSelectTT, 'Value', 0)
-                Button_State(D.UI.toggSelectTT, 'Update')
-                
-                % Hide clust select toggles
-                Safe_Set(D.UI.toggSubPlotTT, ...
-                    'Value', 0, ...
-                    'Visible', 'off')
-                Button_State(D.UI.toggSubPlotTT, 'Update');
-                
-                % Disable plot type toggles
-                Safe_Set(D.UI.toggPlotTypeTT, 'Value', 0)
-                Button_State(D.UI.toggPlotTypeTT, 'Disable');
-                
-                % Run callback to reset plot features
-                Togg_PlotTypeTT(D.UI.toggPlotTypeTT(1));
-                
-            end
-            
-        end
-        
-        % Hack to get toggle color to update
-        for z_p = 1:2
-            pos = D.UI.panSelectTT(z_p).Position;
-            D.UI.panSelectTT(z_p).Position = [0,0,1,1];
-            D.UI.panSelectTT(z_p).Position = pos;
         end
         
     end
@@ -14783,7 +14618,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Send_AC_Com()
         
         % Bail if not connected
-        if ~D.AC.connected
+        if ~D.F.ac_connected
             return
         end
         
@@ -16017,14 +15852,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ----------------------------CELLS CUT BUTTON-----------------------------
-    function Togg_StreamTTs(hObject, ~, ~)
+    function Togg_LoadClust(hObject, ~, ~)
         
         % Get handle values
         val = get(hObject, 'Value');
         %is_ran = get(hObject, 'UserData') == 1;
         
         % Upate button
-        Button_State(D.UI.toggStreamTTs, 'Update');
+        Button_State(D.UI.toggLoadClust, 'Update');
         
         % Get a list of ncf files
         clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
@@ -16068,7 +15903,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.TT.nClust(z_tt) = D.TT.nClust(z_tt)+1;
                 
                 % Include cluster 0 in all streaming tts
-                D.F.stream_clust(z_tt, 1) = val == 1;
+                D.F.clust_loaded(z_tt, 1) = val == 1;
                 
                 % Enable clust buttons
                 Safe_Set(D.UI.toggSubPlotTT(z_tt,1:D.TT.nClust(z_tt)), 'Enable', 'on')
@@ -16102,18 +15937,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if succeeded
                 
                 % Log/print success
-                Console_Write(sprintf('[Togg_StreamTTs] FINISHED: %s', msg));
+                Console_Write(sprintf('[Togg_LoadClust] FINISHED: %s', msg));
                 
                 % Set flag
-                D.F.stream_clust(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
+                D.F.clust_loaded(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
                 
             else
                 
                 % Check for missing das
                 if ~any(contains(D.NLX.das_objects, tt_lab))
-                    Console_Write(sprintf('**WARNING** [Togg_StreamTTs] ABORTED: %s: Missing DAS Object', msg));
+                    Console_Write(sprintf('**WARNING** [Togg_LoadClust] ABORTED: %s: Missing DAS Object', msg));
                 else
-                    Console_Write(sprintf('**WARNING** [Togg_StreamTTs] FAILED: %s', msg));
+                    Console_Write(sprintf('**WARNING** [Togg_LoadClust] FAILED: %s', msg));
                 end
                 
                 % Bail
@@ -16130,7 +15965,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Callback', {@Togg_SubPlotTT})
             
             % Initialize clust pos vals
-            [D.TT.posClust{D.F.stream_clust}] =  deal(cell2struct( ...
+            [D.TT.posClust{D.F.clust_loaded}] =  deal(cell2struct( ...
                 {[1,0], [1,0], single(NaN(120*60*33,2)), single(NaN(120*60*33,2)), NaN(120*60*33,1)}, ...
                 {'indLap', 'indAll', 'Cart', 'Pol', 'TS'}, 2));
             
@@ -16138,7 +15973,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Object_Group_State('TT_Plot_Objects', 'Enable')
             
             % Set ran flag
-            D.UI.toggStreamTTs.UserData = 1;
+            %D.UI.toggLoadClust.UserData = 1;
             
         end
         
@@ -16146,7 +15981,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if val == 0
             
             % Disable all flags
-            D.F.stream_clust(:) = false;
+            D.F.clust_loaded(:) = false;
             
             % Reset count
             D.TT.nClust(:) = 0;
@@ -16160,7 +15995,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if UPDATENOW; Update_UI(0, 'force'); end
     end
 
-% ----------------------------CELLS CUT BUTTON-----------------------------
+% ---------------------ENABLE CUBE TRACKER LED BUTTON----------------------
     function Togg_CubeLED(~, ~, ~)
         
         % Upate button
@@ -17194,7 +17029,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Btn_ClrTT(~, ~, ~)
         
         % Bail if cells not cut
-        if get(D.UI.toggStreamTTs, 'Value') == 0
+        if get(D.UI.toggLoadClust, 'Value') == 0
             return
         end
         
@@ -17237,8 +17072,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.ttFldNow = D.TT.ttList{tt_ind};
         
         % Check if not in 'Track TTs' or 'Plot Spikes' mode
-        if D.UI.toggMainActionTT(1).Value == 0 && ...
-                D.UI.toggMainActionTT(2).Value == 0
+        if D.UI.toggDoTrackTT.Value == 0 && ...
+                D.UI.toggDoPlotTT.Value == 0
             
             % Set button back to deselect and bail
             set(hObject, 'Value', 0)
@@ -17248,7 +17083,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% HANDLE 'Plot Spikes'
         
         % Select/Deselect clust buttons if in 'Plot Spikes' mode
-        if D.UI.toggMainActionTT(2).Value == 1
+        if D.UI.toggDoPlotTT.Value == 1
             
             % Set ref button back to inactive and bail
             if contains(D.TT.ttFldNow, 'R')
@@ -17257,8 +17092,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get active clusters
-            stream_clusts = ...
-                find(D.F.stream_clust(tt_ind, :));
+            stream_clusts = find(D.F.clust_loaded(tt_ind, :));
             
             % Set button back to inactive and bail
             if isempty(stream_clusts)
@@ -17266,13 +17100,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             end
             
-            % Set cluster buttons
-            for z_c = 1:length(stream_clusts)
-                
-                % Set all buttons to val
-                Safe_Set(D.UI.toggSubPlotTT(tt_ind,z_c), 'Value', val);
-                Togg_SubPlotTT(D.UI.toggSubPlotTT(tt_ind,z_c))
+            % Unset any active clust buttons
+            if val == 0
+                for z_c = stream_clusts
+                    Safe_Set(D.UI.toggSubPlotTT(tt_ind,z_c), 'Value', 0);
+                    Togg_SubPlotTT(D.UI.toggSubPlotTT(tt_ind,z_c))
+                end
             end
+            
+            % Update actively streaming tt flag
+            D.F.tt_streaming(tt_ind) = val == 1;
+            
+            % Update curent TT select button
+            Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
             
             % Bail
             return
@@ -17284,7 +17124,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Object_Group_State('TT_Turn_Panel_Objects', 'Enable')
         
         % Turn on/off NLX audio on left and right side for all chan if on pc speakers
-        if D.UI.toggMainActionTT(1).Value == 1 && ...
+        if D.UI.toggDoTrackTT.Value == 1 && ...
                 D.UI.toggHearSourceTT(1).Value == 1 && ...
                 isempty(strfind(D.TT.ttFldNow, 'R'))
             
@@ -17343,7 +17183,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Hack to get toggle color to update
             for z_p = 1:2
                 pos = D.UI.panSelectTT(z_p).Position;
-                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
                 D.UI.panSelectTT(z_p).Position = pos;
             end
             
@@ -17474,7 +17314,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Hack to get toggle color to update
         for z_p = 1:2
             pos = D.UI.panSelectTT(z_p).Position;
-            D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+            D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
             D.UI.panSelectTT(z_p).Position = pos;
         end
         
@@ -17626,32 +17466,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ----------------------------SELECT TT ACTION-----------------------------
     function Togg_MainActionTT(hObject, ~, ~)
         
-        % Handle args
-        if nargin < 1
-            action_str = 'none';
-            val = 0;
-        else
-            action_str = get(hObject, 'String');
-            val = get(hObject, 'Value');
-        end
+        %%  MAIN CODE
         
-        % Get button ind
-        btn_ind = ismember({D.UI.toggMainActionTT(:).String}, action_str);
+        % Handle args
+        action_str = get(hObject, 'String');
+        val = get(hObject, 'Value');
         
         % Enable/dissable button and turn objects
         if strcmp('Track TTs', action_str)
             
             if val == 1
                 
-                % Avtivate/Show all 'Track TTs' objects
-                Change_TT_Action('Track TTs', 'Enable');
-                
                 % Hide all 'Plot Spikes' objects
-                Change_TT_Action('Plot Spikes', 'Disable');
+                SetPlotTTs('Inactivate');
+                
+                % Avtivate/Show all 'Track TTs' objects
+                SetTrackTTs('Activate');
                 
             else
                 % Hide all 'Track TTs' objects
-                Change_TT_Action('Track TTs', 'Disable');
+                SetTrackTTs('Inactivate');
                 
             end
         end
@@ -17661,26 +17495,153 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             if val == 1
                 
-                % Avtivate/Show all 'Plot Spikes' objects
-                Change_TT_Action('Plot Spikes', 'Enable');
-                
                 % Hide all 'Track TTs' objects
-                Change_TT_Action('Track TTs', 'Disable');
+                SetTrackTTs('Inactivate');
+                
+                % Avtivate/Show all 'Plot Spikes' objects
+                SetPlotTTs('Activate');
                 
             else
                 % Hide all 'Plot Spikes' objects
-                Change_TT_Action('Plot Spikes', 'Disable');
+                SetPlotTTs('Inactivate');
             end
             
         end
         
-        % Update buttons
-        Safe_Set(D.UI.toggMainActionTT(btn_ind), 'Value', val);
-        Safe_Set(D.UI.toggMainActionTT(~btn_ind), 'Value', 0);
-        Button_State(D.UI.toggMainActionTT, 'Update');
+        % Hack to get toggle color to update
+        for z_p = 1:2
+            pos = D.UI.panSelectTT(z_p).Position;
+            D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
+            D.UI.panSelectTT(z_p).Position = pos;
+        end
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
+        
+        %% NESTED FUNCTIONS
+        
+        % SET TT TRACK OBJECTS
+        function SetTrackTTs(setting_str)
+            
+            % Set to 'Activate'
+            if strcmp(setting_str, 'Activate')
+                
+                % Update main button
+                Button_State(D.UI.toggDoTrackTT, 'Update')
+                
+                % Enable/show TT panel objects
+                Panel_State(D.UI.panTrackTT, 'Enable');
+                Safe_Set(D.UI.txtPanTT, 'Visible', 'on')
+                Safe_Set(D.UI.spanTrackTT, 'Visible', 'on')
+                Safe_Set(D.UI.popOr, 'Visible', 'on')
+                Safe_Set(D.UI.popTrn, 'Visible', 'on')
+                Safe_Set(D.UI.popDir, 'Visible', 'on')
+                Safe_Set(D.UI.popRefTT, 'Visible', 'on')
+                Safe_Set(D.UI.tblNoteTT, 'Visible', 'on')
+                Safe_Set(D.UI.editNoteTT, 'Visible', 'on')
+                Safe_Set(D.UI.toggUpdateLogTT, 'Visible', 'on')
+                
+                % Enable action buttons
+                Button_State(D.UI.toggFlagTT, 'Enable');
+                Button_State(D.UI.toggHearSourceTT, 'Enable');
+            end
+            
+            % Set to 'Inactivate'
+            if strcmp(setting_str, 'Inactivate')
+                
+                % Unset main button
+                Safe_Set(D.UI.toggDoTrackTT, 'Value', 0)
+                Button_State(D.UI.toggDoTrackTT, 'Update')
+                
+                % Unset any active tt select buttons
+                active_ind = find(Safe_Get(D.UI.toggSelectTT, 'Value'));
+                if ~isempty(active_ind)
+                    Safe_Set(D.UI.toggSelectTT(active_ind), 'Value', 0)
+                end
+                
+                % This will reset all tracking stuff
+                D.UI.toggDoTrackTT.Value = 1;
+                val_save = D.UI.toggDoPlotTT.Value;
+                D.UI.toggDoPlotTT.Value = 0;
+                Togg_SelectTT(D.UI.toggSelectTT(1));
+                D.UI.toggDoTrackTT.Value = 0;
+                D.UI.toggDoPlotTT.Value = val_save;
+                
+                % Disable and hide TT panel stuff
+                Panel_State(D.UI.panTrackTT, 'Disable');
+                Safe_Set(D.UI.txtPanTT, 'Visible', 'off')
+                Safe_Set(D.UI.spanTrackTT, 'Visible', 'off')
+                Safe_Set(D.UI.popOr, 'Visible', 'off')
+                Safe_Set(D.UI.popTrn, 'Visible', 'off')
+                Safe_Set(D.UI.popDir, 'Visible', 'off')
+                Safe_Set(D.UI.popRefTT, 'Visible', 'off')
+                Safe_Set(D.UI.tblNoteTT, 'Visible', 'off')
+                Safe_Set(D.UI.editNoteTT, 'Visible', 'off')
+                Safe_Set(D.UI.toggUpdateLogTT, 'Visible', 'off')
+                
+                % Unset/disable flag button
+                Safe_Set(D.UI.toggFlagTT, 'Value', 0)
+                Button_State(D.UI.toggFlagTT, 'Disable')
+                
+                % Hide flag sub buttons
+                Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'off')
+                
+                % Inactivate/disable hear source objects
+                Safe_Set(D.UI.toggHearSourceTT, 'Value', 0)
+                Button_State(D.UI.toggHearSourceTT, 'Disable');
+                
+                % Hide hear sub buttons
+                Safe_Set(D.UI.toggSubHearSdTT, 'Visible', 'off')
+                Safe_Set(D.UI.toggSubHearChTT, 'Visible', 'off')
+                
+            end
+            
+        end
+        
+        % SET TT PLOT OBJECTS
+        function SetPlotTTs(setting_str)
+            
+            % Set to 'Activate'
+            if strcmp(setting_str, 'Activate')
+                
+                % Update main button
+                Button_State(D.UI.toggDoPlotTT, 'Update')
+                
+                % Reactivate active tts
+                Safe_Set(D.UI.toggSelectTT(D.F.tt_streaming), 'Value', 1)
+                Button_State(D.UI.toggSelectTT, 'Update')
+                
+                % Show clust select toggles
+                Safe_Set(D.UI.toggSubPlotTT, 'Visible', 'on')
+                
+                % Enable plot type toggles
+                Button_State(D.UI.toggPlotTypeTT, 'Enable');
+                
+            end
+            
+            % Set to 'Inactivate'
+            if strcmp(setting_str, 'Inactivate')
+                
+                % Unset main button
+                Safe_Set(D.UI.toggDoPlotTT, 'Value', 0)
+                Button_State(D.UI.toggDoPlotTT, 'Update')
+                
+                % Unset all all tt select buttons
+                Safe_Set(D.UI.toggSelectTT, 'Value', 0)
+                Button_State(D.UI.toggSelectTT, 'Update')
+                
+                % Hide clust select toggles
+                Safe_Set(D.UI.toggSubPlotTT, 'Visible', 'off')
+                Button_State(D.UI.toggSubPlotTT, 'Update');
+                
+                % Unset/disable plot type toggles
+                Safe_Set(D.UI.toggPlotTypeTT, 'Value', 0)
+                Button_State(D.UI.toggPlotTypeTT, 'Disable');
+                
+            end
+            
+        end
+        
     end
 
 % ---------------------------FLAG TT FEATURES------------------------------
@@ -17694,54 +17655,53 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Handle user data
         if strcmp(btn_str, 'Flags')
             
-            % Set flag indecating device change
-            do_action_change = true;
+            % Cannot unset
+            if val == 0
+                Safe_Set(D.UI.toggFlagTT, 'Value', 1)
+                return
+            end
+            
+            % Unset hear button
+            Safe_Set(D.UI.toggHearSourceTT, 'Value', 0)
+            
+            % Hide hear sub buttons
+            Safe_Set(D.UI.toggSubHearSdTT, 'Visible', 'off')
+            Safe_Set(D.UI.toggSubHearChTT, 'Visible', 'off')
+            
+            % Show flag sub buttons
+            Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'on')
             
         else
             
-            % Changing channel
-            do_action_change = false;
+            % Changing feature
             tt_ind = x(1);
             flag_btn_ind = x(2);
-        end
-        
-        % Reset everything
-        if do_action_change
-            
-            % Turn off other button groups
-            if val == 1
-                
-                % Hide other hear buttons
-                Change_TT_Action('Hear Chan', 'Hide');
-                
-                % Show flag sub buttons
-                Change_TT_Action('Flag TT', 'Enable');
-                
-            end
-            
-            % Hide flag sub buttons
-            if val == 0
-                Change_TT_Action('Flag TT', 'Disable')
-            end
-            
-        end
-        
-        % Update flag data
-        if ~do_action_change
             
             % Update tt log value
             D.TT.ttLogNew.([D.TT.ttList{tt_ind},'_F'])(flag_btn_ind) = logical(val);
             
-            % Update sub buttons
-            Button_State(D.UI.toggSubFlagTT, 'Update');
+            % Update sub button
+            Button_State(D.UI.toggSubFlagTT(tt_ind,flag_btn_ind), 'Update');
+            
         end
         
+        % Update main buttons
+        Button_State(D.UI.toggFlagTT, 'Update');
+        Button_State(D.UI.toggHearSourceTT, 'Update');
+        
+        % Hack to get toggle color to update
+        for z_p = 1:2
+            pos = D.UI.panSelectTT(z_p).Position;
+            D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
+            D.UI.panSelectTT(z_p).Position = pos;
+        end
         
         % Log/print
         Update_Log(sprintf('[%s] Set \"%s\" to %d', 'Togg_FlagTT', btn_str, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
+        
     end
 
 % -----------------------SELECT TT SOUND SOURCE--------------------------
@@ -17753,41 +17713,53 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         btn_ind = get(hObject, 'UserData');
         btn_ind = btn_ind{1};
         
-        % Turn off other button groups
-        if val == 1
-            
-            % Hide flag sub buttons
-            Change_TT_Action('Flag TT', 'Hide');
-            
-            % Avtivate/Show hear sub buttons
-            Change_TT_Action('Hear Chan', 'Enable');
-            
-            % Turn off other hear buttons
-            Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 0);
-            
+        % Cannot unset
+        if val == 0
+            Safe_Set(hObject, 'Value', 1)
+            return
         end
         
-        % Ensure one hear active if 'Track TTs' active and 'Flag' not
-        % active
-        if val == 0 && ...
-                get(D.UI.toggMainActionTT(1), 'Value') == 1 && ...
-                get(D.UI.toggFlagTT, 'Value') == 0
-            Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 1);
+        % Unset flag button
+        Safe_Set(D.UI.toggFlagTT, 'Value', 0)
+        
+        % Hide flag sub buttons
+        Safe_Set(D.UI.toggSubFlagTT, 'Visible', 'off')
+        
+        % Show hear sub buttons
+        Safe_Set(D.UI.toggSubHearSdTT, 'Visible', 'on')
+        Safe_Set(D.UI.toggSubHearChTT, 'Visible', 'on')
+        
+        % Turn off other hear source button
+        Safe_Set(D.UI.toggHearSourceTT([1,2]~=btn_ind), 'Value', 0);
+        
+        % Disable sx audio
+        if strcmp(btn_str, 'PC')
+            Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Left None');
+            Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Right None');
         end
         
-        % Reset/update sub buttons
-        Safe_Set(D.UI.toggSubHearSdTT, 'Value', 0)
-        Button_State(D.UI.toggSubHearSdTT, 'Update');
-        Safe_Set(D.UI.toggSubHearChTT, 'Value', 0)
-        Button_State(D.UI.toggSubHearChTT, 'Update');
+        % Disable pc speaker
+        if strcmp(btn_str, 'SX')
+            Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Left None');
+            Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Right None');
+        end
         
-        % Disable headphone
-        Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Left None');
-        Send_NLX_Cmd('-SetAudioSource "AcqSystem1_Audio0" Right None');
-        
-        % Disable speaker
-        Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Left None');
-        Send_NLX_Cmd('-SetAudioSource "Primary Sound Driver" Right None');
+        % Check if buttons should be reset
+        if any(D.UI.toggHearSourceTT([1,2]~=btn_ind).UserData{2}(:))
+            
+            % Find any channels that were on for the other device
+            on_ind = D.UI.toggHearSourceTT([1,2]~=btn_ind).UserData{2};
+            
+            % Reset flags
+            D.UI.toggHearSourceTT([1,2]~=btn_ind).UserData{2}(on_ind) = false;
+            
+            % Reset all sub buttons
+            Safe_Set(D.UI.toggSubHearSdTT, 'Value', 0)
+            Safe_Set(D.UI.toggSubHearChTT, 'Value', 0)
+            Button_State(D.UI.toggSubHearSdTT, 'Update');
+            Button_State(D.UI.toggSubHearChTT, 'Update');
+            
+        end
         
         % Update buttons
         Button_State(D.UI.toggFlagTT, 'Update');
@@ -17809,12 +17781,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         val = get(hObject, 'Value');
         x = get(hObject, 'UserData');
         tt_ind = x(1);
-        chan_ind = x(2);
         side_ind = x(3);
         
         % Create list of channels to turn on and off
         ent_set = ' ';
-        chan_set_on = false(1,4);
         side_str = {'Left', 'Right'};
         
         % Check what audio device to use
@@ -17828,7 +17798,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set device to headphone
             dev_str = '"AcqSystem1_Audio0"';
-            dev_btn_ind = 1;
+            dev_btn_ind = 2;
             
         else
             % Reset button if no sound source selected
@@ -17855,10 +17825,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             if val == 0
                 
-                % Check if chanels need to be turned off
-                if any(is_on_mat(:))
-                    ent_set = 'None';
-                end
+                % No channels to turn off
+                ent_set = 'None';
                 
             elseif val == 1
                 
@@ -17866,9 +17834,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Safe_Set(D.UI.toggSubHearSdTT(tt_ind,side_ind),'Value',1)
                 Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,side_ind),'Value',1)
                 
-                % Flag to turn on all chanels
+                % TT to set source to
                 ent_set = D.TT.ttList{tt_ind};
-                chan_set_on(:) = true;
                 
             end
             
@@ -17879,7 +17846,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Get this button channel to turn off
                 ent_set = D.TT.ttList{tt_ind};
-                chan_set_on(chan_ind) = false;
                 
                 % Check if all chan on this side off
                 if ~any(is_on_mat(:))
@@ -17889,9 +17855,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
             elseif val == 1
                 
-                % Get chan to turn on
+                % TT to set source to
                 ent_set = D.TT.ttList{tt_ind};
-                chan_set_on(chan_ind) = true;
                 
                 % Unset side select button
                 Safe_Set(D.UI.toggSubHearSdTT(:,side_ind),'Value',0)
@@ -17909,21 +17874,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        % Get device, side and entity to set
-        msg_str = sprintf('%s %s %s', dev_str, side_str{side_ind}, ent_set);
-        
         % Set device, side and entity
+        msg_str = sprintf('%s %s %s', dev_str, side_str{side_ind}, ent_set);
         Send_NLX_Cmd(['-SetAudioSource ', msg_str]);
-        
-        % Check for channels to be turned on/off
-        chan_are_on = D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(side_ind,:);
-        chan_changed = find(chan_set_on ~= chan_are_on);
         
         % Check if any channels need setting
         if ~strcmp(ent_set, 'None')
             
+            % Get all chanels to turn on
+            chan_set_on = ...
+                Safe_Get(D.UI.toggSubHearChTT(tt_ind,:,side_ind),'Value') == 1;
+            
             % Set each channel for this tt
-            for z_chn = chan_changed
+            for z_chn = 1:length(chan_set_on)
                 
                 % Make state string
                 if chan_set_on(z_chn)
@@ -17932,8 +17895,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     state_str = 'false';
                 end
                 
-                % Update chanel flag
-                D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(side_ind, z_chn) = chan_set_on(z_chn);
+                % Update channel flag
+                D.UI.toggHearSourceTT(dev_btn_ind).UserData{2}(tt_ind, side_ind, z_chn) = ...
+                    chan_set_on(z_chn);
                 
                 % Create chan setting string
                 msg_str = sprintf('%s %s %d %s', ...
@@ -17947,7 +17911,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update buttons
-        Button_State(D.UI.toggFlagTT, 'Update');
         Button_State(D.UI.toggSubHearSdTT, 'Update');
         Button_State(D.UI.toggSubHearChTT, 'Update');
         
@@ -17967,14 +17930,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         btn_ind = get(hObject, 'UserData');
         
         % Make sure one button set if plot tt active
-        if D.UI.toggMainActionTT(2).Value == 1
+        if D.UI.toggDoPlotTT.Value == 1
             if val == 0
                 Safe_Set(D.UI.toggPlotTypeTT([1,2]~=btn_ind), 'Value', 1);
             end
         end
         
         % Clear pos plots
-        if D.UI.toggMainActionTT(2).Value == 0 || ...
+        if D.UI.toggDoPlotTT.Value == 0 || ...
                 D.UI.toggPlotTypeTT(1).Value == 0
             
             % Clear all marker data
@@ -17983,7 +17946,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Clear rate plots
-        if D.UI.toggMainActionTT(2).Value == 0 || ...
+        if D.UI.toggDoPlotTT.Value == 0 || ...
                 D.UI.toggPlotTypeTT(2).Value == 0
             
             % Hide 2D data
@@ -17996,7 +17959,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Reset axes and legends
-        if D.UI.toggMainActionTT(2).Value == 0
+        if D.UI.toggDoPlotTT.Value == 0
             
             % Remove all axes associations
             Safe_Set(D.UI.axClstH, 'UserData', 0)
@@ -18049,13 +18012,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get axes in use
         active_ax = Safe_Get(D.UI.axClstH, 'UserData');
         
-        % Make sure no more than 10 clust active
-        if all(active_ax) && val == 1
-            
-            % Change value to 0
-            val = 0;
-            Safe_Set(D.UI.toggSubPlotTT(tt_ind, clust_ind), 'Value', val)
-            
+        % Bail if tt not enabled or more than 10 clust active
+        if val == 1
+            if Safe_Get(D.UI.toggSelectTT(tt_ind), 'Value') == 0 || ...
+                    all(active_ax)
+                
+                % Unset button
+                Safe_Set(hObject, 'Value', 0);
+                Button_State(hObject, 'Update');
+                
+                % Bail
+                return
+            end
         end
         
         % Activate cluster
@@ -18086,8 +18054,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Flag axis as in use
             set(D.UI.axClstH(ax_ind), 'UserData', 1);
             
-            % Make sure TT Select button active
-            set(D.UI.toggSelectTT(tt_ind), 'Value', 1);
         end
         
         % Inactivate cluster
@@ -18112,12 +18078,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Flag axis as free
                 set(D.UI.axClstH(ax_ind), 'UserData', 0);
                 
-            end
-            
-            % Check if all cluster off for this tt
-            active_clust = Safe_Get(D.UI.toggSubPlotTT(tt_ind,:), 'Value');
-            if all(active_clust == 0)
-                set(D.UI.toggSelectTT(tt_ind), 'Value', 0);
             end
             
             % Clear associated plots
@@ -18208,13 +18168,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Safe_Set(D.UI.toggSubHearChTT(tt_ind,:,:), 'Enable', 'on')
             
             % Enable streaming clusters
-            clust_inc = D.F.stream_clust(tt_ind, :);
+            clust_inc = D.F.clust_loaded(tt_ind, :);
             Safe_Set(D.UI.toggSubPlotTT(tt_ind,clust_inc), 'Enable', 'on')
             
             % Hack to get toggle color to updae
             for z_p = 1:2
                 pos = D.UI.panSelectTT(z_p).Position;
-                D.UI.panSelectTT(z_p).Position = [0,0,1,1];
+                D.UI.panSelectTT(z_p).Position = [0,0,0.01,0.01];
                 D.UI.panSelectTT(z_p).Position = pos;
             end
             
@@ -18597,7 +18557,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Change tt select objects parent
             Safe_Set(D.UI.panSelectTT, 'Parent', tab_now)
-            Safe_Set(D.UI.toggMainActionTT, 'Parent', tab_now)
+            Safe_Set(D.UI.toggDoTrackTT, 'Parent', tab_now)
+            Safe_Set(D.UI.toggDoPlotTT, 'Parent', tab_now)
             Safe_Set(D.UI.toggFlagTT, 'Parent', tab_now)
             Safe_Set(D.UI.toggHearSourceTT, 'Parent', tab_now)
             Safe_Set(D.UI.toggPlotTypeTT, 'Parent', tab_now)
@@ -18611,9 +18572,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Move action type buttons
-                for z_p = 1:2
-                    D.UI.toggMainActionTT(z_p).Position = D.UI.tab_1_main_act_pos(z_p,:);
-                end
+                D.UI.toggDoTrackTT.Position = D.UI.tab_1_main_act_pos(1,:);
+                D.UI.toggDoPlotTT.Position = D.UI.tab_1_main_act_pos(2,:);
                 
                 % Move action select buttons
                 D.UI.toggFlagTT.Position = D.UI.tab_1_flag_tt_pos;
@@ -18630,9 +18590,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Move action type buttons
-                for z_p = 1:2
-                    D.UI.toggMainActionTT(z_p).Position = D.UI.tab_2_main_act_pos(z_p,:);
-                end
+                D.UI.toggDoTrackTT.Position = D.UI.tab_2_main_act_pos(1,:);
+                D.UI.toggDoPlotTT.Position = D.UI.tab_2_main_act_pos(2,:);
                 
                 % Move action select buttons
                 D.UI.toggFlagTT.Position = D.UI.tab_2_flag_tt_pos;
