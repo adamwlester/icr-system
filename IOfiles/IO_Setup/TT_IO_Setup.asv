@@ -6,8 +6,9 @@ ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
 ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
-PAR.ratList = [...
-    {'r9999'}; ...
+ratList = [...
+    {'r0001'} ...
+    {'r9999'} ...
     ];
 
 %% =========================== SETUP VARS =================================
@@ -34,49 +35,49 @@ tt_D_description = '[TT Depth]';
 tt_O_description = '[TT Screw Orientation]';
 tt_R_description = '[TT Reference]';
 tt_F_description = '[Units, Theta, Sharp Waves, Noise, ?, ?]';
-tt_I_description = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance]';
+tt_I_description = '[TT Impedance]';
 
 %% ========================= UPDATE TT_IO_1 ===============================
 
 % Initialize table
-T = table('RowNames',PAR.ratList);
+T = table('RowNames',ratList);
 
 % ADD/INITIALIZE TABLE ENTRIES
 
-T.Include_Run = true(length(PAR.ratList),1);
+T.Include_Run = true(length(ratList),1);
 
-T.Weight_Drive = nan(length(PAR.ratList),1);
+T.Weight_Drive = nan(length(ratList),1);
 
-T.Cap_Weights = repmat({nan(1,3)},length(PAR.ratList),1);
+T.Cap_Weights = repmat({nan(1,3)},length(ratList),1);
 
-T.Implant_Coordinates = repmat({nan(1,3), nan(1,3)},length(PAR.ratList),1);
+T.Implant_Coordinates = repmat({nan(1,3), nan(1,3)},length(ratList),1);
 
-T.Implant_Angle = repmat({nan(1,2), nan(1,2)},length(PAR.ratList),1);
+T.Implant_Angle = repmat({nan(1,2), nan(1,2)},length(ratList),1);
 
-T.Implant_Configuration = repmat({nan(1,2), nan(1,2)},length(PAR.ratList),1);
+T.Implant_Configuration = repmat({nan(1,2), nan(1,2)},length(ratList),1);
 
 T.Bundle_Label = repmat({bundle_cats'}, ...
-    length(PAR.ratList), 1);
+    length(ratList), 1);
 
 T.TT_Label = repmat({tetrode_cats'}, ...
-    length(PAR.ratList), 1);
+    length(ratList), 1);
 
 T.TT_Mapping = repmat({categorical(repmat({'<undefined>'},18,18), tetrode_cats)}, ...
-    length(PAR.ratList), 2);
+    length(ratList), 2);
 
-T.TT_Include = repmat({true(18,1)}, length(PAR.ratList), 1);
+T.TT_Include = repmat({true(18,1)}, length(ratList), 1);
 
 T.Reference_Mapping = ...
     repmat({[reference_tt_cats', ...
     categorical(repmat({'<undefined>'},length(reference_tt_cats),1), reference_eib_cats)]}, ...
-    length(PAR.ratList), 1);
+    length(ratList), 1);
 
 T.TT_Reference = repmat({categorical(repmat({'<undefined>'},18,1), reference_tt_cats)}, ...
-    length(PAR.ratList), 1);
+    length(ratList), 1);
 
-T.Thread_Pitch = nan(length(PAR.ratList),1);
+T.Thread_Pitch = nan(length(ratList),1);
 
-T.Implant_Notes = cell(length(PAR.ratList),1);
+T.Notes = cell(length(ratList),1);
 
 % Set variable units
 T.Properties.VariableUnits{'Weight_Drive'} = 'g';
@@ -98,30 +99,28 @@ if exist(fullfile(ioDir, 'TT_IO_1.mat'), 'file')
     TT_IO_1 = S.TT_IO_1;
     
     % Exclude rats already in table
-    exc_rats = PAR.ratList(ismember(PAR.ratList,TT_IO_1.Properties.RowNames));
+    exc_rats = ratList(ismember(ratList,TT_IO_1.Properties.RowNames));
     if ~isempty(exc_rats)
         fprintf('**WARNING**: Rats %s Already in List\n', exc_rats{:});
     end
     T(ismember(T.Properties.RowNames,TT_IO_1.Properties.RowNames), :) = [];
     
-    % Get include rat indeces
-     inc_ind = ~ismember(PAR.ratList, exc_rats);
-     
-    % Bail if no new rats
-    if ~any(inc_ind)
+    % Update ratlist and exclude redundant rats
+    ratList = ratList(~ismember(ratList, exc_rats));
+    
+    % Check if nothing changed
+    if isempty(ratList)
         fprintf('**WARNING**: Exited With Nothing Changed\n');
         return
     end
     
-    % Update PAR variables and exclude redundant rats
-    fld_list = fieldnames(PAR);
-    for z_p = 1:length(fld_list)
-        PAR.(fld_list{z_p}) = ...
-            PAR.(fld_list{z_p})(inc_ind);
-    end
-    
     % Add into main table
     T = [TT_IO_1; T];
+    
+    % Print saved changes
+    for i = 1:length(ratList)
+        fprintf('FINISHED: Adding Rat %s\n', char(ratList(i)));
+    end
     
 end
 
@@ -149,7 +148,7 @@ tt_var_values = ...
     {categorical({'<undefined>'}, turn_cats)}; ...
     {categorical({'<undefined>'}, reference_tt_cats)}; ...
     {false(1,6)}; ...
-    {nan(1,4)}; ...
+    {nan}; ...
     {''}], ...
     length(tetrode_cats), 1);
 
@@ -198,8 +197,8 @@ for z_tt = 1:length(tetrode_cats)
 end
 
 % Loop through and create a field for each rat
-for z_rat = 1:length(PAR.ratList)
-    TT_IO_2.(PAR.ratList{z_rat}) = T;
+for z_rat = 1:length(ratList)
+    TT_IO_2.(ratList{z_rat}) = T;
 end
 
 % Sort fields by rat
@@ -214,7 +213,7 @@ if exist(fullfile(ioDir, 'SS_IO_1.mat'), 'file')
     SS_IO_1 = S.SS_IO_1;
     
     % Set implanted flag
-    SS_IO_1.Implanted(ismember(SS_IO_1.Properties.RowNames, PAR.ratList)) = true;
+    SS_IO_1.Implanted(ismember(SS_IO_1.Properties.RowNames, ratList)) = true;
 end
 
 %% =========================== SAVE =======================================
@@ -223,11 +222,6 @@ end
 save(fullfile(ioDir,'TT_IO_1'), 'TT_IO_1')
 save(fullfile(ioDir,'TT_IO_2'), 'TT_IO_2')
 save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1')
-
-% Print saved changes
-for i = 1:length(PAR.ratList)
-    fprintf('FINISHED: Adding Rat %s\n', char(PAR.ratList(i)));
-end
 
 
 %% =========================== TEMP =======================================

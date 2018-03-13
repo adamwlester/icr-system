@@ -1316,11 +1316,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             end
                         end
                         
-                        % Create log directory if none exists
-                        if ~exist(D.DIR.logTempDir, 'dir')
-                            mkdir(D.DIR.logTempDir, 'dir')
-                        end
-                        
                         % Save health and general data
                         Console_Write('[Run:MainLoop] RUNNING: "Save_General_Data()"...');
                         Save_General_Data();
@@ -13676,7 +13671,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         'String', 'Update XX');
                     
                     % Update tt depth/orientation text object
-                    Safe_Set([D.UI.txtPanTT(7),D.UI.txtPanTT(8)], ...
+                    Safe_Set(D.UI.txtPanTT(6:7), ...
                         'String', 'XX', ...
                         'ForegroundColor', D.UI.disabledCol);
                     
@@ -17342,7 +17337,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get last depth
         depths_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_D']);
         
-        % Show last impedances
+        % Show stored impedances
         imp_str = cellstr(num2str(D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])'));
         [D.UI.editImpTT.String] = deal(imp_str{:});
         
@@ -17417,7 +17412,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.TT.ttLogNew.([D.TT.ttFldNow,'_O']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_O'])(end);
             D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_D'])(end);
             D.TT.ttLogNew.([D.TT.ttFldNow,'_R']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_R'])(end);
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_I']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_I'])(end,:);
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_I']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_I'])(end);
             
             % Reset stored turns and lowering direction
             D.UI.popTrn.UserData(tt_ind) = 1;
@@ -17504,13 +17499,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Format impedances as numbers
             imp_str_new = Safe_Get(D.UI.editImpTT,'String');
-            imp_num_new = cell2mat(cellfun(@(x) str2double(x), imp_str_new, 'uni', false));
+            imp_num_new = cellfun(@(x) string2;
             
             % Save values to temp table
             D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = or_new;
             D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
             D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_I']) = imp_num_new;
             
             % Get reference
             ref_str = char(D.TT.refList(D.UI.popRefTT.Value));

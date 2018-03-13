@@ -16,19 +16,11 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % EXAMPLE 1
 %   Weight_Baseline = NaN;
-%   var_before = 'Yoke_Mate';
-%   desc_str = '';
-%   unit_str = 'g';
-%   tt_var = false;
-%   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, var_before, desc_str, unit_str, tt_var);
+%   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, 'Yoke_Mate', '', 'g');
 % 
 % EXAMPLE 2
-  TT_I = nan(1,4);
-  var_before = '_F';
-  desc_str = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance]';
-  unit_str = 'MOhm';
-  tt_var = true;
-  TT_IO_2 = AddNewVar(TT_IO_2, TT_I, var_before, desc_str, unit_str, tt_var);
+%  TT_I = NaN;
+%  TT_IO_2 = AddNewVar(TT_IO_2, TT_I, '_F', '[TT Impedance]', 'MOhm', true);
    
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
@@ -49,16 +41,14 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % EXAMPLE 1
 %   var_move = 'Implanted';
 %   var_before = 'Include_Analysis';
-%   tt_var = false;
 %   do_remove = false;
 %   SS_IO_1 = MoveVarEntries(SS_IO_1, var_move, var_before, do_remove);
 %
 % EXAMPLE 2
-%   var_move = '_I';
-%   var_before = '_F';
-%   tt_var = true;
-%   do_remove = true;
-%   TT_IO_2 = MoveVarEntries(TT_IO_2, var_move, var_before, tt_var, do_remove);
+  var_move = '_I';
+  var_before = '_F';
+  do_remove = true;
+  TT_IO_2 = MoveVarEntries(TT_IO_2, var_move, var_before, true, do_remove);
 
 %% =========================== SAVE TABLES ================================
 

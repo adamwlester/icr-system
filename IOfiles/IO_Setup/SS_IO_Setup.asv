@@ -6,32 +6,35 @@ ioDir = regexp(topDir,'.*(?=\ICR_Running)','match');
 ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
-PAR.ratList = [...
-    {'r0495'}; ...
+ratList = [...
+        {'r0001'} ...
+    {'r0499'} ...
     ];
 
 % Yoke mate list
-PAR.yokeList = [...
+yokeList = [...
+    {'None'}; ...
     {'None'}; ...
     ];
 
 % Age group [Young, Old]
-PAR.ageList = [...
+ageList = [...
+    {'Young'}; ...
     {'Young'}; ...
     ];
 
 % DOB date string
-PAR.dobList = [...
+dobList = [...
     {'03/1/2017'}; ...
     ];
 
 % Tail marking string
-PAR.tailMrkList = [...
+tailMrkList = [...
     {'2B'}; ...
     ];
 
 % Baseline weight
-PAR.weightList = [...
+weightList = [...
     457; ...
     ];
 
@@ -44,7 +47,7 @@ rots = 9;
 %% =========================== SETUP VARS =================================
 
 % convert to yy/mm/dd format
-PAR.dobList = cellstr(datestr(PAR.dobList, 'yyyy/mm/dd'));
+dobList = cellstr(datestr(dobList, 'yyyy/mm/dd'));
 
 % Define categories for SS_IO_1 and SS_IO_2
 feeder_version_cats = {'Static_Feeder', 'Mobile_Feeder'};
@@ -98,86 +101,86 @@ posture_cats{1} = {'Normal', 'Hunched'};
 %% ========================= UPDATE SS_IO_1 ===============================
 
 % Initialize table
-T = table('RowNames',PAR.ratList);
+T = table('RowNames',ratList);
 
 % ADD/INITIALIZE TABLE ENTRIES
 
-T.Include_Run = true(length(PAR.ratList),1);
+T.Include_Run = true(length(ratList),1);
 
-T.Include_Analysis = true(length(PAR.ratList),1);
+T.Include_Analysis = true(length(ratList),1);
 
-T.Implanted = false(length(PAR.ratList),1);
+T.Implanted = false(length(ratList),1);
 
-T.Yoke_Mate = categorical(PAR.yokeList, ...
-    [{'None'}; PAR.ratList]);
+T.Yoke_Mate = categorical(yokeList, ...
+    [{'None'}; ratList]);
 
-T.Feeder_Version = categorical(repmat({'Mobile_Feeder'},length(PAR.ratList),1), ...
+T.Feeder_Version = categorical(repmat({'Mobile_Feeder'},length(ratList),1), ...
     feeder_version_cats);
 
-T.Age_Group = categorical(PAR.ageList, age_group_cats);
+T.Age_Group = categorical(ageList, age_group_cats);
 
-T.DOB = PAR.dobList;
+T.DOB = dobList;
 
-T.Tail_Mark = PAR.tailMrkList;
+T.Tail_Mark = tailMrkList;
 
-T.Weight_Baseline = PAR.weightList;
+T.Weight_Baseline = weightList;
 
-T.Human = categorical(repmat({'AWL'},length(PAR.ratList),1), ...
+T.Human = categorical(repmat({'AWL'},length(ratList),1), ...
     human_cats);
 
-T.Session_Type = categorical(repmat({'ICR_Session'},length(PAR.ratList),1), ...
+T.Session_Type = categorical(repmat({'ICR_Session'},length(ratList),1), ...
     session_type_cats);
 
-T.Session_Condition = categorical(repmat({'Manual_Training'},length(PAR.ratList),1), ...
+T.Session_Condition = categorical(repmat({'Manual_Training'},length(ratList),1), ...
     session_condition_cats);
 
-T.Session_Task = categorical(repmat({'Track'},length(PAR.ratList),1), ...
+T.Session_Task = categorical(repmat({'Track'},length(ratList),1), ...
     session_task_cats);
 
-T.Session_Manual_Training = repmat([0, 0],length(PAR.ratList),1);
+T.Session_Manual_Training = repmat([0, 0],length(ratList),1);
 
-T.Session_Behavior_Training = repmat([0, 0],length(PAR.ratList),1);
+T.Session_Behavior_Training = repmat([0, 0],length(ratList),1);
 
-T.Session_Implant_Training = repmat([0, 0],length(PAR.ratList),1);
+T.Session_Implant_Training = repmat([0, 0],length(ratList),1);
 
-T.Session_Rotation = zeros(length(PAR.ratList),1);
+T.Session_Rotation = zeros(length(ratList),1);
 
-T.Finished_Manual_Training = false(length(PAR.ratList),1);
+T.Finished_Manual_Training = false(length(ratList),1);
 
-T.Finished_Behavior_Training = false(length(PAR.ratList),1);
+T.Finished_Behavior_Training = false(length(ratList),1);
 
-T.Finished_Study = false(length(PAR.ratList),1);
+T.Finished_Study = false(length(ratList),1);
 
-T.Feeder_Condition = categorical(repmat({'<undefined>'},length(PAR.ratList),1), ...
+T.Feeder_Condition = categorical(repmat({'<undefined>'},length(ratList),1), ...
     feeder_condition_cats);
 
-T.Reward_Delay = categorical(repmat({'0.0'},length(PAR.ratList),1), ...
+T.Reward_Delay = categorical(repmat({'0.0'},length(ratList),1), ...
     reward_delay_cats, 'Ordinal', true);
 
-T.Cue_Condition = categorical(repmat({'None'},length(PAR.ratList),1), ...
+T.Cue_Condition = categorical(repmat({'None'},length(ratList),1), ...
     cue_condition_cats, 'Ordinal', true);
 
-T.Sound_Conditions = repmat([false, false], length(PAR.ratList) ,1);
+T.Sound_Conditions = repmat([false, false], length(ratList) ,1);
 
 T.Start_Quadrant = repmat({categorical(repmat({'<undefined>'},200,1), ...
-    start_quadrant_cats)}, length(PAR.ratList),1);
+    start_quadrant_cats)}, length(ratList),1);
 
 T.Rotation_Direction = repmat({categorical(repmat({'<undefined>'},200,1), ...
-    rotation_direction_cats)}, length(PAR.ratList),1);
+    rotation_direction_cats)}, length(ratList),1);
 
 T.Rotation_Positions = repmat({categorical(repmat({'<undefined>'},200,9), ...
-    rotation_positions_cats)}, length(PAR.ratList),1);
+    rotation_positions_cats)}, length(ratList),1);
 
 T.Rotations_Per_Session = repmat({categorical(repmat({'<undefined>'},200,1), ...
-    rotations_per_session_cats)}, length(PAR.ratList),1);
+    rotations_per_session_cats)}, length(ratList),1);
 
 T.Laps_Per_Rotation = repmat({categorical(repmat({'<undefined>'},200,9), ...
-    laps_per_rotation_cats)}, length(PAR.ratList),1);
+    laps_per_rotation_cats)}, length(ratList),1);
 
 T.Days_Till_Rotation = repmat({categorical(repmat({'<undefined>'},200,1), ...
-    days_till_rotation_cats)}, length(PAR.ratList),1);
+    days_till_rotation_cats)}, length(ratList),1);
 
-T.Notes = cell(length(PAR.ratList),1);
+T.Notes = cell(length(ratList),1);
 
 % Set variable units
 T.Properties.VariableUnits{'Weight_Baseline'} = 'g';
@@ -199,26 +202,16 @@ if exist(fullfile(ioDir, 'SS_IO_1.mat'), 'file')
     SS_IO_1 = S.SS_IO_1;
     
     % Exclude rats already in table
-    exc_rats = PAR.ratList(ismember(PAR.ratList,SS_IO_1.Properties.RowNames));
+    exc_rats = ratList(ismember(ratList,SS_IO_1.Properties.RowNames));
     if ~isempty(exc_rats)
         fprintf('**WARNING**: Rats %s Already in List\n', exc_rats{:});
     end
     T(ismember(T.Properties.RowNames,SS_IO_1.Properties.RowNames), :) = [];
     
-       % Get include rat indeces
-     inc_ind = ~ismember(PAR.ratList, exc_rats);
-     
-    % Bail if no new rats
-    if ~any(inc_ind)
+    % Check if nothing changed
+    if size(T,1) == 0
         fprintf('**WARNING**: Exited With Nothing Changed\n');
         return
-    end
-    
-    % Update PAR variables and exclude redundant rats
-    fld_list = fieldnames(PAR);
-    for z_p = 1:length(fld_list)
-        PAR.(fld_list{z_p}) = ...
-            PAR.(fld_list{z_p})(inc_ind);
     end
     
     % Add into main table
@@ -233,13 +226,13 @@ SS_IO_1 = sortrows(T, 'RowNames');
 %  ------------------  Create condition paramiters ------------------------
 
 % Get number of unique conditions needed
-nUnique = sum(ismember(PAR.yokeList, 'None')) + sum(ismember(PAR.ratList, PAR.yokeList))/2;
+nUnique = sum(ismember(yokeList, 'None')) + sum(ismember(ratList, yokeList))/2;
 
 % Get yoked pair indeces
 % NOTE: Each row denotes the rat (col 1) and its yoked pair (col 2).
 % non-yoked rats should be paired with themselves.
-[~,mateInd] = ismember(PAR.ratList, PAR.yokeList);
-yokePrs = [(1:length(PAR.ratList))',mateInd];
+[~,mateInd] = ismember(ratList, yokeList);
+yokePrs = [(1:length(ratList))',mateInd];
 yokePrs(mateInd==0, 2) = yokePrs(mateInd==0, 1);
 yokeInd = diff(yokePrs,[],2);
 yokeInd(yokeInd>=0) = 1:nUnique;
@@ -356,27 +349,27 @@ ndays = reshape(ndays,[],nUnique,1);
 ndays = ndays(1:nses,:); % remove unneaded entries
 
 % Add to main data sets
-for i = 1:length(PAR.ratList)
+for i = 1:length(ratList)
     
-    SS_IO_1{char(PAR.ratList(i)), {'Feeder_Condition'}} = ...
+    SS_IO_1{char(ratList(i)), {'Feeder_Condition'}} = ...
         fdcnd(yokeInd(i));
     
-    SS_IO_1{char(PAR.ratList(i)), {'Start_Quadrant'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Start_Quadrant'}}{:} = ...
         categorical(strqd(:,yokeInd(i)), start_quadrant_cats);
     
-    SS_IO_1{char(PAR.ratList(i)), {'Rotation_Direction'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Rotation_Direction'}}{:} = ...
         categorical(rtdir(:,yokeInd(i)), rotation_direction_cats);
     
-    SS_IO_1{char(PAR.ratList(i)), {'Rotation_Positions'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Rotation_Positions'}}{:} = ...
         categorical(rotps(:,:,yokeInd(i)), rotation_positions_cats);
     
-    SS_IO_1{char(PAR.ratList(i)), {'Rotations_Per_Session'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Rotations_Per_Session'}}{:} = ...
         categorical(nrot(:,yokeInd(i)), rotations_per_session_cats);
     
-    SS_IO_1{char(PAR.ratList(i)), {'Laps_Per_Rotation'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Laps_Per_Rotation'}}{:} = ...
         categorical(nlap(:,:,yokeInd(i)), laps_per_rotation_cats);
     
-    SS_IO_1{char(PAR.ratList(i)), {'Days_Till_Rotation'}}{:} = ...
+    SS_IO_1{char(ratList(i)), {'Days_Till_Rotation'}}{:} = ...
         categorical(ndays(:,yokeInd(i)), days_till_rotation_cats);
     
 end
@@ -502,8 +495,8 @@ T.Properties.VariableDescriptions{'Laps_Per_Rotation'} = laps_per_rotation_descr
 T.Properties.VariableDescriptions{'Days_Till_Rotation'} = days_till_rotation_description;
 
 % Loop through and create a field for each rat
-for z_rat = 1:length(PAR.ratList)
-    SS_IO_2.(PAR.ratList{z_rat}) = T;
+for z_rat = 1:length(ratList)
+    SS_IO_2.(ratList{z_rat}) = T;
 end
 
 % Sort fields by rat
@@ -639,8 +632,8 @@ T.Properties.VariableUnits{'Fed_Ensure'} = 'ml';
 T.Properties.VariableUnits{'Fed_STAT'} = 'ml';
 
 % Loop through and create a field for each rat
-for z_rat = 1:length(PAR.ratList)
-    SS_IO_3.(PAR.ratList{z_rat}) = T;
+for z_rat = 1:length(ratList)
+    SS_IO_3.(ratList{z_rat}) = T;
 end
 
 % Sort fields by rat
@@ -655,8 +648,8 @@ save(fullfile(ioDir,'SS_IO_2'), 'SS_IO_2')
 save(fullfile(ioDir,'SS_IO_3'), 'SS_IO_3')
 
 % Print saved changes
-for i = 1:length(PAR.ratList)
-    fprintf('FINISHED: Adding Rat %s\n', char(PAR.ratList(i)));
+for i = 1:length(ratList)
+    fprintf('FINISHED: Adding Rat %s\n', char(ratList(i)));
 end
 
 end
