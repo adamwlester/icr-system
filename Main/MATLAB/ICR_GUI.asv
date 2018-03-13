@@ -768,7 +768,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % TRACK LOOP TIME
             if (D.T.loop > 0)
-                D.DB.loop = Update_DB_DT(D.DB.loop, Sec_DT(now));
+                D.DB.loop(1) = dt_loop;
+                D.DB.loop(2) = min(D.DB.loop(1), D.DB.loop(2));
+                D.DB.loop(3) = min(999, max(D.DB.loop(1), D.DB.loop(3)));
+                D.DB.loop(4) = D.DB.loop(1) + D.DB.loop(4);
+                D.DB.loop(5) = D.DB.loop(5) + 1;
             end
             D.T.loop = Sec_DT(now);
             
@@ -982,17 +986,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         dt_poll = min([dt_evt, dt_vt, dt_tt]);
                         
                         % POLL NEXT
-                        if dt_poll >= D.PAR.dtPoll && ...
-                                any([dt_evt, dt_vt, dt_tt] > D.PAR.pollRate)
+                        if dt_poll >= D.PAR.dtPoll
                             
-                            if all(dt_evt > max([dt_vt, dt_tt]))
+                            if dt_evt >= D.PAR.pollRate
                                 
                                 % GET/PROCESS NLX EVENTS
                                 Evt_Get();
                                 Evt_Proc();
                                 D.T.poll_last_evt = Sec_DT(now);
                                 
-                            elseif all(dt_vt > max([dt_evt, dt_tt]))
+                            elseif dt_vt >= D.PAR.pollRate
                                 
                                 % GET/PROCESS NLX VT
                                 VT_Get('Rob');
@@ -1004,12 +1007,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 D.T.poll_last_vt = Sec_DT(now);
                                 D.F.poll_new_vt = true;
                                 
-                            elseif all(dt_tt > max([dt_evt, dt_vt]))
+                            elseif dt_vt >= D.PAR.pollRate
                                 
                                 % GET/PROCESS NLX TT DATA
                                 TT_Get();
                                 TT_Proc();
-                                D.T.poll_last_tt = Sec_DT(now);
+                                D.T.poll_last_ttt = Sec_DT(now);
                                 
                             end
                             
@@ -2016,12 +2019,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.plot = [0, inf, 0, 0, 0];
         % Info print time [now, min, max, sum, count]
         D.DB.inf = [0, inf, 0, 0, 0];
-        % poll event dt time [now, min, max, sum, count]
-        D.DB.pollevt = [0, inf, 0, 0, 0];
-        % poll vt dt time [now, min, max, sum, count]
-        D.DB.pollvt = [0, inf, 0, 0, 0];
-        % poll tt dt time [now, min, max, sum, count]
-        D.DB.polltt = [0, inf, 0, 0, 0];
         % halt error [now, min, max, sum, count]
         D.DB.HALT.error = [0, inf, 0, 0, 0];
         
@@ -3951,9 +3948,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtSml(1));
         
         % Debug info
-        ht = btm - D.UI.perf_inf_pan_pos(2) - D.UI.fontSzTxtSml(2);
-        btm = btm - ht;
-        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
+        btm = btm - 3*D.UI.fontSzTxtSml(2);
+        pos = [pos_lft_dflt, btm, ...
+            pos_wd_dflt, D.UI.fontSzTxtSml(2)*2.35];
         D.UI.txtPerfInf(9) = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','', ...
@@ -7236,17 +7233,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % DB timers
         infstr = sprintf( ...
             [...
-            'pEv: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'pVT: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'pTT: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Inf: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Plt: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Drw: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Lop: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             ], ...
-            0, 0, 0, 0, ...
-            0, 0, 0, 0, ...
-            0, 0, 0, 0, ...
             0, 0, 0, 0, ...
             0, 0, 0, 0, ...
             0, 0, 0, 0, ...
@@ -9150,7 +9141,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% STORE TIME AND SET FLAGS
         
         % Update time
-        D.DB.plot = Update_DB_DT(D.DB.plot, t_now);
+        D.DB.plot(1) = (Sec_DT(now) - t_now) * 1000;
+        D.DB.plot(2) = min(D.DB.plot(1), D.DB.plot(2));
+        D.DB.plot(3) = min(999, max(D.DB.plot(1), D.DB.plot(3)));
+        D.DB.plot(4) = D.DB.plot(1) + D.DB.plot(4);
+        D.DB.plot(5) = D.DB.plot(5) + 1;
         
         % Update UI
         if ...
@@ -9539,14 +9534,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ------------------------GET NLX CELL DATA------------------------
     function TT_Get()
         
-        % Bail if not connected
-        if ~NlxAreWeConnected() == 1 || ...
-                ~D.F.cube_connected
+        % Bail if cells not cut
+        if get(D.UI.toggLoadClust, 'Value') == 0
             return
         end
         
-        % Bail if cells not cut
-        if get(D.UI.toggLoadClust, 'Value') == 0
+        % Bail if not connected
+        if ~NlxAreWeConnected() == 1
             return
         end
         
@@ -9586,14 +9580,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -----------------------PROCESS NLX CELL DATA---------------------
     function TT_Proc()
         
-        % Bail if not connected
-        if ~NlxAreWeConnected() == 1 || ...
-                ~D.F.cube_connected
+        % Bail if cells not cut
+        if get(D.UI.toggLoadClust, 'Value') == 0
             return
         end
         
-        % Bail if cells not cut
-        if get(D.UI.toggLoadClust, 'Value') == 0
+        % Bail if not connected
+        if ~NlxAreWeConnected() == 1
             return
         end
         
@@ -9721,9 +9714,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ----------------------PLOT CURRENT POSITION----------------------
     function TT_Plot()
         
+        
         % Bail if not connected
-        if ~NlxAreWeConnected() == 1 || ...
-                ~D.F.cube_connected
+        if ~NlxAreWeConnected() == 1
             return
         end
         
@@ -13229,25 +13222,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% PRINT DEBUG INFO
         
-        % Update poll dt 
-        D.DB.pollevt = Update_DB_DT(D.DB.pollevt, D.T.poll_last_evt);
-        D.DB.pollvt = Update_DB_DT(D.DB.pollvt, D.T.poll_last_vt);
-        D.DB.polltt = Update_DB_DT(D.DB.polltt, D.T.poll_last_tt);
-        
         % Loop time info
         infstr = sprintf( ...
             [...
-            'pEv: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'pVT: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
-            'pTT: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Inf: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Plt: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Drw: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             'Lop: %4.0f  mn|mx:%4.0f|%4.0f av:%4.0f\n', ...
             ], ...
-            D.DB.pollevt(1), D.DB.pollevt(2), D.DB.pollevt(3), D.DB.pollevt(4)/D.DB.pollevt(5), ...
-            D.DB.pollvt(1), D.DB.pollvt(2), D.DB.pollvt(3), D.DB.pollvt(4)/D.DB.pollvt(5), ...
-            D.DB.polltt(1), D.DB.polltt(2), D.DB.polltt(3), D.DB.polltt(4)/D.DB.polltt(5), ...
             D.DB.inf(1), D.DB.inf(2), D.DB.inf(3), D.DB.inf(4)/D.DB.inf(5), ...
             D.DB.plot(1), D.DB.plot(2), D.DB.plot(3), D.DB.plot(4)/D.DB.plot(5), ...
             D.DB.draw(1), D.DB.draw(2), D.DB.draw(3), D.DB.draw(4)/D.DB.draw(5), ...
@@ -13257,9 +13239,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Reset timers every 10 sec
         if Sec_DT(now) - D.T.info_db_reset > 10
-            D.DB.pollevt = [0, inf, 0, 0, 0];
-            D.DB.pollvt = [0, inf, 0, 0, 0];
-            D.DB.polltt = [0, inf, 0, 0, 0];
             D.DB.inf = [0, inf, 0, 0, 0];
             D.DB.plot = [0, inf, 0, 0, 0];
             D.DB.draw = [0, inf, 0, 0, 0];
@@ -14585,9 +14564,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.F.ui_updated = true;
             
             % Track redraw time
-            if isfield(D, 'DB')
-                D.DB.draw = Update_DB_DT(D.DB.draw, t_now);
+            if ~isfield(D, 'DB')
+                return
             end
+            D.DB.draw(1) = (Sec_DT(now) - t_now) * 1000;
+            D.DB.draw(2) = min(D.DB.draw(1), D.DB.draw(2));
+            D.DB.draw(3) = min(999, max(D.DB.draw(1), D.DB.draw(3)));
+            D.DB.draw(4) = D.DB.draw(1) + D.DB.draw(4);
+            D.DB.draw(5) = D.DB.draw(5) + 1;
             
         end
         
@@ -14866,13 +14850,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % --------------------------UPDATE DB DT INFO------------------------------
-    function [t_arr] = Update_DB_DT(t_arr, t1)
-        t_arr(1) = min([999, (Sec_DT(now) - t1) * 1000]);
-        t_arr(2) = min([999, t_arr(1), t_arr(2)]);
-        t_arr(3) = min([999, max([t_arr(1), t_arr(3)])]);
+    function [inf_arr] = Update_DB_DT(t_arr, t1)
+        t_arr(1) = (Sec_DT(now) - t_now) * 1000;
+        t_arr(2) = min(t_arr(1), t_arr(2));
+        t_arr(3) = min(999, max(t_arr(1), t_arr(3)));
         t_arr(4) = t_arr(1) + t_arr(4);
         t_arr(5) = t_arr(5) + 1;
-    end
+        end
     
 % --------------------------HOLD FOR CONDITION-----------------------------
     function[abort, pass] = Check_Flag(abort_cond, pass_cond)
