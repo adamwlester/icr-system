@@ -100,7 +100,7 @@ D.DB.ratLab = 'r0000'; %'r9999';
 D.DB.Implanted = true;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'TT_Turn' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
@@ -9738,9 +9738,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 ind_get_end = D.TT.posClust{tt_ind, clust_ind}.indLap(2);
                 
                 % Pull out values
-                x = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_get_str:ind_get_end,1);
-                y = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_get_str:ind_get_end,2);
-                rad = D.TT.posClust{tt_ind, clust_ind}.Pol(ind_get_str:ind_get_end,1);
+                tt_x = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_get_str:ind_get_end,1);
+                tt_y = D.TT.posClust{tt_ind, clust_ind}.Cart(ind_get_str:ind_get_end,2);
+                tt_rad = D.TT.posClust{tt_ind, clust_ind}.Pol(ind_get_str:ind_get_end,1);
                 
                 % Do spike position
                 if get(D.UI.toggPlotTypeTT(1),'Value') == 1
@@ -9748,7 +9748,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Plot spike pos marker
                     if ~isgraphics(D.UI.mrkClustH(tt_ind, clust_ind))
                         D.UI.mrkClustH(tt_ind, clust_ind) = ...
-                            line(x, y, ...
+                            line(tt_x, tt_y, ...
                             'LineStyle', 'none', ...
                             'Marker', 'o', ...
                             'LineWidth', 0.25, ...
@@ -9758,8 +9758,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             'Parent', D.UI.axH(6));
                     else
                         Safe_Set(D.UI.mrkClustH(tt_ind, clust_ind), ...
-                            'XData', x, ...
-                            'YData', y);
+                            'XData', tt_x, ...
+                            'YData', tt_y);
                     end
                     
                 end
@@ -9779,7 +9779,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         occ_hist = occ_hist(2:end);
                         
                         % Get tt hist from pol data
-                        tt_hist = histc(rad, D.PAR.tt1dBinEdge);
+                        tt_hist = histc(tt_rad, D.PAR.tt1dBinEdge);
                         tt_hist = tt_hist(2:end);
                         
                     end
@@ -9791,8 +9791,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         occ_hist = D.P.frgOccMatRaw;
                         
                         % Get tt hist from cart data
-                        tt_hist = histcounts2(y, x, D.PAR.tt2dBinEdgeY, D.PAR.tt2dBinEdgeX);
+                        tt_hist = histcounts2(tt_y, tt_x, D.PAR.tt2dBinEdgeY, D.PAR.tt2dBinEdgeX);
                         tt_hist = flip(tt_hist,1);
+                    end
+                    
+                    % Make sure occ_hist is column vector
+                    if size(occ_hist, 1) < size(occ_hist, 2)
+                        occ_hist = occ_hist';
+                    end
+                    
+                    % Make sure tt_hist is column vector
+                    if size(tt_hist, 1) < size(tt_hist, 2)
+                        tt_hist = tt_hist';
                     end
                     
                     % Norm hist data
@@ -9808,9 +9818,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Replace nan vals with 0 (i.e., no tt data for this bin)
                     rate_now(isnan(rate_now)) = 0;
                     
-                    % Compute percentile scaled rate
+                    % Scale rate to 99th percentile
                     non_zer_rate = rate_now(rate_now(:) > 0);
-                    scale = prctile(non_zer_rate,95);
+                    scale = prctile(non_zer_rate,99);
                     if scale == 0
                         scale = 1;
                     end
@@ -14150,6 +14160,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
+% ---------------------------- CLEAR TT PLOTS -----------------------------
+    function Clear_Plot_TT(action_str)
+        
+        % Get indeces of active tt/clust
+        active_mat = ...
+            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
+        
+        % Clear spike plot
+        if strcmp(action_str, 'Spike')
+            
+            % Reset spike plot values
+            Safe_Set(D.UI.mrkClustH(active_mat), ...
+                'XData', NaN, 'YData', NaN);
+            
+        end
+        
+        % Clear rate plot
+        if strcmp(action_str, 'Rate')
+            
+            % Reset 1D rate patches
+            if D.PAR.sesTask == 'Track'
+                patch_h = findobj(D.UI.ttClustAxNow(active_mat),'Type','patch');
+                Safe_Set(patch_h, 'FaceAlpha', 0);
+            end
+            
+            % Reset 2D rate plot values
+            if D.PAR.sesTask == 'Forage'
+                Safe_Set(D.UI.imgClustH(active_mat), ...
+                    'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
+                    'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
+            end
+            
+        end
+        
+    end
+
 % ------------------------- CREATE 3D TT GRAPHICS -------------------------
     function [tt_rod_h, tt_sphere_h] = Get_3D_TT(ttXmat, rad, is_updated, ax)
         
@@ -17100,25 +17146,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
+        % Clear spike plots
+        Clear_Plot_TT('Spike');
+        
+        % Clear rate plots
+        Clear_Plot_TT('Rate');
+        
         % Get list of active tt/clust
         active_mat = ...
             logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
-        
-        % Reset spike plot values
-        Safe_Set(D.UI.mrkClustH(active_mat), ...
-            'XData', NaN, 'YData', NaN);
-        
-        % Reset 1D rate patches
-        if D.PAR.sesTask == 'Track'
-            Safe_Set(D.UI.ptchClustH(any(active_mat,1),:), 'FaceAlpha', 0);
-        end
-        
-        % Reset 2D rate plot values
-        if D.PAR.sesTask == 'Forage'
-            Safe_Set(D.UI.imgClustH(active_mat), ...
-                'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
-                'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
-        end
         
         % Reset data inds for active buttons
         for z_tt = 1:size(D.TT.posClust,1)
@@ -17702,6 +17738,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Safe_Set(D.UI.toggPlotTypeTT, 'Value', 1)
                 Button_State(D.UI.toggPlotTypeTT, 'Enable');
                 
+                % Run plot type callback
+                Togg_PlotTypeTT(D.UI.toggPlotTypeTT(1))
+                
             end
             
             % Set to 'Inactivate'
@@ -17722,6 +17761,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Unset/disable plot type toggles
                 Safe_Set(D.UI.toggPlotTypeTT, 'Value', 0)
                 Button_State(D.UI.toggPlotTypeTT, 'Disable');
+                
+                % Clear spike plots
+                Clear_Plot_TT('Spike');
+                
+                % Clear rate plots
+                Clear_Plot_TT('Rate');
                 
             end
             
@@ -18021,17 +18066,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
-        % Get list of active tt/clust
-        active_mat = ...
-            logical(reshape(Safe_Get(D.UI.toggSubPlotTT, 'Value'), size(D.UI.toggSubPlotTT)));
-        
         % Clear spike plots
         if D.UI.toggDoPlotTT.Value == 0 || ...
                 D.UI.toggPlotTypeTT(1).Value == 0
             
-            % Reset spike plot values
-            Safe_Set(D.UI.mrkClustH(active_mat), ...
-                'XData', NaN, 'YData', NaN);
+            % Clear spike plots
+            Clear_Plot_TT('Spike');
             
         end
         
@@ -18039,17 +18079,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.UI.toggDoPlotTT.Value == 0 || ...
                 D.UI.toggPlotTypeTT(2).Value == 0
             
-            % Reset 1D rate patches
-            if D.PAR.sesTask == 'Track'
-                Safe_Set(D.UI.ptchClustH(any(active_mat,1),:), 'FaceAlpha', 0);
-            end
-            
-            % Reset 2D rate plot values
-            if D.PAR.sesTask == 'Forage'
-                Safe_Set(D.UI.imgClustH(active_mat), ...
-                    'CData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins), ...
-                    'AlphaData', zeros(D.PAR.tt2dBins, D.PAR.tt2dBins))
-            end
+            % Clear rate plots
+            Clear_Plot_TT('Rate');
             
         end
         
