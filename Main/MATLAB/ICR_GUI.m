@@ -6442,6 +6442,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         elseif pass
             Console_Write('[NLX_Connect] FINISHED: Connect to NLX');
+            
+            % Identify id to server
+            NlxSetApplicationName('ICR_GUI');
+            
         end
         
         % Bail if exit initiated
