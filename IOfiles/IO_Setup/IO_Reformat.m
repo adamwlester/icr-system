@@ -23,9 +23,9 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 %   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, var_before, desc_str, unit_str, tt_var);
 % 
 % EXAMPLE 2
-  TT_I = nan(1,4);
+  TT_I = nan(1,5);
   var_before = '_F';
-  desc_str = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance]';
+  desc_str = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance, Gnd Impedance]';
   unit_str = 'MOhm';
   tt_var = true;
   TT_IO_2 = AddNewVar(TT_IO_2, TT_I, var_before, desc_str, unit_str, tt_var);

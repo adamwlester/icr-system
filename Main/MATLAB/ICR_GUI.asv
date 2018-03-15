@@ -5076,17 +5076,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Update list
-        D.TT.ttList = [[tt_list{1}], [tt_list{2}]];
+        D.TT.ttList = [tt_list{:}];
         
         % Get tt bundle ind
         D.I.ttBndl = NaN(D.PAR.maxTT,1);
         for z_b = 1:D.TT.nBndl
             D.I.ttBndl(ismember(D.TT.ttList, tt_list{z_b})) =  z_b;
-        end
-        
-        % Clear notes entry
-        for z_tt = 1:length(D.TT.ttList)
-            D.TT.ttLogNew.([D.TT.ttList{z_tt},'_N']){:} = '';
         end
         
         %% ================== IMPORT/FORMAT PAXINOS IMAGES ================
@@ -5893,9 +5888,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Position', pos,...
             'String', sprintf('Electrode Impedance (M%c)', char(911)))
         % Create 4 impedance txt boxes
-        pos = [dflt_lf(1), dflt_btm(6), dflt_wd*(2/5), dflt_ht/2];
-        D.UI.editImpTT = gobjects(5,1);
-        for z_t = 1:5
+        pos = [dflt_lf(1), dflt_btm(6), dflt_wd/2, dflt_ht/2];
+        D.UI.editImpTT = gobjects(4,1);
+        for z_t = 1:4
             D.UI.editImpTT(z_t) = uicontrol(...
                 'Style', 'edit',...
                 'Max', 1, ...
@@ -17588,7 +17583,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.TT.ttLogNew.([D.TT.ttFldNow,'_O']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_O'])(end);
             D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_D'])(end);
             D.TT.ttLogNew.([D.TT.ttFldNow,'_R']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_R'])(end);
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])(1:4) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_I'])(end,1:4);
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_I']) = D.TT_IO_2.(D.PAR.ratLab).([D.TT.ttFldNow,'_I'])(end,:);
             
             % Reset stored turns and lowering direction
             D.UI.popTrn.UserData(tt_ind) = 1;
@@ -17672,27 +17667,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Compute total depth
             depth_new = delta_depth+depths_last;
-             
-            % Save values to temp table
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = or_new;
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
             
             % Format impedances as numbers
             imp_str_new = Safe_Get(D.UI.editImpTT,'String');
             imp_num_new = cell2mat(cellfun(@(x) str2double(x), imp_str_new, 'uni', false));
             
-            % Update ground impedance on all chanels
-            if D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])(5) ~= imp_num_new(5) && ...
-                    ~isnan(imp_num_new(5))
-                
-                for z_tt = 1:length(D.TT.ttList)
-                    D.TT.ttLogNew.([D.TT.ttList{z_tt},'_I'])(5) = imp_num_new(5);
-                end
-            end
-            
-            % Store remaining impedances
-            D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])(1:4) = imp_num_new(1:4);
+            % Save values to temp table
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_O'])(:) = or_new;
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_D']) = depth_new;
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_N']){:} = get(D.UI.editNoteTT,'String');
+            D.TT.ttLogNew.([D.TT.ttFldNow,'_I']) = imp_num_new;
             
             % Get reference
             ref_str = char(D.TT.refList(D.UI.popRefTT.Value));
@@ -18007,10 +17991,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Handle TT audio
         if strcmp(btn_str, 'TT')
             
-            % Raise volume
-            Send_NLX_Cmd('-SetAudioVolume "Primary Sound Driver" Left 100');
-            Send_NLX_Cmd('-SetAudioVolume "Primary Sound Driver" Right 100');
-            
             % Show channel buttons
             Safe_Set(D.UI.toggSubHearChTT, 'Visible', 'on');
             
@@ -18020,9 +18000,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if strcmp(btn_str, 'CS')
             
             % Lower volume
-            Send_NLX_Cmd('-SetAudioVolume "Primary Sound Driver" Left 50');
-            Send_NLX_Cmd('-SetAudioVolume "Primary Sound Driver" Right 50');
-            
             % Unactivate/hide channel buttons
             Safe_Set(D.UI.toggSubHearChTT, 'Value', 0);
             Button_State(D.UI.toggSubHearChTT, 'Update');
@@ -18174,7 +18151,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Format 'CS' string
             if strcmp(source_str, 'CS')
-                ent_set =  sprintf('CSC-%s_01', D.TT.ttList{tt_ind}(3:end));
+                ent_set =  sprintf('CSC_%s_01', D.TT.ttList{tt_ind}(3:end));
             end
             
         end
