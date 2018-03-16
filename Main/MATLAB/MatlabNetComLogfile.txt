@@ -27,3 +27,5 @@ NetCom Version 3.1.0
 -*  ERROR  *- (mm/dd/yyyy): 03/14/2018 At Time: 23:33:55 - NodeConnectionClient::WaitOnConnection - Error receiving data, error code: WSAECONNABORTED - The virtual circuit was terminated due to a time-out or other failure. The application should close the socket as it is no longer usable. Stream Type: Event
 -* NOTICE  *- (mm/dd/yyyy): 03/14/2018 At Time: 23:33:55 - NodeConnectionClient::CloseServerStream - Call to wait for thread completion was successful for Event stream processing thread. Stream Type: Event
 -* NOTICE  *- (mm/dd/yyyy): 03/14/2018 At Time: 23:33:55 - NetworkNodeClient::DisconnectFromServer - NetCom client has been disconnected from its server.
+Log File Closed - End of File
+
