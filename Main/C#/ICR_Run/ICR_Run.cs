@@ -367,10 +367,6 @@ namespace ICR_Run
             // SET BUFFER SIZE
             Console.BufferHeight = Int16.MaxValue - 1;
 
-            // CREATE TEMP LOG DIRECTORY
-            System.IO.Directory.CreateDirectory(logDir);
-            csLog.Print(String.Format("[Setup] FINISHED: Create Temporary Log Directory: \"{0}\"", logDir));
-
             // INITIALIZE MATLAB GLOBAL VARS
 
             csLog.Print("[Setup] RUNNNING: Create mCOM Global Variables...");

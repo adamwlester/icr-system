@@ -506,11 +506,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DIR.frgPath = fullfile(D.DIR.ioTop, 'Operational', 'forage_path.mat');
         
         % Cheetah dirs
+        D.DIR.nlxCheetaEXE = 'C:\Program Files\Neuralynx\Cheetah';
+        D.DIR.nlxSS3DEXE = 'C:\Program Files (x86)\Neuralynx\SpikeSort3D';
         D.DIR.nlxCfg = 'C:\Users\Public\Documents\Cheetah\Configuration';
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
         D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
         D.DIR.recFi = '0000-00-00_00-00-00';
-        D.DIR.nlxSS3DTop = 'C:\Program Files (x86)\Neuralynx\SpikeSort3D';
         
         % Log dirs
         D.DIR.logFi = 'ICR_GUI_Log.csv';
@@ -576,12 +577,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             c2m.('C').dat1 = 1;
         end
         
-        % Setup and start c2m com check timer
+        % Setup c2m com check timer
         D.timer_c2m = timer;
         D.timer_c2m.ExecutionMode = 'fixedRate';
         D.timer_c2m.Period = 0.1;
         D.timer_c2m.TimerFcn = @TimerFcn_CheckCSCom;
-        start(D.timer_c2m);
         
         % Dynamic graphics timer
         D.timer_graphics = timer;
@@ -608,6 +608,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Generate figure tab group
         FIGH = figure('Visible', 'Off', ...
             'DeleteFcn', {@DeleteFcn_ForceClose});
+        
+        % Start c2m timer
+        Console_Write('[Setup] RUNNING: Start "timer_c2m"');
+        start(D.timer_c2m);
+        
+        % Create log dir if none exists
+        if ~exist(D.DIR.logTempDir, 'dir')
+            Console_Write(sprintf('[Setup] RUNNING: Make Temp Log Directory: "%s"', D.DIR.logTempDir));
+            mkdir(D.DIR.logTempDir);
+        end
         
         % Run variable setup code
         Console_Write('[Setup] RUNNING: "Var_Setup()"...');
@@ -1330,11 +1340,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 Safe_Set(D.UI.toggAcq, 'Value', 0)
                                 Togg_Acq(D.UI.toggAcq);
                             end
-                        end
-                        
-                        % Create log directory if none exists
-                        if ~exist(D.DIR.logTempDir, 'dir')
-                            mkdir(D.DIR.logTempDir, 'dir')
                         end
                         
                         % Save health and general data
@@ -4250,23 +4255,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % NLX setup config
                 if D.F.implant_session
-                    start_cfg_fi = 'ICR_Cheetah_Load_Ephys.cfg';
+                    start_cfg_path = fullfile(D.DIR.nlxCfg, 'ICR_Cheetah_Load_Ephys.cfg');
                 else
-                    start_cfg_fi = 'ICR_Cheetah_Load_Behavior.cfg';
+                    start_cfg_path = fullfile(D.DIR.nlxCfg, 'ICR_Cheetah_Load_Behavior.cfg');
                 end
                 
                 % Store current directory
                 curdir = pwd;
                 
                 % Run EXE with specified config
-                cd('C:\Program Files\Neuralynx\Cheetah');
-                system(fullfile('Cheetah.exe C:\Users\Public\Documents\Cheetah\Configuration\', [start_cfg_fi,'&']));
+                cd(D.DIR.nlxCheetaEXE);
+                system(sprintf('Cheetah.exe %s&', start_cfg_path));
+                cd(curdir);
                 
                 % Log/print
-                Console_Write(sprintf('[NLX_Start] FINISHED: Run Cheetah.exe "%s"', start_cfg_fi));
-                
-                % Revert back to main dir
-                cd(curdir);
+                Console_Write(sprintf('[NLX_Start] FINISHED: Run Cheetah.exe "%s"', start_cfg_path));
                 
                 % Set flag
                 D.F.cheetah_running = true;
@@ -5006,10 +5009,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[was_ran] = TT_Track_Setup()
         
         %% BAIL IF NOT IMPLANT SESSION
+        
+        % Initialize output
+        was_ran = false;
+        
+        % Bail
         if ~D.F.implant_session
-            
-            % Set output and bail
-            was_ran = false;
             return
         end
         
@@ -6302,9 +6307,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Copy cluster buttons
             D.UI.toggSubFlagTT(z_tt,:) = copyobj(D.UI.toggSubPlotTT(z_tt,:), D.UI.panSelectTT(bndl_ind));
             
-            % Store flag
-            D.F.tt_chan_disable(z_tt,:) = Safe_Get(D.UI.toggSubFlagTT(z_tt, 7:end), 'Value');
-        
             % Modify sub flag buttons
             for z_f = 1:10
                 
@@ -6434,10 +6436,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[was_ran] = NLX_Connect()
         
         %% BAIL IF CHEETAH NOT RUNNING
+        
+        % Initialize output
+        was_ran = false;
+        
+        % Bail
         if ~D.F.cheetah_running
-            
-            % Set output and bail
-            was_ran = false;
             return
         end
         
@@ -6523,10 +6527,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[was_ran] = NLX_Setup()
         
         %% BAIL IF CHEETAH NOT RUNNING
+        
+        % Initialize output
+        was_ran = false;
+        
+        % Bail
         if ~D.F.cheetah_running
-            
-            % Set output and bail
-            was_ran = false;
             return
         end
         
@@ -6604,6 +6610,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('**WARNING** [NLX_Setup] FAILED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
         end
         
+        %% DISPLAY PROMPT TO POWER ON CUBE
+        
+        % Start Cube
+        if D.F.implant_session
+            
+            % Prompt to turn on cube
+            dlg_h = dlgAWL( ...
+                'Power on Cube', ...
+                'START CUBE', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            Dlg_Wait(dlg_h);
+            
+        end
+        
         %% LOAD PREVIOUS SETTINGS
         
         % Find current NLX recording directory
@@ -6620,6 +6642,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Make directory if none exists
         if exist(D.DIR.nlxRecRat, 'dir') == 0 && ...
                 exist(D.DIR.nlxSaveTop, 'dir') == 1
+            Console_Write(sprintf('[NLX_Setup] RUNNING: Make Rat Rec Directory: "%s"', D.DIR.nlxRecRat));
             mkdir(D.DIR.nlxRecRat);
         end
         
@@ -6629,16 +6652,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Log/print
             Console_Write('[NLX_Setup] RUNNING: Load Previous Cheetah Settings...');
             
-            % Get all ephys rec files from SS_IO_2
-            ind = ...
-                D.SS_IO_2.(D.PAR.ratLab).Session_Condition == 'Rotation' | ...
-                D.SS_IO_2.(D.PAR.ratLab).Session_Condition == 'Implant_Training';
-            rec_fi_list = ...
-                D.SS_IO_2.(D.PAR.ratLab).Recording_File(ind);
-            
-            % Add all TT_Turn recs
-            rec_fi_list = [D.TT_IO_2.(D.PAR.ratLab).Recording_File; rec_fi_list];
-            
             % Initialize file
             nlx_cfg_last = [];
             
@@ -6646,76 +6659,75 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if exist(D.DIR.nlxSaveTop, 'dir') > 0 && ...
                     size(dir(D.DIR.nlxRecRat), 1) > 2
                 
-                % Get stored dir files
-                dirs = dir(D.DIR.nlxRecRat);
-                dirs = sort({dirs(3:end).name});
-                nlx_rec_list = dirs;
+                % Get config file path
+                nlx_cfg_last = ...
+                    fullfile(D.DIR.nlxRecRat, 'CheetahLastConfiguration.cfg');
                 
-                % Check for match
-                nlx_rec_list = nlx_rec_list(ismember(nlx_rec_list, rec_fi_list));
-                
-                % Get most current
-                if ~isempty(nlx_rec_list)
-                    
-                    % Convert to date number
-                    date_num = datenum(nlx_rec_list, 'yyyy-mm-dd_HH-MM-SS');
-                    
-                    % Keep most recent
-                    ind = max(date_num) == date_num;
-                    nlx_rec_last = nlx_rec_list{ind};
-                    
-                    % Store last config file path
-                    nlx_cfg_last = ...
-                        fullfile(D.DIR.nlxRecRat, nlx_rec_last, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
-                    
+                % Set to empty if file does not exist
+                if ~exist(nlx_cfg_last, 'file')
+                    nlx_cfg_last = [];
                 end
                 
             end
             
-            % Prompt to load last configuration file
-            if ~isempty(nlx_cfg_last)
-                
-                dlg_h = dlgAWL(...
-                    sprintf('Load previous Cheetah settings from:\n"%s"?', nlx_rec_last), ...
-                    'END SESSION', ...
-                    'Yes', 'No', [], 'No', ...
-                    D.UI.dlgPos{4}, ...
-                    'question');
-                choice = Dlg_Wait(dlg_h);
-                
-            else
-                choice = 'No';
-            end
-            
-            % Load last settings
-            if strcmp(choice, 'Yes') && ~DOEXIT
+            % Parse last config file
+            if ~isempty(nlx_cfg_last) && ~DOEXIT
                 
                 % List of commands to pars
                 parse_list = { ...
-                    '-SetAcqEntProcessingEnabled', ...
                     '-SetInputRange', ...
                     '-SetSpikeThreshold', ...
-                    '-SetPlotEnabled', ...
                     };
                 
                 % Read in text file
                 fi_imp = fileread(nlx_cfg_last);
                 
+                % Initialize message list
+                msg_list = cell(length(parse_list),1);
+                
                 % Parse file
                 for z_cmd = 1:length(parse_list)
                     
                     % Get matching commands
-                    msg_list = regexp(fi_imp, ['(', parse_list{z_cmd}, '[^\r\n\f]*)(?=\r|\n|\f)'], 'match');
+                    msg_list{z_cmd} = regexp(fi_imp, ['(', parse_list{z_cmd}, '[^\r\n\f]*)(?=\r|\n|\f)'], 'match');
+            
+                end
+                
+                % Concatinate message
+                msg_list = [msg_list{:}];
+                
+                % Create dialogue msg
+                dlg_msg = ...
+                    [sprintf('LOAD PREVIOUS SETTINGS:\n'), ...
+                    sprintf('\n\t%s', msg_list{:})];
+                
+                % Check if settings should be used
+                dlg_h = dlgAWL(...
+                    dlg_msg, ...
+                    'LOAD CONFIG SETTINGS', ...
+                    'Yes', 'No', [], 'No', ...
+                    D.UI.dlgPos{4}, ...
+                    'question', ...
+                    true);
+                set(dlg_h ,'WindowStyle','normal')
+                choice = Dlg_Wait(dlg_h);
+                
+                % Load last settings
+                if strcmp(choice, 'Yes') && ~DOEXIT
+                    
                     for i_msg = 1:length(msg_list)
                         
                         % Send each command
                         Send_NLX_Cmd(msg_list{i_msg});
                         
                     end
-                end
                 
-                % Run local function
+                
                 Console_Write('[NLX_Setup] FINISHED: Load Previous Cheetah Settings');
+                
+                else
+                    
+                end
                 
             elseif DOEXIT
                 
@@ -6755,31 +6767,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
             
-            % Run exe
+            % Specify start config
+            start_cfg_path = fullfile(D.DIR.nlxCfg, 'ICR_SpikeSort3D.cfg');
+            
+            % Store current directory
             curdir = pwd;
-            cd(D.DIR.nlxSS3DTop);
-            system(sprintf('SpikeSort3D.exe spikesort.cfg&'));
+            
+            % Run EXE with specified config
+            cd(D.DIR.nlxSS3DEXE);
+            system(sprintf('SpikeSort3D.exe %s&', start_cfg_path));
             cd(curdir);
             
             Console_Write('[NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
         else
             Console_Write('[NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
-        end
-        
-        %% DISPLAY PROMPT TO POWER ON CUBE
-        
-        % Start Cube
-        if D.F.implant_session
-            
-            % Prompt to turn on cube
-            dlg_h = dlgAWL( ...
-                'Power on Cube', ...
-                'START CUBE', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'default');
-            Dlg_Wait(dlg_h);
-            
         end
         
         %% OPEN NETCOM STREAMS
@@ -6854,6 +6855,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get flagged chanels
         for z_tt = 1:length(D.TT.ttLab)
+            
+            % Store flag
+            D.F.tt_chan_disable(z_tt,:) = Safe_Get(D.UI.toggSubFlagTT(z_tt, 7:end), 'Value');
             
             % Run callback for exluded elecrodes
             if all(D.F.tt_chan_disable(z_tt,:))
@@ -8187,10 +8191,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[was_ran] = Test_Setup()
         
         %% BAIL IF NOT TEST RUN
+        
+        % Initialize output
+        was_ran = false;
+        
+        % Bail
         if ~D.DB.isTestRun
-            
-            % Set output
-            was_ran = false;
             return
         end
         
@@ -12503,14 +12509,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Save GUI window image
         export_fig(FIGH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.png'));
         
-        % Dont update if not ICR Session
+        % Initialize output
+        was_ran = false;
+        
+        % Bail if not ICR Session
         if D.PAR.sesType ~= 'ICR_Session'
-            
-            % Set output and bail
-            was_ran = false;
             return
-            
         end
+        
+        % Set flag
+        was_ran = true;
         
         % Get row ind
         if strcmp(D.SS_IO_2.(D.PAR.ratLab).Date{1}, '')
@@ -12723,22 +12731,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         SS_IO_1 = D.SS_IO_1; %#ok<NASGU>
         save(D.DIR.SS_IO_1, 'SS_IO_1');
         
-        % Set output and bail
-        was_ran = true;
-        return
-        
     end
 
 % -------------------------SAVE TT TRACK DATA---------------------------
     function[was_ran] = Save_TT_Track_Data()
         
+        % Initialize output
+        was_ran = false;
+        
         % Bail if not implant or TT_track session
         if ~D.F.implant_session
-            
-            % Set output and bail
-            was_ran = false;
             return
         end
+        
+        % Set flag
+        was_ran = true;
         
         % Store 'Session'
         D.TT.ttLogNew.Session = D.TT.Ses;
@@ -12773,22 +12780,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         TT_IO_2 = D.TT_IO_2; %#ok<NASGU>
         save(D.DIR.TT_IO_2, 'TT_IO_2');
         
-        % Set output and bail
-        was_ran = true;
-        return
-        
     end
 
 % -------------------------SAVE CHEETAH DATA---------------------------
     function[was_ran] = Save_Cheetah_Data()
         
-        % Bail if not saving
-        if ~D.F.do_nlx_save
-            
-            % Set output and bail
-            was_ran = false;
+        % Initialize output
+        was_ran = false;
+        
+        % Bail if cheetah not running
+        if ~D.F.cheetah_running
             return
-            
         end
         
         % Disconect NetCom
@@ -12841,6 +12843,41 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[Save_Cheetah_Data] FINISHED: Wait for NLX Programs to Close');
         end
         
+        % SAVE CHEETAH CONFIG FILE
+        
+        % Get config file path
+        nlx_cfg_last = ...
+            fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
+        
+        % Copy file to rat directory
+        if exist(nlx_cfg_last, 'file')
+            
+            % Log print source path
+            Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Config File: "%s"...', nlx_cfg_last))
+            
+            % Get rat file path
+            rat_path = fullfile(D.DIR.nlxRecRat, 'CheetahLastConfiguration.cfg');
+            
+            % Delete existing file
+            if exist(rat_path, 'file')
+                delete(rat_path);
+            end
+            
+            % Copy file
+            copyfile(nlx_cfg_last, rat_path);
+            
+            % Log print target path
+            Console_Write(sprintf('[Save_Cheetah_Data] FINISHED: Copying Config File to: "%s"', rat_path))
+            
+        else
+            Console_Write(sprintf('[Save_Cheetah_Data] SKIPPED: Copy Config File: "%s"...', nlx_cfg_last))
+        end
+        
+        % Bail if not saving
+        if ~D.F.do_nlx_save
+            return
+        end
+        
         % COPY OVER CHEETAH DIRECTORY
         
         % Get file size
@@ -12868,7 +12905,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set output and bail
         was_ran = true;
-        return
         
     end
 
@@ -17947,7 +17983,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             flag_btn_ind = x(2);
             
             % Update tt log value
-            D.TT.ttLogNew.([D.TT.ttLab{tt_ind},'_F'])(flag_btn_ind) = logical(val);
+            D.TT.ttLogNew.([D.TT.ttLab{tt_ind},'_F'])(flag_btn_ind) = val == 1;
             
             % Handle exlude tt/chan buttons
             if flag_btn_ind > 5
@@ -17967,8 +18003,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Set all indevidual elecrode flag buttons
                     Safe_Set(D.UI.toggSubFlagTT(tt_ind,7:end), 'Value', val);
                     
+                    % Update tt log value
+                    D.TT.ttLogNew.([D.TT.ttLab{tt_ind},'_F'])(7:end) = val == 1;
+                    
                 end
-                  
+                
                 % Handle indevidual chan flag button
                 if flag_btn_ind > 6
                     
