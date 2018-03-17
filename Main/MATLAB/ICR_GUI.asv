@@ -6302,6 +6302,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Copy cluster buttons
             D.UI.toggSubFlagTT(z_tt,:) = copyobj(D.UI.toggSubPlotTT(z_tt,:), D.UI.panSelectTT(bndl_ind));
             
+            % Store flag
+            D.F.tt_chan_disable(z_tt,:) = Safe_Get(D.UI.toggSubFlagTT(z_tt, 7:end), 'Value');
+        
             % Modify sub flag buttons
             for z_f = 1:10
                 
@@ -6851,9 +6854,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get flagged chanels
         for z_tt = 1:length(D.TT.ttLab)
-            
-            % Store flag
-            D.F.tt_chan_disable(z_tt,:) = Safe_Get(D.UI.toggSubFlagTT(z_tt, 7:end), 'Value');
             
             % Run callback for exluded elecrodes
             if all(D.F.tt_chan_disable(z_tt,:))
@@ -17947,7 +17947,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             flag_btn_ind = x(2);
             
             % Update tt log value
-            D.TT.ttLogNew.([D.TT.ttLab{tt_ind},'_F'])(flag_btn_ind) = val == 1;
+            D.TT.ttLogNew.([D.TT.ttLab{tt_ind},'_F'])(flag_btn_ind) = logical(val);
             
             % Handle exlude tt/chan buttons
             if flag_btn_ind > 5
@@ -17966,9 +17966,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Set all indevidual elecrode flag buttons
                     Safe_Set(D.UI.toggSubFlagTT(tt_ind,7:end), 'Value', val);
-                    
-                    % Update tt log value
-                    D.TT.ttLogNew.([D.TT.ttLab{tt_ind},'_F'])(7:end) = val == 1;
                     
                 end
                   

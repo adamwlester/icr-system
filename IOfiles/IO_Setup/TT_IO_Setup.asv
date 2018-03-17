@@ -33,7 +33,7 @@ tetrode_cats_description = '[Bndl_1{A-P, M-L}, Bndl_2{A-P, M-L}]';
 tt_D_description = '[TT Depth]';
 tt_O_description = '[TT Screw Orientation]';
 tt_R_description = '[TT Reference]';
-tt_F_description = '[Units, Theta, Ripples, Sharp Waves, Noise, Exclude TT, Exclude E1, Exclude E2, Exclude E3, Exclude E4]';
+tt_F_description = '[Units, Theta, Sharp Waves, Noise, ?, Exclude TT, Exclude E1, Exclude E2, Exclude E3, Exclude E4]';
 tt_I_description = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance]';
 
 %% ========================= UPDATE TT_IO_1 ===============================
@@ -146,7 +146,7 @@ tt_var_values = ...
     {0}; ...
     {categorical({'<undefined>'}, turn_cats)}; ...
     {categorical({'<undefined>'}, reference_tt_cats)}; ...
-    {false(1,10)}; ...
+    {false(1,6)}; ...
     {nan(1,4)}; ...
     {''}], ...
     length(tetrode_cats), 1);
@@ -231,29 +231,17 @@ end
 %% =========================== TEMP =======================================
 
 % Modify flag variable
-% S = load(fullfile(ioDir, 'TT_IO_2.mat'));
-% TT_IO_2 = S.TT_IO_2;
-% ratList = fieldnames(TT_IO_2);
-% for z_r = 1:length(ratList)
-%     log_table = TT_IO_2.(ratList{z_r});
-%     for z_tt = 1:length(tetrode_cats)
-%         log_table.([tetrode_cats{z_tt},'_F']) = ...
-%             [TT_IO_2.(ratList{z_r}).([tetrode_cats{z_tt},'_F'])(:,1:5), false(size(log_table,1), 5)];
-%         log_table.Properties.VariableDescriptions{[tetrode_cats{z_tt}, '_F']} = tt_F_description;
-%     end
-%     TT_IO_2.(ratList{z_r}) = log_table;
-% end
-
 S = load(fullfile(ioDir, 'TT_IO_2.mat'));
 TT_IO_2 = S.TT_IO_2;
 ratList = fieldnames(TT_IO_2);
 for z_r = 1:length(ratList)
     log_table = TT_IO_2.(ratList{z_r});
     for z_tt = 1:length(tetrode_cats)
-          log_table.Properties.VariableDescriptions{[tetrode_cats{z_tt}, '_F']} = tt_F_description;
+        log_table.([tetrode_cats{z_tt},'_F']) = ...
+            [TT_IO_2.(ratList{z_r}).([tetrode_cats{z_tt},'_F'])(:,1:5), false(size(log_table,1), 5)];
+        T.Properties.VariableDescriptions{[tetrode_cats{z_tt}, '_F']} = tt_F_description;
     end
     TT_IO_2.(ratList{z_r}) = log_table;
 end
-
 
 end
