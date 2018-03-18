@@ -1713,7 +1713,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.move = 0;
         
         % FLAGS
-        
+        % run cheetah
+        D.F.run_cheetah = false;  
+        % run SpikeSort3D
+        D.F.run_ss3d = false;
+        % record raw data file
+        D.F.rec_raw = false; 
         % ac computer connected
         D.F.ac_connected = false;
         % ui updated
@@ -2701,7 +2706,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         % Popupmenu
-        btm = btm - D.UI.fontSzPopLrg(2);
+        btm = btm - D.UI.fontSzPopLrg(2) - obj_gap*0.25;
+        wd = pos_wd_dflt * 0.7;
         pos = [pos_lft_dflt, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popType = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
@@ -2712,16 +2718,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor',D.UI.figBckCol, ...
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName',D.UI.popFont, ...
-            'FontSize',D.UI.fontSzPopLrg(1), ...
+            'FontSize',D.UI.fontSzPopMed(1), ...
             'FontWeight','Bold', ...
             'String',[{''}; D.PAR.listSesType], ...
             'Value',1);
         
         % Toggle
-        ht = 2.5*obj_gap;
-        wd = D.UI.stup_pan_pos(3)*0.4;
-        btm = btm - 3*obj_gap;
-        lft = (D.UI.stup_pan_pos(3) - wd)/2;
+        ht = 2.7*obj_gap;
+        lft = pos_lft_dflt + wd;
+        wd = pos_wd_dflt - wd;
+        %btm = btm - 3*obj_gap;
         pos = [lft, btm, wd, ht];
         D.UI.toggType = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
@@ -2756,7 +2762,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         % Popupmenu
-        btm = btm - D.UI.fontSzPopLrg(2);
+        btm = btm - D.UI.fontSzPopLrg(2) - obj_gap*0.25;
         pos = [pos_lft_dflt, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popRat = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
@@ -2777,7 +2783,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Header text
         lft = pos_lft_dflt + wd;
         wd = pos_wd_dflt*0.35;
-        btm = btm + D.UI.fontSzPopLrg(2);
+        btm = D.UI.txtRat.Position(2);
         pos = [lft, btm, wd, ht];
         D.UI.txtHuman = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
@@ -2792,7 +2798,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         % Popupmenu
-        btm = btm - D.UI.fontSzPopLrg(2);
+        btm = D.UI.popRat.Position(2);
         pos = [lft, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popHuman = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
@@ -2827,7 +2833,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         % Popupmenu
-        btm = btm - D.UI.fontSzPopLrg(2);
+        btm = btm - D.UI.fontSzPopLrg(2) - obj_gap*0.25;
         pos = [pos_lft_dflt, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popCond = uicontrol('Style','popupmenu', ...
             'Parent', D.UI.tabICR, ...
@@ -2848,7 +2854,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Header text
         lft = pos_lft_dflt + wd;
         wd = pos_wd_dflt*0.35;
-        btm = btm + D.UI.fontSzPopLrg(2);
+        btm = D.UI.txtCond.Position(2);
         pos = [lft, btm, wd, D.UI.fontSzTxtMed(2)];
         D.UI.txtTask = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
@@ -2863,7 +2869,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         % Popupmenu
-        btm = btm - D.UI.fontSzPopLrg(2);
+        btm = D.UI.popCond.Position(2);
         pos = [lft, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popTask = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
@@ -2880,24 +2886,27 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',1);
         
         % REWARD DELAY
+        
         % Header text
-        btm = btm - 2*obj_gap;
-        pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzTxtMed(2)];
+        ht =  D.UI.fontSzPopLrg(2);
+        btm = btm - ht - obj_gap;
+        pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPopLrg(2)];
         D.UI.txtRwDl = uicontrol('Style','text', ...
             'Parent',D.UI.tabICR, ...
             'String','Reward Delay', ...
             'Units','Normalized', ...
             'Position', pos, ...
-            'HorizontalAlignment', 'Center', ...
-            'BackgroundColor', D.UI.figBckCol, ...
+            'HorizontalAlignment', 'Left', ...
+            'BackgroundColor', [0.9,0.9,0.9], ...
             'ForegroundColor', D.UI.enabledCol, ...
             'FontWeight','Bold', ...
             'FontName', D.UI.headFont, ...
             'FontSize', D.UI.fontSzTxtMed(1));
         
         % Popupmenu
-        btm = btm - D.UI.fontSzPopLrg(2);
-        pos = [pos_lft_dflt, btm, pos_wd_dflt, D.UI.fontSzPopLrg(2)];
+        wd = pos_wd_dflt*0.45;
+        lft = pos_lft_dflt + (pos_wd_dflt-wd);
+        pos = [lft, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popRewDel = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
             'Enable', 'off', ...
@@ -2991,7 +3000,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         ht =  D.UI.fontSzBtnMed(2) + 2.5*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
-        % panel
         D.UI.spanSnd = uibuttongroup(...
             'Parent',D.UI.tabICR, ...
             'Units','Normalized', ...
@@ -3034,6 +3042,80 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Callback',{@Togg_Sound}, ...
             'UserData', 2, ...
             'String','Reward', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzBtnMed(1));
+        
+        % NEURALYNX
+        
+        % Buttongroup
+        ht =  D.UI.fontSzBtnMed(2) + 2.5*obj_gap;
+        btm = btm - ht - obj_gap;
+        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
+        D.UI.spanNLX = uibuttongroup(...
+            'Parent',D.UI.tabICR, ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'HighlightColor', D.UI.enabledCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'Title','Neuralynx', ...
+            'TitlePosition','centertop', ...
+            'FontWeight','Bold', ...
+            'FontSize',D.UI.fontSzTxtMed(1), ...
+            'Clipping','off');
+        
+         % Run Cheetah
+        wd = (pos(3)-2*pos_lft_dflt)/3;
+        lft = pos_lft_dflt*2;
+        ht =  D.UI.fontSzBtnMed(2);
+        btm = pos(2)+pos(4) - ht - 2*obj_gap;
+        pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
+        D.UI.toggNlx(1) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Callback',{@Togg_NLXSetup}, ...
+            'String','Cheetah', ...
+            'UserData', 1, ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'Value', 1, ...
+            'FontSize', D.UI.fontSzBtnMed(1));
+        
+        % Run SpikeSort3D
+        lft = lft+wd;
+        pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
+        D.UI.toggNlx(2) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Callback',{@Togg_NLXSetup}, ...
+            'String','SS3D', ...
+            'UserData', 2, ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzBtnMed(1));
+        
+        % Record Raw 
+        lft = lft+wd;
+        pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
+        D.UI.toggNlx(3) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Callback',{@Togg_NLXSetup}, ...
+            'String','Raw', ...
+            'UserData', 3, ...
             'Units','Normalized', ...
             'Position', pos, ...
             'BackgroundColor', D.UI.disabledCol, ...
@@ -3089,13 +3171,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','on', ...
             'Position',  D.UI.run_pan_pos);
         
-        % NEURALYNX SUBPANEL
+        % CHEETAH SUBPANEL
         
         % Bottongorup
         ht =  D.UI.fontSzBtnLrg(2) + D.UI.fontSzBtnLrg(2) + 3.5*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
-        D.UI.spanNLX = uibuttongroup(...
+        D.UI.spanCheetah = uibuttongroup(...
             'Parent',D.UI.tabICR, ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -3199,7 +3281,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         set(D.UI.toggCubeVcc, 'Callback', @(x,y)f(D.UI.toggCubeVcc,'Update'));
         
         % Set to pan bottom
-        btm = D.UI.spanNLX.Position(2);
+        btm = D.UI.spanCheetah.Position(2);
         
         % TASK SUBPANEL
         
@@ -4244,63 +4326,47 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Check if Cheetah open
         D.F.cheetah_running = Check_EXE('Cheetah.exe');
         
+        % Log/print
+        Console_Write('[NLX_Start] RUNNING: Run Cheetah.exe...');
+        
         % Only run if not running Table_Update solo
-        if ~D.F.cheetah_running && D.PAR.sesType ~= 'Table_Update'
+        if D.F.run_cheetah && ...
+                ~D.F.cheetah_running && ...
+                D.PAR.sesType ~= 'Table_Update' && ...
+                ~DOEXIT
+            
+            % NLX setup config
+            if D.F.implant_session
+                start_cfg_path = fullfile(D.DIR.nlxCheetahCfg, 'ICR_Cheetah_Load_Ephys.cfg');
+            else
+                start_cfg_path = fullfile(D.DIR.nlxCheetahCfg, 'ICR_Cheetah_Load_Behavior.cfg');
+            end
+            
+            % Store current directory
+            curdir = pwd;
+            
+            % Run EXE with specified config
+            cd(D.DIR.nlxCheetaEXE);
+            system(sprintf('Cheetah.exe %s&', start_cfg_path));
+            cd(curdir);
+            
+            % Set flag
+            D.F.cheetah_running = true;
             
             % Log/print
-            Console_Write('[NLX_Start] RUNNING: Open Cheetah.exe...');
+            Console_Write(sprintf('[NLX_Start] FINISHED: Run Cheetah.exe "%s"', start_cfg_path));
             
-            % Check if Cheetah should be run for solo session
-            if ISMATSOLO
-                dlg_h = dlgAWL(...
-                    'Do you want to run Cheetah.exe?', ...
-                    'RUN CHEETAH?', ...
-                    'Yes', 'No', [], 'No', ...
-                    D.UI.dlgPos{4}, ...
-                    'question');
-                choice = Dlg_Wait(dlg_h);
-                
-            else
-                choice = 'Yes';
-            end
+        elseif DOEXIT
             
-            % Open Cheetah
-            if strcmp(choice, 'Yes') && ~DOEXIT
-                
-                % NLX setup config
-                if D.F.implant_session
-                    start_cfg_path = fullfile(D.DIR.nlxCheetahCfg, 'ICR_Cheetah_Load_Ephys.cfg');
-                else
-                    start_cfg_path = fullfile(D.DIR.nlxCheetahCfg, 'ICR_Cheetah_Load_Behavior.cfg');
-                end
-                
-                % Store current directory
-                curdir = pwd;
-                
-                % Run EXE with specified config
-                cd(D.DIR.nlxCheetaEXE);
-                system(sprintf('Cheetah.exe %s&', start_cfg_path));
-                cd(curdir);
-                
-                % Log/print
-                Console_Write(sprintf('[NLX_Start] FINISHED: Run Cheetah.exe "%s"', start_cfg_path));
-                
-                % Set flag
-                D.F.cheetah_running = true;
-                
-            elseif DOEXIT
-                
-                % Bail
-                Console_Write('**WARNING** [NLX_Start] ABORTED: Run Cheetah.exe');
-                return
-                
-            else
-                
-                % Bail
-                Console_Write('[NLX_Start] SKIPPED: Run Cheetah.exe');
-                return
-                
-            end
+            % Bail
+            Console_Write('**WARNING** [NLX_Start] ABORTED: Run Cheetah.exe');
+            return
+            
+        else
+            
+            % Bail
+            Console_Write('[NLX_Start] SKIPPED: Run Cheetah.exe');
+            return
             
         end
         
@@ -6624,6 +6690,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('**WARNING** [NLX_Setup] FAILED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
         end
         
+        % TEMP D.F.run_ss3d Send command to record raw data file
+        if D.F.run_ss3d
+            %'-SetRawDataFile "AcqSystem1" "C:\Users\lester\Desktop\raw\RawData.nrd"'
+        else
+        end
+        
         %% DISPLAY PROMPT TO POWER ON CUBE
         
         % Start Cube
@@ -6761,30 +6833,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %% RUN SPIKESORT EXE
         
-        % Check if SpikeSort should be run
-        if D.F.cheetah_running && D.F.implant_session
-            
-            dlg_h = dlgAWL(...
-                'Do you want to run SpikeSort3D.exe?', ...
-                'RUN SS3D?', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'question');
-            choice = Dlg_Wait(dlg_h);
-            
-        else
-            choice = 'No';
-        end
-        
         % Recheck EXE status
         D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
         
-        % Run SpikeSort3D.exe
-        if strcmp('Yes', choice) && ...
-                ~D.F.spikesort_running && ...
-                ~DOEXIT
-            
-            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
+        % Log/print
+        Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
+        
+        % Check if SpikeSort should be run
+        if D.F.run_ss3d && ...
+                D.F.cheetah_running && ...
+                ~D.F.spikesort_running
             
             % Specify start config
             start_cfg_path = fullfile(D.DIR.nlxSS3DCfg, 'spikesort.cfg');
@@ -13450,13 +13508,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Enable other setup objects
                     if ~isundefined(D.PAR.sesType)
                         
+                        % Enable Quit
+                        Safe_Set(D.UI.toggQuit, 'Enable', 'on')
+                        
                         % Enable main setup objects
                         Safe_Set(D.UI.popRat, 'Enable', 'on')
                         Safe_Set(D.UI.popHuman, 'Enable', 'on')
                         Button_State(D.UI.toggSetupDone, 'Enable');
                         
-                        % Enable Quit
-                        Safe_Set(D.UI.toggQuit, 'Enable', 'on')
+                        % Enable Cheetah run button
+                        Button_State(D.UI.toggNlx(1), 'Enable');
                         
                         % Disable ICR objectes
                         if D.PAR.sesType ~= 'ICR_Session'
@@ -15443,7 +15504,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 
 %% ============================ CALLBACK FUNCTIONS ========================
 
-% -----------------------------SWITCH MONITOR------------------------------
+% ----------------------------SWITCH MONITOR-------------------------------
     function Togg_Mon(hObject, ~, ~)
         
         % Get user data
@@ -15509,7 +15570,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% -----------------------------LOAD SELECTION------------------------------
+% ----------------------------LOAD SELECTION-------------------------------
     function Togg_Type(hObject, ~, ~)
         
         % Bail if nothing selected
@@ -15574,7 +15635,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% ------------------------------RAT SELECTION------------------------------
+% -----------------------------RAT SELECTION-------------------------------
     function Pop_Rat(~, ~, ~)
         
         % Bail if nothing selected
@@ -15691,7 +15752,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% ---------------------------SESSION CONDITION-----------------------------
+% ----------------------------HUMAN SELECTION------------------------------
     function Pop_Human(~, ~, ~)
         
         % Bail if nothing selected
@@ -15729,6 +15790,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Store value
         D.PAR.sesCond(:) = D.UI.popCond.String(get(D.UI.popCond, 'Value'));
+        
+        % Enable/disable NLX buttons
+        if D.F.rat_implanted && ...
+                (D.PAR.sesCond == 'Implant_Training' || D.PAR.sesCond == 'Rotation')
+            
+            Button_State(D.UI.toggNlx(2:end), 'Enable');
+        else
+            Safe_Set(D.UI.toggNlx(2:end), 'Value', 0);
+            Button_State(D.UI.toggNlx(2:end), 'Disable');
+        end
         
         % Change other buttons for manual training
         if D.PAR.sesCond == 'Manual_Training'
@@ -15859,6 +15930,41 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% -------------------------NERUALYNX RUN SETTINGS--------------------------
+    function Togg_NLXSetup(hObject, ~, ~)
+        
+        % Get handle values
+        val = get(hObject, 'Value');
+        btn_ind = get(hObject, 'UserData');
+        
+        % Handel Cheetah run button
+        if btn_ind == 1
+            
+            % Unset and Disable other buttons if Cheetah not selected
+            if val == 0
+                Safe_Set(D.UI.toggNlx(2:end), 'Value', 0);
+                Button_State(D.UI.toggNlx(2:end), 'Disable');
+            end
+            
+            % Enable other buttons
+            if val == 1 && ...
+                    D.F.rat_implanted && ...
+                    (D.PAR.sesCond == 'Implant_Training' || D.PAR.sesCond == 'Rotation')
+                
+                Button_State(D.UI.toggNlx(2:end), 'Enable');
+            end
+            
+        end
+        
+        % Update flags
+        D.F.run_cheetah = Safe_Get(D.UI.toggNlx(1), 'Value') == 1;
+        D.F.run_ss3d = Safe_Get(D.UI.toggNlx(2), 'Value') == 1;
+        D.F.rec_raw = Safe_Get(D.UI.toggNlx(3), 'Value') == 1;
+        
+        % Upate buttons
+        Button_State(D.UI.toggNlx, 'Update');
     end
 
 % -----------------------------CUE CONDITION-------------------------------
