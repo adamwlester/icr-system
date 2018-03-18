@@ -100,7 +100,7 @@ D.DB.ratLab = 'r0495'; %'r9999';
 D.DB.Implanted = true;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'TT_Turn' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
@@ -508,7 +508,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Cheetah dirs
         D.DIR.nlxCheetaEXE = 'C:\Program Files\Neuralynx\Cheetah';
         D.DIR.nlxSS3DEXE = 'C:\Program Files (x86)\Neuralynx\SpikeSort3D';
-        D.DIR.nlxCfg = 'C:\Users\Public\Documents\Cheetah\Configuration';
+        D.DIR.nlxCheetahCfg = 'C:\Users\Public\Documents\Cheetah\Configuration';
+        D.DIR.nlxSS3DCfg ='C:\Program Files (x86)\Neuralynx\SpikeSort3D';
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
         D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
         D.DIR.recFi = '0000-00-00_00-00-00';
@@ -613,10 +614,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[Setup] RUNNING: Start "timer_c2m"');
         start(D.timer_c2m);
         
-        % Create log dir if none exists
+        % Delete exisiting log dir
+        if exist(D.DIR.logTempDir, 'dir')
+            Console_Write('[Setup] RUNNING: Delete Exiting Log Directory...');
+            if rmdir(D.DIR.logTempDir, 's')
+                Console_Write('[Setup] FINISHED: Delete Exiting Log Directory');
+            else
+                Console_Write('**WARNING** [Setup] FAILED: Delete Exiting Log Directory');
+            end
+        end
+        
+        % Make new log dir
+        Console_Write('[Setup] RUNNING: Make New Log Directory...');
         if ~exist(D.DIR.logTempDir, 'dir')
-            Console_Write(sprintf('[Setup] RUNNING: Make Temp Log Directory: "%s"', D.DIR.logTempDir));
             mkdir(D.DIR.logTempDir);
+            Console_Write('[Setup] RUNNING: Make New Log Directory');
+        else
+            Console_Write('**WARNING** [Setup] SKIPPED: Make New Log Directory');
         end
         
         % Run variable setup code
@@ -4255,9 +4269,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % NLX setup config
                 if D.F.implant_session
-                    start_cfg_path = fullfile(D.DIR.nlxCfg, 'ICR_Cheetah_Load_Ephys.cfg');
+                    start_cfg_path = fullfile(D.DIR.nlxCheetahCfg, 'ICR_Cheetah_Load_Ephys.cfg');
                 else
-                    start_cfg_path = fullfile(D.DIR.nlxCfg, 'ICR_Cheetah_Load_Behavior.cfg');
+                    start_cfg_path = fullfile(D.DIR.nlxCheetahCfg, 'ICR_Cheetah_Load_Behavior.cfg');
                 end
                 
                 % Store current directory
@@ -6773,7 +6787,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
             
             % Specify start config
-            start_cfg_path = fullfile(D.DIR.nlxCfg, 'ICR_SpikeSort3D.cfg');
+            start_cfg_path = fullfile(D.DIR.nlxSS3DCfg, 'spikesort.cfg');
             
             % Store current directory
             curdir = pwd;
@@ -12801,6 +12815,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Disconect NetCom
         Disconnect_NLX()
         
+        % Get temp and save dir path
+        temp_rec_dir = fullfile(D.DIR.nlxTempTop, D.DIR.recFi);
+        save_rec_dir = fullfile(D.DIR.nlxRecRat, D.DIR.recFi);
+        
         % Confirm that NLX Programs closed
         Console_Write('[Save_Cheetah_Data] RUNNNING: Wait for NLX Programs to Close..');
         while true
@@ -12852,7 +12870,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get config file path
         nlx_cfg_last = ...
-            fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
+            fullfile(temp_rec_dir, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
         
         % Copy file to rat directory
         if exist(nlx_cfg_last, 'file')
@@ -12897,12 +12915,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DIR.recFi, fiGigs));
         
         % Save to global for CS
-        m2c_dir = fullfile(D.DIR.nlxRecRat, D.DIR.recFi);
+        m2c_dir = save_rec_dir;
         Console_Write(sprintf('[Save_Cheetah_Data] SET RECORDING DIR TO "%s"', ...
             m2c_dir));
         
         % Copy file
-        copyfile(fullfile(D.DIR.nlxTempTop, D.DIR.recFi), m2c_dir)
+        copyfile(temp_rec_dir, save_rec_dir)
         
         % Log/print end
         Console_Write(sprintf('[Save_Cheetah_Data] FINISHED: Copy Cheetah File: file=%s size=%0.2fGB', ...
@@ -16149,11 +16167,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggLoadClust, 'Update');
         
         % Get a list of ncf files
-        clust_fi_dir =  fullfile(D.DIR.nlxTempTop,'0000-00-00_00-00-00');
-        D.TT.clust_files = dir(clust_fi_dir);
+        D.TT.clust_files = dir(D.DIR.logTempDir);
         D.TT.clust_files = {D.TT.clust_files.name};
         D.TT.clust_files = regexp(D.TT.clust_files,'TT\d\d.NCF','match');
         D.TT.clust_files = [D.TT.clust_files{:}];
+        
+        % Create new save clust dir
+        save_clust_dir = fullfile(D.DIR.nlxTempTop, D.DIR.recFi,'SpikeSortClust');
+        mkdir(save_clust_dir);
         
         % Open stream
         for z_tt = 1:length(D.TT.ttLab)
@@ -16169,7 +16190,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if ~isempty(fi_ind)
                     
                     % Read in file text
-                    file_id = fopen(fullfile(clust_fi_dir,D.TT.clust_files{fi_ind}));
+                    fi_source_path = fullfile(D.DIR.logTempDir,D.TT.clust_files{fi_ind});
+                    file_id = fopen(fi_source_path);
                     file_str = fread(file_id,'*char')';
                     fclose(file_id);
                     
@@ -16178,6 +16200,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Store number of clusters
                     D.TT.nClust(z_tt) = max(str2double([clusts{:}]));
+                    
+                    % Copy cluster files
+                    fi_targ_path = fullfile(save_clust_dir, D.TT.clust_files{fi_ind});
+                    copyfile(fi_source_path, fi_targ_path);
                     
                 end
                 
