@@ -1714,11 +1714,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % FLAGS
         % run cheetah
-        D.F.run_cheetah = false;  
+        D.F.run_cheetah = true;
         % run SpikeSort3D
         D.F.run_ss3d = false;
         % record raw data file
-        D.F.rec_raw = false; 
+        D.F.rec_raw = false;
         % ac computer connected
         D.F.ac_connected = false;
         % ui updated
@@ -3069,7 +3069,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
         
-         % Run Cheetah
+        % Run Cheetah
         wd = (pos(3)-2*pos_lft_dflt)/3;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnMed(2);
@@ -3107,7 +3107,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzBtnMed(1));
         
-        % Record Raw 
+        % Record Raw
         lft = lft+wd;
         pos = [lft, btm, wd, D.UI.fontSzBtnMed(2)];
         D.UI.toggNlx(3) = uicontrol('Style','togglebutton', ...
@@ -6779,7 +6779,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Get matching commands
                     msg_list{z_cmd} = regexp(fi_imp, ['(', parse_list{z_cmd}, '[^\r\n\f]*)(?=\r|\n|\f)'], 'match');
-            
+                    
                 end
                 
                 % Concatinate message
@@ -6929,6 +6929,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Togg_Mon(D.UI.toggMon(D.UI.monDefault));
         
         %% DISABLE PLOTTING OF FLAGGED TTS
+        
+        % Bail here if not implant session
+        if ~D.F.implant_session
+            return
+        end
         
         % Get flagged chanels
         for z_tt = 1:length(D.TT.ttLab)
