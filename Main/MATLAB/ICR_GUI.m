@@ -99,6 +99,9 @@ D.DB.ratLab = 'r0495'; %'r9999';
 % Implant status
 D.DB.Implanted = true;
 
+% Run cheetah
+D.DB.Run_Cheetah = true;
+
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
@@ -505,14 +508,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DIR.trkBnds = fullfile(D.DIR.ioTop, 'Operational', 'track_bounds.mat');
         D.DIR.frgPath = fullfile(D.DIR.ioTop, 'Operational', 'forage_path.mat');
         
-        % Cheetah dirs
+        % Neuralynx dirs
         D.DIR.nlxCheetaEXE = 'C:\Program Files\Neuralynx\Cheetah';
         D.DIR.nlxSS3DEXE = 'C:\Program Files (x86)\Neuralynx\SpikeSort3D';
         D.DIR.nlxCheetahCfg = 'C:\Users\Public\Documents\Cheetah\Configuration';
         D.DIR.nlxSS3DCfg ='C:\Program Files (x86)\Neuralynx\SpikeSort3D';
         D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
         D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
-        D.DIR.recFi = '0000-00-00_00-00-00';
+        D.DIR.nlxRecSub = '0000-00-00_00-00-00';
+        D.DIR.nlxRawSub = '';
+        D.DIR.nlxSaveRat = '';
         
         % Log dirs
         D.DIR.logFi = 'ICR_GUI_Log.csv';
@@ -1469,6 +1474,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     % Store log
                     fprintf(fid, D.DB.logStr{z_l});
                     cnt_saved = cnt_saved+1;
+                    
                 catch ME
                     
                     % Create error string
@@ -2724,7 +2730,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Value',1);
         
         % Toggle
-        ht = 2.7*obj_gap;
+        ht = 2.5*obj_gap;
         lft = pos_lft_dflt + wd;
         wd = pos_wd_dflt - wd;
         %btm = btm - 3*obj_gap;
@@ -3078,7 +3084,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.toggNlx(1) = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'Enable', 'off', ...
-            'Callback',{@Togg_NLXSetup}, ...
+            'Callback',{@Togg_NLX}, ...
             'String','Cheetah', ...
             'UserData', 1, ...
             'Units','Normalized', ...
@@ -3096,7 +3102,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.toggNlx(2) = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'Enable', 'off', ...
-            'Callback',{@Togg_NLXSetup}, ...
+            'Callback',{@Togg_NLX}, ...
             'String','SS3D', ...
             'UserData', 2, ...
             'Units','Normalized', ...
@@ -3113,7 +3119,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.toggNlx(3) = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'Enable', 'off', ...
-            'Callback',{@Togg_NLXSetup}, ...
+            'Callback',{@Togg_NLX}, ...
             'String','Raw', ...
             'UserData', 3, ...
             'Units','Normalized', ...
@@ -3170,6 +3176,109 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'TitlePosition','centertop', ...
             'Clipping','on', ...
             'Position',  D.UI.run_pan_pos);
+        
+        % TASK SUBPANEL
+        
+        % Buttongroup
+        ht =  4*D.UI.fontSzTxtLrg(2) + 4*obj_gap;
+        btm = btm - ht - obj_gap;
+        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
+        D.UI.spanTask = uibuttongroup(...
+            'Parent',D.UI.tabICR, ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.figBckCol, ...
+            'HighlightColor', D.UI.enabledCol, ...
+            'ForegroundColor', D.UI.enabledCol, ...
+            'Title','Task', ...
+            'TitlePosition','centertop', ...
+            'FontWeight','Bold', ...
+            'FontSize',D.UI.fontSzTxtMed(1), ...
+            'Clipping','off');
+        
+        % Sleep 1 button
+        wd = (pos_wd_dflt - 2*pos_lft_dflt)/2;
+        lft = 2*pos_lft_dflt;
+        ht = D.UI.fontSzTxtLrg(2);
+        btm = pos(2)+pos(4) - ht - 2*obj_gap;
+        pos = [lft, btm, wd*0.9, ht];
+        D.UI.toggSleep(1) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'String', 'Sleep 1', ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzTxtLrg(1), ...
+            'UserData', [1, 0]);
+        
+        % Sleep 1 edit
+        str = ...
+            sprintf('%s/%s', ...
+            datestr(0, 'MM:SS'), ...
+            datestr(D.PAR.sleepDur(1)/(24*60*60), 'MM:SS'));
+        pos = [lft+pos(3), btm, wd*1.1, ht];
+        D.UI.editSleep(1) = uicontrol(...
+            'Parent',D.UI.tabICR, ...
+            'Units','Normalized',...
+            'Position',pos,...
+            'Style','edit',...
+            'HorizontalAlignment', 'Left', ...
+            'FontSize', D.UI.fontSzBtnMed(1), ...
+            'FontName','Monospaced', ...
+            'Max', 1, ...
+            'Enable','off',...
+            'Visible', 'on', ...
+            'String',str);
+        
+        % ICR buttons
+        ht = 2*D.UI.fontSzTxtLrg(2);
+        btm = btm - ht - 0.5*obj_gap;
+        pos = [lft, btm, wd, ht];
+        D.UI.toggICR(1) = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor',  D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzTxtLrg(1));
+        D.UI.toggICR(2) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
+        pos = [lft+wd, btm, wd, 2*D.UI.fontSzTxtLrg(2)];
+        Safe_Set(D.UI.toggICR(2), 'Position', pos);
+        Safe_Set(D.UI.toggICR, 'Callback', {@Togg_ICR})
+        
+        % Sleep 2 button
+        ht = D.UI.fontSzTxtLrg(2);
+        btm = btm - ht - 0.5*obj_gap;
+        pos = [lft, btm, wd*0.9, ht];
+        D.UI.toggSleep(2) = copyobj(D.UI.toggSleep(1), D.UI.tabICR);
+        Safe_Set(D.UI.toggSleep(2), ...
+            'String', 'Sleep 2', ...
+            'UserData', [2, 0], ...
+            'Position', pos);
+        
+        % Sleep 2 edit
+        str = ...
+            sprintf('%s/%s', ...
+            datestr(0, 'MM:SS'), ...
+            datestr(D.PAR.sleepDur(2)/(24*60*60), 'MM:SS'));
+        pos = [lft+pos(3), btm, wd*1.1, ht];
+        D.UI.editSleep(2) = copyobj(D.UI.editSleep(1), D.UI.tabICR);
+        Safe_Set(D.UI.editSleep(2), ...
+            'String', str, ...
+            'Position', pos);
+        
+        % Set sleep button callback
+        Safe_Set(D.UI.toggSleep, 'Callback', {@Togg_Sleep})
+        
+        % Set to pan bottom
+        btm = D.UI.spanTask.Position(2);
         
         % CHEETAH SUBPANEL
         
@@ -3282,109 +3391,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set to pan bottom
         btm = D.UI.spanCheetah.Position(2);
-        
-        % TASK SUBPANEL
-        
-        % Buttongroup
-        ht =  4*D.UI.fontSzTxtLrg(2) + 4*obj_gap;
-        btm = btm - ht - obj_gap;
-        pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
-        D.UI.spanTask = uibuttongroup(...
-            'Parent',D.UI.tabICR, ...
-            'Units','Normalized', ...
-            'Position', pos, ...
-            'BackgroundColor', D.UI.figBckCol, ...
-            'HighlightColor', D.UI.enabledCol, ...
-            'ForegroundColor', D.UI.enabledCol, ...
-            'Title','Task', ...
-            'TitlePosition','centertop', ...
-            'FontWeight','Bold', ...
-            'FontSize',D.UI.fontSzTxtMed(1), ...
-            'Clipping','off');
-        
-        % Sleep 1 button
-        wd = (pos_wd_dflt - 2*pos_lft_dflt)/2;
-        lft = 2*pos_lft_dflt;
-        ht = D.UI.fontSzTxtLrg(2);
-        btm = pos(2)+pos(4) - ht - 2*obj_gap;
-        pos = [lft, btm, wd*0.9, ht];
-        D.UI.toggSleep(1) = uicontrol('Style','togglebutton', ...
-            'Parent',D.UI.tabICR, ...
-            'Enable', 'off', ...
-            'Units','Normalized', ...
-            'Position', pos, ...
-            'String', 'Sleep 1', ...
-            'BackgroundColor', D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontName', D.UI.btnFont, ...
-            'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzTxtLrg(1), ...
-            'UserData', [1, 0]);
-        
-        % Sleep 1 edit
-        str = ...
-            sprintf('%s/%s', ...
-            datestr(0, 'MM:SS'), ...
-            datestr(D.PAR.sleepDur(1)/(24*60*60), 'MM:SS'));
-        pos = [lft+pos(3), btm, wd*1.1, ht];
-        D.UI.editSleep(1) = uicontrol(...
-            'Parent',D.UI.tabICR, ...
-            'Units','Normalized',...
-            'Position',pos,...
-            'Style','edit',...
-            'HorizontalAlignment', 'Left', ...
-            'FontSize', D.UI.fontSzBtnMed(1), ...
-            'FontName','Monospaced', ...
-            'Max', 1, ...
-            'Enable','off',...
-            'Visible', 'on', ...
-            'String',str);
-        
-        % ICR buttons
-        ht = 2*D.UI.fontSzTxtLrg(2);
-        btm = btm - ht - 0.5*obj_gap;
-        pos = [lft, btm, wd, ht];
-        D.UI.toggICR(1) = uicontrol('Style','togglebutton', ...
-            'Parent',D.UI.tabICR, ...
-            'Enable', 'off', ...
-            'Units','Normalized', ...
-            'Position', pos, ...
-            'BackgroundColor',  D.UI.disabledCol, ...
-            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
-            'FontName', D.UI.btnFont, ...
-            'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzTxtLrg(1));
-        D.UI.toggICR(2) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
-        pos = [lft+wd, btm, wd, 2*D.UI.fontSzTxtLrg(2)];
-        Safe_Set(D.UI.toggICR(2), 'Position', pos);
-        Safe_Set(D.UI.toggICR, 'Callback', {@Togg_ICR})
-        
-        % Sleep 2 button
-        ht = D.UI.fontSzTxtLrg(2);
-        btm = btm - ht - 0.5*obj_gap;
-        pos = [lft, btm, wd*0.9, ht];
-        D.UI.toggSleep(2) = copyobj(D.UI.toggSleep(1), D.UI.tabICR);
-        Safe_Set(D.UI.toggSleep(2), ...
-            'String', 'Sleep 2', ...
-            'UserData', [2, 0], ...
-            'Position', pos);
-        
-        % Sleep 2 edit
-        str = ...
-            sprintf('%s/%s', ...
-            datestr(0, 'MM:SS'), ...
-            datestr(D.PAR.sleepDur(2)/(24*60*60), 'MM:SS'));
-        pos = [lft+pos(3), btm, wd*1.1, ht];
-        D.UI.editSleep(2) = copyobj(D.UI.editSleep(1), D.UI.tabICR);
-        Safe_Set(D.UI.editSleep(2), ...
-            'String', str, ...
-            'Position', pos);
-        
-        % Set sleep button callback
-        Safe_Set(D.UI.toggSleep, 'Callback', {@Togg_Sleep})
-        
-        % Set to pan bottom
-        btm = D.UI.spanTask.Position(2);
         
         % ROBOT SUBPANEL
         
@@ -6690,12 +6696,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('**WARNING** [NLX_Setup] FAILED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
         end
         
-        % TEMP D.F.run_ss3d Send command to record raw data file
-        if D.F.run_ss3d
-            %'-SetRawDataFile "AcqSystem1" "C:\Users\lester\Desktop\raw\RawData.nrd"'
-        else
-        end
-        
         %% DISPLAY PROMPT TO POWER ON CUBE
         
         % Start Cube
@@ -6719,17 +6719,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         dirs = dirs(3:end);
         fi_dat_num = ...
             cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
-        D.DIR.recFi = dirs(fi_dat_num == max(fi_dat_num)).name;
+        D.DIR.nlxRecSub = dirs(fi_dat_num == max(fi_dat_num)).name;
         
         % Save directory var
         % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
-        D.DIR.nlxRecRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
+        D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
         
         % Make directory if none exists
-        if exist(D.DIR.nlxRecRat, 'dir') == 0 && ...
+        if exist(D.DIR.nlxSaveRat, 'dir') == 0 && ...
                 exist(D.DIR.nlxSaveTop, 'dir') == 1
-            Console_Write(sprintf('[NLX_Setup] RUNNING: Make Rat Rec Directory: "%s"', D.DIR.nlxRecRat));
-            mkdir(D.DIR.nlxRecRat);
+            
+            Console_Write(sprintf('[NLX_Setup] RUNNING: Make Rat Rec Directory: "%s"', D.DIR.nlxSaveRat));
+            mkdir(D.DIR.nlxSaveRat);
         end
         
         % Load previous settings
@@ -6743,11 +6744,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Find last rec dir
             if exist(D.DIR.nlxSaveTop, 'dir') > 0 && ...
-                    size(dir(D.DIR.nlxRecRat), 1) > 2
+                    size(dir(D.DIR.nlxSaveRat), 1) > 2
                 
                 % Get config file path
                 nlx_cfg_last = ...
-                    fullfile(D.DIR.nlxRecRat, 'CheetahLastConfiguration.cfg');
+                    fullfile(D.DIR.nlxSaveRat, 'CheetahLastConfiguration.cfg');
                 
                 % Set to empty if file does not exist
                 if ~exist(nlx_cfg_last, 'file')
@@ -6831,18 +6832,53 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
+        %% SETTUP RAW NLX DIRECTORY
+        
+        % Send command to record raw data file
+        if D.F.rec_raw
+            
+            % Log/print
+            Console_Write('[NLX_Setup] RUNNING: Set NLX Raw Data Path and File...');
+            
+            % Format raw data sub directory
+            D.DIR.nlxRawSub = [D.DIR.nlxRecSub, '_raw'];
+            
+            % Get path to temp
+            nlx_raw_temp_rat = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRawSub);
+            
+            % Make raw data temp directory
+            mkdir(nlx_raw_temp_rat);
+            
+            % Format file path
+            nlx_raw_fi = fullfile(nlx_raw_temp_rat, 'RawData.nrd');
+            
+            % Format and send message
+            msg = sprintf('-SetRawDataFile "AcqSystem1" "%s"', nlx_raw_fi);
+            succeeded = Send_NLX_Cmd(msg);
+            
+            % Log/print status
+            if succeeded == 1
+                Console_Write(sprintf('[NLX_Setup] FINISHED: Set NLX Raw Data Path and File: "%s"', nlx_raw_fi));
+            else
+                Console_Write(sprintf('**WARNING** [NLX_Setup] FAILED: Set NLX Raw Data Path and File: "%s"', nlx_raw_fi));
+            end
+            
+        else
+            Console_Write('[NLX_Setup] SKIPPED: Set NLX Raw Data Path and File');
+        end
+        
         %% RUN SPIKESORT EXE
         
         % Recheck EXE status
         D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
         
-        % Log/print
-        Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
-        
         % Check if SpikeSort should be run
         if D.F.run_ss3d && ...
                 D.F.cheetah_running && ...
                 ~D.F.spikesort_running
+            
+            % Log/print
+            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
             
             % Specify start config
             start_cfg_path = fullfile(D.DIR.nlxSS3DCfg, 'spikesort.cfg');
@@ -8553,6 +8589,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set Human
             D.SS_IO_1.Human(ratInd) = {'AWL'};
+            
+            % Set run cheetah
+            Safe_Set(D.UI.toggNlx(1), 'Value', D.DB.Run_Cheetah);
+            Togg_NLX(D.UI.toggNlx(1));
             
             % Remaining vars
             if D.PAR.sesType == 'ICR_Session'
@@ -12589,7 +12629,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pause(0.1)
         
         % Save GUI window image
-        export_fig(FIGH, fullfile(D.DIR.nlxTempTop, D.DIR.recFi, 'GUI.png'));
+        export_fig(FIGH, fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub, 'GUI.png'));
         
         % Initialize output
         was_ran = false;
@@ -12627,7 +12667,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Store 'Recording File'
         if D.F.do_nlx_save
-            D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = D.DIR.recFi;
+            D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = D.DIR.nlxRecSub;
         else
             D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = '';
         end
@@ -12838,7 +12878,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'Recording File'
         % Store 'Recording File'
         if D.F.do_nlx_save
-            D.TT.ttLogNew.Recording_File{:} = D.DIR.recFi;
+            D.TT.ttLogNew.Recording_File{:} = D.DIR.nlxRecSub;
         else
             D.TT.ttLogNew.Recording_File{:} = '';
         end
@@ -12867,6 +12907,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -------------------------SAVE CHEETAH DATA---------------------------
     function[was_ran] = Save_Cheetah_Data()
         
+        %% MAIN CODE
+        
         % Initialize output
         was_ran = false;
         
@@ -12879,8 +12921,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Disconnect_NLX()
         
         % Get temp and save dir path
-        temp_rec_dir = fullfile(D.DIR.nlxTempTop, D.DIR.recFi);
-        save_rec_dir = fullfile(D.DIR.nlxRecRat, D.DIR.recFi);
+        temp_rec_dir = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub);
+        save_rec_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRecSub);
+        temp_raw_dir = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRawSub);
+        save_raw_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRawSub);
         
         % Confirm that NLX Programs closed
         Console_Write('[Save_Cheetah_Data] RUNNNING: Wait for NLX Programs to Close..');
@@ -12916,8 +12960,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'default');
             Dlg_Wait(dlg_h);
             
-            % Pause for 1 sec
-            pause(1);
+            % Pause for 5 sec
+            pause(5);
             
         end
         
@@ -12942,7 +12986,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Config File: "%s"...', nlx_cfg_last))
             
             % Get rat file path
-            rat_path = fullfile(D.DIR.nlxRecRat, 'CheetahLastConfiguration.cfg');
+            rat_path = fullfile(D.DIR.nlxSaveRat, 'CheetahLastConfiguration.cfg');
             
             % Delete existing file
             if exist(rat_path, 'file')
@@ -12959,38 +13003,82 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('[Save_Cheetah_Data] SKIPPED: Copy Config File: "%s"...', nlx_cfg_last))
         end
         
+        % Delete raw data file if not saving
+        if D.F.rec_raw && ~D.F.do_nlx_save
+            
+            % Delete temp raw directory
+            DeleteRawDir(temp_raw_dir);
+        end
+        
         % Bail if not saving
         if ~D.F.do_nlx_save
             return
         end
         
-        % COPY OVER CHEETAH DIRECTORY
-        
-        % Get file size
-        fiGigs = dir(fullfile(D.DIR.nlxTempTop, D.DIR.recFi));
-        fiGigs = sum([fiGigs.bytes])/10^9;
-        
-        % Wait for Cheetah to fully close
-        pause(3);
-        
-        % Log/print start
-        Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Cheetah File...: file=%s size=%0.2fGB', ...
-            D.DIR.recFi, fiGigs));
+        % COPY OVER CHEETAH DIRECTORIES
         
         % Save to global for CS
         m2c_dir = save_rec_dir;
         Console_Write(sprintf('[Save_Cheetah_Data] SET RECORDING DIR TO "%s"', ...
             m2c_dir));
         
-        % Copy file
-        copyfile(temp_rec_dir, save_rec_dir)
+        % Copy main directory
+        CopyDir(D.DIR.nlxRecSub, temp_rec_dir, save_rec_dir);
         
-        % Log/print end
-        Console_Write(sprintf('[Save_Cheetah_Data] FINISHED: Copy Cheetah File: file=%s size=%0.2fGB', ...
-            D.DIR.recFi, fiGigs));
+        % Handle raw nlx data
+        if D.F.rec_raw
+            
+            % Copy raw directory
+            CopyDir(D.DIR.nlxRawSub, temp_raw_dir, save_raw_dir);
+            
+            % Delete temp raw directory
+            DeleteRawDir(temp_raw_dir);
+            
+        end
         
         % Set output and bail
         was_ran = true;
+        
+        %% NESTED FUNCTIONS
+        
+        % DELETE TEMP RAW DATA DIRECTORY
+        function DeleteRawDir(temp_dir)
+            
+            % Log/print
+            Console_Write(sprintf('[DeleteRawDir] RUNNING: Delete Temp Raw Data Dir: "%s"', temp_dir))
+            
+            % Delete directory
+            if exist(temp_dir, 'dir')
+                if rmdir(temp_dir, 's')
+                    Console_Write(sprintf('[DeleteRawDir] FINISHED: Delete Temp Raw Data Dir: "%s"', temp_dir))
+                else
+                    Console_Write(sprintf('**WARNING [DeleteRawDir] FAILED: Delete Temp Raw Data Dir: "%s"', temp_dir))
+                end
+            else
+                Console_Write(sprintf('[DeleteRawDir] SKIPPED: Delete Temp Raw Data Dir: Dir Not Found: "%s"', temp_dir))
+            end
+            
+        end
+        
+        % COPY DIRECTORY
+        function CopyDir(fi_name, source_dir, targ_dir)
+            
+            % Get file size
+            fi_gigs = dir(fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub));
+            fi_gigs = sum([fi_gigs.bytes])/10^9;
+            
+            % Log/print start
+            Console_Write(sprintf('[CopyDir] RUNNING: Copy Cheetah Dir...: file=%s size=%0.2fGB', ...
+                fi_name, fi_gigs));
+            
+            % Copy file
+            copyfile(source_dir, targ_dir)
+            
+            % Log/print end
+            Console_Write(sprintf('[CopyDir] FINISHED: Copy Cheetah Dir: file=%s size=%0.2fGB', ...
+                fi_name, fi_gigs));
+            
+        end
         
     end
 
@@ -13560,6 +13648,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Safe_Set(D.UI.popRewDel, 'Enable', 'off')
                     Button_State(D.UI.toggCue, 'Disable');
                     Button_State(D.UI.toggSnd, 'Disable');
+                    Button_State(D.UI.toggNlx, 'Disable');
                     Button_State(D.UI.toggSetupDone, 'Disable');
                     
                 end
@@ -14744,8 +14833,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Itterate log count
         D.DB.logCount = D.DB.logCount+1;
         
+        % Replace '\' with '/'
+        str_frm = regexprep(str, '\\', '/');
+        
         % Add to strings
-        msg = sprintf('[%d],%d,%s\r', D.DB.logCount, t_m, str);
+        msg = sprintf('[%d],%d,%s\r', D.DB.logCount, t_m, str_frm);
         
         % Store log str
         D.DB.logStr{D.DB.logCount} = msg;
@@ -15938,7 +16030,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -------------------------NERUALYNX RUN SETTINGS--------------------------
-    function Togg_NLXSetup(hObject, ~, ~)
+    function Togg_NLX(hObject, ~, ~)
         
         % Get handle values
         val = get(hObject, 'Value');
@@ -16284,7 +16376,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.TT.clust_files = [D.TT.clust_files{:}];
         
         % Create new save clust dir
-        save_clust_dir = fullfile(D.DIR.nlxTempTop, D.DIR.recFi,'SpikeSortClust');
+        save_clust_dir = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub,'SpikeSortClust');
         mkdir(save_clust_dir);
         
         % Open stream
