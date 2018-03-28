@@ -317,7 +317,7 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-int trackLEDduty[2] = { 128, 255 }; // value between 0 and 255
+int trackLEDduty[2] = { 200, 255 }; // value between 0 and 255
 const int rewLEDmin[2] = { 0, 2};
 int rewLEDduty[2] = { rewLEDmin[0], 15 }; // value between 0 and 255
 
