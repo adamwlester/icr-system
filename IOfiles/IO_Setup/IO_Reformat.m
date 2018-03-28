@@ -23,12 +23,17 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 %   SS_IO_1 = AddNewVar(SS_IO_1, Weight_Baseline, var_before, desc_str, unit_str, tt_var);
 % 
 % EXAMPLE 2
-  TT_I = nan(1,5);
-  var_before = '_F';
-  desc_str = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance, Gnd Impedance]';
-  unit_str = 'MOhm';
-  tt_var = true;
-  TT_IO_2 = AddNewVar(TT_IO_2, TT_I, var_before, desc_str, unit_str, tt_var);
+%   TT_I = nan(1,5);
+%   var_before = '_F';
+%   desc_str = '[E1 Impedance, E2 Impedance, E3 Impedance, E4 Impedance, Gnd Impedance]';
+%   unit_str = 'MOhm';
+%   tt_var = true;
+%   TT_IO_2 = AddNewVar(TT_IO_2, TT_I, var_before, desc_str, unit_str, tt_var);
+%
+% EXAMPLE 3 
+% Raw_Data_File = {''};
+% var_before = 'Recording_File';
+% SS_IO_2 = AddNewVar(SS_IO_2, Raw_Data_File, var_before);
    
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
@@ -60,6 +65,14 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 %   do_remove = true;
 %   TT_IO_2 = MoveVarEntries(TT_IO_2, var_move, var_before, tt_var, do_remove);
 
+% --------------------------- CHANGE VAR NAME -----------------------------
+
+% EXAMPLE 1
+%   old_name = 'Raw_Data_File';
+%   new_name = 'Raw_Data_Dir';
+%   tt_var = false;
+%   SS_IO_2 = ChangeVarName(SS_IO_2, old_name, new_name);
+
 %% =========================== SAVE TABLES ================================
 
 save(fullfile(ioDir,'SS_IO_1'), 'SS_IO_1');
@@ -81,21 +94,18 @@ save(fullfile(ioDir,'TT_IO_2'), 'TT_IO_2');
         table_name = inputname(1);
         var_name = inputname(2);
         
-        % Set default for optional inputs
+        % Handle inputs
+        if nargin < 6
+            tt_var = false;
+        end
+        if nargin < 5
+            unit_str = [];
+        end
+        if nargin < 4
+            description_str = [];
+        end
         if nargin < 3
             var_before = '';
-            description_str = [];
-            unit_str = [];
-            tt_var = false;
-        elseif nargin < 4
-            description_str = [];
-            unit_str = [];
-            tt_var = false;
-        elseif nargin < 5
-            unit_str = [];
-            tt_var = false;
-        elseif nargin < 6
-            tt_var = false;
         end
         
         % Determine what table is being changed
@@ -185,11 +195,11 @@ save(fullfile(ioDir,'TT_IO_2'), 'TT_IO_2');
         %       be preserved
         
         % Handle inputs
+        if nargin < 6
+            unit_str = [];
+        end
         if nargin < 5
-            unit_str = [];
             description_str = [];
-        elseif nargin < 6
-            unit_str = [];
         end
         
         % Get input names as string
@@ -294,8 +304,8 @@ save(fullfile(ioDir,'TT_IO_2'), 'TT_IO_2');
         % Handle inputs
         if nargin < 5
             remove_var = false;
-        elseif nargin < 4
-            remove_var = false;
+        end
+        if nargin < 4
             tt_var = false;
         end
         
@@ -380,6 +390,42 @@ save(fullfile(ioDir,'TT_IO_2'), 'TT_IO_2');
             % Update table
             t = t2;
             
+        end
+        
+    end
+
+% CHANGE VAR NAME
+    function [T2] = ChangeVarName(T, old_name, new_name, tt_var)
+        
+        % Handle inputs
+        if nargin < 4
+            tt_var = false;
+        end
+        
+        % Get input names as string
+        table_name = inputname(1);
+        
+        % Determine what table is being changed
+        if strcmp(table_name, 'SS_IO_2') || strcmp(table_name, 'TT_IO_2')
+            
+            % Add for each field (rat) entry
+            T2 = structfun(@(x) ChangeN(x, old_name, new_name), T, 'uni', false);
+            
+        elseif strcmp(table_name, 'SS_IO_1') || strcmp(table_name, 'TT_IO_1')
+            
+            % Add single instance
+            T2 = ChangeN(x, old_name, new_name);
+            
+        end
+        
+         % Change name function
+        function [t] = ChangeN(t, o_n, n_n)
+            
+            % Get var index
+            var_ind = ismember(t.Properties.VariableNames,o_n);
+            
+            % Change name
+            t.Properties.VariableNames{var_ind} = n_n;
         end
         
     end

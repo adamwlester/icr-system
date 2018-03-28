@@ -169,7 +169,9 @@ T.Session = 0;
 
 T.Date = {''};
 
-T.Recording_File = {''};
+T.Recording_Dir = {''};
+
+T.Raw_Data_Dir = {''};
 
 T.Human = categorical({'<undefined>'}, ...
     human_cats);

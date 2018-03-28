@@ -1450,6 +1450,35 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
+        % Delete nlx raw data file if not saving
+        if D.F.rec_raw && ~D.F.do_nlx_save
+            
+            % Format dir string
+            nlx_raw_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRawSub);
+            
+            % Make sure programs closed
+            if Wait_Close_NLX(15)
+                
+                % Log/print
+                Console_Write(sprintf('[DeleteRawDir] RUNNING: Delete Raw Data Dir: "%s"', nlx_raw_dir))
+                
+                % Delete directory
+                if exist(nlx_raw_dir, 'dir')
+                    if rmdir(nlx_raw_dir, 's')
+                        Console_Write(sprintf('[DeleteRawDir] FINISHED: Delete Raw Data Dir: "%s"', nlx_raw_dir))
+                    else
+                        Console_Write(sprintf('**WARNING [DeleteRawDir] FAILED: Delete Raw Data Dir: "%s"', nlx_raw_dir))
+                    end
+                else
+                    Console_Write(sprintf('[DeleteRawDir] SKIPPED: Delete Raw Data Dir: Dir Not Found: "%s"', nlx_raw_dir))
+                end
+                
+            else
+                Console_Write(sprintf('[DeleteRawDir] SKIPPED: Delete Raw Data Dir: Programs Open: "%s"', nlx_raw_dir))
+            end
+            
+        end
+        
         % Save log
         Console_Write('[ICR_GUI] RUNNING: Save ICR_GUI Log...');
         
@@ -1495,7 +1524,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 cnt_saved, cnt_stored, D.DIR.logTempDir));
         else
             % Print failure
-            Console_Write(sprintf('**WARNING** [ICR_GUI] FAILED: Saving %d Logs to \"%s\"', ...
+            Console_Write(sprintf('**WARNING** [ICR_GUI] SKIPPED: Saving %d Logs to \"%s\"', ...
                 D.DB.logCount, D.DIR.logTempDir));
         end
         
@@ -6442,6 +6471,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Modify buttons for ref chanels
             if contains(D.TT.ttLab{z_tt}, 'R')
                 
+                % Delete all plot cluster buttons
+                delete(D.UI.toggSubPlotTT(z_tt, :));
+                
                 % Delete chan flag buttons > 0
                 delete(D.UI.toggSubFlagTT(z_tt, 8:end));
                 
@@ -6844,13 +6876,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DIR.nlxRawSub = [D.DIR.nlxRecSub, '_raw'];
             
             % Get path to temp
-            nlx_raw_temp_rat = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRawSub);
+            nlx_raw_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRawSub);
             
             % Make raw data temp directory
-            mkdir(nlx_raw_temp_rat);
+            mkdir(nlx_raw_dir);
             
             % Format file path
-            nlx_raw_fi = fullfile(nlx_raw_temp_rat, 'RawData.nrd');
+            nlx_raw_fi = fullfile(nlx_raw_dir, 'RawData.nrd');
             
             % Format and send message
             msg = sprintf('-SetRawDataFile "AcqSystem1" "%s"', nlx_raw_fi);
@@ -6910,7 +6942,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get all DAS objects
         Console_Write('[NLX_Setup] RUNNING: "NlxGetDASObjectsAndTypes()"...');
-        [succeeded, D.NLX.das_objects, ~] = NlxGetDASObjectsAndTypes();
+        [succeeded, D.NLX.das_objects, D.NLX.das_types] = NlxGetDASObjectsAndTypes();
         if succeeded == 1
             Console_Write('[NLX_Setup] FINISHED: "NlxGetDASObjectsAndTypes()"...');
         else
@@ -12667,9 +12699,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Store 'Recording File'
         if D.F.do_nlx_save
-            D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = D.DIR.nlxRecSub;
+            D.SS_IO_2.(D.PAR.ratLab).Recording_Dir{rowInd} = D.DIR.nlxRecSub;
         else
-            D.SS_IO_2.(D.PAR.ratLab).Recording_File{rowInd} = '';
+            D.SS_IO_2.(D.PAR.ratLab).Recording_Dir{rowInd} = '';
+        end
+        
+        % Store 'Raw_Data_Dir'
+        if D.F.do_nlx_save && D.F.rec_raw
+            D.SS_IO_2.(D.PAR.ratLab).Raw_Data_Dir{rowInd} = D.DIR.nlxRawSub;
+        else
+            D.SS_IO_2.(D.PAR.ratLab).Raw_Data_Dir{rowInd} = '';
         end
         
         % Store 'Human'
@@ -12875,12 +12914,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store 'Date'
         D.TT.ttLogNew.Date = {datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS')};
         
-        % Store 'Recording File'
-        % Store 'Recording File'
+        % Store 'Recording_Dir'
         if D.F.do_nlx_save
-            D.TT.ttLogNew.Recording_File{:} = D.DIR.nlxRecSub;
+            D.TT.ttLogNew.Recording_Dir{:} = D.DIR.nlxRecSub;
         else
-            D.TT.ttLogNew.Recording_File{:} = '';
+            D.TT.ttLogNew.Recording_Dir{:} = '';
+        end
+        
+        % Store 'Raw_Data_Dir'
+        if D.F.do_nlx_save && D.F.rec_raw
+            D.TT.ttLogNew.Raw_Data_Dir{:} = D.DIR.nlxRawSub;
+        else
+            D.TT.ttLogNew.Raw_Data_Dir{:} = '';
         end
         
         % Store 'Human'
@@ -12907,8 +12952,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -------------------------SAVE CHEETAH DATA---------------------------
     function[was_ran] = Save_Cheetah_Data()
         
-        %% MAIN CODE
-        
         % Initialize output
         was_ran = false;
         
@@ -12923,50 +12966,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get temp and save dir path
         temp_rec_dir = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub);
         save_rec_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRecSub);
-        temp_raw_dir = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRawSub);
-        save_raw_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRawSub);
         
         % Confirm that NLX Programs closed
-        Console_Write('[Save_Cheetah_Data] RUNNNING: Wait for NLX Programs to Close..');
-        while true
-            
-            % Check Cheetah.EXE status
-            D.F.cheetah_running = Check_EXE('Cheetah.exe');
-            
-            % Check SpikeSort3D.EXE status
-            D.F.spikesort_running = Check_EXE('SpikeSort3D.exe');
-            
-            % Check if all closed
-            [abort, pass] = ...
-                Check_Flag(DOEXIT, ...
-                ~D.F.cheetah_running && ~D.F.spikesort_running);
-            if abort || pass; break; end
-            
-            % Get message string
-            if D.F.cheetah_running && D.F.spikesort_running
-                msg = 'Close Cheetah & SpikeSort3D';
-            elseif D.F.cheetah_running
-                msg = 'Close Cheetah';
-            elseif D.F.spikesort_running
-                msg = 'Close SpikeSort3D';
-            end
-            
-            % Prompt user to close programs
-            dlg_h = dlgAWL( ...
-                msg, ...
-                'CLOSE PROGRAMS', ...
-                'OK', [], [], 'OK', ...
-                D.UI.dlgPos{4}, ...
-                'default');
-            Dlg_Wait(dlg_h);
-            
-            % Pause for 5 sec
-            pause(5);
-            
-        end
+        all_closed = Wait_Close_NLX();
         
         % Bail if cheetah still running
-        if D.F.cheetah_running
+        if ~all_closed
             Console_Write('**WARNING** [Save_Cheetah_Data] ABORTED: Wait for NLX Programs to Close');
             return
         else
@@ -12979,8 +12984,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         nlx_cfg_last = ...
             fullfile(temp_rec_dir, 'ConfigurationLog', 'CheetahLastConfiguration.cfg');
         
-        % Copy file to rat directory
-        if exist(nlx_cfg_last, 'file')
+        % Copy config file to rat directory for ephys sessions
+        if D.F.implant_session && ...
+                exist(nlx_cfg_last, 'file')
             
             % Log print source path
             Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Config File: "%s"...', nlx_cfg_last))
@@ -13003,13 +13009,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Console_Write(sprintf('[Save_Cheetah_Data] SKIPPED: Copy Config File: "%s"...', nlx_cfg_last))
         end
         
-        % Delete raw data file if not saving
-        if D.F.rec_raw && ~D.F.do_nlx_save
-            
-            % Delete temp raw directory
-            DeleteRawDir(temp_raw_dir);
-        end
-        
         % Bail if not saving
         if ~D.F.do_nlx_save
             return
@@ -13022,62 +13021,113 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write(sprintf('[Save_Cheetah_Data] SET RECORDING DIR TO "%s"', ...
             m2c_dir));
         
-        % Copy main directory
-        CopyDir(D.DIR.nlxRecSub, temp_rec_dir, save_rec_dir);
+        % Get file size
+        fi_gigs = dir(fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub));
+        fi_gigs = sum([fi_gigs.bytes])/10^9;
         
-        % Handle raw nlx data
-        if D.F.rec_raw
-            
-            % Copy raw directory
-            CopyDir(D.DIR.nlxRawSub, temp_raw_dir, save_raw_dir);
-            
-            % Delete temp raw directory
-            DeleteRawDir(temp_raw_dir);
-            
-        end
+        % Log/print start
+        Console_Write(sprintf('[CopyDir] RUNNING: Copy Cheetah Dir...: file=%s size=%0.2fGB', ...
+            D.DIR.nlxRecSub, fi_gigs));
+        
+        % Copy file
+        copyfile(temp_rec_dir, save_rec_dir)
+        
+        % Log/print end
+        Console_Write(sprintf('[CopyDir] FINISHED: Copy Cheetah Dir: file=%s size=%0.2fGB', ...
+            D.DIR.nlxRecSub, fi_gigs));
         
         % Set output and bail
         was_ran = true;
         
-        %% NESTED FUNCTIONS
+    end
+
+% --------------------PROMPT TO CLOSE NLX PROGRAMS ------------------------
+    function[pass] = Wait_Close_NLX(dt_check)
         
-        % DELETE TEMP RAW DATA DIRECTORY
-        function DeleteRawDir(temp_dir)
+        % Handle inputs
+        if nargin < 1
+            dt_check = 0;
+            do_exit_abort = true;
+        else
+            do_exit_abort = false;
+        end
+        
+        % Confirm that NLX Programs closed
+        Console_Write('[Wait_Close_NLX] RUNNNING: Wait for NLX Programs to Close..');
+        
+        % Get check start time
+        t_str = Sec_DT(now);
+        
+        % Loop till all closed or timedout
+        while true
             
-            % Log/print
-            Console_Write(sprintf('[DeleteRawDir] RUNNING: Delete Temp Raw Data Dir: "%s"', temp_dir))
+            % Check Cheetah.EXE status
+            cheetah_running = Check_EXE('Cheetah.exe');
             
-            % Delete directory
-            if exist(temp_dir, 'dir')
-                if rmdir(temp_dir, 's')
-                    Console_Write(sprintf('[DeleteRawDir] FINISHED: Delete Temp Raw Data Dir: "%s"', temp_dir))
-                else
-                    Console_Write(sprintf('**WARNING [DeleteRawDir] FAILED: Delete Temp Raw Data Dir: "%s"', temp_dir))
-                end
+            % Check SpikeSort3D.EXE status
+            spikesort_running = Check_EXE('SpikeSort3D.exe');
+            
+            % Check if all closed
+            if do_exit_abort
+                % Abort for exit flag
+                [abort, pass] = ...
+                    Check_Flag(DOEXIT, ...
+                    ~cheetah_running && ~spikesort_running);
             else
-                Console_Write(sprintf('[DeleteRawDir] SKIPPED: Delete Temp Raw Data Dir: Dir Not Found: "%s"', temp_dir))
+                % Abort for timeout
+                [abort, pass] = ...
+                    Check_Flag(Sec_DT(now) > t_str+dt_check, ...
+                    ~cheetah_running && ~spikesort_running);
             end
+            if abort || pass; break; end
+            
+            % Get message string
+            if cheetah_running && spikesort_running
+                msg = 'Close Cheetah & SpikeSort3D';
+            elseif cheetah_running
+                msg = 'Close Cheetah';
+            elseif spikesort_running
+                msg = 'Close SpikeSort3D';
+            end
+            
+            % Prompt user to close programs
+            dlg_h = dlgAWL( ...
+                msg, ...
+                'CLOSE PROGRAMS', ...
+                'OK', [], [], 'OK', ...
+                D.UI.dlgPos{4}, ...
+                'default');
+            
+            % Wait for response
+            Dlg_Wait(dlg_h, do_exit_abort);
+            
+            % Pause for 5 sec
+            pause(5);
             
         end
         
-        % COPY DIRECTORY
-        function CopyDir(fi_name, source_dir, targ_dir)
-            
-            % Get file size
-            fi_gigs = dir(fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub));
-            fi_gigs = sum([fi_gigs.bytes])/10^9;
-            
-            % Log/print start
-            Console_Write(sprintf('[CopyDir] RUNNING: Copy Cheetah Dir...: file=%s size=%0.2fGB', ...
-                fi_name, fi_gigs));
-            
-            % Copy file
-            copyfile(source_dir, targ_dir)
-            
-            % Log/print end
-            Console_Write(sprintf('[CopyDir] FINISHED: Copy Cheetah Dir: file=%s size=%0.2fGB', ...
-                fi_name, fi_gigs));
-            
+        % Delete figure if still open
+        if exist('dlg_h', 'var')
+            if ishandle(dlg_h)
+                if isvalid(dlg_h)
+                    delete(dlg_h)
+                end
+            end
+        end
+        
+        % Update globals
+        if exist('D', 'var')
+            if isfield(D, 'F')
+                D.F.cheetah_running = cheetah_running;
+                D.F.spikesort_running = spikesort_running;
+            end
+        end
+        
+        % Log/print status
+        if pass
+            Console_Write('[Wait_Close_NLX] FINISHED: Wait for NLX Programs to Close..');
+        else
+            Console_Write('**WARNING** [Wait_Close_NLX] ABORTED: Wait for NLX Programs to Close..');
         end
         
     end
@@ -13286,17 +13336,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -------------------------CLEAR AND CLOSE ALL-----------------------------
     function ClearCloseAll(clear_all)
         
-        % Stop/delete c2m timer
-        if exist('D', 'var')
-            if isfield(D, 'timer_c2m')
-                if isa(D.timer_c2m, 'timer')
-                    if isvalid(D.timer_c2m)
-                        if strcmp(D.timer_c2m.Running, 'on')
-                            stop(D.timer_c2m);
-                            Console_Write('[ClearCloseAll] Stopped "timer_c2m"');
+        % Stop/delete if clearing all c2m timer
+        if clear_all
+            if exist('D', 'var')
+                if isfield(D, 'timer_c2m')
+                    if isa(D.timer_c2m, 'timer')
+                        if isvalid(D.timer_c2m)
+                            if strcmp(D.timer_c2m.Running, 'on')
+                                stop(D.timer_c2m);
+                                Console_Write('[ClearCloseAll] Stopped "timer_c2m"');
+                            end
+                            delete(D.timer_c2m);
+                            Console_Write('[ClearCloseAll] Deleted "timer_c2m"');
                         end
-                        delete(D.timer_c2m);
-                        Console_Write('[ClearCloseAll] Deleted "timer_c2m"');
                     end
                 end
             end
@@ -15195,14 +15247,24 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ----------------------HOLD FOR DIALOGUE RESPONSE-------------------------
-    function[choice] = Dlg_Wait(dlg_h)
+    function[choice] = Dlg_Wait(dlg_h, do_exit_abort)
+        
+        % Handle inputs
+        if nargin<2
+            do_exit_abort = true;
+        end
         
         % Keep checking for response
         while true
             
             % Get current choice
             choice = dlg_h.UserData;
-            [abort, pass] = Check_Flag(DOEXIT, ~strcmp(choice, ''));
+            if do_exit_abort
+                do_exit = DOEXIT;
+            else
+                do_exit = false;
+            end
+            [abort, pass] = Check_Flag(do_exit, ~strcmp(choice, ''));
             
             % Bail if done
             if abort || pass
@@ -16385,6 +16447,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Get tt label
             tt_lab = D.TT.ttLab{z_tt};
             
+            % Check for DAS object
+            is_das = any(contains(D.NLX.das_objects, tt_lab) & contains(D.NLX.das_types, 'TTScAcqEnt'));
+            
+            % Bail if das object does not exist
+            if ~is_das
+                Console_Write(sprintf('[Togg_LoadClust] SKIPPED: Load %s: DAS Object Not Found', tt_lab));
+                continue
+            end
+                
             % Parse clust file
             if val == 1
                 
@@ -16431,17 +16502,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Open tt stream
             if val == 1
                 msg = sprintf('Open \"%s\" Stream', tt_lab);
-                if any(contains(D.NLX.das_objects, tt_lab))
                     succeeded = NlxOpenStream(tt_lab) == 1;
-                end
             end
             
             % Close tt stream
             if val == 0
                 msg = sprintf('Close \"%s\" Stream', tt_lab);
-                if any(contains(D.NLX.das_objects, tt_lab))
                     succeeded = NlxCloseStream(tt_lab) == 1;
-                end
             end
             
             % Check status
@@ -16454,13 +16521,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.clust_loaded(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
                 
             else
-                
-                % Check for missing das
-                if ~any(contains(D.NLX.das_objects, tt_lab))
-                    Console_Write(sprintf('**WARNING** [Togg_LoadClust] ABORTED: %s: Missing DAS Object', msg));
-                else
-                    Console_Write(sprintf('**WARNING** [Togg_LoadClust] FAILED: %s', msg));
-                end
+                Console_Write(sprintf('**WARNING** [Togg_LoadClust] FAILED: %s', msg));
                 
                 % Bail
                 continue

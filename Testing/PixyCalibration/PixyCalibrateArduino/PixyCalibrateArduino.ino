@@ -17,12 +17,11 @@ bool printSpeed = false;
 // Declare vars
 
 // Coeff calculated using CalibrateCurveFit.m
-const double coeff[5] = {
-	0.000000043550534,
-	-0.000023239535204,
-	0.005033059128963,
-	-0.677050955917591,
-	75.424132382709260
+const double coeff[4] = {
+	-0.000002312868495,
+	0.001516345652661,
+	-0.487244069265786,
+	89.149303146603430
 };
 
 int yNow = NULL;
@@ -116,11 +115,10 @@ void loop()
 
 		// Transfor Y pxl to cm
 		cmNow =
-			coeff[0] * (yNow * yNow * yNow * yNow) +
-			coeff[1] * (yNow * yNow * yNow) +
-			coeff[2] * (yNow * yNow) +
-			coeff[3] * yNow +
-			coeff[4];
+			coeff[0] * (yNow * yNow * yNow) +
+			coeff[1] * (yNow * yNow) +
+			coeff[2] * (yNow) +
+			coeff[3];
 
 		// Fill array
 		if (cmLast != NULL && i < ySampN) {

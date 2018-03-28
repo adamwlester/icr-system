@@ -3795,8 +3795,10 @@ bool CheckForStart()
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static bool is_on = false;
 	static uint32_t t_pulse_last = 0;
-	static uint16_t dt_blink_on = 10;
-	static uint16_t dt_blink_off = 490;
+	static uint16_t dt_blink_on = 10; 
+	static uint16_t dt_blink_off = 490; 
+	//static uint16_t dt_blink_on = 100; // 10 TEMP
+	//static uint16_t dt_blink_off = 100; // 490 TEMP
 
 	if (fc.isHandShook) {
 		return true;
@@ -3815,7 +3817,8 @@ bool CheckForStart()
 	}
 	else if (is_on && millis() >= t_pulse_last + dt_blink_on) {
 
-		analogWrite(pin.TrackLED, 0);
+		analogWrite(pin.TrackLED, 0); 
+		//analogWrite(pin.TrackLED, trackLEDduty[0]); // TEMP 0
 		is_on = false;
 	}
 
@@ -5418,11 +5421,10 @@ double CheckPixy(bool is_hardware_test)
 	// Get Y pos from last block and convert to CM
 	pixy_pos_y = Pixy.blocks[blocks - 1].y;
 	px_rel =
-		pixyCoeff[0] * (pixy_pos_y * pixy_pos_y * pixy_pos_y * pixy_pos_y) +
-		pixyCoeff[1] * (pixy_pos_y * pixy_pos_y * pixy_pos_y) +
-		pixyCoeff[2] * (pixy_pos_y * pixy_pos_y) +
-		pixyCoeff[3] * pixy_pos_y +
-		pixyCoeff[4];
+		pixyCoeff[0] * (pixy_pos_y * pixy_pos_y * pixy_pos_y) +
+		pixyCoeff[1] * (pixy_pos_y * pixy_pos_y) +
+		pixyCoeff[2] * pixy_pos_y +
+		pixyCoeff[3];
 
 	// Return rel val is testing
 	if (is_hardware_test) {

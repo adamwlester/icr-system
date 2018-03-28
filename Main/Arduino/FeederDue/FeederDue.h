@@ -228,12 +228,11 @@ uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
 // PIXY
-const double pixyCoeff[5] = {
-	0.000000043550534,
-	-0.000023239535204,
-	0.005033059128963,
-	-0.677050955917591,
-	75.424132382709260
+const double pixyCoeff[4] = {
+	-0.000002312868495,
+	0.001516345652661,
+	-0.487244069265784,
+	89.149303146603344,
 };
 const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 
@@ -318,7 +317,7 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-int trackLEDduty[2] = { 74, 255 }; // value between 0 and 255
+int trackLEDduty[2] = { 128, 255 }; // value between 0 and 255
 const int rewLEDmin[2] = { 0, 2};
 int rewLEDduty[2] = { rewLEDmin[0], 15 }; // value between 0 and 255
 
