@@ -94,7 +94,6 @@ public:
 	bool isHolding4cross = false;
 	double error = 0;
 	double errorLast = 0;
-	double errorFeeder = 0;
 	double integral = 0;
 	double derivative = 0;
 	double velUpdate = 0;
@@ -303,7 +302,7 @@ public:
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
 	bool isArmExtended = true;
-	const byte armExtStps = 130; // 160
+	const byte armExtStps = 255; // 130
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -905,7 +904,6 @@ double PID::UpdatePID()
 
 	// Compute error 
 	error = kal.RatPos - (kal.RobPos + setPoint);
-	errorFeeder = kal.RatPos - (kal.RobPos + feedDist);
 
 	// Check if motor is open
 	PID_CheckMotorControl();
@@ -1922,7 +1920,7 @@ void REWARD::StartRew()
 	}
 
 	// Compute retract arm time
-	if (strcmp(modeReward, "Button") != 0 && 
+	if (strcmp(modeReward, "Button") != 0 &&
 		!fc.isForageTask) {
 
 		// Compute time and set flag
@@ -1935,7 +1933,7 @@ void REWARD::StartRew()
 
 	// Log/print 
 	sprintf(str, "RUNNING: \"%s\" Reward: cnt_rew=%d dt_sol=%dms dt_rew=%dms dt_retract=%d...",
-		modeReward, cnt_rew, t_closeSol- t_rewStr, duration, doTimedRetract ? t_retractArm - t_rewStr : 0);
+		modeReward, cnt_rew, t_closeSol - t_rewStr, duration, doTimedRetract ? t_retractArm - t_rewStr : 0);
 	DebugFlow(__FUNCTION__, __LINE__, str, t_rewStr);
 
 
@@ -2253,9 +2251,14 @@ void REWARD::ExtendFeedArm()
 	// Make sure step low
 	digitalWrite(pin.ED_STP, LOW);
 
-	// Set to half step
-	digitalWrite(pin.ED_MS1, HIGH);
-	digitalWrite(pin.ED_MS2, LOW);
+	//// Set to half step
+	//digitalWrite(pin.ED_MS1, HIGH);
+	//digitalWrite(pin.ED_MS2, LOW);
+	//digitalWrite(pin.ED_MS3, LOW);
+
+	// Set to quarter step
+	digitalWrite(pin.ED_MS1, LOW);
+	digitalWrite(pin.ED_MS2, HIGH);
 	digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to extend
@@ -3795,8 +3798,8 @@ bool CheckForStart()
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static bool is_on = false;
 	static uint32_t t_pulse_last = 0;
-	static uint16_t dt_blink_on = 10; 
-	static uint16_t dt_blink_off = 490; 
+	static uint16_t dt_blink_on = 10;
+	static uint16_t dt_blink_off = 490;
 
 	if (fc.isHandShook) {
 		return true;
@@ -3815,7 +3818,7 @@ bool CheckForStart()
 	}
 	else if (is_on && millis() >= t_pulse_last + dt_blink_on) {
 
-		analogWrite(pin.TrackLED, 0); 
+		analogWrite(pin.TrackLED, 0);
 		is_on = false;
 	}
 
@@ -5104,9 +5107,9 @@ void CheckBlockTimElapsed()
 	// Check that all 3 measures say rat has passed
 	is_passed_feeder =
 		fc.isTrackingEnabled &&
-		kal.RatPos - (kal.RobPos + feedDist) > 0 &&
-		Pos[0].posRel - (kal.RobPos + feedDist) > 0 &&
-		Pos[2].posRel - (kal.RobPos + feedDist) > 0;
+		kal.RatPos - (kal.RobPos + feedTrackPastDist) > 0 &&
+		Pos[0].posRel - (kal.RobPos + feedTrackPastDist) > 0 &&
+		Pos[2].posRel - (kal.RobPos + feedTrackPastDist) > 0;
 
 	// Check if motor already running again
 	is_mot_running = runSpeedNow > 0;
@@ -5358,7 +5361,6 @@ double CheckPixy(bool is_hardware_test)
 
 	// Bail if rat not on track or doing simulation test
 	if (!is_hardware_test &&
-		!db.do_posDebug &&
 		(!fc.isRatOnTrack || db.do_simRatTest)) {
 		return px_rel;
 	}
@@ -5423,16 +5425,17 @@ double CheckPixy(bool is_hardware_test)
 		pixyCoeff[2] * pixy_pos_y +
 		pixyCoeff[3];
 
-	// Return rel val is testing
+	// Shift pixy data
+	px_rel = px_rel + pixyShift;
+
+	// Return rel val if testing
 	if (is_hardware_test) {
 		return px_rel;
 	}
 
 	// Scale to abs space with rob vt data
 	px_abs = px_rel + Pos[1].posAbs;
-	if (px_abs > (140 * PI)) {
-		px_abs = px_abs - (140 * PI);
-	}
+	px_abs = px_abs > (140 * PI) ? px_abs - (140 * PI) : px_abs;
 
 	// Update pixy pos and vel
 	Pos[2].UpdatePos(px_abs, t_px_ts);
@@ -8726,8 +8729,26 @@ void loop() {
 	// Run position debugging
 	if (db.do_posDebug)
 	{
+		char str[maxStoreStrLng] = { 0 };
 		static double pos_last[3] = { 0 };
+		static int32_t t_check_next = 0;
+		static bool is_halted = false;
+		int dt_check = 250;
 		bool is_new = false;
+
+		// Halt robot after first move
+		if (cmd.cnt_move == 1 && !is_halted) {
+			// Block motor control
+			SetMotorControl("Halt", "Halt");
+			is_halted = true;
+		}
+
+		// Unhalt for last move
+		if ((c2r.idNow == 'M' && c2r.isNew) && cmd.cnt_move == 1 && is_halted) {
+			// Unblock motor control
+			SetMotorControl("Open", "Halt");
+			is_halted = false;
+		}
 
 		// Check if position values changed
 		for (int i = 0; i < 3; i++) {
@@ -8738,16 +8759,16 @@ void loop() {
 		}
 
 		// Plot new data
-		if (is_new)
+		if (is_new && millis() > t_check_next)
 		{
-			// Get setpoint pos
-			double setpoint_vt = Pos[1].posRel + Pid.setPoint;
-			double setpoint_ekf = kal.RobPos + Pid.setPoint;
+
+			// Update check time 
+			t_check_next = millis() + dt_check;
 
 			// Plot pos
 			if (db.do_posPlot) {
 				/*
-				{@Plot.Pos.Pos[0].Blue Pos[0].posRel}{@Plot.Pos.Pos[2].Green Pos[2].posRel}{@Plot.Pos.Pos[1].Orange Pos[1].posRel}{@Plot.Pos.setpoint_vt.Orange setpoint_vt}{@Plot.Pos.ratEKF.Black kal.RatPos}{@Plot.Pos.robEKF.Red kal.RobPos}{@Plot.Pos.setpoint_ekf.Red kal.setpoint_ekf}
+				{@Plot.WinPos.PosRatVT.Blue Pos[0].posRel}{@Plot.WinPos.PosRatPixy.Green Pos[2].posRel}{@Plot.WinPos.PosRobVT.Orange Pos[1].posRel}{@Plot.WinPos.RatEKF.Black kal.RatPos}{@Plot.WinPos.RobEKF.Red kal.RobPos}
 				*/
 				millis();
 			}
@@ -8764,12 +8785,14 @@ void loop() {
 				analogWrite(pin.RewLED_R, rewLEDduty[0]);
 			}
 
+			// Compute distances
+			double rat_vt_dist = Pos[0].posRel - Pos[1].posRel;
+			double rat_pixy_dist = Pos[2].posRel - Pos[1].posRel;
+
 			// Print pos data
-			char str1[50];
-			char str2[50];
-			sprintf(str1, "Rat Dst = %0.2fcm", kal.RatPos - kal.RobPos);
-			sprintf(str2, "Pid Err = %0.2fcm", Pid.error);
-			PrintLCD(false, str1, str2, 't');
+			sprintf(str, "POS DEBUG (abs|rel|laps|dist): rat_vt=%0.2f|%0.2f|%d|%0.2f rat_pixy=%0.2f|%0.2f|%d|%0.2f rob_vt=%0.2f|%0.2f|%d",
+				Pos[0].posRel, Pos[0].posAbs, Pos[0].nLaps, rat_vt_dist, Pos[2].posRel, Pos[2].posAbs, Pos[2].nLaps, rat_pixy_dist, Pos[1].posRel, Pos[1].posAbs, Pos[1].nLaps);
+			SerialUSB.println(str);
 
 		}
 	}
@@ -8793,7 +8816,7 @@ void loop() {
 			millis();
 			// Plot error
 			/*
-			{@Plot.Vel.Error.Red Pid.cal_errNow} {@Plot.Vel.Setpoint.Black 0}
+			{@Plot.WinPID.Error.Red Pid.cal_errNow} {@Plot.WinPID.Setpoint.Black 0}
 			*/
 			millis();
 			// Reset flag
@@ -8842,7 +8865,7 @@ void loop() {
 		// Store info from second 'S' packet
 		if (cmd.sesMsg == 2) {
 			cmd.sesSound = (byte)c2r.dat[1];
-			cmd.sesSetpoint = c2r.dat[2];
+			cmd.sesSetpointHeadDist = c2r.dat[2];
 		}
 
 		// Handle first 'S' packet
@@ -8863,11 +8886,29 @@ void loop() {
 			// Handle Behavior session
 			if (cmd.sesCond == 2) {
 				DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
+
+				// Update pixy coeff
+				pixyCoeff[0] = pixyPackCoeff[0];
+				pixyCoeff[1] = pixyPackCoeff[1];
+				pixyCoeff[2] = pixyPackCoeff[2];
+				pixyCoeff[3] = pixyPackCoeff[3];
+
+				// Update pixy shift
+				pixyShift = pixyPackShift;
 			}
 
 			// Handle Implant session
 			if (cmd.sesCond == 3) {
 				DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
+
+				// Update pixy coeff
+				pixyCoeff[0] = pixyCubeCoeff[0];
+				pixyCoeff[1] = pixyCubeCoeff[1];
+				pixyCoeff[2] = pixyCubeCoeff[2];
+				pixyCoeff[3] = pixyCubeCoeff[3];
+
+				// Update pixy shift
+				pixyShift = pixyCubeShift;
 			}
 
 			// Handle Track task
@@ -8937,11 +8978,18 @@ void loop() {
 				DebugFlow(__FUNCTION__, __LINE__, "DO TONE");
 			}
 
-			// Store pid setpoint
-			Pid.setPoint = cmd.sesSetpoint;
+			// Compute and store pid setpoint
+			Pid.setPoint = setPointHead + cmd.sesSetpointHeadDist;
+
+			// Update tracker feeder pass distance
+			feedTrackPastDist = feedDist + feedHeadPastDist + cmd.sesSetpointHeadDist;
 
 			// Log/print set setpoint
 			sprintf(horeStr, "PID SETPOINT DISTANCE %0.2fcm", Pid.setPoint);
+			DebugFlow(__FUNCTION__, __LINE__, horeStr);
+
+			// Log/print feed pass distance
+			sprintf(horeStr, "FEED PASS TRACKER DISTANCE %0.2fcm", feedTrackPastDist);
 			DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 		}
@@ -9475,8 +9523,7 @@ void loop() {
 			Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
 			// Set rat vt and pixy to setpoint if rat not in or task done
-			if ((!fc.isRatOnTrack && !db.do_posDebug) ||
-				fc.isTaskDone) {
+			if (!fc.isRatOnTrack || fc.isTaskDone) {
 
 				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
 				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
@@ -9499,8 +9546,7 @@ void loop() {
 		else if (cmd.vtEnt == 0) {
 
 			// Update only after rat in before task done
-			if ((fc.isRatOnTrack || db.do_posDebug) &&
-				!fc.isTaskDone) {
+			if (fc.isRatOnTrack && !fc.isTaskDone) {
 
 				// Update rat VT
 				Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);

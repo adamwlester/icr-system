@@ -228,12 +228,22 @@ uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
 // PIXY
-const double pixyCoeff[4] = {
-	-0.000002312868495,
-	0.001516345652661,
-	-0.487244069265784,
-	89.149303146603344,
+double pixyCoeff[4] = {0};
+const double pixyPackCoeff[4] = {
+	-0.000002478073388,
+	0.001624656056423,
+	-0.522047217070484,
+	95.874253371360751,
 };
+const double pixyCubeCoeff[4] = {
+	-0.000003917250068,
+	0.001889485307691,
+	-0.510571942244013,
+	91.860699215839887,
+};
+double pixyShift = 0;
+const double pixyPackShift = 0; // (cm)
+const double pixyCubeShift = -5; // (cm)
 const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
 
 // AUTODRIVER
@@ -276,15 +286,18 @@ struct KAL
 kal;
 
 // PID SETTINGS
+const float setPointHead = 70;
+const float feedDist = 72;
 const float guardDist = 4.5;
-const float feedDist = 66;
 
 // MOVEMENT
 float moveToSpeedMax = 80; // (cm/sec)
 float moveToSpeedMin = 15; // (cm/sec)
-float moveToDecelDist = 30; // cm
+float moveToDecelDist = 40; // cm
 
 // REWARD
+double feedTrackPastDist = 0; // (cm) 
+const double feedHeadPastDist = 10; // (cm)
 const long armStepFreq = 1000; // (us)
 const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
@@ -394,7 +407,7 @@ struct CMD
 	byte sesCond = 0;
 	byte sesTask = 0;
 	byte sesSound = 0;
-	float sesSetpoint = 0;
+	float sesSetpointHeadDist = 0;
 	byte vtEnt = 0;
 	float vtCM[2] = { 0,0 };
 	uint32_t vtTS[2] = { 0,0 };

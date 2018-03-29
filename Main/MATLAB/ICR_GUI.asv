@@ -451,13 +451,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Min time in start quad
         D.PAR.strQdDel = 0.5; % (sec)
         % PID setPoint
-        D.PAR.setPointHead = 70;
+        D.PAR.setPointHead = 67;
         D.PAR.setPointHeadDistBackpack = -12;
-        D.PAR.setPointHeadDistImplant = 0;
+        D.PAR.setPointImplant = 66;
         D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistBackpack;
         D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
         % Feeder dist from rob tracker
-        D.PAR.feedDistRad = 72 * ((2 * pi)/(140 * pi));
+        D.PAR.feedDistRad = 67 * ((2 * pi)/(140 * pi));
         % Robot guard dist
         D.PAR.guardDistRad = 4.5 * ((2 * pi)/(140 * pi));
         % Robot butt dist
@@ -7068,7 +7068,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.implant_session
             
             % Specify inplant setpoint
-            D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistImplant;
+            D.PAR.setPointCM = D.PAR.setPointImplant;
             D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
             
             % Set stream hd flag
@@ -7713,11 +7713,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.sesMsg(2,1) = 2;
         end
         
-        % Pid setpoint tracker head distance
+        % Pid setpoint
         if ~D.F.implant_session
             D.PAR.sesMsg(2,2) = D.PAR.setPointHeadDistBackpack;
         else
-            D.PAR.sesMsg(2,2) = D.PAR.setPointHeadDistImplant;
+            D.PAR.sesMsg(2,2) = D.PAR.setPointImplant;
         end
         
         % Start timer

@@ -89,15 +89,16 @@ while true
     % Put up light backround
     if ~exist('frame_java', 'var') || ...
             (etime(clock, t_darkBackImg) >= dt_keepDarkImg && ...
-            etime(t_darkBackImg, t_lightBackImg) > 0)
+            etime(clock, t_darkBackImg) >= dt_keepDarkImg)
+            
         
-        % Show image and save time
         frame_java = fullscreenAWL(fullfile(imgDir,subDir{1},imgBackFiles{1}));
-         t_lightBackImg = clock;
-         
         % Print status message
         fprintf('\r\tchange image to \"%s\": %s\r', ...
             imgBackFiles{1}, datestr(now, 'HH:MM:SS AM'))
+        t_lightBackImg
+        % Pause so not run again
+        pause(1);
     end
     
     % Bring java window back to front

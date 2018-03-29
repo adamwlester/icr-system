@@ -18,10 +18,10 @@ bool printSpeed = false;
 
 // Coeff calculated using CalibrateCurveFit.m
 const double coeff[4] = {
-	-0.000002312868495,
-	0.001516345652661,
-	-0.487244069265786,
-	89.149303146603430
+	-0.000003656100063,
+	0.001763519620511,
+	-0.476533812761073,
+	85.403319268117031,
 };
 
 int yNow = NULL;
