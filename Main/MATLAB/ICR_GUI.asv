@@ -99,8 +99,10 @@ D.DB.ratLab = 'r0495'; %'r9999';
 % Implant status
 D.DB.Implanted = true;
 
-% Run cheetah
+% NLX parameters
 D.DB.Run_Cheetah = true;
+D.DB.Run_SS3D = false;
+D.DB.Rec_Raw = true;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
@@ -451,13 +453,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Min time in start quad
         D.PAR.strQdDel = 0.5; % (sec)
         % PID setPoint
-        D.PAR.setPointHead = 67;
+        D.PAR.setPointHead = 70;
         D.PAR.setPointHeadDistBackpack = -12;
-        D.PAR.setPointImplant = 66;
+        D.PAR.setPointHeadDistImplant = 0;
         D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistBackpack;
         D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
         % Feeder dist from rob tracker
-        D.PAR.feedDistRad = 67 * ((2 * pi)/(140 * pi));
+        D.PAR.feedDistRad = 72 * ((2 * pi)/(140 * pi));
         % Robot guard dist
         D.PAR.guardDistRad = 4.5 * ((2 * pi)/(140 * pi));
         % Robot butt dist
@@ -1458,7 +1460,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             nlx_raw_dir = fullfile(D.DIR.nlxSaveRat, D.DIR.nlxRawSub);
             
             % Make sure programs closed
-            if Wait_Close_NLX(15)
+            if Wait_Close_NLX(4)
                 
                 % Log/print
                 Console_Write(sprintf('[DeleteRawDir] RUNNING: Delete Raw Data Dir: "%s"', nlx_raw_dir))
@@ -7068,7 +7070,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.implant_session
             
             % Specify inplant setpoint
-            D.PAR.setPointCM = D.PAR.setPointImplant;
+            D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistImplant;
             D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
             
             % Set stream hd flag
@@ -7713,11 +7715,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.sesMsg(2,1) = 2;
         end
         
-        % Pid setpoint
+        % Pid setpoint tracker head distance
         if ~D.F.implant_session
             D.PAR.sesMsg(2,2) = D.PAR.setPointHeadDistBackpack;
         else
-            D.PAR.sesMsg(2,2) = D.PAR.setPointImplant;
+            D.PAR.sesMsg(2,2) = D.PAR.setPointHeadDistImplant;
         end
         
         % Start timer
@@ -8626,10 +8628,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set Human
             D.SS_IO_1.Human(ratInd) = {'AWL'};
             
-            % Set run cheetah
-            Safe_Set(D.UI.toggNlx(1), 'Value', D.DB.Run_Cheetah);
-            Togg_NLX(D.UI.toggNlx(1));
-            
             % Remaining vars
             if D.PAR.sesType == 'ICR_Session'
                 
@@ -8686,6 +8684,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Run PopRat
             Pop_Rat();
+            
+            % Set NLX buttons
+            Safe_Set(D.UI.toggNlx(1), 'Value', D.DB.Run_Cheetah);
+            Togg_NLX(D.UI.toggNlx(1));
+            Safe_Set(D.UI.toggNlx(2), 'Value', D.DB.Run_SS3D);
+            Togg_NLX(D.UI.toggNlx(2));
+            Safe_Set(D.UI.toggNlx(3), 'Value', D.DB.Rec_Raw);
+            Togg_NLX(D.UI.toggNlx(3));
             
             % TRIGGER SETUP DONE
             Safe_Set(D.UI.toggSetupDone, 'Value', 1);
@@ -13046,24 +13052,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % --------------------PROMPT TO CLOSE NLX PROGRAMS ------------------------
-    function[pass] = Wait_Close_NLX(dt_check)
+    function[pass] = Wait_Close_NLX(check_max)
         
         % Handle inputs
         if nargin < 1
-            dt_check = 0;
+            check_max = inf;
             do_exit_abort = true;
         else
             do_exit_abort = false;
         end
         
         % Confirm that NLX Programs closed
-        Console_Write('[Wait_Close_NLX] RUNNNING: Wait for NLX Programs to Close..');
+        Console_Write(sprintf('[Wait_Close_NLX] RUNNNING: Wait for NLX Programs to Close: n_check=%d...', check_max));
         
         % Get check start time
         t_str = Sec_DT(now);
         
+        % Initialize counter
+        cnt_check = 0;
+        
         % Loop till all closed or timedout
         while true
+            
+            % Itterate counter
+            cnt_check = cnt_check+1;
             
             % Check Cheetah.EXE status
             cheetah_running = Check_EXE('Cheetah.exe');
@@ -13071,19 +13083,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Check SpikeSort3D.EXE status
             spikesort_running = Check_EXE('SpikeSort3D.exe');
             
-            % Check if all closed
-            if do_exit_abort
-                % Abort for exit flag
-                [abort, pass] = ...
-                    Check_Flag(DOEXIT, ...
-                    ~cheetah_running && ~spikesort_running);
-            else
-                % Abort for timeout
-                [abort, pass] = ...
-                    Check_Flag(Sec_DT(now) > t_str+dt_check, ...
-                    ~cheetah_running && ~spikesort_running);
+            % Get abort flag
+            do_abort = (do_exit_abort && DOEXIT) || check_max > check_max;
+            
+            % Abort for exit flag
+            [abort, pass] = ...
+                Check_Flag(do_abort, ...
+                ~cheetah_running && ~spikesort_running);
+            
+            % Bail
+            if abort || pass
+                break;
             end
-            if abort || pass; break; end
             
             % Get message string
             if cheetah_running && spikesort_running
@@ -13110,7 +13121,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        % Delete figure if still open
+        % Delete dialogue window if still open
         if exist('dlg_h', 'var')
             if ishandle(dlg_h)
                 if isvalid(dlg_h)
@@ -13127,11 +13138,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
         end
         
+        % Format inf string
+        dat_str = sprintf(': dt_check=%0.2fsec cnt_check=%d', Sec_DT(now) - t_str, cnt_check);
+        
         % Log/print status
         if pass
-            Console_Write('[Wait_Close_NLX] FINISHED: Wait for NLX Programs to Close..');
+            Console_Write(['[Wait_Close_NLX] FINISHED: Wait for NLX Programs to Close', dat_str]);
         else
-            Console_Write('**WARNING** [Wait_Close_NLX] ABORTED: Wait for NLX Programs to Close..');
+            Console_Write(['**WARNING** [Wait_Close_NLX] ABORTED: Wait for NLX Programs to Close', dat_str]);
         end
         
     end
