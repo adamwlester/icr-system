@@ -248,7 +248,8 @@ uint32_t word_rewStr;
 uint32_t word_rewEnd;
 
 // IR time sync LED
-const int dt_irSyncPulse = 10; // (ms)
+const int dt_irSyncPulse = 500; // (ms) 
+const int dt_irSyncPulseOn = 10; // (ms)
 uint32_t del_irSyncPulse = 60000; // (ms)
 uint32_t t_sync = 0;
 bool is_irOn = false;
@@ -391,7 +392,7 @@ bool CheckForStart()
 	if (digitalRead(pin.BlinkSwitch) == LOW || is_irOn)
 	{
 		// Turn on without triggering ttl
-		PulseIR(500, dt_irSyncPulse, 2, false);
+		PulseIR(dt_irSyncPulse, dt_irSyncPulseOn, 2, false);
 	}
 
 	// Get new data
@@ -1680,6 +1681,7 @@ void StatusBlink()
 {
 	bool is_on = false;
 	int dt = 100;
+
 	// Flash 
 	for (int i = 0; i < 10; i++)
 	{
@@ -1687,6 +1689,7 @@ void StatusBlink()
 		delay(dt);
 		is_on = !is_on;
 	}
+
 	// Reset LED
 	digitalWrite(pin.relIR, LOW);
 }
@@ -1718,7 +1721,7 @@ void QuitBeep()
 }
 
 // PULSE IR: force_state=[0,1,2]
-bool PulseIR(int dt_off, int dt_on, byte force_state, bool do_ttl)
+bool PulseIR(int dt_pulse, int dt_on, byte force_state, bool do_ttl)
 {
 	// Local vars
 	bool is_changed = false;
@@ -1734,7 +1737,7 @@ bool PulseIR(int dt_off, int dt_on, byte force_state, bool do_ttl)
 		(
 			force_state == 2 &&
 			!is_irOn &&
-			millis() > t_irSyncLast + dt_off)
+			millis() > t_irSyncLast + dt_pulse)
 		)
 	{
 		// Set ir relay and ttl pins high
@@ -2416,7 +2419,7 @@ void loop()
 	}
 
 	// PULSE IR
-	if (PulseIR(del_irSyncPulse, dt_irSyncPulse)) {
+	if (PulseIR(del_irSyncPulse, dt_irSyncPulseOn)) {
 
 		// Itterate count
 		if (is_irOn) {

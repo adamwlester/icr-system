@@ -18,10 +18,10 @@ bool printSpeed = false;
 
 // Coeff calculated using CalibrateCurveFit.m
 const double coeff[4] = {
-	-0.000003656100063,
-	0.001763519620511,
-	-0.476533812761073,
-	85.403319268117031,
+	-0.000005563484773,
+	0.002449206596693,
+	-0.556940386359456,
+	89.885505970779050,
 };
 
 int yNow = NULL;
@@ -87,22 +87,6 @@ void loop()
 	uint16_t blocks;
 	static int i = 0;
 	static int k = 0;
-
-	// TEMP
-	static uint32_t t_lit = 0;
-	static bool is_on = false;
-	if (millis() > t_lit + 5000) {
-		is_on = !is_on;
-		byte duty = is_on ? 15 : 0;
-		analogWrite(pin.RewLED_R, duty);
-		t_lit = millis();
-		if (is_on) {
-			SerialUSB.println("LED ON");
-		}
-		else {
-			SerialUSB.println("LED OFF");
-		}
-	}
 
 	// get new data
 	blocks = pixy.getBlocks();

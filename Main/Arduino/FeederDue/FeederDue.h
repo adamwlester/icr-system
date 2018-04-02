@@ -127,8 +127,8 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Testing
-	const bool do_posDebug = false; // I set
-	const bool do_posPlot = false; // I set
+	const bool do_posDebug = false; // I set (Run in Manual_Training Mode)
+	const bool do_posPlot = false; // I set (Run in Manual_Training Mode)
 	bool is_runTest = false; // set by system
 	bool do_simRatTest = false; // set by system
 	bool do_pidCalibration = false; // set by system
@@ -230,16 +230,16 @@ uint32_t t_quit = 0;
 // PIXY
 double pixyCoeff[4] = {0};
 const double pixyPackCoeff[4] = {
-	-0.000002478073388,
-	0.001624656056423,
-	-0.522047217070484,
-	95.874253371360751,
+	-0.000004725264535,
+	0.002357167791536,
+	-0.607192622964849,
+	99.905820904465827,
 };
 const double pixyCubeCoeff[4] = {
-	-0.000003917250068,
-	0.001889485307691,
-	-0.510571942244013,
-	91.860699215839887,
+	-0.000005563484773,
+	0.002449206596693,
+	-0.556940386359457,
+	89.885505970779093,
 };
 double pixyShift = 0;
 const double pixyPackShift = 0; // (cm)
@@ -330,7 +330,7 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-int trackLEDduty[2] = { 200, 255 }; // value between 0 and 255
+int trackLEDduty[2] = { 200, 250 }; // value between 0 and 255
 const int rewLEDmin[2] = { 0, 2};
 int rewLEDduty[2] = { rewLEDmin[0], 15 }; // value between 0 and 255
 

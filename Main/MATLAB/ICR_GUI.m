@@ -102,11 +102,11 @@ D.DB.Implanted = true;
 % NLX parameters
 D.DB.Run_Cheetah = true;
 D.DB.Run_SS3D = false;
-D.DB.Rec_Raw = true;
+D.DB.Rec_Raw = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Implant_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -278,7 +278,7 @@ if ...
         ISMATSOLO
     Console_Write('RUN MODE = DEBUG');
 else
-    Console_Write('RUN MODE = DEBUG');
+    Console_Write('RUN MODE = RELEASE');
 end
 
 % Log print input arguments
@@ -454,7 +454,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.strQdDel = 0.5; % (sec)
         % PID setPoint
         D.PAR.setPointHead = 70;
-        D.PAR.setPointHeadDistBackpack = -12;
+        D.PAR.setPointHeadDistBackpack = -5;
         D.PAR.setPointHeadDistImplant = 0;
         D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistBackpack;
         D.PAR.setPointRad = D.PAR.setPointCM * ((2 * pi)/(140 * pi));
@@ -1752,7 +1752,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % FLAGS
         % run cheetah
-        D.F.run_cheetah = true;
+        D.F.run_cheetah = false;
         % run SpikeSort3D
         D.F.run_ss3d = false;
         % record raw data file
@@ -2702,6 +2702,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Position settings
         pos_lft_dflt = 0.005;
         pos_wd_dflt = D.UI.stup_pan_pos(3)-0.01;
+        pos_wd_grp_dflt = pos_wd_dflt - 2*pos_lft_dflt;
         obj_gap = 0.01;
         
         % Bottom start
@@ -2982,7 +2983,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','off');
         
         % All
-        wd = (pos(3)-2*pos_lft_dflt)/3;
+        wd = pos_wd_grp_dflt/3;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnMed(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
@@ -3055,7 +3056,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','off');
         
         % White Noise
-        wd = (pos(3)-2*pos_lft_dflt)/2;
+        wd = pos_wd_grp_dflt/2;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnMed(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
@@ -3111,7 +3112,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','off');
         
         % Run Cheetah
-        wd = (pos(3)-2*pos_lft_dflt)/3;
+        wd = pos_wd_grp_dflt/3;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnMed(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
@@ -3128,7 +3129,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.disabledBtnFrgCol, ...
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
-            'Value', 1, ...
             'FontSize', D.UI.fontSzBtnMed(1));
         
         % Run SpikeSort3D
@@ -3190,6 +3190,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Position settings
         pos_lft_dflt = 0.005;
         pos_wd_dflt = D.UI.run_pan_pos(3)-0.01;
+        pos_wd_grp_dflt = pos_wd_dflt - 2*pos_lft_dflt;
         obj_gap = 0.01;
         
         % Bottom start
@@ -3215,7 +3216,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % TASK SUBPANEL
         
         % Buttongroup
-        ht =  4*D.UI.fontSzTxtLrg(2) + 4*obj_gap;
+        ht =  3.5*D.UI.fontSzTxtLrg(2) + 4*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
         D.UI.spanTask = uibuttongroup(...
@@ -3232,7 +3233,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','off');
         
         % Sleep 1 button
-        wd = (pos_wd_dflt - 2*pos_lft_dflt)/2;
+        wd = pos_wd_grp_dflt/2;
         lft = 2*pos_lft_dflt;
         ht = D.UI.fontSzTxtLrg(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
@@ -3270,7 +3271,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String',str);
         
         % ICR buttons
-        ht = 2*D.UI.fontSzTxtLrg(2);
+        ht = 1.5*D.UI.fontSzTxtLrg(2);
         btm = btm - ht - 0.5*obj_gap;
         pos = [lft, btm, wd, ht];
         D.UI.toggICR(1) = uicontrol('Style','togglebutton', ...
@@ -3282,9 +3283,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.disabledBtnFrgCol, ...
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzTxtLrg(1));
+            'FontSize', D.UI.fontSzBtnLrg(1));
         D.UI.toggICR(2) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
-        pos = [lft+wd, btm, wd, 2*D.UI.fontSzTxtLrg(2)];
+        pos = [lft+wd, btm, wd, ht];
         Safe_Set(D.UI.toggICR(2), 'Position', pos);
         Safe_Set(D.UI.toggICR, 'Callback', {@Togg_ICR})
         
@@ -3318,7 +3319,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % CHEETAH SUBPANEL
         
         % Bottongorup
-        ht =  D.UI.fontSzBtnLrg(2) + D.UI.fontSzBtnLrg(2) + 3.5*obj_gap;
+        ht =  3*D.UI.fontSzBtnLrg(2) + 4*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
         D.UI.spanCheetah = uibuttongroup(...
@@ -3335,7 +3336,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Clipping','off');
         
         % Acquire
-        wd = (pos_wd_dflt-2*pos_lft_dflt)/2;
+        wd = pos_wd_grp_dflt/2;
         lft = pos_lft_dflt*2;
         ht =  D.UI.fontSzBtnLrg(2);
         btm = pos(2)+pos(4) - ht - 2*obj_gap;
@@ -3372,7 +3373,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Cells cut toggle
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
-        wd = (pos_wd_dflt-2*pos_lft_dflt)/2;
+        wd = pos_wd_grp_dflt/2;
         lft = pos_lft_dflt*2;
         pos = [lft, btm, wd, ht];
         D.UI.toggLoadClust = uicontrol('Style','togglebutton', ...
@@ -3389,12 +3390,30 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzBtnLrg(1), ...
             'UserData', 0);
         
-        % Cube LED
+        % Screen shot toggle
         lft = lft + wd;
-        pos = [lft, btm, wd/2, ht];
+        pos = [lft, btm, wd, ht];
+        D.UI.toggScreenShot = uicontrol('Style','togglebutton', ...
+            'Parent',D.UI.tabICR, ...
+            'String','Screen Shot', ...
+            'Callback', {@Togg_ScreenShot}, ...
+            'Enable', 'off', ...
+            'Units','Normalized', ...
+            'Position', pos, ...
+            'BackgroundColor', D.UI.disabledCol, ...
+            'ForegroundColor', D.UI.disabledBtnFrgCol, ...
+            'FontName', D.UI.btnFont, ...
+            'FontWeight','Bold', ...
+            'FontSize', D.UI.fontSzBtnLrg(1), ...
+            'UserData', 0);
+        
+        % Cube LED
+        btm = btm - ht - 0.5*obj_gap;
+        lft = pos_lft_dflt*2;
+        pos = [lft, btm, wd, ht];
         D.UI.toggCubeLED = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
-            'String','QLED', ...
+            'String','Cube LED', ...
             'Callback', {@Togg_CubeLED}, ...
             'Enable', 'off', ...
             'Units','Normalized', ...
@@ -3407,11 +3426,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'UserData', 0);
         
         % Cube VCC Update
-        lft = lft + wd/2;
-        pos = [lft, btm, wd/2, ht];
+        lft = lft + wd;
+        pos = [lft, btm, wd, ht];
         D.UI.toggCubeVcc = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
-            'String','QVCC', ...
+            'String','Cube VCC', ...
             'Enable', 'off', ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -3430,7 +3449,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % ROBOT SUBPANEL
         
         % Buttongroup
-        ht =  2*D.UI.fontSzBtnLrg(2) + D.UI.fontSzPopLrg(2) + 3*obj_gap;
+        ht = 3*D.UI.fontSzBtnLrg(2) + 4*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
         D.UI.spanRob = uibuttongroup(...
@@ -3478,7 +3497,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor',D.UI.figBckCol, ...
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName',D.UI.popFont, ...
-            'FontSize',D.UI.fontSzPopLrg(1), ...
+            'FontSize',D.UI.fontSzPopMed(1), ...
             'FontWeight','Bold', ...
             'String',D.PAR.listBull);
         
@@ -3519,7 +3538,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % REWARD SUBPANEL
         
         % Buttongroup
-        ht =  3*D.UI.fontSzBtnLrg(2) + D.UI.fontSzPopLrg(2) + 5*obj_gap;
+        ht =  2*D.UI.fontSzBtnLrg(2) + D.UI.fontSzPopLrg(2) + 4*obj_gap;
         btm = btm - ht - obj_gap;
         pos = [pos_lft_dflt, btm, pos_wd_dflt, ht];
         D.UI.spanRew = uibuttongroup(...
@@ -3573,11 +3592,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Cue reward
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
-        wd = (pos_wd_dflt-2*pos_lft_dflt);
+        wd = pos_wd_grp_dflt/4;
         pos = [pos(1), btm, wd, ht];
         D.UI.toggDoCue = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
-            'String','Cue Reward', ...
+            'String','Cue', ...
             'Callback', {@Togg_DoCue}, ...
             'Enable', 'off', ...
             'Units','Normalized', ...
@@ -3586,13 +3605,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.disabledBtnFrgCol, ...
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzBtnLrg(1));
+            'FontSize', D.UI.fontSzBtnMed(1));
         
         % Block cue
-        ht = D.UI.fontSzBtnLrg(2);
-        btm = btm - ht - 0.5*obj_gap;
-        wd = (pos_wd_dflt-2*pos_lft_dflt)/2;
-        pos = [pos(1), btm, wd, ht];
+        lft = lft+wd;
+        wd = (pos_wd_grp_dflt - wd)/2;
+        pos = [lft, btm, wd, ht];
         D.UI.toggBlockCue = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'String','Block Cue', ...
@@ -3604,11 +3622,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.disabledBtnFrgCol, ...
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzBtnLrg(1));
+            'FontSize', D.UI.fontSzBtnMed(1));
         
         % Force cue
         lft = lft+wd;
-        pos = [lft, pos(2), pos(3), pos(4)];
+        pos = [lft, btm, wd, ht];
         D.UI.toggForceCue = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'String','Force Cue', ...
@@ -3620,12 +3638,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ForegroundColor', D.UI.disabledBtnFrgCol, ...
             'FontName', D.UI.btnFont, ...
             'FontWeight','Bold', ...
-            'FontSize', D.UI.fontSzBtnLrg(1));
+            'FontSize', D.UI.fontSzBtnMed(1));
         
         % Pick reward pos
         ht = D.UI.fontSzBtnLrg(2);
         btm = btm - ht - 0.5*obj_gap;
-        wd = pos_wd_dflt-2*pos_lft_dflt;
+        wd = pos_wd_grp_dflt;
         lft = pos_lft_dflt*2;
         pos = [lft, btm, wd, ht];
         D.UI.toggPickRewPos = uicontrol('Style','togglebutton', ...
@@ -6763,6 +6781,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % format: datestr(now, 'yyyy-mm-dd_HH-MM-SS', 'local');
         D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
         
+        % Enable sreen shot button
+        Button_State(D.UI.toggScreenShot, 'Enable');
+        
         % Make directory if none exists
         if exist(D.DIR.nlxSaveRat, 'dir') == 0 && ...
                 exist(D.DIR.nlxSaveTop, 'dir') == 1
@@ -8616,6 +8637,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 find(ismember(D.UI.popType.String,  D.DB.Session_Type)));
             Safe_Set(D.UI.toggType, 'Value', 1);
             Togg_Type(D.UI.toggType);
+            
+            % Enable setup objects
+            Object_Group_State('Setup_Objects', 'Enable')
             
             % Get rat table ind
             ratInd = ...
@@ -13679,8 +13703,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Safe_Set(D.UI.popHuman, 'Enable', 'on')
                         Button_State(D.UI.toggSetupDone, 'Enable');
                         
-                        % Enable NLX buttons
-                        Button_State(D.UI.toggNlx, 'Enable');
+                        % Enable Cheetah run button
+                        Button_State(D.UI.toggNlx(1), 'Enable');
                         
                         % Disable ICR objectes
                         if D.PAR.sesType ~= 'ICR_Session'
@@ -15807,6 +15831,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
+        % Set run cheetah to active
+        if D.PAR.sesType ~= 'Table_Update' 
+            Safe_Set(D.UI.toggNlx(1), 'Value', 1);
+            Togg_NLX(D.UI.toggNlx(1));
+        end
+        
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
         
@@ -16585,6 +16615,38 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
+    end
+
+% --------------------------GET NLX SCREEN SHOT-----------------------------
+    function Togg_ScreenShot(~, ~, ~)
+        
+        % Dock figure
+        jFrame = get(FIGH,'JavaFrame');
+        jFrame.setMinimized(true);
+        
+        % Take screen capture
+        robot = java.awt.Robot();
+        pos = [0 0 400 400]; % [left top width height]
+        rect = java.awt.Rectangle(pos(1),pos(2),pos(3),pos(4));
+        cap = robot.createScreenCapture(rect);
+        
+        % Convert to an RGB image
+        rgb = typecast(cap.getRGB(0,0,cap.getWidth,cap.getHeight,[],0,cap.getWidth),'uint8');
+        imgData = zeros(cap.getHeight,cap.getWidth,3,'uint8');
+        imgData(:,:,1) = reshape(rgb(3:4:end),cap.getWidth,[])';
+        imgData(:,:,2) = reshape(rgb(2:4:end),cap.getWidth,[])';
+        imgData(:,:,3) = reshape(rgb(1:4:end),cap.getWidth,[])';
+        
+        % Show or save to file
+        imshow(imgData)
+        imwrite(imgData,'out.png')
+        
+        % Undock figure
+        jFrame.setMinimized(false);
+        
+        % Save image
+        fi_path = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub);
+        
     end
 
 % ---------------------ENABLE CUBE TRACKER LED BUTTON----------------------

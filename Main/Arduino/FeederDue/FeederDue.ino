@@ -3819,6 +3819,7 @@ bool CheckForStart()
 	else if (is_on && millis() >= t_pulse_last + dt_blink_on) {
 
 		analogWrite(pin.TrackLED, 0);
+		//analogWrite(pin.TrackLED, trackLEDduty[0]); // TEMP
 		is_on = false;
 	}
 
@@ -8732,23 +8733,8 @@ void loop() {
 		char str[maxStoreStrLng] = { 0 };
 		static double pos_last[3] = { 0 };
 		static int32_t t_check_next = 0;
-		static bool is_halted = false;
 		int dt_check = 250;
 		bool is_new = false;
-
-		// Halt robot after first move
-		if (cmd.cnt_move == 1 && !is_halted) {
-			// Block motor control
-			SetMotorControl("Halt", "Halt");
-			is_halted = true;
-		}
-
-		// Unhalt for last move
-		if ((c2r.idNow == 'M' && c2r.isNew) && cmd.cnt_move == 1 && is_halted) {
-			// Unblock motor control
-			SetMotorControl("Open", "Halt");
-			is_halted = false;
-		}
 
 		// Check if position values changed
 		for (int i = 0; i < 3; i++) {
