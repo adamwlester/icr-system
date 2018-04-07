@@ -3819,7 +3819,6 @@ bool CheckForStart()
 	else if (is_on && millis() >= t_pulse_last + dt_blink_on) {
 
 		analogWrite(pin.TrackLED, 0);
-		//analogWrite(pin.TrackLED, trackLEDduty[0]); // TEMP
 		is_on = false;
 	}
 
@@ -8646,8 +8645,8 @@ void loop() {
 				HardStop("loop", true);
 
 				// Set tracker duty to default
-				trackLEDduty[0] = 75;
-				trackLEDduty[1] = 255;
+				trackLEDduty[0] = trackLEDdutyDefault[0];
+				trackLEDduty[1] = trackLEDdutyDefault[1];
 				analogWrite(pin.TrackLED, trackLEDduty[0]);
 
 

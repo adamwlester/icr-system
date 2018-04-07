@@ -249,7 +249,7 @@ uint32_t word_rewEnd;
 
 // IR time sync LED
 const int dt_irSyncPulse = 500; // (ms) 
-const int dt_irSyncPulseOn = 10; // (ms)
+const int dt_irSyncPulseOn = 10; // (ms) 
 uint32_t del_irSyncPulse = 60000; // (ms)
 uint32_t t_sync = 0;
 bool is_irOn = false;

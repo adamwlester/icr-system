@@ -1749,6 +1749,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.zone = zeros(2,length(D.PAR.zoneLocs));
         % track number of robot move cammands
         D.C.move = 0;
+        % cheetah screen captures
+        D.C.cheetah_cap = 0;
         
         % FLAGS
         % run cheetah
@@ -3393,10 +3395,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Screen shot toggle
         lft = lft + wd;
         pos = [lft, btm, wd, ht];
-        D.UI.toggScreenShot = uicontrol('Style','togglebutton', ...
+        D.UI.btnScreenShot = uicontrol('Style','push', ...
             'Parent',D.UI.tabICR, ...
             'String','Screen Shot', ...
-            'Callback', {@Togg_ScreenShot}, ...
+            'Callback', {@Btn_ScreenShot}, ...
             'Enable', 'off', ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -6782,7 +6784,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DIR.nlxSaveRat = fullfile(D.DIR.nlxSaveTop, D.PAR.ratLab(2:end));
         
         % Enable sreen shot button
-        Button_State(D.UI.toggScreenShot, 'Enable');
+        Button_State(D.UI.btnScreenShot, 'Enable');
         
         % Make directory if none exists
         if exist(D.DIR.nlxSaveRat, 'dir') == 0 && ...
@@ -16618,34 +16620,47 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % --------------------------GET NLX SCREEN SHOT-----------------------------
-    function Togg_ScreenShot(~, ~, ~)
+    function Btn_ScreenShot(~, ~, ~)
         
         % Dock figure
         jFrame = get(FIGH,'JavaFrame');
         jFrame.setMinimized(true);
         
+        % Screen width height
+        sc_wh = [sum(D.UI.monPos([1:2],3)), D.UI.monPos(1,4)];
+        
         % Take screen capture
         robot = java.awt.Robot();
-        pos = [0 0 400 400]; % [left top width height]
+        pos = [0, 0, sc_wh(1), sc_wh(2)]; % [left top width height]
         rect = java.awt.Rectangle(pos(1),pos(2),pos(3),pos(4));
         cap = robot.createScreenCapture(rect);
         
         % Convert to an RGB image
         rgb = typecast(cap.getRGB(0,0,cap.getWidth,cap.getHeight,[],0,cap.getWidth),'uint8');
-        imgData = zeros(cap.getHeight,cap.getWidth,3,'uint8');
-        imgData(:,:,1) = reshape(rgb(3:4:end),cap.getWidth,[])';
-        imgData(:,:,2) = reshape(rgb(2:4:end),cap.getWidth,[])';
-        imgData(:,:,3) = reshape(rgb(1:4:end),cap.getWidth,[])';
+        img_dat = zeros(cap.getHeight,cap.getWidth,3,'uint8');
+        img_dat(:,:,1) = reshape(rgb(3:4:end),cap.getWidth,[])';
+        img_dat(:,:,2) = reshape(rgb(2:4:end),cap.getWidth,[])';
+        img_dat(:,:,3) = reshape(rgb(1:4:end),cap.getWidth,[])';
         
-        % Show or save to file
-        imshow(imgData)
-        imwrite(imgData,'out.png')
+        % Itterate screen shots
+        D.C.cheetah_cap = D.C.cheetah_cap + 1;
         
         % Undock figure
         jFrame.setMinimized(false);
         
-        % Save image
-        fi_path = fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub);
+        % Seperate and save images
+        fi_name_1 = sprintf('CheetahScreenShot_%d_1.png', D.C.cheetah_cap);
+        img_dat_1 = img_dat(:,1:D.UI.monPos(1,3),:);
+        imwrite(img_dat_1,fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub, fi_name_1));
+        fi_name_2 = sprintf('CheetahScreenShot_%d_2.png', D.C.cheetah_cap);
+        img_dat_2 = img_dat(:,D.UI.monPos(1,3)+1:end,:);
+        imwrite(img_dat_2,fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub, fi_name_2));
+        
+        % Log/print
+        Console_Write(sprintf('[%s] Saved Cheetah Screen Shot %d', 'Btn_ScreenShot', D.C.cheetah_cap));
+        
+        % Update UI
+        if UPDATENOW; Update_UI(0, 'force'); end
         
     end
 
