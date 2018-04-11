@@ -1062,7 +1062,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     elseif ~D.F.rob_setup
                         D.F.sub_case_now = 'WAIT FOR ROBOT SETUP';
                         
-                    elseif ~D.F.matlab_streaming
+                    elseif ~D.F.streaming_confirmed
                         D.F.sub_case_now = 'WAIT FOR MATLAB STREAMING';
                         
                     elseif ~D.F.rob_streaming
@@ -1178,7 +1178,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             Console_Write('[Run:SubLoop] CONFIRMED MATLAB STREAMING');
                             
                             % Set flag
-                            D.F.matlab_streaming = true;
+                            D.F.streaming_confirmed = true;
                             
                         case 'WAIT FOR ROBOT STREAMING'
                             
@@ -1786,7 +1786,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % cube connection status
         D.F.cube_connected = false;
         % nlx streaming
-        D.F.matlab_streaming = false;
+        D.F.streaming_setup = false;
+        D.F.streaming_confirmed = false;
         D.F.vt_rat_streaming = false;
         D.F.vt_rob_streaming  = false;
         D.F.evt_streaming = false;
@@ -7030,6 +7031,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % All streaming
             Console_Write(sprintf('[NLX_Setup] FINISHED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
                 D.F.vt_rat_streaming , D.F.vt_rob_streaming , D.F.evt_streaming));
+            
+            % Set flag
+            D.F.streaming_setup = true;
         else
             % Open stream failed
             Console_Write(sprintf('**WARING** [NLX_Setup] FAILED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
@@ -7042,7 +7046,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% DISABLE PLOTTING OF FLAGGED TTS
         
         % Bail here if not implant session
-        if ~D.F.ephys_session
+        if ~D.F.ephys_session 
             return
         end
         
@@ -7564,7 +7568,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.ephys_session
             
             % SETUP FIRING RATE AXES
-            Console_Write('[NLX_Setup] RUNNING: Setup Cluster Rate Patches...');
+            Console_Write('[ICR_Session_Setup] RUNNING: Setup Cluster Rate Patches...');
             
             % Calculate patch bounds
             ptch_bounds = arrayfun(@(x) [x, x+((2*pi)/D.PAR.tt1dBins)], ...
@@ -7623,7 +7627,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'UserData', 0);
             
             % SETUP PLOT COLOR MAP
-            Console_Write('[NLX_Setup] RUNNING: Setup Cluster Colormaps...');
+            Console_Write('[ICR_Session_Setup] RUNNING: Setup Cluster Colormaps...');
             
             % Colorbar legend pos
             ax_pos = [...
@@ -7696,11 +7700,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Visible', 'on');
             
             % Log/print
-            Console_Write('[NLX_Setup] FINISHED: Setup Cluster Objects');
+            Console_Write('[ICR_Session_Setup] FINISHED: Setup Cluster Objects');
             
         else
             
-            Console_Write('[NLX_Setup] SKIPPED: Setup Cluster Objects');
+            Console_Write('[ICR_Session_Setup] SKIPPED: Setup Cluster Objects');
             
         end
         
@@ -16796,7 +16800,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 
                 % Load sleep tracking config
                 Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Sleep.cfg');
-                Console_Write('[NLX_Setup] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
                 % Log/print
                 Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
@@ -18543,7 +18547,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if all(D.F.tt_chan_disable(tt_ind,:))
                     
                     % Disable TT and times series tt plot
-                    if D.F.cheetah_running
+                    if D.F.ephys_session && D.F.streaming_setup
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "TT%d_Win" "TT%s" %s', ...
                             win_ind, D.TT.ttNum{tt_ind}, 'False'));
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "CSC%d_Win" "TT%s" %s', ...
@@ -18555,7 +18559,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if val == 0
                     
                     % Enable TT and times series tt plot
-                    if D.F.cheetah_running
+                    if D.F.ephys_session && D.F.streaming_setup
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "TT%d_Win" "TT%s" %s', ...
                             win_ind, D.TT.ttNum{tt_ind}, 'True'));
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "CSC%d_Win" "TT%s" %s', ...
@@ -18577,7 +18581,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Set time series plot
-                    if D.F.cheetah_running
+                    if D.F.ephys_session && D.F.streaming_setup
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "CSC%d_Win" "CSC%s_0%d" %s', ...
                             win_ind, D.TT.ttNum{tt_ind}, z_e, set_str));
                     end
