@@ -416,6 +416,8 @@ T.Recording_Dir = {''};
 
 T.Raw_Data_Dir = {''};
 
+T.Ephys_Recorded = false;
+
 T.Human = categorical({'<undefined>'}, ...
     human_cats);
 

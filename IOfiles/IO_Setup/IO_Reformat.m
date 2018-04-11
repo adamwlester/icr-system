@@ -34,7 +34,7 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % Raw_Data_File = {''};
 % var_before = 'Recording_File';
 % SS_IO_2 = AddNewVar(SS_IO_2, Raw_Data_File, var_before);
-   
+
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
 % % Specify inputs

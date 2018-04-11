@@ -14195,10 +14195,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Format as cell
         if ~isa(get_arr, 'cell')
             if isa(get_arr, 'double')
-                get_arr = {get_arr(:)};
-            elseif isa(get_arr, 'char')
-                get_arr = cellstr(get_arr);
-            end
+            get_arr = {get_arr(:)};
+            elseif isa(get_arr{1}, 'char')
+                
         end
         
         % Preset correct data type
