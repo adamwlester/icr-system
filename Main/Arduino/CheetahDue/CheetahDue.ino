@@ -21,6 +21,9 @@
 //
 #include <MemoryFree.h>
 
+// Timers
+#include <DueTimer.h>
+
 #pragma endregion 
 
 
@@ -248,33 +251,44 @@ uint32_t word_rewStr;
 uint32_t word_rewEnd;
 
 // IR time sync LED
-const int dt_irSyncPulse = 500; // (ms) 
-const int dt_irSyncPulseOn = 10; // (ms) 
+const int dt_irSyncPulse = 500; // (ms) 500
+const int dt_irSyncPulseOn = 10; // (ms) 10 
 uint32_t del_irSyncPulse = 60000; // (ms)
 uint32_t t_sync = 0;
 bool is_irOn = false;
 int cnt_ir = 0;
 uint32_t t_irSyncLast;
-uint32_t word_irOn;
+uint32_t word_irAll;
+uint32_t word_irRel;
 
 // Volitiles
+
+// IR flicker flag
+volatile bool v_is_irHigh = false;
+// IR flicker flag
+volatile bool v_do_irTTL = false;
+// PT interupt flag
 volatile bool v_doPTInterupt = false;
 // PT north vars
 volatile uint32_t v_t_inLastNorth = millis();
 volatile uint32_t v_t_outLastNorth = millis();
 volatile bool v_isOnNorth = false;
+volatile bool v_doPrintNorth = false;
 // PT west vars
 volatile uint32_t v_t_inLastWest = millis();
 volatile uint32_t v_t_outLastWest = millis();
 volatile bool v_isOnWest = false;
+volatile bool v_doPrintWest = false;
 // PT south 
 volatile uint32_t v_t_inLastSouth = millis();
 volatile uint32_t v_t_outLastSouth = millis();
 volatile bool v_isOnSouth = false;
+volatile bool v_doPrintSouth = false;
 // PT east vars
 volatile uint32_t v_t_inLastEast = millis();
 volatile uint32_t v_t_outLastEast = millis();
 volatile bool v_isOnEast = false;
+volatile bool v_doPrintEast = false;
 // Any pin
 volatile bool v_isOnAny = false;
 
@@ -282,7 +296,7 @@ volatile bool v_isOnAny = false;
 uint32_t t_debounce = 10; // (ms)
 uint32_t dt_ttlPulse = 50; // (ms)
 
-						   // union
+// Union
 union u_tag {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
@@ -350,17 +364,13 @@ void SetPort(uint32_t word_on, uint32_t word_off);
 // Reset PT pins
 void ResetTTL();
 // North
-void NorthInterrupt();
-void NorthFun();
+void Interrupt_North();
 // West
-void WestInterrupt();
-void WestFun();
+void Interrupt_West();
 // South
-void SouthInterrupt();
-void SouthFun();
+void Interrupt_South();
 // East
-void EastInterrupt();
-void EastFun();
+void Interrupt_East();
 
 #pragma endregion
 
@@ -1529,7 +1539,7 @@ void HardwareTest(int test_num)
 	switch (test_num)
 	{
 
-	// Test arduino pin reward tone
+		// Test arduino pin reward tone
 	case 1:
 	{
 		// Write pins high then low
@@ -1608,13 +1618,11 @@ void HardwareTest(int test_num)
 	{
 		// Create port word for white and tone pins
 		DebugFlow("[HardwareTest] TEST PORT WORD: IR");
-		int sam_ir_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
-		word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
 
 		// Write word on then off
-		SetPort(word_irOn, 0x0);
+		SetPort(word_irAll, 0x0);
 		delay(dt_on);
-		SetPort(0x0, word_irOn);
+		SetPort(0x0, word_irAll);
 
 	}
 	break;
@@ -1679,19 +1687,25 @@ void HardwareTest(int test_num)
 // BLINK LEDS AT RESTART/UPLOAD
 void StatusBlink()
 {
-	bool is_on = false;
+	bool do_on = false;
 	int dt = 100;
 
 	// Flash 
 	for (int i = 0; i < 10; i++)
 	{
-		digitalWrite(pin.relIR, is_on ? LOW : HIGH);
+		do_on = !do_on;
+		if (do_on) {
+			SetPort(word_irRel, 0x0);
+		}
+		else {
+			SetPort(0x0, word_irRel);
+		}
 		delay(dt);
-		is_on = !is_on;
+
 	}
 
 	// Reset LED
-	digitalWrite(pin.relIR, LOW);
+	SetPort(0x0, word_irRel);
 }
 
 // PLAY SOUND WHEN QUITING
@@ -1740,14 +1754,18 @@ bool PulseIR(int dt_pulse, int dt_on, byte force_state, bool do_ttl)
 			millis() > t_irSyncLast + dt_pulse)
 		)
 	{
-		// Set ir relay and ttl pins high
+		// Set ir port on
 		if (do_ttl) {
-			SetPort(word_irOn, 0x0);
+			SetPort(word_irAll, 0x0);
 		}
 		else {
-			digitalWrite(pin.relIR, HIGH);
+			SetPort(word_irRel, 0x0);
 		}
+
+		// Store time
 		t_irSyncLast = millis();
+
+		// Update flags
 		is_irOn = true;
 		is_changed = true;
 	}
@@ -1760,13 +1778,10 @@ bool PulseIR(int dt_pulse, int dt_on, byte force_state, bool do_ttl)
 			millis() > t_irSyncLast + dt_on)
 		)
 	{
-		// Set ir relay and ttl pins low
-		if (do_ttl) {
-			SetPort(0x0, word_irOn);
-		}
-		else {
-			digitalWrite(pin.relIR, LOW);
-		}
+		// Set ir port off
+		SetPort(0x0, word_irAll);
+
+		// Update flags
 		is_irOn = false;
 		is_changed = true;
 	}
@@ -1814,15 +1829,20 @@ uint32_t GetPortWord(uint32_t word, int pin_arr[], int arr_size)
 // SET PORT
 void SetPort(uint32_t word_on, uint32_t word_off)
 {
+
+	// Copy current registry state
 	uint32_t word_new = REG_PIOC_ODSR;
+
+	// Set off entries
 	word_new = word_new & ~word_off;
+
+	// Set on entries
 	word_new |= word_on;
+
+	// Update port registry
 	REG_PIOC_ODSR = word_new;
+
 }
-
-#pragma endregion
-
-#pragma region --------PHOTO TRANSDUCERS ---------
 
 // Reset PT pins
 void ResetTTL()
@@ -1833,61 +1853,103 @@ void ResetTTL()
 		return;
 	}
 
-	// north
-	if (v_isOnNorth && millis() - v_t_outLastNorth > dt_ttlPulse) {
+	// North
+	if (v_isOnNorth) {
 
-		digitalWrite(pin.ttlNorthOn, LOW); // set back to LOW
-		v_isOnNorth = false;
-		// Print
-		if (db.print_flow) {
-			DebugFlow("[ResetTTL] NORTH OFF");
+		// Print on time
+		if (db.print_flow && v_doPrintNorth) {
+			DebugFlow("[NorthFun] NORTH ON", v_t_outLastNorth);
+			v_doPrintNorth = false;
+		}
+
+		// Set back to LOW
+		if (millis() - v_t_outLastNorth > dt_ttlPulse) {
+
+			digitalWrite(pin.ttlNorthOn, LOW);
+			v_isOnNorth = false;
+			// Print
+			if (db.print_flow) {
+				DebugFlow("[ResetTTL] NORTH OFF");
+			}
 		}
 	}
 
-	// west
-	if (v_isOnWest && millis() - v_t_outLastWest > dt_ttlPulse) {
+	// West
+	if (v_isOnWest) {
 
-		digitalWrite(pin.ttlWestOn, LOW); // set back to LOW
-		v_isOnWest = false;
+		// Print on time
+		if (db.print_flow && v_doPrintWest) {
+			DebugFlow("[WestFun] WEST ON", v_t_outLastWest);
+			v_doPrintWest = false;
+		}
 
-		// Print
-		if (db.print_flow) {
-			DebugFlow("[ResetTTL] WEST OFF");
+		// Set back to LOW
+		if (millis() - v_t_outLastWest > dt_ttlPulse) {
+
+			digitalWrite(pin.ttlWestOn, LOW);
+			v_isOnWest = false;
+
+			// Print
+			if (db.print_flow) {
+				DebugFlow("[ResetTTL] WEST OFF");
+			}
 		}
 	}
 
-	// south
-	if (v_isOnSouth && millis() - v_t_outLastSouth > dt_ttlPulse) {
+	// South
+	if (v_isOnSouth) {
 
-		digitalWrite(pin.ttlSouthOn, LOW); // set back to LOW
-		v_isOnSouth = false;
+		// Print on time
+		if (db.print_flow && v_doPrintSouth) {
+			DebugFlow("[SouthFun] SOUTH ON", v_t_outLastSouth);
+			v_doPrintSouth = false;
+		}
 
-		// Print
-		if (db.print_flow) {
-			DebugFlow("[ResetTTL] SOUTH OFF");
+		// Set back to LOW
+		if (millis() - v_t_outLastSouth > dt_ttlPulse) {
+
+			digitalWrite(pin.ttlSouthOn, LOW);
+			v_isOnSouth = false;
+
+			// Print
+			if (db.print_flow) {
+				DebugFlow("[ResetTTL] SOUTH OFF");
+			}
 		}
 	}
 
-	// east
-	if (v_isOnEast && millis() - v_t_outLastEast > dt_ttlPulse) {
+	// East
+	if (v_isOnEast) {
 
-		digitalWrite(pin.ttlEastOn, LOW); // set back to LOW
-		v_isOnEast = false;
+		// Print on time
+		if (db.print_flow && v_doPrintEast) {
+			DebugFlow("[EastFun] EAST ON", v_t_outLastEast);
+			v_doPrintEast = false;
+		}
 
-		// Print
-		if (db.print_flow) {
-			DebugFlow("[ResetTTL] EAST OFF");
+		// Set back to LOW
+		if (millis() - v_t_outLastEast > dt_ttlPulse) {
+
+			digitalWrite(pin.ttlEastOn, LOW);
+			v_isOnEast = false;
+
+			// Print
+			if (db.print_flow) {
+				DebugFlow("[ResetTTL] EAST OFF");
+			}
 		}
 	}
+
+	// Update on flag
 	v_isOnAny = v_isOnNorth || v_isOnWest || v_isOnSouth || v_isOnEast;
 }
 
+#pragma endregion
+
+#pragma region --------INTERUPTS---------
+
 // North
-void NorthInterrupt()
-{
-	NorthFun();
-}
-void NorthFun()
+void Interrupt_North()
 {
 	if (v_doPTInterupt)
 	{
@@ -1895,48 +1957,32 @@ void NorthFun()
 
 			digitalWrite(pin.ttlNorthOn, HIGH);
 			v_t_outLastNorth = millis();
+			v_doPrintNorth = true;
 			v_isOnNorth = true;
 			v_isOnAny = true;
-
-			// Print
-			if (db.print_flow) {
-				DebugFlow("[NorthFun] NORTH ON", v_t_outLastNorth);
-			}
 		}
 		v_t_inLastNorth = millis();
 	}
 }
 
 // West
-void WestInterrupt()
-{
-	WestFun();
-}
-void WestFun()
+void Interrupt_West()
 {
 	if (v_doPTInterupt)
 	{
 		if (millis() - v_t_inLastWest > t_debounce) {
 			digitalWrite(pin.ttlWestOn, HIGH);
 			v_t_outLastWest = millis();
+			v_doPrintWest = true;
 			v_isOnWest = true;
 			v_isOnAny = true;
-
-			// Print
-			if (db.print_flow) {
-				DebugFlow("[WestFun] WEST ON", v_t_outLastWest);
-			}
 		}
 		v_t_inLastWest = millis();
 	}
 }
 
 // South
-void SouthInterrupt()
-{
-	SouthFun();
-}
-void SouthFun()
+void Interrupt_South()
 {
 	if (v_doPTInterupt)
 	{
@@ -1944,24 +1990,16 @@ void SouthFun()
 
 			digitalWrite(pin.ttlSouthOn, HIGH);
 			v_t_outLastSouth = millis();
+			v_doPrintSouth = true;
 			v_isOnSouth = true;
 			v_isOnAny = true;
-
-			// Print
-			if (db.print_flow) {
-				DebugFlow("[SouthFun] SOUTH ON", v_t_outLastSouth);
-			}
 		}
 		v_t_inLastSouth = millis();
 	}
 }
 
 // East
-void EastInterrupt()
-{
-	EastFun();
-}
-void EastFun()
+void Interrupt_East()
 {
 	if (v_doPTInterupt)
 	{
@@ -1969,13 +2007,9 @@ void EastFun()
 
 			digitalWrite(pin.ttlEastOn, HIGH);
 			v_t_outLastEast = millis();
+			v_doPrintEast = true;
 			v_isOnEast = true;
 			v_isOnAny = true;
-
-			// Print
-			if (db.print_flow) {
-				DebugFlow("[EastFun] EAST ON", v_t_outLastEast);
-			}
 		}
 		v_t_inLastEast = millis();
 	}
@@ -2066,20 +2100,22 @@ void setup()
 	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT C
 	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output port
 
-	// Get ir word
-	int sam_ir_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
-	word_irOn = GetPortWord(0x0, sam_ir_pins, 2);
+	// Get ir words
+	int sam_ir_all_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
+	word_irAll = GetPortWord(0x0, sam_ir_all_pins, 2);
+	int sam_ir_rel_pins[1] = { pin.sam_relIR };
+	word_irRel = GetPortWord(0x0, sam_ir_rel_pins, 1);
 
 	// SETUP INTERUPTS
 
 	// North
-	attachInterrupt(digitalPinToInterrupt(pin.ptNorthOn), NorthInterrupt, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.ptNorthOn), Interrupt_North, RISING);
 	// West
-	attachInterrupt(digitalPinToInterrupt(pin.ptWestOn), WestInterrupt, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.ptWestOn), Interrupt_West, RISING);
 	// South
-	attachInterrupt(digitalPinToInterrupt(pin.ptSouthOn), SouthInterrupt, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.ptSouthOn), Interrupt_South, RISING);
 	// East
-	attachInterrupt(digitalPinToInterrupt(pin.ptEastOn), EastInterrupt, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.ptEastOn), Interrupt_East, RISING);
 
 	// PRINT PIN MAPPING
 	/*
@@ -2121,7 +2157,6 @@ void setup()
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);
 	StatusBlink();
-
 }
 
 
@@ -2293,7 +2328,7 @@ void loop()
 			// White noise only
 			else if (r2a.dat[0] == 1)
 			{
-				
+
 				// Set flags
 				fc.doWhiteNoise = true;
 				fc.doRewTone = false;
@@ -2320,7 +2355,7 @@ void loop()
 				word_rewStr = GetPortWord(0x0, sam_on_pins, 3);
 				int sam_off_pins[3] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise, pin.sam_ttlRewOff };
 				word_rewEnd = GetPortWord(0x0, sam_off_pins, 3);
-			
+
 			}
 
 			// Create reward event only word
@@ -2338,7 +2373,7 @@ void loop()
 
 				// Set relay back to low first
 				digitalWrite(pin.relWhiteNoise, LOW);
-				
+
 				// Set port 
 				int sam_white_pins[2] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise };
 				uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
