@@ -8291,18 +8291,20 @@ void setup() {
 	PrintLCD(true, "RUN SETUP", "Interrupts");
 	PrintLCD(true, "SETUP", "Interrupts");
 	uint32_t t_check_ir = millis() + 1000;
-	bool is_ir_low = false;
+	bool is_ir_off = false;
 
-	// Check if IR detector already high
-	while (!is_ir_low && millis() < t_check_ir) {
-		is_ir_low = digitalRead(pin.IRdetect) == LOW;
+	// Check if IR detector already low
+	while (!is_ir_off && millis() < t_check_ir) {
+		is_ir_off = digitalRead(pin.IRdetect) == HIGH;
 	}
 
-	// Do not enable if ir detector pin already high
-	if (is_ir_low) {
+	// Enable ir detector interupt
+	if (is_ir_off) {
 		// IR detector
-		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, RISING);
+		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, FALLING);
 	}
+
+	// Do not enable if ir detector pin already low
 	else {
 		// Skip ir sync setup
 		t_sync = 1;
