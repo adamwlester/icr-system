@@ -5251,9 +5251,10 @@ void CheckSampDT()
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
-	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
 	static int cnt_swap_vt = 0;
 	static int cnt_swap_pixy = 0;
+	static uint32_t t_swap_vt = 0;
+	static uint32_t t_swap_pixy = 0;
 	bool do_swap_vt = false;
 	bool do_swap_pixy = false;
 	int dt_max_vt = 150;
@@ -5299,37 +5300,38 @@ void CheckSampDT()
 
 	// Use Pixy for VT data
 	if (do_swap_vt && !do_swap_pixy) {
-		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_msNow);
+
+		// Itterate count
 		cnt_swap_vt++;
+
+		// Log/print non consecutive events
+		if (millis() - t_swap_vt > 2 * dt_max_vt) {
+			sprintf(str, "Swapped VT with Pixy: cnt=%d|%d dt=%d|%d pos=%0.2f|%0.2f",
+				cnt_swap_vt, cnt_swap_pixy, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
+			DebugError(__FUNCTION__, __LINE__, str);
+		}
+
+		// Swap
+		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_msNow);
+		t_swap_vt = millis();
 	}
 
 	// Use VT for Pixy data
-	else if (do_swap_pixy && !do_swap_vt) {
-		Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+	if (do_swap_pixy && !do_swap_vt) {
+
+		// Itterate count
 		cnt_swap_pixy++;
-	}
-
-	// Log/print first and every 10 errors
-	if (cnt_swap_vt + cnt_swap_pixy == 1 ||
-		cnt_swap_vt + cnt_swap_pixy % 10 == 0) {
-
-		// Format data string
-		sprintf(dat_str, "cnt=%d|%d dt=%d|%d pos=%0.2f|%0.2f",
-			cnt_swap_vt, cnt_swap_pixy, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
-
-		// Swapped one for the other
-		if (!(do_swap_vt && do_swap_pixy)) {
-			sprintf(str, "Swapped %s: %s",
-				do_swap_vt ? "VT with Pixy" : "Pixy with VT", dat_str);
+		
+		// Log/print non consecutive events
+		if (millis() - t_swap_pixy > 2 * dt_max_pixy) {
+			sprintf(str, "Swapped Pixy with VT: cnt=%d|%d dt=%d|%d pos=%0.2f|%0.2f",
+				cnt_swap_vt, cnt_swap_pixy, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
+			DebugError(__FUNCTION__, __LINE__, str);
 		}
 
-		// Both sources dt too long
-		else {
-			sprintf(str, "All Rat Tracking Hanging: %s", dat_str);
-		}
-
-		// Log/print
-		DebugError(__FUNCTION__, __LINE__, str);
+		// Swap
+		Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+		t_swap_pixy = millis();
 	}
 
 }
@@ -6021,9 +6023,6 @@ float CheckBattery(bool force_check)
 	vcc_last = vccAvg;
 	vccAvg = vcc_avg;
 
-	// Store time
-	t_vcc_update = millis();
-
 	// Keep a list of averages to check for shutdown
 	for (int i = 0; i < 10 - 1; i++) {
 		vcc_shutdown_arr[i] = vcc_shutdown_arr[i + 1];
@@ -6072,6 +6071,9 @@ float CheckBattery(bool force_check)
 			RunErrorHold(str, 60000);
 		}
 	}
+
+	// Store time
+	t_vcc_update = millis();
 
 	// Return battery voltage
 	return vccAvg;
