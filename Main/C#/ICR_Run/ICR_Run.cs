@@ -1253,8 +1253,16 @@ namespace ICR_Run
 
             // LOG/PRINT RUN SUMMARY
 
-            csLog.Print(msg_in: csLog.GetSummary("warnings"));
-            csLog.Print(msg_in: csLog.GetSummary("errors"));
+            // Error and warning summary
+            csLog.Print(msg_in: csLog.GetErrorSummary("warnings"));
+            csLog.Print(msg_in: csLog.GetErrorSummary("errors"));
+            
+            // Com summary info
+            csLog.Print(msg_in: String.Format(
+                "COM SUMMARY: c2r=|p_ind={0}|p_tot={1}|resnd={2}| r2c=|p_ind={3}|p_tot={4}|rercv={5}|drops={6}| " +
+                "c2m=|p_ind={7}|p_tot={8}|resnd={9}|  m2c=|p_ind={10}|p_tot={11}|rercv={12}|",
+                c2r.packInd, c2r.packTot, c2r.cnt_repeat, r2c.packInd - UInt16.MaxValue / 2, r2c.packTot, r2c.cnt_repeat, r2c.cnt_dropped,
+                c2m.packInd, c2m.packTot, c2m.cnt_repeat, m2c.packInd, m2c.packTot, m2c.cnt_repeat));
 
             // SAVE CS LOG FILE
 
@@ -1416,8 +1424,8 @@ namespace ICR_Run
                 // Get new packet number
                 if (pack == 0)
                 {
-                    c2r.cnt_pack++;
-                    pack = c2r.cnt_pack;
+                    c2r.packInd++;
+                    pack = c2r.packInd;
                 }
 
                 // Format data string
@@ -1438,7 +1446,7 @@ namespace ICR_Run
                     // Bail if this is pos data
                     if (id == 'P')
                     {
-                        c2r.cnt_pack--;
+                        c2r.packInd--;
                         return pack;
                     }
                 }
@@ -2737,7 +2745,7 @@ namespace ICR_Run
             // Itterate packet
             if (id != ' ')
             {
-                pack = ++c2m.cnt_pack;
+                pack = ++c2m.packInd;
             }
 
             // Run method on seperate thread
@@ -3642,7 +3650,7 @@ namespace ICR_Run
         }
 
         // Get summary
-        public string GetSummary(string get_what)
+        public string GetErrorSummary(string get_what)
         {
             // Local vars
             string summary_str = "";
@@ -3718,7 +3726,7 @@ namespace ICR_Run
         public long dt_resend;
         public int resendMax = 5;
         public UInt16 packTot = 0;
-        public UInt16 cnt_pack = 0;
+        public UInt16 packInd = 0;
         public int[] cnt_dropped = new int[2] { 0, 0 };
         public int cnt_repeat = 0;
         public long t_new = 0;
@@ -3850,10 +3858,21 @@ namespace ICR_Run
             this.datMat[id_ind][1] = dat[1];
             this.datMat[id_ind][2] = dat[2];
 
-            // Update packet number
-            packTot = pack;
+            // Itterate packet total
+            packTot++;
+
+            // Update packet history
             packLastArr[id_ind] = this.packArr[id_ind];
             this.packArr[id_ind] = pack;
+
+            // Update recieved packet ind
+            if (_objID != "c2r" && _objID != "c2m")
+            {
+                if (_objID == "m2c" || (_objID == "r2c" && pack > UInt16.MaxValue / 2))
+                {
+                    packInd = pack > packInd ? pack : packInd;
+                }
+            }
 
             // Update timers
             t_last = t_new;

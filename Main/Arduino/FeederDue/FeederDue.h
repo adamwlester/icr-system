@@ -219,9 +219,9 @@ const int resendMax = 5;
 const int dt_resend = 100; // (ms)
 const int dt_sendSent = 5; // (ms) 
 const int dt_sendRcvd = 0; // (ms) 
-int cnt_packBytesRead = 0;
-int cnt_packBytesSent = 0;
-int cnt_packBytesDiscarded = 0;
+int cnt_bytesRead = 0;
+int cnt_bytesSent = 0;
+int cnt_bytesDiscarded = 0;
 
 // START/QUIT
 uint32_t t_ardQuit = 0;
@@ -432,9 +432,10 @@ struct R4
 	const char head;
 	const char foot;
 	const char *id;
-	uint16_t pack[20];
-	uint16_t packLast[20];
-	int packTot;
+	uint16_t packArr[20];
+	uint16_t packLastArr[20];
+	uint16_t packInd;
+	uint32_t packTot;
 	int cnt_repeat;
 	int cnt_dropped;
 	char idNow;
@@ -453,14 +454,15 @@ struct R2
 	const char head;
 	const char foot;
 	const char *id;
-	uint16_t pack[20];
-	uint16_t packLast[20];
-	uint16_t cnt_pack;
+	uint16_t packArr[20];
+	uint16_t packLastArr[20];
+	uint16_t packInd;
+	uint16_t packTot;
 	int cnt_repeat;
-	float datList[20][3];
-	uint32_t t_sentList[20];
-	bool doRcvCheck[20];
-	int cnt_resend[20];
+	float datMat[20][3];
+	uint32_t t_sentListArr[20];
+	bool do_rcvCheckArr[20];
+	int cnt_repeatArr[20];
 	int pinCTS;
 	bool stateCTS;
 	byte sendQueue[sendQueueSize][sendQueueBytes];
@@ -487,10 +489,12 @@ R4 c2r
 	'>',
 	// id
 	cs_id_list,
-	// pack
+	// packArr
 	{ 0 },
-	// packLast
+	// packLastArr
 	{ 0 },
+	// packInd
+	0,
 	// packTot
 	0,
 	// cnt_repeat
@@ -524,21 +528,23 @@ R2 r2c
 	'>',
 	// id
 	cs_id_list,
-	// pack
+	// packArr
 	{ 0 },
-	// packLast
+	// packLastArr
 	{ 0 },
-	// cnt_pack
+	// packInd
 	UINT16_MAX / 2,
+	// packTot
+	0,
 	// cnt_repeat
 	0,
-	// datList
+	// datMat
 	{ { 0 } },
-	// t_sentList
+	// t_sentListArr
 	{ 0 },
-	// doRcvCheck
+	// do_rcvCheckArr
 	{ false },
-	// cnt_resend
+	// cnt_repeatArr
 	{ 0 },
 	// pinCTS
 	pin.X1a_CTS,
@@ -573,10 +579,12 @@ R4 a2r
 	'}',
 	// id
 	ard_id_list,
-	// pack
+	// packArr
 	{ 0 },
-	// packLast
+	// packLastArr
 	{ 0 },
+	// packInd
+	0,
 	// packTot
 	0,
 	// cnt_repeat
@@ -611,21 +619,23 @@ R2 r2a
 	'}',
 	// id
 	ard_id_list,
-	// pack
+	// packArr
 	{ 0 },
-	// packLast
+	// packLastArr
 	{ 0 },
-	// cnt_pack
+	// packInd
+	UINT16_MAX / 2,
+	// packTot
 	0,
 	// cnt_repeat
 	0,
-	// datList
+	// datMat
 	{ { 0 } },
-	// t_sentList
+	// t_sentListArr
 	{ 0 },
-	// doRcvCheck
+	// do_rcvCheckArr
 	{ false },
-	// cnt_resend
+	// cnt_repeatArr
 	{ 0 },
 	// pinCTS
 	pin.X1b_CTS,
@@ -654,7 +664,7 @@ struct R42T
 	const char head;
 	const char foot;
 	const char *id;
-	uint16_t cnt_pack;
+	uint16_t packInd;
 	int cnt_dropped;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
@@ -675,7 +685,7 @@ R42T r42t
 	')',
 	// id
 	tnsy_id_list,
-	// cnt_pack
+	// packInd
 	0,
 	// cnt_dropped
 	0,

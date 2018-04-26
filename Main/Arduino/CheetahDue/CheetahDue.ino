@@ -198,8 +198,8 @@ struct R2A
 	bool isNew = false;
 	float dat[3] = { 0 };
 	const static int lng = sizeof(id) / sizeof(id[0]);
-	uint16_t pack[lng] = { 0 };
-	uint16_t packLast[lng] = { 0 };
+	uint16_t packArr[lng] = { 0 };
+	uint16_t packLastArr[lng] = { 0 };
 	int cnt_repeat = 0;
 	int cnt_dropped = 0;
 	int32_t t_rcvd = 0; // (ms)
@@ -223,8 +223,8 @@ struct A2R
 	const char foot = '}';
 	float dat[3] = { 0 };
 	const static int lng = sizeof(id) / sizeof(id[0]);
-	uint16_t pack[lng] = { 0 };
-	uint16_t packLast[lng] = { 0 };
+	uint16_t packArr[lng] = { 0 };
+	uint16_t packLastArr[lng] = { 0 };
 	int cnt_repeat = 0;
 	int32_t t_sent = 0; // (ms)
 	int dt_sent = 0; // (ms)
@@ -575,14 +575,14 @@ void GetSerial()
 
 		// Update last packet
 		int id_ind = CharInd(id, r2a.id, r2a.lng);
-		r2a.packLast[id_ind] = r2a.pack[id_ind];
-		r2a.pack[id_ind] = pack;
+		r2a.packLastArr[id_ind] = r2a.packArr[id_ind];
+		r2a.packArr[id_ind] = pack;
 
 		// Combine data strings
 		sprintf(str, "%s %s", dat_str_1, dat_str_2);
 
 		// Check if packet is new
-		if (r2a.packLast[id_ind] != pack)
+		if (r2a.packLastArr[id_ind] != pack)
 		{
 			// Print received packet
 			DebugRcvd(id, str);
@@ -918,7 +918,7 @@ bool SendPacket()
 	sendQueue[sendQueueIndRead][0] = '\0';
 
 	// Check if resending
-	is_resend = pack == r2a.packLast[CharInd(id, r2a.id, r2a.lng)];
+	is_resend = pack == r2a.packLastArr[CharInd(id, r2a.id, r2a.lng)];
 
 	// Make log/print string
 	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%d b_sent=%d tx=%d rx=%d dt_snd=%d dt_rcv=%d dt_q=%d",

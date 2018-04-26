@@ -3512,7 +3512,7 @@ void LOGGER::StreamLogs()
 	fc.doBlockLogQueue = false;
 	delay(50);
 
-	// Log warnings summary
+	// Warnings summary
 	for (int i = 0; i < cnt_warn; i++) {
 		char str_lin[10];
 		sprintf(str_lin, "%d|", warn_line[i]);
@@ -3524,7 +3524,7 @@ void LOGGER::StreamLogs()
 	r2c.port.write(logQueue[logQueueIndStore]);
 	delay(50);
 
-	// Log errors summary
+	// Errors summary
 	for (int i = 0; i < cnt_err; i++) {
 		char str_lin[10];
 		sprintf(str_lin, "%d|", err_line[i]);
@@ -3542,9 +3542,18 @@ void LOGGER::StreamLogs()
 	int ol_buff_tx = SERIAL_BUFFER_SIZE - 1 - port.availableForWrite();
 	int ol_buff_rx = port.available();
 
-	// Print log time info
+	// Com summary info
+	sprintf(str, "COM SUMMARY: r2c=|p_ind=%d|p_tot=%d|resnd=%d| c2r=|p_ind=%d|p_tot=%d|rercv=%d|drops=%d| r2a=|p_ind=%d|p_tot=%d|resnd=%d| a2r=|p_ind=%d|p_tot=%d|rercv=%d|drops=%d|",
+		r2c.packInd - UINT16_MAX / 2, r2c.packTot, r2c.cnt_repeat, c2r.packInd, c2r.packTot, c2r.cnt_repeat, c2r.cnt_dropped,
+		r2a.packInd - UINT16_MAX / 2, r2a.packTot, r2a.cnt_repeat, a2r.packInd, a2r.packTot, a2r.cnt_repeat, a2r.cnt_dropped);
+	DebugFlow(__FUNCTION__, __LINE__, str);
+	// Send
+	r2c.port.write(logQueue[logQueueIndStore]);
+	delay(50);
+
+	// Log summary info
 	float dt_s = (float)(millis() - t_start) / 1000.0f;
-	sprintf(str, "Run Info: dt_run=%0.2fs b_sent=%d b_stored=%d cnt_err_1=%d cnt_err_2=%d cnt_err_3=%d log_tx=%d log_rx=%d xbee_tx=%d xbee_rx=%d",
+	sprintf(str, "LOG SUMMARY: dt_run=%0.2fs b_sent=%d b_stored=%d cnt_err_1=%d cnt_err_2=%d cnt_err_3=%d log_tx=%d log_rx=%d xbee_tx=%d xbee_rx=%d",
 		dt_s, cnt_logBytesSent, cnt_logBytesStored, cnt_err_1, cnt_err_2, cnt_err_3, ol_buff_tx, ol_buff_rx, xbee_buff_tx, xbee_buff_rx);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	// Send
@@ -3891,7 +3900,6 @@ void GetSerial(R4 *r4)
 	FORMAT: [0]head, [1]id, [2:5]dat[0], [6:9]dat[1], [10:13]dat[1], [14:15]pack, [16]do_conf, [17]footer, [18]targ
 	*/
 
-
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	static char dat_str_1[200] = { 0 }; dat_str_1[0] = '\0';
@@ -3928,8 +3936,8 @@ void GetSerial(R4 *r4)
 	}
 
 	// Reset vars
-	cnt_packBytesRead = 0;
-	cnt_packBytesDiscarded = 0;
+	cnt_bytesRead = 0;
+	cnt_bytesDiscarded = 0;
 	r4->isNew = false;
 	r4->idNow = ' ';
 
@@ -3998,7 +4006,7 @@ void GetSerial(R4 *r4)
 
 	// Store data strings
 	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%d b_read=%d b_dump=%d",
-		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf, cnt_packBytesRead, cnt_packBytesDiscarded);
+		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf, cnt_bytesRead, cnt_bytesDiscarded);
 	sprintf(dat_str_2, "rx=%d tx=%d dt_snd=%d|%d dt_rcv=%d|%d dt_prs=%d",
 		buff_rx, buff_tx, dt_sent[0], dt_sent[1], dt_rcvd[0], dt_rcvd[1], dt_parse);
 
@@ -4032,37 +4040,38 @@ void GetSerial(R4 *r4)
 		}
 
 		// Reset check
-		r2->doRcvCheck[r2_ind] = false;
-		r2->cnt_resend[r2_ind] = 0;
-
-		// Check for missed packets
-		int pack_diff = (pack - r4->packTot);
-
-		// Get number of dropped/missed packets
-		int cnt_dropped = pack_diff - 1;
-
-		if (cnt_dropped > 0)
-		{
-			// Add to count and get last pack
-			int cnt_dropped_tot = 0;
-			uint16_t pack_tot_last = 0;
-
-			// Store dropped data
-			r4->cnt_dropped += cnt_dropped;
-			cnt_dropped_tot = r4->cnt_dropped;
-			pack_tot_last = r4->packTot;
-
-			// Log/print skipped packet info
-			sprintf(str, "Missed %s Packs: cnt=%d|%d pack_last=%d %s %s",
-				r4->instID, cnt_dropped, cnt_dropped_tot, pack_tot_last, dat_str_1, dat_str_2);
-			DebugError(__FUNCTION__, __LINE__, str);
-		}
+		r2->do_rcvCheckArr[r2_ind] = false;
+		r2->cnt_repeatArr[r2_ind] = 0;
 
 		// Update packet history
-		r4->packLast[r4_ind] = r4->pack[r4_ind];
-		r4->pack[r4_ind] = pack;
-		r4->packTot = pack > r4->packTot ? pack : r4->packTot;
-		uint16_t pack_last = r4->packLast[r4_ind];
+		r4->packLastArr[r4_ind] = r4->packArr[r4_ind];
+		r4->packArr[r4_ind] = pack;
+
+		// Update packet count
+		r4->packTot++;
+
+		// Skip if pack originated from robot (i.e., > UINT16_MAX / 2)
+		if (pack < UINT16_MAX / 2) {
+
+			// Get number of dropped/missed packets
+			int cnt_dropped = (pack - r4->packInd) - 1;
+
+			// Update dropped packets
+			if (cnt_dropped > 0)
+			{
+				// Store dropped data
+				r4->cnt_dropped += cnt_dropped;
+
+				// Log/print skipped packet info
+				sprintf(str, "Missed %s Packs: cnt=%d|%d pack_last=%d %s %s",
+					r4->instID, cnt_dropped, r4->cnt_dropped, r4->packInd, dat_str_1, dat_str_2);
+				DebugError(__FUNCTION__, __LINE__, str);
+			}
+
+			// Update packet ind 
+			r4->packInd = pack > r4->packInd ? pack : r4->packInd;
+
+		}
 
 		// Update id
 		r4->idNow = id;
@@ -4071,7 +4080,7 @@ void GetSerial(R4 *r4)
 		sprintf(str, "%s %s", dat_str_1, dat_str_2);
 
 		// New pack
-		if (pack != pack_last)
+		if (pack != r4->packLastArr[r4_ind])
 		{
 			// Log/print received
 			DebugRcvd(r4, str);
@@ -4095,7 +4104,7 @@ void GetSerial(R4 *r4)
 	}
 
 	// Check if data was discarded
-	if (cnt_packBytesDiscarded > 0) {
+	if (cnt_bytesDiscarded > 0) {
 		sprintf(str, "Dumped Bytes: %s %s", dat_str_1, dat_str_2);
 		DebugError(__FUNCTION__, __LINE__, str);
 	}
@@ -4141,7 +4150,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 		if (r4->port.available() > 0) {
 
 			buff = r4->port.read();
-			cnt_packBytesRead++;
+			cnt_bytesRead++;
 
 			// Bail
 			return buff;
@@ -4158,7 +4167,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 		if (r4->port.available() > 0) {
 
 			buff = r4->port.read();
-			cnt_packBytesRead++;
+			cnt_bytesRead++;
 
 			// check match was found
 			if (buff == mtch) {
@@ -4169,7 +4178,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 
 			// Otherwise add to discard count
 			else {
-				cnt_packBytesDiscarded++;
+				cnt_bytesDiscarded++;
 			}
 
 			// Check for overflow
@@ -4190,7 +4199,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 		while (r4->port.available() > 0) {
 			if (r4->port.available() > 0) {
 				r4->port.read();
-				cnt_packBytesRead++;
+				cnt_bytesRead++;
 			}
 		}
 	}
@@ -4201,7 +4210,7 @@ byte WaitBuffRead(R4 *r4, char mtch)
 
 	// Store current info
 	sprintf(dat_str, " from=%s buff=\'%s\' b_read=%d b_dump=%d rx_str=%d rx_now=%d tx_now=%d dt_chk=%d",
-		r4->instID, PrintSpecialChars(buff), cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
+		r4->instID, PrintSpecialChars(buff), cnt_bytesRead, cnt_bytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
 
 	// Buffer flooded
 	if (is_overflowed) {
@@ -4302,9 +4311,12 @@ void QueuePacket(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t p
 
 	}
 
-	// Itterate packet number
+	// Update packet count
+	r2->packTot++;
+
+	// Itterate packet ind if originating from robot
 	if (pack == 0) {
-		pack = ++r2->cnt_pack;
+		pack = ++r2->packInd;
 	}
 
 	// Create byte packet
@@ -4366,7 +4378,7 @@ bool SendPacket(R2 *r2)
 	R2 *r2o;
 
 	// Reset bytes sent
-	cnt_packBytesSent = 0;
+	cnt_bytesSent = 0;
 
 	// Set pointer to R4 struct
 	if (r2->instID == "r2c") {
@@ -4422,7 +4434,7 @@ bool SendPacket(R2 *r2)
 	r2->port.write(r2->sendQueue[r2->sendQueueIndRead], msg_lng);
 
 	// Store bytes sent
-	cnt_packBytesSent = msg_lng;
+	cnt_bytesSent = msg_lng;
 
 	// Update dt stuff
 	r2->dt_sent = r2->t_sent > 0 ? millis() - r2->t_sent : 0;
@@ -4466,27 +4478,27 @@ bool SendPacket(R2 *r2)
 	id_ind = ID_Ind<R2>(id, r2);
 
 	// Check if resending
-	is_resend = pack == r2a.packLast[id_ind];
+	is_resend = pack == r2a.packLastArr[id_ind];
 
 	// Set flags for recieve confirmation
 	if (do_conf) {
-		r2->doRcvCheck[id_ind] = true;
+		r2->do_rcvCheckArr[id_ind] = true;
 	}
 
 	// Update struct info
-	r2->datList[id_ind][0] = dat[0];
-	r2->datList[id_ind][1] = dat[1];
-	r2->datList[id_ind][2] = dat[2];
-	r2->packLast[id_ind] = r2->pack[id_ind];
-	r2->pack[id_ind] = pack;
-	r2->t_sentList[id_ind] = r2->t_sent;
+	r2->datMat[id_ind][0] = dat[0];
+	r2->datMat[id_ind][1] = dat[1];
+	r2->datMat[id_ind][2] = dat[2];
+	r2->packLastArr[id_ind] = r2->packArr[id_ind];
+	r2->packArr[id_ind] = pack;
+	r2->t_sentListArr[id_ind] = r2->t_sent;
 
 	// Check if resending
-	is_resend = pack == r2->packLast[id_ind];
+	is_resend = pack == r2->packLastArr[id_ind];
 
 	// Format data string
 	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%d b_sent=%d tx=%d rx=%d cts=%d dt_snd=%d|%d dt_rcv=%d|%d dt_q=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf, cnt_packBytesSent, buff_tx, buff_rx, r2->stateCTS, dt_sent[0], dt_sent[1], dt_rcvd[0], dt_rcvd[1], dt_queue);
+		id, dat[0], dat[1], dat[2], pack, do_conf, cnt_bytesSent, buff_tx, buff_rx, r2->stateCTS, dt_sent[0], dt_sent[1], dt_rcvd[0], dt_rcvd[1], dt_queue);
 
 	// Log/print
 	DebugSent(r2, dat_str, is_resend);
@@ -4509,7 +4521,7 @@ bool CheckResend(R2 *r2)
 	// Bail if nothing to send
 	for (int i = 0; i < r2->lng; i++)
 	{
-		is_waiting_for_pack = is_waiting_for_pack || r2->doRcvCheck[i];
+		is_waiting_for_pack = is_waiting_for_pack || r2->do_rcvCheckArr[i];
 	}
 	if (!is_waiting_for_pack) {
 		return false;
@@ -4523,18 +4535,18 @@ bool CheckResend(R2 *r2)
 	for (int i = 0; i < r2->lng; i++)
 	{
 		// Flag if waiting on anything
-		if (r2->doRcvCheck[i]) {
+		if (r2->do_rcvCheckArr[i]) {
 
 			// Set flag
 			is_waiting_for_pack = true;
 
 			// Get dt sent
-			dt_sent = millis() - r2->t_sentList[i];
+			dt_sent = millis() - r2->t_sentListArr[i];
 		}
 
 		// Bail if no action requred
 		if (
-			!r2->doRcvCheck[i] ||
+			!r2->do_rcvCheckArr[i] ||
 			dt_sent < dt_resend
 			) {
 			continue;
@@ -4546,24 +4558,24 @@ bool CheckResend(R2 *r2)
 
 		// Get dat string
 		sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d dt_sent=%dms tx=%d rx=%d",
-			r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], dt_sent, buff_tx, buff_rx);
+			r2->id[i], r2->datMat[i][0], r2->datMat[i][1], r2->datMat[i][2], r2->packArr[i], dt_sent, buff_tx, buff_rx);
 
-		if (r2->cnt_resend[i] < resendMax) {
+		if (r2->cnt_repeatArr[i] < resendMax) {
 
 			// Resend data
-			QueuePacket(r2, r2->id[i], r2->datList[i][0], r2->datList[i][1], r2->datList[i][2], r2->pack[i], true);
+			QueuePacket(r2, r2->id[i], r2->datMat[i][0], r2->datMat[i][1], r2->datMat[i][2], r2->packArr[i], true);
 
 			// Update count
-			r2->cnt_resend[i]++;
+			r2->cnt_repeatArr[i]++;
 
 			// Print resent packet
 			sprintf(str, "Resending %s Packet: cnt=%d %s",
-				r2->instID, r2->cnt_resend[i], dat_str);
+				r2->instID, r2->cnt_repeatArr[i], dat_str);
 			DebugError(__FUNCTION__, __LINE__, str);
 
 			// Set flags
 			do_pack_resend = true;
-			r2->doRcvCheck[i] = false;
+			r2->do_rcvCheckArr[i] = false;
 		}
 
 		// Coms failed
@@ -4571,11 +4583,11 @@ bool CheckResend(R2 *r2)
 
 			// Log/print error
 			sprintf(str, "ABORTED: Resending %s Packet: cnt=%d %s",
-				r2->instID, r2->cnt_resend[i], dat_str);
+				r2->instID, r2->cnt_repeatArr[i], dat_str);
 			DebugError(__FUNCTION__, __LINE__, str, true);
 
 			// Reset flag
-			r2->doRcvCheck[i] = false;
+			r2->do_rcvCheckArr[i] = false;
 		}
 	}
 
@@ -5306,9 +5318,7 @@ void CheckSampDT()
 
 		// Log/print non consecutive events
 		if (millis() - t_swap_vt > 2 * dt_max_vt) {
-			sprintf(str, "Swapped VT with Pixy: cnt=%d|%d dt=%d|%d pos=%0.2f|%0.2f",
-				cnt_swap_vt, cnt_swap_pixy, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
-			DebugError(__FUNCTION__, __LINE__, str);
+			sprintf(str, "Swapped VT with Pixy");
 		}
 
 		// Swap
@@ -5324,14 +5334,20 @@ void CheckSampDT()
 		
 		// Log/print non consecutive events
 		if (millis() - t_swap_pixy > 2 * dt_max_pixy) {
-			sprintf(str, "Swapped Pixy with VT: cnt=%d|%d dt=%d|%d pos=%0.2f|%0.2f",
-				cnt_swap_vt, cnt_swap_pixy, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
-			DebugError(__FUNCTION__, __LINE__, str);
+			sprintf(str, "Swapped Pixy with VT");
 		}
 
 		// Swap
 		Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
 		t_swap_pixy = millis();
+	}
+
+	// Log/print warning 
+	if (str[0] != '\0') {
+		char msg[200] = { 0 };
+		sprintf(msg, "%s: cnt=|vt=%d|px=%d| dt=|vt=%d|px=%d| pos=|vt=%0.2f|px=%0.2f|",
+			str, cnt_swap_vt, cnt_swap_pixy, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
+		DebugError(__FUNCTION__, __LINE__, msg);
 	}
 
 }
@@ -6742,14 +6758,14 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2
 	chk_last = cnt_chk;
 
 	// Itterate count
-	r42t.cnt_pack++;
+	r42t.packInd++;
 
 	// Send head
 	r42t.port.write(head_byte, 1);
 
 	// Send packet number
 	U.f = 0;
-	U.i16[0] = r42t.cnt_pack;
+	U.i16[0] = r42t.packInd;
 	r42t.port.write(U.b, 2);
 
 	// Send message
@@ -7641,7 +7657,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
-
+	
 	// EXAMPLE:
 	/*
 	static uint32_t t_s = 0;
@@ -7683,7 +7699,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 	}
 	int r2_ind = ID_Ind<R2>(id, r2);
 	if (r2_ind != -1) {
-		r2c.doRcvCheck[r2_ind] = false;
+		r2c.do_rcvCheckArr[r2_ind] = false;
 	}
 
 	// Print everything
@@ -9023,7 +9039,7 @@ void loop() {
 
 			// Tell CS quit is done
 			if (!fc.isQuitConfirmed) {
-				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('Q', &c2r)], true);
+				QueuePacket(&r2c, 'D', 0, 0, 0, c2r.packArr[ID_Ind<R4>('Q', &c2r)], true);
 				fc.isQuitConfirmed = true;
 			}
 
@@ -9183,7 +9199,7 @@ void loop() {
 					DebugFlow(__FUNCTION__, __LINE__, horeStr);
 
 					// Send done confirmation
-					QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('M', &c2r)], true);
+					QueuePacket(&r2c, 'D', 0, 0, 0, c2r.packArr[ID_Ind<R4>('M', &c2r)], true);
 
 				}
 
@@ -9486,7 +9502,7 @@ void loop() {
 		DebugFlow(__FUNCTION__, __LINE__, "STREAMING CONFIRMED");
 
 		// Send streaming confirmation
-		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.pack[ID_Ind<R4>('V', &c2r)], true);
+		QueuePacket(&r2c, 'D', 0, 0, 0, c2r.packArr[ID_Ind<R4>('V', &c2r)], true);
 
 		// Reset flag
 		fc.doStreamCheck = false;
