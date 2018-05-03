@@ -2262,7 +2262,7 @@ void REWARD::ExtendFeedArm()
 	digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to extend
-	digitalWrite(pin.ED_DIR, LOW);
+	digitalWrite(pin.ED_DIR, HIGH);
 	v_stepDir = 'e';
 
 	// Store start time
@@ -2317,7 +2317,7 @@ void REWARD::RetractFeedArm()
 	digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to retract
-	digitalWrite(pin.ED_DIR, HIGH);
+	digitalWrite(pin.ED_DIR, LOW);
 	v_stepDir = 'r';
 
 	// Store start time
@@ -2403,7 +2403,7 @@ void REWARD::CheckFeedArm()
 		digitalWrite(pin.ED_STP, v_stepState);
 
 		// Set direction to extend
-		digitalWrite(pin.ED_DIR, LOW);
+		digitalWrite(pin.ED_DIR, HIGH);
 		delayMicroseconds(100);
 
 		// Move arm x steps
@@ -5331,7 +5331,7 @@ void CheckSampDT()
 
 		// Itterate count
 		cnt_swap_pixy++;
-		
+
 		// Log/print non consecutive events
 		if (millis() - t_swap_pixy > 2 * dt_max_pixy) {
 			sprintf(str, "Swapped Pixy with VT");
@@ -7657,7 +7657,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
-	
+
 	// EXAMPLE:
 	/*
 	static uint32_t t_s = 0;
@@ -7833,10 +7833,10 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 			analogWrite(pin.TrackLED, duty[(int)do_led_on]);
 			if (!is_rat_blink) {
 				analogWrite(pin.Disp_LED, duty[(int)do_led_on]);
-				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
+				analogWrite(pin.RewLED_R, duty[(int)do_led_on]);
 			}
 			else {
-				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
+				analogWrite(pin.RewLED_R, duty[(int)do_led_on]);
 			}
 
 			// Update stuff
@@ -8285,7 +8285,7 @@ void setup() {
 		PrintLCD(true, "FAILED SETUP", "OpenLog");
 		DebugError(__FUNCTION__, __LINE__, "ABORTED: OpenLog Setup", true);
 		DoAll("PrintDebug");
-		RunErrorHold("OPENLOG SETUP");
+		RunErrorHold("OPENLOG SETUP"); 
 	}
 
 	// Create new log file
