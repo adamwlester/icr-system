@@ -91,7 +91,7 @@ struct PIN
 	const int IRprox_Lft = 43;
 
 	// IR detector
-	const int IRdetect = 1; // TEMP 31
+	const int IRdetect = 1; // 31
 }
 // Initialize
 pin;

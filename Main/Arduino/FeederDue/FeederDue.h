@@ -273,6 +273,11 @@ const double frontMotCoeff[5] = {
 	0.021557249590414,
 };
 
+// BIGEASYDRIVER
+const byte ezDirExtState = 1; 
+const byte ezDirRetState = 0; 
+const uint16_t ezExtStps = 255; // 400 255 TEMP
+
 // KALMAN MODEL
 struct KAL
 {
@@ -351,7 +356,7 @@ volatile byte v_stepState = false;
 volatile byte v_doStepTimer = false;
 volatile byte v_isArmMoveDone = false;
 volatile uint16_t v_cnt_steps = 0;
-volatile byte v_stepTarg = 0;
+volatile uint16_t v_stepTarg = 0;
 volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 

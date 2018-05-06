@@ -302,7 +302,6 @@ public:
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
 	bool isArmExtended = true;
-	const byte armExtStps = 255; // 130
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -2241,7 +2240,7 @@ void REWARD::ExtendFeedArm()
 	delayMicroseconds(dt_armStep + 100);
 
 	// Set targ and flag
-	v_stepTarg = armExtStps;
+	v_stepTarg = ezExtStps;
 	doExtendArm = true;
 	v_isArmMoveDone = false;
 
@@ -2262,7 +2261,7 @@ void REWARD::ExtendFeedArm()
 	digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to extend
-	digitalWrite(pin.ED_DIR, HIGH);
+	digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW);
 	v_stepDir = 'e';
 
 	// Store start time
@@ -2317,7 +2316,7 @@ void REWARD::RetractFeedArm()
 	digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to retract
-	digitalWrite(pin.ED_DIR, LOW);
+	digitalWrite(pin.ED_DIR, ezDirRetState == 1 ? HIGH : LOW);
 	v_stepDir = 'r';
 
 	// Store start time
@@ -2345,10 +2344,13 @@ void REWARD::CheckFeedArm()
 		!doRetractArm &&
 		!doTimedRetract)
 	{
-		// Make sure motor asleep
-		if (digitalRead(pin.ED_SLP) == HIGH) {
+
+		// Make sure motor asleep if arm not extended
+		if (!isArmExtended && digitalRead(pin.ED_SLP) == HIGH) {
 			digitalWrite(pin.ED_SLP, LOW);
 		}
+
+		// Bail
 		return;
 	}
 
@@ -2379,8 +2381,8 @@ void REWARD::CheckFeedArm()
 	if (!doExtendArm &&
 		!doRetractArm)
 	{
-		// Make sure motor asleep
-		if (digitalRead(pin.ED_SLP) == HIGH) {
+		// Make sure motor asleep if not extended
+		if (!isArmExtended && digitalRead(pin.ED_SLP) == HIGH) {
 			// Sleep motor
 			digitalWrite(pin.ED_SLP, LOW);
 		}
@@ -2403,7 +2405,7 @@ void REWARD::CheckFeedArm()
 		digitalWrite(pin.ED_STP, v_stepState);
 
 		// Set direction to extend
-		digitalWrite(pin.ED_DIR, HIGH);
+		digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW);
 		delayMicroseconds(100);
 
 		// Move arm x steps
@@ -2452,15 +2454,17 @@ void REWARD::CheckFeedArm()
 			digitalWrite(pin.ED_STP, LOW);
 		}
 
-		// Sleep motor
-		digitalWrite(pin.ED_SLP, LOW);
-
 		// Set arm state flags
 		if (doExtendArm) {
 			isArmExtended = true;
 		}
 		else if (doRetractArm) {
 			isArmExtended = false;
+		}
+
+		// Sleep motor if arm not extended
+		if (!isArmExtended) {
+			digitalWrite(pin.ED_SLP, LOW);
 		}
 
 		// Log/print status
@@ -8285,7 +8289,7 @@ void setup() {
 		PrintLCD(true, "FAILED SETUP", "OpenLog");
 		DebugError(__FUNCTION__, __LINE__, "ABORTED: OpenLog Setup", true);
 		DoAll("PrintDebug");
-		RunErrorHold("OPENLOG SETUP"); 
+		RunErrorHold("OPENLOG SETUP");
 	}
 
 	// Create new log file
