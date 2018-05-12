@@ -6,14 +6,12 @@ NOTES
 	Have to run from Arduino IDE for changes to take effect
 */
 
-#define DO_DEBUG 0
+// Set to print debug info to console
+#define DO_PRINT_DEBUG 0
+#define DO_PRINT_LOGS 0
 
 
 #pragma region ============ VARIABLE SETUP =============
-
-// Print port
-//usb_serial_class portPrint = Serial;
-Serial_ portPrint = SerialUSB;
 
 // Pin mapping
 struct PIN
@@ -21,13 +19,10 @@ struct PIN
 	// Status led
 	int StatLED = 13;
 
-	// Send log
-	//int Teensy_SendStart = 4;
-	//int Teensy_Resetting = 5;
-	//int Teensy_Unused = 6;
-	int Teensy_SendStart = 36;
-	int Teensy_Resetting = 38;
-	int Teensy_Unused = 40;
+	// Due coms
+	int Teensy_Unused = 14;
+	int Teensy_SendLogs = 15;
+	int Teensy_Resetting = 16;
 }
 // Initialize
 pin;
@@ -40,8 +35,7 @@ const char tnsy_id_list[1] =
 
 struct R42T
 {
-	//HardwareSerial2 &port;
-	USARTClass &port;
+	HardwareSerial2 &port;
 	const char *instID;
 	const int lng;
 	const char head;
@@ -87,6 +81,7 @@ bool is_ledOn = false;
 // Debugging general
 const uint16_t maxStoreStrLng = 300;
 const uint16_t logSize = 40;
+bool is_startConfirmed = false;
 uint32_t cnt_logsRcvd = 0;
 uint16_t cnt_logsStored = 0;
 byte logInd = 0;
@@ -152,7 +147,8 @@ void RunReset() {
 	// Itterate count
 	cnt_reset++;
 
-	// Reset counters
+	// Reset variables
+	is_startConfirmed = false;
 	cnt_logsRcvd = 0;
 	cnt_logsStored = 0;
 	logInd = 0;
@@ -178,21 +174,25 @@ void RunReset() {
 	// Set reset indicator pin high
 	sprintf(str, "[RunReset] Setting Reset Pin High");
 	PrintDebug(str);
-	digitalWrite(pin.StatLED, HIGH);
 	digitalWrite(pin.Teensy_Resetting, HIGH);
+	
 	// Flicker LED
 	for (size_t i = 0; i < 40; i++)
 	{
-		is_ledOn = !is_ledOn;
-		digitalWrite(pin.StatLED, is_ledOn ? HIGH : LOW);
+		StatusBlink();
 		delay(25);
 	}
-	// Print finished
+
+	// Set reset indicator pin back to low
 	digitalWrite(pin.Teensy_Resetting, LOW);
 	sprintf(str, "[RunReset] Setting Reset Pin Low");
 	PrintDebug(str);
 
-	// CHECK TX BUFFER SIZE
+	// Check RX buffer
+	sprintf(str, "[RunReset] RX BUFFER IS %d Bytes", r42t.port.available());
+	PrintDebug(str);
+
+	// Check TX buffer
 	PrintDebug("[RunReset] TX BUFFER SHOULD BE 64 Bytes");
 	sprintf(str, "[RunReset] TX BUFFER IS %d Bytes", r42t.port.availableForWrite()+1);
 	PrintDebug(str);
@@ -220,8 +220,15 @@ void GetSerial()
 
 	// Bail if no new input
 	if (r42t.port.available() == 0 ||
-		digitalRead(pin.Teensy_SendStart) == LOW) {
+		digitalRead(pin.Teensy_SendLogs) == LOW) {
 		return;
+	}
+
+	// Check send log command
+	if (!is_startConfirmed && 
+		digitalRead(pin.Teensy_SendLogs) == LOW) {
+		PrintDebug("[GetSerial] RECIEVED SEND LOG SIGNAL");
+		is_startConfirmed = true;
 	}
 
 	// Set status LED high
@@ -233,7 +240,7 @@ void GetSerial()
 
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
-			if (DO_DEBUG) {
+			if (DO_PRINT_DEBUG) {
 				sprintf(str, "**WARNING** [GetSerial] Missing Head: b_read=%lu b_dump=%lu",
 					cnt_packBytesRead, cnt_packBytesDiscarded);
 				PrintDebug(str);
@@ -258,7 +265,7 @@ void GetSerial()
 
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
-			if (DO_DEBUG) {
+			if (DO_PRINT_DEBUG) {
 				sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
 					cnt_packBytesRead, cnt_packBytesDiscarded);
 				PrintDebug(str);
@@ -299,6 +306,13 @@ void GetSerial()
 	// Update counts
 	cnt_logsRcvd++;
 	cnt_logsStored += cnt_logsStored < logSize ? 1 : 0;
+
+	// Print every 100 log
+	if (cnt_logsRcvd == 1 || cnt_logsRcvd % 100 == 0) {
+		sprintf(str, "[GetSerial] Recieved %d Logs", cnt_logsRcvd);
+		PrintDebug(str);
+	}
+
 
 }
 
@@ -404,7 +418,9 @@ void StoreMessage(char msg[], uint16_t cnt_pack)
 	}
 
 	// Print message
-	PrintDebug(str);
+	if (DO_PRINT_LOGS) {
+		PrintDebug(str);
+	}
 }
 
 // SEND LOGS
@@ -416,7 +432,7 @@ void SendLogs()
 	char c_arr[4] = { 0 };
 
 	// Check for low pin
-	if (digitalRead(pin.Teensy_SendStart) != LOW) {
+	if (digitalRead(pin.Teensy_SendLogs) != LOW) {
 		return;
 	}
 
@@ -424,7 +440,7 @@ void SendLogs()
 	while (millis() < t_check) {
 
 		// Check for high pin
-		if (digitalRead(pin.Teensy_SendStart) != LOW) {
+		if (digitalRead(pin.Teensy_SendLogs) != LOW) {
 			return;
 		}
 
@@ -494,7 +510,7 @@ void SendLogs()
 // FORMAT AND PRINT MESSAGE
 void PrintDebug(char msg[], uint32_t t)
 {
-#if DO_DEBUG
+#if DO_PRINT_DEBUG
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -522,10 +538,7 @@ void PrintDebug(char msg[], uint32_t t)
 	sprintf(str, "%s%s%s\n", str_time, spc, msg);
 
 	// Print it
-	portPrint.print(str);
-
-	// Store message
-	//StoreMessage(str, 0);
+	SerialUSB.print(str);
 
 #endif
 }
@@ -554,30 +567,30 @@ void setup()
 	// SET UP SERIAL STUFF
 
 	// Serial monitor
-#if DO_DEBUG
-	portPrint.begin(57600);
+#if DO_PRINT_DEBUG
+	SerialUSB.begin(57600);
 #endif 
 
 	// FeederDue Serial
 	//r42t.port.begin(57600);
 	//r42t.port.begin(115200);
 	r42t.port.begin(256000);
+
 	// SETUP PINS
 
 	// Set direction
-	pinMode(pin.Teensy_SendStart, INPUT);
-	pinMode(pin.StatLED, OUTPUT);
+	pinMode(pin.Teensy_SendLogs, INPUT);
 	pinMode(pin.Teensy_Resetting, OUTPUT);
+	pinMode(pin.StatLED, OUTPUT);
 
 	// Set initial state
 	digitalWrite(pin.StatLED, LOW);
 	digitalWrite(pin.Teensy_Resetting, LOW);
 
-	// Add delay so can load sketch if issue
+	// USE AS DELAY 
 	for (size_t i = 0; i < 120; i++)
 	{
-		is_ledOn = !is_ledOn;
-		digitalWrite(pin.StatLED, is_ledOn ? HIGH : LOW);
+		StatusBlink();
 		delay(25);
 	}
 

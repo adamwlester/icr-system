@@ -57,16 +57,16 @@
 
 // DEBUG SETTING
 
-// Logging
-#define DO_LOG 1
-#define DO_FAST_LOG 0
-
 // Console
-#define DO_PRINT_DEBUG 0
+#define DO_PRINT_DEBUG 1
 #define DO_FAST_PRINT 0
 
-// Other
-#define DO_TEENSY_DEBUG 0
+// Teensy Logging
+#define DO_TEENSY_DEBUG 1
+
+// Primary Logging
+#define DO_LOG 1
+#define DO_FAST_LOG 0
 
 // Main debug flag
 #if DO_PRINT_DEBUG || DO_TEENSY_DEBUG
@@ -230,10 +230,10 @@ uint32_t t_quit = 0;
 // PIXY
 double pixyCoeff[4] = {0};
 const double pixyPackCoeff[4] = {
-	-0.000004725264535,
-	0.002357167791536,
-	-0.607192622964849,
-	99.905820904465827,
+	-0.000004516384601,
+	0.002197926774659,
+	-0.561615287495448,
+	95.389990433465044,
 };
 const double pixyCubeCoeff[4] = {
 	-0.000005563484773,
@@ -274,9 +274,10 @@ const double frontMotCoeff[5] = {
 };
 
 // BIGEASYDRIVER
-const byte ezDirExtState = 1; 
-const byte ezDirRetState = 0; 
-const uint16_t ezExtStps = 255; // 400 255 TEMP
+const byte ezDirExtState = 1; // 1
+const byte ezDirRetState = 0; // 0
+const int16_t ezExtStps = 250; // 500 255 TEMP
+const int16_t ezRestStps = 50; // 50 25 TEMP
 
 // KALMAN MODEL
 struct KAL
@@ -355,7 +356,7 @@ volatile byte v_doBlockIR = false;
 volatile byte v_stepState = false;
 volatile byte v_doStepTimer = false;
 volatile byte v_isArmMoveDone = false;
-volatile uint16_t v_cnt_steps = 0;
+volatile int16_t v_cnt_steps = 0;
 volatile uint16_t v_stepTarg = 0;
 volatile byte v_stepDir = 'e'; // ['e','r']
 

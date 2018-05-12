@@ -23,9 +23,9 @@ struct PIN
 	const int X1b_UNDEF = 26;
 
 	// Teensy
-	const int Teensy_SendStart = 36;
-	const int Teensy_Resetting = 38;
-	const int Teensy_Unused = 40;
+	const int Teensy_Unused = 36;
+	const int Teensy_SendLogs = 38;
+	const int Teensy_Resetting = 40;
 
 	// Display
 	const int Disp_SCK = 8;
@@ -91,7 +91,7 @@ struct PIN
 	const int IRprox_Lft = 43;
 
 	// IR detector
-	const int IRdetect = 1; // 31
+	const int IRdetect = 31; 
 }
 // Initialize
 pin;
@@ -115,7 +115,7 @@ void SetupPins() {
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
 	// Teensy
-	pinMode(pin.Teensy_SendStart, OUTPUT);
+	pinMode(pin.Teensy_SendLogs, OUTPUT);
 	// Display
 	pinMode(pin.Disp_SCK, OUTPUT);
 	pinMode(pin.Disp_MOSI, OUTPUT);
@@ -152,16 +152,16 @@ void SetupPins() {
 	digitalWrite(pin.PWR_OFF, LOW);
 	digitalWrite(pin.PWR_ON, LOW);
 	digitalWrite(pin.PWR_Swtch_Grn, LOW);
-	// Voltage Regulators (start high)
-	digitalWrite(pin.REG_24V_ENBLE, HIGH);
+	// Voltage Regulators (start 12V high)
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_ENBLE, HIGH);
+	digitalWrite(pin.REG_24V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V_ENBLE, LOW);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
 	// Teensy (start high)
-	digitalWrite(pin.Teensy_SendStart, HIGH);
+	digitalWrite(pin.Teensy_SendLogs, HIGH);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);

@@ -905,6 +905,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Console_Write('[Run:MainLoop] SKIPPED: "TT_Track_Setup()"');
                     end
                     
+                    % TEMP
+                    pause(5);
+                    
                     % Connect to NLX
                     Console_Write('[Run:MainLoop] RUNNING: "NLX_Connect()"...');
                     was_ran = NLX_Connect();

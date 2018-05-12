@@ -2260,8 +2260,14 @@ void REWARD::ExtendFeedArm()
 	digitalWrite(pin.ED_MS2, HIGH);
 	digitalWrite(pin.ED_MS3, LOW);
 
+	//// Set to eigth step
+	//digitalWrite(pin.ED_MS1, HIGH);
+	//digitalWrite(pin.ED_MS2, HIGH);
+	//digitalWrite(pin.ED_MS3, LOW);
+
 	// Set direction to extend
-	digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW);
+	digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW); 
+	delayMicroseconds(100);
 	v_stepDir = 'e';
 
 	// Store start time
@@ -2315,8 +2321,14 @@ void REWARD::RetractFeedArm()
 	digitalWrite(pin.ED_MS2, HIGH);
 	digitalWrite(pin.ED_MS3, LOW);
 
+	//// Set to eigth step
+	//digitalWrite(pin.ED_MS1, HIGH);
+	//digitalWrite(pin.ED_MS2, HIGH);
+	//digitalWrite(pin.ED_MS3, LOW);
+
 	// Set direction to retract
-	digitalWrite(pin.ED_DIR, ezDirRetState == 1 ? HIGH : LOW);
+	digitalWrite(pin.ED_DIR, ezDirRetState == 1 ? HIGH : LOW); 
+	delayMicroseconds(100);
 	v_stepDir = 'r';
 
 	// Store start time
@@ -2405,11 +2417,11 @@ void REWARD::CheckFeedArm()
 		digitalWrite(pin.ED_STP, v_stepState);
 
 		// Set direction to extend
-		digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW);
+		digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW); 
 		delayMicroseconds(100);
 
 		// Move arm x steps
-		for (int i = 0; i < 20; i++)
+		for (int i = 0; i < ezRestStps; i++)
 		{
 			digitalWrite(pin.ED_STP, HIGH);
 			delayMicroseconds(500);
@@ -5743,7 +5755,6 @@ bool GetButtonInput()
 			DebugFlow(__FUNCTION__, __LINE__, "Button 0 \"Reward.RetractFeedArm()\" Triggered");
 		}
 	}
-
 	else if (do_flag_fun[0][1]) {
 		fc.doMoveRobFwd = true;
 		DebugFlow(__FUNCTION__, __LINE__, "Button 0 \"fc.doMoveRobFwd\" Triggered");
@@ -6807,12 +6818,12 @@ void GetTeensyDebug()
 	DoAll("PrintDebug");
 
 	// Set send pin low for 150 ms
-	digitalWrite(pin.Teensy_SendStart, LOW);
+	digitalWrite(pin.Teensy_SendLogs, LOW);
 	delay(10);
 	// Send start string
 	r42t.port.write("<<<");
 	delay(150);
-	digitalWrite(pin.Teensy_SendStart, HIGH);
+	digitalWrite(pin.Teensy_SendLogs, HIGH);
 
 	// Start getting logs
 	while (strcmp(c_arr, ">>>") != 0 &&
@@ -6920,7 +6931,7 @@ void GetTeensyDebug()
 
 	// Check for random fail
 	else {
-		sprintf(str, "FILED FOR UNKNOWN REASON: Import Teensy Logs: cnt=%d", cnt_log);
+		sprintf(str, "FAILED: REASON UNKNOWN: Import Teensy Logs: cnt=%d", cnt_log);
 		DebugError(__FUNCTION__, __LINE__, str);
 	}
 
@@ -8010,8 +8021,6 @@ void Interupt_TimerHandler()
 // POWER OFF
 void Interupt_Power()
 {
-	// NOT USING
-	return;
 
 	// Turn off power
 	digitalWrite(pin.PWR_OFF, HIGH);
@@ -8335,7 +8344,9 @@ void setup() {
 	}
 
 	// Power off
-	//attachInterrupt(digitalPinToInterrupt(pin.PWR_Swtch), Interupt_Power, FALLING);
+#if !DO_AUTO_POWER
+	attachInterrupt(digitalPinToInterrupt(pin.PWR_Swtch), Interupt_Power, FALLING);
+#endif
 
 	// IR prox right
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), Interupt_IRprox_Halt, FALLING);

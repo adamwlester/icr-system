@@ -14,27 +14,30 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="src">
-      <UniqueIdentifier>{0bef9d66-5cc9-44d0-b50e-f74d2b3c5576}</UniqueIdentifier>
+      <UniqueIdentifier>{6e526685-17ac-4d6e-92f2-27b2efa09275}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly">
-      <UniqueIdentifier>{c4f02ef8-ffca-4552-9729-1849c6d9420a}</UniqueIdentifier>
+      <UniqueIdentifier>{11f80422-4868-46f0-9640-aeafc4067c6e}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core">
-      <UniqueIdentifier>{23a7f32d-7023-48bf-9ae6-c44b5a795656}</UniqueIdentifier>
+      <UniqueIdentifier>{c35cb804-ff5f-4888-a7fd-9ef9ea03dfc7}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\avr">
-      <UniqueIdentifier>{78936af0-9160-49d5-95c2-621fd45d8d1d}</UniqueIdentifier>
+      <UniqueIdentifier>{97a4b60a-bec0-48b0-9a0e-91d7d4f569b3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\_micro-api-readonly\core\USB">
-      <UniqueIdentifier>{b764db91-9814-4196-be5c-e80fa11f6c0c}</UniqueIdentifier>
+    <Filter Include="src\_micro-api-readonly\core\util">
+      <UniqueIdentifier>{c57b613e-629a-464d-b8e3-135beb72ceef}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries">
-      <UniqueIdentifier>{19034bbc-4258-4b4b-b033-b76d9571aaf8}</UniqueIdentifier>
+      <UniqueIdentifier>{e0e7cc20-34ff-4704-a3f9-0dbec1f5ccd0}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="TeensyHelper.ino" />
-    <None Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_pulse_asm.S">
+    <None Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\memcpy-armv7m.S">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </None>
+    <None Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\memset.S">
       <Filter>src\_micro-api-readonly\core</Filter>
     </None>
   </ItemGroup>
@@ -42,174 +45,282 @@
     <ClInclude Include="__vm\.TeensyHelper.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Arduino.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Arduino.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\binary.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\arm_common_tables.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Client.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\arm_math.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\HardwareSerial.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\AudioStream.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\IPAddress.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr_emulation.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\itoa.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr_functions.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Print.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\binary.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Printable.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Client.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Reset.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\core_cm4.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\RingBuffer.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\core_cm4_simd.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Server.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\core_cmInstr.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Stream.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\core_id.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\syscalls.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\core_pins.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Tone.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\DMAChannel.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\UARTClass.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\elapsedMillis.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Udp.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\EventResponder.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USARTClass.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\watchdog.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\IntervalTimer.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WCharacter.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\IPAddress.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WInterrupts.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Keyboard.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\keylayouts.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_analog.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\kinetis.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_constants.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\math_helper.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_digital.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\MIDIUSB.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_private.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\mk20dx128.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_pulse.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Mouse.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_shift.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\new.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WMath.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\pgmspace.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WString.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\pins_arduino.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\avr\dtostrf.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Print.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Printable.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Server.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\ser_print.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\SPIFIFO.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Stream.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Udp.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_audio.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_desc.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_dev.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_flightsim.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_joystick.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_keyboard.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_mem.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_midi.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_mouse.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_mtp.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_names.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_rawhid.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_seremu.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_serial.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_touch.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_undef.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\WCharacter.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\WConstants.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\wiring.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\wiring_private.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\WProgram.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\WString.h">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\eeprom.h">
       <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\avr\interrupt.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\interrupt.h">
       <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\avr\pgmspace.h">
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\io.h">
       <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\PluggableUSB.h">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\pgmspace.h">
+      <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBAPI.h">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\power.h">
+      <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBCore.h">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\sleep.h">
+      <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBDesc.h">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr\wdt.h">
+      <Filter>src\_micro-api-readonly\core\avr</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\pins_arduino.h">
-      <Filter>src\_micro-api-readonly\core</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\util\atomic.h">
+      <Filter>src\_micro-api-readonly\core\util</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\variant.h">
-      <Filter>src\_micro-api-readonly\core</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\util\crc16.h">
+      <Filter>src\_micro-api-readonly\core\util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\util\delay.h">
+      <Filter>src\_micro-api-readonly\core\util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\util\parity.h">
+      <Filter>src\_micro-api-readonly\core\util</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\abi.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\AudioStream.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\IPAddress.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\avr_emulation.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\main.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\DMAChannel.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\new.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\EventResponder.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Print.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial1.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Reset.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial2.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\RingBuffer.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial3.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\Stream.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial4.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\UARTClass.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial5.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USARTClass.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\HardwareSerial6.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\watchdog.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\IntervalTimer.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\wiring_pulse.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\IPAddress.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WMath.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\main.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\WString.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\new.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\CDC.cpp">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Print.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\PluggableUSB.cpp">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Stream.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\USB\USBCore.cpp">
-      <Filter>src\_micro-api-readonly\core\USB</Filter>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\Tone.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\variant.cpp">
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_audio.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_flightsim.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\usb_inst.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\WMath.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\WString.cpp">
+      <Filter>src\_micro-api-readonly\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\..\..\..\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\yield.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
   </ItemGroup>
