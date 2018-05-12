@@ -152,10 +152,10 @@ void SetupPins() {
 	digitalWrite(pin.PWR_OFF, LOW);
 	digitalWrite(pin.PWR_ON, LOW);
 	digitalWrite(pin.PWR_Swtch_Grn, LOW);
-	// Voltage Regulators (start 12V high)
+	// Voltage Regulators (start high)
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
-	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_5V_ENBLE, LOW);
+	digitalWrite(pin.REG_24V_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V_ENBLE, HIGH);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);

@@ -6701,11 +6701,12 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2
 	static byte head_byte[1] = { r42t.head };
 	static byte foot_byte[1] = { r42t.foot };
 	static float t_s = 0;
-	static uint32_t cnt_chk = 0;
-	static uint32_t chk_last = 0;
 	static bool do_skip_repeat = false;
 	static int  cnt_long_dt_skip = 0;
 	static uint32_t dt_run = 0;
+	static uint32_t cnt_chk = 0;
+	static uint32_t chk_last = 0;
+	int cnt_skip = 0;
 	int chk_diff = 0;
 	uint16_t b_ind = 0;
 	uint32_t t_str = micros();
@@ -6761,9 +6762,12 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2
 	// Copy string
 	strcpy(fun_copy, fun);
 
-	// Short summary
-	sprintf(str, "%0.0f %s_%s l%d s%d m%0.0f",
-		t_s, msg1, fun, cnt_loop_short, cnt_chk - chk_last, (float)mem / 1000);
+	// Get number of times skipped logging
+	cnt_skip = cnt_chk - chk_last;
+
+	// Short summary [time sec, function, message arg, loop count, skip count, memory GB]
+	sprintf(str, "%0.0f %s_%s l=%d s=%d m=%0.0f",
+		t_s, fun, msg1, cnt_loop_short, cnt_skip, (float)mem / 1000);
 
 	//// Detail memory
 	//sprintf(str, "%0.0f %s_%s %d%s",
@@ -8149,7 +8153,10 @@ void setup() {
 	// DISABLE VOLTAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V_ENBLE, LOW);
+	// Keep Teensy powered
+#if !DO_TEENSY_DEBUG
 	digitalWrite(pin.REG_5V_ENBLE, LOW);
+#endif
 
 	// WAIT FOR POWER SWITCH RELEASE
 	while (digitalRead(pin.PWR_Swtch) == LOW) {

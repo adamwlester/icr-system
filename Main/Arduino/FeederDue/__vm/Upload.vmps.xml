@@ -9,24 +9,24 @@
       <VCCodeMacros />
     </VCCodeModel>
     <BreakPoints>
-      <BreakPoint Index="1" Name="FeederDue.ino, line 8793" Id="e5dcb0bd-9054-4fe9-ae1f-10ffbd5a88bc" Enabled="1" Message="{@Plot.WinPos.PosRatVT.Blue Pos[0].posRel}{@Plot.WinPos.PosRatPixy.Green Pos[2].posRel}{@Plot.WinPos.PosRobVT.Orange Pos[1].posRel}{@Plot.WinPos.RatEKF.Black kal.RatPos}{@Plot.WinPos.RobEKF.Red kal.RobPos}" MessageTextType="2" PreProcessedMessage="{0}{1}{2}{3}{4}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="8793" FileColumn="1" FunctionName="" FunctionLineOffset="1" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='e5dcb0bd-9054-4fe9-ae1f-10ffbd5a88bc'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
-        <Source>8786				t_check_next = millis() + dt_check;
-8787	
-8788				// Plot pos
-8789				if (db.do_posPlot) {
-8790					/*
-8791					{@Plot.WinPos.PosRatVT.Blue Pos[0].posRel}{@Plot.WinPos.PosRatPixy.Green Pos[2].posRel}{@Plot.WinPos.PosRobVT.Orange Pos[1].posRel}{@Plot.WinPos.RatEKF.Black kal.RatPos}{@Plot.WinPos.RobEKF.Red kal.RobPos}
-8792					*/
---&gt;8793					millis();
-8794				}
-8795	
-8796				// Turn on rew led when near setpoint
-8797				if (Pid.error &gt; -0.5 &amp;&amp; Pid.error &lt; 0.5 &amp;&amp;
-8798					Pos[0].is_streamStarted &amp;&amp;
-8799					Pos[1].is_streamStarted) {
-8800	
-8801					analogWrite(pin.RewLED_C, 10);
-8802				}
+      <BreakPoint Index="1" Name="FeederDue.ino, line 8800" Id="e5dcb0bd-9054-4fe9-ae1f-10ffbd5a88bc" Enabled="1" Message="{@Plot.WinPos.PosRatVT.Blue Pos[0].posRel}{@Plot.WinPos.PosRatPixy.Green Pos[2].posRel}{@Plot.WinPos.PosRobVT.Orange Pos[1].posRel}{@Plot.WinPos.RatEKF.Black kal.RatPos}{@Plot.WinPos.RobEKF.Red kal.RobPos}" MessageTextType="2" PreProcessedMessage="{0}{1}{2}{3}{4}" Condition="" ConditionType="1" CurrentHits="0" File="c:\users\lester\medocuments\research\barneslab\study_icr\icr_code\icr_running\main\arduino\feederdue\feederdue.ino" FileLine="8800" FileColumn="1" FunctionName="" FunctionLineOffset="1" FunctionColumnOffset="1" HitCountTarget="1" HitCountType="1" Language="C++" LocationType="3" Tag="&lt;vmbp Id='e5dcb0bd-9054-4fe9-ae1f-10ffbd5a88bc'/&gt;" Type="1" ToString="System.__ComObject" BreakWhenHit="0">
+        <Source>8793				t_check_next = millis() + dt_check;
+8794	
+8795				// Plot pos
+8796				if (db.do_posPlot) {
+8797					/*
+8798					{@Plot.WinPos.PosRatVT.Blue Pos[0].posRel}{@Plot.WinPos.PosRatPixy.Green Pos[2].posRel}{@Plot.WinPos.PosRobVT.Orange Pos[1].posRel}{@Plot.WinPos.RatEKF.Black kal.RatPos}{@Plot.WinPos.RobEKF.Red kal.RobPos}
+8799					*/
+--&gt;8800					millis();
+8801				}
+8802	
+8803				// Turn on rew led when near setpoint
+8804				if (Pid.error &gt; -0.5 &amp;&amp; Pid.error &lt; 0.5 &amp;&amp;
+8805					Pos[0].is_streamStarted &amp;&amp;
+8806					Pos[1].is_streamStarted) {
+8807	
+8808					analogWrite(pin.RewLED_C, 10);
+8809				}
 </Source>
         <MessageVariables>
           <MessageVariable Name="@Plot.WinPos.PosRatVT.Blue Pos[0].posRel" Index="1" />

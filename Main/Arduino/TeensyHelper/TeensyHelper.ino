@@ -41,7 +41,7 @@ struct R42T
 	const char head;
 	const char foot;
 	const char *id;
-	uint16_t cnt_pack;
+	uint16_t packTot;
 	int cnt_dropped;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
@@ -283,7 +283,7 @@ void GetSerial()
 	else {
 
 		// Check for missed packets
-		int pack_diff = (pack - r42t.cnt_pack);
+		int pack_diff = (pack - r42t.packTot);
 
 		// Get number of dropped/missed packets
 		int cnt_dropped = pack_diff - 1;
@@ -294,14 +294,14 @@ void GetSerial()
 		}
 
 		// Update packs
-		r42t.cnt_pack = pack;
+		r42t.packTot = pack;
 	}
 
 	// Terminate string
 	readBuff[buffInd] = '\0';
 
 	// Store message
-	StoreMessage(readBuff, r42t.cnt_pack);
+	StoreMessage(readBuff, r42t.packTot);
 
 	// Update counts
 	cnt_logsRcvd++;
@@ -385,19 +385,20 @@ char WaitBuffRead(int timeout, char mtch)
 }
 
 // STORE MESSAGE
-void StoreMessage(char msg[], uint16_t cnt_pack)
+void StoreMessage(char msg[], uint16_t pack)
 {
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char print_str[maxStoreStrLng] = { 0 }; print_str[0] = '\0';
 
 	// Format string
-	sprintf(str, "TEENSY %lu: %s", cnt_pack, msg);
+	sprintf(str, "TEENSY %lu: %s", pack, msg);
 
 	// Store log
 	sprintf(Log[logInd], "%c%s%c", r42t.head, str, r42t.foot);
 
 	// Store first log which has log file
-	if (cnt_pack == 1) {
+	if (pack == 1) {
 		sprintf(logNumStr, Log[logInd]);
 	}
 
@@ -419,7 +420,8 @@ void StoreMessage(char msg[], uint16_t cnt_pack)
 
 	// Print message
 	if (DO_PRINT_LOGS) {
-		PrintDebug(str);
+		sprintf(print_str, "%d: %s", pack, str);
+		PrintDebug(print_str);
 	}
 }
 
