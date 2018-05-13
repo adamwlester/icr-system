@@ -10,10 +10,12 @@ NOTES
 #define DO_PRINT_DEBUG 0
 #define DO_PRINT_LOGS 0
 
+#include "SdFat.h"
+
 
 #pragma region ============ VARIABLE SETUP =============
 
-// Pin mapping
+// PIN MAPPING
 struct PIN
 {
 	// Status led
@@ -27,6 +29,7 @@ struct PIN
 // Initialize
 pin;
 
+// SERIAL COMS
 
 const char tnsy_id_list[1] =
 {
@@ -42,7 +45,6 @@ struct R42T
 	const char foot;
 	const char *id;
 	uint16_t packTot;
-	int cnt_dropped;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
 };
@@ -63,9 +65,7 @@ R42T r42t
 	')',
 	// id
 	tnsy_id_list,
-	// cnt_pack
-	0,
-	// cnt_dropped
+	// packTot
 	0,
 	// t_rcvd
 	0,
@@ -88,19 +88,26 @@ byte logInd = 0;
 byte logIndArr[logSize] = { 0 };
 char Log[logSize][maxStoreStrLng] = { { 0 } };
 uint16_t cnt_reset = 0;
-char logNumStr[100] = { 0 };
 
 // Serial com general
 uint32_t t_sync = 0;
 uint16_t buffInd = 0;
 char readBuff[maxStoreStrLng] = { 0 };
-uint32_t cnt_packBytesRead = 0;
-uint32_t cnt_packBytesDiscarded = 0;
+uint32_t packTotBytesRead = 0;
+uint32_t packTotBytesDiscarded = 0;
+
+// SD Logging
+char logFiStr[100] = { 0 };
+uint32_t dt_flush = 500; // (ms)
+uint32_t t_flush = 0;
+SdFatSdioEX sdEx;
+File logFileSD;
 
 // union
 union u_tag {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
+	uint8_t i8[4]; // (uint8_t) 1 byte
 	uint16_t i16[2]; // (int16) 2 byte
 	uint32_t i32; // (int32) 4 byte
 	long l; // (long) 4 byte
@@ -115,6 +122,12 @@ union u_tag {
 // RESET VARIABLES
 void RunReset();
 
+// OPEN NEW LOG FOR WRITING
+void OpenNewLog();
+
+// GET LOG NUMBER
+uint32_t GetLogNumber();
+
 // PARSE SERIAL INPUT
 void GetSerial();
 
@@ -122,7 +135,7 @@ void GetSerial();
 char WaitBuffRead(int timeout, char mtch = '\0');
 
 // STORE MESSAGE
-void StoreMessage(char msg[], uint16_t cnt_pack);
+void StoreMessage(char msg[], uint16_t pack);
 
 // SEND LOGS
 void SendLogs();
@@ -154,8 +167,8 @@ void RunReset() {
 	logInd = 0;
 	buffInd = 0;
 	readBuff[0] = '\0';
-	cnt_packBytesRead = 0;
-	cnt_packBytesDiscarded = 0;
+	packTotBytesRead = 0;
+	packTotBytesDiscarded = 0;
 
 	// Reinitialize arrays
 	for (size_t i = 0; i < logSize; i++) {
@@ -164,7 +177,7 @@ void RunReset() {
 	}
 
 	// Set log entry to null
-	sprintf(logNumStr, "%cNULL%c", r42t.head, r42t.foot);
+	sprintf(logFiStr, "%cNULL%c", r42t.head, r42t.foot);
 
 	// Dump buffer
 	while (r42t.port.available() > 0) {
@@ -203,6 +216,124 @@ void RunReset() {
 
 }
 
+// OPEN NEW LOG FOR WRITING
+void OpenNewLog() {
+
+	// Local vars
+	static char str[100] = { 0 }; str[0] = '\0';
+	static char file_str[50] = { 0 };
+	uint32_t log_num = 0;
+
+	// Initialize SD card
+	sdEx.begin();
+	sdEx.chvol();
+
+	// Get curent log number
+	log_num = GetLogNumber();
+
+	// Check if capacity reached
+	if (log_num > 5) {
+
+		// Move to root directory
+		sdEx.chdir();
+
+		// Wipe all data
+		if (sdEx.vwd()->rmRfStar()) {
+			PrintDebug("[OpenNewLog] WIPED SD CARD");
+		}
+		else {
+			PrintDebug("!!ERROR!! [OpenNewLog] FAILED: WIPE SD CARD");
+		}
+
+		// Reinitialize SD card
+		sdEx.begin();
+		sdEx.chvol();
+
+		// Get new log number
+		log_num = GetLogNumber();
+
+	}
+
+	// Format log file name
+	sprintf(file_str, "%s.txt", logFiStr);
+	PrintDebug(file_str);
+
+	// Attempt to open/create count file
+	if (logFileSD.open(file_str, O_RDWR | O_CREAT)) {
+		sprintf(str, "[OpenNewLog] OPENED \"%s\" FILE", file_str);
+	}
+	else {
+		sprintf(str, "!!ERROR!! [OpenNewLog] FAILED: OPENING \"%s\" FILE", file_str);
+	}
+	PrintDebug(str);
+
+}
+
+// GET LOG NUMBER
+uint32_t GetLogNumber() {
+
+	// Local vars
+	static char str[100] = { 0 }; str[0] = '\0';
+	bool is_dir_exit = false;
+	File log_num_file_sd;
+
+	// Specify file and dir
+	char log_dir[10] = "LOGS";
+	char fi_num_dir[20] = "LOGCNT.bin";
+
+	// Check for main directory
+	if (!sdEx.exists(log_dir)) {
+
+		// Make main directory
+		if (sdEx.mkdir(log_dir)) {
+			sprintf(str, "[GetLogNumber] CREATED \"%s\" DIR", log_dir);
+		}
+		else {
+			sprintf(str, "!!ERROR!! [GetLogNumber] FAILED: CREATE \"%s\" DIR", log_dir);
+		}
+		PrintDebug(str);
+
+	}
+
+	// Change directory
+	if (sdEx.chdir(log_dir)) {
+		sprintf(str, "[GetLogNumber] \CD TO \"%s\" DIR", log_dir);
+	}
+	else {
+		sprintf(str, "!!ERROR!! [GetLogNumber] FAILED: CD TO \"%s\" DIR", log_dir);
+	}
+	PrintDebug(str);
+
+	// Attempt to open/create count file
+	if (log_num_file_sd.open(fi_num_dir, O_RDWR | O_CREAT)) {
+		sprintf(str, "[GetLogNumber] OPENED \"%s\" FILE", fi_num_dir);
+	}
+	else {
+		sprintf(str, "!!ERROR!! [GetLogNumber] FAILED: OPENING \"%s\" FILE", fi_num_dir);
+	}
+	PrintDebug(str);
+
+	// Read in log number 
+	U.i32 = 0;
+	log_num_file_sd.read(U.i8, 4);
+	sprintf(str, "[GetLogNumber] CURRENTLY %lu LOGS", U.i32);
+	PrintDebug(str);
+
+	// Set current position to zero
+	log_num_file_sd.rewind();
+
+	// Itterate and store count
+	U.i32++;
+	log_num_file_sd.write(U.i8, 4);
+
+	// Close log num count
+	log_num_file_sd.close();
+
+	// Return number
+	return U.i32;
+
+}
+
 // PARSE SERIAL INPUT
 void GetSerial()
 {
@@ -215,12 +346,21 @@ void GetSerial()
 	uint16_t pack = 0;
 
 	// Reset vars
-	cnt_packBytesRead = 0;
-	cnt_packBytesDiscarded = 0;
+	packTotBytesRead = 0;
+	packTotBytesDiscarded = 0;
 
-	// Bail if no new input
+	// Check for new data
 	if (r42t.port.available() == 0 ||
 		digitalRead(pin.Teensy_SendLogs) == LOW) {
+
+		// Flush sd queue
+		if (millis() - t_flush > dt_flush && 
+			millis() - r42t.t_rcvd > dt_flush) {
+			logFileSD.flush();
+			t_flush = millis();
+		}
+
+		// Bail
 		return;
 	}
 
@@ -242,7 +382,7 @@ void GetSerial()
 		if (cnt_logsRcvd > 0) {
 			if (DO_PRINT_DEBUG) {
 				sprintf(str, "**WARNING** [GetSerial] Missing Head: b_read=%lu b_dump=%lu",
-					cnt_packBytesRead, cnt_packBytesDiscarded);
+					packTotBytesRead, packTotBytesDiscarded);
 				PrintDebug(str);
 			}
 		}
@@ -267,7 +407,7 @@ void GetSerial()
 		if (cnt_logsRcvd > 0) {
 			if (DO_PRINT_DEBUG) {
 				sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
-					cnt_packBytesRead, cnt_packBytesDiscarded);
+					packTotBytesRead, packTotBytesDiscarded);
 				PrintDebug(str);
 			}
 		}
@@ -279,37 +419,25 @@ void GetSerial()
 
 	}
 
-	// Check for dropped packs
-	else {
-
-		// Check for missed packets
-		int pack_diff = (pack - r42t.packTot);
-
-		// Get number of dropped/missed packets
-		int cnt_dropped = pack_diff - 1;
-
-		// Add to total
-		if (cnt_dropped > 0 && cnt_logsRcvd > 0) {
-			r42t.cnt_dropped += cnt_dropped;
-		}
-
-		// Update packs
-		r42t.packTot = pack;
-	}
+	// Update pack info
+	r42t.packTot = pack;
 
 	// Terminate string
 	readBuff[buffInd] = '\0';
-
-	// Store message
-	StoreMessage(readBuff, r42t.packTot);
 
 	// Update counts
 	cnt_logsRcvd++;
 	cnt_logsStored += cnt_logsStored < logSize ? 1 : 0;
 
+	// Store message
+	StoreMessage(readBuff, pack);
+
+	// Store recieve time
+	r42t.t_rcvd = millis();
+
 	// Print every 100 log
 	if (cnt_logsRcvd == 1 || cnt_logsRcvd % 100 == 0) {
-		sprintf(str, "[GetSerial] Recieved %d Logs", cnt_logsRcvd);
+		sprintf(str, "[GetSerial] Recieved %lu Logs", cnt_logsRcvd);
 		PrintDebug(str);
 	}
 
@@ -338,7 +466,7 @@ char WaitBuffRead(int timeout, char mtch)
 			readBuff[0] = r42t.port.read();
 
 			// Itterate count
-			cnt_packBytesRead++;
+			packTotBytesRead++;
 
 			// Add termination and bail
 			readBuff[buffInd + 1] = '\0';
@@ -358,7 +486,7 @@ char WaitBuffRead(int timeout, char mtch)
 			readBuff[buffInd] = r42t.port.read();
 
 			// Itterate count
-			cnt_packBytesRead++;
+			packTotBytesRead++;
 
 			// check match was found
 			if (readBuff[buffInd] == mtch) {
@@ -372,7 +500,7 @@ char WaitBuffRead(int timeout, char mtch)
 			else {
 
 				// Itterate counts
-				cnt_packBytesDiscarded++;
+				packTotBytesDiscarded++;
 				buffInd++;
 			}
 		}
@@ -389,17 +517,21 @@ void StoreMessage(char msg[], uint16_t pack)
 {
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
-	static char print_str[maxStoreStrLng] = { 0 }; print_str[0] = '\0';
 
 	// Format string
-	sprintf(str, "TEENSY %lu: %s", pack, msg);
+	sprintf(str, "TEENSY %lu|%d: %s", cnt_logsRcvd, pack, msg);
 
 	// Store log
 	sprintf(Log[logInd], "%c%s%c", r42t.head, str, r42t.foot);
 
-	// Store first log which has log file
+	// Create log file
 	if (pack == 1) {
-		sprintf(logNumStr, Log[logInd]);
+
+		// Store first log which has log file
+		sprintf(logFiStr, msg);
+
+		// Create new log file
+		OpenNewLog();
 	}
 
 	// Shift ind array
@@ -418,10 +550,12 @@ void StoreMessage(char msg[], uint16_t pack)
 		logInd = 0;
 	}
 
+	// Write to SD log
+	logFileSD.println(str);
+
 	// Print message
 	if (DO_PRINT_LOGS) {
-		sprintf(print_str, "%d: %s", pack, str);
-		PrintDebug(print_str);
+		PrintDebug(str);
 	}
 }
 
@@ -474,10 +608,6 @@ void SendLogs()
 	// Wait 100 ms
 	delay(100);
 
-	// Send log number first
-	r42t.port.write(logNumStr);
-	PrintDebug(logNumStr);
-
 	// Send logs
 	for (size_t i = 0; i < logSize; i++) {
 		delay(10);
@@ -489,9 +619,12 @@ void SendLogs()
 		StatusBlink();
 	}
 
+	// Get number of dropped/missed packets
+	int cnt_dropped = r42t.packTot - cnt_logsRcvd;
+
 	// Send summary
-	sprintf(str, "%cTEENSY LOG SUMMARY: sent=%d rcvd=%lu dropped=%d%c",
-		r42t.head, cnt_logsStored, cnt_logsRcvd, r42t.cnt_dropped, r42t.foot);
+	sprintf(str, "%cTEENSY SUMMARY \"%s\": sent=%d rcvd=%lu dropped=%d%c",
+		r42t.head, logFiStr, cnt_logsStored, cnt_logsRcvd, cnt_dropped, r42t.foot);
 	r42t.port.write(str);
 	PrintDebug(str);
 
@@ -505,6 +638,9 @@ void SendLogs()
 		cnt_logsStored, cnt_logsRcvd);
 	PrintDebug(str);
 
+	// Close log file
+	logFileSD.close();
+
 	// Reset Stuff
 	RunReset();
 }
@@ -512,7 +648,6 @@ void SendLogs()
 // FORMAT AND PRINT MESSAGE
 void PrintDebug(char msg[], uint32_t t)
 {
-#if DO_PRINT_DEBUG
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -539,6 +674,12 @@ void PrintDebug(char msg[], uint32_t t)
 	// Put it all together
 	sprintf(str, "%s%s%s\n", str_time, spc, msg);
 
+	// Write to SD log
+	logFileSD.println(str);
+
+
+#if DO_PRINT_DEBUG
+
 	// Print it
 	SerialUSB.print(str);
 
@@ -553,8 +694,8 @@ void StatusBlink(bool do_force) {
 		millis() > t_blink + dt_blink) {
 
 		// Flip state and run
+		digitalWrite(pin.StatLED, is_ledOn ? LOW : HIGH);
 		is_ledOn = !is_ledOn;
-		digitalWrite(pin.StatLED, is_ledOn ? HIGH : LOW);
 		t_blink = millis();
 	}
 

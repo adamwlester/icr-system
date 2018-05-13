@@ -586,7 +586,7 @@ void HardwareTest();
 void CheckLoop();
 
 // LOG FUNCTION RUN TO TEENSY
-void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[] = "");
+void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[] = {0});
 
 // GET LAST TEENSY LOG
 void GetTeensyDebug();
@@ -6690,7 +6690,7 @@ void CheckLoop()
 }
 
 // LOG FUNCTION RUN TO TEENSY msg=["S", "E", other]
-void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[])
+void StoreTeensyDebug(const char *fun, int line, int mem, char where_str[], char msg[])
 {
 #if DO_TEENSY_DEBUG
 
@@ -6731,7 +6731,7 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2
 
 	// Bail if skip run unless special call
 	if (cnt_long_dt_skip > 0 &&
-		strcmp(msg1, "S") == 0) {
+		strcmp(where_str, "S") == 0) {
 
 		// Decriment count
 		cnt_long_dt_skip--;
@@ -6745,7 +6745,7 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2
 
 		// Check if this is start message
 		if (do_skip_repeat ||
-			strcmp(msg1, "S") == 0) {
+			strcmp(where_str, "S") == 0) {
 
 			// Set flag and bail
 			do_skip_repeat = true;
@@ -6765,13 +6765,16 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2
 	// Get number of times skipped logging
 	cnt_skip = cnt_chk - chk_last;
 
-	// Short summary [time sec, function, message arg, loop count, skip count, memory GB]
-	sprintf(str, "%0.0f %s_%s l=%d s=%d m=%0.0f",
-		t_s, fun, msg1, cnt_loop_short, cnt_skip, (float)mem / 1000);
+	// Send only message if included
+	if (msg[0] != '\0') {
+		sprintf(str, msg);
+	}
 
-	//// Detail memory
-	//sprintf(str, "%0.0f %s_%s %d%s",
-	//	t_s, msg1, fun, mem, msg2);
+	// Short summary [time sec, function, message arg, loop count, skip count, memory GB]
+	else {
+		sprintf(str, "%0.0f %s_%s l=%d s=%d m=%0.0f",
+			t_s, fun, where_str, cnt_loop_short, cnt_skip, (float)mem / 1000);
+	}
 
 	// Store cnt
 	chk_last = cnt_chk;
@@ -8398,9 +8401,10 @@ void setup() {
 	PrintLCD(true, "DONE SETUP", "Teensy Log");
 	DoAll("PrintDebug");
 
-	// Send log number to Teensy
+	// Send log number to Teensy as optional argument
 	fc.isSetup = true;
-	StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), Log.logFile);
+	sprintf(str, "LOG%05u", Log.logNum);
+	StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "", str);
 
 	// Log everything in queue
 	DoAll("WriteLog", 5000);

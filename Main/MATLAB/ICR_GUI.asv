@@ -7927,14 +7927,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % GET CUED ZONE DISTRIBUTION
         
-        % Exclude zero tails
-        d = dist_short(dist_short>0);
-        
         % Make sure at least 1 cued reward for each dist val
-        d = ceil(d/min(d(d>0)));
+        d = ceil(dist_short/min(dist_short(dist_short>0)));
         
         % Make center (0 deg) val largest
-        d(D.PAR.zoneLocs==0) = 1 + d(D.PAR.zoneLocs==0);
+        d(round(length(d)/2)) = 1 + d(round(length(d)/2));
+        
+        % Exclude zero tails
+        d = d(d>0);
         
         % Convert dist values to array
         i = 1:length(D.PAR.zoneLocs);
@@ -7946,7 +7946,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat({dd},1,ceil(100/length(dd))), 'uni', false));
         
         % Set first value to center (0 deg)
-        D.I.cue_zone_arr(1) = find(D.PAR.zoneLocs==0);
+        D.I.cue_zone_arr(1) = round(length(d)/2);
 
         %% CREATE ADITIONAL UI OBJECTS
         

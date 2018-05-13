@@ -58,7 +58,7 @@
 // DEBUG SETTING
 
 // Console
-#define DO_PRINT_DEBUG 1
+#define DO_PRINT_DEBUG 0
 #define DO_FAST_PRINT 0
 
 // Teensy Logging
