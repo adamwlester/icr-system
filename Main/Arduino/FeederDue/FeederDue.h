@@ -58,7 +58,7 @@
 // DEBUG SETTING
 
 // Console
-#define DO_PRINT_DEBUG 0
+#define DO_PRINT_DEBUG 1
 #define DO_FAST_PRINT 0
 
 // Teensy Logging
@@ -76,7 +76,10 @@
 #endif
 
 // DEBUG VIA TEENSY
+
+// Put at start of function
 #define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
+// Put at end of function
 #define DB_FUN_END() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "E");
 
 // DEBUGGING STRUCT
@@ -127,7 +130,7 @@ struct DB
 	const bool log_vel_rob_ekf = false;
 
 	// Testing
-	const bool do_posDebug = false; // I set (Run in Manual_Training Mode)
+	const bool do_posDebug = true; // I set (Run in Manual_Training Mode)
 	const bool do_posPlot = false; // I set (Run in Manual_Training Mode)
 	bool is_runTest = false; // set by system
 	bool do_simRatTest = false; // set by system
@@ -228,18 +231,21 @@ uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
 // PIXY
-double pixyCoeff[4] = {0};
-const double pixyPackCoeff[4] = {
-	-0.000004516384601,
-	0.002197926774659,
-	-0.561615287495448,
-	95.389990433465044,
+const int pixyOrd = 5;
+double pixyCoeff[pixyOrd] = {0};
+const double pixyPackCoeff[pixyOrd] = {
+	0.000000031316275,
+	-0.000017574918569,
+	0.003934022977557,
+	-0.650941078574675,
+	81.611186742642417,
 };
-const double pixyCubeCoeff[4] = {
-	-0.000005563484773,
-	0.002449206596693,
-	-0.556940386359457,
-	89.885505970779093,
+const double pixyCubeCoeff[pixyOrd] = {
+	0.000000031316275,
+	-0.000017574918569,
+	0.003934022977557,
+	-0.650941078574675,
+	81.611186742642417,
 };
 double pixyShift = 0;
 const double pixyPackShift = 0; // (cm)
@@ -258,14 +264,15 @@ char runDirNow = 'f';
 uint16_t adR_stat = 0x0;
 uint16_t adF_stat = 0x0;
 const int dt_checkAD = 1000; // (ms)
-const double rearMotCoeff[5] = {
+const int velOrd = 5;
+const double rearVelCoeff[velOrd] = {
 	0.000000044120830,
 	-0.000007753772088,
 	0.000418793299060,
 	0.945620729817402,
 	0.047445535533065,
 };
-const double frontMotCoeff[5] = {
+const double frontVelCoeff[velOrd] = {
 	0.000000032971731,
 	-0.000006928907732,
 	0.000457085441358,
@@ -276,8 +283,8 @@ const double frontMotCoeff[5] = {
 // BIGEASYDRIVER
 const byte ezDirExtState = 1; // 1
 const byte ezDirRetState = 0; // 0
-const int16_t ezExtStps = 250; // 500 255 TEMP
-const int16_t ezRestStps = 50; // 50 25 TEMP
+const int16_t ezExtStps = 250; // 250
+const int16_t ezRestStps = 50; // 50
 
 // KALMAN MODEL
 struct KAL

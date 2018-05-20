@@ -17,19 +17,20 @@ bool printSpeed = false;
 // Declare vars
 
 // Coeff calculated using CalibrateCurveFit.m
-const double coeff[4] = {
-	-0.000004516384601,
-	0.002197926774659,
-	-0.561615287495447,
-	95.389990433465030,
+const double coeff[5] = {
+	0.000000031316275,
+	-0.000017574918569,
+	0.003934022977557,
+	-0.650941078574671,
+	81.611186742642388,
 };
 
 int yNow = NULL;
 int cmNow = NULL;
 int cmLast = NULL;
-int ySampN = 25;
-float spArr[25];
-float spDevArr[25];
+const int ySampN = 10;
+float spArr[ySampN];
+float spDevArr[ySampN];
 float spSum = 0;
 float spMu = 0;
 float spDevSum = 0;
@@ -37,10 +38,10 @@ float spDevMu = 0;
 float spFltSum = 0;
 float spFltMu = 0;
 int cutSD = 3;
-int cmArr[25];
+int cmArr[ySampN];
 float cmFltSum = 0;
 float cmFltMu = 0;
-int yArr[25];
+int yArr[ySampN];
 float yFltSum = 0;
 float yFltMu = 0;
 
@@ -99,10 +100,11 @@ void loop()
 
 		// Transfor Y pxl to cm
 		cmNow =
-			coeff[0] * (yNow * yNow * yNow) +
-			coeff[1] * (yNow * yNow) +
-			coeff[2] * (yNow) +
-			coeff[3];
+			coeff[0] * (yNow * yNow * yNow * yNow) +
+			coeff[1] * (yNow * yNow * yNow) +
+			coeff[2] * (yNow * yNow) +
+			coeff[3] * (yNow) +
+			coeff[4];
 
 		// Fill array
 		if (cmLast != NULL && i < ySampN) {
@@ -177,7 +179,8 @@ void loop()
 			// Print pos in Y
 			else if (printY)
 			{
-				sprintf(msg, "Y: %0.2f\n", yFltMu);
+				float yRound = round(yFltMu * 10.0) / 10.0;
+				sprintf(msg, "Y: %0.1f\n", yRound);
 				SerialUSB.print(msg);
 			}
 		}

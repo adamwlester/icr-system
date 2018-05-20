@@ -188,7 +188,7 @@ void RunReset() {
 	sprintf(str, "[RunReset] Setting Reset Pin High");
 	PrintDebug(str);
 	digitalWrite(pin.Teensy_Resetting, HIGH);
-	
+
 	// Flicker LED
 	for (size_t i = 0; i < 40; i++)
 	{
@@ -207,7 +207,7 @@ void RunReset() {
 
 	// Check TX buffer
 	PrintDebug("[RunReset] TX BUFFER SHOULD BE 64 Bytes");
-	sprintf(str, "[RunReset] TX BUFFER IS %d Bytes", r42t.port.availableForWrite()+1);
+	sprintf(str, "[RunReset] TX BUFFER IS %d Bytes", r42t.port.availableForWrite() + 1);
 	PrintDebug(str);
 
 	// Print status
@@ -223,7 +223,9 @@ void OpenNewLog() {
 	static char str[100] = { 0 }; str[0] = '\0';
 	static char file_str[50] = { 0 };
 	uint32_t log_num = 0;
-
+	uint32_t free_kb = 0;
+	float free_gb = 0;
+	delay(1000);
 	// Initialize SD card
 	sdEx.begin();
 	sdEx.chvol();
@@ -231,8 +233,13 @@ void OpenNewLog() {
 	// Get curent log number
 	log_num = GetLogNumber();
 
-	// Check if capacity reached
-	if (log_num > 5) {
+	// Get free space on sd
+	free_kb = sdEx.vol()->freeClusterCount();
+	free_kb *= sdEx.vol()->blocksPerCluster() / 2;
+	free_gb = (float)free_kb / 1000000;
+
+	// Reset logs if < 2GB left or > 100 logs
+	if (free_gb < 2 || log_num > 5) {
 
 		// Move to root directory
 		sdEx.chdir();
@@ -255,7 +262,7 @@ void OpenNewLog() {
 	}
 
 	// Format log file name
-	sprintf(file_str, "%s.txt", logFiStr);
+	sprintf(file_str, "%s.CSV", logFiStr);
 	PrintDebug(file_str);
 
 	// Attempt to open/create count file
@@ -265,6 +272,10 @@ void OpenNewLog() {
 	else {
 		sprintf(str, "!!ERROR!! [OpenNewLog] FAILED: OPENING \"%s\" FILE", file_str);
 	}
+	PrintDebug(str);
+
+	// Print available space
+	sprintf(str, "[OpenNewLog] %0.2fGB ABAILABLE SPACE ON 8GB SD", free_gb);
 	PrintDebug(str);
 
 }
@@ -354,7 +365,7 @@ void GetSerial()
 		digitalRead(pin.Teensy_SendLogs) == LOW) {
 
 		// Flush sd queue
-		if (millis() - t_flush > dt_flush && 
+		if (millis() - t_flush > dt_flush &&
 			millis() - r42t.t_rcvd > dt_flush) {
 			logFileSD.flush();
 			t_flush = millis();
@@ -365,7 +376,7 @@ void GetSerial()
 	}
 
 	// Check send log command
-	if (!is_startConfirmed && 
+	if (!is_startConfirmed &&
 		digitalRead(pin.Teensy_SendLogs) == LOW) {
 		PrintDebug("[GetSerial] RECIEVED SEND LOG SIGNAL");
 		is_startConfirmed = true;
@@ -521,7 +532,7 @@ void StoreMessage(char msg[], uint16_t pack)
 	// Format string
 	sprintf(str, "TEENSY %lu|%d: %s", cnt_logsRcvd, pack, msg);
 
-	// Store log
+	// Format log
 	sprintf(Log[logInd], "%c%s%c", r42t.head, str, r42t.foot);
 
 	// Create log file
@@ -551,7 +562,9 @@ void StoreMessage(char msg[], uint16_t pack)
 	}
 
 	// Write to SD log
-	logFileSD.println(str);
+	logFileSD.print(str);
+	logFileSD.print('\r');
+	logFileSD.print('\n');
 
 	// Print message
 	if (DO_PRINT_LOGS) {
@@ -672,10 +685,10 @@ void PrintDebug(char msg[], uint32_t t)
 	sprintf(spc, arg, '_');
 
 	// Put it all together
-	sprintf(str, "%s%s%s\n", str_time, spc, msg);
+	sprintf(str, "%s%s%s\r\n", str_time, spc, msg);
 
 	// Write to SD log
-	logFileSD.println(str);
+	logFileSD.print(str);
 
 
 #if DO_PRINT_DEBUG

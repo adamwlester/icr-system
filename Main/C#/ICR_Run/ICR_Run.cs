@@ -138,12 +138,14 @@ namespace ICR_Run
         // Initialize FC to track program flow
         private static Flow_Control fc = new Flow_Control(cs_log: ref csLog);
 
-        // Define NetCom vars
-        private static MNetComClient com_netComClient = new MNetComClient();
-        private static string NETCOM_APP_ID = "ICR_Run"; // string displayed in Cheetah when connected
-        private static string NETCOM_ACQ_ENT_VT1 = "VT1"; // aquisition entity to stream
-        private static string NETCOM_ACQ_ENT_VT2 = "VT2"; // aquisition entity to stream
-        private static string NETCOM_ServerIP = "192.168.3.100"; // host computer IP 9"127.0.0.1")
+        // Define Com vars
+        private static MNetComClient netcomClient = new MNetComClient();
+        private static string netcomAppID = "ICR_Run"; // string displayed in Cheetah when connected
+        private static string netcomAcqEntVT1 = "VT1"; // aquisition entity to stream
+        private static string netcomAcqEntVT2 = "VT2"; // aquisition entity to stream
+        private static string netcomServerIP = "192.168.3.100"; // host computer IP 9"127.0.0.1")
+        private static string csXbeePortName = "COM5";
+        private static string csDuePortName = "COM3";
 
         // Directories
         private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLAB\Startup";
@@ -525,7 +527,7 @@ namespace ICR_Run
             csLog.Print("[Setup] RUNNING: Setup CheetahDue Serial Coms and Logging...");
             sp_cheetahDue.ReadTimeout = 100;
             sp_cheetahDue.BaudRate = 57600;
-            sp_cheetahDue.PortName = "COM5";
+            sp_cheetahDue.PortName = csDuePortName;
             // Set com flag
             fc.isArdComActive = true;
             // Open serial port connection
@@ -542,7 +544,7 @@ namespace ICR_Run
             csLog.Print("[Setup] RUNNING: Setup Xbee Serial Coms");
             sp_Xbee.ReadTimeout = 100;
             sp_Xbee.BaudRate = 57600;
-            sp_Xbee.PortName = "COM4";
+            sp_Xbee.PortName = csXbeePortName;
             // Set com flag
             fc.isRobComActive = true;
             // Set byte threshold to max packet size
@@ -653,14 +655,14 @@ namespace ICR_Run
 
             // Initilize deligate for VT callback
             deligate_netComCallback = new MNetCom.MNC_VTCallback(NetComCallbackVT);
-            com_netComClient.SetCallbackFunctionVT(deligate_netComCallback, new ICR_Run());
+            netcomClient.SetCallbackFunctionVT(deligate_netComCallback, new ICR_Run());
 
             // Connect to NetCom
             csLog.Print("[Setup] RUNNING: Connect to NLX...");
-            fc.isNlxConnected = com_netComClient.AreWeConnected();
+            fc.isNlxConnected = netcomClient.AreWeConnected();
             while (!fc.isNlxConnected && !fc.doAbortCS)
             {
-                fc.isNlxConnected = com_netComClient.ConnectToServer(NETCOM_ServerIP);
+                fc.isNlxConnected = netcomClient.ConnectToServer(netcomServerIP);
             }
             if (fc.isNlxConnected)
                 csLog.Print("[Setup] SUCCEEDED: Connect to NLX");
@@ -675,12 +677,12 @@ namespace ICR_Run
             csLog.Print("[Setup] STARTING: Nlx Stream");
 
             // Send App name
-            com_netComClient.SetApplicationName(NETCOM_APP_ID);
+            netcomClient.SetApplicationName(netcomAppID);
 
             // Start robot vt streaming
             csLog.Print("[Setup] RUNNING: Open VT2 Stream...");
             while (!fc.isRobStreaming && !fc.doAbortCS)
-                fc.isRobStreaming = com_netComClient.OpenStream(NETCOM_ACQ_ENT_VT2);
+                fc.isRobStreaming = netcomClient.OpenStream(netcomAcqEntVT2);
             if (fc.isRobStreaming)
                 csLog.Print("[Setup] FINISHED: Open VT2 Stream");
             else
@@ -783,7 +785,7 @@ namespace ICR_Run
                 {
                     csLog.Print("[Run] RUNNING: Open VT1 Stream...");
                     while (!fc.isRatStreaming && !fc.doAbortCS)
-                        fc.isRatStreaming = com_netComClient.OpenStream(NETCOM_ACQ_ENT_VT1);
+                        fc.isRatStreaming = netcomClient.OpenStream(netcomAcqEntVT1);
                     if (fc.isRatStreaming)
                         csLog.Print("[Setup] FINISHED: Open VT1 Stream");
                     else
@@ -807,7 +809,7 @@ namespace ICR_Run
             csLog.Print("[Run] RUNNING: Main Session Loop...");
             // Stay in loop till task is done or error
             while (
-                com_netComClient.AreWeConnected() &&
+                netcomClient.AreWeConnected() &&
                 fc.isRatInArena &&
                 !fc.isGUIclosed &&
                 !fc.isTaskDone &&
@@ -817,7 +819,7 @@ namespace ICR_Run
                 csLog.Print("[Run] SUCCEEDED: Main Session Loop");
             else
             {
-                if (com_netComClient.AreWeConnected())
+                if (netcomClient.AreWeConnected())
                     fc.LogWarning("**WARNING** [Run] ABORTED: Main Session Loop");
                 else
                 {
@@ -993,20 +995,20 @@ namespace ICR_Run
                 {
                     fc.LogWarning("**WARNING** [Exit] STOPPING NLX RECORDING AND ACQUISITION");
                     string reply = " ";
-                    com_netComClient.SendCommand("-StopRecording", ref reply);
-                    com_netComClient.SendCommand("-StopAcquisition", ref reply);
+                    netcomClient.SendCommand("-StopRecording", ref reply);
+                    netcomClient.SendCommand("-StopAcquisition", ref reply);
                 }
 
                 // Close NetCom sreams
-                com_netComClient.CloseStream(NETCOM_ACQ_ENT_VT1);
-                com_netComClient.CloseStream(NETCOM_ACQ_ENT_VT2);
+                netcomClient.CloseStream(netcomAcqEntVT1);
+                netcomClient.CloseStream(netcomAcqEntVT2);
 
                 // Disconnect from NetCom
-                do { com_netComClient.DisconnectFromServer(); }
-                while (com_netComClient.AreWeConnected() && !fc.doAbortCS);
+                do { netcomClient.DisconnectFromServer(); }
+                while (netcomClient.AreWeConnected() && !fc.doAbortCS);
 
                 // Check if disconnect succesful
-                if (!com_netComClient.AreWeConnected())
+                if (!netcomClient.AreWeConnected())
                 {
                     fc.isNlxConnected = false;
                     csLog.Print("[Exit] SUCCEEDED: NetCom Disconnect");

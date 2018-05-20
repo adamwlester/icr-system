@@ -6,77 +6,77 @@
 struct PIN
 {
 	// Power off
-	const int PWR_OFF = 45;
-	const int PWR_ON = 44;
-	const int PWR_Swtch = 24;
-	const int PWR_Swtch_Grn = 25;
+	const int PWR_OFF = 45; // (gray)
+	const int PWR_ON = 44; // (white)
+	const int PWR_Swtch = 32; // (red)
+	const int PWR_Swtch_Grn = 33; // (black)
 
 	// Autodriver
-	const int AD_CSP_R = 5;
-	const int AD_CSP_F = 6;
-	const int AD_RST = 7;
+	const int AD_CSP_R = 5; // (yellow)
+	const int AD_CSP_F = 6; // (red)
+	const int AD_RST = 7; // (brown)
 
 	// XBees
-	const int X1a_CTS = 29;
-	const int X1b_CTS = 27;
-	const int X1a_UNDEF = 28;
-	const int X1b_UNDEF = 26;
+	const int X1a_CTS = 28; // (brown)
+	const int X1b_CTS = 26; // (white)
+	const int X1a_UNDEF = 29; // (red)
+	const int X1b_UNDEF = 27; // (purple)
 
 	// Teensy
-	const int Teensy_Unused = 36;
-	const int Teensy_SendLogs = 38;
-	const int Teensy_Resetting = 40;
+	const int Teensy_Unused = 36; // (green)
+	const int Teensy_SendLogs = 38; // (yellow)
+	const int Teensy_Resetting = 40; // (orange)
 
-	// Display
-	const int Disp_SCK = 8;
-	const int Disp_MOSI = 9;
-	const int Disp_DC = 10;
-	const int Disp_RST = 11;
-	const int Disp_CS = 12;
-	const int Disp_LED = 13;
+	// Display TEMP CHECK
+	const int Disp_CS = 8; // (white)
+	const int Disp_RST = 9; // (gray)
+	const int Disp_DC = 10; // (purple)
+	const int Disp_MOSI = 11; // (blue)
+	const int Disp_SCK = 12; // (green)
+	const int Disp_LED = 13; // (yellow)
 
 	// LEDs
-	const int RewLED_R = 4;
-	const int RewLED_C = 3;
-	const int TrackLED = 2;
+	const int RewLED_C = 2; // (white)
+	const int RewLED_R = 3; // (yellow)
+	const int TrackLED = 4; // (red)
 
 	// Relays
-	const int Rel_EtOH = 23;
-	const int Rel_Rew = 22;
-	const int Rel_Vcc = A5;
+	const int Rel_Rew = 22; // (green)
+	const int Rel_EtOH = 23; // (blue)
+	const int Rel_Vcc = A5; // (blue)
 
 	// Voltage Regulators
-	const int REG_24V_ENBLE = 34;
-	const int REG_12V_ENBLE = 46;
-	const int REG_5V_ENBLE = 48;
+	const int REG_24V_ENBLE = 30; // (green)
+	const int REG_12V_ENBLE = 46; // (orange) TEMP CHECK
+	const int REG_5V_ENBLE = 48; // (yellow) TEMP CHECK
 
 	// BigEasyDriver
-	const int ED_RST = 47;
-	const int ED_SLP = 49;
-	const int ED_DIR = 51;
-	const int ED_STP = 53;
-	const int ED_ENBL = 35;
-	const int ED_MS1 = 37;
-	const int ED_MS2 = 39;
-	const int ED_MS3 = 41;
+	const int ED_RST = 47; // (green)
+	const int ED_SLP = 49; // (blue)
+	const int ED_DIR = 51; // (gray)
+	const int ED_STP = 53; // (white)
+	const int ED_ENBL = 35; // (brown)
+	const int ED_MS1 = 37; // (red)
+	const int ED_MS2 = 39; // (orange)
+	const int ED_MS3 = 41; // (yellow)
 
 	// OpenLog
-	const int OL_RST = 30;
+	const int OL_RST = 34; // (purple)
 
 	// Feeder switch
 	/*
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch_Gnd = 33;
-	const int FeedSwitch = 32;
+	const int FeedSwitch = 24; // (red)
+	const int FeedSwitch_Gnd = 25; // (black)
 
 	// Voltage monitor
-	const int BatVcc = A6;
-	const int BatIC = A7;
+	const int BatVcc = A6; // (purple)
+	const int BatIC = A7; // (blue)
 
 	// Buttons
-	const int Btn[3] = { A2, A1, A0 };
+	const int Btn[3] = { A2, A1, A0 }; // (blue, purple, white)
 
 	// Testing
 	int Test_Signal = A8;
@@ -87,11 +87,11 @@ struct PIN
 	*/
 
 	// IR proximity sensors
-	const int IRprox_Rt = 42;
-	const int IRprox_Lft = 43;
+	const int IRprox_Rt = 42; // (green)
+	const int IRprox_Lft = 43; // (blue)
 
 	// IR detector
-	const int IRdetect = 31; 
+	const int IRdetect = 31; // (white)
 }
 // Initialize
 pin;

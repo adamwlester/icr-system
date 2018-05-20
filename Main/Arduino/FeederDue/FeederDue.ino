@@ -461,7 +461,7 @@ AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 PixyI2C Pixy(0x54);
 
 // Initialize LCD5110 class instance
-LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
+LCD5110 LCD(pin.Disp_SCK, pin.Disp_MOSI, pin.Disp_DC, pin.Disp_RST, pin.Disp_CS);
 
 // Initialize array of POSTRACK class instances
 POSTRACK Pos[3] = {
@@ -586,7 +586,7 @@ void HardwareTest();
 void CheckLoop();
 
 // LOG FUNCTION RUN TO TEENSY
-void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[] = {0});
+void StoreTeensyDebug(const char *fun, int line, int mem, char msg1[], char msg2[] = { 0 });
 
 // GET LAST TEENSY LOG
 void GetTeensyDebug();
@@ -2266,7 +2266,7 @@ void REWARD::ExtendFeedArm()
 	//digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to extend
-	digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW); 
+	digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW);
 	delayMicroseconds(100);
 	v_stepDir = 'e';
 
@@ -2327,7 +2327,7 @@ void REWARD::RetractFeedArm()
 	//digitalWrite(pin.ED_MS3, LOW);
 
 	// Set direction to retract
-	digitalWrite(pin.ED_DIR, ezDirRetState == 1 ? HIGH : LOW); 
+	digitalWrite(pin.ED_DIR, ezDirRetState == 1 ? HIGH : LOW);
 	delayMicroseconds(100);
 	v_stepDir = 'r';
 
@@ -2417,7 +2417,7 @@ void REWARD::CheckFeedArm()
 		digitalWrite(pin.ED_STP, v_stepState);
 
 		// Set direction to extend
-		digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW); 
+		digitalWrite(pin.ED_DIR, ezDirExtState == 1 ? HIGH : LOW);
 		delayMicroseconds(100);
 
 		// Move arm x steps
@@ -4916,19 +4916,11 @@ bool RunMotor(char dir, double new_speed, char agent[])
 	// Log/print speed change
 	DebugRunSpeed(__FUNCTION__, __LINE__, agent, runSpeedNow, new_speed);
 
-	// Scale vel
-	speed_rear =
-		rearMotCoeff[0] * (new_speed * new_speed * new_speed * new_speed) +
-		rearMotCoeff[1] * (new_speed * new_speed * new_speed) +
-		rearMotCoeff[2] * (new_speed * new_speed) +
-		rearMotCoeff[3] * new_speed +
-		rearMotCoeff[4];
-	speed_front =
-		frontMotCoeff[0] * (new_speed * new_speed * new_speed * new_speed) +
-		frontMotCoeff[1] * (new_speed * new_speed * new_speed) +
-		frontMotCoeff[2] * (new_speed * new_speed) +
-		frontMotCoeff[3] * new_speed +
-		frontMotCoeff[4];
+	// Scale vel for each motor
+	for (size_t i = 0; i < velOrd; i++) {
+		speed_rear += rearVelCoeff[i] * pow(new_speed, velOrd - 1 - i);
+		speed_front += frontVelCoeff[i] * pow(new_speed, velOrd - 1 - i);
+	}
 
 	// Run forward
 	if (dir == 'f') {
@@ -4957,8 +4949,8 @@ bool ManualRun(char dir)
 #endif
 
 	// Local vars
-	static char speed_str[100] = { 0 }; speed_str[0] = '\0';
-	static char vcc_str[100] = { 0 }; vcc_str[0] = '\0';
+	static char lcd_str1[100] = { 0 }; lcd_str1[0] = '\0';
+	static char lcd_str2[100] = { 0 }; lcd_str2[0] = '\0';
 	int inc_speed = 10; // (cm/sec)
 	double new_speed;
 
@@ -4980,9 +4972,9 @@ bool ManualRun(char dir)
 	RunMotor(dir, new_speed, "Override");
 
 	// Print voltage and speed to LCD
-	sprintf(vcc_str, "VCC=%0.2fV", vccAvg);
-	sprintf(speed_str, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
-	PrintLCD(false, vcc_str, speed_str);
+	sprintf(lcd_str1, "VCC=%0.2fV", vccAvg);
+	sprintf(lcd_str2, "VEL=%s%dcm/s", runDirNow == 'f' ? "->" : "<-", (int)runSpeedNow);
+	PrintLCD(false, lcd_str1, lcd_str2);
 }
 
 // SET WHATS CONTROLLING THE MOTOR: set_to=["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
@@ -5427,7 +5419,7 @@ double CheckPixy(bool is_hardware_test)
 	if (blocks == UINT16_MAX - 1) {
 
 		// Log/print error
-		DebugError(__FUNCTION__, __LINE__, "Pixy.getBlocks() Returned CS ERROR", true);
+		DebugError(__FUNCTION__, __LINE__, "Pixy.getBlocks() RETURNED CS ERROR", true);
 
 		// Set blocks to zero
 		blocks = 0;
@@ -5438,6 +5430,10 @@ double CheckPixy(bool is_hardware_test)
 
 		// Set next check with short dt
 		t_check = millis() + dt_pixyCheck[0];
+
+#if DO_TEENSY_DEBUG
+		DB_FUN_END();
+#endif
 
 		// Bail
 		return px_rel;
@@ -5451,19 +5447,22 @@ double CheckPixy(bool is_hardware_test)
 	// Save time stamp
 	t_px_ts = millis();
 
-	// Get Y pos from last block and convert to CM
+	// Get Y pos from last block
 	pixy_pos_y = Pixy.blocks[blocks - 1].y;
-	px_rel =
-		pixyCoeff[0] * (pixy_pos_y * pixy_pos_y * pixy_pos_y) +
-		pixyCoeff[1] * (pixy_pos_y * pixy_pos_y) +
-		pixyCoeff[2] * pixy_pos_y +
-		pixyCoeff[3];
+
+	// Transform to CM
+	for (size_t i = 0; i < pixyOrd; i++) {
+		px_rel += pixyCoeff[i] * pow(pixy_pos_y, pixyOrd - 1 - i);
+	}
 
 	// Shift pixy data
 	px_rel = px_rel + pixyShift;
 
 	// Return rel val if testing
 	if (is_hardware_test) {
+#if DO_TEENSY_DEBUG
+		DB_FUN_END();
+#endif
 		return px_rel;
 	}
 
@@ -5483,6 +5482,9 @@ double CheckPixy(bool is_hardware_test)
 	}
 
 	// Return relative pos
+#if DO_TEENSY_DEBUG
+	DB_FUN_END();
+#endif
 	return px_rel;
 }
 
@@ -5789,7 +5791,7 @@ bool GetButtonInput()
 	// Turn on LCD if any fucntion flagged durring manual mode
 	if (fc.isManualSes && !fc.doChangeLCDstate) {
 		// Turn on LCD LED
-		ChangeLCDlight(10);
+		ChangeLCDlight(8);
 	}
 
 	// Return flag
@@ -5805,8 +5807,8 @@ void OpenCloseRewSolenoid()
 
 	// Local vars
 	byte is_sol_open = digitalRead(pin.Rel_Rew);
-	static char etoh_str[100] = { 0 }; etoh_str[0] = '\0';
-	static char rew_str[100] = { 0 }; rew_str[0] = '\0';
+	static char lcd_str1[100] = { 0 }; lcd_str1[0] = '\0';
+	static char lcd_str2[100] = { 0 }; lcd_str2[0] = '\0';
 
 	// Change state
 	is_sol_open = !is_sol_open;
@@ -5823,9 +5825,9 @@ void OpenCloseRewSolenoid()
 	digitalWrite(pin.Rel_Rew, is_sol_open);
 
 	// Print etoh and rew sol state to LCD
-	sprintf(rew_str, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
-	sprintf(etoh_str, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
-	PrintLCD(true, rew_str, etoh_str, 's');
+	sprintf(lcd_str1, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
+	sprintf(lcd_str2, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
+	PrintLCD(true, lcd_str1, lcd_str2, 's');
 
 }
 
@@ -5838,8 +5840,8 @@ void OpenCloseEtOHSolenoid()
 
 	// Local vars
 	byte is_sol_open = digitalRead(pin.Rel_EtOH);
-	static char etoh_str[100] = { 0 }; etoh_str[0] = '\0';
-	static char rew_str[100] = { 0 }; rew_str[0] = '\0';
+	static char lcd_str1[100] = { 0 }; lcd_str1[0] = '\0';
+	static char lcd_str2[100] = { 0 }; lcd_str2[0] = '\0';
 
 	// Change state
 	is_sol_open = !is_sol_open;
@@ -5858,9 +5860,9 @@ void OpenCloseEtOHSolenoid()
 	}
 
 	// Print etoh and rew sol state to LCD
-	sprintf(rew_str, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
-	sprintf(etoh_str, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
-	PrintLCD(true, rew_str, etoh_str, 's');
+	sprintf(lcd_str1, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
+	sprintf(lcd_str2, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
+	PrintLCD(true, lcd_str1, lcd_str2, 's');
 
 }
 
@@ -5950,8 +5952,8 @@ float CheckBattery(bool force_check)
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
-	static char vcc_str[100]; vcc_str[0] = '\0';
-	static char ic_str[100]; ic_str[0] = '\0';
+	static char lcd_str1[100]; lcd_str1[0] = '\0';
+	static char lcd_str2[100]; lcd_str2[0] = '\0';
 	static uint32_t t_vcc_update = 0;
 	static uint32_t t_vcc_send = 0;
 	static uint32_t t_vcc_print = 0;
@@ -6081,9 +6083,9 @@ float CheckBattery(bool force_check)
 		DebugFlow(__FUNCTION__, __LINE__, str);
 
 		// Print to lcd
-		sprintf(vcc_str, "VCC=%0.2fV", vccAvg);
-		sprintf(ic_str, "IC=%0.2fA", icNow);
-		PrintLCD(false, vcc_str, ic_str);
+		sprintf(lcd_str1, "VCC=%0.2fV", vccAvg);
+		sprintf(lcd_str2, "IC=%0.2fA", icNow);
+		PrintLCD(false, lcd_str1, lcd_str2);
 
 		// Store time
 		t_vcc_print = millis();
@@ -6123,7 +6125,7 @@ void ChangeLCDlight(uint32_t duty)
 	// Check if new duty given
 	if (duty == 256) {
 		fc.isLitLCD = !fc.isLitLCD;
-		duty = fc.isLitLCD ? 50 : 0;
+		duty = fc.isLitLCD ? 8 : 0;
 	}
 	else {
 		fc.isLitLCD = duty > 0;
@@ -6697,7 +6699,7 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char where_str[], char
 	// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
 	static byte msg_out[100] = { 0 }; msg_out[0] = '\0';
-	static char fun_copy[100] = { 0 };
+	static char fun_last[100] = { 0 };
 	static byte head_byte[1] = { r42t.head };
 	static byte foot_byte[1] = { r42t.foot };
 	static float t_s = 0;
@@ -6741,9 +6743,9 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char where_str[], char
 	}
 
 	// Bail if message repeat
-	if (strcmp(fun, fun_copy) == 0) {
+	if (strcmp(fun, fun_last) == 0) {
 
-		// Check if this is start message
+		// Only bail for repeat start message
 		if (do_skip_repeat ||
 			strcmp(where_str, "S") == 0) {
 
@@ -6759,8 +6761,10 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char where_str[], char
 	// Store time
 	t_s = (float)(millis() - t_sync) / 1000.0f;
 
-	// Copy string
-	strcpy(fun_copy, fun);
+	// Copy function for start calls
+	if (strcmp(where_str, "S") == 0) {
+		strcpy(fun_last, fun);
+	}
 
 	// Get number of times skipped logging
 	cnt_skip = cnt_chk - chk_last;
@@ -7747,7 +7751,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 	DoAll("PrintDebug");
 
 	// Turn on LCD LED
-	ChangeLCDlight(100);
+	ChangeLCDlight(128);
 
 	// Get time seconds
 	t_s = (float)(millis() - t_sync) / 1000.0f;
@@ -8207,7 +8211,7 @@ void setup() {
 	}
 
 	// Print to LCD
-	ChangeLCDlight(50);
+	ChangeLCDlight(64);
 	PrintLCD(true, "SETUP", "MAIN");
 
 	// Log and print to console
@@ -8218,11 +8222,14 @@ void setup() {
 	delayMicroseconds(100);
 	StatusBlink(true, 1, 100);
 	while (StatusBlink());
+	ChangeLCDlight(64);
 
 	// SETUP AUTODRIVER
 
 	// Configure SPI
 	PrintLCD(true, "RUN SETUP", "AutoDriver");
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: AutoDriver Setup...");
+	DoAll("PrintDebug");
 	AD_R.SPIConfig();
 	delayMicroseconds(100);
 	AD_F.SPIConfig();
@@ -8230,6 +8237,8 @@ void setup() {
 	// Reset boards
 	AD_Reset(maxAcc, maxDec, maxSpeed);
 	PrintLCD(true, "DONE SETUP", "AutoDriver");
+	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: AutoDriver Setup...");
+	DoAll("PrintDebug");
 
 	// Make sure motor is stopped and in high impedance
 	AD_R.hardHiZ();
@@ -8239,15 +8248,23 @@ void setup() {
 
 	// Start BigEasyDriver in sleep
 	PrintLCD(true, "RUN SETUP", "Big Easy");
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Big Easy Driver Setup...");
+	DoAll("PrintDebug");
 	digitalWrite(pin.ED_RST, HIGH);
 	digitalWrite(pin.ED_SLP, LOW);
 	PrintLCD(true, "DONE SETUP", "Big Easy");
+	DebugFlow(__FUNCTION__, __LINE__, "FINISEHD: Big Easy Driver Setup...");
+	DoAll("PrintDebug");
 
 	// INITIALIZE PIXY
 	PrintLCD(true, "RUN SETUP", "Pixy");
-	Pixy.init();
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Pixy Setup...");
+	DoAll("PrintDebug");
+    Pixy.init();
 	Wire.begin();
 	PrintLCD(true, "DONE SETUP", "Pixy");
+	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Pixy Setup...");
+	DoAll("PrintDebug");
 
 	// DUMP BUFFER
 	PrintLCD(true, "RUN SETUP", "Dump Serial");
@@ -8279,16 +8296,21 @@ void setup() {
 	// GET BATTERY LEVEL
 	uint32_t t_check_vcc = millis() + 1000;
 	PrintLCD(true, "RUN SETUP", "Battery Check");
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Battery Check...");
+	DoAll("PrintDebug");
 	while (CheckBattery(true) == 0 && millis() < t_check_vcc);
 
 	// EXIT WITH ERROR IF POWER OFF
 	if (CheckBattery(true) == 0) {
 		// Hold for error
+		PrintLCD(true, "FAILED SETUP", "Battery Check");
 		DebugError(__FUNCTION__, __LINE__, "ABORTED: Power Off", true);
 		DoAll("PrintDebug");
 		RunErrorHold("POWER OFF");
 	}
 	PrintLCD(true, "DONE SETUP", "Battery Check");
+	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Battery Check...");
+	DoAll("PrintDebug");
 
 	// SETUP OPENLOG
 	PrintLCD(true, "RUN SETUP", "OpenLog");
@@ -8314,6 +8336,7 @@ void setup() {
 	// Create new log file
 	PrintLCD(true, "RUN SETUP", "Log File");
 	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Make New Log...");
+	DoAll("PrintDebug");
 	if (Log.OpenNewLog() == 0) {
 		// Hold for error
 		PrintLCD(true, "FAILED SETUP", "Log File");
@@ -8330,7 +8353,8 @@ void setup() {
 
 	// DEFINE EXTERNAL INTERUPTS
 	PrintLCD(true, "RUN SETUP", "Interrupts");
-	PrintLCD(true, "SETUP", "Interrupts");
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Interrupts Setup...");
+	DoAll("PrintDebug");
 	uint32_t t_check_ir = millis() + 1000;
 	bool is_ir_off = false;
 
@@ -8363,11 +8387,15 @@ void setup() {
 
 	// IR prox left
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+    
+	// Log/print interupts setup
+	PrintLCD(true, "DONE SETUP", "Interrupts");
+	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Interrupts Setup...");
+	DoAll("PrintDebug");
 
 	// Start Feed Arm timer
 	FeederArmTimer.setPeriod(1000);
 	FeederArmTimer.attachInterrupt(Interupt_TimerHandler);
-	PrintLCD(true, "DONE SETUP", "Interrupts");
 
 	// RESET FEEDER ARM
 	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Reset Feeder Arm...");
@@ -8382,8 +8410,9 @@ void setup() {
 
 	// IMPORT LAST TEENSY LOG
 #if DO_TEENSY_DEBUG
+	
 	// Log everything in queue
-	DoAll("WriteLog", 1000);
+	DoAll("WriteLog", 5000);
 
 	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Get Teensy Log...");
 	PrintLCD(true, "RUN SETUP", "Teensy Log");
@@ -8409,10 +8438,6 @@ void setup() {
 	// Log everything in queue
 	DoAll("WriteLog", 5000);
 #endif
-
-	// CLEAR LCD
-	ChangeLCDlight(0);
-	ClearLCD();
 
 	// SET DEFAULTS
 	fc.isManualSes = true;
@@ -8443,6 +8468,11 @@ void setup() {
 		DO_FAST_PRINT ? "FAST PRINTING ENABLED|" : "",
 		DO_FAST_LOG ? "FAST LOGGING ENABLED|" : "");
 	DebugFlow(__FUNCTION__, __LINE__, str);
+
+
+	// CLEAR LCD
+	ChangeLCDlight(0);
+	ClearLCD();
 
 	// PRINT SETUP FINISHED
 	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Setup");
@@ -8775,11 +8805,34 @@ void loop() {
 	// Run position debugging
 	if (db.do_posDebug)
 	{
-		char str[maxStoreStrLng] = { 0 };
+		static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+		static char lcd_str1[100] = { 0 }; lcd_str1[0] = '\0';
+		static char lcd_str2[100] = { 0 }; lcd_str2[0] = '\0';
+		static bool is_halted = false;
 		static double pos_last[3] = { 0 };
 		static int32_t t_check_next = 0;
 		int dt_check = 250;
 		bool is_new = false;
+
+		// Block motor
+		if (cmd.cnt_move == 1 &&
+			!fc.doMove &&
+			!fc.isTaskDone &&
+			!is_halted) {
+
+			// Halt robot
+			HardStop("Halt");
+			SetMotorControl("Halt", "Halt");
+			is_halted = true;
+		}
+
+		// Unblock motor
+		if (fc.isTaskDone && is_halted) {
+
+			// Unhalt robot
+			SetMotorControl("Open", "Halt");
+			is_halted = false;
+		}
 
 		// Check if position values changed
 		for (int i = 0; i < 3; i++) {
@@ -8789,7 +8842,7 @@ void loop() {
 			pos_last[i] = Pos[i].posRel;
 		}
 
-		// Plot new data
+		// Plot and print new data
 		if (is_new && millis() > t_check_next)
 		{
 
@@ -8823,7 +8876,12 @@ void loop() {
 			// Print pos data
 			sprintf(str, "POS DEBUG (abs|rel|laps|dist): rat_vt=%0.2f|%0.2f|%d|%0.2f rat_pixy=%0.2f|%0.2f|%d|%0.2f rob_vt=%0.2f|%0.2f|%d",
 				Pos[0].posRel, Pos[0].posAbs, Pos[0].nLaps, rat_vt_dist, Pos[2].posRel, Pos[2].posAbs, Pos[2].nLaps, rat_pixy_dist, Pos[1].posRel, Pos[1].posAbs, Pos[1].nLaps);
-			SerialUSB.println(str);
+			DebugFlow(__FUNCTION__, __LINE__, str);
+
+			// Display rat vt dist
+			sprintf(lcd_str1, "%0.2f", rat_vt_dist);
+			sprintf(lcd_str2, "%0.2f", rat_pixy_dist);
+			PrintLCD(false, lcd_str1, lcd_str2);
 
 		}
 	}
@@ -8919,10 +8977,9 @@ void loop() {
 				DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
 
 				// Update pixy coeff
-				pixyCoeff[0] = pixyPackCoeff[0];
-				pixyCoeff[1] = pixyPackCoeff[1];
-				pixyCoeff[2] = pixyPackCoeff[2];
-				pixyCoeff[3] = pixyPackCoeff[3];
+				for (size_t i = 0; i < pixyOrd; i++){
+					pixyCoeff[i] = pixyPackCoeff[i];
+				}
 
 				// Update pixy shift
 				pixyShift = pixyPackShift;
@@ -8933,10 +8990,9 @@ void loop() {
 				DebugFlow(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
 
 				// Update pixy coeff
-				pixyCoeff[0] = pixyCubeCoeff[0];
-				pixyCoeff[1] = pixyCubeCoeff[1];
-				pixyCoeff[2] = pixyCubeCoeff[2];
-				pixyCoeff[3] = pixyCubeCoeff[3];
+				for (size_t i = 0; i < pixyOrd; i++) {
+					pixyCoeff[i] = pixyPackCoeff[i];
+				}
 
 				// Update pixy shift
 				pixyShift = pixyCubeShift;

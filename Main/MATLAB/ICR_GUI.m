@@ -100,7 +100,7 @@ D.DB.ratLab = 'r0563'; %'r9999';
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.Run_Cheetah = false;
+D.DB.Run_Cheetah = true;
 D.DB.Run_SS3D = false;
 D.DB.Rec_Raw = false;
 
@@ -1737,8 +1737,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.lap = num2cell(zeros(1,3));
         % rew by rotation
         D.C.rew = num2cell(zeros(1,3));
-        % cued rewards
-        D.C.cued_rew = [];
         % reward send
         D.C.rew_send = 0;
         % reward crossings
@@ -1969,6 +1967,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.I.targ_last = 1;
         % cue zone array
         D.I.cue_zone_arr = NaN;
+        % cued rewards
+        D.I.cued_rew = [];
         
         %% DATA STORAGE VARIABLES
         
@@ -10620,7 +10620,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if get(D.UI.toggDoCue, 'Value') == 1
             
             % Get new cued zone based on distrebution
-            D.I.zone_now = D.I.cue_zone_arr(length(D.C.cued_rew)+1);
+            D.I.zone_now = D.I.cue_zone_arr(length(D.I.cued_rew)+1);
             
             % Get new reward duration
             D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone_now);
@@ -10728,7 +10728,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Update cued reward count
             if get(D.UI.toggDoCue, 'Value') == 1
-                D.C.cued_rew = [D.C.cued_rew, sum([D.C.rew{:}])];
+                D.I.cued_rew = [D.I.cued_rew, sum([D.C.rew{:}])];
             end
             
             % Store reward zone with range [-20,20]
@@ -12895,7 +12895,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.zone_hist(1:find(~isnan(D.PAR.zone_hist),1,'last'));
         
         % Store 'Cued_Rewards'
-        D.SS_IO_2.(D.PAR.ratLab).Cued_Rewards{rowInd} = D.C.cued_rew;
+        D.SS_IO_2.(D.PAR.ratLab).Cued_Rewards{rowInd} = D.I.cued_rew;
         
         % Store 'Rewards_Missed'
         D.SS_IO_2.(D.PAR.ratLab).Rewards_Missed(rowInd) = sum(D.C.missed_rew);

@@ -1,29 +1,46 @@
-% Paist backpack Y values from arduino
-%PX = [175,170,165,160,155,150,145,140,135,131,126,122,117,113,108,104,101,97,93,89,86,82,79,76,72,69,66,63,60,57,54,52,49,47,44,41]; 
 
-% Paist cube tracker Y values from arduino
-%PX = [160,156,150,145,139,134,128,123,118,113,108,103,98,93,89,85,81,77,73,69,66,63,59,56,53,50,47,43,40,38,35,33,30,28,25,22];
-PX = [174,168,163,158,153,147,142,137,131,127,122,117,112,108,104,100,96,92,88,84,81,77,73,69,66,63,59,56,53,50,48,45,42,40,37,35];
+% Paist tracker Y values from arduino
+PX = [186,172.1,159,146,133,121,109,98,87,76.6,67,58,50,42,35,28,22,16,11,5.8];
+
 % Format corresponding cm values
-CM = linspace(40.5, 78.5, length(PX));
+CM = linspace(21, 78, length(PX));
+
+% Specify polynomial
+polOrd = 4;
 
 % Fit
-P = polyfit(PX, CM, 3);
+P = polyfit(PX, CM, polOrd);
 
 % Plot unfitted
 figure;
-plot(CM, PX, '.-k');
+plot(CM, PX, 'o-', ...
+    'LineWidth', 2, ...
+    'MarkerSize', 5, ...
+    'Color', [0,0,0]);
 axis square
 hold on;
 
-% Compute 4th order
-%CM1 = P(1).*PX.^4 + P(2).*PX.^3 + P(3).*PX.^2 + P(4).*PX.^1 + P(5);
+switch polOrd
+    
+    % Compute 2rd order
+    case 2
+        CM1 = P(1).*PX.^2 + P(2).*PX.^1 + P(3);
+        
+        % Compute 3rd order
+    case 3
+        CM1 = P(1).*PX.^3 + P(2).*PX.^2 + P(3).*PX.^1 + P(4);
+        
+        % Compute 4th order
+    case 4
+        CM1 = P(1).*PX.^4 + P(2).*PX.^3 + P(3).*PX.^2 + P(4).*PX.^1 + P(5);
+        
+end
 
-% Compute 3rd order
-CM1 = P(1).*PX.^3 + P(2).*PX.^2 + P(3).*PX.^1 + P(4);
-
-%PX1 = CM*p(1)^2 + CM*p(2) + p(3); 
-plot(CM1, PX, '.-b');
+%PX1 = CM*p(1)^2 + CM*p(2) + p(3);
+plot(CM1, PX, 'o-', ...
+    'LineWidth', 2, ...
+    'MarkerSize', 5, ...
+    'Color', [1,0,0]);
 
 % Copy these coeff values to arduino code
 fprintf('%0.15f,\n', P);
