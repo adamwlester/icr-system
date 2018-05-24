@@ -1,15 +1,15 @@
+
 #ifndef FeederDue_PinMap_h
 #define FeederDue_PinMap_h
-#include "Arduino.h"
 
 // Pin mapping
 struct PIN
 {
 	// Power off
-	const int PWR_OFF = 45; // (gray)
-	const int PWR_ON = 44; // (white)
-	const int PWR_Swtch = 32; // (red)
-	const int PWR_Swtch_Grn = 33; // (black)
+	const int PWR_OFF = 48; // (gray)
+	const int PWR_ON = 46; // (white)
+	const int PWR_Swtch = 44; // (red)
+	const int PWR_Swtch_Grn = 45; // (black)
 
 	// Autodriver
 	const int AD_CSP_R = 5; // (yellow)
@@ -17,17 +17,17 @@ struct PIN
 	const int AD_RST = 7; // (brown)
 
 	// XBees
-	const int X1a_CTS = 28; // (brown)
-	const int X1b_CTS = 26; // (white)
-	const int X1a_UNDEF = 29; // (red)
-	const int X1b_UNDEF = 27; // (purple)
+	const int X1a_CTS = 28; // (blue)
+	const int X1b_CTS = 26; // (blue)
+	const int X1a_UNDEF = 29; // (yellow)
+	const int X1b_UNDEF = 27; // (yellow)
 
 	// Teensy
 	const int Teensy_Unused = 36; // (green)
 	const int Teensy_SendLogs = 38; // (yellow)
 	const int Teensy_Resetting = 40; // (orange)
 
-	// Display TEMP CHECK
+	// Display
 	const int Disp_CS = 8; // (white)
 	const int Disp_RST = 9; // (gray)
 	const int Disp_DC = 10; // (purple)
@@ -46,9 +46,10 @@ struct PIN
 	const int Rel_Vcc = A5; // (blue)
 
 	// Voltage Regulators
-	const int REG_24V_ENBLE = 30; // (green)
-	const int REG_12V_ENBLE = 46; // (orange) TEMP CHECK
-	const int REG_5V_ENBLE = 48; // (yellow) TEMP CHECK
+	const int REG_24V_ENBLE = 33; // (green)
+	const int REG_12V_ENBLE = 50; // (orange) 
+	const int REG_5V_ENBLE = 52; // (yellow) 
+	const int REG_5V_PIXY_ENBLE = 32; // (blue)
 
 	// BigEasyDriver
 	const int ED_RST = 47; // (green)
@@ -110,6 +111,7 @@ void SetupPins() {
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
 	pinMode(pin.REG_12V_ENBLE, OUTPUT);
 	pinMode(pin.REG_5V_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V_PIXY_ENBLE, OUTPUT);
 	// Autodriver
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
@@ -156,6 +158,7 @@ void SetupPins() {
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V_PIXY_ENBLE, HIGH);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);

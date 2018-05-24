@@ -1,43 +1,13 @@
+
 #ifndef FeederDue_h
 #define FeederDue_h
-
-#pragma region ========== LIBRARIES & EXT DEFS =========
-
-//----------LIBRARIES------------
-
-// General
 #include "FeederDue_PinMap.h"
-//
-#include "Arduino.h"
-//
-#include <string.h>
 
-// Memory
-#include <MemoryFree.h>
-
-
-// Timers
-#include <DueTimer.h>
-
-// AutoDriver
-
-#include <SPI.h>
-//
-#include "AutoDriver_Due.h"
-
-// Pixy
-
-#include <Wire.h> 
-//
-#include <PixyI2C.h>
-
-// LCD
-#include <LCD5110_Basic.h>
+#pragma region =============== EXT DEFS ================
 
 // TinyEKF
 #define N 4     // States
 #define M 6     // Measurements
-#include <TinyEKF.h>
 
 //-------SOFTWARE RESET----------
 #define SYSRESETREQ    (1<<2)
@@ -48,7 +18,6 @@
 
 #pragma endregion 
 
-
 #pragma region ============ DEBUG SETTINGS =============
 
 
@@ -57,36 +26,23 @@
 
 // DEBUG SETTING
 
-// Console
+// CONSOLE
 #define DO_PRINT_DEBUG 1
 #define DO_FAST_PRINT 0
 
-// Teensy Logging
-#define DO_TEENSY_DEBUG 1
+// TEENSY LOGGING
+#define DO_TEENSY_DEBUG 0
 
-// Primary Logging
+// OPENLOG LOGGING
 #define DO_LOG 1
 #define DO_FAST_LOG 0
-
-// Main debug flag
-#if DO_PRINT_DEBUG || DO_TEENSY_DEBUG
- #define DO_DEBUG 1
-#else
- #define DO_DEBUG 0
-#endif
-
-// DEBUG VIA TEENSY
-
-// Put at start of function
-#define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
-// Put at end of function
-#define DB_FUN_END() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "E");
 
 // DEBUGGING STRUCT
 struct DB
 {
 
-	// Printing
+	// PRINTING
+
 	const bool print_errors = true;
 	const bool print_flow = true;
 	const bool print_logging = false;
@@ -104,8 +60,10 @@ struct DB
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
 	const bool print_runSpeed = false;
+	const bool print_pixy = false;
 
-	// Logging
+	// LOGGING
+
 	const bool log_errors = true;
 	const bool log_flow = true;
 	const bool log_c2r = true;
@@ -116,7 +74,9 @@ struct DB
 	const bool log_bull = true;
 	const bool log_motorControl = true;
 	const bool log_runSpeed = false;
-	// tracking data
+	const bool log_pixy = true;
+
+	// Tracking data
 	const bool log_pos = false;
 	const bool log_pos_rat_vt = false;
 	const bool log_pos_rat_pixy = false;
@@ -129,13 +89,18 @@ struct DB
 	const bool log_vel_rat_ekf = false;
 	const bool log_vel_rob_ekf = false;
 
-	// Testing
-	const bool do_posDebug = true; // I set (Run in Manual_Training Mode)
-	const bool do_posPlot = false; // I set (Run in Manual_Training Mode)
-	bool is_runTest = false; // set by system
-	bool do_simRatTest = false; // set by system
-	bool do_pidCalibration = false; // set by system
-	volatile bool do_v_irSyncCalibration = false; // set by system
+	// TESTING
+
+	// Manually set
+	const bool do_posDebug = true; 
+	const bool do_posPrint = false; 
+	const bool do_posPlot = false; 
+
+	// Set by system
+	bool is_runTest = false;
+	bool do_simRatTest = false; 
+	bool do_pidCalibration = false; 
+	volatile bool do_v_irSyncCalibration = false;
 
 	// Other
 	bool isErrLoop = false;
@@ -152,8 +117,21 @@ const float pC = 1.9; // oscillation period [0,2.25,1.9]
 const double cal_speedSteps[4] = { 20, 40, 60, 80 }; // (cm/sec) [{ 10, 20, 30, 40 }]
 int cal_nMeasPerSteps = 10;
 
-#pragma endregion
+// MAIN DEBUG FLAG
+#if DO_PRINT_DEBUG || DO_TEENSY_DEBUG
+#define DO_DEBUG 1
+#else
+#define DO_DEBUG 0
+#endif
 
+// DEBUG VIA TEENSY
+
+// Put at start of function
+#define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
+// Put at end of function
+#define DB_FUN_END() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "E");
+
+#pragma endregion
 
 #pragma region ============= VARIABLE SETUP ============
 
@@ -198,8 +176,8 @@ struct FC
 fc;
 
 // DEBUGGING GENERAL
-uint32_t cnt_loop_tot = 0;
-uint16_t cnt_loop_short = 0;
+uint32_t cnt_loopTot = 0;
+uint16_t cnt_loopShort = 0;
 uint16_t cnt_warn = 0;
 uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
@@ -231,6 +209,8 @@ uint32_t t_ardQuit = 0;
 uint32_t t_quit = 0;
 
 // PIXY
+const uint8_t pixyAddress = 0x54;
+const uint16_t pixyMaxBlocks = 1;
 const int pixyOrd = 5;
 double pixyCoeff[pixyOrd] = {0};
 const double pixyPackCoeff[pixyOrd] = {
@@ -250,7 +230,8 @@ const double pixyCubeCoeff[pixyOrd] = {
 double pixyShift = 0;
 const double pixyPackShift = 0; // (cm)
 const double pixyCubeShift = -5; // (cm)
-const int dt_pixyCheck[2] = { 5, 10 }; // (ms)
+const int dt_pixyCheck[2] = { 10, 20 }; // (ms)
+uint16_t cnt_pixyReset = 0;
 
 // AUTODRIVER
 const double cm2stp = 200 / (9 * PI);
@@ -368,7 +349,6 @@ volatile uint16_t v_stepTarg = 0;
 volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 
-
 
 #pragma region ============ COM STRUCT SETUP ===========
 
@@ -491,7 +471,7 @@ struct R2
 R4 c2r
 {
 	// serial
-	Serial3,
+	Serial2,
 	// instID
 	"c2r",
 	// lng
@@ -530,7 +510,7 @@ R4 c2r
 R2 r2c
 {
 	// serial
-	Serial3,
+	Serial2,
 	// instID
 	"r2c",
 	// lng
@@ -581,7 +561,7 @@ R2 r2c
 R4 a2r
 {
 	// serial
-	Serial2,
+	Serial3,
 	// instID
 	"a2r",
 	// lng
@@ -621,7 +601,7 @@ R4 a2r
 R2 r2a
 {
 	// serial
-	Serial2,
+	Serial3,
 	// instID
 	"r2a",
 	// lng

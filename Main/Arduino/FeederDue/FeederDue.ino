@@ -4,10 +4,6 @@
 
 // ######################################
 
-#include "FeederDue.h"
-//
-#include "FeederDue_PinMap.h"
-
 // NOTES:
 /*
 
@@ -39,7 +35,99 @@ baud,escape,esc#,mode,verb,echo,ignoreRX
 */
 
 
+#pragma region =============== LIBRARIES ===============
+
+//----------LIBRARIES------------
+
+// General
+
+#include "FeederDue.h"
+#include "FeederDue_PinMap.h"
+#include <Arduino.h>
+#include <string.h>
+
+// Memory
+
+#include <MemoryFree.h>
+
+
+// Timers
+
+#include <DueTimer.h>
+
+// AutoDriver
+
+#include <SPI.h>
+#include <AutoDriver_Due.h>
+
+// Pixy
+
+#include <Wire.h> 
+
+// LCD
+
+#include <LCD5110_Basic.h>
+
+
+// TinyEKF
+
+#include <TinyEKF.h>
+
+#pragma endregion 
+
+
 #pragma region ========== CLASS DECLARATIONS ===========
+
+
+
+//CLASS: PIXY
+class PIXY
+{
+public:
+
+	// VARS
+	uint16_t wordStr = 0xaa55;
+	uint16_t wordStrCC = 0xaa56;
+	uint16_t wordStrX = 0x55aa;
+	uint16_t blockCount = 0;
+	uint16_t checksum = 0xffff;
+	uint16_t wordNew = 0xffff;
+	uint16_t wordLast = 0xffff;
+	char blockID[20] = { 0 };
+	enum BlockTypeEnum
+	{
+		NORMAL_BLOCK,
+		CC_BLOCK
+	};
+	BlockTypeEnum blockType;
+	bool skipStart = false;
+	struct Block
+	{
+		uint16_t sum() {
+			return signature + x + y + width + height + angle;
+		}
+		uint16_t signature;
+		uint16_t x;
+		uint16_t y;
+		uint16_t width;
+		uint16_t height;
+		uint16_t angle;
+	};
+	Block block{ 0,0,0,0,0,0 };
+
+	// METHODS
+	void PixyBegin();
+	double PixyCheckPixy(bool is_hardware_test = false);
+	uint16_t PixyGetBlocks();
+	bool PixyCheckStart();
+	uint16_t PixyGetWord();
+	uint8_t PixyGetByte();
+	void DebugPixy(const char *fun, int line, char msg[]);
+
+};
+
+
+
 
 //CLASS: POSTRACK
 class POSTRACK
@@ -63,10 +151,9 @@ public:
 	int sampCnt = 0;
 	bool isNew = false;
 	bool is_streamStarted = false;
-	uint32_t t_init;
 
 	// METHODS
-	POSTRACK(uint32_t t, char obj_id[], int n_samp);
+	POSTRACK(char obj_id[], int n_samp);
 	void UpdatePos(double pos_new, uint32_t ts_new);
 	double GetPos();
 	double GetVel();
@@ -131,21 +218,20 @@ public:
 	double cal_ratVel = 0;
 	bool cal_isPidUpdated = false;
 	bool cal_isCalFinished = false;
-	uint32_t t_init;
 
 	// METHODS
-	PID(uint32_t t, const float kC, const float pC);
-	double UpdatePID();
-	void PID_Run(char called_from[]);
-	void PID_Stop(char called_from[]);
-	void PID_Hold(char called_from[]);
-	void PID_Reset();
-	void PID_CheckMotorControl();
-	void PID_CheckEKF(uint32_t t, char called_from[]);
-	void PID_ResetEKF(char called_from[]);
-	void PID_SetUpdateTime(uint32_t t);
-	void DebugPID(const char *fun, int line, char msg[], char called_from[]);
-	double RunCalibration();
+	PID(const float kC, const float pC);
+	double PidUpdate();
+	void PidRun(char called_from[]);
+	void PidStop(char called_from[]);
+	void PidHold(char called_from[]);
+	void PidReset();
+	void PidCheckMotorControl();
+	void PidCheckEKF(uint32_t t, char called_from[]);
+	void PidResetEKF(char called_from[]);
+	void PidSetUpdateTime(uint32_t t);
+	void DebugPid(const char *fun, int line, char msg[], char called_from[]);
+	double PidCalibration();
 };
 
 
@@ -171,10 +257,9 @@ public:
 	bool isMoved = false;
 	bool isTimeUp = false;
 	bool isPassedReset = false;
-	uint32_t t_init;
 
 	// METHODS
-	BULLDOZE(uint32_t t);
+	BULLDOZE(void);
 	void UpdateBull();
 	void BullReinitialize(float bull_delay, float bull_speed, char called_from[]);
 	void BullRun(char called_from[]);
@@ -222,10 +307,8 @@ public:
 		0.131160714285714,
 		-2.425892857142854,
 	};
-	uint32_t t_init;
 
 	// METHODS
-	MOVETO(uint32_t t);
 	bool CompTarg(double now_pos, double targ_pos);
 	double DecelToTarg(double now_pos, double now_vel, double dist_decel, double speed_min);
 	double GetMoveError(double now_pos);
@@ -305,10 +388,9 @@ public:
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
-	uint32_t t_init;
 
 	// METHODS
-	REWARD(uint32_t t);
+	REWARD(void);
 	void StartRew();
 	bool EndRew();
 	void SetRewDur(int zone_ind);
@@ -356,10 +438,8 @@ public:
 	int cnt_logBytesStored = 0;
 	int cnt_logBytesSent = 0;
 	bool isFileReady = false;
-	uint32_t t_init;
 
 	// METHODS
-	LOGGER(uint32_t t);
 	bool Setup();
 	int OpenNewLog();
 	bool SetToCmdMode();
@@ -434,7 +514,7 @@ protected:
 
 
 
-//UNION
+//UNION: UTAG
 union UTAG {
 	byte b[4]; // (byte) 1 byte
 	char c[4]; // (char) 1 byte
@@ -457,33 +537,33 @@ UTAG U;
 AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
 AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 
-// Initialize PixyI2C class instance
-PixyI2C Pixy(0x54);
+// Initialize PixyCom class instance
+PIXY PixyCom;
 
 // Initialize LCD5110 class instance
 LCD5110 LCD(pin.Disp_SCK, pin.Disp_MOSI, pin.Disp_DC, pin.Disp_RST, pin.Disp_CS);
 
 // Initialize array of POSTRACK class instances
 POSTRACK Pos[3] = {
-	POSTRACK(millis(), "RatVT", 4),
-	POSTRACK(millis(), "RobVT", 4),
-	POSTRACK(millis(), "RatPixy", 6)
+	POSTRACK("RatVT", 4),
+	POSTRACK("RobVT", 4),
+	POSTRACK("RatPixy", 6)
 };
 
 // Initialize PID class instance
-PID Pid(millis(), kC, pC);
+PID Pid(kC, pC);
 
 // Initialize BULLDOZE class instance
-BULLDOZE Bull(millis());
+BULLDOZE Bull;
 
 // Initialize MOVETO class instance
-MOVETO Move(millis());
+MOVETO Move;
 
 // Initialize REWARD class instance
-REWARD Reward(millis());
+REWARD Reward;
 
 // Initialize LOGGER class instance
-LOGGER Log(millis());
+LOGGER Log;
 
 // Initialize DueTimer class instance
 DueTimer FeederArmTimer = DueTimer(1);
@@ -500,6 +580,9 @@ bool CheckForStart();
 
 // PARSE SERIAL INPUT
 void GetSerial(R4 *r4);
+
+// PROCESS PIXY STREAM
+uint16_t GetPixy(bool is_hardware_test);
 
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4 *r4, char mtch = '\0');
@@ -548,9 +631,6 @@ void InitializeTracking();
 
 // CHECK IF RAT VT OR PIXY DATA IS NOT UPDATING
 void CheckSampDT();
-
-// PROCESS PIXY STREAM
-double CheckPixy(bool is_hardware_test = false);
 
 // UPDATE EKF
 void UpdateEKF();
@@ -662,11 +742,397 @@ void Interupt_IR_Detect();
 
 #pragma region =========== CLASS DEFINITIONS ===========
 
+#pragma region ----------CLASS: PIXY----------
+
+void PIXY::PixyBegin()
+{
+	// Begin I2C
+	Wire.begin();
+
+	// Set clock frequency TEMP
+	//Wire.setClock(100000); // 100k default
+
+}
+
+double PIXY::PixyCheckPixy(bool is_hardware_test)
+{
+
+	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
+	static uint32_t t_check = 0;
+	double px_rel = 0;
+	double px_abs = 0;
+	uint32_t t_px_ts = 0;
+	double pixy_pos_y = 0;
+	uint16_t blocks = 0;
+
+	// Bail if robot not streaming yet
+	if (!is_hardware_test &&
+		!Pos[1].is_streamStarted) {
+		return px_rel;
+	}
+
+	// Bail if task done
+	if (fc.isTaskDone) {
+		return px_rel;
+	}
+
+	// Bail if rat not on track or doing simulation test
+	if (!is_hardware_test &&
+		(!fc.isRatOnTrack || db.do_simRatTest)) {
+		return px_rel;
+	}
+
+	// Bail if not time to check
+	if (millis() < t_check) {
+		return px_rel;
+	}
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Get new blocks
+	blocks = PixyCom.PixyGetBlocks();
+
+	// Check for pixy error
+	if (blocks == UINT16_MAX - 1) {
+
+		// Itterate count
+		cnt_pixyReset++;
+
+		// Log/print error
+		sprintf(str, "PixyCom.GetBlocks() RETURNED ERROR: cnt=%d", cnt_pixyReset);
+		DebugError(__FUNCTION__, __LINE__, str, true);
+
+		// Log/print
+		DebugError(__FUNCTION__, __LINE__, "RESSETTING PIXY 5V POWER SUPPLY");
+
+		// Reset
+		digitalWrite(pin.REG_5V_PIXY_ENBLE, LOW);
+		delay(25);
+		digitalWrite(pin.REG_5V_PIXY_ENBLE, HIGH);
+		delay(25);
+
+		// Restart com
+		PixyBegin();
+
+		// Set blocks to zero
+		blocks = 0;
+	}
+
+	// Bail if no new data
+	if (!blocks) {
+
+		// Set next check with short dt
+		t_check = millis() + dt_pixyCheck[0];
+
+		// Bail
+		return px_rel;
+	}
+
+	else {
+		// Set next check with longer dt
+		t_check = millis() + dt_pixyCheck[1];
+	}
+
+	// Save time stamp
+	t_px_ts = millis();
+
+	// Get Y pos from last block
+	pixy_pos_y = PixyCom.block.y;
+
+	// Transform to CM
+	for (size_t i = 0; i < pixyOrd; i++) {
+		px_rel += pixyCoeff[i] * pow(pixy_pos_y, pixyOrd - 1 - i);
+	}
+
+	// Shift pixy data
+	px_rel = px_rel + pixyShift;
+
+	// Return rel val if testing
+	if (is_hardware_test) {
+		return px_rel;
+	}
+
+	// Scale to abs space with rob vt data
+	px_abs = px_rel + Pos[1].posAbs;
+	px_abs = px_abs > (140 * PI) ? px_abs - (140 * PI) : px_abs;
+
+	// Update pixy pos and vel
+	Pos[2].UpdatePos(px_abs, t_px_ts);
+
+	// Log/print first sample
+	if (!Pos[2].is_streamStarted) {
+		sprintf(str, "FIRST RAT PIXY RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
+			Pos[2].posAbs, Pos[2].posRel, Pos[2].nLaps);
+		DebugFlow(__FUNCTION__, __LINE__, str);
+		Pos[2].is_streamStarted = true;
+	}
+
+	// Return relative pos
+	return px_rel;
+}
+
+uint16_t PIXY::PixyGetBlocks()
+{
+	/*
+	I2C BLOCK FORMAT:
+		Bytes    16-bit words   Description
+		----------------------------------------------------------------
+		0, 1     0              sync (0xaa55)
+		2, 3     1              checksum (sum of all 16-bit words 2-6)
+		4, 5     2              signature number
+		6, 7     3              x center of object
+		8, 9     4              y center of object
+		10, 11   5              width of object
+		12, 13   6              height of object
+	*/
+
+	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
+	uint16_t w = 0;
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Reset checksum
+	checksum = 0xffff;
+
+	// Check for frame start
+	if (!skipStart)
+	{
+		// Bail if start not found
+		if (PixyCheckStart() == false)
+			return 0;
+}
+	else
+		skipStart = false;
+
+	// Loop through pixyBlocksMax
+	for (blockCount = 0; blockCount < pixyMaxBlocks;)
+	{
+		// Get next word
+		checksum = PixyGetWord();
+
+		// Reached beginning of the next block frame
+		if (checksum == wordStr || checksum == wordStrCC) {
+
+			if (checksum == wordStr) {
+				blockType = NORMAL_BLOCK;
+			}
+			else if (checksum == wordStrCC) {
+
+				blockType = CC_BLOCK;
+			}
+
+			// Flag skip start
+			skipStart = true;
+
+			// Log/print
+			DebugPixy(__FUNCTION__, __LINE__, "Reached Frame End");
+
+			// Bail
+			break;
+
+		}
+
+		// No new data
+		else if (checksum == 0) {
+
+			// Log/print
+			DebugPixy(__FUNCTION__, __LINE__, "No New Data");
+
+			// Bail
+			break;
+		}
+
+		// Get and store data
+		block.signature = PixyGetWord();
+		block.x = PixyGetWord();
+		block.y = PixyGetWord();
+		block.width = PixyGetWord();
+		block.height = PixyGetWord();
+
+		// Get angle for coded blocks
+		if (blockType == CC_BLOCK) {
+			block.angle = PixyGetWord();
+		}
+		else {
+			block.angle = 0;
+		}
+
+		// Check that expected bytes read
+		if (checksum == block.sum()) {
+
+			// Itterate block count
+			blockCount++;
+
+			// Log/print
+			DebugPixy(__FUNCTION__, __LINE__, "Block Recieved");
+		}
+
+		// Checksum error
+		else {
+
+			// Log/print error
+			sprintf(str, "CHECKSUM MISSMATCH: checksum=%d read_sum=%d", checksum, block.sum());
+			DebugError(__FUNCTION__, __LINE__, str, true);
+
+			// Return value indicating error
+			return UINT16_MAX - 1;
+		}
+
+		// Get sync word
+		w = PixyGetWord();
+
+		// Start of next block
+		if (w == wordStr)
+			blockType = NORMAL_BLOCK;
+		else if (w == wordStrCC)
+			blockType = CC_BLOCK;
+
+		// End of frame
+		else
+			break;
+	}
+
+	// Return block count
+	return blockCount;
+}
+
+bool PIXY::PixyCheckStart()
+{
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
+	uint16_t w = 0;
+	bool pass = false;
+
+	// Get next word
+	wordNew = PixyGetWord();
+
+	// Flag normal block
+	if (wordNew == wordStr && wordLast == wordStr)
+	{
+		blockType = NORMAL_BLOCK;
+		pass = true;
+	}
+
+	// Flag CC block
+	else if (wordNew == wordStrCC && wordLast == wordStr)
+	{
+		blockType = CC_BLOCK;
+		pass = true;
+	}
+
+	// Resync ???
+	else if (wordNew == wordStrX)
+	{
+		PixyGetByte();
+	}
+
+	// Check for pass
+	if (pass) {
+
+		// Log/print start found
+		DebugPixy(__FUNCTION__, __LINE__, "Recieved Start");
+
+		// Reset last word
+		wordLast = 0xffff;
+	}
+	else {
+		// Update last word
+		wordLast = wordNew;
+	}
+
+	// Return status
+	return pass;
+
+}
+
+uint16_t PIXY::PixyGetWord()
+{
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Local vars
+	uint16_t w;
+	uint8_t c;
+
+	// Request two bytes from Pixy
+	Wire.requestFrom((int)pixyAddress, 2);
+	c = Wire.read();
+	w = Wire.read();
+
+	// Do something to the binary data ???
+	w <<= 8;
+	w |= c;
+
+	// Return word
+	return w;
+}
+
+uint8_t PIXY::PixyGetByte()
+{
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Request single byte from Pixy
+	Wire.requestFrom((int)pixyAddress, 1);
+	return Wire.read();
+}
+
+void PIXY::DebugPixy(const char *fun, int line, char msg[])
+{
+	// Local vars
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
+	static char dat_str[maxStoreStrLng + 50] = { 0 }; dat_str[0] = '\0';
+	bool do_print = db.print_pixy && DO_PRINT_DEBUG;
+	bool do_log = db.log_pixy && DO_LOG;
+
+	// Bail if neither set
+	if (!do_print && !do_log) {
+		return;
+	}
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Format data string
+	sprintf(dat_str, "block_type=%s word_new=%X word_last=%X checksum=%d blocks=%d",
+		blockType == NORMAL_BLOCK ? "NORMAL_BLOCK" : blockType == CC_BLOCK ? "CC_BLOCK" : "NULL",
+		wordNew, wordLast, checksum, blockCount);
+
+	// Format string
+	sprintf(str, "[%s:%d] %s: %s", fun, line - 23, msg, dat_str);
+
+	// Add to print queue
+	if (do_print) {
+		QueueDebug(str, millis());
+	}
+	// Add to log queue
+	if (do_log) {
+		Log.QueueLog(str, millis());
+	}
+}
+
+#pragma endregion 
+
 #pragma region ----------CLASS: POSTRACK----------
 
-POSTRACK::POSTRACK(uint32_t t, char obj_id[], int n_samp)
+POSTRACK::POSTRACK(char obj_id[], int n_samp)
 {
-	this->t_init = t;
 	strcpy(this->instID, obj_id);
 	this->nSamp = n_samp;
 
@@ -682,7 +1148,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 #endif
 
 	// Local vars
-	char str[maxStoreStrLng] = { 0 };
+	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	double pos_diff = 0;
 	double dist = 0;
 	double dist_sum = 0;
@@ -849,7 +1315,7 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 	// Make sure pos val range [0, 140*PI]
 	if (set_pos < 0) {
 		update_pos = set_pos + (140 * PI);
-	}
+}
 	else if (set_pos > (140 * PI)) {
 		update_pos = set_pos - (140 * PI);
 	}
@@ -877,23 +1343,22 @@ void POSTRACK::PosReset(bool do_lap_reset)
 	// Reset lap number
 	if (do_lap_reset) {
 		this->nLaps = 0;
-	}
+}
 }
 
 #pragma endregion 
 
 #pragma region ----------CLASS: PID----------
 
-PID::PID(uint32_t t, const float kC, const float pC)
+PID::PID(const float kC, const float pC)
 {
-	this->t_init = t;
 	this->kP = 0.6 * kC; // proportional constant
 	this->kI = 2 * kP / pC; // integral constant
 	this->kD = kP*pC / 8; // derivative constant
 	sprintf(this->modePID, "Manual");
 }
 
-double PID::UpdatePID()
+double PID::PidUpdate()
 {
 
 	// Wait till ekf ready
@@ -905,7 +1370,7 @@ double PID::UpdatePID()
 	error = kal.RatPos - (kal.RobPos + setPoint);
 
 	// Check if motor is open
-	PID_CheckMotorControl();
+	PidCheckMotorControl();
 
 	// Bail if in manual or hold mode
 	if (strcmp(modePID, "Manual") == 0 ||
@@ -941,7 +1406,7 @@ double PID::UpdatePID()
 
 	// Log/print first run
 	if (isFirstRun) {
-		DebugPID(__FUNCTION__, __LINE__, "First PID Run", "loop");
+		DebugPid(__FUNCTION__, __LINE__, "First PID Run", "loop");
 		isFirstRun = false;
 	}
 
@@ -991,16 +1456,16 @@ double PID::UpdatePID()
 	// Return new run speed
 	return runSpeed;
 
-}
+	}
 
-void PID::PID_Run(char called_from[])
+void PID::PidRun(char called_from[])
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Log/print event
-	DebugPID(__FUNCTION__, __LINE__, "Run PID", called_from);
+	DebugPid(__FUNCTION__, __LINE__, "Run PID", called_from);
 
 	// Take motor control
 	if (!SetMotorControl("Pid", "PID::Run")) {
@@ -1010,24 +1475,24 @@ void PID::PID_Run(char called_from[])
 
 		// Bail
 		return;
-	}
+}
 
 	// Reset
-	PID_Reset();
+	PidReset();
 	sprintf(modePID, "Automatic");
 
 	// Tell ard pid is running
 	QueuePacket(&r2a, 'p', 1);
 }
 
-void PID::PID_Stop(char called_from[])
+void PID::PidStop(char called_from[])
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Log/print event
-	DebugPID(__FUNCTION__, __LINE__, "Stop PID", called_from);
+	DebugPid(__FUNCTION__, __LINE__, "Stop PID", called_from);
 
 	if (strcmp(fc.motorControl, "Pid") == 0)
 	{
@@ -1039,7 +1504,7 @@ void PID::PID_Stop(char called_from[])
 
 		// Give over control
 		SetMotorControl("Open", "PID::Stop");
-	}
+}
 
 	// Tell ard pid is stopped if not rewarding
 	if (!Reward.isRewarding) {
@@ -1050,23 +1515,23 @@ void PID::PID_Stop(char called_from[])
 	sprintf(modePID, "Manual");
 }
 
-void PID::PID_Hold(char called_from[])
+void PID::PidHold(char called_from[])
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Log/print event
-	DebugPID(__FUNCTION__, __LINE__, "Hold PID", called_from);
+	DebugPid(__FUNCTION__, __LINE__, "Hold PID", called_from);
 
 	// Call Stop
-	PID_Stop("Pid.Hold");
+	PidStop("Pid.Hold");
 
 	// But set mode to "Hold"
 	sprintf(modePID, "Hold");
 }
 
-void PID::PID_Reset()
+void PID::PidReset()
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1077,7 +1542,7 @@ void PID::PID_Reset()
 	isHolding4cross = true;
 }
 
-void PID::PID_CheckMotorControl()
+void PID::PidCheckMotorControl()
 {
 
 	// Run pid
@@ -1085,7 +1550,7 @@ void PID::PID_CheckMotorControl()
 		strcmp(modePID, "Hold") == 0) {
 
 		// Run pid
-		PID_Run("PID::PID_CheckMotorControl");
+		PidRun("PID::PidCheckMotorControl");
 	}
 
 	// Put pid on hold
@@ -1093,11 +1558,11 @@ void PID::PID_CheckMotorControl()
 		strcmp(modePID, "Automatic") == 0) {
 
 		// Hold pid
-		PID_Hold("PID::PID_CheckMotorControl");
+		PidHold("PID::PidCheckMotorControl");
 	}
 }
 
-void PID::PID_CheckEKF(uint32_t t, char called_from[])
+void PID::PidCheckEKF(uint32_t t, char called_from[])
 {
 	// Bail if not checking
 	if (fc.isEKFReady) {
@@ -1112,28 +1577,28 @@ void PID::PID_CheckEKF(uint32_t t, char called_from[])
 		kal.cnt_ekf > 100)
 	{
 		// Log/print event 
-		DebugPID(__FUNCTION__, __LINE__, "EKF Ready for PID", called_from);
+		DebugPid(__FUNCTION__, __LINE__, "EKF Ready for PID", called_from);
 
 		// Set flag
 		fc.isEKFReady = true;
 	}
 }
 
-void PID::PID_ResetEKF(char called_from[])
+void PID::PidResetEKF(char called_from[])
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Log/print event
-	DebugPID(__FUNCTION__, __LINE__, "Reset EKF", called_from);
+	DebugPid(__FUNCTION__, __LINE__, "Reset EKF", called_from);
 
 	// Set flag and time
 	fc.isEKFReady = false;
 	t_ekfReady = millis();
 }
 
-void PID::PID_SetUpdateTime(uint32_t t)
+void PID::PidSetUpdateTime(uint32_t t)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1148,7 +1613,7 @@ void PID::PID_SetUpdateTime(uint32_t t)
 	}
 }
 
-void PID::DebugPID(const char *fun, int line, char msg[], char called_from[])
+void PID::DebugPid(const char *fun, int line, char msg[], char called_from[])
 {
 	// Local vars
 	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
@@ -1174,7 +1639,7 @@ void PID::DebugPID(const char *fun, int line, char msg[], char called_from[])
 	}
 }
 
-double PID::RunCalibration()
+double PID::PidCalibration()
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1325,9 +1790,8 @@ double PID::RunCalibration()
 
 #pragma region ----------CLASS: BULLDOZE----------
 
-BULLDOZE::BULLDOZE(uint32_t t)
+BULLDOZE::BULLDOZE(void)
 {
-	this->t_init = t;
 	sprintf(this->modeBull, "Inactive");
 	sprintf(this->stateBull, "Off");
 }
@@ -1636,11 +2100,6 @@ void BULLDOZE::DebugBull(const char *fun, int line, char msg[], char called_from
 
 #pragma region ----------CLASS: MOVETO----------
 
-MOVETO::MOVETO(uint32_t t)
-{
-	this->t_init = t;
-}
-
 bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 {
 
@@ -1865,9 +2324,8 @@ void MOVETO::MoveToReset()
 
 #pragma region ----------CLASS: REWARD----------
 
-REWARD::REWARD(uint32_t t)
+REWARD::REWARD(void)
 {
-	this->t_init = t;
 	this->duration = durationDefault;
 	this->durationByte = (byte)(duration / 10);
 	sprintf(this->modeReward, "None");
@@ -1885,7 +2343,7 @@ void REWARD::StartRew()
 	// Set motor hold time
 	if (!fc.isForageTask) {
 		BlockMotorTill(dt_rewBlock);
-	}
+}
 
 	// Hard stop
 	HardStop("StartRew");
@@ -2164,7 +2622,7 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	if (now_pos > boundMax + 5) {
 		isAllZonePassed = true;
 		return isZoneTriggered;
-	}
+}
 
 	// Bail if first bound not reached
 	if (now_pos < boundMin) {
@@ -2386,8 +2844,8 @@ void REWARD::CheckFeedArm()
 
 			// Reset flag
 			doTimedRetract = false;
-		}
 	}
+}
 
 	// Bail if still nothing to do
 	if (!doExtendArm &&
@@ -2558,11 +3016,6 @@ void REWARD::RewardReset(bool was_rewarded)
 
 #pragma region ----------CLASS: LOGGER----------
 
-LOGGER::LOGGER(uint32_t t)
-{
-	this->t_init = t;
-}
-
 bool LOGGER::Setup()
 {
 #if DO_TEENSY_DEBUG
@@ -2671,8 +3124,8 @@ int LOGGER::OpenNewLog()
 	}
 
 
-	// Check if more than 100 logs saved
-	if (logNum > 100)
+	// Check if more than 50 logs saved
+	if (logNum > 50)
 	{
 		// Step out of directory
 		if (SendCommand("cd ..\r") == '!') {
@@ -3052,7 +3505,7 @@ bool LOGGER::SetToWriteMode(char log_file[])
 	// Check if already in log mode
 	if (mode == '<') {
 		return true;
-	}
+}
 
 	// Send append file command
 	sprintf(str, "append %s\r", log_file);
@@ -3166,7 +3619,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 	t_m = t - t_sync;
 
 	// Store log
-	sprintf(logQueue[logQueueIndStore], "[%d],%lu,%d,%s%s\r\n", cnt_logsStored, t_m, cnt_loop_short, overflow_str, msg_copy);
+	sprintf(logQueue[logQueueIndStore], "[%d],%lu,%d,%s%s\r\n", cnt_logsStored, t_m, cnt_loopShort, overflow_str, msg_copy);
 
 	// Reset overlow stuff
 	overflow_cnt = 0;
@@ -3546,7 +3999,7 @@ void LOGGER::StreamLogs()
 		sprintf(str_lin, "%d|", err_line[i]);
 		strcat(err_lines, str_lin);
 	}
-	sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? warn_lines : "");
+	sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? err_lines : "");
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	// Send
 	r2c.port.write(logQueue[logQueueIndStore]);
@@ -3772,7 +4225,7 @@ int LOGGER::GetLogQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < logQueueSize; i++) {
 		n_entries += logQueue[i][0] != '\0' ? 1 : 0;
-	}
+}
 
 	// Get total available
 	return logQueueSize - n_entries;
@@ -3792,7 +4245,7 @@ void LOGGER::PrintLOGGER(char msg[], bool start_entry)
 	// Bail if logging should not be printed
 	if (!db.print_logging) {
 		return;
-	}
+}
 
 	// Print like normal entry
 	if (start_entry) {
@@ -4132,6 +4585,13 @@ void GetSerial(R4 *r4)
 	}
 
 	return;
+	}
+
+// PROCESS PIXY STREAM
+uint16_t GetPixy(bool is_hardware_test)
+{
+
+
 }
 
 // WAIT FOR BUFFER TO FILL
@@ -4230,22 +4690,37 @@ byte WaitBuffRead(R4 *r4, char mtch)
 
 	// Buffer flooded
 	if (is_overflowed) {
+
+		// Itterate count
 		cnt_overflow++;
-		sprintf(msg_str, "Buffer Overflowed: cnt=%d", cnt_overflow);
+
+		// Print only every 10th message after first 10
+		if (cnt_overflow < 10 || cnt_overflow % 10 == 0) {
+			sprintf(msg_str, "BUFFER OVERFLOWED: cnt=%d", cnt_overflow);
+		}
 	}
+
 	// Timed out
 	else if (millis() > t_timeout) {
+
+		// Itterate count
 		cnt_timeout++;
-		sprintf(msg_str, "Timedout: cnt=%d", cnt_timeout);
+
+		// Print only every 10th message after first 10
+		if (cnt_timeout < 10 || cnt_timeout % 10 == 0) {
+			sprintf(msg_str, "TIMEDOUT: cnt=%d", cnt_timeout);
+		}
 	}
+
 	// Byte not found
 	else if (mtch != '\0') {
-		sprintf(msg_str, "Char \'%c\' Not Found:",
+		sprintf(msg_str, "CHAR \'%c\' NOT FOUND:",
 			mtch);
 	}
+
 	// Failed for unknown reason
 	else {
-		sprintf(msg_str, "Failed for Unknown Reason:");
+		sprintf(msg_str, "FAILED FOR UNKNOWN REASON:");
 	}
 
 	// Compbine strings
@@ -4558,7 +5033,7 @@ bool CheckResend(R2 *r2)
 
 			// Get dt sent
 			dt_sent = millis() - r2->t_sentListArr[i];
-		}
+	}
 
 		// Bail if no action requred
 		if (
@@ -4605,7 +5080,7 @@ bool CheckResend(R2 *r2)
 			// Reset flag
 			r2->do_rcvCheckArr[i] = false;
 		}
-	}
+}
 
 	// Return
 	return is_waiting_for_pack;
@@ -4872,7 +5347,7 @@ void HardStop(char called_from[], bool do_block_hz)
 	runSpeedNow = 0;
 
 	// Reset pid
-	Pid.PID_Reset();
+	Pid.PidReset();
 
 	// Set to high impedance so robot can be moved
 	if (fc.isManualSes && !do_block_hz) {
@@ -5232,7 +5707,7 @@ void InitializeTracking()
 	fc.isTrackingEnabled = true;
 
 	// Reset ekf
-	Pid.PID_ResetEKF("InitializeTracking");
+	Pid.PidResetEKF("InitializeTracking");
 
 	// Don't start pid for manual or forage sessions
 	if (!fc.isManualSes &&
@@ -5246,7 +5721,7 @@ void InitializeTracking()
 		}
 
 		// Run Pid
-		Pid.PID_Run("InitializeTracking");
+		Pid.PidRun("InitializeTracking");
 		DebugFlow(__FUNCTION__, __LINE__, "PID STARTED");
 	}
 
@@ -5281,6 +5756,11 @@ void CheckSampDT()
 	int dt_max_pixy = 100;
 	int dt_vt = 0;
 	int dt_pixy = 0;
+
+	// Bail if doing pos debug
+	if (db.do_posDebug) {
+		return;
+	}
 
 	// Bail if rat not on track or task done
 	if (!fc.isRatOnTrack || fc.isTaskDone) {
@@ -5324,8 +5804,8 @@ void CheckSampDT()
 		// Itterate count
 		cnt_swap_vt++;
 
-		// Log/print non consecutive events
-		if (millis() - t_swap_vt > 2 * dt_max_vt) {
+		// Log/print if > 1 sec sinse last swap
+		if (millis() - t_swap_vt > 1000) {
 			sprintf(str, "Swapped VT with Pixy");
 		}
 
@@ -5340,8 +5820,8 @@ void CheckSampDT()
 		// Itterate count
 		cnt_swap_pixy++;
 
-		// Log/print non consecutive events
-		if (millis() - t_swap_pixy > 2 * dt_max_pixy) {
+		// Log/print if > 1 sec sinse last swap
+		if (millis() - t_swap_pixy > 1000) {
 			sprintf(str, "Swapped Pixy with VT");
 		}
 
@@ -5358,134 +5838,6 @@ void CheckSampDT()
 		DebugError(__FUNCTION__, __LINE__, msg);
 	}
 
-}
-
-// PROCESS PIXY STREAM
-double CheckPixy(bool is_hardware_test)
-{
-
-	// Local vars
-	static char str[200] = { 0 }; str[0] = '\0';
-	static uint32_t t_check = 0;
-	static bool is_first_check = true;
-	double px_rel = 0;
-	double px_abs = 0;
-	uint32_t t_px_ts = 0;
-	double pixy_pos_y = 0;
-	uint16_t blocks = 0;
-
-	// Bail if robot not streaming yet
-	if (!is_hardware_test &&
-		!Pos[1].is_streamStarted) {
-		return px_rel;
-	}
-
-	// Bail if task done
-	if (fc.isTaskDone) {
-		return px_rel;
-	}
-
-	// Bail if rat not on track or doing simulation test
-	if (!is_hardware_test &&
-		(!fc.isRatOnTrack || db.do_simRatTest)) {
-		return px_rel;
-	}
-
-	// Bail if not time to check
-	if (millis() < t_check) {
-		return px_rel;
-	}
-
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
-
-	// Print first check
-	if (is_first_check) {
-
-		// Log/print
-		DebugFlow(__FUNCTION__, __LINE__, "First Run of \"getBlocks()\"...");
-		DoAll("PrintDebug");
-		DoAll("WriteLog");
-
-		// Reset flag
-		is_first_check = false;
-	}
-
-	// Get new blocks
-	blocks = Pixy.getBlocks();
-
-	// Check for pixy error
-	if (blocks == UINT16_MAX - 1) {
-
-		// Log/print error
-		DebugError(__FUNCTION__, __LINE__, "Pixy.getBlocks() RETURNED CS ERROR", true);
-
-		// Set blocks to zero
-		blocks = 0;
-	}
-
-	// Bail if no new data
-	if (!blocks) {
-
-		// Set next check with short dt
-		t_check = millis() + dt_pixyCheck[0];
-
-#if DO_TEENSY_DEBUG
-		DB_FUN_END();
-#endif
-
-		// Bail
-		return px_rel;
-	}
-
-	else {
-		// Set next check with longer dt
-		t_check = millis() + dt_pixyCheck[1];
-	}
-
-	// Save time stamp
-	t_px_ts = millis();
-
-	// Get Y pos from last block
-	pixy_pos_y = Pixy.blocks[blocks - 1].y;
-
-	// Transform to CM
-	for (size_t i = 0; i < pixyOrd; i++) {
-		px_rel += pixyCoeff[i] * pow(pixy_pos_y, pixyOrd - 1 - i);
-	}
-
-	// Shift pixy data
-	px_rel = px_rel + pixyShift;
-
-	// Return rel val if testing
-	if (is_hardware_test) {
-#if DO_TEENSY_DEBUG
-		DB_FUN_END();
-#endif
-		return px_rel;
-	}
-
-	// Scale to abs space with rob vt data
-	px_abs = px_rel + Pos[1].posAbs;
-	px_abs = px_abs > (140 * PI) ? px_abs - (140 * PI) : px_abs;
-
-	// Update pixy pos and vel
-	Pos[2].UpdatePos(px_abs, t_px_ts);
-
-	// Log/print first sample
-	if (!Pos[2].is_streamStarted) {
-		sprintf(str, "FIRST RAT PIXY RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
-			Pos[2].posAbs, Pos[2].posRel, Pos[2].nLaps);
-		DebugFlow(__FUNCTION__, __LINE__, str);
-		Pos[2].is_streamStarted = true;
-	}
-
-	// Return relative pos
-#if DO_TEENSY_DEBUG
-	DB_FUN_END();
-#endif
-	return px_rel;
 }
 
 // UPDATE EKF
@@ -5515,10 +5867,10 @@ void UpdateEKF()
 #endif
 
 	// Check EKF progress
-	Pid.PID_CheckEKF(millis(), "UpdateEKF");
+	Pid.PidCheckEKF(millis(), "UpdateEKF");
 
 	// Set pid update time
-	Pid.PID_SetUpdateTime(millis());
+	Pid.PidSetUpdateTime(millis());
 
 	// Set flag for reward
 	if (fc.isTrackingEnabled) {
@@ -6110,7 +6462,7 @@ float CheckBattery(bool force_check)
 
 	// Return battery voltage
 	return vccAvg;
-}
+	}
 
 // TURN LCD LIGHT ON/OFF
 void ChangeLCDlight(uint32_t duty)
@@ -6126,7 +6478,7 @@ void ChangeLCDlight(uint32_t duty)
 	if (duty == 256) {
 		fc.isLitLCD = !fc.isLitLCD;
 		duty = fc.isLitLCD ? 8 : 0;
-	}
+}
 	else {
 		fc.isLitLCD = duty > 0;
 	}
@@ -6149,7 +6501,7 @@ void QuitSession()
 
 	// Stop all movement
 	HardStop("QuitSession");
-	Pid.PID_Stop("QuitSession");
+	Pid.PidStop("QuitSession");
 	Bull.BullOff("QuitSession");
 
 	// Log/print anything left in queue
@@ -6443,7 +6795,7 @@ void HardwareTest()
 				if (!is_pixy_led_on) {
 
 					// Store value
-					pixy_pos_arr[cnt_pixy] = CheckPixy(true);
+					pixy_pos_arr[cnt_pixy] = PixyCom.PixyCheckPixy(true);
 
 					// Itterate count
 					cnt_pixy++;
@@ -6618,7 +6970,7 @@ void CheckLoop()
 	int a_tx = 0;
 
 	// Keep short count of loops
-	cnt_loop_short = cnt_loop_short < 999 ? cnt_loop_short + 1 : 1;
+	cnt_loopShort = cnt_loopShort < 999 ? cnt_loopShort + 1 : 1;
 
 	// Bail till ses started
 	if (!fc.isSesStarted) {
@@ -6646,7 +6998,7 @@ void CheckLoop()
 	a_tx = SERIAL_BUFFER_SIZE - 1 - a2r.port.availableForWrite();
 
 	// Track total loops
-	cnt_loop_tot++;
+	cnt_loopTot++;
 
 	// Compute current loop dt
 	dt_loop = millis() - t_loop_last;
@@ -6668,7 +7020,7 @@ void CheckLoop()
 	{
 
 		// Skip first 1k runs
-		if (cnt_loop_tot >= 1000) {
+		if (cnt_loopTot >= 1000) {
 
 			// Get message id
 			sprintf(msg, "**CHANGE DETECTED** [CheckLoop] |%s%s%s:",
@@ -6678,7 +7030,7 @@ void CheckLoop()
 
 			// Log/print message
 			sprintf(str, "%s cnt_loop:%d|%d dt_loop=%d|%d c_rx=%d|%d c_tx=%d|%d a_rx=%d|%d a_tx=%d|%d",
-				msg, cnt_loop_short, cnt_loop_tot, dt_loop, dt_loop_last, c_rx, c_rx_last, c_tx, c_tx_last, a_rx, a_rx_last, a_tx, a_tx_last);
+				msg, cnt_loopShort, cnt_loopTot, dt_loop, dt_loop_last, c_rx, c_rx_last, c_tx, c_tx_last, a_rx, a_rx_last, a_tx, a_tx_last);
 			DebugFlow(__FUNCTION__, __LINE__, str);
 		}
 	}
@@ -6776,8 +7128,8 @@ void StoreTeensyDebug(const char *fun, int line, int mem, char where_str[], char
 
 	// Short summary [time sec, function, message arg, loop count, skip count, memory GB]
 	else {
-		sprintf(str, "%0.0f %s_%s l=%d s=%d m=%0.0f",
-			t_s, fun, where_str, cnt_loop_short, cnt_skip, (float)mem / 1000);
+		sprintf(str, "%0.0f %s_%s l%d s%d m%0.2f",
+			t_s, fun, where_str, cnt_loopShort, cnt_skip, (float)mem / 1000);
 	}
 
 	// Store cnt
@@ -7317,7 +7669,7 @@ void QueueDebug(char msg[], uint32_t t)
 	t_s = (float)(t_m) / 1000.0f;
 
 	// Make time string
-	sprintf(str, "[%0.3f][%d]", t_s, cnt_loop_short);
+	sprintf(str, "[%0.3f][%d]", t_s, cnt_loopShort);
 
 	// Add space after time
 	sprintf(arg, "%%%ds", 20 - strlen(str));
@@ -7389,7 +7741,7 @@ void PrintLCD(bool do_block, char msg_1[], char msg_2[], char f_siz)
 	}
 	else if (fc.doBlockWriteLCD) {
 		return;
-	}
+}
 
 	// Reset
 	LCD.clrScr();
@@ -7512,7 +7864,7 @@ int GetPrintQueueAvailable() {
 	// Check each entry
 	for (int i = 0; i < printQueueSize; i++) {
 		n_entries += printQueue[i][0] != '\0' ? 1 : 0;
-	}
+}
 
 	// Get total available
 	return printQueueSize - n_entries;
@@ -7593,7 +7945,7 @@ void LogTrackingData()
 	static int16_t pos_hist[10][n_samps] = { { 0 } };
 	static const char id_str[10][n_samps] = { { "Rat VT Pos: |" } ,{ "Rat Px Pos: |" } ,{ "Rob VT Pos: |" } ,{ "Rat EKF Pos: |" } ,{ "Rob EKF Pos: |" },
 	{ "Rat VT Vel: |" } ,{ "Rat Px Vel: |" } ,{ "Rob VT Vel: |" } ,{ "Rat EKF Vel: |" } ,{ "Rob EKF Vel: |" }
-	};
+};
 	static bool do_log[10] = { db.log_pos_rat_vt, db.log_pos_rat_pixy, db.log_pos_rob_vt, db.log_pos_rat_ekf, db.log_pos_rob_ekf,
 		db.log_vel_rat_vt, db.log_vel_rat_pixy, db.log_vel_rob_vt, db.log_vel_rat_ekf, db.log_vel_rob_ekf };
 	static int hist_ind = 0;
@@ -7675,7 +8027,7 @@ void LogTrackingData()
 		hist_ind = 0;
 		t_last_log = kal.t_last;
 	}
-}
+	}
 
 // SEND TEST PACKET
 void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf)
@@ -7698,7 +8050,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 	*/
 
 	//// Only send once
-	//if (cnt_loop_short > 0 || cnt_loop_tot > 0) {
+	//if (cnt_loopShort > 0 || cnt_loopTot > 0) {
 	//	return;
 	//}
 
@@ -7809,7 +8161,7 @@ template <typename T> int ID_Ind(char id, T *r24)
 		if (id == r24->id[i]) {
 			ind = i;
 		}
-	}
+}
 
 	// Print warning if not found
 	if (ind == -1) {
@@ -7875,7 +8227,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 
 	// Reset LEDs
 	else {
-		analogWrite(pin.Disp_LED, 0);
+		ChangeLCDlight(0);
 		analogWrite(pin.RewLED_C, rewLEDduty[0]);
 		analogWrite(pin.RewLED_R, rewLEDduty[0]);
 		analogWrite(pin.TrackLED, trackLEDduty[1]);
@@ -8040,6 +8392,7 @@ void Interupt_Power()
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V_ENBLE, LOW);
 	digitalWrite(pin.REG_5V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V_PIXY_ENBLE, LOW);
 
 	// Restart Arduino
 	REQUEST_EXTERNAL_RESET;
@@ -8145,11 +8498,9 @@ void setup() {
 	// XBee 1b (to/from CheetahDue)
 	r2a.port.begin(57600);
 
-	// Wait for SerialUSB if printing to console
-#if DO_PRINT_DEBUG
-	uint32_t t_check = millis() + 100;
+	// Wait for SerialUSB
+	uint32_t t_check = millis() + 500;
 	while (!SerialUSB && millis() < t_check);
-#endif
 
 	// SETUP PINS
 	SetupPins();
@@ -8164,6 +8515,7 @@ void setup() {
 #if !DO_TEENSY_DEBUG
 	digitalWrite(pin.REG_5V_ENBLE, LOW);
 #endif
+	digitalWrite(pin.REG_5V_PIXY_ENBLE, LOW);
 
 	// WAIT FOR POWER SWITCH RELEASE
 	while (digitalRead(pin.PWR_Swtch) == LOW) {
@@ -8199,6 +8551,7 @@ void setup() {
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V_PIXY_ENBLE, HIGH);
 
 	// LOG/PRINT SETUP RUNNING
 
@@ -8256,14 +8609,13 @@ void setup() {
 	DebugFlow(__FUNCTION__, __LINE__, "FINISEHD: Big Easy Driver Setup...");
 	DoAll("PrintDebug");
 
-	// INITIALIZE PIXY
-	PrintLCD(true, "RUN SETUP", "Pixy");
-	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Pixy Setup...");
+	// SETUP PIXY I2C COM
+	PrintLCD(true, "RUN SETUP", "Pixy I2C");
+	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Pixy I2C Setup...");
 	DoAll("PrintDebug");
-    Pixy.init();
-	Wire.begin();
-	PrintLCD(true, "DONE SETUP", "Pixy");
-	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Pixy Setup...");
+	PixyCom.PixyBegin();
+	PrintLCD(true, "DONE SETUP", "Pixy I2C");
+	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Pixy I2C Setup...");
 	DoAll("PrintDebug");
 
 	// DUMP BUFFER
@@ -8387,7 +8739,7 @@ void setup() {
 
 	// IR prox left
 	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
-    
+
 	// Log/print interupts setup
 	PrintLCD(true, "DONE SETUP", "Interrupts");
 	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Interrupts Setup...");
@@ -8410,7 +8762,7 @@ void setup() {
 
 	// IMPORT LAST TEENSY LOG
 #if DO_TEENSY_DEBUG
-	
+
 	// Log everything in queue
 	DoAll("WriteLog", 5000);
 
@@ -8813,6 +9165,8 @@ void loop() {
 		static int32_t t_check_next = 0;
 		int dt_check = 250;
 		bool is_new = false;
+		int dt_vt = 0;
+		int dt_pixy = 0;
 
 		// Block motor
 		if (cmd.cnt_move == 1 &&
@@ -8832,6 +9186,11 @@ void loop() {
 			// Unhalt robot
 			SetMotorControl("Open", "Halt");
 			is_halted = false;
+		}
+
+		// Make sure LCD light on 
+		if (!fc.isLitLCD) {
+			ChangeLCDlight(8);
 		}
 
 		// Check if position values changed
@@ -8874,14 +9233,20 @@ void loop() {
 			double rat_pixy_dist = Pos[2].posRel - Pos[1].posRel;
 
 			// Print pos data
-			sprintf(str, "POS DEBUG (abs|rel|laps|dist): rat_vt=%0.2f|%0.2f|%d|%0.2f rat_pixy=%0.2f|%0.2f|%d|%0.2f rob_vt=%0.2f|%0.2f|%d",
-				Pos[0].posRel, Pos[0].posAbs, Pos[0].nLaps, rat_vt_dist, Pos[2].posRel, Pos[2].posAbs, Pos[2].nLaps, rat_pixy_dist, Pos[1].posRel, Pos[1].posAbs, Pos[1].nLaps);
-			DebugFlow(__FUNCTION__, __LINE__, str);
+			if (db.do_posPrint) {
+				sprintf(str, "POS DEBUG (abs|rel|laps|dist): rat_vt=%0.2f|%0.2f|%d|%0.2f rat_pixy=%0.2f|%0.2f|%d|%0.2f rob_vt=%0.2f|%0.2f|%d",
+					Pos[0].posRel, Pos[0].posAbs, Pos[0].nLaps, rat_vt_dist, Pos[2].posRel, Pos[2].posAbs, Pos[2].nLaps, rat_pixy_dist, Pos[1].posRel, Pos[1].posAbs, Pos[1].nLaps);
+				DebugFlow(__FUNCTION__, __LINE__, str);
+			}
+
+			// Compute dt sinse last record
+			dt_vt = min(999, millis() - Pos[0].t_msNow);
+			dt_pixy = min(999, millis() - Pos[2].t_msNow);
 
 			// Display rat vt dist
-			sprintf(lcd_str1, "%0.2f", rat_vt_dist);
-			sprintf(lcd_str2, "%0.2f", rat_pixy_dist);
-			PrintLCD(false, lcd_str1, lcd_str2);
+			sprintf(lcd_str1, "VT %d %d", (int)rat_vt_dist, dt_vt);
+			sprintf(lcd_str2, "PX %d %d", (int)rat_pixy_dist, dt_pixy);
+			PrintLCD(true, lcd_str1, lcd_str2);
 
 		}
 	}
@@ -8889,7 +9254,7 @@ void loop() {
 	// Run Pid calibration
 	if (db.do_pidCalibration)
 	{
-		double new_speed = Pid.RunCalibration();
+		double new_speed = Pid.PidCalibration();
 
 		// Run motors
 		if (Pid.cal_isPidUpdated)
@@ -8977,7 +9342,7 @@ void loop() {
 				DebugFlow(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
 
 				// Update pixy coeff
-				for (size_t i = 0; i < pixyOrd; i++){
+				for (size_t i = 0; i < pixyOrd; i++) {
 					pixyCoeff[i] = pixyPackCoeff[i];
 				}
 
@@ -9563,7 +9928,7 @@ void loop() {
 			fc.doBulldoze = false;
 
 			// Turn off pid
-			Pid.PID_Stop("loop \'I\'");
+			Pid.PidStop("loop \'I\'");
 
 			// Set to stop tracking
 			fc.isTrackingEnabled = false;
@@ -9702,7 +10067,7 @@ void loop() {
 #pragma region //--- UPDATE TRACKING ---
 
 	// UPDATE PIXY
-	CheckPixy();
+	PixyCom.PixyCheckPixy();
 
 	// CHECK IF RAT POS FRAMES DROPPING
 	CheckSampDT();
@@ -9714,7 +10079,7 @@ void loop() {
 	UpdateEKF();
 
 	// UPDATE PID AND SPEED
-	double new_speed = Pid.UpdatePID();
+	double new_speed = Pid.PidUpdate();
 	if (new_speed >= 0) {
 		RunMotor('f', new_speed, "Pid");
 	}

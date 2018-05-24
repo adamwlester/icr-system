@@ -42,6 +42,7 @@ function[status] = ICR_GUI(SYSTEST, BREAKDEBUG, DOAUTOLOAD, DOPROFILE, ISMATSOLO
 global ME; % error handeling
 global DOEXIT; % exit flag
 global FORCECLOSE; % forced close flag
+global ISABORTRUN; % abort flag
 global ISCRASH; % crash flag
 global FIGH; % ui figure group
 global D; % main data struct
@@ -66,6 +67,7 @@ DTHANDSHAKE = 0;
 ME = [];
 DOEXIT = false;
 FORCECLOSE = false;
+ISABORTRUN = false;
 ISCRASH = false;
 UPDATENOW = true;
 STATUS = 'failed';
@@ -1450,6 +1452,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Pause then shut it all down
             pause(1);
+            
+            % Disconnect AC computer if aborting
+            if ISABORTRUN
+                Disconnect_AC();
+            end
+            
             % Disconnect from NetCom
             Disconnect_NLX();
             
@@ -1547,7 +1555,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
         while exist('c2m', 'var')
             [abort, pass] = ...
-                Check_Flag(exist('c2m', 'var'), ...
+                Check_Flag(~exist('c2m', 'var'), ...
                 c2m.('C').dat1 == 1);
             if abort || pass; break; end
         end
@@ -13399,6 +13407,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Disconnect AC computer
         Disconnect_AC();
+        
         % Disconnect from NetCom
         Disconnect_NLX()
         
@@ -15276,6 +15285,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Pause for message to show
                 pause(1);
             end
+            
+            % Set abort run flag
+            if c2m.(id).dat1 ~= 1
+                ISABORTRUN = true;
+                Console_Write("**WARNING** SET ABORT RUN FLAG", now);
+            end
+            
         end
         
         %Print new data

@@ -14,46 +14,43 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="src">
-      <UniqueIdentifier>{1a08b051-d0e5-4145-aaea-602be85d05a8}</UniqueIdentifier>
+      <UniqueIdentifier>{1e75779e-aad4-4af4-b058-7e4cbe075dc9}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly">
-      <UniqueIdentifier>{b0f77405-1be9-45ef-83e8-492dc21d3787}</UniqueIdentifier>
+      <UniqueIdentifier>{66b3bfd0-b374-4866-976e-ddd39680a947}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core">
-      <UniqueIdentifier>{bd086f79-06ab-4d0c-87a6-07a09795b60e}</UniqueIdentifier>
+      <UniqueIdentifier>{43ef8ccb-773a-4cd5-a19e-5295b4961003}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\avr">
-      <UniqueIdentifier>{7599ed5b-6b41-4d03-814f-2a9958b52fa8}</UniqueIdentifier>
+      <UniqueIdentifier>{bef94638-e949-4202-8ef0-d307e4e83a6d}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\core\USB">
-      <UniqueIdentifier>{4ed2e86a-c73d-43b1-a583-97e3fd61e503}</UniqueIdentifier>
+      <UniqueIdentifier>{8b1c1f8b-b964-425f-b088-2d3c945555a7}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries">
-      <UniqueIdentifier>{ac95caf5-3ed6-4abc-8371-4b1f514fe387}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Arduino-MemoryFree">
-      <UniqueIdentifier>{d7df1f74-5038-4858-9b77-ed07206d788a}</UniqueIdentifier>
+      <UniqueIdentifier>{b5b22c71-74a9-4d83-8be4-531c1e0320d1}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\AutoDriver_Due">
-      <UniqueIdentifier>{47b88ee8-1577-48d2-8c62-834388b5641d}</UniqueIdentifier>
+      <UniqueIdentifier>{a2ea4f3a-9e88-4193-8b21-edce7e1eee34}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\DueTimer">
-      <UniqueIdentifier>{b96baea8-c33b-414b-a67d-de51065a2d7c}</UniqueIdentifier>
+      <UniqueIdentifier>{a3948766-7cd8-4a38-8f85-f0e324fabb32}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\LCD5110_Basic">
-      <UniqueIdentifier>{bcb177c2-97ab-48a4-a679-9558d045da0d}</UniqueIdentifier>
+      <UniqueIdentifier>{a02a8a3f-1009-46ba-bc60-615c9454bb44}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\_micro-api-readonly\libraries\Pixy">
-      <UniqueIdentifier>{3dc1aa4c-8d41-4cd3-80f9-610a9a5bfec1}</UniqueIdentifier>
+    <Filter Include="src\_micro-api-readonly\libraries\MemoryFree">
+      <UniqueIdentifier>{8fd9fde1-9389-4158-b746-f153d709188f}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\SPI">
-      <UniqueIdentifier>{434031c7-b864-4777-9af5-fd9df3da5f9c}</UniqueIdentifier>
+      <UniqueIdentifier>{c252f977-d571-48f4-95f6-0c3cc67be685}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\TinyEKF">
-      <UniqueIdentifier>{724aabd4-e731-4df9-847d-a0ecf65dda49}</UniqueIdentifier>
+      <UniqueIdentifier>{c957c467-102c-4d67-ae77-be5f6966e0b8}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\_micro-api-readonly\libraries\Wire">
-      <UniqueIdentifier>{dfe96c0d-b447-4d26-8bae-e829a628d6bb}</UniqueIdentifier>
+      <UniqueIdentifier>{af91445d-2f6c-474c-8a18-e685c38e6fbc}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -198,12 +195,6 @@
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\variant.h">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.h">
-      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.h">
-      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriver_Due.h">
       <Filter>src\_micro-api-readonly\libraries\AutoDriver_Due</Filter>
     </ClInclude>
@@ -216,20 +207,11 @@
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\LCD5110_Basic.h">
       <Filter>src\_micro-api-readonly\libraries\LCD5110_Basic</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\Pixy.h">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\MemoryFree\MemoryFree.h">
+      <Filter>src\_micro-api-readonly\libraries\MemoryFree</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\PixyI2C.h">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\PixySPI_SS.h">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\PixyUART.h">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\TPixy.h">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
+    <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\MemoryFree\pgmStrToRAM.h">
+      <Filter>src\_micro-api-readonly\libraries\MemoryFree</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src\SPI.h">
       <Filter>src\_micro-api-readonly\libraries\SPI</Filter>
@@ -302,12 +284,6 @@
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x\variant.cpp">
       <Filter>src\_micro-api-readonly\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\MemoryFree.cpp">
-      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.cpp">
-      <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\AutoDriver_Due\AutoDriverCommands_Due.cpp">
       <Filter>src\_micro-api-readonly\libraries\AutoDriver_Due</Filter>
     </ClCompile>
@@ -328,6 +304,12 @@
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\LCD5110_Basic.cpp">
       <Filter>src\_micro-api-readonly\libraries\LCD5110_Basic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\MemoryFree\MemoryFree.cpp">
+      <Filter>src\_micro-api-readonly\libraries\MemoryFree</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\MemoryFree\pgmStrToRAM.cpp">
+      <Filter>src\_micro-api-readonly\libraries\MemoryFree</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src\SPI.cpp">
       <Filter>src\_micro-api-readonly\libraries\SPI</Filter>
@@ -351,12 +333,6 @@
     </Text>
     <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\LCD5110_Basic\keywords.txt">
       <Filter>src\_micro-api-readonly\libraries\LCD5110_Basic</Filter>
-    </Text>
-    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\arduino_pixy-0.1.7.txt">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
-    </Text>
-    <Text Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Pixy\keywords.txt">
-      <Filter>src\_micro-api-readonly\libraries\Pixy</Filter>
     </Text>
     <Text Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\keywords.txt">
       <Filter>src\_micro-api-readonly\libraries\SPI</Filter>

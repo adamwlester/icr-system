@@ -12,7 +12,6 @@ NOTES
 
 #include "SdFat.h"
 
-
 #pragma region ============ VARIABLE SETUP =============
 
 // PIN MAPPING
@@ -662,6 +661,8 @@ void SendLogs()
 void PrintDebug(char msg[], uint32_t t)
 {
 
+#if DO_PRINT_DEBUG
+
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
 	char msg_copy[maxStoreStrLng] = { 0 }; msg_copy[0] = '\0';
@@ -689,9 +690,6 @@ void PrintDebug(char msg[], uint32_t t)
 
 	// Write to SD log
 	logFileSD.print(str);
-
-
-#if DO_PRINT_DEBUG
 
 	// Print it
 	SerialUSB.print(str);

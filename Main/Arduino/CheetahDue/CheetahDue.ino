@@ -29,29 +29,18 @@
 
 #pragma region ============ DEBUG SETTINGS =============
 
-// Logging
-#define DO_LOG 1
-
-// Console
+// CONSOLE
 #define DO_PRINT_DEBUG 0
 
-// Main debug flag
-#if DO_PRINT_DEBUG 
-#define DO_DEBUG 1
-#else
-#define DO_DEBUG 0
-#endif
+// SERIAL LOGGING
+#define DO_LOG 1
 
+// DEBUGGING STRUCT
 struct DB
 {
-	// Logging
-	bool log_flow = true;
-	bool log_errors = true;
-	bool log_r2a = true;
-	bool log_a2r = true;
-	bool log_resent = true;
 
-	// Printing
+	// PRINTING
+
 	bool print_flow = true;
 	bool print_errors = true;
 	bool print_r2a = true;
@@ -59,14 +48,33 @@ struct DB
 	bool print_resent = true;
 	bool print_log = false;
 
-	// Testing
-	const bool doPrintPimMapTest = false; // I set
-	const bool doHandshakeBypass = false; // I set
-	bool do_irSyncCalibration = false; // set by system
+	// LOGGING
+
+	bool log_flow = true;
+	bool log_errors = true;
+	bool log_r2a = true;
+	bool log_a2r = true;
+	bool log_resent = true;
+
+	// TESTING
+
+	// Manually set
+	const bool doPrintPimMapTest = false; 
+	const bool doHandshakeBypass = false; 
+
+	// Set by system
+	bool do_irSyncCalibration = false;
 
 }
 // Initialize
 db;
+
+// MAIN DEBUG FLAG
+#if DO_PRINT_DEBUG 
+#define DO_DEBUG 1
+#else
+#define DO_DEBUG 0
+#endif
 
 #pragma endregion 
 
