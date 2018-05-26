@@ -1,16 +1,18 @@
 /*
 NOTES
 	Changd "C:\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\serial3"
-	SERIAL2_TX_BUFFER_SIZE 40 to 64
-	SERIAL2_RX_BUFFER_SIZE 64 to 128
-	Have to run from Arduino IDE for changes to take effect
+	SERIAL2_TX_BUFFER_SIZE 40 to 128
+	SERIAL2_RX_BUFFER_SIZE 64 to 512
+	Cant 'see' these directives from script for some reason  
 */
 
 // Set to print debug info to console
 #define DO_PRINT_DEBUG 0
+#define DO_LOG_DEBUG 1
 #define DO_PRINT_LOGS 0
 
 #include "SdFat.h"
+
 
 #pragma region ============ VARIABLE SETUP =============
 
@@ -101,6 +103,7 @@ uint32_t dt_flush = 500; // (ms)
 uint32_t t_flush = 0;
 SdFatSdioEX sdEx;
 File logFileSD;
+float freeMemGB = 0;
 
 // union
 union u_tag {
@@ -201,12 +204,17 @@ void RunReset() {
 	PrintDebug(str);
 
 	// Check RX buffer
-	sprintf(str, "[RunReset] RX BUFFER IS %d Bytes", r42t.port.available());
+	sprintf(str, "[RunReset] RX BUFFER CONTAINS %dB", r42t.port.available());
 	PrintDebug(str);
 
 	// Check TX buffer
-	PrintDebug("[RunReset] TX BUFFER SHOULD BE 64 Bytes");
-	sprintf(str, "[RunReset] TX BUFFER IS %d Bytes", r42t.port.availableForWrite() + 1);
+	if (r42t.port.availableForWrite() + 1 == 128) {
+		sprintf(str, "[RunReset] TX BUFFER SIZE: ACTUAL=%dB EXPECTED=128B", r42t.port.availableForWrite() + 1);
+	}
+		// Buffer size is wrong
+	else {
+		sprintf(str, "!!ERROR!! [RunReset] TX BUFFER SIZE: ACTUAL=%dB EXPECTED=128B", r42t.port.availableForWrite() + 1);
+	}
 	PrintDebug(str);
 
 	// Print status
@@ -223,7 +231,6 @@ void OpenNewLog() {
 	static char file_str[50] = { 0 };
 	uint32_t log_num = 0;
 	uint32_t free_kb = 0;
-	float free_gb = 0;
 	delay(1000);
 	// Initialize SD card
 	sdEx.begin();
@@ -235,10 +242,10 @@ void OpenNewLog() {
 	// Get free space on sd
 	free_kb = sdEx.vol()->freeClusterCount();
 	free_kb *= sdEx.vol()->blocksPerCluster() / 2;
-	free_gb = (float)free_kb / 1000000;
+	freeMemGB = (float)free_kb / 1000000;
 
-	// Reset logs if < 2GB left or > 100 logs
-	if (free_gb < 2 || log_num > 5) {
+	// Reset logs if < 2GB left or > 50 logs
+	if (freeMemGB < 2 || log_num > 50) {
 
 		// Move to root directory
 		sdEx.chdir();
@@ -274,7 +281,7 @@ void OpenNewLog() {
 	PrintDebug(str);
 
 	// Print available space
-	sprintf(str, "[OpenNewLog] %0.2fGB ABAILABLE SPACE ON 8GB SD", free_gb);
+	sprintf(str, "[OpenNewLog] %0.2fGB ABAILABLE SPACE ON 8GB SD", freeMemGB);
 	PrintDebug(str);
 
 }
@@ -364,8 +371,11 @@ void GetSerial()
 		digitalRead(pin.Teensy_SendLogs) == LOW) {
 
 		// Flush sd queue
-		if (millis() - t_flush > dt_flush &&
+		if (logFileSD.isOpen() &&
+			millis() - t_flush > dt_flush &&
 			millis() - r42t.t_rcvd > dt_flush) {
+
+			// Flush and store time
 			logFileSD.flush();
 			t_flush = millis();
 		}
@@ -390,11 +400,11 @@ void GetSerial()
 
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
-			if (DO_PRINT_DEBUG) {
-				sprintf(str, "**WARNING** [GetSerial] Missing Head: b_read=%lu b_dump=%lu",
-					packTotBytesRead, packTotBytesDiscarded);
-				PrintDebug(str);
-			}
+#if DO_PRINT_DEBUG || DO_LOG_DEBUG
+			sprintf(str, "**WARNING** [GetSerial] Missing Head: b_read=%lu b_dump=%lu",
+				packTotBytesRead, packTotBytesDiscarded);
+			PrintDebug(str);
+#endif
 		}
 
 		// Bail
@@ -415,11 +425,11 @@ void GetSerial()
 
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
-			if (DO_PRINT_DEBUG) {
+#if DO_PRINT_DEBUG || DO_LOG_DEBUG
 				sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
 					packTotBytesRead, packTotBytesDiscarded);
 				PrintDebug(str);
-			}
+#endif
 		}
 
 		// Bail on first read
@@ -537,8 +547,13 @@ void StoreMessage(char msg[], uint16_t pack)
 	// Create log file
 	if (pack == 1) {
 
-		// Store first log which has log file
-		sprintf(logFiStr, msg);
+		// Check msg contains "LOG"
+		if (msg[0] == 'L' && msg[1] == 'O' && msg[2] == 'G') {
+			sprintf(logFiStr, "TEENSY%s", msg);
+		}
+		else {
+			sprintf(logFiStr, "TEENSYLOG00000");
+		}
 
 		// Create new log file
 		OpenNewLog();
@@ -620,30 +635,40 @@ void SendLogs()
 	// Wait 100 ms
 	delay(100);
 
-	// Send logs
-	for (size_t i = 0; i < logSize; i++) {
-		delay(10);
-		if (Log[logIndArr[i]][0] == '\0') {
-			continue;
+	// Check if logs to send
+	if (cnt_logsStored > 0) {
+
+		// Send logs
+		for (size_t i = 0; i < logSize; i++) {
+			delay(10);
+			if (Log[logIndArr[i]][0] == '\0') {
+				continue;
+			}
+			r42t.port.write(Log[logIndArr[i]]);
+			PrintDebug(Log[logIndArr[i]]);
+			StatusBlink();
 		}
-		r42t.port.write(Log[logIndArr[i]]);
-		PrintDebug(Log[logIndArr[i]]);
-		StatusBlink();
+
+		// Get number of dropped/missed packets
+		int cnt_dropped = r42t.packTot - cnt_logsRcvd;
+
+		// Send summary
+		sprintf(str, "%cTEENSY SUMMARY \"%s\": sent=%d rcvd=%lu dropped=%d free_mem=%0.2fGB%c",
+			r42t.head, logFiStr, cnt_logsStored, cnt_logsRcvd, cnt_dropped, freeMemGB, r42t.foot);
+		r42t.port.write(str);
+		PrintDebug(str);
+
 	}
 
-	// Get number of dropped/missed packets
-	int cnt_dropped = r42t.packTot - cnt_logsRcvd;
-
-	// Send summary
-	sprintf(str, "%cTEENSY SUMMARY \"%s\": sent=%d rcvd=%lu dropped=%d%c",
-		r42t.head, logFiStr, cnt_logsStored, cnt_logsRcvd, cnt_dropped, r42t.foot);
-	r42t.port.write(str);
-	PrintDebug(str);
+	// No logs to send
+	else {
+		r42t.port.write("TEENSY SUMMARY: NO LOGS STORED");
+		PrintDebug(str);
+	}
 
 	// End reached send ">>>"
 	r42t.port.write(">>>");
 	delay(100);
-
 
 	// Log/print
 	sprintf(str, "[SendLogs] Finished Sending %d of %lu Logs",
@@ -651,7 +676,9 @@ void SendLogs()
 	PrintDebug(str);
 
 	// Close log file
-	logFileSD.close();
+	if (logFileSD.isOpen()) {
+		logFileSD.close();
+	}
 
 	// Reset Stuff
 	RunReset();
@@ -661,7 +688,7 @@ void SendLogs()
 void PrintDebug(char msg[], uint32_t t)
 {
 
-#if DO_PRINT_DEBUG
+#if DO_PRINT_DEBUG || DO_LOG_DEBUG
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
@@ -688,13 +715,24 @@ void PrintDebug(char msg[], uint32_t t)
 	// Put it all together
 	sprintf(str, "%s%s%s\r\n", str_time, spc, msg);
 
+#if DO_LOG_DEBUG
+
 	// Write to SD log
-	logFileSD.print(str);
+	if (logFileSD.isOpen()) {
+		logFileSD.print(str);
+	}
+
+#endif
+
+#if DO_PRINT_DEBUG
 
 	// Print it
 	SerialUSB.print(str);
 
 #endif
+
+#endif
+
 }
 
 // RUN STATUS BLINK

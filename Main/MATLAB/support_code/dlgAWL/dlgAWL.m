@@ -90,7 +90,7 @@ if strcmp(dlgType,'default')
 elseif strcmp(dlgType,'question')
     TxtCol = [0.1 0.1 0.1];
 elseif strcmp(dlgType,'warning')
-    TxtCol = [0.9 0 0];
+    TxtCol = [0.1 0.1 0.1];
 elseif strcmp(dlgType,'error')
     TxtCol = [0.9 0 0];
 end

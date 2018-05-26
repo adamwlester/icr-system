@@ -27,11 +27,11 @@
 // DEBUG SETTING
 
 // CONSOLE
-#define DO_PRINT_DEBUG 1
+#define DO_PRINT_DEBUG 0
 #define DO_FAST_PRINT 0
 
 // TEENSY LOGGING
-#define DO_TEENSY_DEBUG 0
+#define DO_TEENSY_DEBUG 1
 
 // OPENLOG LOGGING
 #define DO_LOG 1
@@ -60,7 +60,7 @@ struct DB
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
 	const bool print_runSpeed = false;
-	const bool print_pixy = false;
+	const bool print_pixy = false; 
 
 	// LOGGING
 
@@ -74,7 +74,7 @@ struct DB
 	const bool log_bull = true;
 	const bool log_motorControl = true;
 	const bool log_runSpeed = false;
-	const bool log_pixy = true;
+	const bool log_pixy = false;
 
 	// Tracking data
 	const bool log_pos = false;
@@ -92,7 +92,7 @@ struct DB
 	// TESTING
 
 	// Manually set
-	const bool do_posDebug = true; 
+	const bool do_posDebug = false;  
 	const bool do_posPrint = false; 
 	const bool do_posPlot = false; 
 
@@ -182,6 +182,8 @@ uint16_t cnt_warn = 0;
 uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
+uint16_t cnt_errAD = 0;
+uint16_t cnt_errEKF = 0;
 const uint16_t n_pings = 5;
 float dt_pingRoundTrip[2] = { 0 };
 const uint16_t maxStoreStrLng = 300;
@@ -324,10 +326,10 @@ const int dt_icUpdate = 10;
 float icNow = 0;
 
 // LEDs
-const int trackLEDdutyDefault[2] = { 200, 250 }; // value between 0 and 255
+const int trackLEDdutyDefault[2] = { 175, 250 };
 int trackLEDduty[2] = { trackLEDdutyDefault[0], trackLEDdutyDefault[1] }; 
 const int rewLEDmin[2] = { 0, 2};
-int rewLEDduty[2] = { rewLEDmin[0], 15 }; // value between 0 and 255
+int rewLEDduty[2] = { rewLEDmin[0], 15 }; 
 
 // LCD
 extern unsigned char SmallFont[];
