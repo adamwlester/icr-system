@@ -59,6 +59,7 @@ global m2c_dir; % current cheetah directory
 
 % CS to Matlab communication
 global c2m; % local data struct
+global c2m_pack; % track packets
 global c2m_com; % message in from CS
 
 % Initialize globals
@@ -132,7 +133,7 @@ D.DB.t2_doPidCalibrationTest = false;
 D.DB.t3_doVTCalibrationTest = false;
 D.DB.t4_doHaltErrorTest = false;
 D.DB.t5_doWallIRTimingTest = false;
-D.DB.t6_doSyncIRTimingTest = false;
+D.DB.t6_doIRSyncTest = false;
 D.DB.t7_doRobotHardwareTest = false;
 D.DB.t8_doCubeBatteryTest = false;
 
@@ -218,8 +219,12 @@ end
 % Console and log vars
 D.DB.consoleStr = [repmat(' ',1000,150),repmat('\r',1000,1)];
 D.DB.logStr = cell(1000,1);
-D.DB.consoleCount = 0;
-D.DB.logCount = 0;
+D.DB.cnt_console = 0;
+D.DB.cnt_logs = 0;
+D.DB.cnt_warn = 0;
+D.DB.cnt_err = 0;
+D.DB.warn_line = nan(100,1);
+D.DB.err_line = nan(100,1);
 
 % Set test flags
 if length(SYSTEST)==1
@@ -253,7 +258,7 @@ end
 
 % IR sync timing
 if any(SYSTEST == 6)
-    D.DB.t6_doSyncIRTimingTest = true;
+    D.DB.t6_doIRSyncTest = true;
 end
 
 % Robot hardware test
@@ -278,13 +283,13 @@ if ...
         DOAUTOLOAD || ...
         DOPROFILE || ...
         ISMATSOLO
-    Console_Write('RUN MODE = DEBUG');
+    Log_Debug('RUN MODE = DEBUG');
 else
-    Console_Write('RUN MODE = RELEASE');
+    Log_Debug('RUN MODE = RELEASE');
 end
 
 % Log print input arguments
-Console_Write(sprintf('INPUT ARGUMENTS (%d): SYSTEST=|%d|%d| BREAKDEBUG=%d DOAUTOLOAD=%d DOPROFILE=%d ISMATSOLO=%d', ...
+Log_Debug(sprintf('INPUT ARGUMENTS (%d): SYSTEST=|%d|%d| BREAKDEBUG=%d DOAUTOLOAD=%d DOPROFILE=%d ISMATSOLO=%d', ...
     nargin, SYSTEST, BREAKDEBUG, DOAUTOLOAD, DOPROFILE, ISMATSOLO));
 
 %---------------------Important variable formats---------------------------
@@ -304,14 +309,14 @@ if BREAKDEBUG > 0
     if ~DOEXIT
         Setup();
     else
-        Console_Write('**WARNING** [ICR_GUI] SKIPPED: ICR/Setup');
+        Debug_Warning('SKIPPED: ICR/Setup');
     end
     
     % RUN MAIN RUN
     if ~DOEXIT
         Run();
     else
-        Console_Write('**WARNING** [ICR_GUI] SKIPPED: ICR/Run');
+        Debug_Warning('SKIPPED: ICR/Run');
     end
     
     % RUN MAIN EXIT
@@ -340,7 +345,7 @@ else
         if ~DOEXIT
             Setup();
         else
-            Console_Write('**WARNING** [ICR_GUI] SKIPPED: ICR/Setup');
+            Debug_Warning('SKIPPED: ICR/Setup');
         end
     catch ME
         SetExit()
@@ -351,7 +356,7 @@ else
         if ~DOEXIT && isempty(ME)
             Run();
         else
-            Console_Write('**WARNING** [ICR_GUI] SKIPPED: ICR/Run');
+            Debug_Warning('SKIPPED: ICR/Run');
         end
     catch ME
         SetExit()
@@ -397,7 +402,7 @@ if ~isempty(ME)
     err = err(1:end);
     err_print = [sprintf('!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!\r\n'), err, ...
         sprintf('\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n')];
-    Console_Write(err_print);
+    Log_Debug(err_print);
     
     % Store status
     err_status = regexprep(err, '\r\n', ' ');
@@ -440,7 +445,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Setup()
         
         % Start of setup
-        Console_Write('[Setup] BEGIN: Setup()');
+        Log_Debug('BEGIN: Setup()');
         
         % ---------------------------- SET PARAMETERS ---------------------
         
@@ -559,7 +564,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 {id_list(z_id), 0, 0, 0, 0, 0, 0}, ...
                 {'id', 'dat1', 'dat2', 'dat3', 'pack', 'packLast', 't_sent'}, 2);
         end
-        m2c.cnt_pack = 0;
+        
+        % m2c packet tracking
+        m2c.packRange = [1, floor(double(intmax('uint16'))/2)];
+        m2c.packInd = 0;
+        m2c.packTot = 0;
         
         % m2c_pack array [id, dat1, dat2, dat3, pack, flag]
         m2c_pack(1:6) = 0;
@@ -582,6 +591,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % c2m struct shared with cs
         c2m_com = c2m;
+        
+        % c2m packet tracking
+        c2m_pack.packRange = [1, 32767];
+        c2m_pack.packInd = 0;
+        c2m_pack.packTot = 0;
         
         % Bypass some things if running solo
         if ISMATSOLO
@@ -623,52 +637,52 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'DeleteFcn', {@DeleteFcn_ForceClose});
         
         % Start c2m timer
-        Console_Write('[Setup] RUNNING: Start "timer_c2m"');
+        Log_Debug('RUNNING: Start "timer_c2m"');
         start(D.timer_c2m);
         
         % Delete exisiting log dir
         if exist(D.DIR.logTempDir, 'dir')
-            Console_Write('[Setup] RUNNING: Delete Exiting Log Directory...');
+            Log_Debug('RUNNING: Delete Exiting Log Directory...');
             if rmdir(D.DIR.logTempDir, 's')
-                Console_Write('[Setup] FINISHED: Delete Exiting Log Directory');
+                Log_Debug('FINISHED: Delete Exiting Log Directory');
             else
-                Console_Write('**WARNING** [Setup] FAILED: Delete Exiting Log Directory');
+                Debug_Warning('FAILED: Delete Exiting Log Directory');
             end
         end
         
         % Make new log dir
-        Console_Write('[Setup] RUNNING: Make New Log Directory...');
+        Log_Debug('RUNNING: Make New Log Directory...');
         if ~exist(D.DIR.logTempDir, 'dir')
             mkdir(D.DIR.logTempDir);
-            Console_Write('[Setup] RUNNING: Make New Log Directory');
+            Log_Debug('RUNNING: Make New Log Directory');
         else
-            Console_Write('**WARNING** [Setup] SKIPPED: Make New Log Directory');
+            Debug_Warning('SKIPPED: Make New Log Directory');
         end
         
         % Run variable setup code
-        Console_Write('[Setup] RUNNING: "Var_Setup()"...');
+        Log_Debug('RUNNING: "Var_Setup()"...');
         Var_Setup();
-        Console_Write('[Setup] FINISHED: "Var_Setup()"');
+        Log_Debug('FINISHED: "Var_Setup()"');
         
         % Run UI setup code
-        Console_Write('[Setup] RUNNING: "UI_Setup()"...');
+        Log_Debug('RUNNING: "UI_Setup()"...');
         UI_Setup();
-        Console_Write('[Setup] FINISHED: "UI_Setup()"');
+        Log_Debug('FINISHED: "UI_Setup()"');
         
         % Enable setup panel and load popup
         Object_Group_State('Setup_Objects', 'Enable')
         
         % Run testing setup
-        Console_Write('[Setup] RUNNING: "Test_Setup()"...');
+        Log_Debug('RUNNING: "Test_Setup()"...');
         was_ran = Test_Setup();
         if was_ran
-            Console_Write('[Setup] FINISHED: "Test_Setup()"');
+            Log_Debug('FINISHED: "Test_Setup()"');
         else
-            Console_Write('[Setup] SKIPPED: "Test_Setup()"');
+            Log_Debug('SKIPPED: "Test_Setup()"');
         end
         
         % Wait for ses type selection
-        Console_Write('[Setup] RUNNING: Wait for Session Type Selection...');
+        Log_Debug('RUNNING: Wait for Session Type Selection...');
         while true
             [abort, pass] = ...
                 Check_Flag(DOEXIT, D.F.ses_type_confirmed);
@@ -677,10 +691,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check status
         if abort
-            Console_Write('**WARNING** [Setup] ABORTED: Wait for Session Type Selection');
+            Debug_Warning('ABORTED: Wait for Session Type Selection');
             return
         else
-            Console_Write('[Setup] FINISHED: Wait for Session Type Selection');
+            Log_Debug('FINISHED: Wait for Session Type Selection');
         end
         
         % Send sesion type info to CS
@@ -690,7 +704,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.sesType == 'Table_Update');
         
         % ------------------------ SETUP AC CONNECTION --------------------
-        Console_Write('[Setup] RUNNING: Connect to AC Computer...');
+        Log_Debug('RUNNING: Connect to AC Computer...');
         
         % Setup communication with ARENACONTROLLER
         D.AC.IP = '172.17.0.3';
@@ -734,15 +748,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Print that AC computer is connected
             if (D.F.ac_connected)
-                Console_Write(sprintf('[Setup] FINISHED: Connect to AC Computer IP=%s', ...
+                Log_Debug(sprintf('FINISHED: Connect to AC Computer IP=%s', ...
                     D.AC.IP));
             else
-                Console_Write(sprintf('**WARNING** [Setup] ABORTED: Connect to AC Computer IP=%s', ...
+                Debug_Warning(sprintf('ABORTED: Connect to AC Computer IP=%s', ...
                     D.AC.IP));
             end
             
         else
-            Console_Write(sprintf('[Setup] SKIPPED: Connect to AC Computer IP=%s', ...
+            Log_Debug(sprintf('SKIPPED: Connect to AC Computer IP=%s', ...
                 D.AC.IP));
         end
         
@@ -758,7 +772,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Send_CS_Com('i');
         
         % Wait for sync time
-        Console_Write('[Setup] RUNNING: Wait for Handshake...');
+        Log_Debug('RUNNING: Wait for Handshake...');
         if ~ISMATSOLO
             while true
                 [abort, pass] = ...
@@ -768,19 +782,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check status
             if abort
-                Console_Write('**WARNING** [Setup] ABORTED: Wait for Handshake');
+                Debug_Warning('ABORTED: Wait for Handshake');
                 return
             elseif pass
-                Console_Write('[Setup] FINISHED: Wait for Handshake');
+                Log_Debug('FINISHED: Wait for Handshake');
                 
                 % Log/print sync time
-                Console_Write(sprintf('SET SYNC TIME: %dms', round(DTHANDSHAKE*1000)));
+                Log_Debug(sprintf('SET SYNC TIME: %dms', round(DTHANDSHAKE*1000)));
             end
             
         end
         
         % End of setup
-        Console_Write('[Setup] END: Setup()');
+        Log_Debug('END: Setup()');
         
     end
 
@@ -788,7 +802,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function[] = Run()
         
         % Start main run
-        Console_Write('[Run] BEGIN: Run()');
+        Log_Debug('BEGIN: Run()');
         
         % ---------------------------SETUP & RUN----------------------------------
         
@@ -842,40 +856,40 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Store last case
-            D.F.main_case_last = D.F.main_case_now;
+            D.PAR.main_case_last = D.PAR.main_case_now;
             
             % Handle Flow
             if ~D.F.ses_data_loaded
-                D.F.main_case_now = 'WAIT FOR UI SETUP';
+                D.PAR.main_case_now = 'WAIT FOR UI SETUP';
                 
                 % Finish Setup
             elseif ~D.F.do_quit && ~D.F.ses_setup_done
-                D.F.main_case_now = 'FINISH SESSION SETUP';
+                D.PAR.main_case_now = 'FINISH SESSION SETUP';
                 
                 % Run Task
             elseif  (~D.F.task_done_confirmed || ~all(D.F.sleep_done)) && ...
                     ~(D.PAR.sesType == 'TT_Turn' || D.PAR.sesType == 'Table_Update')
-                D.F.main_case_now = 'RUN ICR TASK';
+                D.PAR.main_case_now = 'RUN ICR TASK';
                 
                 % Wait for save
             elseif ~D.F.do_quit && ~D.F.ses_save_done
-                D.F.main_case_now = 'WAIT FOR SAVE';
+                D.PAR.main_case_now = 'WAIT FOR SAVE';
                 
             elseif ~D.F.do_quit
-                D.F.main_case_now = 'WAIT FOR QUIT';
+                D.PAR.main_case_now = 'WAIT FOR QUIT';
                 
             else
-                D.F.main_case_now = 'WAIT FOR EXIT';
+                D.PAR.main_case_now = 'WAIT FOR EXIT';
                 
             end
             
             % PRINT CHANGE IN FLOW
-            if ~strcmp(D.F.main_case_now, D.F.main_case_last)
-                Console_Write(sprintf('[Run:MainLoop] SWITCH FROM "%s" TO "%s"', D.F.main_case_last, D.F.main_case_now));
+            if ~strcmp(D.PAR.main_case_now, D.PAR.main_case_last)
+                Log_Debug(sprintf('SWITCH FROM "%s" TO "%s"', D.PAR.main_case_last, D.PAR.main_case_now));
             end
             
             % HANDLE CASE
-            switch D.F.main_case_now
+            switch D.PAR.main_case_now
                 
                 
                 case 'WAIT FOR UI SETUP'
@@ -889,45 +903,45 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.F.ses_setup_done = true;
                     
                     % Setup NXL
-                    Console_Write('[Run:MainLoop] RUNNING: "NLX_Start()"...');
+                    Log_Debug('RUNNING: "NLX_Start()"...');
                     NLX_Start();
-                    Console_Write('[Run:MainLoop] FINISHED: "NLX_Start()"');
+                    Log_Debug('FINISHED: "NLX_Start()"');
                     
                     % Run Table Setup code
-                    Console_Write('[Run:MainLoop] RUNNING: "Table_Setup()"...');
+                    Log_Debug('RUNNING: "Table_Setup()"...');
                     Table_Setup();
                     D.F.table_tab_setup = true;
-                    Console_Write('[Run:MainLoop] FINISHED: "Table_Setup()"');
+                    Log_Debug('FINISHED: "Table_Setup()"');
                     
                     % Run TT Track Setup code
-                    Console_Write('[Run:MainLoop] RUNNING: "TT_Track_Setup()"...');
+                    Log_Debug('RUNNING: "TT_Track_Setup()"...');
                     was_ran = TT_Track_Setup();
                     if was_ran
-                        Console_Write('[Run:MainLoop] FINISHED: "TT_Track_Setup()"');
+                        Log_Debug('FINISHED: "TT_Track_Setup()"');
                         D.F.tt_tab_setup = true;
                     else
-                        Console_Write('[Run:MainLoop] SKIPPED: "TT_Track_Setup()"');
+                        Log_Debug('SKIPPED: "TT_Track_Setup()"');
                     end
                     
                     % Connect to NLX
-                    Console_Write('[Run:MainLoop] RUNNING: "NLX_Connect()"...');
+                    Log_Debug('RUNNING: "NLX_Connect()"...');
                     was_ran = NLX_Connect();
                     if was_ran
-                        Console_Write('[Run:MainLoop] FINISHED: "NLX_Connect()"');
+                        Log_Debug('FINISHED: "NLX_Connect()"');
                     else
-                        Console_Write('[Run:MainLoop] SKIPPED: "NLX_Connect()"');
+                        Log_Debug('SKIPPED: "NLX_Connect()"');
                     end
                     
                     % Send NLX connected confirmation
                     Send_CS_Com('N', D.PAR.R, D.PAR.XC, D.PAR.YC);
                     
                     % Run NLX Setup
-                    Console_Write('[Run:MainLoop] RUNNING: "NLX_Setup()"...');
+                    Log_Debug('RUNNING: "NLX_Setup()"...');
                     was_ran = NLX_Setup();
                     if was_ran
-                        Console_Write('[Run:MainLoop] FINISHED: "NLX_Setup()"');
+                        Log_Debug('FINISHED: "NLX_Setup()"');
                     else
-                        Console_Write('[Run:MainLoop] SKIPPED: "NLX_Setup()"');
+                        Log_Debug('SKIPPED: "NLX_Setup()"');
                     end
                     
                     % Enable TT_Track Objects
@@ -936,9 +950,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Run Finish AC setup code
-                    Console_Write('[Run:MainLoop] RUNNING: "Finish_AC_Setup()"...');
+                    Log_Debug('RUNNING: "Finish_AC_Setup()"...');
                     Finish_AC_Setup();
-                    Console_Write('[Run:MainLoop] FINISHED: "Finish_AC_Setup()"');
+                    Log_Debug('FINISHED: "Finish_AC_Setup()"');
                     
                     % Start aquisition
                     if D.F.cheetah_running
@@ -976,9 +990,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Run ICR Session setup code
-                    Console_Write('[Run:MainLoop] RUNNING: "ICR_Session_Setup()"...');
+                    Log_Debug('RUNNING: "ICR_Session_Setup()"...');
                     ICR_Session_Setup();
-                    Console_Write('[Run:MainLoop] FINISHED: "ICR_Session_Setup()"');
+                    Log_Debug('FINISHED: "ICR_Session_Setup()"');
                     
                     % Send first setup info packet
                     Send_CS_Com('S', 1, D.PAR.sesMsg(1,1), D.PAR.sesMsg(1,2));
@@ -1054,57 +1068,60 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % ---------------CHECK WHAT TO DO------------------
-                    D.F.sub_case_last = D.F.sub_case_now;
+                    D.PAR.sub_case_last = D.PAR.sub_case_now;
                     
                     
                     if  ~D.F.sleep_done(1)
-                        D.F.sub_case_now = 'RUN SLEEP 1';
+                        D.PAR.sub_case_now = 'RUN SLEEP 1';
                         
                     elseif ~D.F.task_setup
-                        D.F.sub_case_now = 'SETUP TASK';
+                        D.PAR.sub_case_now = 'SETUP TASK';
                         
                     elseif ~D.F.rob_setup
-                        D.F.sub_case_now = 'WAIT FOR ROBOT SETUP';
+                        D.PAR.sub_case_now = 'WAIT FOR ROBOT SETUP';
                         
-                    elseif ~D.F.streaming_confirmed
-                        D.F.sub_case_now = 'WAIT FOR MATLAB STREAMING';
+                    elseif ~D.F.cs_netcom_setup
+                        D.PAR.sub_case_now = 'WAIT FOR CS NETCOM';
                         
                     elseif ~D.F.rob_streaming
-                        D.F.sub_case_now = 'WAIT FOR ROBOT STREAMING';
+                        D.PAR.sub_case_now = 'WAIT FOR ROBOT STREAMING';
                         
                     elseif ~(D.F.task_done || D.F.do_quit)
                         
                         if ~D.F.first_move_sent && D.F.poll_new_vt
-                            D.F.sub_case_now = 'CHECK IF MOVE READY';
+                            D.PAR.sub_case_now = 'SEND FIRST MOVE COMMAND';
+                            
+                        elseif ~D.F.first_move_done
+                            D.PAR.sub_case_now = 'WAIT FOR FIRST MOVE';
                             
                         elseif  ~D.F.rat_in && D.F.poll_new_vt
-                            D.F.sub_case_now = 'CHECK IF RAT IN';
+                            D.PAR.sub_case_now = 'CHECK IF RAT IN';
                             
                         elseif D.F.rat_in && D.F.poll_new_vt
-                            D.F.sub_case_now = 'DO TASK CHECKS';
+                            D.PAR.sub_case_now = 'DO TASK CHECKS';
                             
                         else
                             continue
                         end
                         
                     elseif ~D.F.rat_out
-                        D.F.sub_case_now = 'SEND TASK DONE CONFIRMATION';
+                        D.PAR.sub_case_now = 'SEND TASK DONE CONFIRMATION';
                         
                     elseif ~D.F.task_done_confirmed
-                        D.F.sub_case_now = 'CHECK FOR TASK DONE CONFIRMATION';
+                        D.PAR.sub_case_now = 'CHECK FOR TASK DONE CONFIRMATION';
                         
                     elseif ~D.F.sleep_done(2)
-                        D.F.sub_case_now = 'RUN SLEEP 2';
+                        D.PAR.sub_case_now = 'RUN SLEEP 2';
                         
                     end
                     
                     % PRINT CHANGE IN FLOW
-                    if ~strcmp(D.F.sub_case_now, D.F.sub_case_last)
-                        Console_Write(sprintf('[Run:SubLoop] SWITCH FROM "%s" TO "%s"', D.F.sub_case_last, D.F.sub_case_now));
+                    if ~strcmp(D.PAR.sub_case_now, D.PAR.sub_case_last)
+                        Log_Debug(sprintf('SWITCH FROM "%s" TO "%s"', D.PAR.sub_case_last, D.PAR.sub_case_now));
                     end
                     
                     % HANDLE CASE
-                    switch D.F.sub_case_now
+                    switch D.PAR.sub_case_now
                         
                         case 'WAIT FOR ROBOT SETUP'
                             %% -------------WAIT FOR ROBOT SETUP-------------------
@@ -1115,7 +1132,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             end
                             
                             % Log/print
-                            Console_Write('[Run:SubLoop] CONFIRMED ROBOT SETUP');
+                            Log_Debug('CONFIRMED ROBOT SETUP');
                             
                             % Set flag
                             D.F.rob_setup = true;
@@ -1134,16 +1151,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             % Run 'Track' task setup code
                             if D.PAR.sesTask == 'Track'
-                                Console_Write('[Run:SubLoop] RUNNING: "Track_Task_Setup()"');
+                                Log_Debug('RUNNING: "Track_Task_Setup()"');
                                 Track_Task_Setup();
-                                Console_Write('[Run:SubLoop] FINISHED: "Track_Task_Setup()"');
+                                Log_Debug('FINISHED: "Track_Task_Setup()"');
                             end
                             
                             % Run 'Forage' task setup code
                             if D.PAR.sesTask == 'Forage'
-                                Console_Write('[Run:SubLoop] RUNNING: "Forage_Task_Setup()"');
+                                Log_Debug('RUNNING: "Forage_Task_Setup()"');
                                 Forage_Task_Setup();
-                                Console_Write('[Run:SubLoop] FINISHED: "Forage_Task_Setup()"');
+                                Log_Debug('FINISHED: "Forage_Task_Setup()"');
                             end
                             
                             % Show start button
@@ -1167,9 +1184,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Force  update UI
                             Update_UI(0, 'force');
                             
-                        case 'WAIT FOR MATLAB STREAMING'
+                        case 'WAIT FOR CS NETCOM'
                             
-                            %% ----------WAIT FOR MATLAB STREAMING-----------
+                            %% ----------WAIT FOR CS NETCOM-----------
                             
                             % Bail if not streaming data received
                             if ~D.F.vt_rat_streaming && ...
@@ -1179,10 +1196,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             end
                             
                             % Log/print
-                            Console_Write('[Run:SubLoop] CONFIRMED MATLAB STREAMING');
+                            Log_Debug('CONFIRMED CS NETCOM SETUP');
                             
                             % Set flag
-                            D.F.streaming_confirmed = true;
+                            D.F.cs_netcom_setup = true;
                             
                         case 'WAIT FOR ROBOT STREAMING'
                             
@@ -1194,10 +1211,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             end
                             
                             % Log/print
-                            Console_Write('[Run:SubLoop] CONFIRMED ROBOT STREAMING');
+                            Log_Debug('CONFIRMED ROBOT STREAMING');
                             
                             % Dump initial vt recs
-                            Console_Write('[Run:SubLoop] RUNNING: Dump First VT Recs...');
+                            Log_Debug('RUNNING: Dump First VT Recs...');
                             while true
                                 
                                 % Get recs
@@ -1217,10 +1234,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             % Check status
                             if abort
-                                Console_Write('**WARNING** [Run:SubLoop] ABORTED: Dump VT Recs');
+                                Debug_Warning('ABORTED: Dump VT Recs');
                                 return
                             elseif pass
-                                Console_Write('[Run:SubLoop] FINISHED: Dump VT Recs');
+                                Log_Debug('FINISHED: Dump VT Recs');
                             end
                             
                             % Set flags
@@ -1229,10 +1246,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             UPDATENOW = false;
                             
                             % Begin main loop
-                            Console_Write('[Run:SubLoop] READY TO ROCK!');
+                            Log_Debug('READY TO ROCK!');
                             
-                        case 'CHECK IF MOVE READY'
-                            %% ------------CHECK IF MOVE READY--------------
+                        case 'SEND FIRST MOVE COMMAND'
+                            %% ------------SEND FIRST MOVE COMMAND--------------
                             
                             % Wait till at least 1000 VT samples collected
                             if ~ISMATSOLO && ...
@@ -1255,24 +1272,38 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 % Move to forage reward targ
                                 Send_CS_Com('M', D.C.move, deg2rad(D.PAR.frgTargDegArr(D.I.targ_now)));
                                 
-                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
+                                Log_Debug('SENT STARTING MOVE TO FORAGE REWARD TARGET COMMAND');
                                 
                             elseif D.PAR.sesCond == 'Manual_Training' %#ok<*STCMP>
                                 
                                 % Move to track reward zone
                                 Send_CS_Com('M', D.C.move, D.UI.rewZoneRad(1));
                                 
-                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
+                                Log_Debug('SENT STARTING MOVE TO TRACK REWARD ZONE COMMAND');
                             else
                                 
                                 % Move to start quad
                                 Send_CS_Com('M', D.C.move, D.PAR.strQuadBnds(1));
-                                Console_Write('[Run:SubLoop] SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
+                                Log_Debug('SENT STARTING MOVE TO TRACK START QUADRANT COMMAND');
                                 
                             end
                             
                             % Set flag
                             D.F.first_move_sent = true;
+                           
+                        case 'WAIT FOR FIRST MOVE'
+                            %% ------------WAIT FOR FIRST MOVE--------------
+                            
+                            % Bail if setup not confirmed
+                            if c2m.('K').dat1 < 3
+                                continue
+                            end
+                            
+                            % Log/print
+                            Log_Debug('CONFIRMED ROBOT IN PLACE');
+                            
+                            % Set flag
+                            D.F.first_move_done = true;
                             
                         case 'CHECK IF RAT IN'
                             %% ------------CHECK IF RAT IN------------------
@@ -1285,14 +1316,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % ROTATION TRIGGER CHECK
                             Rotation_Trig_Check();
                             
-                            % TRACK REWARD RESET CHECK
-                            Track_Reward_Send_Check();
-                            
                             % TRACK REWARD CHECK
-                            Track_Reward_Zone_Check();
+                            Track_Reward_Check();
                             
                             % FORAGE REWARD CHECK
-                            Forage_Reward_Targ_Check();
+                            Forage_Reward_Check();
                             
                             % LAP CHECK
                             Lap_Check();
@@ -1305,7 +1333,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                             % Set flag
                             D.F.rat_out = true;
-                            Console_Write('[Run:SubLoop] SENT TASK DONE CONFIRMATION');
+                            Log_Debug('SENT TASK DONE CONFIRMATION');
                             
                         case 'CHECK FOR TASK DONE CONFIRMATION'
                             %% ------CHECK FOR TASK DONE CONFIRMATION-------
@@ -1324,7 +1352,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 
                                 % Reset c2m flag
                                 c2m.('Y').dat1 = 0;
-                                Console_Write('[Run:SubLoop] RECEIVED TASK DONE CONFIRMATION');
+                                Log_Debug('RECEIVED TASK DONE CONFIRMATION');
                             end
                             
                         case 'RUN SLEEP 2'
@@ -1354,7 +1382,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Save sesion data
                     if D.F.do_save
-                        Console_Write('[Run:MainLoop] SAVE INITIATED');
+                        Log_Debug('SAVE INITIATED');
                         
                         % Stop recording and aquisition
                         if D.F.cheetah_running
@@ -1369,35 +1397,35 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         end
                         
                         % Save health and general data
-                        Console_Write('[Run:MainLoop] RUNNING: "Save_General_Data()"...');
+                        Log_Debug('RUNNING: "Save_General_Data()"...');
                         Save_General_Data();
-                        Console_Write('[Run:MainLoop] FINISHED: "Save_General_Data()"');
+                        Log_Debug('FINISHED: "Save_General_Data()"');
                         
                         % Save task data
-                        Console_Write('[Run:MainLoop] RUNNING: "Save_Task_Data()"...');
+                        Log_Debug('RUNNING: "Save_Task_Data()"...');
                         was_ran = Save_Task_Data();
                         if was_ran
-                            Console_Write('[Run:MainLoop] FINISHED: "Save_Task_Data()"');
+                            Log_Debug('FINISHED: "Save_Task_Data()"');
                         else
-                            Console_Write('[Run:MainLoop] SKIPPED: "Save_Task_Data()"');
+                            Log_Debug('SKIPPED: "Save_Task_Data()"');
                         end
                         
                         % Save Cheetah data
-                        Console_Write('[Run:MainLoop] RUNNING: "Save_TT_Track_Data()"...');
+                        Log_Debug('RUNNING: "Save_TT_Track_Data()"...');
                         was_ran = Save_TT_Track_Data();
                         if was_ran
-                            Console_Write('[Run:MainLoop] FINISHED: "Save_TT_Track_Data()"');
+                            Log_Debug('FINISHED: "Save_TT_Track_Data()"');
                         else
-                            Console_Write('[Run:MainLoop] SKIPPED: "Save_TT_Track_Data()"');
+                            Log_Debug('SKIPPED: "Save_TT_Track_Data()"');
                         end
                         
                         % Save Cheetah data
-                        Console_Write('[Run:MainLoop] RUNNING: "Save_Cheetah_Data()"...');
+                        Log_Debug('RUNNING: "Save_Cheetah_Data()"...');
                         was_ran = Save_Cheetah_Data();
                         if was_ran
-                            Console_Write('[Run:MainLoop] FINISHED: "Save_Cheetah_Data()"');
+                            Log_Debug('FINISHED: "Save_Cheetah_Data()"');
                         else
-                            Console_Write('[Run:MainLoop] SKIPPED: "Save_Cheetah_Data()"');
+                            Log_Debug('SKIPPED: "Save_Cheetah_Data()"');
                         end
                         
                         % Set flags
@@ -1437,18 +1465,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % End of Run
-        Console_Write('[Run] END: Run()');
+        Log_Debug('END: Run()');
     end
 
 % -----------------------------MAIN EXIT-----------------------------------
     function[] = Exit()
         
         % Start of exit
-        Console_Write('[Exit] BEGIN: Exit()');
+        Log_Debug('BEGIN: Exit()');
         
         % Check if GUI was forced close
         if ~FORCECLOSE
-            Console_Write('[ICR_GUI] RUNNING: Normal Exit Procedure...');
+            Log_Debug('RUNNING: Normal Exit Procedure...');
             
             % Pause then shut it all down
             pause(1);
@@ -1473,34 +1501,63 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if Wait_Close_NLX(4)
                 
                 % Log/print
-                Console_Write(sprintf('[DeleteRawDir] RUNNING: Delete Raw Data Dir: "%s"', nlx_raw_dir))
+                Log_Debug(sprintf('RUNNING: Delete Raw Data Dir: "%s"', nlx_raw_dir))
                 
                 % Delete directory
                 if exist(nlx_raw_dir, 'dir')
                     if rmdir(nlx_raw_dir, 's')
-                        Console_Write(sprintf('[DeleteRawDir] FINISHED: Delete Raw Data Dir: "%s"', nlx_raw_dir))
+                        Log_Debug(sprintf('FINISHED: Delete Raw Data Dir: "%s"', nlx_raw_dir))
                     else
-                        Console_Write(sprintf('**WARNING [DeleteRawDir] FAILED: Delete Raw Data Dir: "%s"', nlx_raw_dir))
+                        Log_Debug(sprintf('**WARNING [DeleteRawDir] FAILED: Delete Raw Data Dir: "%s"', nlx_raw_dir))
                     end
                 else
-                    Console_Write(sprintf('[DeleteRawDir] SKIPPED: Delete Raw Data Dir: Dir Not Found: "%s"', nlx_raw_dir))
+                    Log_Debug(sprintf('SKIPPED: Delete Raw Data Dir: Dir Not Found: "%s"', nlx_raw_dir))
                 end
                 
             else
-                Console_Write(sprintf('[DeleteRawDir] SKIPPED: Delete Raw Data Dir: Programs Open: "%s"', nlx_raw_dir))
+                Log_Debug(sprintf('SKIPPED: Delete Raw Data Dir: Programs Open: "%s"', nlx_raw_dir))
             end
             
         end
         
+        % Warnings summary
+        if D.DB.cnt_warn > 0
+            warn_lines = 'ON LINES |';
+        else
+            warn_lines = '';
+        end
+        for i = 1:D.DB.cnt_warn
+            warn_lines = [warn_lines, sprintf('%d|', D.DB.warn_line(i))]; %#ok<AGROW>
+        end
+        str = sprintf('TOTAL WARNINGS: %d %s', D.DB.cnt_warn, warn_lines);
+        Log_Debug(str);
+        
+        % Error summary
+        if D.DB.cnt_err > 0
+            err_lines = 'ON LINES |';
+        else
+            err_lines = '';
+        end
+        for i = 1:D.DB.cnt_err
+            err_lines = [err_lines, sprintf('%d|', D.DB.err_line(i))]; %#ok<AGROW>
+        end
+        str = sprintf('TOTAL ERRORS: %d %s', D.DB.cnt_err, err_lines);
+        Log_Debug(str);
+        
+        % Com summary
+        str = sprintf('COM SUMMARY FEEDERDUE: M2C=|pind=%d|ptot=%d| C2M=|pind=%d|ptot=%d|', ...
+            m2c.packInd, m2c.packTot, c2m_pack.packInd, c2m_pack.packTot);
+        Log_Debug(str);
+        
         % Save log
-        Console_Write('[ICR_GUI] RUNNING: Save ICR_GUI Log...');
+        Log_Debug('RUNNING: Save ICR_GUI Log...');
         
         % Make sure dir exists
         if size(who('global'),1) > 0 && ...
                 exist(D.DIR.logTempDir, 'dir')
             
             % Track logs
-            cnt_stored = D.DB.logCount;
+            cnt_stored = D.DB.cnt_logs;
             cnt_saved = 0;
             
             % Open and write to file
@@ -1533,12 +1590,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Close file and print status
             fclose(fid);
-            Console_Write(sprintf('[ICR_GUI] FINISHED: Save ICR_GUI Log: %d/%d to "%s"', ...
+            Log_Debug(sprintf('FINISHED: Save ICR_GUI Log: %d/%d to "%s"', ...
                 cnt_saved, cnt_stored, D.DIR.logTempDir));
         else
             % Print failure
-            Console_Write(sprintf('**WARNING** [ICR_GUI] SKIPPED: Saving %d Logs to "%s"', ...
-                D.DB.logCount, D.DIR.logTempDir));
+            Debug_Warning(sprintf('SKIPPED: Saving %d Logs to "%s"', ...
+                D.DB.cnt_logs, D.DIR.logTempDir));
         end
         
         % Close figure
@@ -1552,7 +1609,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Send_CS_Com('C');
         
         % Wait for recieved confirmation
-        Console_Write('[ICR_GUI] RUNNING: Wait for GUI Closed Confirm...');
+        Log_Debug('RUNNING: Wait for GUI Closed Confirm...');
         while exist('c2m', 'var')
             [abort, pass] = ...
                 Check_Flag(~exist('c2m', 'var'), ...
@@ -1560,13 +1617,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if abort || pass; break; end
         end
         if abort
-            Console_Write('**WARNING** [ICR_GUI] ABORTED: Wait for GUI Closed Confirm');
+            Debug_Warning('ABORTED: Wait for GUI Closed Confirm');
         else
-            Console_Write('[ICR_GUI] FINISHED: Wait for GUI Closed Confirm');
+            Log_Debug('FINISHED: Wait for GUI Closed Confirm');
         end
         
         % End of Exit
-        Console_Write('[Exit] END: Exit()');
+        Log_Debug('END: Exit()');
     end
 
 
@@ -1781,12 +1838,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.table_tab_setup = false;
         % tt tab setup
         D.F.tt_tab_setup = false;
-        % switch case main loop
-        D.F.main_case_now = 'NULL';
-        D.F.main_case_last = 'NULL';
-        % switch case poll
-        D.F.sub_case_now = 'NULL';
-        D.F.sub_case_last = 'NULL';
         % status of Cheetah.exe
         D.F.cheetah_running = false;
         % status of SpikeSort3D.exe
@@ -1794,8 +1845,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % cube connection status
         D.F.cube_connected = false;
         % nlx streaming
-        D.F.streaming_setup = false;
-        D.F.streaming_confirmed = false;
+        D.F.mat_netcom_setup = false;
+        D.F.cs_netcom_setup = false;
         D.F.vt_rat_streaming = false;
         D.F.vt_rob_streaming  = false;
         D.F.evt_streaming = false;
@@ -1817,6 +1868,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.poll_new_vt = false;
         % first move sent to robot
         D.F.first_move_sent = false;
+        % first move finished
+        D.F.first_move_done = false;
         % recording done
         D.F.task_done = false;
         % task done confirm enabled
@@ -1849,14 +1902,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.rewarding = false;
         % flag if halted
         D.F.halted = false;
-        % reward reset
-        D.F.rew_confirmed = false;
-        % reward reset
-        D.F.rew_reset = false;
         % reward sent
         D.F.rew_sent = false;
-        % all reward zones crossed
-        D.F.rew_zone_crossed = false;
+        % reward reset
+        D.F.rew_confirmed = false;
         % flag to move to new forage targ
         D.F.move_to_targ = false;
         % track lap bounds
@@ -2107,6 +2156,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DB.HALT.error = [0, inf, 0, 0, 0];
         
         % OTHER
+        % switch case main loop
+        D.PAR.main_case_now = 'NULL';
+        D.PAR.main_case_last = 'NULL';
+        % switch case poll
+        D.PAR.sub_case_now = 'NULL';
+        D.PAR.sub_case_last = 'NULL';
         % session message
         D.PAR.sesMsg = NaN(2,2);
         % bulldoze defaults
@@ -2358,7 +2413,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.ttDiam = 0.0254;
         D.UI.ttScale = [1,0.5];
         
-        % TT Sphere scale 
+        % TT Sphere scale
         D.UI.ttSphereScale = [2,3,4];
         
         % Track lines offset (mm)
@@ -4406,7 +4461,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.cheetah_running = Check_EXE('Cheetah.exe');
         
         % Log/print
-        Console_Write('[NLX_Start] RUNNING: Run Cheetah.exe...');
+        Log_Debug('RUNNING: Run Cheetah.exe...');
         
         % Only run if not running Table_Update solo
         if D.F.run_cheetah && ...
@@ -4436,18 +4491,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.T.cheetah_run = Sec_DT(now);
             
             % Log/print
-            Console_Write(sprintf('[NLX_Start] FINISHED: Run Cheetah.exe "%s"', start_cfg_path));
+            Log_Debug(sprintf('FINISHED: Run Cheetah.exe "%s"', start_cfg_path));
             
         elseif DOEXIT
             
             % Bail
-            Console_Write('**WARNING** [NLX_Start] ABORTED: Run Cheetah.exe');
+            Debug_Warning('ABORTED: Run Cheetah.exe');
             return
             
         else
             
             % Bail
-            Console_Write('[NLX_Start] SKIPPED: Run Cheetah.exe');
+            Log_Debug('SKIPPED: Run Cheetah.exe');
             return
             
         end
@@ -4525,7 +4580,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             pan_ht];
         
         %% CREATE TEMPLATE OBJECTS
-        Console_Write('[Table_Setup] RUNNING: Create Template Objects');
+        Log_Debug('RUNNING: Create Template Objects');
         
         % Create tab group
         D.UI.tblTabSubGrp = ...
@@ -4619,7 +4674,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize', D.UI.fontSzTxtMed(1));
         
         %% CREATE WEIGHT PANEL OBJECTS
-        Console_Write('[Table_Setup] RUNNING: Create Weight Panel Objects');
+        Log_Debug('RUNNING: Create Weight Panel Objects');
         
         % GET WEIGHT VALUES
         
@@ -4754,7 +4809,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.txtPercentageWeight(2).String = 'XX%';
         
         %% CREATE FOOD PANEL OBJECTS
-        Console_Write('[Table_Setup] RUNNING: Create Food Panel Objects');
+        Log_Debug('RUNNING: Create Food Panel Objects');
         
         % Food Panel
         D.UI.panFeed = copyobj(D.UI.panTemplate, D.UI.tabTBL);
@@ -4848,7 +4903,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggUpdateFed, 'Enable');
         
         %% CREATE TAB TABLE OBJECTS
-        Console_Write('[Table_Setup] RUNNING: Create Tab Table Objects');
+        Log_Debug('RUNNING: Create Tab Table Objects');
         
         % Add SS_IO_1 tab
         D.UI.tbleSSIO1tab = uitab(D.UI.tblTabSubGrp, ...
@@ -4920,7 +4975,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblTabSubGrp.SelectedTab = D.UI.tbleSSIO3tab;
         
         %% CREATE SESSION NOTES OBJECTS
-        Console_Write('[Table_Setup] RUNNING: Create Session Notes Objects');
+        Log_Debug('RUNNING: Create Session Notes Objects');
         
         % Create notes panel
         D.UI.panGenNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
@@ -4973,7 +5028,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblSSIO2(1).ColumnName(notes_ind) = [];
         
         %% CREATE TT NOTES OBJECTS
-        Console_Write('[Table_Setup] RUNNING: Create TT Notes Objects');
+        Log_Debug('RUNNING: Create TT Notes Objects');
         
         % TT Notes Panel
         D.UI.panTTNotes = copyobj(D.UI.panTemplate, D.UI.tabTBL);
@@ -6207,7 +6262,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Copy color
         D.UI.ttCol = D.UI.ttColDefault;
         
-        %         TEMP % GET CLUSTER COLOR TO MATCH TT 
+        %         TEMP % GET CLUSTER COLOR TO MATCH TT
         %
         %         % Get tt and clust specific color map
         %         tt_col_map = NaN(D.PAR.maxTT, size(D.UI.linColBarH,2), 3);
@@ -6625,7 +6680,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% WAIT FOR CHEETAH
         
         % Wait for Cheetah to open
-        Console_Write('[NLX_Connect] RUNNING: Confirm Cheetah.exe Running...');
+        Log_Debug('RUNNING: Confirm Cheetah.exe Running...');
         while true
             % Check EXE status
             D.F.cheetah_running = Check_EXE('Cheetah.exe');
@@ -6638,14 +6693,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check status
         if abort
-            Console_Write('**WARNING** [NLX_Connect] ABORTED: Wait for Cheetah.exe to Open');
+            Debug_Warning('ABORTED: Wait for Cheetah.exe to Open');
             return
         elseif pass
-            Console_Write('[NLX_Connect] FINISHED: Wait for Cheetah.exe to Open');
+            Log_Debug('FINISHED: Wait for Cheetah.exe to Open');
         end
         
         % Wait for min delay between running Cheetah and connecting
-        Console_Write(sprintf('[NLX_Connect] RUNNING: Wait %d sec Minimum to Connect to NLX...', ...
+        Log_Debug(sprintf('RUNNING: Wait %d sec Minimum to Connect to NLX...', ...
             D.PAR.dtMinNetcom));
         while true
             [abort, pass] = ...
@@ -6655,12 +6710,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check status
         if abort
-            Console_Write(sprintf('**WARNING** [NLX_Connect] ABORTED: Waiting %0.2f sec to Connect to NLX', ...
-            Sec_DT(now) - D.T.cheetah_run));
+            Debug_Warning(sprintf('ABORTED: Waiting %0.2f sec to Connect to NLX', ...
+                Sec_DT(now) - D.T.cheetah_run));
             return
         elseif pass
-            Console_Write(sprintf('[NLX_Connect] FINISHED: Waiting %0.2f sec to Connect to NLX', ...
-            Sec_DT(now) - D.T.cheetah_run));
+            Log_Debug(sprintf('FINISHED: Waiting %0.2f sec to Connect to NLX', ...
+                Sec_DT(now) - D.T.cheetah_run));
         end
         
         % Bail if exit initiated
@@ -6672,7 +6727,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% CONNECT TO NETCOM
         
         % Connect to NetCom
-        Console_Write(sprintf('[NLX_Connect] RUNNING: Connect to NLX IP=%s...', ...
+        Log_Debug(sprintf('RUNNING: Connect to NLX IP=%s...', ...
             D.NLX.ServerIP));
         
         % Keep attempting till success
@@ -6690,10 +6745,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Check status
         if abort
-            Console_Write('**WARNING** [NLX_Connect] ABORTED: Connect to NLX');
+            Debug_Warning('ABORTED: Connect to NLX');
             return
         elseif pass
-            Console_Write('[NLX_Connect] FINISHED: Connect to NLX');
+            Log_Debug('FINISHED: Connect to NLX');
             
             % Identify id to server
             NlxSetApplicationName('ICR_GUI');
@@ -6714,11 +6769,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Check if successful
         if NlxAreWeConnected() == 1
             
-            Console_Write('[NLX_Connect] FINISHED: Confirm NLX Connection');
+            Log_Debug('FINISHED: Confirm NLX Connection');
         else
             
             % Set exit flag and bail
-            Console_Write('!!ERROR!! [NLX_Connect] FAILED: Confirm NLX Connection');
+            Debug_Error('FAILED: Confirm NLX Connection');
             SetExit();
             return
         end
@@ -6743,7 +6798,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% CONFIGURE DIGITAL IO
         
         % Log/print
-        Console_Write(sprintf('[NLX_Setup] RUNNING: Configure NLX...'));
+        Log_Debug(sprintf('RUNNING: Configure NLX...'));
         
         % SETUP PORTS
         
@@ -6786,7 +6841,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if DOEXIT
             return
         else
-            Console_Write('[NLX_Setup] FINISHED: Configure NLX');
+            Log_Debug('FINISHED: Configure NLX');
         end
         
         %% LOAD SETUP CONFIGURATION SETTINGS
@@ -6799,16 +6854,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[NLX_Setup] RUNNING: Load Cheetah Setup Config: "%s"...', setup_cfg_fi));
+        Log_Debug(sprintf('RUNNING: Load Cheetah Setup Config: "%s"...', setup_cfg_fi));
         
         % Load setup config
         succeeded = Send_NLX_Cmd(sprintf('-ProcessConfigurationFile %s', setup_cfg_fi));
         
         % Log/print
         if succeeded == 1
-            Console_Write(sprintf('[NLX_Setup] FINISHED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
+            Log_Debug(sprintf('FINISHED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
         else
-            Console_Write(sprintf('**WARNING** [NLX_Setup] FAILED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
+            Debug_Warning(sprintf('FAILED: Load Cheetah Setup Config: "%s"', setup_cfg_fi));
         end
         
         %% DISPLAY PROMPT TO POWER ON CUBE
@@ -6847,7 +6902,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if exist(D.DIR.nlxSaveRat, 'dir') == 0 && ...
                 exist(D.DIR.nlxSaveTop, 'dir') == 1
             
-            Console_Write(sprintf('[NLX_Setup] RUNNING: Make Rat Rec Directory: "%s"', D.DIR.nlxSaveRat));
+            Log_Debug(sprintf('RUNNING: Make Rat Rec Directory: "%s"', D.DIR.nlxSaveRat));
             mkdir(D.DIR.nlxSaveRat);
         end
         
@@ -6855,7 +6910,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.ephys_session
             
             % Log/print
-            Console_Write('[NLX_Setup] RUNNING: Load Previous Cheetah Settings...');
+            Log_Debug('RUNNING: Load Previous Cheetah Settings...');
             
             % Initialize file
             nlx_cfg_last = [];
@@ -6937,16 +6992,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Log/print status
             if is_settings_loaded
-                Console_Write('[NLX_Setup] FINISHED: Load Previous Cheetah Settings');
+                Log_Debug('FINISHED: Load Previous Cheetah Settings');
                 
             elseif DOEXIT
-                Console_Write('**WARNING** [NLX_Setup] ABORTED: Load Previous Cheetah Settings');
+                Debug_Warning('ABORTED: Load Previous Cheetah Settings');
                 
                 % Bail
                 return
                 
             else
-                Console_Write('[NLX_Setup] SKIPPED: Load Previous Cheetah Settings');
+                Log_Debug('SKIPPED: Load Previous Cheetah Settings');
             end
         end
         
@@ -6956,7 +7011,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.rec_raw
             
             % Log/print
-            Console_Write('[NLX_Setup] RUNNING: Set NLX Raw Data Path and File...');
+            Log_Debug('RUNNING: Set NLX Raw Data Path and File...');
             
             % Format raw data sub directory
             D.DIR.nlxRawSub = [D.DIR.nlxRecSub, '_raw'];
@@ -6976,13 +7031,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Log/print status
             if succeeded == 1
-                Console_Write(sprintf('[NLX_Setup] FINISHED: Set NLX Raw Data Path and File: "%s"', nlx_raw_fi));
+                Log_Debug(sprintf('FINISHED: Set NLX Raw Data Path and File: "%s"', nlx_raw_fi));
             else
-                Console_Write(sprintf('**WARNING** [NLX_Setup] FAILED: Set NLX Raw Data Path and File: "%s"', nlx_raw_fi));
+                Debug_Warning(sprintf('FAILED: Set NLX Raw Data Path and File: "%s"', nlx_raw_fi));
             end
             
         else
-            Console_Write('[NLX_Setup] SKIPPED: Set NLX Raw Data Path and File');
+            Log_Debug('SKIPPED: Set NLX Raw Data Path and File');
         end
         
         %% RUN SPIKESORT EXE
@@ -6996,7 +7051,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 ~D.F.spikesort_running
             
             % Log/print
-            Console_Write('[NLX_Setup] RUNNING: Open SpikeSort3D.exe...');
+            Log_Debug('RUNNING: Open SpikeSort3D.exe...');
             
             % Specify start config
             start_cfg_path = fullfile(D.DIR.nlxSS3DCfg, 'spikesort.cfg');
@@ -7009,61 +7064,61 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             system(sprintf('SpikeSort3D.exe %s&', start_cfg_path));
             cd(curdir);
             
-            Console_Write('[NLX_Setup] FINISHED: Open SpikeSort3D.exe...');
+            Log_Debug('FINISHED: Open SpikeSort3D.exe...');
         else
-            Console_Write('[NLX_Setup] SKIPPED: Open SpikeSort3D.exe');
+            Log_Debug('SKIPPED: Open SpikeSort3D.exe');
         end
         
         %% OPEN NETCOM STREAMS
         
         % Open VT and Event streams
-        Console_Write('[NLX_Setup] RUNNING: Open VT and Event Streams...');
+        Log_Debug('RUNNING: Open VT and Event Streams...');
         
         % Check for exit
         if DOEXIT
             % Bail
-            Console_Write('**WARNING** [NLX_Setup] ABORTED: Open VT and Event Streams');
+            Debug_Warning('ABORTED: Open VT and Event Streams');
             return
         end
         
         % Get all DAS objects
-        Console_Write('[NLX_Setup] RUNNING: "NlxGetDASObjectsAndTypes()"...');
+        Log_Debug('RUNNING: "NlxGetDASObjectsAndTypes()"...');
         [succeeded, D.NLX.das_objects, D.NLX.das_types] = NlxGetDASObjectsAndTypes();
         if succeeded == 1
-            Console_Write('[NLX_Setup] FINISHED: "NlxGetDASObjectsAndTypes()"...');
+            Log_Debug('FINISHED: "NlxGetDASObjectsAndTypes()"...');
         else
-            Console_Write('!!ERROR!! [NLX_Setup] FAILED: "NlxGetDASObjectsAndTypes()"...');
+            Debug_Error('FAILED: "NlxGetDASObjectsAndTypes()"...');
         end
         
         % Open rat vt stream
         if any(contains(D.NLX.das_objects, D.NLX.vt_rat_ent))
             D.F.vt_rat_streaming = NlxOpenStream(D.NLX.vt_rat_ent) == 1;
-            Console_Write(sprintf('[NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+            Log_Debug(sprintf('FINISHED: Open NLX "%s" Stream: status=%d', ...
                 D.NLX.vt_rat_ent, D.F.vt_rat_streaming ));
         else
-            Console_Write(sprintf('!!ERROR!! [NLX_Setup] Missing DAS Object: "%s"', D.NLX.vt_rat_ent));
+            Debug_Error(sprintf('Missing DAS Object: "%s"', D.NLX.vt_rat_ent));
         end
         
         % Open robot vt stream
         if any(contains(D.NLX.das_objects, D.NLX.vt_rob_ent))
             D.F.vt_rob_streaming = NlxOpenStream(D.NLX.vt_rob_ent) == 1;
-            Console_Write(sprintf('[NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+            Log_Debug(sprintf('FINISHED: Open NLX "%s" Stream: status=%d', ...
                 D.NLX.vt_rob_ent, D.F.vt_rob_streaming ));
         else
-            Console_Write(sprintf('!!ERROR!! [NLX_Setup] Missing DAS Object: "%s"', D.NLX.vt_rob_ent));
+            Debug_Error(sprintf('Missing DAS Object: "%s"', D.NLX.vt_rob_ent));
         end
         
         % Open event vt stream
         if any(contains(D.NLX.das_objects, D.NLX.event_ent))
             D.F.evt_streaming = NlxOpenStream(D.NLX.event_ent) == 1;
-            Console_Write(sprintf('[NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+            Log_Debug(sprintf('FINISHED: Open NLX "%s" Stream: status=%d', ...
                 D.NLX.event_ent, D.F.evt_streaming ));
         else
-            Console_Write(sprintf('!!ERROR!! [NLX_Setup] Missing DAS Object: "%s"', D.NLX.event_ent));
+            Debug_Error(sprintf('Missing DAS Object: "%s"', D.NLX.event_ent));
         end
         
         D.F.evt_streaming = NlxOpenStream(D.NLX.event_ent) == 1;
-        Console_Write(sprintf('[NLX_Setup] FINISHED: Open NLX "%s" Stream: status=%d', ...
+        Log_Debug(sprintf('FINISHED: Open NLX "%s" Stream: status=%d', ...
             D.NLX.event_ent, D.F.evt_streaming));
         
         % Log/print stream status
@@ -7071,14 +7126,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.F.vt_rob_streaming  && ...
                 D.F.evt_streaming
             % All streaming
-            Console_Write(sprintf('[NLX_Setup] FINISHED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
+            Log_Debug(sprintf('FINISHED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
                 D.F.vt_rat_streaming , D.F.vt_rob_streaming , D.F.evt_streaming));
             
             % Set flag
-            D.F.streaming_setup = true;
+            D.F.mat_netcom_setup = true;
         else
             % Open stream failed
-            Console_Write(sprintf('**WARING** [NLX_Setup] FAILED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
+            Debug_Warning(sprintf('FAILED: Open VT and Event Streams: vt1=%d vt2=%d evt=%d', ...
                 D.F.vt_rat_streaming , D.F.vt_rob_streaming , D.F.evt_streaming));
         end
         
@@ -7088,7 +7143,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% DISABLE PLOTTING OF FLAGGED TTS
         
         % Bail here if not implant session
-        if ~D.F.ephys_session 
+        if ~D.F.ephys_session
             return
         end
         
@@ -7610,7 +7665,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if D.F.ephys_session
             
             % SETUP FIRING RATE AXES
-            Console_Write('[ICR_Session_Setup] RUNNING: Setup Cluster Rate Patches...');
+            Log_Debug('RUNNING: Setup Cluster Rate Patches...');
             
             % Calculate patch bounds
             ptch_bounds = arrayfun(@(x) [x, x+((2*pi)/D.PAR.tt1dBins)], ...
@@ -7669,7 +7724,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'UserData', 0);
             
             % SETUP PLOT COLOR MAP
-            Console_Write('[ICR_Session_Setup] RUNNING: Setup Cluster Colormaps...');
+            Log_Debug('RUNNING: Setup Cluster Colormaps...');
             
             % Colorbar legend pos
             ax_pos = [...
@@ -7742,11 +7797,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Visible', 'on');
             
             % Log/print
-            Console_Write('[ICR_Session_Setup] FINISHED: Setup Cluster Objects');
+            Log_Debug('FINISHED: Setup Cluster Objects');
             
         else
             
-            Console_Write('[ICR_Session_Setup] SKIPPED: Setup Cluster Objects');
+            Log_Debug('SKIPPED: Setup Cluster Objects');
             
         end
         
@@ -7804,7 +7859,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         start(D.timer_graphics);
         
         % Log/print
-        Console_Write('[ICR_Session_Setup] FINISHED: Session Setup');
+        Log_Debug('FINISHED: Session Setup');
         
     end
 
@@ -7955,7 +8010,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Set first value to center (0 deg)
         D.I.cue_zone_arr(1) = find(D.PAR.zoneLocs==0);
-
+        
         %% CREATE ADITIONAL UI OBJECTS
         
         % Plot reward bounds
@@ -8442,10 +8497,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         if inbndTim > 0
-            Console_Write(sprintf('[Rat_In_Check] FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
+            Log_Debug(sprintf('FINISHED: Rat In Check: dt_occ=%0.2fsec', ...
                 inbndTim));
         else
-            Console_Write('[Rat_In_Check] FINISHED: Rat In Check: Started Manually');
+            Log_Debug('FINISHED: Rat In Check: Started Manually');
         end
         
     end
@@ -8625,6 +8680,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Prevent start move
             D.F.first_move_sent = true;
+            D.F.first_move_done = true;
             
             % Change implanted flag
             D.DB.Implanted = false;
@@ -8636,7 +8692,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % SYNC IR TIMING TEST
-        if D.DB.t6_doSyncIRTimingTest
+        if D.DB.t6_doIRSyncTest
             
             % Notes:
             %   Connect robot Reward LED red and ground to DigitalLynx port 2 pin 0
@@ -8657,6 +8713,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Prevent start move
             D.F.first_move_sent = true;
+            D.F.first_move_done = true;
             
             % Change implanted flag
             D.DB.Implanted = false;
@@ -8712,7 +8769,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write('[Test_Setup] FINISHED: Test Run Setup');
+        Log_Debug('FINISHED: Test Run Setup');
         
         %% AUTOLOAD RAT DATA
         
@@ -8853,7 +8910,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Check if this is first record
         if D.P.(fld).vtNRecs > 0 && D.P.(fld).cnt_vtRec == 0
             % Log/print
-            Console_Write(sprintf('[VT_Get] FIRST %s VT RECORD: x=%d y=%d ts=%d', ...
+            Log_Debug(sprintf('FIRST %s VT RECORD: x=%d y=%d ts=%d', ...
                 upper(fld), D.P.(fld).vtTS(1), D.P.(fld).vtPos(1), D.P.(fld).vtPos(2)));
         end
         
@@ -9775,7 +9832,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.F.rewarding = true;
             
             % Log/print
-            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.rew_on_str));
+            Log_Debug(sprintf('Recieved "%s" Event', D.NLX.rew_on_str));
             
         end
         
@@ -9837,7 +9894,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'BackgroundColor', D.UI.enabledCol);
             
             % Log/print
-            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.rew_off_str));
+            Log_Debug(sprintf('Recieved "%s" Event', D.NLX.rew_off_str));
             
         end
         
@@ -9851,7 +9908,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.setPosLineWidth = 4;
             
             % Log/print
-            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.pid_run_str));
+            Log_Debug(sprintf('Recieved "%s" Event', D.NLX.pid_run_str));
         end
         
         % Stopped
@@ -9862,7 +9919,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.setPosLineWidth = 2;
             
             % Log/print
-            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.pid_stop_str));
+            Log_Debug(sprintf('Recieved "%s" Event', D.NLX.pid_stop_str));
         end
         
         %% CHECK FOR BULLDOZE
@@ -9878,7 +9935,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.C.bulldozings = D.C.bulldozings + 1;
             
             % Log/print
-            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.bull_run_str));
+            Log_Debug(sprintf('Recieved "%s" Event', D.NLX.bull_run_str));
         end
         % Stopped
         if any(ismember(D.E.evtStr, D.NLX.bull_stop_str))
@@ -9888,7 +9945,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.UI.guardPosLineWidth = 5;
             
             % Log/print
-            Console_Write(sprintf('[Evt_Proc] Recieved "%s" Event', D.NLX.bull_stop_str));
+            Log_Debug(sprintf('Recieved "%s" Event', D.NLX.bull_stop_str));
         end
         
     end
@@ -9933,7 +9990,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check if streaming failed
             if succeeded ~= 1
-                Console_Write(sprintf('**WARNING** [TT_Get] NlxGetNewTTData(%s) FAILED', tt_lab));
+                Debug_Warning(sprintf('NlxGetNewTTData(%s) FAILED', tt_lab));
             end
             
         end
@@ -10347,7 +10404,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'default');
             
             % Print Cube status
-            Console_Write(['[Hardware_Check] ', msg]);
+            Log_Debug(msg);
             
         end
         
@@ -10594,110 +10651,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% ---------------------TRACK REWARD SEND CHECK---------------------
-    function Track_Reward_Send_Check()
-        
-        % BAIL IF MANUAL OR FORAGE TRAINING OR BOUNDS PASSED
-        if D.PAR.sesCond == 'Manual_Training' || ...
-                D.PAR.sesTask == 'Forage' || ...
-                D.F.rew_sent || ...
-                all(isnan(D.P.Rat.rad))
-            return
-        end
-        
-        % Check if rat is in quad
-        check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.UI.rewRstBnds(D.I.rot,:));
-        if ~any(check_inbound)
-            return
-        end
-        
-        % Itterate count
-        D.C.rew_send = D.C.rew_send+1;
-        
-        % Disable cue buttons
-        Cue_Button_State('Disable');
-        
-        % Reset reward zone patches
-        Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-            'ShowAll', D.UI.rotCol(D.I.rot,:));
-        
-        % Clear last duration
-        Safe_Set(D.UI.txtFdDurH(:), 'Visible', 'off');
-        
-        % Handle cued reward
-        if get(D.UI.toggDoCue, 'Value') == 1
-            
-            % Get new cued zone based on distrebution
-            D.I.zone_now = D.I.cue_zone_arr(length(D.I.cued_rew)+1);
-            
-            % Get new reward duration
-            D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone_now);
-            
-            % Will send CS command with pos and zone
-            r_pos = D.UI.rewRatHead(D.I.rot);
-            z_ind = D.I.zone_now;
-            r_cond = 2;
-            
-            % Send cued reward command
-            Send_CS_Com('R', r_pos, r_cond, z_ind);
-            
-            % Post NLX event: cue on
-            Send_NLX_Cmd(D.NLX.cue_on_evt);
-            
-            % Show new cued reward target patch
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
-                'Active', D.UI.rotCol(D.I.rot,:));
-            
-            % Print new duration
-            Safe_Set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
-                'Visible', 'on');
-            
-        else
-            
-            % Send reward center and no zone ind
-            r_pos = D.UI.rewRatHead(D.I.rot);
-            r_del = D.PAR.rewDel;
-            r_cond = 3;
-            
-            % Send free reward command
-            Send_CS_Com('R', r_pos, r_cond, r_del);
-            
-            % Post NLX event: cue off
-            Send_NLX_Cmd(D.NLX.cue_off_evt);
-            
-            % Darken all zone patches
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-                'Select', D.UI.rotCol(D.I.rot,:))
-        end
-        
-        % Set reward sent flag
-        D.F.rew_sent = true;
-        
-        % Reset reward check flags
-        D.F.rew_zone_crossed = false;
-        D.F.rew_confirmed = false;
-        D.F.rew_reset = false;
-        
-        % Hide reset patch
-        Patch_State(D.UI.ptchRewSendH(D.I.rot), ...
-            'Hide', D.UI.rotCol(D.I.rot,:));
-        
-        % Stop bulldozer if active
-        D.PAR.bullLastVal = get(D.UI.toggBulldoze, 'Value');
-        if D.PAR.bullLastVal == 1
-            Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-            Pop_Bulldoze();
-        end
-        
-        % Print reset bounds crossed
-        Console_Write(sprintf('[Track_Reward_Send_Check] Crossed Reward Send Bounds: cross_cnt=%d', D.C.rew_send));
-        
-    end
+% ---------------------TRACK SEND REWARD CHECK---------------------
+    
 
-% ----------------------TRACK REWARD ZONE CHECK--------------------
-    function Track_Reward_Zone_Check()
+% ------------------------TRACK REWARD CHECK-----------------------
+    function Track_Reward_Check()
         
-        %% BAIL IF MANUAL OR FORRAGE TRAINING
+        % BAIL IF MANUAL OR FORRAGE TRAINING
         
         if D.PAR.sesCond == 'Manual_Training' || ...
                 D.PAR.sesTask == 'Forage'
@@ -10705,25 +10665,152 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             return
         end
         
-        %% CHECK FOR REWARD CONFIRMATION
+        % SEND REWARD INFO
+        SendReward();
         
-        % Check if reward has been reset
-        if  ~D.F.rew_zone_crossed && ...
-                D.F.rew_sent && ...
-                c2m.('Z').dat1 ~= 0 && ...
-                ~D.F.rew_confirmed
+        % CHECK FOR REWARD CONFIRMATION
+        CheckRewConf();
+        
+        % CHECK IF ALL ZONES PASSED
+        CheckRewPass();
+        
+        % SEND REWARD INFO
+        function SendReward()
             
-            % Store rewarded zone ind
-            D.I.zone_now = c2m.('Z').dat1;
-            D.I.zone_active(:) = false;
-            D.I.zone_active(D.I.zone_now) = true;
+            % Check flags
+            if D.F.rew_sent
+                return
+            end
             
-            % Reset next zone
-            D.I.zone_select = 0;
+            % Bail if no new pos data
+            if  all(isnan(D.P.Rat.rad))
+                return;
+            end
             
-            % Post NLX event: reward info
-            Send_NLX_Cmd(...
-                sprintf(D.NLX.rew_evt, -1*D.PAR.zoneLocs(D.I.zone_now), D.PAR.zoneRewDur(D.I.zone_now)));
+            % Bail if rat not in bounds
+            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.UI.rewRstBnds(D.I.rot,:));
+            if ~any(check_inbound)
+                return
+            end
+            
+            % UPDATE FLAGS AND COUNTERS
+            
+            % Itterate count
+            D.C.rew_send = D.C.rew_send+1;
+            
+            % Set reward sent flag
+            D.F.rew_sent = true;
+            
+            % Reset reward check flags
+            D.F.rew_confirmed = false;
+            
+            % RESET REWARD ZONE GRAPHICS
+            ResetRewGraphics();
+            
+            % HANDLE CUED REWARD STUFF 
+            
+            % Disable cue buttons
+            Cue_Button_State('Disable');
+            
+            % Get new reward zone
+            if get(D.UI.toggDoCue, 'Value') == 1
+                
+                % Get new cued zone based on distrebution
+                D.I.zone_now = D.I.cue_zone_arr(length(D.I.cued_rew)+1);
+                
+                % Get new reward duration
+                D.PAR.rewDur = D.PAR.zoneRewDur(D.I.zone_now);
+                
+                % Show new cued reward target patch
+                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
+                    'Active', D.UI.rotCol(D.I.rot,:));
+                
+                % Print new duration
+                Safe_Set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
+                    'Visible', 'on');
+                
+            else
+                
+                % Darken all zone patches
+                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
+                    'Select', D.UI.rotCol(D.I.rot,:))
+        
+            end
+            
+            % SEND REWARD MESSAGE
+            
+            % Send cued reward
+            if get(D.UI.toggDoCue, 'Value') == 1
+                
+                % Store reward pos and zone
+                r_pos = D.UI.rewRatHead(D.I.rot);
+                z_ind = D.I.zone_now;
+                r_cond = 2;
+                
+                % Send cued reward command
+                Send_CS_Com('R', r_pos, r_cond, z_ind);
+                
+                % Post NLX event: cue on
+                Send_NLX_Cmd(D.NLX.cue_on_evt);
+                
+                % Print reset bounds crossed
+                Log_Debug(sprintf('Sent Cued Reward: rew_cond=%d zone_pos_rad=%0.2f zone_ind=%d', ...
+                    r_cond, r_pos, z_ind));
+            end
+            
+            % Send free reward reward
+            if get(D.UI.toggDoCue, 'Value') == 0
+                
+                % Store reward center and delay
+                r_pos = D.UI.rewRatHead(D.I.rot);
+                r_del = D.PAR.rewDel;
+                r_cond = 3;
+                
+                % Send free reward command
+                Send_CS_Com('R', r_pos, r_cond, r_del);
+                
+                % Post NLX event: cue off
+                Send_NLX_Cmd(D.NLX.cue_off_evt);
+                
+                % Print reset bounds crossed
+                Log_Debug(sprintf('Sent Free Reward: rew_cond=%d zone_pos_rad=%0.2f rew_del=%dsec', ...
+                    r_cond, r_pos, r_del));
+            end
+            
+            % HIDE REWARD SEND PATCH
+            Patch_State(D.UI.ptchRewSendH(D.I.rot), ...
+                'Hide', D.UI.rotCol(D.I.rot,:));
+            
+            % STOP BULLDOZER
+            D.PAR.bullLastVal = get(D.UI.toggBulldoze, 'Value');
+            if D.PAR.bullLastVal == 1
+                Safe_Set(D.UI.toggBulldoze, 'Value', 0);
+                Pop_Bulldoze();
+            end
+            
+            % Log/print reset bounds crossed
+            Log_Debug(sprintf('Crossed Reward Send Bounds: cross_cnt=%d', D.C.rew_send));
+            
+        end
+       
+        % CHECK FOR REWARD CONFIRMATION
+        function CheckRewConf()
+            
+            % Check flags
+            if D.F.rew_confirmed || ...
+                    ~D.F.rew_sent
+                return
+            end
+            
+            % Bail if zone message not updated
+            if c2m.('Z').dat1 == 0
+                return
+            end
+            
+            % UPDATE FLAGS AND COUNTERS
+            
+            % Set reward confirmed flag
+            D.F.rew_confirmed = true;
             
             % Update reward count
             if D.F.rotated
@@ -10738,6 +10825,27 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if get(D.UI.toggDoCue, 'Value') == 1
                 D.I.cued_rew = [D.I.cued_rew, sum([D.C.rew{:}])];
             end
+            
+            % Reset missed rewards
+            D.C.missed_rew(2) = sum(D.C.missed_rew);
+            D.C.missed_rew(1) = 0;
+            
+            % UPDATE REWARD ZONE INFO
+            
+            % Store rewarded zone ind
+            D.I.zone_now = c2m.('Z').dat1;
+            c2m.('Z').dat1 = 0;
+            
+            % Set active zone
+            D.I.zone_active(:) = false;
+            D.I.zone_active(D.I.zone_now) = true;
+            
+            % Reset next zone
+            D.I.zone_select = 0;
+            
+            % Post NLX event: reward info
+            Send_NLX_Cmd(...
+                sprintf(D.NLX.rew_evt, -1*D.PAR.zoneLocs(D.I.zone_now), D.PAR.zoneRewDur(D.I.zone_now)));
             
             % Store reward zone with range [-20,20]
             D.PAR.zone_hist(sum([D.C.rew{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
@@ -10762,10 +10870,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Display count
             Safe_Set(D.UI.axZoneH(1), 'XTickLabel', D.C.zone(D.I.rot,:))
             
-            % Reset missed rewards
-            D.C.missed_rew(2) = sum(D.C.missed_rew);
-            D.C.missed_rew(1) = 0;
-            
             % Plot average zone pos
             avg_trig = D.PAR.zoneLocs*D.C.zone(D.I.rot,:)' / sum(D.C.zone(D.I.rot,:));
             [xbnd, ybnd] =  ...
@@ -10786,29 +10890,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'YData', y);
             end
             
-            % Reset reward zone patches
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-                'ShowAll', D.UI.rotCol(D.I.rot,:));
+            % Update reward graphics
+            ResetRewGraphics();
+            UpdateRewInfo();
             
-            % Darken current zone
+            % Darken rewarded zone patch
             Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
                 'Select', D.UI.rotCol(D.I.rot,:));
             
-            % Print new duration
+            % Print rewarded zone text
             Safe_Set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
                 'Visible', 'on');
             
-            % Set reward confirmed flag
-            D.F.rew_confirmed = true;
-            
-            % Reset 'Z' data
-            c2m.('Z').dat1 = 0;
-            
-            % Reset flags
-            D.F.check_rew_confirm = false;
-            
             % Log/print reward details
-            Console_Write(sprintf('[Track_Reward_Zone_Check] Rewarded: rew_cnt=%d zone=%d vel=%0.2fcm/sec', ...
+            Log_Debug(sprintf('Rewarded: rew_cnt=%d zone=%d rat_vel=%0.2fcm/sec', ...
                 sum([D.C.rew{:}]), D.PAR.zone_hist(sum([D.C.rew{:}])), D.P.Rat.vel));
             
             % Update UI
@@ -10816,41 +10911,34 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        %% CHECK IF ALL ZONES PASSED OR CONFIRMATION RECEIVED
-        
-        % Track reward crossing
-        if D.F.rew_sent && ~D.F.rew_zone_crossed
+        % CHECK IF ALL ZONES PASSED
+        function CheckRewPass()
             
-            % Check if rat passed all zones
+            % Check flags
+            if ~D.F.rew_sent
+                return
+            end
+            
+            % Bail if no new pos data
+            if  all(isnan(D.P.Rat.rad))
+                return;
+            end
+            
+            % Bail if rat not in bounds
             check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.UI.rewPassBnds(D.I.rot,:));
-            
-            % Bail if not passed zones and reward not confirmed
-            if ~any(check_inbound) && ~D.F.rew_confirmed
+            if ~any(check_inbound)
                 return
             end
             
-            % Check for zone crossing before resseting flags for reward
-            % send to run
-            if any(check_inbound)
-                
-                % Set reward zones corssed flag
-                D.F.rew_zone_crossed = true;
-                
-                % Reset other flags
-                D.F.rew_sent = false;
-                
-                % Itterate count
-                D.C.rew_cross = D.C.rew_cross+1;
-                
-            end
+            % UPDATE FLAGS AND COUNTERS
             
-            % Bail if reset already done
-            if D.F.rew_reset
-                return
-            end
+            % Reset reward sent flag
+            D.F.rew_sent = false;
             
-            % Set reward reset flag
-            D.F.rew_reset = true;
+            % Itterate count
+            D.C.rew_cross = D.C.rew_cross+1;
+            
+            % HANDLE CUED REWARD STUFF
             
             % Enable cue buttons
             Cue_Button_State('Enable');
@@ -10877,11 +10965,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
             end
             
-            % Restart bulldozer if was active
-            if D.PAR.bullLastVal == 1
-                Safe_Set(D.UI.toggBulldoze, 'Value', 1);
-                Pop_Bulldoze();
-            end
+            % HANDLE MISSED REWARDS
             
             % Check for missed rewards
             if ~D.F.rew_confirmed
@@ -10889,27 +10973,55 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Add to missed reward count
                 D.C.missed_rew(1) = D.C.missed_rew(1)+1;
                 
-                % Lighten all reward zone patches
-                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-                    'ShowAll', D.UI.rotCol(D.I.rot,:));
-                
-                % Hide last duration
-                Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
-                    'Visible', 'off');
-                
                 % Print missed reward
-                Console_Write(sprintf('[Track_Reward_Zone_Check] Detected Missed Reward: cross_cnt=%d miss_cnt=%d|%d', ...
+                Log_Debug(sprintf('Detected Missed Reward: cross_cnt=%d miss_cnt=%d|%d', ...
                     D.C.rew_cross, D.C.missed_rew(1), D.C.missed_rew(2)));
+                
+                % Update reward graphics
+                ResetRewGraphics();
+                UpdateRewInfo();
                 
             end
             
-            % Set reward send patch to visible
+            % RESTART BULLDOZER
+            if D.PAR.bullLastVal == 1
+                Safe_Set(D.UI.toggBulldoze, 'Value', 1);
+                Pop_Bulldoze();
+            end
+            
+            % SHOW REWARD SEND PATCH
             Patch_State(D.UI.ptchRewSendH(D.I.rot), ...
                 'Select', D.UI.rotCol(D.I.rot,:));
             
-            % Update reward info list
+            % Log/print reset bounds crossed
+            Log_Debug(sprintf('Crossed Reward Bounds: cross_cnt=%d', D.C.rew_cross));
+            
+            % Update UI
+            Update_UI(0, 'limitrate');
+            
+        end
+         
+        % RESET REWARD GRAPHICS
+        function ResetRewGraphics()
+            
+            % Reset reward zone patches
+            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
+                'ShowAll', D.UI.rotCol(D.I.rot,:));
+            
+            % Hide reward duration text
+            Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
+                'Visible', 'off');
+            
+        end
+
+        % UPDATE REWARD INFO
+        function UpdateRewInfo()
+            
+            % Compute dime info
             rew_ellapsed = Sec_DT(now) - D.T.rew_last;
             D.T.rew_last = Sec_DT(now);
+            
+            % Format list
             D.UI.rewInfoList = [...
                 D.UI.rewInfoList; ...
                 {sprintf('%d: T:%0.2f Z:%d M:%d', ...
@@ -10918,25 +11030,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 -1*D.PAR.zoneLocs(D.I.zone_now), ...
                 sum(D.C.missed_rew)) ...
                 }];
+            
+            % Compute reward percent
             rew_percent = ...
                 round(100-(sum(D.C.missed_rew)/D.C.rew_cross)*100);
+            
+            % Update list
             infstr = [...
                 sprintf('Reward Info (%d%%)', rew_percent); ...
                 D.UI.rewInfoList];
+            
+            % Update popmenu
             Safe_Set(D.UI.popRewInfo, 'String', infstr);
-            
-            % Log/print reset bounds crossed
-            Console_Write(sprintf('[Track_Reward_Zone_Check] Crossed Reward Bounds: cross_cnt=%d', D.C.rew_cross));
-            
-            % Update UI
-            Update_UI(0, 'limitrate');
             
         end
         
     end
 
-% ----------------------FORAGE REWARD ZONE CHECK-------------------
-    function Forage_Reward_Targ_Check()
+% ------------------------FORAGE REWARD CHECK----------------------
+    function Forage_Reward_Check()
         
         % BAIL IF MANUAL OR TRACK TRAINING
         if D.PAR.sesCond == 'Manual_Training' || ...
@@ -11011,7 +11123,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             VT_Plot_Hist()
             
             % Log/print
-            Console_Write(sprintf('[Forage_Reward_Targ_Check] Rewarded: targ=%ddeg dt_occ=%0.2fsec', ...
+            Log_Debug(sprintf('Rewarded: targ=%ddeg dt_occ=%0.2fsec', ...
                 D.PAR.frgTargDegArr(D.I.targ_last), inbndTim));
             
             % Update UI
@@ -11061,7 +11173,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 is_left_early = true;
                 
                 % Log/print
-                Console_Write(sprintf('**WARNING** [Forage_Reward_Targ_Check] Rat Moved Out of Bounds Early: dt_rew=%0.2fsec dt_occ=%0.2fsec', ...
+                Debug_Warning(sprintf('Rat Moved Out of Bounds Early: dt_rew=%0.2fsec dt_occ=%0.2fsec', ...
                     Sec_DT(now) - D.T.frg_rew, outbndTim));
                 
             else
@@ -11120,7 +11232,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.I.targ_now = targ_ind_new;
             
             % Log/print
-            Console_Write(sprintf('[Forage_Reward_Targ_Check] Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
+            Log_Debug(sprintf('Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
                 D.PAR.frgTargDegArr(D.I.targ_last), D.PAR.frgTargDegArr(D.I.targ_now)));
             
         end
@@ -11145,7 +11257,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.F.move_to_targ = false;
             
             % Log/print
-            Console_Write(sprintf('[Forage_Reward_Targ_Check] Sent Moved Command: targ=%ddeg dt_rew=%0.2fs', ...
+            Log_Debug(sprintf('Sent Moved Command: targ=%ddeg dt_rew=%0.2fs', ...
                 targ_rad, Sec_DT(now) - D.T.frg_rew));
             
         end
@@ -11271,7 +11383,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Sync IR timing test
-        if D.DB.t6_doSyncIRTimingTest
+        if D.DB.t6_doIRSyncTest
             SyncIRTimingTest()
         end
         
@@ -11720,7 +11832,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.isTestStarted = true;
                 
                 % Log/print
-                Console_Write(sprintf('[Test_Run] Start VT Calibration Test: dt_run=%0.2fmin rob_vel=%dcm/sec', ...
+                Log_Debug(sprintf('Start VT Calibration Test: dt_run=%0.2fmin rob_vel=%dcm/sec', ...
                     D.DB.CALVT.RunDur, D.DB.CALVT.RobVel));
                 
             end
@@ -11924,7 +12036,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     sprintf('\r%4.0f, %4.0f, %4.0f, %0.4f, %4.0f\r', ...
                     D.DB.HALT.error(1), D.DB.HALT.error(2), D.DB.HALT.error(3), D.DB.HALT.error(4)/D.DB.HALT.error(5), D.DB.HALT.NowVel)];
                 % Log/print
-                Console_Write(D.DB.HALT.error_str);
+                Log_Debug(D.DB.HALT.error_str);
                 
                 % Check if vel should be stepped
                 if D.DB.HALT.Cnt == D.DB.HALT.StepTrials
@@ -11950,12 +12062,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         fprintf(file_id,D.DB.HALT.error_str(3:end));
                         fclose(file_id);
                         % Log/print
-                        Console_Write(sprintf('[Test_Run] Saved Halt Error Test: %s', ...
+                        Log_Debug(sprintf('Saved Halt Error Test: %s', ...
                             fi_out));
                     end
                     
                     % Log/print
-                    Console_Write(sprintf('[Test_Run] Halt Error Test: new_vel=%dcm/sec', ...
+                    Log_Debug(sprintf('Halt Error Test: new_vel=%dcm/sec', ...
                         D.DB.HALT.NowVel));
                     
                 end
@@ -11994,7 +12106,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.HALT.IsHalted = true;
                 
                 % Log/print
-                Console_Write('[Test_Run] Halt Error Test: Halting Robot');
+                Log_Debug('Halt Error Test: Halting Robot');
             end
             
         end
@@ -12152,7 +12264,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.t_send(D.DB.WALIR.cntEvent(1), :) = ts;
                         
                         % Log/print
-                        Console_Write(sprintf('[Test_Run] WALL IR IMAGE TEST: Trial=%d Img Change TS=%0.0fms', ...
+                        Log_Debug(sprintf('WALL IR IMAGE TEST: Trial=%d Img Change TS=%0.0fms', ...
                             D.DB.WALIR.cntEvent(1), ts/1000));
                     end
                     
@@ -12173,7 +12285,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             D.DB.WALIR.t_trig(D.DB.WALIR.cntEvent(1), z_t) = ts;
                             
                             % Log/print
-                            Console_Write(sprintf('[Test_Run] WALL IR IMAGE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
+                            Log_Debug(sprintf('WALL IR IMAGE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
                                 D.DB.WALIR.PTttlStr{z_t}, D.DB.WALIR.cntEvent(1), ts/1000));
                             
                         end
@@ -12256,7 +12368,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.t_send(D.DB.WALIR.cntEvent(2), D.DB.WALIR.cntSensor) = ts;
                         
                         % Log/print
-                        Console_Write(sprintf('[Test_Run] WALL IR PULSE TEST: Sensor=%s Trial=%d Pulse TS=%0.0fms', ...
+                        Log_Debug(sprintf('WALL IR PULSE TEST: Sensor=%s Trial=%d Pulse TS=%0.0fms', ...
                             D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}, D.DB.WALIR.cntEvent(2), ts/1000));
                     end
                     
@@ -12271,7 +12383,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.WALIR.t_trig(D.DB.WALIR.cntEvent(3), D.DB.WALIR.cntSensor) = ts;
                         
                         % Log/print
-                        Console_Write(sprintf('[Test_Run] WALL IR PULSE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
+                        Log_Debug(sprintf('WALL IR PULSE TEST: Sensor=%s Trial=%d Trigger TS=%0.0fms', ...
                             D.DB.WALIR.PTttlStr{D.DB.WALIR.cntSensor}, D.DB.WALIR.cntEvent(3), ts/1000));
                     end
                 end
@@ -12365,6 +12477,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % BEGIN TEST
             if ~D.DB.isTestStarted
+                
+                % Wait form netcom setup
+                if ~D.F.mat_netcom_setup
+                    return;
+                end
                 
                 % Set port direction
                 Send_NLX_Cmd(['-SetDigitalIOportDirection ', D.NLX.DevTTL, ' ', '2', ' Input']);
@@ -12483,7 +12600,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.SYNCIR.t_pulse(D.DB.SYNCIR.cntEvent(2)) = ts(1);
                         
                         % Log/print
-                        Console_Write(sprintf('[Test_Run] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
+                        Log_Debug(sprintf('SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
                             D.NLX.ir_ts_str, D.DB.SYNCIR.cntEvent(2), ts/1000));
                     end
                     
@@ -12498,7 +12615,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         D.DB.SYNCIR.t_trig(D.DB.SYNCIR.cntEvent(3)) = ts(1);
                         
                         % Log/print
-                        Console_Write(sprintf('[Test_Run] SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
+                        Log_Debug(sprintf('SYNC IR TEST: Event=%s Trial=%d TS=%0.0fms', ...
                             D.DB.SYNCIR.NLXevtStr, D.DB.SYNCIR.cntEvent(3), ts/1000));
                     end
                     
@@ -12607,7 +12724,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.DB.isTestStarted = true;
                 
                 % Log/print
-                Console_Write(sprintf('[Test_Run] CUBE "%s" BATTERY TEST: Cube VCC Starting at %d%%', ...
+                Log_Debug(sprintf('CUBE "%s" BATTERY TEST: Cube VCC Starting at %d%%', ...
                     D.PAR.cubeBatteryType, D.DB.CVCC.vcc_step(1)));
             end
             
@@ -12656,7 +12773,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 set(D.DB.CVCC.ax, 'XLim', [0,ceil(max(D.DB.CVCC.dt_step)/60)]);
                 
                 % Log/print
-                Console_Write(sprintf('[Test_Run] CUBE "%s" BATTERY TEST: [%s] Cube VCC = %d%%', ...
+                Log_Debug(sprintf('Cube VCC = %d%%', ...
                     D.PAR.cubeBatteryType, dt_str, D.DB.CVCC.vcc_step(change_ind+1)));
             end
             
@@ -12732,10 +12849,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_3.(D.PAR.ratLab).Weight_Cap(rowInd) = D.PAR.capWeight;
             D.SS_IO_3.(D.PAR.ratLab).Weight_Corrected(rowInd) = D.PAR.ratWeightCorrected;
             D.SS_IO_3.(D.PAR.ratLab).Weight_Proportion(rowInd) = D.PAR.ratWeightProportion;
-            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Weight');
+            Log_Debug('FINISHED: Update Rat Weight');
         else
             % Carry over old weight info
-            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Weight');
+            Log_Debug('SKIPPED: Update Rat Weight');
         end
         
         % Store feed info
@@ -12744,12 +12861,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_3.(D.PAR.ratLab).Fed_Mash(rowInd) = D.PAR.feedMash;
             D.SS_IO_3.(D.PAR.ratLab).Fed_Ensure(rowInd) = D.PAR.feedEnsure;
             D.SS_IO_3.(D.PAR.ratLab).Fed_STAT(rowInd) = D.PAR.feedSTAT;
-            Console_Write('[Save_Weight_Data] FINISHED: Update Rat Food');
+            Log_Debug('FINISHED: Update Rat Food');
         else
             % Set to zeros
             var_ind =  contains(D.SS_IO_3.(D.PAR.ratLab).Properties.VariableNames, 'Fed_');
             D.SS_IO_3.(D.PAR.ratLab){end, var_ind} = 0;
-            Console_Write('[Save_Weight_Data] SKIPPED: Update Rat Food');
+            Log_Debug('SKIPPED: Update Rat Food');
         end
         
         % Store health info
@@ -13005,7 +13122,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update 'Sound_Conditions'
         D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
-        Console_Write('[Save_Weight_Data] FINISHED: Update "SS_IO_1"');
+        Log_Debug('FINISHED: Update "SS_IO_1"');
         
         % Save out data
         SS_IO_2 = D.SS_IO_2; %#ok<NASGU>
@@ -13093,10 +13210,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if cheetah still running
         if ~all_closed
-            Console_Write('**WARNING** [Save_Cheetah_Data] ABORTED: Wait for NLX Programs to Close');
+            Debug_Warning('ABORTED: Wait for NLX Programs to Close');
             return
         else
-            Console_Write('[Save_Cheetah_Data] FINISHED: Wait for NLX Programs to Close');
+            Log_Debug('FINISHED: Wait for NLX Programs to Close');
         end
         
         % SAVE CHEETAH CONFIG FILE
@@ -13110,7 +13227,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 exist(nlx_cfg_last, 'file')
             
             % Log print source path
-            Console_Write(sprintf('[Save_Cheetah_Data] RUNNING: Copy Config File: "%s"...', nlx_cfg_last))
+            Log_Debug(sprintf('RUNNING: Copy Config File: "%s"...', nlx_cfg_last))
             
             % Get rat file path
             rat_path = fullfile(D.DIR.nlxSaveRat, 'CheetahLastConfiguration.cfg');
@@ -13124,10 +13241,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             copyfile(nlx_cfg_last, rat_path);
             
             % Log print target path
-            Console_Write(sprintf('[Save_Cheetah_Data] FINISHED: Copying Config File to: "%s"', rat_path))
+            Log_Debug(sprintf('FINISHED: Copying Config File to: "%s"', rat_path))
             
         else
-            Console_Write(sprintf('[Save_Cheetah_Data] SKIPPED: Copy Config File: "%s"...', nlx_cfg_last))
+            Log_Debug(sprintf('SKIPPED: Copy Config File: "%s"...', nlx_cfg_last))
         end
         
         % Bail if not saving
@@ -13139,7 +13256,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Save to global for CS
         m2c_dir = save_rec_dir;
-        Console_Write(sprintf('[Save_Cheetah_Data] SET RECORDING DIR TO "%s"', ...
+        Log_Debug(sprintf('SET RECORDING DIR TO "%s"', ...
             m2c_dir));
         
         % Get file size
@@ -13147,14 +13264,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         fi_gigs = sum([fi_gigs.bytes])/10^9;
         
         % Log/print start
-        Console_Write(sprintf('[CopyDir] RUNNING: Copy Cheetah Dir...: file=%s size=%0.2fGB', ...
+        Log_Debug(sprintf('RUNNING: Copy Cheetah Dir...: file=%s size=%0.2fGB', ...
             D.DIR.nlxRecSub, fi_gigs));
         
         % Copy file
         copyfile(temp_rec_dir, save_rec_dir)
         
         % Log/print end
-        Console_Write(sprintf('[CopyDir] FINISHED: Copy Cheetah Dir: file=%s size=%0.2fGB', ...
+        Log_Debug(sprintf('FINISHED: Copy Cheetah Dir: file=%s size=%0.2fGB', ...
             D.DIR.nlxRecSub, fi_gigs));
         
         % Set output and bail
@@ -13174,7 +13291,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Confirm that NLX Programs closed
-        Console_Write(sprintf('[Wait_Close_NLX] RUNNNING: Wait for NLX Programs to Close: check_max=%d...', check_max));
+        Log_Debug(sprintf('RUNNNING: Wait for NLX Programs to Close: check_max=%d...', check_max));
         
         % Get check start time
         t_str = Sec_DT(now);
@@ -13254,9 +13371,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print status
         if pass
-            Console_Write(['[Wait_Close_NLX] FINISHED: Wait for NLX Programs to Close', dat_str]);
+            Log_Debug(['FINISHED: Wait for NLX Programs to Close', dat_str]);
         else
-            Console_Write(['**WARNING** [Wait_Close_NLX] ABORTED: Wait for NLX Programs to Close', dat_str]);
+            Debug_Warning(['ABORTED: Wait for NLX Programs to Close', dat_str]);
         end
         
     end
@@ -13271,12 +13388,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if not connected
         if ~D.F.ac_connected
-            Console_Write('[Disconnect_AC] SKIPPED: Disconnect from AC Computer...');
+            Log_Debug('SKIPPED: Disconnect from AC Computer...');
             return
         end
         
         % Log/print
-        Console_Write('[Disconnect_AC] RUNNING: Disconnect from AC Computer...');
+        Log_Debug('RUNNING: Disconnect from AC Computer...');
         
         % Disconnect from AC computer
         if isfield(D, 'AC')
@@ -13299,23 +13416,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             fclose(TCPIP);
                             
                             % Show status disconnected
-                            Console_Write(sprintf('[Disconnect_AC] FINISHED: Disconnect from AC Computer IP=%s', ...
+                            Log_Debug(sprintf('FINISHED: Disconnect from AC Computer IP=%s', ...
                                 D.AC.IP));
                             
                         else
-                            Console_Write('**WARNING** [Disconnect_AC] "TCPIP" Does Not Exist');
+                            Debug_Warning('"TCPIP" Does Not Exist');
                         end
                     else
-                        Console_Write('**WARNING** [Disconnect_AC] "TCPIP" is Not a TCPIP Object');
+                        Debug_Warning('"TCPIP" is Not a TCPIP Object');
                     end
                 else
-                    Console_Write('**WARNING** [Disconnect_AC] "TCPIP" Does Not Exist');
+                    Debug_Warning('"TCPIP" Does Not Exist');
                 end
             else
-                Console_Write('**WARNING** [Disconnect_AC] "D.AC" is Empty');
+                Debug_Warning('"D.AC" is Empty');
             end
         else
-            Console_Write('**WARNING** [Disconnect_AC] "AC" Not a Field of "D"');
+            Debug_Warning('"AC" Not a Field of "D"');
         end
         
         % Unset flag
@@ -13341,12 +13458,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if not connected
         if NlxAreWeConnected() ~= 1
-            Console_Write('[Disconnect_NLX] SKIPPED: Disconnect from NLX...');
+            Log_Debug('SKIPPED: Disconnect from NLX...');
             return
         end
         
         % Log/print
-        Console_Write('[Disconnect_NLX] RUNNING: Disconnect from NLX...');
+        Log_Debug('RUNNING: Disconnect from NLX...');
         
         % Stop recording and aquisition
         Send_NLX_Cmd('-StopRecording');
@@ -13358,19 +13475,19 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Close rat vt stream
             D.F.vt_rat_streaming = NlxCloseStream(D.NLX.vt_rat_ent) ~= 1;
-            Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
+            Log_Debug(sprintf('Close NLX "%s" Stream: status=%d', ...
                 D.NLX.vt_rat_ent, ~D.F.vt_rat_streaming ));
             
             % Close robot vt stream
             D.F.vt_rob_streaming  = NlxCloseStream(D.NLX.vt_rob_ent) ~= 1;
-            Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
+            Log_Debug(sprintf('Close NLX "%s" Stream: status=%d', ...
                 D.NLX.vt_rob_ent, ~D.F.vt_rob_streaming ));
         end
         
         % Close event stream
         if isfield(D.NLX, 'event_ent')
             D.F.evt_streaming = NlxCloseStream(D.NLX.event_ent) ~= 1;
-            Console_Write(sprintf('[Disconnect_NLX] Close NLX "%s" Stream: status=%d', ...
+            Log_Debug(sprintf('Close NLX "%s" Stream: status=%d', ...
                 D.NLX.event_ent, ~D.F.evt_streaming));
         end
         
@@ -13392,9 +13509,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Show status disconnected
         if pass
-            Console_Write('[Disconnect_NLX] FINISHED: Disconnect from NLX');
+            Log_Debug('FINISHED: Disconnect from NLX');
         else
-            Console_Write('**WARNING** [Disconnect_NLX] ABORTED: Disconnect from NLX');
+            Debug_Warning('ABORTED: Disconnect from NLX');
         end
         
     end
@@ -13403,7 +13520,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function ForceClose()
         
         % Log/print
-        Console_Write('**WARNING** [ForceClose] RUNNING: ForceClose Exit Procedure...');
+        Debug_Warning('RUNNING: ForceClose Exit Procedure...');
         
         % Disconnect AC computer
         Disconnect_AC();
@@ -13437,7 +13554,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Clear and close
         if ISCRASH
-            Console_Write('**WARNING** [ForceClose] MATLAB CRASHED: CLEARING AND CLOSING');
+            Debug_Warning('MATLAB CRASHED: CLEARING AND CLOSING');
             ClearCloseAll(false)
         end
         
@@ -13460,7 +13577,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         DOEXIT = true;
         
         % Log/print
-        Console_Write('[SetExit] SET EXIT FLAG');
+        Log_Debug('SET EXIT FLAG');
     end
 
 % -------------------------CLEAR AND CLOSE ALL-----------------------------
@@ -13474,10 +13591,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         if isvalid(D.timer_c2m)
                             if strcmp(D.timer_c2m.Running, 'on')
                                 stop(D.timer_c2m);
-                                Console_Write('[ClearCloseAll] Stopped "timer_c2m"');
+                                Log_Debug('Stopped "timer_c2m"');
                             end
                             delete(D.timer_c2m);
-                            Console_Write('[ClearCloseAll] Deleted "timer_c2m"');
+                            Log_Debug('Deleted "timer_c2m"');
                         end
                     end
                 end
@@ -13539,11 +13656,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Clear all global variables but return var
         if clear_all
-            vars_exc = {'STATUS', 'c2m_com'};
+            vars_exc = {'STATUS', 'c2m_com', 'c2m_pack'};
         end
         
         % Log/print vars cleared
-        Console_Write(['[ClearCloseAll] CLEARING ALL VARS BUT:', sprintf(' "%s"', vars_exc{:})]);
+        Log_Debug(['CLEARING ALL VARS BUT:', sprintf(' "%s"', vars_exc{:})]);
         
         % Clear variables
         clearvars('-global', '-except', vars_exc{:});
@@ -14563,7 +14680,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Log/print
-            Update_Log(sprintf('[Cue_Button_State] Set Cue Buttons to "%s"', setting_str));
+            Update_Log(sprintf('Set Cue Buttons to "%s"', setting_str));
         end
     end
 
@@ -14761,7 +14878,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Create rods
         for z_r = 1:nr
-           
+            
             % Calculating the length of the cylinder
             length_cyl = norm(C2{z_r}-C1);
             
@@ -14828,7 +14945,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Large sphear for last depth
                 scale = radius*D.UI.ttScale(1)*D.UI.ttSphereScale(2);
                 
-            elseif abs(tt_coords(z_sph,3)) > abs(tt_coords(end,3)) 
+            elseif abs(tt_coords(z_sph,3)) > abs(tt_coords(end,3))
                 
                 % Hide sphere for coords below current tt pos
                 scale = radius*D.UI.ttScale(2);
@@ -14972,104 +15089,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% ---------------------------PRINT TO CONSOLE------------------------------
-    function Console_Write(str, t_now, is_err)
-        
-        % Handle inputs
-        if nargin < 3
-            is_err = false;
-        end
-        if nargin < 2
-            t_now = now;
-            is_err = false;
-        end
-        
-        % Update log
-        Update_Log(str, t_now);
-        
-        % Get time centered to handshake time
-        t_s = Sec_DT(t_now);
-        t_s = t_s - DTHANDSHAKE;
-        
-        % Add to string array
-        msg = sprintf('\r%0.2f %s', t_s, str);
-        
-        % Bail if following conditions not met
-        if ~exist('D','var'); return; end
-        if ~isfield(D, 'DB'); return; end
-        if ~isfield(D.DB, 'consoleStr'); return; end
-        
-        % Itterate log count
-        D.DB.consoleCount = D.DB.consoleCount+1;
-        
-        % Insert new print string into existing string
-        if (D.DB.consoleCount>1)
-            D.DB.consoleStr(2:D.DB.consoleCount+1,:) = D.DB.consoleStr(1:D.DB.consoleCount,:);
-        end
-        D.DB.consoleStr(1,1:150) = ' ';
-        D.DB.consoleStr(1,1:length(msg)) = msg;
-        
-        % Bail if following conditions not met
-        if ~isfield(D, 'UI'); return; end
-        if ~isfield(D.UI, 'listConsole'); return; end
-        if ~isvalid(D.UI.listConsole); return; end
-        
-        % Print normal
-        Safe_Set(D.UI.listConsole, ...
-            'String', D.DB.consoleStr);
-        
-        % Set to red bold for error
-        if is_err
-            Safe_Set(D.UI.listConsole, ...
-                'ForegroundColor', D.UI.warningCol, ...
-                'FontWeight','Bold');
-        end
-        
-        % Update UI imediately if not running task
-        if UPDATENOW
-            Update_UI(0, 'force');
-        else
-            Update_UI(10, 'force');
-        end
-        
-    end
-
-% ---------------------------UPDATE LOG------------------------------
-    function Update_Log(str, t_now)
-        
-        % Handle inputs
-        if nargin < 2
-            t_now = now;
-        end
-        
-        % Get time centered to handshake time
-        t_s = Sec_DT(t_now);
-        t_s = t_s - DTHANDSHAKE;
-        t_m = round(t_s*1000);
-        
-        % Write to Matlab window
-        fprintf('%0.2f %s\n\r', t_s, str);
-        
-        % Bail if following conditions not met
-        if ~exist('D','var'); return; end
-        if ~isfield(D, 'DB'); return; end
-        if ~isfield(D.DB, 'logCount'); return; end
-        if ~isfield(D.DB, 'logStr'); return; end
-        
-        % Itterate log count
-        D.DB.logCount = D.DB.logCount+1;
-        
-        % Replace '\' with '/'
-        str_frm = regexprep(str, '\\', '/');
-        
-        % Add to strings
-        msg = sprintf('[%d],%d,%s\r', D.DB.logCount, t_m, str_frm);
-        
-        % Store log str
-        D.DB.logStr{D.DB.logCount} = msg;
-        
-    end
-
 % ---------------------------UPDATE UI-----------------------------
     function Update_UI(dt_min, arg_str)
         
@@ -15159,12 +15178,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check status
             if abort
-                Console_Write('**WARNING** [Setup] ABORTED: Wait For m2c Packet Reset');
+                Debug_Warning('ABORTED: Wait For m2c Packet Reset');
                 return
             elseif ~pass
                 % Force reset packet
                 m2c_pack(6) = 0;
-                Console_Write(sprintf('**WARNING** [Send_CS_Com] Forced Reset m2c Packet: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
+                Debug_Warning(sprintf('Forced Reset m2c Packet: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f dt=%dms', ...
                     id, dat1, dat2, dat3, round((Sec_DT(now) - t_start)*1000)));
             end
             
@@ -15178,16 +15197,33 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Get new packet number
         if pack == 0
-            m2c.cnt_pack = m2c.cnt_pack+1;
+            
+            % Itterate packet or restart
+            m2c.packInd = m2c.packInd+1;
+            
+            % Reset packet if out of range
+            if m2c.packInd > m2c.packRange(2)
+                Log_Debug(sprintf('RESETTING M2C PACKET INDEX FROM %d TO %d', ...
+                    m2c.packInd, m2c.packRange(1)));
+                m2c.packInd = m2c.packRange(1);
+            end
+            
+            % Update packet info
             m2c.(id).packLast = m2c.(id).pack;
-            m2c.(id).pack = m2c.cnt_pack;
-            m2c_pack(5) = m2c.cnt_pack;
+            m2c.(id).pack = m2c.packInd;
+            
+            % Save to shared var
+            m2c_pack(5) = m2c.packInd;
+            
         else
             % Use packet input
             m2c_pack(5) = pack;
         end
         
-        % Save dat to struct
+        % Update total packet count
+        m2c.packTot = m2c.packTot+1;
+        
+        % Save data to struct
         m2c.(id).dat1 = double(dat1);
         m2c.(id).dat2 = double(dat2);
         m2c.(id).dat3 = double(dat3);
@@ -15202,7 +15238,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('   [SENT] m2c: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
+        Log_Debug(sprintf('   [SENT] m2c: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
             id, dat1 ,dat2, dat3, m2c_pack(5)));
         
     end
@@ -15230,7 +15266,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 SetExit()
                 
                 % Log/print exit received
-                Console_Write(sprintf('[Proc_CS_Com] RECIEVED CS EXIT COMMAND: id=''%s'' dat1=%d', ...
+                Log_Debug(sprintf('RECIEVED CS EXIT COMMAND: id=''%s'' dat1=%d', ...
                     id, c2m.(id).dat1), now);
             end
             
@@ -15254,7 +15290,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Write to console
-                Console_Write(err_str, now, true);
+                Log_Debug(err_str, now, true);
                 
             end
             
@@ -15280,7 +15316,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 SetExit()
                 
                 % Write to console
-                Console_Write(err_str, now, true);
+                Log_Debug(err_str, now, true);
                 
                 % Pause for message to show
                 pause(1);
@@ -15289,13 +15325,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set abort run flag
             if c2m.(id).dat1 ~= 1
                 ISABORTRUN = true;
-                Console_Write("**WARNING** SET ABORT RUN FLAG", now);
+                Debug_Warning('SET ABORT RUN FLAG', now);
             end
             
         end
         
         %Print new data
-        Console_Write(sprintf('   [RCVD] c2m: id=''%s'' dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%0.0f', ...
+        Log_Debug(sprintf('   [RCVD] c2m: id=''%s'' dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%0.0f', ...
             c2m.(id).id, c2m.(id).dat1, c2m.(id).dat2, c2m.(id).dat3, c2m.(id).pack), now);
         
         % Update UI
@@ -15322,7 +15358,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         fwrite(TCPIP,D.AC.data,'int8');
         
         % Log/print
-        Console_Write(sprintf('   [SENT] m2ac: dat=|%d|%d|%d|', ...
+        Log_Debug(sprintf('   [SENT] m2ac: dat=|%d|%d|%d|', ...
             D.AC.data(1),D.AC.data(2),D.AC.data(3)));
     end
 
@@ -15338,7 +15374,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~D.F.cheetah_running
             
             % Log/print skipping
-            Console_Write(sprintf('[Send_NLX_Cmd] SKIPPED: m2nlx: msg="%s"', msg));
+            Log_Debug(sprintf('SKIPPED: m2nlx: msg="%s"', msg));
             
             % Set outputs and bail
             pass = 0;
@@ -15370,10 +15406,198 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         if pass == 1
-            Console_Write(sprintf('   [SENT] m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg));
+            Log_Debug(sprintf('   [SENT] m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg));
         else
-            Console_Write(sprintf('**WARNING** FAILED: m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg));
+            Debug_Warning(sprintf('FAILED: m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg));
         end
+    end
+
+
+
+
+
+
+%% ============================ DEBUGGING FUNCTIONS =======================
+
+% ------------------------------DEBUG ERROR--------------------------------
+    function Debug_Warning(msg, t_now)
+        
+        % Handle inputs
+        if nargin < 2
+            t_now = now;
+        end
+        
+        % Add error type
+        err_str = ['**WARNING** ', msg];
+        
+        % Log/print error
+        Log_Debug(err_str, t_now);
+        
+        % Add to counter
+        D.DB.cnt_warn = D.DB.cnt_warn+1;
+        D.DB.warn_line(D.DB.cnt_warn) = D.DB.cnt_logs;
+        
+    end
+
+% ------------------------------DEBUG ERROR--------------------------------
+    function Debug_Error(msg, t_now)
+        
+        % Handle inputs
+        if nargin < 2
+            t_now = now;
+        end
+        
+        % Add error type
+        err_str = ['!!ERROR!! ', msg];
+        
+        % Log/print error
+        Log_Debug(err_str, t_now, true);
+        
+        % Add to counter
+        D.DB.cnt_err = D.DB.cnt_err+1;
+        D.DB.err_line(D.DB.cnt_err) = D.DB.cnt_logs;
+        
+    end
+
+% -----------------------------PRINT AND LOG-------------------------------
+    function Log_Debug(msg, t_now, is_err)
+        
+        % Handle inputs
+         if nargin < 3
+            is_err = false;
+        end
+        if nargin < 2
+            t_now = now;
+            is_err = false;
+        end
+        
+        % Update log and get print formated message
+        print_msg = Update_Log(msg, t_now);
+        
+        % Bail if following conditions not met
+        if ~exist('D','var'); return; end
+        if ~isfield(D, 'DB'); return; end
+        if ~isfield(D.DB, 'consoleStr'); return; end
+        
+        % Itterate log count
+        D.DB.cnt_console = D.DB.cnt_console+1;
+        
+        % Insert new print string into existing string
+        if (D.DB.cnt_console>1)
+            D.DB.consoleStr(2:D.DB.cnt_console+1,:) = D.DB.consoleStr(1:D.DB.cnt_console,:);
+        end
+        D.DB.consoleStr(1,1:150) = ' ';
+        D.DB.consoleStr(1,1:length(print_msg)) = print_msg;
+        
+        % Bail if following conditions not met
+        if ~isfield(D, 'UI'); return; end
+        if ~isfield(D.UI, 'listConsole'); return; end
+        if ~isvalid(D.UI.listConsole); return; end
+        
+        % Print normal
+        Safe_Set(D.UI.listConsole, ...
+            'String', D.DB.consoleStr);
+        
+        % Set to red bold for error
+        if is_err
+            Safe_Set(D.UI.listConsole, ...
+                'ForegroundColor', D.UI.warningCol, ...
+                'FontWeight','Bold');
+        end
+        
+        % Update UI imediately if not running task
+        if UPDATENOW
+            Update_UI(0, 'force');
+        else
+            Update_UI(10, 'force');
+        end
+        
+    end
+
+% ---------------------------UPDATE LOG------------------------------
+    function[print_msg] = Update_Log(msg, t_now)
+        
+        % Handle inputs
+        if nargin < 2
+            t_now = now;
+        end
+        
+        % Store handshake time in local variable
+        persistent t_handshake_time;
+        if isempty(t_handshake_time)
+            if exist('DTHANDSHAKE','var')
+                if DTHANDSHAKE > 0
+                    t_handshake_time = DTHANDSHAKE;
+                end
+            end
+        end
+        
+        % Get call stack
+        stack = dbstack;
+        s_ind = 2;
+        
+        % Check if called from 'Log_Debug'
+        if contains(stack(s_ind).name, 'Log_Debug')
+            s_ind = s_ind+1;
+        end
+        
+        % Check if called from 'Debug_Warning' or 'Debug_Error'
+        if contains(stack(s_ind).name, 'Debug_Warning') || ...
+                contains(stack(s_ind).name, 'Debug_Error')
+            s_ind = s_ind+1;
+        end
+        
+        % Only one level in
+        if ~contains(stack(s_ind).name, '/')
+            fun = stack(s_ind).name;
+        else
+            
+            % Handle calls from these functions
+            if contains(stack(s_ind).name, 'Debug_Warning') || ...
+                    contains(stack(s_ind).name, 'Debug_Error')
+                s_ind = 3;
+            end
+            
+            % Parse for function name
+            fun = regexp(stack(s_ind).name, '(?<=\/)\w*', 'match');
+            fun = fun{end};
+        end
+        
+        % Store line
+        line = stack(s_ind).line;
+        
+        % Format string with function and line number
+        msg_frm_1 = sprintf('[%s:%d] %s', fun, line, msg);
+        
+        % Get time centered to handshake time
+        t_s = Sec_DT(t_now);
+        t_s = t_s - t_handshake_time;
+        t_m = round(t_s*1000);
+        
+        % Store print version 
+        print_msg = sprintf('\r%0.2f %s', t_s, msg_frm_1);
+        
+        % Display in Matlab window
+        disp(print_msg); %#ok<DSPS>
+        
+        % Bail if following conditions not met
+        if ~exist('D','var'); return; end
+        if ~isfield(D, 'DB'); return; end
+        if ~isfield(D.DB, 'cnt_logs'); return; end
+        if ~isfield(D.DB, 'logStr'); return; end
+        
+        % Itterate log count
+        D.DB.cnt_logs = D.DB.cnt_logs+1;
+        
+        % Replace '\' with '/'
+        msg_frm_2 = regexprep(msg_frm_1, '\\', '/');
+        
+        % Add to strings
+        log_msg = sprintf('[%d],%d,%s\r', D.DB.cnt_logs, t_m, msg_frm_2);
+        
+        % Store log str
+        D.DB.logStr{D.DB.cnt_logs} = log_msg;
+        
     end
 
 
@@ -15386,8 +15610,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % ---------------------------GET TIME NOW-------------------------------
     function [t_sec] = Sec_DT(t_now)
         
+        % Store local time in local variable
+        persistent t_local_time;
+        if isempty(t_local_time)
+            if exist('TIMSTRLOCAL','var')
+                if TIMSTRLOCAL > 0
+                    t_local_time = TIMSTRLOCAL;
+                end
+            end
+        end
+        
         % Convert from days to seconds
-        t_sec = (t_now-TIMSTRLOCAL)*24*60*60;
+        t_sec = (t_now-t_local_time)*24*60*60;
         
     end
 
@@ -15848,23 +16082,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         if (is_del_changed)
-            Update_Log('[Check_Setup_Defaults] Changed Reward Delay');
+            Update_Log('Changed Reward Delay');
             Update_UI(0, 'force');
         end
         if (is_cue_changed)
-            Update_Log('[Check_Setup_Defaults] Changed Cue Condition');
+            Update_Log('Changed Cue Condition');
             Update_UI(0, 'force');
         end
         if (is_task_changed)
-            Update_Log('[Check_Setup_Defaults] Changed Task Condition');
+            Update_Log('Changed Task Condition');
             Update_UI(0, 'force');
         end
         if (is_sound_changed)
-            Update_Log('[Check_Setup_Defaults] Changed Sound Condition');
+            Update_Log('Changed Sound Condition');
             Update_UI(0, 'force');
         end
         if (is_nlx_changed)
-            Update_Log('[Check_Setup_Defaults] Changed NLX Flags');
+            Update_Log('Changed NLX Flags');
             Update_UI(0, 'force');
         end
         
@@ -15878,7 +16112,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             t_c = D.UI.popTask.String{get(D.UI.popTask, 'Value')};
         end
-            
+        
     end
 
 %%=========================================================================
@@ -16017,7 +16251,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Set run cheetah to active
-        if D.PAR.sesType ~= 'Table_Update' 
+        if D.PAR.sesType ~= 'Table_Update'
             Safe_Set(D.UI.toggNlx(1), 'Value', 1);
             Togg_NLX();
         end
@@ -16137,7 +16371,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%s"', 'Pop_Rat', D.PAR.ratLab));
+        Log_Debug(sprintf('Set to "%s"', D.PAR.ratLab));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16161,7 +16395,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.sesHuman(:) = D.UI.popHuman.String(get(D.UI.popHuman, 'Value'));
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%s"', 'Pop_Human', char(D.PAR.sesHuman)));
+        Log_Debug(sprintf('Set to "%s"', char(D.PAR.sesHuman)));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16230,7 +16464,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%s"', 'Pop_Cond', char(D.PAR.sesCond)));
+        Log_Debug(sprintf('Set to "%s"', char(D.PAR.sesCond)));
         
         % Check settings
         Check_Setup_Defaults();
@@ -16276,7 +16510,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%s"', 'Pop_Task', char(D.PAR.sesTask)));
+        Log_Debug(sprintf('Set to "%s"', char(D.PAR.sesTask)));
         
         % Check settings
         Check_Setup_Defaults();
@@ -16305,7 +16539,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.rewDel = str2double(char(D.PAR.sesRewDel));
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%s"', 'Pop_RewDel', char(D.PAR.sesRewDel)));
+        Log_Debug(sprintf('Set to "%s"', char(D.PAR.sesRewDel)));
         
         % Check settings
         Check_Setup_Defaults();
@@ -16326,7 +16560,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggNlx, 'Update');
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d" "%d" "%d"', 'Togg_NLX', ...
+        Log_Debug(sprintf('Set to "%d" "%d" "%d"', ...
             get(D.UI.toggNlx(1), 'Value'), get(D.UI.toggNlx(2), 'Value'), get(D.UI.toggNlx(3), 'Value')));
         
         % Check settings
@@ -16370,7 +16604,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%s"', 'Togg_Cue', char(D.PAR.sesCue)));
+        Log_Debug(sprintf('Set to "%s"', char(D.PAR.sesCue)));
         
         % Check settings
         Check_Setup_Defaults();
@@ -16410,7 +16644,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggSnd, 'Update');
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d" "%d"', 'Togg_Sound', ...
+        Log_Debug(sprintf('Set to "%d" "%d"', ...
             get(D.UI.toggSnd(1), 'Value'), get(D.UI.toggSnd(2), 'Value')));
         
         % Check settings
@@ -16462,7 +16696,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.ses_data_loaded = true;
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_SetupDone', get(D.UI.toggSetupDone,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.toggSetupDone,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16588,7 +16822,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.acq_tim = Sec_DT(now);
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_Acq', get(D.UI.toggAcq,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.toggAcq,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16625,7 +16859,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.rec_tim = Sec_DT(now);
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_Rec', get(D.UI.toggRec,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.toggRec,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16662,10 +16896,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Bail if das object does not exist
             if ~is_das
-                Console_Write(sprintf('[Togg_LoadClust] SKIPPED: Load %s: DAS Object Not Found', tt_lab));
+                Log_Debug(sprintf('SKIPPED: Load %s: DAS Object Not Found', tt_lab));
                 continue
             end
-                
+            
             % Parse clust file
             if val == 1
                 
@@ -16712,26 +16946,26 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Open tt stream
             if val == 1
                 msg = sprintf('Open "%s" Stream', tt_lab);
-                    succeeded = NlxOpenStream(tt_lab) == 1;
+                succeeded = NlxOpenStream(tt_lab) == 1;
             end
             
             % Close tt stream
             if val == 0
                 msg = sprintf('Close "%s" Stream', tt_lab);
-                    succeeded = NlxCloseStream(tt_lab) == 1;
+                succeeded = NlxCloseStream(tt_lab) == 1;
             end
             
             % Check status
             if succeeded
                 
                 % Log/print success
-                Console_Write(sprintf('[Togg_LoadClust] FINISHED: %s', msg));
+                Log_Debug(sprintf('FINISHED: %s', msg));
                 
                 % Set flag
                 D.F.clust_loaded(z_tt, 1:D.TT.nClust(z_tt)) =  val == 1;
                 
             else
-                Console_Write(sprintf('**WARNING** [Togg_LoadClust] FAILED: %s', msg));
+                Debug_Warning(sprintf('FAILED: %s', msg));
                 
                 % Bail
                 continue
@@ -16815,7 +17049,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         imwrite(img_dat_2,fullfile(D.DIR.nlxTempTop, D.DIR.nlxRecSub, fi_name_2));
         
         % Log/print
-        Console_Write(sprintf('[%s] Saved Cheetah Screen Shot %d', 'Btn_ScreenShot', D.C.cheetah_cap));
+        Log_Debug(sprintf('Saved Cheetah Screen Shot %d', D.C.cheetah_cap));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16875,14 +17109,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if sleep_phase == 2
                 
                 % Log/print
-                Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                Log_Debug('RUNNING: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
                 % Load sleep tracking config
                 Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Sleep.cfg');
-                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                Log_Debug('FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
                 % Log/print
-                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
+                Log_Debug('FINISHED: Load "ICR_Set_VT_Entities_Ephys_Sleep.cfg"');
                 
             end
             
@@ -16908,14 +17142,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if sleep_phase == 1
                 
                 % Log/print
-                Console_Write('[Togg_Sleep] RUNNING: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
+                Log_Debug('RUNNING: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
                 
                 % Load sleep tracking config
                 pause(0.5);
                 Send_NLX_Cmd('-ProcessConfigurationFile ICR_Set_VT_Entities_Ephys_Task.cfg');
                 
                 % Log/print
-                Console_Write('[Togg_Sleep] FINISHED: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
+                Log_Debug('FINISHED: Load "ICR_Set_VT_Entities_Ephys_Task.cfg"');
                 
             end
             
@@ -16925,7 +17159,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s(%d)] Set to "%d"', 'Togg_Sleep', sleep_phase, val));
+        Log_Debug(sprintf('Set to "%d"', sleep_phase, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -16977,7 +17211,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_ICR', val));
+        Log_Debug(sprintf('Set to "%d"', val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17065,7 +17299,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 get(D.UI.toggPickRewPos, 'Value') == 1
             
             % Run sub function
-            doZoneSelect(mouse_rad, mouse_roh);
+            DoZoneSelect(mouse_rad, mouse_roh);
         end
         
         % Forage reward target select
@@ -17073,7 +17307,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 get(D.UI.toggPickRewPos, 'Value') == 1
             
             % Run sub function
-            doTargSelect(mouse_rad, mouse_roh);
+            DoTargSelect(mouse_rad, mouse_roh);
         end
         
         % Rotation select
@@ -17081,11 +17315,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 any([D.UI.toggICR.Value] == 1)
             
             % Run sub function
-            doRotSelect(mouse_rad, mouse_roh);
+            DoRotSelect(mouse_rad, mouse_roh);
         end
         
-        % Select track reward zone
-        function doZoneSelect(rad, roh)
+        % SELECT TRACK REWARD ZONE
+        function DoZoneSelect(rad, roh)
             
             % Check if mouse over any targ
             if ~(roh > D.P.trackRohBnd(1) && roh < D.P.trackRohBnd(2))
@@ -17121,8 +17355,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        % Select forrage reward target
-        function doTargSelect(rad, roh)
+        % SELECT FORAGE REWARD ZONE
+        function DoTargSelect(rad, roh)
             
             % Check if mouse over any targ
             if ~(roh > D.P.frgRohBnd(1) && roh < D.P.frgRohBnd(2))
@@ -17171,8 +17405,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
-        % Select rot pos
-        function doRotSelect(rad, roh)
+        % SELECT ROTATION POSITION
+        function DoRotSelect(rad, roh)
             
             % Get next rot ind
             rotNext = [1, 2] ~=  D.I.rot;
@@ -17273,7 +17507,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.I.targ_now = targ_ind_new;
         
         % Log/print
-        Console_Write(sprintf('[Mouse_SelectRewTarg] Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
+        Log_Debug(sprintf('Set New Forage Target: targ_last=%ddeg targ_new=%ddeg', ...
             D.PAR.frgTargDegArr(D.I.targ_last), D.PAR.frgTargDegArr(D.I.targ_now)));
         
         % Update UI
@@ -17412,7 +17646,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_TaskDone', get(D.UI.toggTaskDone,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.toggTaskDone,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17459,7 +17693,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_Save', get(D.UI.toggSave,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.toggSave,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17517,7 +17751,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Print session aborting
         if ~D.F.ses_save_done
-            Console_Write('**WARNING** [Togg_Quit] ABORTING SESSION...');
+            Debug_Warning('ABORTING SESSION...');
         end
         
         % Stop halt if still active
@@ -17572,7 +17806,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Togg_Quit', get(D.UI.toggQuit,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.toggQuit,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17609,7 +17843,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggHaltRob, 'Update');
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to "%d"', 'Togg_HaltRob', get(D.UI.toggHaltRob,'Value')));
+        Update_Log(sprintf('Set to "%d"', get(D.UI.toggHaltRob,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17646,7 +17880,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggBulldoze, 'Update');
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to "%d" "%d"', 'Pop_Bulldoze', D.PAR.bullDel, D.PAR.bullSpeed));
+        Update_Log(sprintf('Set to "%d" "%d"', D.PAR.bullDel, D.PAR.bullSpeed));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17669,7 +17903,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.btn_rew_sent = Sec_DT(now);
         
         % Log/print
-        Console_Write(sprintf('[%s] Set to "%d"', 'Btn_Reward', get(D.UI.btnReward,'Value')));
+        Log_Debug(sprintf('Set to "%d"', get(D.UI.btnReward,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17704,7 +17938,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to "%d"', 'Togg_DoCue', get(D.UI.toggDoCue,'Value')));
+        Update_Log(sprintf('Set to "%d"', get(D.UI.toggDoCue,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17728,7 +17962,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to "%d"', 'Togg_BlockCue', get(D.UI.toggBlockCue,'Value')));
+        Update_Log(sprintf('Set to "%d"', get(D.UI.toggBlockCue,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17749,7 +17983,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to "%d"', 'Togg_ForceCue', get(D.UI.toggForceCue,'Value')));
+        Update_Log(sprintf('Set to "%d"', get(D.UI.toggForceCue,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -17851,7 +18085,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.P.Rob.velAll.indHist(1) = max(1, D.P.Rob.velAll.indHist(2));
         
         % Log/print
-        Update_Log(sprintf('[%s] Set to "%d"', 'Btn_ClrVT', get(D.UI.btnClrVT,'Value')));
+        Update_Log(sprintf('Set to "%d"', get(D.UI.btnClrVT,'Value')));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -18605,7 +18839,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     Safe_Set([D.UI.ttBndlLegTxt(tt_ind), D.UI.ttDriveLegTxt(tt_ind)], ...
                         'Color', [1, 1, 1])
                     
-                     % Replot tt track
+                    % Replot tt track
                     Plot_TT_Path(tt_ind)
                     
                 end
@@ -18626,7 +18860,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if all(D.F.tt_chan_disable(tt_ind,:))
                     
                     % Disable TT and times series tt plot
-                    if D.F.ephys_session && D.F.streaming_setup
+                    if D.F.ephys_session && D.F.mat_netcom_setup
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "TT%d_Win" "TT%s" %s', ...
                             win_ind, D.TT.ttNum{tt_ind}, 'False'));
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "CSC%d_Win" "TT%s" %s', ...
@@ -18638,7 +18872,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if val == 0
                     
                     % Enable TT and times series tt plot
-                    if D.F.ephys_session && D.F.streaming_setup
+                    if D.F.ephys_session && D.F.mat_netcom_setup
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "TT%d_Win" "TT%s" %s', ...
                             win_ind, D.TT.ttNum{tt_ind}, 'True'));
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "CSC%d_Win" "TT%s" %s', ...
@@ -18660,7 +18894,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     end
                     
                     % Set time series plot
-                    if D.F.ephys_session && D.F.streaming_setup
+                    if D.F.ephys_session && D.F.mat_netcom_setup
                         Send_NLX_Cmd(sprintf('-SetPlotEnabled "CSC%d_Win" "CSC%s_0%d" %s', ...
                             win_ind, D.TT.ttNum{tt_ind}, z_e, set_str));
                     end
@@ -18683,7 +18917,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Log/print
-        Update_Log(sprintf('[%s] Set "%s" to %d', 'Togg_FlagTT', btn_str, val));
+        Update_Log(sprintf('Set "%s" to %d', btn_str, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -18776,7 +19010,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggHearSourceTT, 'Update');
         
         % Log/print
-        Update_Log(sprintf('[%s] Set "%s" to %d', 'Togg_HearSourceTT', btn_str, val));
+        Update_Log(sprintf('Set "%s" to %d', btn_str, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -18930,7 +19164,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggSubHearChTT, 'Update');
         
         % Log/print
-        Update_Log(sprintf('[%s] Set "%s" to %d', 'Togg_SubHearTT', btn_str, val));
+        Update_Log(sprintf('Set "%s" to %d', btn_str, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -18995,7 +19229,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggPlotTypeTT, 'Update');
         
         % Log/print
-        Update_Log(sprintf('[%s] Set "%s" to %d', 'Togg_PlotTypeTT', btn_str, val));
+        Update_Log(sprintf('Set "%s" to %d', btn_str, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -19103,7 +19337,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Button_State(D.UI.toggSelectTT(tt_ind), 'Update');
         
         % Log/print
-        Update_Log(sprintf('[%s] Set "%s" to %d', 'Togg_SubPlotTT', btn_str, val));
+        Update_Log(sprintf('Set "%s" to %d', btn_str, val));
         
         % Update UI
         if UPDATENOW; Update_UI(0, 'force'); end
@@ -19264,8 +19498,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             c2m.(id).dat3 = c2m_com.(id).dat3;
             c2m.(id).pack = c2m_com.(id).pack;
             
-            % Update last packet
+            % Update packet history
             c2m.(id).packLast = c2m.(id).pack;
+            
+            % Update packet ind
+            if c2m.(id).pack > c2m_pack.packInd
+                c2m_pack.packInd = c2m.(id).pack;
+            end
+            
+            % Update total packet count
+            c2m_pack.packTot = c2m_pack.packTot+1;
             
             % Update recieve time
             c2m.(id).t_rcvd = Sec_DT(now);
@@ -19274,7 +19516,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Proc_CS_Com(id)
             
         catch ME
-            Console_Write('!!ERROR!! [Timer_FcnGetCSCom] FAILED', now);
+            Debug_Error('FAILED', now);
             SetExit()
         end
         
@@ -19403,7 +19645,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if UPDATENOW; Update_UI(0, 'force'); end
             
         catch ME
-            Console_Write('!!ERROR!! [Timer_FcnGraphics] FAILED', now);
+            Debug_Error('FAILED', now);
             SetExit()
         end
         
@@ -19453,7 +19695,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if UPDATENOW; Update_UI(0, 'force'); end
             
         catch ME
-            Console_Write('!!ERROR!! [Timer_StopBtnStatus] FAILED', now);
+            Debug_Error('FAILED', now);
             SetExit()
         end
         
@@ -19552,7 +19794,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             if UPDATENOW; Update_UI(0, 'force'); end
             
         catch ME
-            Console_Write('!!ERROR!! [Tab_GrpChange] FAILED', now);
+            Debug_Error('FAILED', now);
             SetExit()
         end
         

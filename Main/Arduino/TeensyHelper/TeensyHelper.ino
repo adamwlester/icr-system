@@ -3,7 +3,7 @@ NOTES
 	Changd "C:\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\serial3"
 	SERIAL2_TX_BUFFER_SIZE 40 to 128
 	SERIAL2_RX_BUFFER_SIZE 64 to 512
-	Cant 'see' these directives from script for some reason  
+	Cant 'see' these directives from script for some reason
 */
 
 // Set to print debug info to console
@@ -12,7 +12,6 @@ NOTES
 #define DO_PRINT_LOGS 0
 
 #include "SdFat.h"
-
 
 #pragma region ============ VARIABLE SETUP =============
 
@@ -45,7 +44,8 @@ struct R42T
 	const char head;
 	const char foot;
 	const char *id;
-	uint16_t packTot;
+	uint16_t packInd;
+	uint32_t packTot;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
 };
@@ -66,6 +66,8 @@ R42T r42t
 	')',
 	// id
 	tnsy_id_list,
+	// packInd
+	0,
 	// packTot
 	0,
 	// t_rcvd
@@ -158,6 +160,7 @@ void RunReset() {
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	uint32_t t_flicker = 0;
 
 	// Itterate count
 	cnt_reset++;
@@ -171,6 +174,10 @@ void RunReset() {
 	readBuff[0] = '\0';
 	packTotBytesRead = 0;
 	packTotBytesDiscarded = 0;
+	r42t.packInd = 0;
+	r42t.packTot = 0;
+	r42t.t_rcvd = 0;
+	r42t.dt_rcvd = 0;
 
 	// Reinitialize arrays
 	for (size_t i = 0; i < logSize; i++) {
@@ -192,8 +199,8 @@ void RunReset() {
 	digitalWrite(pin.Teensy_Resetting, HIGH);
 
 	// Flicker LED
-	for (size_t i = 0; i < 40; i++)
-	{
+	t_flicker = millis() + 500;
+	while(millis()<t_flicker){
 		StatusBlink();
 		delay(25);
 	}
@@ -211,7 +218,7 @@ void RunReset() {
 	if (r42t.port.availableForWrite() + 1 == 128) {
 		sprintf(str, "[RunReset] TX BUFFER SIZE: ACTUAL=%dB EXPECTED=128B", r42t.port.availableForWrite() + 1);
 	}
-		// Buffer size is wrong
+	// Buffer size is wrong
 	else {
 		sprintf(str, "!!ERROR!! [RunReset] TX BUFFER SIZE: ACTUAL=%dB EXPECTED=128B", r42t.port.availableForWrite() + 1);
 	}
@@ -291,7 +298,6 @@ uint32_t GetLogNumber() {
 
 	// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
-	bool is_dir_exit = false;
 	File log_num_file_sd;
 
 	// Specify file and dir
@@ -314,7 +320,7 @@ uint32_t GetLogNumber() {
 
 	// Change directory
 	if (sdEx.chdir(log_dir)) {
-		sprintf(str, "[GetLogNumber] \CD TO \"%s\" DIR", log_dir);
+		sprintf(str, "[GetLogNumber] CD TO \"%s\" DIR", log_dir);
 	}
 	else {
 		sprintf(str, "!!ERROR!! [GetLogNumber] FAILED: CD TO \"%s\" DIR", log_dir);
@@ -426,9 +432,9 @@ void GetSerial()
 		// Indicate incomplete message
 		if (cnt_logsRcvd > 0) {
 #if DO_PRINT_DEBUG || DO_LOG_DEBUG
-				sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
-					packTotBytesRead, packTotBytesDiscarded);
-				PrintDebug(str);
+			sprintf(str, "**WARNING** [GetSerial] Missing Foot: b_read=%lu b_dump=%lu",
+				packTotBytesRead, packTotBytesDiscarded);
+			PrintDebug(str);
 #endif
 		}
 
@@ -439,8 +445,11 @@ void GetSerial()
 
 	}
 
-	// Update pack info
-	r42t.packTot = pack;
+	// Update packet ind 
+	r42t.packInd = pack > r42t.packInd ? pack : r42t.packInd;
+
+	// Itterate packet total
+	r42t.packTot++;
 
 	// Terminate string
 	readBuff[buffInd] = '\0';
@@ -454,13 +463,6 @@ void GetSerial()
 
 	// Store recieve time
 	r42t.t_rcvd = millis();
-
-	// Print every 100 log
-	if (cnt_logsRcvd == 1 || cnt_logsRcvd % 100 == 0) {
-		sprintf(str, "[GetSerial] Recieved %lu Logs", cnt_logsRcvd);
-		PrintDebug(str);
-	}
-
 
 }
 
@@ -536,24 +538,40 @@ char WaitBuffRead(int timeout, char mtch)
 void StoreMessage(char msg[], uint16_t pack)
 {
 	// Local vars
+	static char msg_frm[maxStoreStrLng] = { 0 }; msg_frm[0] = '\0';
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	bool is_log_name = false;
 
 	// Format string
-	sprintf(str, "TEENSY %lu|%d: %s", cnt_logsRcvd, pack, msg);
+	sprintf(msg_frm, "TEENSY: |p=%d|ptot=%lu|: %s", pack, r42t.packTot, msg);
 
 	// Format log
-	sprintf(Log[logInd], "%c%s%c", r42t.head, str, r42t.foot);
+	sprintf(Log[logInd], "%c%s%c", r42t.head, msg_frm, r42t.foot);
 
 	// Create log file
-	if (pack == 1) {
+	if (r42t.packTot == 1 || !logFileSD.isOpen()) {
+
+		// Check for log name
+		is_log_name = r42t.packTot == 1 && msg[0] == 'L' && msg[1] == 'O' && msg[2] == 'G';
 
 		// Check msg contains "LOG"
-		if (msg[0] == 'L' && msg[1] == 'O' && msg[2] == 'G') {
+		if (is_log_name) {
 			sprintf(logFiStr, "TEENSY%s", msg);
 		}
 		else {
 			sprintf(logFiStr, "TEENSYLOG00000");
 		}
+
+		// Log/print status
+#if DO_PRINT_DEBUG || DO_LOG_DEBUG
+		if (is_log_name) {
+			sprintf(str, "[StoreMessage] RECIEVED LOG NAME MESSAGE: |p=%d|ptot=%lu| msg=\"%s\"", pack, r42t.packTot, msg);
+		}
+		else {
+			sprintf(str, "!!ERROR!! [StoreMessage] MISSING LOG NAME MESSAGE: |p=%d|ptot=%lu| msg=\"%s\"", pack, r42t.packTot, msg);
+		}
+		PrintDebug(str);
+#endif
 
 		// Create new log file
 		OpenNewLog();
@@ -576,14 +594,15 @@ void StoreMessage(char msg[], uint16_t pack)
 	}
 
 	// Write to SD log
-	logFileSD.print(str);
+	logFileSD.print(msg_frm);
 	logFileSD.print('\r');
 	logFileSD.print('\n');
 
 	// Print message
-	if (DO_PRINT_LOGS) {
-		PrintDebug(str);
-	}
+#if DO_PRINT_LOGS
+	PrintDebug(msg_frm);
+#endif
+
 }
 
 // SEND LOGS
@@ -644,9 +663,14 @@ void SendLogs()
 			if (Log[logIndArr[i]][0] == '\0') {
 				continue;
 			}
+
+			// Send log and blink status
 			r42t.port.write(Log[logIndArr[i]]);
-			PrintDebug(Log[logIndArr[i]]);
 			StatusBlink();
+
+#if DO_PRINT_LOGS
+			PrintDebug(Log[logIndArr[i]]);
+#endif
 		}
 
 		// Get number of dropped/missed packets
@@ -692,7 +716,6 @@ void PrintDebug(char msg[], uint32_t t)
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
-	char msg_copy[maxStoreStrLng] = { 0 }; msg_copy[0] = '\0';
 	char str_time[100] = { 0 };
 	uint32_t t_m = 0;
 	float t_s = 0;
@@ -779,16 +802,17 @@ void setup()
 	digitalWrite(pin.StatLED, LOW);
 	digitalWrite(pin.Teensy_Resetting, LOW);
 
-	// USE AS DELAY 
-	for (size_t i = 0; i < 120; i++)
-	{
+	// Show setup blink
+	uint32_t t_flicker = millis() + 500;
+	while(millis()<t_flicker){
 		StatusBlink();
-		delay(25);
+		delay(100);
 	}
 
 	// RUN RESET
 	RunReset();
 }
+
 
 void loop()
 {

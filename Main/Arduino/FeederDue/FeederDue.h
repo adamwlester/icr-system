@@ -31,7 +31,7 @@
 #define DO_FAST_PRINT 0
 
 // TEENSY LOGGING
-#define DO_TEENSY_DEBUG 1
+#define DO_TEENSY_DEBUG 0
 
 // OPENLOG LOGGING
 #define DO_LOG 1
@@ -60,7 +60,7 @@ struct DB
 	const bool print_o2a = false;
 	const bool print_o2aRaw = false;
 	const bool print_runSpeed = false;
-	const bool print_pixy = false; 
+	const bool print_pixy = false;
 
 	// LOGGING
 
@@ -92,15 +92,15 @@ struct DB
 	// TESTING
 
 	// Manually set
-	const bool do_posDebug = false;  
-	const bool do_posPrint = false; 
-	const bool do_posPlot = false; 
+	const bool do_posDebug = false;
+	const bool do_posPrint = false;
+	const bool do_posPlot = false;
 
 	// Set by system
 	bool is_runTest = false;
-	bool do_simRatTest = false; 
-	bool do_pidCalibration = false; 
-	volatile bool do_v_irSyncCalibration = false;
+	bool do_simRatTest = false;
+	bool do_pidCalibration = false;
+	volatile bool do_v_irSyncTest = false;
 
 	// Other
 	bool isErrLoop = false;
@@ -127,9 +127,9 @@ int cal_nMeasPerSteps = 10;
 // DEBUG VIA TEENSY
 
 // Put at start of function
-#define DB_FUN_STR() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "S");
+#define DB_FUN_STR() DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), "S");
 // Put at end of function
-#define DB_FUN_END() StoreTeensyDebug(__FUNCTION__, __LINE__, freeMemory(), "E");
+#define DB_FUN_END() DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), "E");
 
 #pragma endregion
 
@@ -139,7 +139,6 @@ int cal_nMeasPerSteps = 10;
 struct FC
 {
 	char motorControl[25] = "None"; // ["None", "Halt", "Open", "MoveTo", "Bull", "Pid"]
-	bool isSetup = false;
 	bool isBlockingTill = false;
 	bool doQuit = false;
 	bool isQuitConfirmed = false;
@@ -162,6 +161,7 @@ struct FC
 	bool doBlockPrintQueue = false;
 	bool doBlockLogWrite = false;
 	bool doBlockWriteLCD = false;
+	bool isTeensyReady = false;
 	bool isEKFReady = false;
 	bool doEtOHRun = true;
 	bool isLitLCD = false;
@@ -184,6 +184,8 @@ uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
 uint16_t cnt_errAD = 0;
 uint16_t cnt_errEKF = 0;
+uint32_t cnt_overflowRX = 0;
+uint32_t cnt_timeoutRX = 0;
 const uint16_t n_pings = 5;
 float dt_pingRoundTrip[2] = { 0 };
 const uint16_t maxStoreStrLng = 300;
@@ -214,7 +216,7 @@ uint32_t t_quit = 0;
 const uint8_t pixyAddress = 0x54;
 const uint16_t pixyMaxBlocks = 1;
 const int pixyOrd = 5;
-double pixyCoeff[pixyOrd] = {0};
+double pixyCoeff[pixyOrd] = { 0 };
 const double pixyPackCoeff[pixyOrd] = {
 	0.000000031316275,
 	-0.000017574918569,
@@ -263,12 +265,6 @@ const double frontVelCoeff[velOrd] = {
 	0.021557249590414,
 };
 
-// BIGEASYDRIVER
-const byte ezDirExtState = 1; // 1
-const byte ezDirRetState = 0; // 0
-const int16_t ezExtStps = 250; // 250
-const int16_t ezRestStps = 50; // 50
-
 // KALMAN MODEL
 struct KAL
 {
@@ -294,11 +290,19 @@ float moveToDecelDist = 40; // cm
 // REWARD
 double feedTrackPastDist = 0; // (cm) 
 const double feedHeadPastDist = 10; // (cm)
-const long armStepFreq = 1000; // (us)
-const double dt_armStep = 1000; // (us)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_rewBlockMove = 0; // (ms)
 const float solOpenScaleArr[2] = { 1, 0.5 };
+
+// BIGEASYDRIVER
+const byte ezDirExtState = 1; // 1
+const byte ezDirRetState = 0; // 0
+const byte ezExtStps = 255; // max [255] 250
+const byte ezRestStps = 25; // max [255] 50
+const double ezStepPeriod = 1000; // (us)
+enum ezMicrostep { FULL, HALF, QUARTER, EIGHTH, SIXTEENTH };
+const ezMicrostep ezExtMicroStep = QUARTER;
+const ezMicrostep ezRetMicroStep = QUARTER;
 
 // SOLONOIDS
 /*
@@ -327,15 +331,18 @@ float icNow = 0;
 
 // LEDs
 const int trackLEDdutyDefault[2] = { 175, 250 };
-int trackLEDduty[2] = { trackLEDdutyDefault[0], trackLEDdutyDefault[1] }; 
-const int rewLEDmin[2] = { 0, 2};
-int rewLEDduty[2] = { rewLEDmin[0], 15 }; 
+int trackLEDduty[2] = { trackLEDdutyDefault[0], trackLEDdutyDefault[1] };
+const int rewLEDmin[2] = { 0, 2 };
+int rewLEDduty[2] = { rewLEDmin[0], 15 };
 
 // LCD
 extern unsigned char SmallFont[];
 extern unsigned char TinyFont[];
 
-// INTERUPTS
+// IR SYNC
+const int dt_irHandshakePulse = 75; // (ms) 75
+
+// INTERUPTS/VOLATILES
 volatile uint32_t t_sync = 0; // (ms)
 volatile uint32_t v_t_irSyncLast = 0; // (ms)
 volatile int v_dt_ir = 0;
@@ -346,14 +353,21 @@ volatile byte v_doBlockIR = false;
 volatile byte v_stepState = false;
 volatile byte v_doStepTimer = false;
 volatile byte v_isArmMoveDone = false;
-volatile int16_t v_cnt_steps = 0;
-volatile uint16_t v_stepTarg = 0;
+volatile byte v_cnt_steps = 0;
+volatile byte v_stepTarg = 0;
 volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 
 
 #pragma region ============ COM STRUCT SETUP ===========
 
+// Lower packet range
+const uint16_t lower_pack_range[2] = { 1, UINT16_MAX / 2 };
+
+// Uper packet range
+const uint16_t upper_pack_range[2] = { (UINT16_MAX / 2) + 1, UINT16_MAX };
+
+// CS Com IDs
 const char cs_id_list[19] =
 {
 	'h', // setup handshake
@@ -377,6 +391,7 @@ const char cs_id_list[19] =
 	'\0'
 };
 
+// CheetahDue Com IDs
 const char ard_id_list[7] =
 {
 	't', // hardware test
@@ -422,7 +437,8 @@ cmd;
 struct R4
 {
 	USARTClass &port;
-	const char *instID;
+	const char *objID;
+	const uint16_t packRange[2];
 	const int lng;
 	const char head;
 	const char foot;
@@ -444,7 +460,8 @@ struct R4
 struct R2
 {
 	USARTClass &port;
-	const char *instID;
+	const char *objID;
+	const uint16_t packRange[2];
 	const int lng;
 	const char head;
 	const char foot;
@@ -452,7 +469,7 @@ struct R2
 	uint16_t packArr[20];
 	uint16_t packLastArr[20];
 	uint16_t packInd;
-	uint16_t packTot;
+	uint32_t packTot;
 	int cnt_repeat;
 	float datMat[20][3];
 	uint32_t t_sentListArr[20];
@@ -474,8 +491,10 @@ R4 c2r
 {
 	// serial
 	Serial2,
-	// instID
+	// objID
 	"c2r",
+	// packRange
+	{ lower_pack_range[0], lower_pack_range[1] },
 	// lng
 	strlen(cs_id_list),
 	// head
@@ -489,7 +508,7 @@ R4 c2r
 	// packLastArr
 	{ 0 },
 	// packInd
-	0,
+	lower_pack_range[0]-1,
 	// packTot
 	0,
 	// cnt_repeat
@@ -513,8 +532,10 @@ R2 r2c
 {
 	// serial
 	Serial2,
-	// instID
+	// objID
 	"r2c",
+	// packRange
+	{ upper_pack_range[0], upper_pack_range[1] },
 	// lng
 	strlen(cs_id_list),
 	// head
@@ -528,7 +549,7 @@ R2 r2c
 	// packLastArr
 	{ 0 },
 	// packInd
-	UINT16_MAX / 2,
+	upper_pack_range[0]-1,
 	// packTot
 	0,
 	// cnt_repeat
@@ -564,8 +585,10 @@ R4 a2r
 {
 	// serial
 	Serial3,
-	// instID
+	// objID
 	"a2r",
+	// packRange
+	{ lower_pack_range[0], lower_pack_range[1] },
 	// lng
 	strlen(ard_id_list),
 	// head
@@ -579,7 +602,7 @@ R4 a2r
 	// packLastArr
 	{ 0 },
 	// packInd
-	0,
+	lower_pack_range[0]-1,
 	// packTot
 	0,
 	// cnt_repeat
@@ -604,8 +627,10 @@ R2 r2a
 {
 	// serial
 	Serial3,
-	// instID
+	// objID
 	"r2a",
+	// packRange
+	{ upper_pack_range[0], upper_pack_range[1] },
 	// lng
 	strlen(ard_id_list),
 	// head
@@ -619,7 +644,7 @@ R2 r2a
 	// packLastArr
 	{ 0 },
 	// packInd
-	UINT16_MAX / 2,
+	upper_pack_range[0]-1,
 	// packTot
 	0,
 	// cnt_repeat
@@ -649,29 +674,34 @@ R2 r2a
 };
 
 // TEENSY SERIAL COMS
+
 #if DO_TEENSY_DEBUG
 
-struct R42T
+struct R2T
 {
 	UARTClass &port;
-	const char *instID;
+	const char *objID;
+	const uint16_t packRange[2];
 	const int lng;
 	const char head;
 	const char foot;
 	const char *id;
 	uint16_t packInd;
+	uint32_t packTot;
 	int cnt_dropped;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
 };
 
-// Initialize C2R
-R42T r42t
+// Initialize R2T
+R2T r2t
 {
 	// serial
 	Serial,
-	// instID
+	// objID
 	"t2r",
+	// packRange
+	{ lower_pack_range[0], lower_pack_range[1] },
 	// lng
 	0,
 	// head
@@ -681,6 +711,8 @@ R42T r42t
 	// id
 	tnsy_id_list,
 	// packInd
+	lower_pack_range[0]-1,
+	// packTot
 	0,
 	// cnt_dropped
 	0,
@@ -690,7 +722,7 @@ R42T r42t
 	0,
 };
 
-#endif
+#endif 
 
 #pragma endregion 
 

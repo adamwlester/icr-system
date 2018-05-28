@@ -59,8 +59,8 @@ struct DB
 	// TESTING
 
 	// Manually set
-	const bool doPrintPimMapTest = false; 
-	const bool doHandshakeBypass = false; 
+	const bool doPrintPimMapTest = false;
+	const bool doHandshakeBypass = false;
 
 	// Set by system
 	bool do_irSyncCalibration = false;
@@ -153,30 +153,32 @@ struct FC
 // Initialize
 fc;
 
-// Debugging general
+// DEBUGGING GENERAL
 uint32_t cnt_loop_tot = 0;
 uint16_t cnt_loop_short = 0;
 uint16_t cnt_warn = 0;
 uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
 uint16_t err_line[100] = { 0 };
+uint32_t cnt_overflowRX = 0;
+uint32_t cnt_timeoutRX = 0;
 const uint16_t maxStoreStrLng = 300;
 const uint16_t maxMsgStrLng = maxStoreStrLng - 50;
 
-// Log debugging
+// LOG GENERAL
 const int logQueueSize = 40;
 char logQueue[logQueueSize][maxStoreStrLng] = { { 0 } };
 int logQueueIndStore = 0;
 int logQueueIndRead = 0;
 int cnt_logsStored = 0;
 
-// Print debugging
+// PRINT DEBUGGING
 const int printQueueSize = 15;
 char printQueue[printQueueSize][maxStoreStrLng] = { { 0 } };
 int printQueueIndStore = 0;
 int printQueueIndRead = 0;
 
-// Serial tracking
+// SERIAL COM GENERAL
 const int sendQueueSize = 10;
 const int sendQueueBytes = 18;
 byte sendQueue[sendQueueSize][sendQueueBytes] = { { 0 } };
@@ -184,81 +186,20 @@ int sendQueueIndStore = 0;
 int sendQueueIndRead = 0;
 const int dt_sendSent = 5; // (ms) 
 const int dt_sendRcvd = 0; // (ms) 
-int cnt_packBytesRead = 0;
-int cnt_packBytesSent = 0;
-int cnt_packBytesDiscarded = 0;
+int cnt_bytesRead = 0;
+int cnt_bytesSent = 0;
+int cnt_bytesDiscarded = 0;
 int cnt_logBytesSent = 0;
 
-// Serial from rob
-struct R2A
-{
-	const char id[6] = {
-		't', // system test
-		'q', // quit/reset
-		'r', // reward
-		's', // sound cond [0, 1, 2]
-		'p', // pid mode [0, 1]
-		'b', // bull mode [0, 1]
-	};
-	const char head = '{';
-	const char foot = '}';
-	char idNow = ' ';
-	bool isNew = false;
-	float dat[3] = { 0 };
-	const static int lng = sizeof(id) / sizeof(id[0]);
-	uint16_t packArr[lng] = { 0 };
-	uint16_t packLastArr[lng] = { 0 };
-	int cnt_repeat = 0;
-	int cnt_dropped = 0;
-	int32_t t_rcvd = 0; // (ms)
-	int dt_rcvd = 0; // (ms)
-}
-// Initialize
-r2a;
-
-// Serial to rob
-struct A2R
-{
-	const char id[6] = {
-		't', // system test
-		'q', // quit/reset
-		'r', // reward
-		's', // sound cond [0, 1, 2]
-		'p', // pid mode [0, 1]
-		'b', // bull mode [0, 1]
-	};
-	const char head = '{';
-	const char foot = '}';
-	float dat[3] = { 0 };
-	const static int lng = sizeof(id) / sizeof(id[0]);
-	uint16_t packArr[lng] = { 0 };
-	uint16_t packLastArr[lng] = { 0 };
-	int cnt_repeat = 0;
-	int32_t t_sent = 0; // (ms)
-	int dt_sent = 0; // (ms)
-}
-// Initialize
-a2r;
-
-// Serial to CS
-struct A2C
-{
-	const char head = '<';
-	const char foot = '>';
-	int32_t t_sent = 0; // (ms)
-	int dt_sent = 0; // (ms)
-}
-// Initialize
-a2c;
-
-// Reward
+// REWARD
 int cnt_rew;
 uint32_t rewDur; // (ms) 
 uint32_t t_rewEnd;
 uint32_t word_rewStr;
 uint32_t word_rewEnd;
 
-// IR time sync LED
+// IR SYNC
+const int dt_irHandshakePulse = 75; // (ms) 75
 const int dt_irSyncPulse = 500; // (ms) 500
 const int dt_irSyncPulseOn = 10; // (ms) 10 
 uint32_t del_irSyncPulse = 60000; // (ms) 
@@ -269,7 +210,7 @@ uint32_t t_irSyncLast;
 uint32_t word_irAll;
 uint32_t word_irRel;
 
-// Volitiles
+// INTERUPTS/VOLATILES
 
 // IR flicker flag
 volatile bool v_is_irHigh = false;
@@ -317,6 +258,88 @@ union u_tag {
 #pragma endregion 
 
 
+#pragma region ============ COM STRUCT SETUP ===========
+
+// Lower packet range
+const uint16_t lower_pack_range[2] = { 1, UINT16_MAX / 2 };
+
+// Uper packet range
+const uint16_t upper_pack_range[2] = { (UINT16_MAX / 2) + 1, UINT16_MAX };
+
+// Serial from rob
+struct R2A
+{
+	USARTClass &port = Serial1;
+	const uint16_t packRange[2] = { upper_pack_range[0], upper_pack_range[1] };
+	const char head = '{';
+	const char foot = '}';
+	const char id[6] = {
+		't', // system test
+		'q', // quit/reset
+		'r', // reward
+		's', // sound cond [0, 1, 2]
+		'p', // pid mode [0, 1]
+		'b', // bull mode [0, 1]
+	};
+	uint16_t packInd = upper_pack_range[0]-1;
+	uint32_t packTot = 0;
+	char idNow = ' ';
+	bool isNew = false;
+	float dat[3] = { 0 };
+	const static int lng = sizeof(id) / sizeof(id[0]);
+	uint16_t packArr[lng] = { 0 };
+	uint16_t packLastArr[lng] = { 0 };
+	int cnt_repeat = 0;
+	int cnt_dropped = 0;
+	int32_t t_rcvd = 0; // (ms)
+	int dt_rcvd = 0; // (ms)
+}
+// Initialize
+r2a;
+
+// Serial to rob
+struct A2R
+{
+	USARTClass &port = Serial1;
+	const uint16_t packRange[2] = { lower_pack_range[0], lower_pack_range[1] };
+	const char head = '{';
+	const char foot = '}';
+	const char id[6] = {
+		't', // system test
+		'q', // quit/reset
+		'r', // reward
+		's', // sound cond [0, 1, 2]
+		'p', // pid mode [0, 1]
+		'b', // bull mode [0, 1]
+	};
+	uint16_t packInd = lower_pack_range[0]-1;
+	uint32_t packTot = 0;
+	float dat[3] = { 0 };
+	const static int lng = sizeof(id) / sizeof(id[0]);
+	uint16_t packArr[lng] = { 0 };
+	uint16_t packLastArr[lng] = { 0 };
+	int cnt_repeat = 0;
+	int32_t t_sent = 0; // (ms)
+	int dt_sent = 0; // (ms)
+}
+// Initialize
+a2r;
+
+// Serial to CS
+struct A24C
+{
+	UARTClass &port = Serial;
+	const char head = '<';
+	const char foot = '>';
+	int32_t t_sent = 0; // (ms)
+	int dt_sent = 0; // (ms)
+}
+// Initialize
+a24c;
+
+#pragma endregion 
+
+
 #pragma region ========= FUNCTION DECLARATIONS =========
 
 // CHECK FOR HANDSHAKE
@@ -342,9 +365,11 @@ void EndRew();
 // TEST PIN MAPPING
 void DebugPinMap();
 // LOG/PRING MAIN EVENT
-void DebugFlow(char msg[], uint32_t t = millis());
+void DebugFlow(const char *fun, int line, char msg[], uint32_t t = millis());
+// LOG/PRINT WARNINGS
+void DebugWarning(const char *fun, int line, char msg[], uint32_t t = millis());
 // LOG/PRINT ERRORS
-void DebugError(char msg[], bool is_error = false, uint32_t t = millis());
+void DebugError(const char *fun, int line, char msg[], uint32_t t = millis());
 // PRINT RECIEVED PACKET
 void DebugRcvd(char id, char msg[], bool is_repeat = false);
 // LOG/PRING SENT PACKET DEBUG STRING
@@ -395,6 +420,7 @@ bool CheckForStart()
 	bool is_rcvd = false;
 	byte in_byte[1] = { 0 };
 	byte handshake_byte[1] = { 'i' };
+	uint32_t ir_str = 0;
 
 	// Bail if session started
 	if (fc.isSesStarted) {
@@ -414,8 +440,8 @@ bool CheckForStart()
 	}
 
 	// Get new data
-	if (Serial.available() > 0) {
-		in_byte[0] = Serial.read();
+	if (a24c.port.available() > 0) {
+		in_byte[0] = a24c.port.read();
 	}
 
 	// Bail if not a match
@@ -427,45 +453,50 @@ bool CheckForStart()
 	PulseIR(0, 0, 0);
 	delay(1000);
 
-	// Turn ir on for 10 ms
+	// Pulse IR on
+	ir_str = millis();
 	PulseIR(0, 0, 1);
-	delayMicroseconds(10 * 1000);
+	delayMicroseconds(dt_irSyncPulseOn * 1000);
 
-	// Turn ir off for 65 ms
+	// Turn IR off
 	PulseIR(0, 0, 0);
-	delayMicroseconds(65 * 1000);
+	delayMicroseconds((dt_irHandshakePulse- dt_irSyncPulseOn) * 1000);
 
-	// Turn ir back on
+	// Turn IR back on
 	PulseIR(0, 0, 1);
 
 	// Store time
 	t_sync = millis();
 
-	// Turn ir on for 10 ms
-	PulseIR(0, 0, 1);
-	delayMicroseconds(10 * 1000);
+	// Log pulse time
+	sprintf(str, "%dms IR SYNC PULSE SENT", t_sync - ir_str);
+	DebugFlow(__FUNCTION__, __LINE__, str);
+
+	// Turn IR back off
+	delayMicroseconds(dt_irSyncPulseOn * 1000);
+	PulseIR(0, 0, 0);
 
 	// Dump buffer
-	while (Serial.available()) {
-		Serial.read();
+	while (a24c.port.available()) {
+		a24c.port.read();
 	}
 
 	// Log success
-	DebugFlow("[CheckForStart] HANDSHAKE SUCCEEDED");
+	DebugFlow(__FUNCTION__, __LINE__, "HANDSHAKE SUCCEEDED");
 
 	// Log sync time
 	sprintf(str, "SET SYNC TIME: %dms", t_sync);
-	DebugFlow(str, t_sync);
+	DebugFlow(__FUNCTION__, __LINE__, str, t_sync);
 
 	// Set flags
 	is_rcvd = true;
 	fc.isSesStarted = true;
 	v_doPTInterupt = true;
-	DebugFlow("[CheckForStart] START SESSION");
+	DebugFlow(__FUNCTION__, __LINE__, "START SESSION");
 
 	// Dump Xbee buffer
-	while (Serial1.available() > 0) {
-		Serial1.read();
+	while (r2a.port.available() > 0) {
+		r2a.port.read();
 	}
 
 	// Return success
@@ -485,8 +516,8 @@ void GetSerial()
 	static char dat_str_2[200] = { 0 }; dat_str_2[0] = '\0';
 	uint32_t t_str = millis();
 	int dt_parse = 0;
-	int buff_tx = 0;
-	int buff_rx = 0;
+	uint16_t buff_tx = 0;
+	uint16_t buff_rx = 0;
 	byte buff = 0;
 	char head = ' ';
 	char id = ' ';
@@ -496,13 +527,13 @@ void GetSerial()
 	uint16_t pack = 0;
 
 	// Reset vars
-	cnt_packBytesRead = 0;
-	cnt_packBytesDiscarded = 0;
+	cnt_bytesRead = 0;
+	cnt_bytesDiscarded = 0;
 	r2a.isNew = false;
 	r2a.idNow = ' ';
 
 	// Bail if no new input
-	if (Serial1.available() == 0) {
+	if (r2a.port.available() == 0) {
 		return;
 	}
 
@@ -547,12 +578,12 @@ void GetSerial()
 	dt_parse = millis() - t_str;
 
 	// Get total data in buffers
-	buff_rx = Serial1.available();
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
+	buff_rx = r2a.port.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - r2a.port.availableForWrite();
 
 	// Store data strings
 	sprintf(dat_str_1, "head=%c id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d foot=%c do_conf=%d b_read=%d b_dump=%d",
-		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf, cnt_packBytesRead, cnt_packBytesDiscarded);
+		head, id, dat[0], dat[1], dat[2], pack, foot, do_conf, cnt_bytesRead, cnt_bytesDiscarded);
 
 
 	// Check for missing footer
@@ -566,9 +597,9 @@ void GetSerial()
 		r2a.cnt_dropped++;
 
 		// Log/print dropped packet info
-		sprintf(str, "**WARNING** [GetSerial] Dropped r2a Packs: cnt=%d %s %s",
+		sprintf(str, "Dropped r2a Packs: cnt=%d %s %s",
 			r2a.cnt_dropped, dat_str_1, dat_str_2);
-		DebugError(str);
+		DebugWarning(__FUNCTION__, __LINE__, str);
 
 	}
 	else
@@ -581,10 +612,36 @@ void GetSerial()
 		sprintf(dat_str_2, "rx=%d tx=%d dt_prs=%d dt_snd=%d dt_rcv=%d",
 			buff_rx, buff_tx, dt_parse, a2r.t_sent > 0 ? millis() - a2r.t_sent : 0, r2a.dt_rcvd);
 
-		// Update last packet
+		// Update packet history
 		int id_ind = CharInd(id, r2a.id, r2a.lng);
 		r2a.packLastArr[id_ind] = r2a.packArr[id_ind];
 		r2a.packArr[id_ind] = pack;
+
+		// Update total packet count
+		r2a.packTot++;
+
+		// Skip if pack originated from cheetah due
+		if (pack >= r2a.packRange[0] && pack < r2a.packRange[1]) {
+
+			// Get number of dropped/missed packets
+			int cnt_dropped = (pack - r2a.packInd) - 1;
+
+			// Update dropped packets
+			if (cnt_dropped > 0)
+			{
+				// Store dropped data
+				r2a.cnt_dropped += cnt_dropped;
+
+				// Log/print dropped packet info
+				sprintf(str, "Missed r2a Packs: cnt=%d|%d pack_last=%d %s %s",
+					cnt_dropped, r2a.cnt_dropped, r2a.packInd, dat_str_1, dat_str_2);
+				DebugWarning(__FUNCTION__, __LINE__, str);
+			}
+
+			// Update packet ind 
+			r2a.packInd = pack > r2a.packInd ? pack : r2a.packInd;
+
+		}
 
 		// Combine data strings
 		sprintf(str, "%s %s", dat_str_1, dat_str_2);
@@ -619,17 +676,17 @@ void GetSerial()
 	}
 
 	// Check if data was discarded
-	if (cnt_packBytesDiscarded > 0) {
+	if (cnt_bytesDiscarded > 0) {
 
 		// Log/print discarded data
-		sprintf(str, "**WARNING** [GetSerial] Dumped Bytes: %s %s", dat_str_1, dat_str_2);
-		DebugError(str);
+		sprintf(str, "Dumped Bytes: %s %s", dat_str_1, dat_str_2);
+		DebugWarning(__FUNCTION__, __LINE__, str);
 	}
 
 	// Check if parsing took unusually long
 	if (dt_parse > 30) {
-		sprintf(str, "**WARNING** [GetSerial] Parser Hanging: %s %s", dat_str_1, dat_str_2);
-		DebugError(str);
+		sprintf(str, "Parser Hanging: %s %s", dat_str_1, dat_str_2);
+		DebugWarning(__FUNCTION__, __LINE__, str);
 	}
 
 }
@@ -640,30 +697,28 @@ byte WaitBuffRead(char mtch)
 	// Local vars
 	static int timeout = 100;
 	uint32_t t_timeout = millis() + timeout;
-	static int cnt_overflow = 0;
-	static int cnt_timeout = 0;
 	bool is_bytes_discarded = false;
 	bool is_overflowed = false;
 	byte buff = 0;
 
 	// Get total data in buffers now
-	int buff_rx_start = Serial1.available();
+	uint16_t buff_rx_start = r2a.port.available();
 
 	// Check for overflow
 	is_overflowed = buff_rx_start >= SERIAL_BUFFER_SIZE - 1;
 
 	// Wait for at least 1 byte
-	while (Serial1.available() < 1 &&
+	while (r2a.port.available() < 1 &&
 		millis() < t_timeout);
 
 	// Get any byte
 	if (!is_overflowed &&
 		mtch == '\0') {
 
-		if (Serial1.available() > 0) {
+		if (r2a.port.available() > 0) {
 
-			buff = Serial1.read();
-			cnt_packBytesRead++;
+			buff = r2a.port.read();
+			cnt_bytesRead++;
 			return buff;
 		}
 	}
@@ -675,10 +730,10 @@ byte WaitBuffRead(char mtch)
 		!is_overflowed) {
 
 		// Check new data
-		if (Serial1.available() > 0) {
+		if (r2a.port.available() > 0) {
 
-			buff = Serial1.read();
-			cnt_packBytesRead++;
+			buff = r2a.port.read();
+			cnt_bytesRead++;
 
 			// check match was found
 			if (buff == mtch) {
@@ -687,13 +742,13 @@ byte WaitBuffRead(char mtch)
 
 			// Otherwise add to discard count
 			else {
-				cnt_packBytesDiscarded++;
+				cnt_bytesDiscarded++;
 				is_bytes_discarded = true;
 			}
 
 			// Check for overflow
 			is_overflowed =
-				!is_overflowed ? Serial1.available() >= SERIAL_BUFFER_SIZE - 1 : is_overflowed;
+				!is_overflowed ? r2a.port.available() >= SERIAL_BUFFER_SIZE - 1 : is_overflowed;
 		}
 
 	}
@@ -706,49 +761,49 @@ byte WaitBuffRead(char mtch)
 	if (is_overflowed) {
 
 		// DUMP IT ALL
-		while (Serial1.available() > 0) {
-			if (Serial1.available() > 0) {
-				Serial1.read();
-				cnt_packBytesRead++;
-				cnt_packBytesDiscarded++;
+		while (r2a.port.available() > 0) {
+			if (r2a.port.available() > 0) {
+				r2a.port.read();
+				cnt_bytesRead++;
+				cnt_bytesDiscarded++;
 			}
 		}
 	}
 
 	// Get buffer 
-	int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	int buff_rx = Serial1.available();
+	uint16_t buff_tx = SERIAL_BUFFER_SIZE - 1 - r2a.port.availableForWrite();
+	uint16_t buff_rx = r2a.port.available();
 
 	// Store current info
 	char buff_print = buff == 10 ? 'n' : buff == 13 ? 'r' : buff;
 	sprintf(dat_str, " buff=%c b_read=%d b_dump=%d rx_str=%d rx_now=%d tx_now=%d dt_chk=%d",
-		buff_print, cnt_packBytesRead, cnt_packBytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
+		buff_print, cnt_bytesRead, cnt_bytesDiscarded, buff_rx_start, buff_rx, buff_tx, (millis() - t_timeout) + timeout);
 
 
 	// Buffer flooded
 	if (is_overflowed) {
-		cnt_overflow++;
-		sprintf(msg_str, "**WARNING** [WaitBuffRead] Buffer Overflowed: cnt=%d", cnt_overflow);
+		cnt_overflowRX++;
+		sprintf(msg_str, "BUFFER OVERFLOWED: cnt=%d", cnt_overflowRX);
 	}
 	// Timed out
 	else if (millis() > t_timeout) {
-		cnt_timeout++;
-		sprintf(msg_str, "**WARNING** [WaitBuffRead] Timedout: cnt=%d", cnt_timeout);
+		cnt_timeoutRX++;
+		sprintf(msg_str, "TIMEDOUT: cnt=%d", cnt_timeoutRX);
 	}
 	// Byte not found
 	else if (mtch != '\0') {
-		sprintf(msg_str, "**WARNING** [WaitBuffRead] Char %c Not Found:", mtch);
+		sprintf(msg_str, "CHAR \'%c\' NOT FOUND:", mtch);
 	}
 	// Failed for unknown reason
 	else {
-		sprintf(msg_str, "**WARNING** [WaitBuffRead] Failed for Unknown Reason:");
+		sprintf(msg_str, "FAILED FOR UNKNOWN REASON:");
 	}
 
 	// Compbine strings
 	strcat(msg_str, dat_str);
 
 	// Log/print error
-	DebugError(msg_str);
+	DebugError(__FUNCTION__, __LINE__, msg_str);
 
 	// Set buff to '\0' ((byte)-1) if !pass
 	return 0;
@@ -790,15 +845,15 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 		queue_state[sendQueueSize] = '\0';
 
 		// Get buffers
-		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-		int buff_rx = Serial1.available();
+		uint16_t buff_tx = SERIAL_BUFFER_SIZE - 1 - a2r.port.availableForWrite();
+		uint16_t buff_rx = a2r.port.available();
 
 		// Store overflow error instead
-		sprintf(str, "!!ERRROR!! [QueuePacket] SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_snd=%d dt_rcv=%d tx=%d rx=%d",
+		sprintf(str, "SEND QUEUE OVERFLOWED: sendQueueIndStore=%d sendQueueIndRead=%d queue_state=|%s| dt_snd=%d dt_rcv=%d tx=%d rx=%d",
 			sendQueueIndStore, sendQueueIndRead, queue_state, millis() - a2r.t_sent, millis() - r2a.t_rcvd, buff_tx, buff_rx);
 
 		// Log/print error
-		DebugError(str, true);
+		DebugError(__FUNCTION__, __LINE__, str);
 
 		// Set queue back 
 		sendQueueIndStore = sendQueueIndStore - 1 >= 0 ? sendQueueIndStore - 1 : sendQueueSize - 1;
@@ -806,6 +861,24 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 		// Bail
 		return;
 
+	}
+
+	// Itterate packet ind if originating cheetah due
+	if (pack == 0) {
+		
+		// Iterate packet
+		a2r.packInd++;
+
+		// Reset packet if out of range
+		if (a2r.packInd > a2r.packRange[1])
+		{
+			sprintf(str, "RESETTING A2R PACKET INDEX FROM %d TO %d", a2r.packInd, a2r.packRange[0]);
+			DebugFlow(__FUNCTION__, __LINE__, str);
+			a2r.packInd = a2r.packRange[0];
+		}
+
+		// Copy packet number
+		pack = a2r.packInd;
 	}
 
 	// Create byte packet
@@ -852,11 +925,11 @@ bool SendPacket()
 	float dat[3] = { 0 };
 	bool do_conf = 0;
 	uint16_t pack = 0;
-	int buff_tx;
-	int buff_rx;
+	uint16_t buff_tx;
+	uint16_t buff_rx;
 
 	// Reset bytes sent
-	cnt_packBytesSent = 0;
+	cnt_bytesSent = 0;
 
 	// Bail if nothing in queue
 	if (sendQueueIndRead == sendQueueIndStore &&
@@ -865,8 +938,8 @@ bool SendPacket()
 	}
 
 	// Get buffer 
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	buff_rx = Serial1.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - a2r.port.availableForWrite();
+	buff_rx = a2r.port.available();
 
 	// Bail if buffer or time inadequate
 	if (buff_tx > 0 ||
@@ -891,14 +964,14 @@ bool SendPacket()
 	}
 
 	// Send
-	Serial1.write(sendQueue[sendQueueIndRead], msg_lng);
+	a2r.port.write(sendQueue[sendQueueIndRead], msg_lng);
 	a2r.dt_sent = a2r.t_sent > 0 ? millis() - a2r.t_sent : 0;
 	a2r.t_sent = millis();
-	cnt_packBytesSent = msg_lng;
+	cnt_bytesSent = msg_lng;
 
 	// Get buffers
-	buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	buff_rx = Serial1.available();
+	buff_tx = SERIAL_BUFFER_SIZE - 1 - a2r.port.availableForWrite();
+	buff_rx = a2r.port.available();
 
 	// pull out packet data
 	int b_ind = 1;
@@ -928,9 +1001,14 @@ bool SendPacket()
 	// Check if resending
 	is_resend = pack == r2a.packLastArr[CharInd(id, r2a.id, r2a.lng)];
 
+	// Update total packet count
+	if (!is_resend) {
+		a2r.packTot++;
+	}
+
 	// Make log/print string
 	sprintf(dat_str, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d do_conf=%d b_sent=%d tx=%d rx=%d dt_snd=%d dt_rcv=%d dt_q=%d",
-		id, dat[0], dat[1], dat[2], pack, do_conf, cnt_packBytesSent, buff_tx, buff_rx, a2r.dt_sent, r2a.t_rcvd > 0 ? millis() - r2a.t_rcvd : 0, millis() - t_queue);
+		id, dat[0], dat[1], dat[2], pack, do_conf, cnt_bytesSent, buff_tx, buff_rx, a2r.dt_sent, r2a.t_rcvd > 0 ? millis() - r2a.t_rcvd : 0, millis() - t_queue);
 
 	// Log/print
 	DebugSent(dat_str, is_resend);
@@ -988,7 +1066,7 @@ void QueueLog(char msg[], uint32_t t)
 			queue_state[logQueueSize] = '\0';
 
 			// Store overflow error instead
-			sprintf(msg_copy, "**WARNING** [QueueLog] LOG QUEUE OVERFLOWED: queue_s=%d queue_r=%d queue_state=|%s|",
+			sprintf(msg_copy, "**WARNING** [QueueLog] QUEUE OVERFLOWED: queue_s=%d queue_r=%d queue_state=|%s|",
 				logQueueIndStore, logQueueIndRead, queue_state);
 
 			// Set queue back so overflow will write over last log
@@ -999,10 +1077,10 @@ void QueueLog(char msg[], uint32_t t)
 		else if (is_mem_overflowing) {
 
 			// Store part of message
-			for (int i = 0; i < 100; i++) {
+			for (int i = 0; i < 50; i++) {
 				str[i] = msg[i];
 			}
-			str[100] = '\0';
+			str[50] = '\0';
 
 			// Store overflow error instead
 			sprintf(msg_copy, "**WARNING** [QueueLog] MESSAGE TOO LONG: msg_lng=%d max_lng=%d \"%s%s\"",
@@ -1042,7 +1120,7 @@ void QueueLog(char msg[], uint32_t t)
 	// Add header, chksum and footer
 	int b_ind = 0;
 	// head
-	msg_out[b_ind++] = a2c.head;
+	msg_out[b_ind++] = a24c.head;
 	// checksum
 	msg_out[b_ind++] = chksum;
 	// msg
@@ -1050,7 +1128,7 @@ void QueueLog(char msg[], uint32_t t)
 		msg_out[b_ind++] = msg_temp[i];
 	}
 	// foot
-	msg_out[b_ind++] = a2c.foot;
+	msg_out[b_ind++] = a24c.foot;
 	// null
 	msg_out[b_ind] = '\0';
 
@@ -1067,13 +1145,13 @@ bool SendLog()
 	FORMAT: head,chksum,"[log_cnt],loop,ts_ms,message",foot
 	*/
 	// Local vars
-	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
+	static char str[maxStoreStrLng+100] = { 0 }; str[0] = '\0';
 	int msg_lng = 0;
 	cnt_logBytesSent = 0;
 	int xbee_buff_tx;
 	int xbee_buff_rx;
-	int cs_buff_tx;
-	int cs_buff_rx;
+	int log_buff_tx;
+	int log_buff_rx;
 
 	// Bail if serial not established or no logs to store
 	if (!fc.isSesStarted ||
@@ -1083,17 +1161,17 @@ bool SendLog()
 	}
 
 	// Get buffers 
-	xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-	xbee_buff_rx = Serial1.available();
-	cs_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
-	cs_buff_rx = Serial.available();
+	xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - r2a.port.availableForWrite();
+	xbee_buff_rx = r2a.port.available();
+	log_buff_tx = SERIAL_BUFFER_SIZE - 1 - a24c.port.availableForWrite();
+	log_buff_rx = a24c.port.available();
 
 	// Bail if buffer or time inadequate
 	if (!(xbee_buff_tx == 0 &&
 		xbee_buff_rx == 0 &&
-		cs_buff_tx == 0 &&
-		cs_buff_rx == 0 &&
-		millis() > a2c.dt_sent + dt_sendSent &&
+		log_buff_tx == 0 &&
+		log_buff_rx == 0 &&
+		millis() > a24c.dt_sent + dt_sendSent &&
 		millis() > a2r.t_sent + dt_sendSent &&
 		millis() > r2a.t_rcvd + dt_sendRcvd)) {
 
@@ -1113,28 +1191,36 @@ bool SendLog()
 	msg_lng = strlen(logQueue[logQueueIndRead]);
 
 	// Send
-	Serial.write(logQueue[logQueueIndRead], msg_lng);
-	a2c.dt_sent = a2c.t_sent > 0 ? millis() - a2c.t_sent : 0;
-	a2c.t_sent = millis();
+	a24c.port.write(logQueue[logQueueIndRead], msg_lng);
+	a24c.dt_sent = a24c.t_sent > 0 ? millis() - a24c.t_sent : 0;
+	a24c.t_sent = millis();
 	cnt_logBytesSent += msg_lng;
 
 	// Print
 	if (db.print_log && DO_PRINT_DEBUG)
 	{
-		// Get data in buffers
-		int buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
-		int buff_rx = Serial.available();
 
-		// Get buffers 
-		xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial1.availableForWrite();
-		xbee_buff_rx = Serial1.available();
-		cs_buff_tx = SERIAL_BUFFER_SIZE - 1 - Serial.availableForWrite();
-		cs_buff_rx = Serial.available();
+		// Update log buffer
+		log_buff_tx = SERIAL_BUFFER_SIZE - 1 - a24c.port.availableForWrite();
+		log_buff_rx = a24c.port.available();
 
-		// Print stored log
-		sprintf(str, "   [LOG] a2c: log_cnt=%d b_sent=%d xbee_rx=%d xbee_tx=%d cs_rx=%d cs_tx=%d dt_snd=%d msg=\"%s\"",
-			cnt_logsStored, cnt_logBytesSent, xbee_buff_tx, xbee_buff_rx, cs_buff_tx, cs_buff_rx, a2c.dt_sent, logQueue[logQueueIndRead]);
-		QueueDebug(str, a2c.t_sent);
+		// TEMP Format stored log message
+		sprintf(str, "   [LOG:%d] a2c: b_snt=%d l_rx=%d l_rx=%d dt=%d \"%s\"",
+			cnt_logsStored, cnt_logBytesSent, log_buff_tx, log_buff_rx, a24c.dt_sent, logQueue[logQueueIndRead]);
+
+		// Truncate message
+		msg_lng = strlen(str);
+		if (msg_lng > maxMsgStrLng) {
+
+			// Terminate message early
+			str[maxMsgStrLng - 4] = '.';
+			str[maxMsgStrLng - 3] = '.';
+			str[maxMsgStrLng - 2] = '.';
+			str[maxMsgStrLng-1] = '\0';
+		}
+
+		// Store
+		QueueDebug(str, a24c.t_sent);
 	}
 
 	// Set entry to null
@@ -1198,14 +1284,14 @@ void StartRew()
 	// Signal PID stopped
 	digitalWrite(pin.ttlPidRun, LOW);
 	digitalWrite(pin.ttlPidStop, HIGH);
-	DebugFlow("[StartRew] PID STOPPED");
+	DebugFlow(__FUNCTION__, __LINE__, "PID STOPPED");
 
 	// Set flag
 	fc.isRewarding = true;
 
 	// Print
-	sprintf(str, "[StartRew] RUNNING: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
-	DebugFlow(str);
+	sprintf(str, "RUNNING: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
+	DebugFlow(__FUNCTION__, __LINE__, str);
 }
 
 // END REWARD
@@ -1221,8 +1307,8 @@ void EndRew()
 		SetPort(word_rewEnd, word_rewStr);
 
 		fc.isRewarding = false;
-		sprintf(str, "[StartRew] FINISHED: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
-		DebugFlow("[EndRew] REWARD OFF");
+		sprintf(str, "FINISHED: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
+		DebugFlow(__FUNCTION__, __LINE__, "REWARD OFF");
 
 	}
 }
@@ -1237,47 +1323,61 @@ void DebugPinMap()
 	delay(5000);
 	bool p_flow = db.print_flow;
 	db.print_flow = true;
-	digitalWrite(pin.ttlNorthOn, HIGH); DebugFlow("[DebugPinMap] North TTL"); delay(1000); digitalWrite(pin.ttlNorthOn, LOW);
-	digitalWrite(pin.ttlWestOn, HIGH); DebugFlow("[DebugPinMap] West TTL"); delay(1000); digitalWrite(pin.ttlWestOn, LOW);
-	digitalWrite(pin.ttlSouthOn, HIGH); DebugFlow("[DebugPinMap] South TTL"); delay(1000); digitalWrite(pin.ttlSouthOn, LOW);
-	digitalWrite(pin.ttlEastOn, HIGH); DebugFlow("[DebugPinMap] East TTL"); delay(1000); digitalWrite(pin.ttlEastOn, LOW);
-	digitalWrite(pin.ttlIR, HIGH); DebugFlow("[DebugPinMap] IR Sync TTL"); delay(1000); digitalWrite(pin.ttlIR, LOW);
-	digitalWrite(pin.ttlWhiteNoise, HIGH); DebugFlow("[DebugPinMap] White Noise TTL"); delay(1000); digitalWrite(pin.ttlWhiteNoise, LOW);
-	digitalWrite(pin.ttlRewTone, HIGH); DebugFlow("[DebugPinMap] Reward Tone TTL"); delay(1000); digitalWrite(pin.ttlRewTone, LOW);
-	digitalWrite(pin.ttlRewOn, HIGH); DebugFlow("[DebugPinMap] Reward On TTL"); delay(1000); digitalWrite(pin.ttlRewOn, LOW);
-	digitalWrite(pin.ttlRewOff, HIGH); DebugFlow("[DebugPinMap] Reward Off TTL"); delay(1000); digitalWrite(pin.ttlRewOff, LOW);
-	digitalWrite(pin.ttlPidRun, HIGH); DebugFlow("[DebugPinMap] PID Run TTL"); delay(1000); digitalWrite(pin.ttlPidRun, LOW);
-	digitalWrite(pin.ttlPidStop, HIGH); DebugFlow("[DebugPinMap] PID Stop TTL"); delay(1000); digitalWrite(pin.ttlPidStop, LOW);
-	digitalWrite(pin.ttlBullRun, HIGH); DebugFlow("[DebugPinMap] Bull Run TTL"); delay(1000); digitalWrite(pin.ttlBullRun, LOW);
-	digitalWrite(pin.ttlBullStop, HIGH); DebugFlow("[DebugPinMap] Bull Stop TTL"); delay(1000); digitalWrite(pin.ttlBullStop, LOW);
-	digitalWrite(pin.relIR, HIGH); DebugFlow("[DebugPinMap] IR Sync Relay"); delay(1000); digitalWrite(pin.relIR, LOW);
-	digitalWrite(pin.relRewTone, HIGH); DebugFlow("[DebugPinMap] Reward Tone Relay"); delay(1000); digitalWrite(pin.relRewTone, LOW);
-	digitalWrite(pin.relWhiteNoise, HIGH); DebugFlow("[DebugPinMap] White Noise Relay"); delay(1000); digitalWrite(pin.relWhiteNoise, LOW);
+	digitalWrite(pin.ttlNorthOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "North TTL"); delay(1000); digitalWrite(pin.ttlNorthOn, LOW);
+	digitalWrite(pin.ttlWestOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "West TTL"); delay(1000); digitalWrite(pin.ttlWestOn, LOW);
+	digitalWrite(pin.ttlSouthOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "South TTL"); delay(1000); digitalWrite(pin.ttlSouthOn, LOW);
+	digitalWrite(pin.ttlEastOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "East TTL"); delay(1000); digitalWrite(pin.ttlEastOn, LOW);
+	digitalWrite(pin.ttlIR, HIGH); DebugFlow(__FUNCTION__, __LINE__, "IR Sync TTL"); delay(1000); digitalWrite(pin.ttlIR, LOW);
+	digitalWrite(pin.ttlWhiteNoise, HIGH); DebugFlow(__FUNCTION__, __LINE__, "White Noise TTL"); delay(1000); digitalWrite(pin.ttlWhiteNoise, LOW);
+	digitalWrite(pin.ttlRewTone, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Tone TTL"); delay(1000); digitalWrite(pin.ttlRewTone, LOW);
+	digitalWrite(pin.ttlRewOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward On TTL"); delay(1000); digitalWrite(pin.ttlRewOn, LOW);
+	digitalWrite(pin.ttlRewOff, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Off TTL"); delay(1000); digitalWrite(pin.ttlRewOff, LOW);
+	digitalWrite(pin.ttlPidRun, HIGH); DebugFlow(__FUNCTION__, __LINE__, "PID Run TTL"); delay(1000); digitalWrite(pin.ttlPidRun, LOW);
+	digitalWrite(pin.ttlPidStop, HIGH); DebugFlow(__FUNCTION__, __LINE__, "PID Stop TTL"); delay(1000); digitalWrite(pin.ttlPidStop, LOW);
+	digitalWrite(pin.ttlBullRun, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Bull Run TTL"); delay(1000); digitalWrite(pin.ttlBullRun, LOW);
+	digitalWrite(pin.ttlBullStop, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Bull Stop TTL"); delay(1000); digitalWrite(pin.ttlBullStop, LOW);
+	digitalWrite(pin.relIR, HIGH); DebugFlow(__FUNCTION__, __LINE__, "IR Sync Relay"); delay(1000); digitalWrite(pin.relIR, LOW);
+	digitalWrite(pin.relRewTone, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Tone Relay"); delay(1000); digitalWrite(pin.relRewTone, LOW);
+	digitalWrite(pin.relWhiteNoise, HIGH); DebugFlow(__FUNCTION__, __LINE__, "White Noise Relay"); delay(1000); digitalWrite(pin.relWhiteNoise, LOW);
 	db.print_flow = p_flow;
 	delay(5000);
 }
 
 // LOG/PRING MAIN EVENT
-void DebugFlow(char msg[], uint32_t t)
+void DebugFlow(const char *fun, int line, char msg[], uint32_t t)
 {
 	// Local vars
+	static char str[maxStoreStrLng + 50] = { 0 }; str[0] = '\0';
 	bool do_print = DO_PRINT_DEBUG && db.print_flow;
 	bool do_log = DO_LOG && db.log_flow;
 
+	// Bail if neither set
+	if (!do_print && !do_log) {
+		return;
+	}
+
+	// Add funciton and line number
+	sprintf(str, "[%s:%d] %s", fun, line - 23, msg);
+
 	if (do_print) {
-		QueueDebug(msg, millis());
+		QueueDebug(str, t);
 	}
 
 	if (do_log) {
-		QueueLog(msg, millis());
+		QueueLog(str, t);
 	}
 
 }
 
-// LOG/PRINT ERRORS
-void DebugError(char msg[], bool is_error, uint32_t t)
+// LOG/PRINT WARNINGS
+void DebugWarning(const char *fun, int line, char msg[], uint32_t t)
 {
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
 	// Local vars
+	char warn_str[maxStoreStrLng + 50] = { 0 }; warn_str[0] = '\0';
 	bool do_print = db.print_errors && DO_PRINT_DEBUG;
 	bool do_log = db.log_errors && DO_LOG;
 
@@ -1286,23 +1386,52 @@ void DebugError(char msg[], bool is_error, uint32_t t)
 		return;
 	}
 
+	// Add error type, function and line number
+	sprintf(warn_str, "%s [%s:%d] %s", "**WARNING**", fun, line - 23, msg);
+
 	// Add to print queue
 	if (do_print) {
-		QueueDebug(msg, t);
+		QueueDebug(warn_str, t);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(msg, t);
+		QueueLog(warn_str, t);
+	}
+
+	// Store warning info
+	warn_line[cnt_warn < 100 ? cnt_warn++ : 99] = cnt_logsStored;
+
+}
+
+// LOG/PRINT ERRORS
+void DebugError(const char *fun, int line, char msg[], uint32_t t)
+{
+	// Local vars
+	char err_str[maxStoreStrLng + 50] = { 0 }; err_str[0] = '\0';
+	bool do_print = db.print_errors && DO_PRINT_DEBUG;
+	bool do_log = db.log_errors && DO_LOG;
+
+	// Bail if neither set
+	if (!do_print && !do_log) {
+		return;
+	}
+
+	// Add error type, function and line number
+	sprintf(err_str, "%s [%s:%d] %s", "!!ERROR!!", fun, line - 23, msg);
+
+	// Add to print queue
+	if (do_print) {
+		QueueDebug(err_str, t);
+	}
+
+	// Add to log queue
+	if (do_log) {
+		QueueLog(err_str, t);
 	}
 
 	// Store error info
-	if (is_error) {
-		err_line[cnt_err < 100 ? cnt_err++ : 99] = cnt_logsStored;
-	}
-	else {
-		warn_line[cnt_warn < 100 ? cnt_warn++ : 99] = cnt_logsStored;
-	}
+	err_line[cnt_err < 100 ? cnt_err++ : 99] = cnt_logsStored;
 }
 
 // PRINT RECIEVED PACKET
@@ -1551,7 +1680,7 @@ void HardwareTest(int test_num)
 	case 1:
 	{
 		// Write pins high then low
-		DebugFlow("[HardwareTest] TEST DUE PIN: Reward Tone");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: Reward Tone");
 		digitalWrite(pin.relWhiteNoise, LOW);
 		digitalWrite(pin.ttlWhiteNoise, LOW);
 		digitalWrite(pin.relRewTone, HIGH);
@@ -1565,7 +1694,7 @@ void HardwareTest(int test_num)
 	// Test arduino pin white noise
 	case 2:
 	{
-		DebugFlow("[HardwareTest] TEST DUE PIN: White Noise");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: White Noise");
 		digitalWrite(pin.relWhiteNoise, HIGH);
 		digitalWrite(pin.ttlWhiteNoise, HIGH);
 		delay(dt_on);
@@ -1578,7 +1707,7 @@ void HardwareTest(int test_num)
 	case 3:
 	{
 		// Create port word for rew event pins only
-		DebugFlow("[HardwareTest] TEST PORT WORD: Reward Event Only");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward Event Only");
 		int sam_on_pins[1] = { pin.sam_ttlRewOn };
 		word_rewStr = GetPortWord(0x0, sam_on_pins, 1);
 		int sam_off_pins[1] = { pin.sam_ttlRewOff };
@@ -1595,7 +1724,7 @@ void HardwareTest(int test_num)
 	case 4:
 	{
 		// Create port word for white and tone pins
-		DebugFlow("[HardwareTest] TEST PORT WORD: Reward With Sound");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward With Sound");
 		int sam_on_pins[3] = { pin.sam_relRewTone, pin.sam_ttlRewTone, pin.sam_ttlRewOn };
 		word_rewStr = GetPortWord(0x0, sam_on_pins, 3);
 		int sam_off_pins[3] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise, pin.sam_ttlRewOff };
@@ -1612,7 +1741,7 @@ void HardwareTest(int test_num)
 	case 5:
 	{
 		// Write pins high then low
-		DebugFlow("[HardwareTest] TEST DUE PIN: IR");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: IR");
 		digitalWrite(pin.relIR, HIGH);
 		digitalWrite(pin.ttlIR, HIGH);
 		delay(dt_on);
@@ -1625,7 +1754,7 @@ void HardwareTest(int test_num)
 	case 6:
 	{
 		// Create port word for white and tone pins
-		DebugFlow("[HardwareTest] TEST PORT WORD: IR");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST PORT WORD: IR");
 
 		// Write word on then off
 		SetPort(word_irAll, 0x0);
@@ -1639,7 +1768,7 @@ void HardwareTest(int test_num)
 	case 7:
 	{
 		// Write pins high then low
-		DebugFlow("[HardwareTest] TEST DUE PIN: PID");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: PID");
 		digitalWrite(pin.ttlPidRun, HIGH);
 		digitalWrite(pin.ttlPidStop, LOW);
 		delay(dt_on);
@@ -1653,7 +1782,7 @@ void HardwareTest(int test_num)
 	case 8:
 	{
 		// Write pins high then low
-		DebugFlow("[HardwareTest] TEST DUE PIN: BULL");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: BULL");
 		digitalWrite(pin.ttlBullRun, HIGH);
 		digitalWrite(pin.ttlBullStop, LOW);
 		delay(dt_on);
@@ -1666,7 +1795,7 @@ void HardwareTest(int test_num)
 	case 9:
 	{
 		// Write pins high then low
-		DebugFlow("[HardwareTest] TEST DUE PIN: PT");
+		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: PT");
 		digitalWrite(pin.ttlNorthOn, HIGH);
 		delay(10);
 		digitalWrite(pin.ttlWestOn, HIGH);
@@ -1814,8 +1943,8 @@ int CharInd(char id, const char id_arr[], int arr_size)
 	// Print error if not found
 	if (ind == -1) {
 
-		sprintf(str, "!!ERROR!! [CharInd] ID \'%c\' Not Found", id);
-		DebugError(str);
+		sprintf(str, "ID \'%c\' Not Found", id);
+		DebugError(__FUNCTION__, __LINE__, str);
 	}
 
 	return ind;
@@ -1866,7 +1995,7 @@ void ResetTTL()
 
 		// Print on time
 		if (db.print_flow && v_doPrintNorth) {
-			DebugFlow("[NorthFun] NORTH ON", v_t_outLastNorth);
+			DebugFlow(__FUNCTION__, __LINE__, "NORTH ON", v_t_outLastNorth);
 			v_doPrintNorth = false;
 		}
 
@@ -1877,7 +2006,7 @@ void ResetTTL()
 			v_isOnNorth = false;
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[ResetTTL] NORTH OFF");
+				DebugFlow(__FUNCTION__, __LINE__, "NORTH OFF");
 			}
 		}
 	}
@@ -1887,7 +2016,7 @@ void ResetTTL()
 
 		// Print on time
 		if (db.print_flow && v_doPrintWest) {
-			DebugFlow("[WestFun] WEST ON", v_t_outLastWest);
+			DebugFlow(__FUNCTION__, __LINE__, "WEST ON", v_t_outLastWest);
 			v_doPrintWest = false;
 		}
 
@@ -1899,7 +2028,7 @@ void ResetTTL()
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[ResetTTL] WEST OFF");
+				DebugFlow(__FUNCTION__, __LINE__, "WEST OFF");
 			}
 		}
 	}
@@ -1909,7 +2038,7 @@ void ResetTTL()
 
 		// Print on time
 		if (db.print_flow && v_doPrintSouth) {
-			DebugFlow("[SouthFun] SOUTH ON", v_t_outLastSouth);
+			DebugFlow(__FUNCTION__, __LINE__, "SOUTH ON", v_t_outLastSouth);
 			v_doPrintSouth = false;
 		}
 
@@ -1921,7 +2050,7 @@ void ResetTTL()
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[ResetTTL] SOUTH OFF");
+				DebugFlow(__FUNCTION__, __LINE__, "SOUTH OFF");
 			}
 		}
 	}
@@ -1931,7 +2060,7 @@ void ResetTTL()
 
 		// Print on time
 		if (db.print_flow && v_doPrintEast) {
-			DebugFlow("[EastFun] EAST ON", v_t_outLastEast);
+			DebugFlow(__FUNCTION__, __LINE__, "EAST ON", v_t_outLastEast);
 			v_doPrintEast = false;
 		}
 
@@ -1943,7 +2072,7 @@ void ResetTTL()
 
 			// Print
 			if (db.print_flow) {
-				DebugFlow("[ResetTTL] EAST OFF");
+				DebugFlow(__FUNCTION__, __LINE__, "EAST OFF");
 			}
 		}
 	}
@@ -2083,10 +2212,10 @@ void setup()
 	// SET UP SERIAL STUFF
 
 	// XBee
-	Serial1.begin(57600);
+	r2a.port.begin(57600);
 
 	// CS through programming port
-	Serial.begin(57600);
+	a24c.port.begin(57600);
 
 	// Serial monitor
 	SerialUSB.begin(0);
@@ -2098,8 +2227,8 @@ void setup()
 	}
 
 	// Dump CS buffers
-	while (Serial.available() > 0) {
-		Serial.read();
+	while (a24c.port.available() > 0) {
+		a24c.port.read();
 	}
 
 	// SETUP TTL PORTS
@@ -2137,27 +2266,37 @@ void setup()
 
 	// Print run mode
 	if (DO_DEBUG) {
-		DebugFlow("RUN MODE = DEBUG");
+		DebugFlow(__FUNCTION__, __LINE__, "RUN MODE = DEBUG");
 	}
 	else {
-		DebugFlow("RUN MODE = RELEASE");
+		DebugFlow(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
 	}
 
 	// Print settings
-	sprintf(str, "[setup] RUNNING IN %s MODE: |%s%s",
+	sprintf(str, "RUNNING IN %s MODE: |%s%s",
 		DO_DEBUG ? "DEBUG" : "RELEASE",
 		DO_LOG ? "LOGGING ENABLED|" : "",
 		DO_PRINT_DEBUG ? "PRINTING ENABLED|" : "");
-	DebugFlow(str);
-
-	// PRINT SETUP FINISHED
-	DebugFlow("[setup] FINISHED: Setup");
+	DebugFlow(__FUNCTION__, __LINE__, str);
 
 	// PRINT AVAILABLE MEMORY
-	sprintf(str, "[setup] AVAILABLE MEMORY: %0.2fKB",
+	sprintf(str, "AVAILABLE MEMORY: %0.2fKB",
 		(float)freeMemory() / 1000);
-	DebugFlow(str);
+	DebugFlow(__FUNCTION__, __LINE__, str);
 	while (PrintDebug());
+
+	// CHECK SERIAL BUFFER SIZE
+	sprintf(str, "SERIAL BUFFER SIZE: ACTUAL=%dB EXPECTED=512B", SERIAL_BUFFER_SIZE);
+	if (SERIAL_BUFFER_SIZE == 512) {
+		DebugFlow(__FUNCTION__, __LINE__, str);
+	}
+	// Buffer size is wrong
+	else {
+		DebugError(__FUNCTION__, __LINE__, str);
+	}
+
+	// PRINT SETUP FINISHED
+	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Setup");
 
 	// SET WHITE NOISE RELAY HIGH
 	digitalWrite(pin.relWhiteNoise, HIGH);
@@ -2212,7 +2351,7 @@ void loop()
 				if (r2a.dat[1] == 0)
 				{
 					// Log/rint test
-					DebugFlow("DO TEST: WALL IR TIMING TEST");
+					DebugFlow(__FUNCTION__, __LINE__, "DO TEST: WALL IR TIMING TEST");
 
 					// Make sure IR off
 					PulseIR(0, 0, 0);
@@ -2240,7 +2379,7 @@ void loop()
 				if (r2a.dat[1] == 0)
 				{
 					// Log/rint test
-					DebugFlow("DO TEST: SYNC IR TIMING TEST");
+					DebugFlow(__FUNCTION__, __LINE__, "DO TEST: SYNC IR TIMING TEST");
 
 					// Set flag
 					db.do_irSyncCalibration = true;
@@ -2289,7 +2428,7 @@ void loop()
 				if (r2a.dat[1] == 0)
 				{
 					// Log/rint test
-					DebugFlow("DO TEST: HARDWARE");
+					DebugFlow(__FUNCTION__, __LINE__, "DO TEST: HARDWARE");
 
 					// Set to block IR pulse
 					fc.doBlockIRPulse = true;
@@ -2330,7 +2469,7 @@ void loop()
 			{
 				fc.doWhiteNoise = false;
 				fc.doRewTone = false;
-				DebugFlow("[loop] NO SOUND");
+				DebugFlow(__FUNCTION__, __LINE__, "NO SOUND");
 			}
 
 			// White noise only
@@ -2340,7 +2479,7 @@ void loop()
 				// Set flags
 				fc.doWhiteNoise = true;
 				fc.doRewTone = false;
-				DebugFlow("[loop] DONT DO TONE");
+				DebugFlow(__FUNCTION__, __LINE__, "DONT DO TONE");
 
 			}
 
@@ -2351,7 +2490,7 @@ void loop()
 				// Set flags
 				fc.doWhiteNoise = true;
 				fc.doRewTone = true;
-				DebugFlow("[loop] DO TONE");
+				DebugFlow(__FUNCTION__, __LINE__, "DO TONE");
 
 			}
 
@@ -2397,14 +2536,14 @@ void loop()
 			{
 				digitalWrite(pin.ttlPidStop, HIGH);
 				digitalWrite(pin.ttlPidRun, LOW);
-				DebugFlow("[loop] PID Stopped");
+				DebugFlow(__FUNCTION__, __LINE__, "PID Stopped");
 			}
 			// Signal PID running
 			else if (r2a.dat[0] == 1)
 			{
 				digitalWrite(pin.ttlPidRun, HIGH);
 				digitalWrite(pin.ttlPidStop, LOW);
-				DebugFlow("[loop] PID Started");
+				DebugFlow(__FUNCTION__, __LINE__, "PID Started");
 			}
 		}
 
@@ -2415,21 +2554,37 @@ void loop()
 			{
 				digitalWrite(pin.ttlBullStop, HIGH);
 				digitalWrite(pin.ttlBullRun, LOW);
-				DebugFlow("[loop] Bull Stopped");
+				DebugFlow(__FUNCTION__, __LINE__, "Bull Stopped");
 			}
 			// Signal Bull running
 			else if (r2a.dat[0] == 1)
 			{
 				digitalWrite(pin.ttlBullRun, HIGH);
 				digitalWrite(pin.ttlBullStop, LOW);
-				DebugFlow("[loop] Bull Started");
+				DebugFlow(__FUNCTION__, __LINE__, "Bull Started");
 			}
 		}
 
 		// (q) DO QUIT
 		else if (r2a.idNow == 'q') {
 
-			// Log warnings summary
+			// Update buffers 
+			uint16_t xbee_buff_tx = SERIAL_BUFFER_SIZE - 1 - r2a.port.availableForWrite();
+			uint16_t xbee_buff_rx = r2a.port.available();
+			uint16_t log_buff_tx = SERIAL_BUFFER_SIZE - 1 - a24c.port.availableForWrite();
+			uint16_t log_buff_rx = a24c.port.available();
+
+			// Com summary info Genaeral
+			sprintf(str, "COM SUMMARY GENERAL: RX=|flood=%lu|tout=%lu|xbeebuf=%d|logbuf=%d| TX=|xbeebuf=%d|logbuf=%d|",
+				cnt_overflowRX, cnt_timeoutRX, xbee_buff_rx, log_buff_rx, xbee_buff_tx, log_buff_tx);
+			DebugFlow(__FUNCTION__, __LINE__, str);
+
+			// Com summary info FeederDue
+			sprintf(str, "COM SUMMARY FEEDERDUE: A2R=|pind=%d|ptot=%lu|resnd=%d| R2A=|pind=%d|ptot=%lu|rercv=%d|drop=%d|",
+				a2r.packInd, a2r.packTot, a2r.cnt_repeat, r2a.packInd, r2a.packTot, r2a.cnt_repeat, r2a.cnt_dropped);
+			DebugFlow(__FUNCTION__, __LINE__, str);
+
+			// Warnings summary
 			char warn_lines[200] = "ON LINES |";
 			for (int i = 0; i < cnt_warn; i++) {
 				char str_lin[10];
@@ -2437,21 +2592,21 @@ void loop()
 				strcat(warn_lines, str_lin);
 			}
 			sprintf(str, "TOTAL WARNINGS: %d %s", cnt_warn, cnt_warn > 0 ? warn_lines : "");
-			DebugFlow(str);
+			DebugFlow(__FUNCTION__, __LINE__, str);
 
-			// Log errors summary
+			// Errors summary
 			char err_lines[200] = "ON LINES |";
 			for (int i = 0; i < cnt_err; i++) {
 				char str_lin[10];
 				sprintf(str_lin, "%d|", err_line[i]);
 				strcat(err_lines, str_lin);
 			}
-			sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? warn_lines : "");
-			DebugFlow(str);
+			sprintf(str, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? err_lines : "");
+			DebugFlow(__FUNCTION__, __LINE__, str);
 
 			// Set flags
 			fc.doQuit = true;
-			DebugFlow("[loop] QUITING...");
+			DebugFlow(__FUNCTION__, __LINE__, "QUITING...");
 		}
 
 	}
@@ -2470,9 +2625,9 @@ void loop()
 		}
 
 		// Log ir event
-		sprintf(str, "[loop] IR Sync %s: cnt=%d dt=%dms",
+		sprintf(str, "IR Sync %s: cnt=%d dt=%dms",
 			is_irOn ? "Start" : "End", cnt_ir, millis() - t_irSyncLast);
-		DebugFlow(str);
+		DebugFlow(__FUNCTION__, __LINE__, str);
 	}
 
 	// CHECK FOR QUIT
