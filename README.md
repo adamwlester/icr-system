@@ -14,7 +14,7 @@ Highlights
     
 * Deterministic timing with IR/TTL sync and mirrored robot/PC logging.
     
-* Turnkey CSV outputs for analysis.
+* Turnkey .mat inputs and outputs for control and analysis.
     
 
 Tech Stack
@@ -32,29 +32,37 @@ Repository Structure
 
 ```
 icr-system/
-├─ csharp/                    – C# application for Windows that orchestrates the experiment.
-│   ├─ ICR_Run.cs             – main control program.
-│   └─ (other helper classes) – debugging, communication and logging utilities.
+├─ csharp/                      – C# application for Windows that orchestrates the experiment.
+│   ├─ ICR_Run.cs               – main control program.
 │
 ├─ arduino/
-│   ├─ CheetahDue/            – firmware for fixed feeder and synchronisation controller.
-│   │   ├─ CheetahDue.ino     – main Arduino sketch.
-│   │   ├─ CheetahDue.h       – class definitions and constants.
-│   │   └─ CheetahDue_PinMap.h – pin mappings for TTL outputs and sensors.
-│   ├─ FeederDue/             – firmware for mobile feeder cart.
-│   │   ├─ FeederDue.h        – main firmware (header-only implementation).
-│   │   └─ FeederDue_PinMap.h – pin mappings for motor drivers, solenoids and sensors.
-│   └─ (testing/)             – hardware diagnostic sketches and calibration tools.
+│   ├─ CheetahDue/              – firmware for fixed feeder and synchronisation controller.
+│   │   ├─ CheetahDue.ino       – main Arduino sketch.
+│   │   ├─ CheetahDue.h         – class definitions and constants.
+│   │   └─ CheetahDue_PinMap.h  – pin mappings for TTL outputs and sensors.
+│   ├─ FeederDue/               – firmware for mobile feeder cart.
+│   │   ├─ FeederDue.h          – main firmware (header-only implementation).
+│   │   └─ FeederDue_PinMap.h   – pin mappings for motor drivers, solenoids and sensors.
 │
 ├─ matlab/
-│   ├─ support_code/dlgAWL/   – generic file and dialog utilities used by the GUI.
-│   └─ (additional scripts)   – calibrations, data reformatting and offline analysis.
+│   ├─ support_code/dlgAWL/     – generic file and dialog utilities used by the GUI.
+│   ├─ ICR_GUI.m                – primary GUI and control code.
+│   └─ AC_NETMON.m              – image and sound display code for projector computer.
 │
-├─ data/
-│   └─ data_file_setup/       – example scripts for converting raw Neuralynx files into analysis-ready formats.
+├─ data/                        – experiment resources, Neuralynx configs, images, and session data.
+│   ├─ cheetah/                 – Neuralynx (Cheetah/SpikeSort3D) configuration files.
+│   │   └─ configuration/       – .cfg files for behavior and ephys setups (requires manual path edits).
+│   ├─   images/                – visual assets for image projection.
+│   │   ├─ icons/               – small UI and GUI icons.
+│   │   ├─ paxinos/             – Paxinos brain atlas reference images (coronal, sagittal, horizontal).
+│   │   └─ wall_images/         – cue wall textures used during behavior (main, testing, trigger sets).
+│   ├─ io_file_setup/           – MATLAB scripts to configure IO .mat session files.
+│   ├─ operational/             – precomputed path and track-boundary files for tasks.
+│   └─ session/                 – example session-level IO .mat files for saved task configurations.
 │
-└─ testing/
-    └─ HardwareDiagnostic/    – Arduino sketch for verifying TTL lines, solenoids and sensors.
+│─ testing/
+│   └─ HardwareDiagnostic/      – Arduino sketch for verifying TTL lines, solenoids and sensors.
+└─  config.json                 – global path configuration file used by both MATLAB and C#.
 ```
 
 Core Capabilities (Code-Level)
@@ -70,6 +78,14 @@ Core Capabilities (Code-Level)
     
 * **Reliability** Watchdogs, heartbeats, bounded queues, and fail-safe motor/solenoid states.
     
+
+Path Config Setup
+------------
+
+* **Paths** Define global paths in `config.json` at the repo root. Both MATLAB and C# code read this file instead of using hardcoded directories.
+* **Cheetah configs** Certain paths still need to be manually updated in the attached Neuralynx configuration files:
+  * `data\cheetah\configuration\ICR_Basic.cfg`
+  * `data\cheetah\configuration\Cheetah.cfg`
 
 Quick Start
 -----------

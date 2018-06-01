@@ -1,0 +1,34 @@
+{
+  "PROJ_REPO_DIR": "C:\\Users\\lester\\repos\\icr-system",
+  "_comment_PROJ_REPO_DIR": "Root repository directory",
+
+  "MATLAB_STARTUP_DIR": "C:\\Users\\lester\\MATLAB\\startup",
+  "_comment_MATLAB_STARTUP_DIR": "Default MATLAB startup directory",
+
+  "MATLAB_STARTUP_ALT_DIR": "C:\\Users\\lester\\MATLAB\\Startup",
+  "_comment_MATLAB_STARTUP_ALT_DIR": "Alternate MATLAB startup directory (from C#)",
+
+  "CHEETAH_MAIN_REC_DIR": "C:\\CheetahData\\ICR_Recordings",
+  "_comment_CHEETAH_MAIN_REC_DIR": "Cheetah main recording directory",
+
+  "CHEETAH_TEMP_REC_DIR": "C:\\CheetahData\\Temp",
+  "_comment_CHEETAH_TEMP_REC_DIR": "Cheetah temporary recording directory",
+
+  "CHEETAH_EXE_DIR": "C:\\Program Files\\Neuralynx\\Cheetah",
+  "_comment_CHEETAH_EXE_DIR": "Cheetah installation directory",
+
+  "CHEETAH_EXE_PATH": "C:\\Program Files\\Neuralynx\\Cheetah\\Cheetah.exe",
+  "_comment_CHEETAH_EXE_PATH": "Full path to Cheetah executable",
+
+  "CHEETAH_CFG_DIR": "C:\\Users\\Public\\Documents\\cheetah\\configuration",
+  "_comment_CHEETAH_CFG_DIR": "Cheetah configuration directory",
+
+  "SPIKESORT3D_EXE_DIR": "C:\\Program Files (x86)\\Neuralynx\\SpikeSort3D",
+  "_comment_SPIKESORT3D_EXE_DIR": "SpikeSort3D installation directory",
+
+  "SPIKESORT3D_CFG_DIR": "C:\\Program Files (x86)\\Neuralynx\\SpikeSort3D",
+  "_comment_SPIKESORT3D_CFG_DIR": "SpikeSort3D configuration directory (same as exe dir)",
+
+  "SAVE_TOP_DIR": "E:\\BehaviorPilot",
+  "_comment_SAVE_TOP_DIR": "Top-level save directory for experiments"
+}

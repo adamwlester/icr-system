@@ -29,12 +29,10 @@ function[status] = ICR_GUI(SYSTEST, BREAKDEBUG, DOAUTOLOAD, DOPROFILE, ISMATSOLO
 %     	true: Run with profiler
 %       false: Run without profiler
 
-
-
-
-
-
 %% ============================== TOP LEVEL RUN ===========================
+
+% ---------------------- LOAD CONFIG.JSON ----------------------
+cfg = jsondecode(fileread(fullfile(fileparts(mfilename('fullpath')), '..', 'config.json')));
 
 % ----------------------------- SETUP GLOBALS -----------------------------
 
@@ -502,7 +500,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % DIRECTORIES
         
         % Top directory
-        D.DIR.top = 'C:\Users\lester\repos\icr-system';
+        D.DIR.top = cfg.PROJ_REPO_DIR;
         
         % Test output
         D.DIR.ioTestOut = fullfile(D.DIR.top,'testing','Output');
@@ -532,16 +530,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.DIR.frgPath = fullfile(D.DIR.ioTop, 'Operational', 'forage_path.mat');
         
         % Neuralynx dirs
-        D.DIR.nlxCheetaEXE = 'C:\Program Files\Neuralynx\Cheetah';
-        D.DIR.nlxSS3DEXE = 'C:\Program Files (x86)\Neuralynx\SpikeSort3D';
-        D.DIR.nlxCheetahCfg = 'C:\Users\Public\Documents\cheetah\configuration';
-        D.DIR.nlxSS3DCfg ='C:\Program Files (x86)\Neuralynx\SpikeSort3D';
-        D.DIR.nlxSaveTop = 'E:\BehaviorPilot';
-        D.DIR.nlxTempTop = 'C:\CheetahData\Temp';
-        D.DIR.nlxTempSub = '0000-00-00_00-00-00';
-        D.DIR.nlxRatSub = '';
-        D.DIR.nlxRecSub = '';
-        D.DIR.nlxRawSub = '';
+        D.DIR.nlxCheetaEXE = cfg.CHEETAH_EXE_DIR;
+        D.DIR.nlxSS3DEXE   = cfg.SPIKESORT3D_EXE_DIR;
+        D.DIR.nlxCheetahCfg = cfg.CHEETAH_CFG_DIR;
+        D.DIR.nlxSS3DCfg   = cfg.SPIKESORT3D_CFG_DIR;
+        D.DIR.nlxSaveTop   = cfg.SAVE_TOP_DIR;
+        D.DIR.nlxTempTop   = cfg.CHEETAH_TEMP_REC_DIR;
+        D.DIR.nlxTempSub   = '0000-00-00_00-00-00';
+        D.DIR.nlxRatSub    = '';
+        D.DIR.nlxRecSub    = '';
+        D.DIR.nlxRawSub    = '';
         
         % Log dirs
         D.DIR.logTempDir = fullfile(D.DIR.nlxTempTop,D.DIR.nlxTempSub);

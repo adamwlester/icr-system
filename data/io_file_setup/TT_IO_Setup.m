@@ -4,9 +4,9 @@ function[] = TT_IO_Setup()
 % appropriate prameters (e.g., Implant_Coordinates etc)
 
 %% =========================== SET PARAMETERS =============================
-topDir = 'C:\Users\lester\repos\icr-system\main\matlab';
-ioDir = regexp(topDir,'.*(?=\icr-system)','match');
-ioDir = fullfile(ioDir{:},'icr-system\data\session');
+cfg = jsondecode(fileread(fullfile(fileparts(mfilename('fullpath')), '..', 'config.json')));
+topDir = fullfile(cfg.PROJ_REPO_DIR, 'main', 'matlab');
+ioDir  = fullfile(cfg.PROJ_REPO_DIR, 'data', 'session');
 
 % Rat numbers (must be preceded by an 'r')
 PAR.ratList = [...

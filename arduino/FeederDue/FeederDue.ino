@@ -25,7 +25,6 @@
 	DO (to UART rx) buffer = 202 bytes
 
 * ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO "expectedSerialBufferSize"
-	Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
 
 * DATA TYPES
 	DATA TYPE				SIZE (IN BYTES)				RANGE
@@ -3223,7 +3222,7 @@ double PID::PidCalibration()
 	int m_ind = DB_FUN_START();
 
 	/*
-	Calibration based on the Ziegler–Nichols method:
+	Calibration based on the Zieglerï¿½Nichols method:
 	http://www.inpharmix.com/jps/PID_Controller_For_Lego_Mindstorms_Robots.html
 	Equations:
 	kP = 0.6*Kc

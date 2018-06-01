@@ -1,7 +1,10 @@
 function [] = IO_Reformat()
 
+% Load config.json
+cfg = jsondecode(fileread(fullfile(fileparts(mfilename('fullpath')), '..', 'config.json')));
+
 % Directory containing table data
-topDir = 'C:\Users\lester\repos\icr-system\main\matlab';
+topDir = cfg.PROJ_REPO_DIR;
 ioDir = regexp(topDir,'.*(?=\icr-system)','match');
 ioDir = fullfile(ioDir{:},'icr-system\data\session'); 
 

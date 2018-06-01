@@ -6,10 +6,30 @@ using System.Threading;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Collections.Generic;
 
 namespace ICR_Run
 {
+    // --- Config loader for global paths ---
+    public static class Config
+    {
+        private static Dictionary<string, string> cfg;
 
+        static Config()
+        {
+            var cfgPath = Path.Combine(AppContext.BaseDirectory, "config.json");
+            var json = File.ReadAllText(cfgPath);
+            cfg = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+        }
+
+        public static string Get(string key)
+        {
+            return cfg.ContainsKey(key) ? cfg[key] : null;
+        }
+    }
+
+    // --- Main ICR Run Class ---
     public class ICR_Run
     {
 
@@ -95,12 +115,12 @@ namespace ICR_Run
         private static UNION_HACK u_logBytes = new UNION_HACK(0, '0', 0, 0, 0);
 
         // MATLAB Directories
-        private static string matStartDir = @"C:\Users\lester\MeDocuments\AppData\MATLAB\Startup";
+       private static string matStartDir = Config.Get("MATLAB_STARTUP_ALT_DIR"); // matlab startup.m dir
 
         // Neuralynx Directories
-        private static string nlxTempTop = @"C:\CheetahData\Temp"; // cheetah temp dir
+        private static string nlxTempTop = Config.Get("CHEETAH_TEMP_REC_DIR"); // cheetah temp dir
         private static string nlxTempSub = @"0000-00-00_00-00-00"; // cheetah temp sub dir
-        private static string nlxSaveTop = @"E:\BehaviorPilot"; // cheetah recording dir
+        private static string nlxSaveTop = Config.Get("CHEETAH_MAIN_REC_DIR"); // cheetah recording dir
         private static string nlxRatSub = nlxTempTop; // cheetah recording dir
         private static string nlxRecSub = nlxTempSub; // cheetah sub dir
 
@@ -3096,10 +3116,10 @@ namespace ICR_Run
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
             string nowDir = Directory.GetCurrentDirectory();
-            string newDir = @"C:\Program Files\Neuralynx\Cheetah";
+            string newDir = Config.Get("CHEETAH_EXE_DIR");
             Directory.SetCurrentDirectory(newDir);
-            startInfo.FileName = @"C:\Program Files\Neuralynx\Cheetah\Cheetah.exe";
-            startInfo.Arguments = string.Format("\"C:\\Users\\Public\\Documents\\Cheetah\\configuration\\{0}\"&", config);
+            startInfo.FileName = Config.Get("CHEETAH_EXE_PATH");
+            startInfo.Arguments = string.Format("\"{0}\\{1}\"&", Config.Get("CHEETAH_CFG_DIR"), config);
             startInfo.WindowStyle = ProcessWindowStyle.Minimized;
             Process.Start(startInfo);
             Directory.SetCurrentDirectory(nowDir);
