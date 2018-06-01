@@ -12,10 +12,10 @@
 
 % image directory
 imgDir = ...
-    '\\ICRCHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages';
+    '\\ICRCHEETAH\Study_ICR\ICR_Code\icr-system\data\images\wall_Images';
 
 % Subdirectories
-subDir{1} = 'Main';
+subDir{1} = 'main';
 subDir{2} = 'Trigger';
 
 %% Set tcip then run indefinaitely
@@ -61,11 +61,11 @@ trgDel = 0.1; %#ok<*NASGU>
 % Backround image files
 imgBackFiles = [{'back_light.bmp'}, {'back_dark.bmp'}];
 
-% Main image files
+% main image files
 imgRunFiles = [{'Img1.bmp'}, {'Img2.bmp'}, {'Img3.bmp'}];
 
 % DEBUG
-% fullscreenAWL('\\ICRCHEETAH\Study_ICR\ICR_Code\ICR_Running\IOfiles\Images\WallImages\Trigger\back_dark.bmp')
+% fullscreenAWL('\\ICRCHEETAH\Study_ICR\ICR_Code\icr-system\data\images\wall_Images\Trigger\back_dark.bmp')
 
 %% Loop indefinitely
 

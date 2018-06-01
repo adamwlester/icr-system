@@ -91,7 +91,7 @@ See the Manual installation section of this guide.
 
 http://arduino.cc/en/Guide/Libraries
 
-\section SDconfig SdFat Configuration
+\section SDconfig SdFat configuration
 
 Several configuration options may be changed by editing the SdFatConfig.h
 file in the %SdFat folder.
@@ -182,7 +182,7 @@ more internal RAM buffering than other cards and therefore can limit
 the number of flash erase operations that the Arduino forces due to its
 limited RAM.
 
-\section Hardware Hardware Configuration
+\section Hardware Hardware configuration
 
 %SdFat was developed using an
 <A HREF = "http://www.adafruit.com/"> Adafruit Industries</A>

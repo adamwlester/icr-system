@@ -124,7 +124,7 @@ Small stuff:
 * Wildcard is supported in v3.2
 * [Remove] efcount and efinfo is not yet supported in v3.0
 
-Testing at 115200. First test with clean/empty card. The second test is with 193MB across 172 files on the microSD card.
+testing at 115200. First test with clean/empty card. The second test is with 193MB across 172 files on the microSD card.
 
 * 1GB: 333075/333075, 333075/333075
 * 8GB: 333075/333075, 333075/333075
@@ -132,7 +132,7 @@ Testing at 115200. First test with clean/empty card. The second test is with 193
 
 The card with tons of files may have problems. Whenever possible, use a clean, empty, freshly formatted card.
 
-Testing at 57600. First test with clean/empty card. The second test is with 193MB across 172 files on the microSD card.
+testing at 57600. First test with clean/empty card. The second test is with 193MB across 172 files on the microSD card.
 
 * 1GB: 111075/111075, 111075/111075
 * 8GB: 111075/111075, 111075/111075
@@ -185,7 +185,7 @@ C:\arduino-xxxx\hardware\arduino\cores\arduino\HardwareSerial.cpp
 
 I've added the modified HardwareSerial.cpp to the repo.
  
-Testing at 57600
+testing at 57600
 
 * 1GB: 110490/111000, 110490/111000
 * 8GB: 111000/111000, 111000/111000, 111000/111000
@@ -199,7 +199,7 @@ To remove a directory and all its files:
  
 Windows 7 stores the Arduino hex file in an awful place. Something like:
 
-    C:\Users\Main\AppData\Local\Temp\build3390340147786739225.tmp\OpenLog_v2.cpp.hex
+    C:\Users\main\AppData\Local\Temp\build3390340147786739225.tmp\OpenLog_v2.cpp.hex
  
 Added HardwareSerial.cpp and a readme to the main trunk.
 Added OpenLog_v2.cpp.hex to the main trunk.
@@ -231,7 +231,7 @@ In the command_shell / read_line function : It may be better to pull directly fr
  
 Because of all these changes, I need to re-test power consumption. For now, I'm confident it's low enough.
  
-Testing with 512 buffer array size
+testing with 512 buffer array size
 
 * 1GB @ 57600 - dropped very little out of 3 tests
 * 1GB @ 115200 - dropped very little out of 2 tests
@@ -242,7 +242,7 @@ Testing with 512 buffer array size
  
 1024 array size (and 800) does not run
  
-Testing with 700 buffer array size
+testing with 700 buffer array size
 
 * 1GB @ 57600 - 110300 out of 111000 bytes, 110300/111000,
 * 1GB @ 115200 - 111000/111000!, 109600/111000
@@ -413,7 +413,7 @@ If config file has corrupt values in it, system will default to known values 960
  
 If config file is empty, system resets to known values
  
-After some massive testing, and lots of code to check for illegal states, it looks to be pretty stable. The only problem is that we're running out of RAM. The buffer had to be decreased from 900 bytes to 700 bytes to facilitate all the config file checking. Testing at 57600bps, unit runs very well over 40kb test file on straight RS232 connection. That's pretty good. Testing at 115200 on straight  connection, unit will drop a buffer every once and a while. Not great, but not much we can do if the SD card times out for ~150ms while it's writing. 8 bits to the byte plus a start/stop bit = 10 bits per byte
+After some massive testing, and lots of code to check for illegal states, it looks to be pretty stable. The only problem is that we're running out of RAM. The buffer had to be decreased from 900 bytes to 700 bytes to facilitate all the config file checking. testing at 57600bps, unit runs very well over 40kb test file on straight RS232 connection. That's pretty good. testing at 115200 on straight  connection, unit will drop a buffer every once and a while. Not great, but not much we can do if the SD card times out for ~150ms while it's writing. 8 bits to the byte plus a start/stop bit = 10 bits per byte
  
 * 9600bps = 960 bytes per second. Buffer will last for 729ms
 * 57600bps = 5760 bytes per second. Buffer will last for 121ms
@@ -484,9 +484,9 @@ Experimenting with Scott's SD cards (customer gave cards on loan for recreating 
 
 Added sd_raw_sync() inside append_file. I believe this was why tz1's addition of the timeout buffer update feature was not working. Auto buffer update now working. So if you don't send anything to OpenLog for 5 seconds, the buffer will automatically record/update.
  
-Need to create 'Testing' page to outline the battery of tests we need to throw at any OpenLog after a firmware submission and update is complete.
+Need to create 'testing' page to outline the battery of tests we need to throw at any OpenLog after a firmware submission and update is complete.
  
-Testing create 40,000 logs
+testing create 40,000 logs
  
 Record at full speed: Run at full 115200, load lotsoftext.txt and verify no characters are dropped.
  

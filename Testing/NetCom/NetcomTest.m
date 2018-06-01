@@ -32,11 +32,11 @@ D.TT.ttList = { ...
    
 % NLX setup
 %cfg_sub_dir = 'Cheetah.cfg';
-%cfg_sub_dir = 'Testing\Cheetah_Raw_Playback.cfg';
+%cfg_sub_dir = 'testing\Cheetah_Raw_Playback.cfg';
 cfg_sub_dir = 'ICR_Cheetah_Ephys.cfg';
 
 % Get path to test config directory
-cfg_path = fullfile('C:\Users\Public\Documents\Cheetah\Configuration',cfg_sub_dir);
+cfg_path = fullfile('C:\Users\Public\Documents\cheetah\configuration',cfg_sub_dir);
 
 % Open Cheetah
 curdir = pwd;

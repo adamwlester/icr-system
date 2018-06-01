@@ -173,9 +173,9 @@ __attribute__((always_inline)) static __INLINE void __set_PSP(uint32_t topOfProc
 }
 
 
-/** \brief  Get Main Stack Pointer
+/** \brief  Get main Stack Pointer
 
-This function returns the current value of the Main Stack Pointer (MSP).
+This function returns the current value of the main Stack Pointer (MSP).
 
 \return               MSP Register value
 */
@@ -188,11 +188,11 @@ __attribute__((always_inline)) static __INLINE uint32_t __get_MSP(void)
 }
 
 
-/** \brief  Set Main Stack Pointer
+/** \brief  Set main Stack Pointer
 
-This function assigns the given value to the Main Stack Pointer (MSP).
+This function assigns the given value to the main Stack Pointer (MSP).
 
-\param [in]    topOfMainStack  Main Stack Pointer value to set
+\param [in]    topOfMainStack  main Stack Pointer value to set
 */
 __attribute__((always_inline)) static __INLINE void __set_MSP(uint32_t topOfMainStack)
 {

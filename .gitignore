@@ -11,8 +11,8 @@ git rm z_Obs-Arc --cache
 
 # AWL
 # Have to run at command line if already commited:
-# git rm --cached IOfiles/SessionData/ -r
-/IOfiles/SessionData/
+# git rm --cached data/session/ -r
+/data/session/
 
 # User-specific files
 *.suo

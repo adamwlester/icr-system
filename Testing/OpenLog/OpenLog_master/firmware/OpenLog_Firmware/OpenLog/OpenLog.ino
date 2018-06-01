@@ -1805,7 +1805,7 @@ void systemMenu(void)
 
   while (1)
   {
-    NewSerial.println(F("\r\nSystem Configuration"));
+    NewSerial.println(F("\r\nSystem configuration"));
 
     NewSerial.print(F("Current boot mode: "));
     if (systemMode == MODE_NEWLOG) NewSerial.print(F("New file"));

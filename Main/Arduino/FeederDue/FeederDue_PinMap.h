@@ -149,7 +149,7 @@ struct PIN
 	const int BTN_2 = A1; // (purple)
 	const int BTN_3 = A0; // (white)
 
-	// Testing
+	// testing
 	int TEST_SIGNAL = A8;
 
 	// IR proximity sensors

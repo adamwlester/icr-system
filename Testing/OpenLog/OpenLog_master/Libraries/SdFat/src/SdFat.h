@@ -255,7 +255,7 @@ class SdFatBase : public FatFileSystem {
 //==============================================================================
 /**
  * \class SdFat
- * \brief Main file system class for %SdFat library.
+ * \brief main file system class for %SdFat library.
  */
 class SdFat : public SdFatBase {
  public:
