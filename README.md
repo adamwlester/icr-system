@@ -1,79 +1,116 @@
-# ICR System (Instantaneous Cue Rotation)
+ICR System (Instantaneous Cue Rotation)
+=======================================
 
-Minimal MATLAB code used to run the ICR arena task, which rotates all orienting visual cues in real time while rats navigate a circular track. The setup tests allothetic vs. idiothetic inputs without removing the animal from the arena.
+Software for the Instantaneous Cue Rotation arena: controls panoramic cue rotations, drives a mobile feeder robot, streams position, and synchronizes events for closed-loop rodent navigation experiments. This README is recruiter-friendly and focuses on the codebase.
 
-## Quick start
+Highlights
+----------
 
-From MATLAB:
+* Real-time cue switching and projector orchestration.
+    
+* Mobile feeder robot control with closed-loop position and reward delivery.
+    
+* Robust comms path (MATLAB → C# service → Arduino Due/XBee).
+    
+* Deterministic timing with IR/TTL sync and mirrored robot/PC logging.
+    
+* Turnkey CSV outputs for analysis.
+    
 
-```matlab
-% status = ICR_GUI(SYSTEST, BREAKDEBUG, DOAUTOLOAD, DOPROFILE, ISMATSOLO);
+Tech Stack
+----------
 
-% Typical debug run (normal, break-on-error, autoload defaults):
-status = ICR_GUI(0, 1, true, false, false);
+* **MATLAB (R2017a+)** UI, task logic, projector control, analysis utils
+    
+* **C# (.NET)** serial/XBee transport, packet framing, stream server
+    
+* **Arduino/C++ (Due/SAM3X8E)** stepper/PID, Pixy CMUcam5, XBee, SD, IR sync
+    
+
+Repository Structure
+--------------------
+
+```
+icr-system/
+├─ csharp/                    – C# application for Windows that orchestrates the experiment.
+│   ├─ ICR_Run.cs             – main control program.
+│   └─ (other helper classes) – debugging, communication and logging utilities.
+│
+├─ arduino/
+│   ├─ CheetahDue/            – firmware for fixed feeder and synchronisation controller.
+│   │   ├─ CheetahDue.ino     – main Arduino sketch.
+│   │   ├─ CheetahDue.h       – class definitions and constants.
+│   │   └─ CheetahDue_PinMap.h – pin mappings for TTL outputs and sensors.
+│   ├─ FeederDue/             – firmware for mobile feeder cart.
+│   │   ├─ FeederDue.h        – main firmware (header-only implementation).
+│   │   └─ FeederDue_PinMap.h – pin mappings for motor drivers, solenoids and sensors.
+│   └─ (testing/)             – hardware diagnostic sketches and calibration tools.
+│
+├─ matlab/
+│   ├─ support_code/dlgAWL/   – generic file and dialog utilities used by the GUI.
+│   └─ (additional scripts)   – calibrations, data reformatting and offline analysis.
+│
+├─ data/
+│   └─ data_file_setup/       – example scripts for converting raw Neuralynx files into analysis-ready formats.
+│
+└─ testing/
+    └─ HardwareDiagnostic/    – Arduino sketch for verifying TTL lines, solenoids and sensors.
 ```
 
-**Args**
+Core Capabilities (Code-Level)
+------------------------------
 
-* `SYSTEST` `[0..8]`: 0 normal | 1 sim rat | 2 PID calib | 3 VT calib | 4 halt-error | 5 wall-image IR sync | 6 IR sync | 7 hardware test | 8 cube battery
+* **Cue control** Atomic swaps between pre-warped panoramas; phototransistor pulses mark each change.
     
-* `BREAKDEBUG`: 0 no break | 1 break on errors | >1 break at line
+* **Robot control** Velocity/position loops keep an offset to the animal; reward arm and solenoids actuated with safety states.
     
-* `DOAUTOLOAD`: `true|false` autoload hardcoded rat/session values
+* **Sensor fusion** Overhead camera + Pixy fused on-robot via EKF for smooth pose/velocity.
     
-* `DOPROFILE`: `true|false` enable MATLAB profiler
+* **Sync & logging** IR sync with PC TTL for sub-frame alignment; robot SD logs mirrored to PC.
     
-* `ISMATSOLO`: `true|false` MATLAB running alone or with other programs
-    
-
-Requirements
-------------
-
-* MATLAB (tested historically with R2018+)
-    
-* Optional: Neuralynx Cheetah for TTL I/O and timestamping
+* **Reliability** Watchdogs, heartbeats, bounded queues, and fail-safe motor/solenoid states.
     
 
-What it does
-------------
+Quick Start
+-----------
 
-* Initializes globals and runtime state, then calls `Setup() → Run() → Exit()` with error-aware control flow
+1. **Firmware** Flash `arduino/FeederDue` to an Arduino Due; configure XBee, motor drivers, solenoids, Pixy.
     
-* Provides system tests for simulated rat, calibration, sync timing, and hardware checks
+2. **Comms service** Build and run `csharp/` on Windows; select the XBee COM port.
     
-* When present, identifies to Cheetah, verifies timestamp/connection, and configures TTL I/O (sound, reward, PID state)
+3. **MATLAB** Open the control app, point to projector assets and IO/COM paths, connect to the C# service.
+    
+4. **Run** Start a session; MATLAB drives cues, C# relays commands and streams position, the robot executes motion and rewards.
+    
+5. **End** MATLAB writes session CSVs; robot streams SD logs for reconciliation.
     
 
-Key session parameters (autoload defaults example)
---------------------------------------------------
+Outputs
+-------
 
-```matlab
-D.DB.Session_Type       = 'ICR_Session';         % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition  = 'Behavior_Training';   % e.g., 'Rotation', 'Dark_Control'
-D.DB.Session_Task       = 'Track';               % ['Track' 'Forage']
-D.DB.Feeder_Condition   = 'C2';                  % mobile feeder option
-D.DB.Reward_Delay       = '3.0';                 % seconds
-D.DB.Cue_Condition      = 'None';                % ['All' 'Half' 'None']
-D.DB.Rotation_Direction = 'CCW';                 % ['CCW' 'CW']
-D.DB.Start_Quadrant     = 'NW';                  % ['NE' 'SE' 'SW' 'NW']
-D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270];
-```
+* **PC** CSV/TSV for position, cue state, rewards, and TTL events.
+    
+* **Robot** SD logs with local timestamps; merged during post-session reconciliation.
+    
 
-Apparatus summary
------------------
+Testing
+-------
 
-The ICR apparatus projects a 360° panorama onto arena walls and can rotate all orienting cues instantaneously while the rat is running. This creates immediate conflict between visual and self-motion signals without disturbing vestibular feedback; navigation accuracy is read out via a cue-aligned goal task. A mobile robotic feeder minimizes local olfactory cues.
+* Dry-run modes disable solenoids and limit motor torque for benchtop checks.
+    
+* `testing/HardwareDiagnostic` verifies TTL lines, solenoids, sensors, and radio.
+    
+
+License
+-------
+
+See `LICENSE`.
 
 Citation
 --------
 
-If you use this code or task design, please cite:
+Lester, A. W., Kapellusch, A. J., & Barnes, C. A. (2020). A novel apparatus for assessing visual cue-based navigation in rodents. _Journal of Neuroscience Methods_, 338, 108667.
 
-Lester AW, Kapellusch AJ, Barnes CA (2020). _A novel apparatus for assessing visual cue-based navigation in rodents_. **Journal of Neuroscience Methods**, 338:108667.
+* * *
 
-Notes
------
-
-* Default autoload rat/session IDs and flags are set near the top of `ICR_GUI.m`
-    
-* Use system tests for quick hardware/sync sanity checks before real sessions
+Summary: I delivered a concise, recruiter-friendly Markdown README with an industry-standard structure and your requested folder tree, focusing on the mobile feeder robot and codebase capabilities, setup, runtime flow, outputs, and testing.
