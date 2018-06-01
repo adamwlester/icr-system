@@ -1,6 +1,6 @@
 function [] = IO_Reformat()
 
-% Directory containing tables
+% Directory containing table data
 topDir = 'C:\Users\lester\repos\icr-system\main\matlab';
 ioDir = regexp(topDir,'.*(?=\icr-system)','match');
 ioDir = fullfile(ioDir{:},'icr-system\data\session'); 
