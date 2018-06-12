@@ -22,20 +22,20 @@
 
 
 // POWER SETTING
-#define DO_AUTO_POWER 1
+#define DO_AUTO_POWER 0 // 0
 
 // DEBUG SETTING
 
 // CONSOLE
-#define DO_PRINT_DEBUG 0
-#define DO_FAST_PRINT 0
+#define DO_PRINT_DEBUG 0 // 0
+#define DO_FAST_PRINT 0 // 0
 
 // TEENSY LOGGING
-#define DO_TEENSY_DEBUG 0
+#define DO_TEENSY_DEBUG 0 // 0
 
 // OPENLOG LOGGING
-#define DO_LOG 1
-#define DO_FAST_LOG 0
+#define DO_LOG 1 // 1
+#define DO_FAST_LOG 0 // 0
 
 // DEBUGGING STRUCT
 struct DB
@@ -315,9 +315,11 @@ uint32_t t_solClose = 0;
 
 // BATTERY
 /*
-Updated when EtOH relay opened
+	OLD NOTE: Updated when EtOH relay opened
+	bit2volt = (3.3/1023) * (12.6/3)
+	Set pot to 12.6V == 3V
 */
-const float bit2volt = 0.01545; // was 0.0164;
+const float bit2volt = 0.01334;
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;
 const int dt_vccSend = 30000;
@@ -326,8 +328,6 @@ float vccArr[vccMaxSamp] = { 0 };
 float vccNow = 0;
 float vccAvg = 0;
 float vccCutoff = 11.6;
-const int dt_icUpdate = 10;
-float icNow = 0;
 
 // LEDs
 const int trackLEDdutyDefault[2] = { 175, 250 };
@@ -563,7 +563,7 @@ R2 r2c
 	// cnt_repeatArr
 	{ 0 },
 	// pinCTS
-	pin.X1a_CTS,
+	pin.XB_CTS_F,
 	// stateCTS
 	false,
 	// sendQueue
@@ -658,7 +658,7 @@ R2 r2a
 	// cnt_repeatArr
 	{ 0 },
 	// pinCTS
-	pin.X1b_CTS,
+	pin.XB_CTS_R,
 	// stateCTS
 	false,
 	// sendQueue

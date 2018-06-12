@@ -6,10 +6,10 @@
 struct PIN
 {
 	// Power off
-	const int PWR_OFF = 48; // (gray)
-	const int PWR_ON = 46; // (white)
-	const int PWR_Swtch = 44; // (red)
-	const int PWR_Swtch_Grn = 45; // (black)
+	const int PWR_OFF = 44; // (gray)
+	const int PWR_ON = 45; // (white)
+	const int PWR_Swtch = 40; // (red)
+	const int PWR_Swtch_Grn = 41; // (black)
 
 	// Autodriver
 	const int AD_CSP_R = 5; // (yellow)
@@ -17,10 +17,10 @@ struct PIN
 	const int AD_RST = 7; // (brown)
 
 	// XBees
-	const int X1a_CTS = 28; // (blue)
-	const int X1b_CTS = 26; // (blue)
-	const int X1a_UNDEF = 29; // (yellow)
-	const int X1b_UNDEF = 27; // (yellow)
+	const int XB_CTS_F = 28; // (blue)
+	const int XB_CTS_R = 26; // (blue)
+	const int XB_UNDEF_F = 29; // (yellow)
+	const int XB_UNDEF_R = 27; // (yellow)
 
 	// Teensy
 	const int Teensy_Unused = 36; // (green)
@@ -41,28 +41,28 @@ struct PIN
 	const int TrackLED = 4; // (red)
 
 	// Relays
-	const int Rel_Rew = 22; // (green)
-	const int Rel_EtOH = 23; // (blue)
-	const int Rel_Vcc = A5; // (blue)
+	const int Rel_EtOH = 22; // (green)
+	const int Rel_Rew = 23; // (blue)
+	const int Rel_Vcc = A3; // (orange)
 
 	// Voltage Regulators
-	const int REG_24V_ENBLE = 33; // (green)
-	const int REG_12V_ENBLE = 50; // (orange) 
-	const int REG_5V_ENBLE = 52; // (yellow) 
-	const int REG_5V_PIXY_ENBLE = 32; // (blue)
+	const int REG_24V_ENBLE = A4; // (red)
+	const int REG_12V2_ENBLE = 50; // (yellow) 
+	const int REG_5V1_ENBLE = 48; // (green) 
+	const int REG_5V2_ENBLE = 46; // (blue)
 
 	// BigEasyDriver
 	const int ED_RST = 47; // (green)
 	const int ED_SLP = 49; // (blue)
 	const int ED_DIR = 51; // (gray)
 	const int ED_STP = 53; // (white)
-	const int ED_ENBL = 35; // (brown)
-	const int ED_MS1 = 37; // (red)
-	const int ED_MS2 = 39; // (orange)
-	const int ED_MS3 = 41; // (yellow)
+	const int ED_ENBL = 33; // (brown)
+	const int ED_MS1 = 35; // (red)
+	const int ED_MS2 = 37; // (orange)
+	const int ED_MS3 = 39; // (yellow)
 
 	// OpenLog
-	const int OL_RST = 34; // (purple)
+	const int OL_RST = 30; // (purple)
 
 	// Feeder switch
 	/*
@@ -73,8 +73,7 @@ struct PIN
 	const int FeedSwitch_Gnd = 25; // (black)
 
 	// Voltage monitor
-	const int BatVcc = A6; // (purple)
-	const int BatIC = A7; // (blue)
+	const int BatVcc = A5; // (brown)
 
 	// Buttons
 	const int Btn[3] = { A2, A1, A0 }; // (blue, purple, white)
@@ -109,9 +108,9 @@ void SetupPins() {
 	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
 	// Voltage Regulators
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
-	pinMode(pin.REG_12V_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V_PIXY_ENBLE, OUTPUT);
+	pinMode(pin.REG_12V2_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V1_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V2_ENBLE, OUTPUT);
 	// Autodriver
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
@@ -155,10 +154,10 @@ void SetupPins() {
 	digitalWrite(pin.PWR_ON, LOW);
 	digitalWrite(pin.PWR_Swtch_Grn, LOW);
 	// Voltage Regulators (start high)
-	digitalWrite(pin.REG_12V_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_PIXY_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
@@ -202,13 +201,12 @@ void SetupPins() {
 	// Power
 	pinMode(pin.PWR_Swtch, INPUT);
 	// XBees
-	pinMode(pin.X1a_CTS, INPUT);
-	pinMode(pin.X1b_CTS, INPUT);
+	pinMode(pin.XB_CTS_F, INPUT);
+	pinMode(pin.XB_CTS_R, INPUT);
 	// Teensy
 	pinMode(pin.Teensy_Resetting, INPUT);
 	// Battery monitor
 	pinMode(pin.BatVcc, INPUT);
-	pinMode(pin.BatIC, INPUT);
 	// IR proximity sensors
 	pinMode(pin.IRprox_Rt, INPUT);
 	pinMode(pin.IRprox_Lft, INPUT);

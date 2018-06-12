@@ -26,7 +26,7 @@ namespace ICR_Run
                 4: Halt error test
                 5: Wall image IR sync timing
                 6: IR sync timing
-                7: Robot hardware test
+                7: Hardware test
             */
             public double systemTest;
 
@@ -789,6 +789,10 @@ namespace ICR_Run
             if (pass)
             {
                 csLog.LogDebug("[Run] FINISHED: WAIT FOR: Rat In");
+
+                // Pause for flags to be set
+                Thread.Sleep(100);
+                
                 // Stream rat vt if not forage task or simulation test
                 if (db.systemTest != 1 && fc.isRatOnTrack)
                 {
@@ -823,7 +827,10 @@ namespace ICR_Run
                 !fc.isGUIclosed &&
                 !fc.isTaskDone &&
                 !fc.doAbortCS
-                ) ;
+                )
+            {
+                Thread.Sleep(10);
+            }
             if (!fc.doAbortCS)
                 csLog.LogDebug("[Run] SUCCEEDED: Main Session Loop");
             else
@@ -904,11 +911,6 @@ namespace ICR_Run
             }
             else
                 fc.DebugWarning("[Run] SKIPPED:  MoveTo South");
-
-            // WAIT FOR FINAL MOVEMENT TO PLOT
-
-            // Wait also cause fucking 'Done' Check still does not work
-            Thread.Sleep(1000);
 
             // SEND TASK DONE CONFIRMATION TO MATLAB
 
@@ -1208,9 +1210,9 @@ namespace ICR_Run
                 fc.DebugWarning(String.Format("[Exit] ABORTED: Clear MatCom Globals: msg=\"{0}\"", msg));
             }
 
-            // HOLD FOR DEBUGGING OR ERRRORS
+            // HOLD FOR ERRRORS
 
-            if (db.is_debugRun || fc.isAbortRun || fc.isErrorRun)
+            if (fc.isErrorRun)
             {
                 // Show Matlab window
                 if (!fc.isMatFailed)
@@ -1230,14 +1232,6 @@ namespace ICR_Run
                     {
                         Console.WriteLine(csLog.err_list[i]);
                     }
-                }
-                else if (fc.isAbortRun)
-                {
-                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR ABORT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                }
-                else
-                {
-                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PAUSED FOR DEBUGGING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                 }
 
                 Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PRESS ANY KEY TO EXIT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
@@ -2669,7 +2663,6 @@ namespace ICR_Run
             // Check for rat in command
             else if (id == 'I')
             {
-                fc.isRatInArena = true;
                 if (dat[0] == 0)
                 {
                     csLog.LogDebug_Thread("[ProgressChanged_MatCOM] ICR_GUI Confirmed Rat On Forage Platform");
@@ -2679,6 +2672,7 @@ namespace ICR_Run
                     fc.isRatOnTrack = true;
                     csLog.LogDebug_Thread("[ProgressChanged_MatCOM] ICR_GUI Confirmed Rat On Track");
                 }
+                fc.isRatInArena = true;
             }
 
             // Check for task status command
@@ -3228,6 +3222,7 @@ namespace ICR_Run
                 if (cmd == null)
                 {
                     // Pause and bail
+                    Thread.Sleep(10);
                     continue;
                 }
 
@@ -3458,7 +3453,7 @@ namespace ICR_Run
             if (set_abort_cs)
             {
                 doAbortCS = true;
-                DebugWarning("[Flow_Control::SetAbort] SET ABORT CS");
+                DebugWarning_Thread("[Flow_Control::SetAbort] SET ABORT CS");
             }
 
             // Set received check flag
@@ -3472,14 +3467,14 @@ namespace ICR_Run
                 {
                     doHardAbortMat = true;
                     doAbortCS = true;
-                    DebugWarning("[Flow_Control::SetAbort] SET HARD ABORT MATLAB");
+                    DebugWarning_Thread("[Flow_Control::SetAbort] SET HARD ABORT MATLAB");
                 }
 
                 // Attempt to save data
                 else if (isRatInArena && !isGUIquit)
                 {
                     doSoftAbortMat = true;
-                    DebugWarning("[Flow_Control::SetAbort] SET SOFT ABORT MATLAB");
+                    DebugWarning_Thread("[Flow_Control::SetAbort] SET SOFT ABORT MATLAB");
                 }
 
             }
@@ -3490,7 +3485,7 @@ namespace ICR_Run
                 isMatFailed = true;
                 doAbortCS = true;
                 doAbortMat = true;
-                DebugError("[Flow_Control::SetAbort] MATLAB HAS FAILED/CRASHED");
+                DebugError_Thread("[Flow_Control::SetAbort] MATLAB HAS FAILED/CRASHED");
             }
 
             // Set main flag
@@ -3529,8 +3524,9 @@ namespace ICR_Run
             {
                 return;
             }
+
             // Log/print flag change
-            _csLog.LogDebug(String.Format("[Flow_Control] Set \"{0}\" to {1}",
+            _csLog.LogDebug_Thread(String.Format("[Flow_Control] Set \"{0}\" to {1}",
                    var_name, value));
 
             // Change local value
@@ -3545,7 +3541,7 @@ namespace ICR_Run
             {
                 string flag_str = String.Format("\"isMatComActive\"={0} \"isMatFailed\"={1} \"doExit\"={2}",
                     isMatComActive, isMatFailed, doExit);
-                _csLog.LogDebug("   [Flow_Control::ContinueMatCom] RETURNED DISCONTINUE FLAG: " + flag_str);
+                _csLog.LogDebug_Thread("   [Flow_Control::ContinueMatCom] RETURNED DISCONTINUE FLAG: " + flag_str);
             }
             return do_cont;
         }
@@ -3558,7 +3554,7 @@ namespace ICR_Run
             {
                 string flag_str = String.Format("\"isRobComActive\"={0} \"doExit\"={1}",
                     isRobComActive, doExit);
-                _csLog.LogDebug("   [Flow_Control::ContinueRobCom] RETURNED DISCONTINUE FLAG: " + flag_str);
+                _csLog.LogDebug_Thread("   [Flow_Control::ContinueRobCom] RETURNED DISCONTINUE FLAG: " + flag_str);
             }
             return do_cont;
         }
@@ -3571,7 +3567,7 @@ namespace ICR_Run
             {
                 string flag_str = String.Format("isArdComActive={0} doExit={1}",
                     isArdComActive, doExit);
-                _csLog.LogDebug("   [Flow_Control::ContinueArdCom] RETURNED DISCONTINUE FLAG: " + flag_str);
+                _csLog.LogDebug_Thread("   [Flow_Control::ContinueArdCom] RETURNED DISCONTINUE FLAG: " + flag_str);
             }
             return do_cont;
         }

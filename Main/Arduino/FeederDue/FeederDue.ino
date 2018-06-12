@@ -149,14 +149,16 @@ public:
 	uint32_t cnt_rec = 0;
 	uint32_t cnt_samp = 0;
 	uint32_t t_tsNow = 0;
-	uint32_t t_msNow = millis();
+	uint32_t t_update = millis();
+	uint32_t t_rec = 0;
+	uint32_t dt_recSum = 0;
 	int nLaps = 0;
 	bool isNew = false;
 	bool is_streamStarted = false;
 
 	// METHODS
 	POSTRACK(char obj_id[], int n_samp);
-	void UpdatePos(double pos_new, uint32_t ts_new);
+	void UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec = true);
 	double GetPos();
 	double GetVel();
 	void SwapPos(double set_pos, uint32_t t);
@@ -808,7 +810,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		if (millis() > t_power_reset + 25) {
 
 			// Turn 5V power back on
-			digitalWrite(pin.REG_5V_PIXY_ENBLE, HIGH);
+			digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 
 			// Set flags
 			do_power_reset = false;
@@ -863,7 +865,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 
 		// Turn off 5V power
 		DebugWarning(__FUNCTION__, __LINE__, "POWERING OFF 5V PIXY POWER SUPPLY");
-		digitalWrite(pin.REG_5V_PIXY_ENBLE, LOW);
+		digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
 		// Set flag and store time
 		do_power_reset = true;
@@ -1240,7 +1242,7 @@ POSTRACK::POSTRACK(char obj_id[], int n_samp)
 	}
 }
 
-void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
+void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1258,13 +1260,19 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new)
 	double vel = 0;
 
 	// Store input
-	this->t_msNow = millis();
+	this->t_update = millis();
 	this->posAbs = pos_new;
 	this->t_tsNow = ts_new;
 
 	// Update itteration count
 	this->cnt_samp++;
-	this->cnt_rec++;
+
+	// Update record info
+	if (is_new_rec) {
+		this->dt_recSum += millis() - this->t_rec <= 999 ? millis() - this->t_rec : this->cnt_rec > 0 ? 999 : 0;
+		this->t_rec = millis();
+		this->cnt_rec++;
+	}
 
 	// Shift and add data
 	for (int i = 0; i < this->nSamp - 1; i++)
@@ -1424,13 +1432,10 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 	}
 
 	// Compute ts
-	uint32_t ts = this->t_tsNow + (t - this->t_msNow);
+	uint32_t ts = this->t_tsNow + (t - this->t_update);
 
 	// Update pos
-	UpdatePos(update_pos, ts);
-
-	// Dont include in count
-	this->cnt_rec--;
+	UpdatePos(update_pos, ts, false);
 
 }
 
@@ -2901,7 +2906,7 @@ void REWARD::SetMicroSteps(ezMicrostep microstep)
 
 	switch (microstep)
 	{
-	case FULL: 
+	case FULL:
 		digitalWrite(pin.ED_MS1, LOW);
 		digitalWrite(pin.ED_MS2, LOW);
 		digitalWrite(pin.ED_MS3, LOW);
@@ -4117,9 +4122,10 @@ void LOGGER::StreamLogs()
 	delay(50);
 
 	// Tracknig summary info
-	sprintf(str, "TRACKING SUMMARY: ERR=|ad=%d|ekf=%d|rat_vt=%d|rat_pixy=%d|rob_vt=%d| RECS=|rat_vt=%lu|rat_pixy=%lu|rob_vt=%lu| SWAP=|rat_vt=%d|rat_pixy=%d|",
+	sprintf(str, "TRACKING SUMMARY: ERR=|ad=%d|ekf=%d|rat_vt=%d|rat_pixy=%d|rob_vt=%d| RECS=|rat_vt=%lu|rat_pixy=%lu|rob_vt=%lu| DT=|rat_vt=%0.0f|rat_pixy=%0.0f|rob_vt=%0.0f| SWAP=|rat_vt=%d|rat_pixy=%d|",
 		cnt_errAD, cnt_errEKF, Pos[0].cnt_err, Pos[2].cnt_err, Pos[1].cnt_swap,
 		Pos[0].cnt_rec, Pos[2].cnt_rec, Pos[1].cnt_rec,
+		(double)Pos[0].dt_recSum / Pos[0].cnt_rec, (double)Pos[2].dt_recSum / Pos[2].cnt_rec, (double)Pos[1].dt_recSum / Pos[1].cnt_rec,
 		Pos[0].cnt_swap, Pos[2].cnt_swap);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	r2c.port.write(logQueue[logQueueIndStore]);
@@ -4468,7 +4474,7 @@ bool CheckForStart()
 	{
 
 		// Copy ir dt
-		dt_ir = v_dt_ir; 
+		dt_ir = v_dt_ir;
 
 		// Check for setup ir pulse
 		if (abs(dt_irHandshakePulse - dt_ir) <= 1) {
@@ -5494,7 +5500,7 @@ void AD_CheckOC(bool force_check)
 	t_checkAD = millis() + dt_checkAD;
 
 	// Disable resetting after 5 errors
-	if (cnt_errAD >= 5) {
+	if (cnt_errAD >= 5 && !do_reset_disable) {
 
 		// Log/print
 		sprintf(str, "DISABLED AD RESET AFTER %d ERRORS", cnt_errAD);
@@ -5974,8 +5980,8 @@ void CheckSampDT()
 	}
 
 	// Compute dt
-	dt_vt = millis() - Pos[0].t_msNow;
-	dt_pixy = millis() - Pos[2].t_msNow;
+	dt_vt = millis() - Pos[0].t_update;
+	dt_pixy = millis() - Pos[2].t_update;
 
 	// Check VT 
 	do_swap_vt =
@@ -6010,7 +6016,7 @@ void CheckSampDT()
 		}
 
 		// Swap
-		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_msNow);
+		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_update);
 		t_swap_vt = millis();
 	}
 
@@ -6026,7 +6032,7 @@ void CheckSampDT()
 		}
 
 		// Swap
-		Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+		Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
 		t_swap_pixy = millis();
 	}
 
@@ -6504,11 +6510,9 @@ float CheckBattery(bool force_check)
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
 	static char lcd_str1[100]; lcd_str1[0] = '\0';
-	static char lcd_str2[100]; lcd_str2[0] = '\0';
 	static uint32_t t_vcc_update = 0;
 	static uint32_t t_vcc_send = 0;
 	static uint32_t t_vcc_print = 0;
-	static uint32_t t_ic_update = 0;
 	static uint32_t t_update_str = 0;
 	static uint32_t t_relay_ready = 0;
 	static float vcc_shutdown_arr[10] = { 0 };
@@ -6516,12 +6520,11 @@ float CheckBattery(bool force_check)
 	static float vcc_last = 0;
 	static int cnt_samples = 0;
 	uint32_t vcc_bit_in = 0;
-	uint32_t ic_bit_in = 0;
 	float vcc_sum = 0;
 	bool is_mot_off = false;
 	byte do_shutdown = false;
 
-	// Bail if nothing to do
+	// Check for forced check
 	if (!force_check) {
 
 		// Not time to check
@@ -6577,13 +6580,6 @@ float CheckBattery(bool force_check)
 	DB_FUN_STR();
 #endif
 
-	// Calculate current
-	if (millis() > t_ic_update + dt_icUpdate) {
-		ic_bit_in = analogRead(pin.BatIC);
-		icNow = 36.7*(((float)ic_bit_in * (3.3 / 1024)) / 3.3) - 18.3;
-		t_ic_update = millis();
-	}
-
 	// Calculate voltage
 	vcc_bit_in = analogRead(pin.BatVcc);
 	vccNow = (float)vcc_bit_in * bit2volt;
@@ -6628,15 +6624,14 @@ float CheckBattery(bool force_check)
 	// Log/print voltage and current
 	if (millis() > t_vcc_print + dt_vccPrint) {
 
-		// Log/print voltage and current
-		sprintf(str, "Battery VCC & IC: vcc=%0.2fV ic=%0.2fA dt_chk=%d",
-			vccAvg, icNow, millis() - t_vcc_update);
+		// Log/print voltage
+		sprintf(str, "Battery VCC: vcc=%0.2fV dt_chk=%d",
+			vccAvg, millis() - t_vcc_update);
 		DebugFlow(__FUNCTION__, __LINE__, str);
 
 		// Print to lcd
 		sprintf(lcd_str1, "VCC=%0.2fV", vccAvg);
-		sprintf(lcd_str2, "IC=%0.2fA", icNow);
-		PrintLCD(false, lcd_str1, lcd_str2);
+		PrintLCD(false, lcd_str1);
 
 		// Store time
 		t_vcc_print = millis();
@@ -7770,7 +7765,7 @@ void DebugRcvd(R4 *r4, char msg[], bool is_repeat)
 	if (r4->idNow == 'P') {
 		U.f = r4->dat[2];
 		sprintf(str, " ts_int=%d dt_samp=%d",
-			U.i32, millis() - Pos[cmd.vtEnt].t_msNow);
+			U.i32, millis() - Pos[cmd.vtEnt].t_update);
 		strcat(msg_out, str);
 	}
 
@@ -8468,10 +8463,10 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 			analogWrite(pin.TrackLED, duty[(int)do_led_on]);
 			if (!is_rat_blink) {
 				analogWrite(pin.Disp_LED, duty[(int)do_led_on]);
-				analogWrite(pin.RewLED_R, duty[(int)do_led_on]);
+				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
 			}
 			else {
-				analogWrite(pin.RewLED_R, duty[(int)do_led_on]);
+				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
 			}
 
 			// Update stuff
@@ -8647,9 +8642,9 @@ void Interupt_Power()
 
 	// Disable regulators
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V_ENBLE, LOW);
-	digitalWrite(pin.REG_5V_ENBLE, LOW);
-	digitalWrite(pin.REG_5V_PIXY_ENBLE, LOW);
+	digitalWrite(pin.REG_12V2_ENBLE, LOW);
+	digitalWrite(pin.REG_5V1_ENBLE, LOW);
+	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
 	// Restart Arduino
 	REQUEST_EXTERNAL_RESET;
@@ -8767,15 +8762,16 @@ void setup() {
 
 	// DISABLE VOLTAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V_ENBLE, LOW);
+	digitalWrite(pin.REG_12V2_ENBLE, LOW);
 	// Keep Teensy powered
 #if !DO_TEENSY_DEBUG
-	digitalWrite(pin.REG_5V_ENBLE, LOW);
+	digitalWrite(pin.REG_5V1_ENBLE, LOW);
 #endif
-	digitalWrite(pin.REG_5V_PIXY_ENBLE, LOW);
+	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
 	// WAIT FOR POWER SWITCH RELEASE
-	while (digitalRead(pin.PWR_Swtch) == LOW) {
+	while (!DO_DEBUG && !DO_AUTO_POWER &&
+		digitalRead(pin.PWR_Swtch) == LOW) {
 		delay(10);
 	}
 
@@ -8791,7 +8787,7 @@ void setup() {
 	}
 
 	// TURN ON POWER
-	delay(1000);
+	delay(100);
 	digitalWrite(pin.PWR_OFF, LOW);
 	delayMicroseconds(100);
 	digitalWrite(pin.PWR_ON, HIGH);
@@ -8800,15 +8796,16 @@ void setup() {
 	delayMicroseconds(100);
 
 	// WAIT FOR POWER SWITCH RELEASE
-	while (digitalRead(pin.PWR_Swtch) == LOW) {
+	while (!DO_DEBUG && !DO_AUTO_POWER &&
+		digitalRead(pin.PWR_Swtch) == LOW) {
 		delay(10);
 	}
 
 	// ENABLE VOLTGAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
-	digitalWrite(pin.REG_12V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_PIXY_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 
 	// LOG/PRINT SETUP RUNNING
 
@@ -9028,9 +9025,9 @@ void setup() {
 	DoAll("PrintDebug");
 
 	// Begin Teensy serial  [57600, 115200, 256000]
-	r2t.port.begin(256000); 
-							
-    // Wait for SerialUSB
+	r2t.port.begin(256000);
+
+	// Wait for SerialUSB
 	uint32_t t_check_ser_r2t = millis() + 500;
 	while (!r2t.port && millis() < t_check_ser_r2t);
 
@@ -9405,7 +9402,7 @@ void loop() {
 			if (cmd.testRun == 0) {
 
 				// Log/rint test
-				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: ROBOT HARDWARE");
+				DebugFlow(__FUNCTION__, __LINE__, "DO TEST: HARDWARE");
 
 				// Run hardware test
 				HardwareTest();
@@ -9494,7 +9491,6 @@ void loop() {
 			}
 			else {
 				analogWrite(pin.RewLED_C, rewLEDduty[0]);
-				analogWrite(pin.RewLED_R, rewLEDduty[0]);
 			}
 
 			// Compute distances
@@ -9509,8 +9505,8 @@ void loop() {
 			}
 
 			// Compute dt sinse last record
-			dt_vt = min(999, millis() - Pos[0].t_msNow);
-			dt_pixy = min(999, millis() - Pos[2].t_msNow);
+			dt_vt = min(999, millis() - Pos[0].t_update);
+			dt_pixy = min(999, millis() - Pos[2].t_update);
 
 			// Display rat vt dist
 			sprintf(lcd_str1, "VT %d %d", (int)rat_vt_dist, dt_vt);
@@ -10246,8 +10242,8 @@ void loop() {
 			// Set rat vt and pixy to setpoint if rat not in or task done
 			if (!fc.isRatOnTrack || fc.isTaskDone) {
 
-				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
-				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_msNow);
+				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
+				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
 			}
 
 			// Log/print first sample
@@ -10274,7 +10270,7 @@ void loop() {
 
 				// Use rat vt for pixy if running simulated rat test
 				if (cmd.vtEnt == 0 && db.do_simRatTest) {
-					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_msNow);
+					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
 				}
 
 				// Log/print first sample

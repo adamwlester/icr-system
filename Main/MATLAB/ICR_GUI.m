@@ -97,7 +97,7 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0563'; %'r9999';
+D.DB.ratLab = 'r9999'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
@@ -134,7 +134,7 @@ D.DB.t3_doVTCalibrationTest = false;
 D.DB.t4_doHaltErrorTest = false;
 D.DB.t5_doWallIRTimingTest = false;
 D.DB.t6_doIRSyncTest = false;
-D.DB.t7_doRobotHardwareTest = false;
+D.DB.t7_doHardwareTest = false;
 D.DB.t8_doCubeBatteryTest = false;
 
 % SIMULATED RAT TEST SETTINGS
@@ -263,7 +263,7 @@ end
 
 % Robot hardware test
 if any(SYSTEST == 7)
-    D.DB.t7_doRobotHardwareTest = true;
+    D.DB.t7_doHardwareTest = true;
 end
 
 % Cube battery test
@@ -8725,7 +8725,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % HARDWARE TEST
-        if D.DB.t7_doRobotHardwareTest
+        if D.DB.t7_doHardwareTest
             
             % Notes:
             %   Nothing to set here
@@ -11388,7 +11388,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Hardware test
-        if D.DB.t7_doRobotHardwareTest
+        if D.DB.t7_doHardwareTest
             HardwareTest()
         end
         
@@ -12691,7 +12691,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Send_CS_Com('T', SYSTEST(1), 2);
             
             % Unset flag
-            D.DB.t7_doRobotHardwareTest = false;
+            D.DB.t7_doHardwareTest = false;
             
         end
         
