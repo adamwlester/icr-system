@@ -6621,7 +6621,7 @@ float CheckBattery(bool force_check)
 		t_vcc_send = millis();
 	}
 
-	// Log/print voltage and current
+	// Log/print voltage 
 	if (millis() > t_vcc_print + dt_vccPrint) {
 
 		// Log/print voltage
@@ -8769,14 +8769,18 @@ void setup() {
 #endif
 	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
-	// WAIT FOR POWER SWITCH RELEASE
+	// WAIT FOR POWER SWITCH
+
+	// Wait for button release
 	while (!DO_DEBUG && !DO_AUTO_POWER &&
 		digitalRead(pin.PWR_Swtch) == LOW) {
 		delay(10);
 	}
 
-	// WAIT FOR POWER SWITCH
+	// Set off switch high
 	digitalWrite(pin.PWR_OFF, HIGH);
+
+	// Wait for button press
 	if (!DO_DEBUG && !DO_AUTO_POWER) {
 		while (digitalRead(pin.PWR_Swtch) == HIGH);
 	}
@@ -8787,15 +8791,19 @@ void setup() {
 	}
 
 	// TURN ON POWER
+
+	// Set power off pin low
 	delay(100);
 	digitalWrite(pin.PWR_OFF, LOW);
 	delayMicroseconds(100);
+
+	// Pulse power on switch high
 	digitalWrite(pin.PWR_ON, HIGH);
 	delayMicroseconds(100);
 	digitalWrite(pin.PWR_ON, LOW);
 	delayMicroseconds(100);
 
-	// WAIT FOR POWER SWITCH RELEASE
+	// Wait for button release
 	while (!DO_DEBUG && !DO_AUTO_POWER &&
 		digitalRead(pin.PWR_Swtch) == LOW) {
 		delay(10);
@@ -9057,18 +9065,6 @@ void setup() {
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	DoAll("PrintDebug");
 
-	// PRINT BATTERY VOLTAGE
-	sprintf(str, "BATTERY VCC: %0.2fV", vccAvg);
-	DebugFlow(__FUNCTION__, __LINE__, str);
-	DoAll("PrintDebug");
-	sprintf(str, "%0.2fV", vccAvg);
-	PrintLCD(true, "BATTERY VCC", str);
-
-	// PRINT AVAILABLE MEMORY
-	sprintf(str, "AVAILABLE MEMORY: %0.2fKB", (float)freeMemory() / 1000);
-	DebugFlow(__FUNCTION__, __LINE__, str);
-	DoAll("PrintDebug");
-
 	// CHECK SERIAL BUFFER SIZE
 	sprintf(str, "SERIAL BUFFER SIZE: ACTUAL=%dB EXPECTED=512B", SERIAL_BUFFER_SIZE);
 	if (SERIAL_BUFFER_SIZE == 512) {
@@ -9089,10 +9085,20 @@ void setup() {
 		DO_FAST_LOG ? "FAST LOGGING ENABLED|" : "");
 	DebugFlow(__FUNCTION__, __LINE__, str);
 
+	// PRINT AVAILABLE MEMORY
+	sprintf(str, "AVAILABLE MEMORY: %0.2fKB", (float)freeMemory() / 1000);
+	DebugFlow(__FUNCTION__, __LINE__, str);
+	DoAll("PrintDebug");
 
-	// CLEAR LCD
+	// PRINT BATTERY VOLTAGE
+	sprintf(str, "BATTERY VCC: %0.2fV", vccAvg);
+	DebugFlow(__FUNCTION__, __LINE__, str);
+	DoAll("PrintDebug");
+	sprintf(str, "%0.2fV", vccAvg);
+	PrintLCD(true, "BATTERY VCC", str);
+
+	// TURN OFF LCD LIGHT
 	ChangeLCDlight(0);
-	ClearLCD();
 
 	// PRINT SETUP FINISHED
 	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Setup");

@@ -319,7 +319,7 @@ uint32_t t_solClose = 0;
 	bit2volt = (3.3/1023) * (12.6/3)
 	Set pot to 12.6V == 3V
 */
-const float bit2volt = 0.01334;
+const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;
 const int dt_vccSend = 30000;

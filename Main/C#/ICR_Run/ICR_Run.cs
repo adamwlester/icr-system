@@ -3215,6 +3215,14 @@ namespace ICR_Run
                 string cmd = null;
                 int x;
 
+                // Check for key press
+                if (!Console.KeyAvailable)
+                {
+                    // Pause and bail
+                    Thread.Sleep(10);
+                    continue;
+                }
+
                 // Check for input
                 cmd = Console.ReadLine();
 

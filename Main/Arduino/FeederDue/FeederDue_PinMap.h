@@ -5,11 +5,9 @@
 // Pin mapping
 struct PIN
 {
-	// Power off
+	// Power button
 	const int PWR_OFF = 44; // (gray)
 	const int PWR_ON = 45; // (white)
-	const int PWR_Swtch = 40; // (red)
-	const int PWR_Swtch_Grn = 41; // (black)
 
 	// Autodriver
 	const int AD_CSP_R = 5; // (yellow)
@@ -69,8 +67,8 @@ struct PIN
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch = 24; // (red)
-	const int FeedSwitch_Gnd = 25; // (black)
+	const int FeedSwitch = 40; // (red)
+	const int FeedSwitch_Gnd = 41; // (black)
 
 	// Voltage monitor
 	const int BatVcc = A5; // (brown)
@@ -85,6 +83,10 @@ struct PIN
 	Note: pins bellow are all used for external interupts
 	and must all be members of the same port (PortA)
 	*/
+
+	// Power button
+	const int PWR_Swtch = 24; // (white)
+	const int PWR_Swtch_Grn = 25; // (black)
 
 	// IR proximity sensors
 	const int IRprox_Rt = 42; // (green)
