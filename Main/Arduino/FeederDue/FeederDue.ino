@@ -757,8 +757,8 @@ void PIXY::PixyBegin()
 	// Begin I2C
 	Wire.begin();
 
-	// Set clock frequency TEMP
-	//Wire.setClock(100000); // 100k default
+	// Set clock frequency
+	Wire.setClock(100000); // 100k default
 
 }
 
@@ -2792,6 +2792,9 @@ void REWARD::ExtendFeedArm()
 
 	// Bail if arm already extended
 	if (isArmExtended) {
+
+		// Log/print warning
+		DebugWarning(__FUNCTION__, __LINE__, "ABORTED: Arm Already Extended");
 		return;
 	}
 
@@ -2808,6 +2811,7 @@ void REWARD::ExtendFeedArm()
 
 	// Set targ and flag
 	v_stepTarg = ezExtStps;
+	doRetractArm = false;
 	doExtendArm = true;
 	v_isArmMoveDone = false;
 
@@ -2862,6 +2866,7 @@ void REWARD::RetractFeedArm()
 
 	// Set targ and flag
 	v_stepTarg = 0;
+	doExtendArm = false;
 	doRetractArm = true;
 	v_isArmMoveDone = false;
 
@@ -6647,7 +6652,7 @@ float CheckBattery(bool force_check)
 		if (do_shutdown) {
 			// Run error hold then shutdown after 5 min
 			sprintf(str, "BATT LOW %0.2fV", vccAvg);
-			RunErrorHold(str, 60000);
+			RunErrorHold(str, 5*60000);
 		}
 	}
 
@@ -8364,7 +8369,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 	sprintf(str, "ERROR %0.2fs", t_s);
 	PrintLCD(true, msg, str, 't');
 
-	// Loop indefinaitely
+	// Loop till shutdown
 	while (true)
 	{
 		// Flicker lights

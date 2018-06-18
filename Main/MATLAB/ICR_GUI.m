@@ -103,7 +103,7 @@ D.DB.ratLab = 'r9999'; %'r9999';
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.Run_Cheetah = true;
+D.DB.Run_Cheetah = false;
 D.DB.Run_SS3D = false;
 D.DB.Rec_Raw = false;
 
@@ -115,10 +115,10 @@ D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 % Other
 D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
 D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
-D.DB.Cue_Condition = 'All'; % ['All' 'Half' 'None']
+D.DB.Cue_Condition = 'Half'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NW'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Start_Quadrant = 'NE'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
@@ -2398,8 +2398,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Rotation Button String
         D.UI.btnICRstr = cell(2,1);
         
-        % Lap Time List
-        D.UI.lapTimList = {[]};
+        % Lap Info List
+        D.UI.lapInfoList = {[]};
         
         % Reward Info List
         D.UI.rewInfoList = {[]};
@@ -4045,9 +4045,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         btm = btm - D.UI.fontSzPopLrg(2);
         wd = pos_wd_dflt/2;
         pos = [pos_lft_dflt, btm, wd, D.UI.fontSzPopLrg(2)];
-        D.UI.popLapTim = uicontrol('Style','popupmenu', ...
+        D.UI.popLapInfo = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
-            'String','Lap Times', ...
+            'String','Lap', ...
             'Units','Normalized', ...
             'Position', pos, ...
             'BackgroundColor',D.UI.figBckCol, ...
@@ -4056,6 +4056,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize',D.UI.fontSzPopSml(1), ...
             'FontWeight','Light', ...
             'Visible','off', ...
+            'UserData', 'Lap', ...
             'Value',1);
         
         % Reward info dropdown
@@ -4064,7 +4065,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pos = [lft, btm, wd, D.UI.fontSzPopLrg(2)];
         D.UI.popRewInfo = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
-            'String','Reward Info', ...
+            'String','Reward', ...
             'Units','Normalized', ...
             'Position', pos, ...
             'BackgroundColor',D.UI.figBckCol, ...
@@ -4073,6 +4074,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize',D.UI.fontSzPopSml(1), ...
             'FontWeight','Light', ...
             'Visible','off', ...
+            'UserData', 'Reward', ...
             'Value',1);
         
         % Standard laps/reward
@@ -7292,7 +7294,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.popLapsPerRot, 'String', txt);
         
         % Make rot pos list
-        txt = [{'Rotation Pos'}; ...
+        txt = [{'Rot Position'}; ...
             cellfun(@(x,y) sprintf('%d:    %s', x, y), ...
             num2cell(1:length(D.PAR.rotPosList))', ...
             cellstr(char(D.PAR.rotPosList)), 'Uni', false)];
@@ -8004,9 +8006,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         dd = ...
             cell2mat(arrayfun(@(x,y) repmat(x,1,y), i, d, 'uni', false));
         
-        % Shuffle and replicate for 100 values total
+        % Shuffle and replicate for 500 values total
         D.I.cue_zone_arr = cell2mat(cellfun(@(x) x(randperm(length(x))), ...
-            repmat({dd},1,ceil(100/length(dd))), 'uni', false));
+            repmat({dd},1,ceil(500/length(dd))), 'uni', false));
         
         % Set first value to center (0 deg)
         D.I.cue_zone_arr(1) = find(D.PAR.zoneLocs==0);
@@ -10890,9 +10892,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'YData', y);
             end
             
-            % Update reward graphics
-            ResetRewGraphics();
-            UpdateRewInfo();
+            % Handle/update reward
+            RewardDone();
             
             % Darken rewarded zone patch
             Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
@@ -10977,16 +10978,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Log_Debug(sprintf('Detected Missed Reward: cross_cnt=%d miss_cnt=%d|%d', ...
                     D.C.rew_cross, D.C.missed_rew(1), D.C.missed_rew(2)));
                 
-                % Update reward graphics
-                ResetRewGraphics();
-                UpdateRewInfo();
+                % Handle/update reward 
+                RewardDone();
                 
-            end
-            
-            % RESTART BULLDOZER
-            if D.PAR.bullLastVal == 1
-                Safe_Set(D.UI.toggBulldoze, 'Value', 1);
-                Pop_Bulldoze();
             end
             
             % SHOW REWARD SEND PATCH
@@ -11014,10 +11008,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
 
-        % UPDATE REWARD INFO
-        function UpdateRewInfo()
+        % HANDLE REWARD EVENT
+        function RewardDone()
             
-            % Compute dime info
+            % Reset reward graphics
+            ResetRewGraphics();
+            
+            % Compute time info
             rew_ellapsed = Sec_DT(now) - D.T.rew_last;
             D.T.rew_last = Sec_DT(now);
             
@@ -11032,13 +11029,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 }];
             
             % Compute reward percent
-            rew_percent = ...
-                round(100-(sum(D.C.missed_rew)/D.C.rew_cross)*100);
+            if sum(D.C.missed_rew) == 0 || D.C.rew_cross == 0
+                rew_percent = 100;
+            else
+                rew_percent = ...
+                    round(100-(sum(D.C.missed_rew)/D.C.rew_cross)*100);
+            end
             
             % Update list
             infstr = [...
-                sprintf('Reward Info (%d%%)', rew_percent); ...
+                sprintf('%s(%d%%)', D.UI.popRewInfo.UserData, rew_percent); ...
                 D.UI.rewInfoList];
+            
+            % Restart bulldozer
+            if D.PAR.bullLastVal == 1
+                Safe_Set(D.UI.toggBulldoze, 'Value', 1);
+                Pop_Bulldoze();
+            end
             
             % Update popmenu
             Safe_Set(D.UI.popRewInfo, 'String', infstr);
@@ -11325,16 +11332,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         lap_tim_average = D.T.lap_tot / sum([D.C.lap{:}]);
         
         % Update lap time dropdown
-        D.UI.lapTimList = [...
-            D.UI.lapTimList; ...
+        D.UI.lapInfoList = [...
+            D.UI.lapInfoList; ...
             {sprintf('%d: T:%1.1f M:%d', ...
             sum([D.C.lap{:}]), ...
             lap_tim_ellapsed, ...
             sum(D.C.missed_rew))}];
         infstr = [...
-            sprintf('Lap Times (%1.1fs)', lap_tim_average); ...
-            D.UI.lapTimList];
-        Safe_Set(D.UI.popLapTim, 'String', infstr);
+            sprintf('%s(%1.1fs)', D.UI.popLapInfo.UserData, lap_tim_average); ...
+            D.UI.lapInfoList];
+        Safe_Set(D.UI.popLapInfo, 'String', infstr);
         
         % Update plot history
         VT_Plot_Hist()
@@ -14141,7 +14148,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Performance info
                     Safe_Set(D.UI.txtPerfInf, 'Visible', 'on')
-                    Safe_Set(D.UI.popLapTim, 'Visible', 'on')
+                    Safe_Set(D.UI.popLapInfo, 'Visible', 'on')
                     Safe_Set(D.UI.popRewInfo, 'Visible', 'on')
                     
                     % Timer info

@@ -30,10 +30,10 @@
 #pragma region ============ DEBUG SETTINGS =============
 
 // CONSOLE
-#define DO_PRINT_DEBUG 0
+#define DO_PRINT_DEBUG 0 // 0
 
 // SERIAL LOGGING
-#define DO_LOG 1
+#define DO_LOG 1 // 0
 
 // DEBUGGING STRUCT
 struct DB
@@ -1204,7 +1204,7 @@ bool SendLog()
 		log_buff_tx = SERIAL_BUFFER_SIZE - 1 - a24c.port.availableForWrite();
 		log_buff_rx = a24c.port.available();
 
-		// TEMP Format stored log message
+		// Format stored log message
 		sprintf(str, "   [LOG:%d] a2c: b_snt=%d l_rx=%d l_rx=%d dt=%d \"%s\"",
 			cnt_logsStored, cnt_logBytesSent, log_buff_tx, log_buff_rx, a24c.dt_sent, logQueue[logQueueIndRead]);
 
