@@ -681,6 +681,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Log_Debug('SKIPPED: "Test_Setup()"');
         end
         
+        % Send initial CS handshake
+        Send_CS_Com('i', 0);
+        
         % Wait for ses type selection
         Log_Debug('RUNNING: Wait for Session Type Selection...');
         while true
@@ -768,11 +771,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % -------------------------- SETUP HANDSHAKE ----------------------
         
-        % Tell CS ready for handshake
-        Send_CS_Com('i');
+        % Send CS handshake confirmation request
+        Send_CS_Com('i', 1);
         
         % Wait for sync time
-        Log_Debug('RUNNING: Wait for Handshake...');
+        Log_Debug('RUNNING: Wait for Handshake and Sync Time...');
         if ~ISMATSOLO
             while true
                 [abort, pass] = ...
@@ -782,10 +785,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check status
             if abort
-                Debug_Warning('ABORTED: Wait for Handshake');
+                Debug_Warning('ABORTED: Wait for Handshake and Sync Time');
                 return
             elseif pass
-                Log_Debug('FINISHED: Wait for Handshake');
+                Log_Debug('FINISHED: Wait for Handshake and Sync Time');
                 
                 % Log/print sync time
                 Log_Debug(sprintf('SET SYNC TIME: %dms', round(DTHANDSHAKE*1000)));
@@ -13395,7 +13398,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Bail if not connected
         if ~D.F.ac_connected
-            Log_Debug('SKIPPED: Disconnect from AC Computer...');
+            Log_Debug('SKIPPED: Disconnect from AC Computer: Already Disconnected');
             return
         end
         

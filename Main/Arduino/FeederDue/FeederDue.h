@@ -22,7 +22,7 @@
 
 
 // POWER SETTING
-#define DO_AUTO_POWER 0 // 0
+#define DO_AUTO_POWER 1 // 0
 
 // DEBUG SETTING
 

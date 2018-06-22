@@ -35,6 +35,8 @@ const bool do_VoltTest = false;
 Send keyboard entries from XBee on XCTU
 */
 const bool do_XBeeTest = true;
+USARTClass &c2rPort = Serial2;
+USARTClass &a2rPort = Serial3;
 
 // Solenoid Test 
 /*
@@ -267,120 +269,13 @@ void setup()
 	SerialUSB.begin(0);
 
 	// XBee 1a (to/from CS)
-	Serial3.begin(57600);
+	c2rPort.begin(57600);
 
 	// XBee 1b (to/from CheetahDue)
-	Serial2.begin(57600);
+	a2rPort.begin(57600);
 
-	// SETUP OUTPUT PINS
-
-	// Power
-	pinMode(pin.PWR_OFF, OUTPUT);
-	pinMode(pin.PWR_ON, OUTPUT);
-	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
-	// Autodriver
-	pinMode(pin.AD_CSP_R, OUTPUT);
-	pinMode(pin.AD_CSP_F, OUTPUT);
-	pinMode(pin.AD_RST, OUTPUT);
-	// Display
-	pinMode(pin.Disp_SCK, OUTPUT);
-	pinMode(pin.Disp_MOSI, OUTPUT);
-	pinMode(pin.Disp_DC, OUTPUT);
-	pinMode(pin.Disp_RST, OUTPUT);
-	pinMode(pin.Disp_CS, OUTPUT);
-	pinMode(pin.Disp_LED, OUTPUT);
-	// LEDs
-	pinMode(pin.RewLED_R, OUTPUT);
-	pinMode(pin.RewLED_C, OUTPUT);
-	pinMode(pin.TrackLED, OUTPUT);
-	// Relays
-	pinMode(pin.Rel_Rew, OUTPUT);
-	pinMode(pin.Rel_EtOH, OUTPUT);
-	pinMode(pin.Rel_Vcc, OUTPUT);
-	// Voltage Regulators
-	pinMode(pin.REG_24V_ENBLE, OUTPUT);
-	pinMode(pin.REG_12V_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V_ENBLE, OUTPUT);
-	// BigEasyDriver
-	pinMode(pin.ED_RST, OUTPUT);
-	pinMode(pin.ED_SLP, OUTPUT);
-	pinMode(pin.ED_DIR, OUTPUT);
-	pinMode(pin.ED_STP, OUTPUT);
-	pinMode(pin.ED_ENBL, OUTPUT);
-	pinMode(pin.ED_MS1, OUTPUT);
-	pinMode(pin.ED_MS2, OUTPUT);
-	pinMode(pin.ED_MS3, OUTPUT);
-	// OpenLog
-	pinMode(pin.OL_RST, OUTPUT);
-	// Feeder switch
-	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
-	delayMicroseconds(100);
-
-	// Power
-	digitalWrite(pin.PWR_OFF, LOW);
-	digitalWrite(pin.PWR_ON, LOW);
-	digitalWrite(pin.PWR_Swtch_Grn, LOW);
-	// Autodriver
-	digitalWrite(pin.AD_CSP_R, LOW);
-	digitalWrite(pin.AD_CSP_F, LOW);
-	digitalWrite(pin.AD_RST, LOW);
-	// Display
-	digitalWrite(pin.Disp_SCK, LOW);
-	digitalWrite(pin.Disp_MOSI, LOW);
-	digitalWrite(pin.Disp_DC, LOW);
-	digitalWrite(pin.Disp_RST, LOW);
-	digitalWrite(pin.Disp_CS, LOW);
-	digitalWrite(pin.Disp_LED, LOW);
-	// LEDs
-	digitalWrite(pin.RewLED_R, LOW);
-	digitalWrite(pin.RewLED_C, LOW);
-	digitalWrite(pin.TrackLED, LOW);
-	// Relays
-	digitalWrite(pin.Rel_Rew, LOW);
-	digitalWrite(pin.Rel_EtOH, LOW);
-	digitalWrite(pin.Rel_Vcc, LOW);
-	// Voltage Regulators
-	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V_ENBLE, LOW);
-	digitalWrite(pin.REG_5V_ENBLE, LOW);
-	// Big Easy Driver
-	digitalWrite(pin.ED_MS1, LOW);
-	digitalWrite(pin.ED_MS2, LOW);
-	digitalWrite(pin.ED_MS3, LOW);
-	digitalWrite(pin.ED_RST, LOW);
-	digitalWrite(pin.ED_SLP, LOW);
-	digitalWrite(pin.ED_DIR, LOW);
-	digitalWrite(pin.ED_STP, LOW);
-	digitalWrite(pin.ED_ENBL, LOW);
-	// OpenLog
-	digitalWrite(pin.OL_RST, LOW);
-	// Feeder switch
-	digitalWrite(pin.FeedSwitch_Gnd, LOW);
-	delayMicroseconds(100);
-
-	// SET INPUT PINS
-
-	// Power
-	pinMode(pin.PWR_Swtch, INPUT);
-	// XBees
-	pinMode(pin.X1a_CTS, INPUT);
-	pinMode(pin.X1b_CTS, INPUT);
-	// Battery monitor
-	pinMode(pin.BatVcc, INPUT);
-	pinMode(pin.BatIC, INPUT);
-	// IR proximity sensors
-	pinMode(pin.IRprox_Rt, INPUT);
-	pinMode(pin.IRprox_Lft, INPUT);
-	// IR detector
-	pinMode(pin.IRdetect, INPUT);
-
-	// Set power, button and switch internal pullup
-	pinMode(pin.PWR_Swtch, INPUT_PULLUP);
-	for (int i = 0; i <= 2; i++) {
-		pinMode(pin.Btn[i], INPUT_PULLUP);
-	}
-	pinMode(pin.FeedSwitch, INPUT_PULLUP);
-	delayMicroseconds(100);
+	// SETUP PINS
+	SetupPins();
 
 	// TURN ON POWER
 	digitalWrite(pin.PWR_OFF, LOW);
@@ -392,8 +287,9 @@ void setup()
 
 	// ENABLE VOLTGAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
-	digitalWrite(pin.REG_12V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 
 	// INITIALIZE LCD
 	LCD.InitLCD();
@@ -991,11 +887,9 @@ void CheckBattery()
 	uint32_t vcc_bit_in;
 	uint32_t ic_bit_in;
 	float volt_in;
-	float ic_in;
 	float volt_sum;
 	float volt_avg;
 	byte vcc_bit_out;
-	byte ic_bit_out;
 
 	// Make sure relay is open
 	//if (digitalRead(pin.Rel_Vcc) == LOW) {
@@ -1020,11 +914,6 @@ void CheckBattery()
 		SerialUSB.print(str);
 	}
 
-	// Calculate current
-	ic_bit_in = analogRead(pin.BatIC);
-	//ic_in = (float)ic_bit_in*bit2ic;
-	ic_in = 36.7*(((float)ic_bit_in * (3.3 / 1023)) / 3.3) - 18.3;
-
 	// Calculate voltage
 	vcc_bit_in = analogRead(pin.BatVcc);
 	volt_in = (float)vcc_bit_in * bit2volt;
@@ -1040,13 +929,12 @@ void CheckBattery()
 
 	// Convert float to byte
 	vcc_bit_out = byte(round(volt_avg * 10));
-	ic_bit_out = byte(round(ic_in * 10));
 
 	if (millis() > t_lastUpdate + dt_update)
 	{
 		char str[200];
-		sprintf(str, "\r\nVOLTAGE & CURRENT: Vcc=%0.2fV Vcc_Bit_In=%d Vcc_Bit_Out=%d IC=%0.2fA IC_Bit_In=%d IC_Bit_Out=%d",
-			volt_avg, vcc_bit_in, vcc_bit_out, ic_in, ic_bit_in, ic_bit_out);
+		sprintf(str, "\r\nVOLTAGE & CURRENT: Vcc=%0.2fV Vcc_Bit_In=%d Vcc_Bit_Out=%d",
+			volt_avg, vcc_bit_in, vcc_bit_out);
 		SerialUSB.print(str);
 
 		t_lastUpdate = millis();
@@ -1057,13 +945,13 @@ void XBeeRead()
 {
 	byte buff_b;
 	char buff_c;
-	while (Serial3.available() > 0) {
-		buff_b = Serial3.read();
+	while (c2rPort.available() > 0) {
+		buff_b = c2rPort.read();
 		buff_c = buff_b;
 		SerialUSB.print(buff_c);
 	}
-	while (Serial2.available() > 0) {
-		buff_b = Serial2.read();
+	while (a2rPort.available() > 0) {
+		buff_b = a2rPort.read();
 		buff_c = buff_b;
 		SerialUSB.print(buff_c);
 	}
@@ -1080,10 +968,10 @@ void ConsoleRead()
 		}
 		SerialUSB.write(buff_b);
 		if (targ == 'c') {
-			Serial3.write(buff_b);
+			c2rPort.write(buff_b);
 		}
 		else if (targ == 'a') {
-			Serial2.write(buff_b);
+			a2rPort.write(buff_b);
 		}
 	}
 }
