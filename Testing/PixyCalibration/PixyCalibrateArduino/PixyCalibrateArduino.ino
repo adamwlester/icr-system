@@ -18,11 +18,11 @@ bool printSpeed = false;
 
 // Coeff calculated using CalibrateCurveFit.m
 const double coeff[5] = {
-	0.000000031316275,
-	-0.000017574918569,
-	0.003934022977557,
-	-0.650941078574671,
-	81.611186742642388,
+	0.000000024551930,
+	-0.000014298999215,
+	0.003283287634146,
+	-0.584298073942136,
+	79.031445369696740,
 };
 
 int yNow = NULL;
@@ -62,8 +62,9 @@ void setup()
 	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
 	// Voltage Regulators
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
-	pinMode(pin.REG_12V_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V_ENBLE, OUTPUT);
+	pinMode(pin.REG_12V2_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V1_ENBLE, OUTPUT);
+	pinMode(pin.REG_5V2_ENBLE, OUTPUT);
 
 	// Power
 	digitalWrite(pin.PWR_OFF, LOW);
@@ -71,8 +72,9 @@ void setup()
 	digitalWrite(pin.PWR_Swtch_Grn, LOW);
 	// Voltage Regulators
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V_ENBLE, HIGH);
+	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 
 	// INIT PIXY STUFF
 	pixy.init();
