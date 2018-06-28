@@ -388,7 +388,7 @@ public:
 	bool doExtendArm = false;
 	bool doRetractArm = false;
 	bool doTimedRetract = false;
-	bool isArmExtended = true;
+	bool isArmExtended = false;
 	const int dt_step_high = 500; // (us)
 	const int dt_step_low = 500; // (us)
 	bool isArmStpOn = false;
@@ -401,7 +401,7 @@ public:
 	void SetRewMode(char mode_now[], int arg2 = 0);
 	bool CompZoneBounds(double now_pos, double rew_pos);
 	bool CheckZoneBounds(double now_pos);
-	void ExtendFeedArm();
+	void ExtendFeedArm(byte ext_steps);
 	void RetractFeedArm();
 	void SetMicroSteps(ezMicrostep microstep);
 	void CheckFeedArm();
@@ -2482,7 +2482,7 @@ void REWARD::StartRew()
 
 	// Extend feeder arm
 	if (!fc.isForageTask) {
-		ExtendFeedArm();
+		ExtendFeedArm(ezRewExtStps);
 	}
 
 	// Compute retract arm time
@@ -2777,18 +2777,22 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	return isZoneTriggered;
 }
 
-void REWARD::ExtendFeedArm()
+void REWARD::ExtendFeedArm(byte ext_steps)
 {
 
-	// Step mode:
+	// Notes
 	/*
-	MS1	MS2	MS3	Microstep Resolution	Excitation Mode
-	L	L	L	Full Step	2 Phase
-	H	L	L	Half Step	1 - 2 Phase
-	L	H	L	Quarter Step	W1 - 2 Phase
-	H	H	L	Eigth Step	2W1 - 2 Phase
-	H	H	H	Sixteenth Step	4W1 - 2 Phase
+	Step mode:
+		MS1	MS2	MS3	Microstep Resolution	Excitation Mode
+		L	L	L	Full Step	2 Phase
+		H	L	L	Half Step	1 - 2 Phase
+		L	H	L	Quarter Step	W1 - 2 Phase
+		H	H	L	Eigth Step	2W1 - 2 Phase
+		H	H	H	Sixteenth Step	4W1 - 2 Phase
 	*/
+
+	// Local vars
+	static char str[200] = { 0 }; str[0] = '\0';
 
 	// Bail if arm already extended
 	if (isArmExtended) {
@@ -2803,14 +2807,15 @@ void REWARD::ExtendFeedArm()
 #endif
 
 	// Log/print
-	DebugFlow(__FUNCTION__, __LINE__, "Set Extend Feed Arm");
+	sprintf(str, "Set Extend Feed Arm: steps=%d", ext_steps);
+	DebugFlow(__FUNCTION__, __LINE__, str);
 
 	// Block handler
 	v_doStepTimer = false;
 	delayMicroseconds(ezStepPeriod + 100);
 
 	// Set targ and flag
-	v_stepTarg = ezExtStps;
+	v_stepTarg = ext_steps;
 	doRetractArm = false;
 	doExtendArm = true;
 	v_isArmMoveDone = false;
@@ -6837,7 +6842,7 @@ void HardwareTest()
 			// Extend retract feed arm
 			if (!Reward.doExtendArm &&
 				!Reward.doRetractArm) {
-				Reward.isArmExtended ? Reward.RetractFeedArm() : Reward.ExtendFeedArm();
+				Reward.isArmExtended ? Reward.RetractFeedArm() : Reward.ExtendFeedArm(ezRewExtStps);
 			}
 			Reward.CheckFeedArm();
 
@@ -9019,13 +9024,41 @@ void setup() {
 	// RESET FEEDER ARM
 	DebugFlow(__FUNCTION__, __LINE__, "RUNNING: Reset Feeder Arm...");
 	DoAll("PrintDebug");
-	PrintLCD(true, "RUN SETUP", "Retract Arm");
-	Reward.RetractFeedArm();
-	while (Reward.doRetractArm) {
+	PrintLCD(true, "RUN SETUP", "Reset Arm");
+
+	// Extend arm
+	uint32_t t_check_ext = millis() + 1000;
+	Reward.ExtendFeedArm(ezResetExtStps);
+	while (Reward.doExtendArm && millis() < t_check_ext) {
 		Reward.CheckFeedArm();
 	}
-	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Reset Feeder Arm");
-	DoAll("PrintDebug");
+
+	// Log/Print error
+	if (Reward.doExtendArm) {
+		DebugError(__FUNCTION__, __LINE__, "FAILED: Reset Feeder Arm: Extend Feeder Arm");
+		DoAll("PrintDebug");
+	}
+
+	// Retract arm if extend succeeded
+	else {
+		uint32_t t_check_ret = millis() + 1000;
+		Reward.RetractFeedArm();
+		while (Reward.doRetractArm && millis() < t_check_ext) {
+			Reward.CheckFeedArm();
+		}
+
+		// Log/Print error
+		if (Reward.doRetractArm) {
+			DebugError(__FUNCTION__, __LINE__, "FAILED: Reset Feeder Arm: Retract Feeder Arm");
+			DoAll("PrintDebug");
+		}
+	}
+
+	// Log/print success
+	if (!Reward.doExtendArm && !Reward.doRetractArm) {
+		DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Reset Feeder Arm");
+		DoAll("PrintDebug");
+	}
 
 	// IMPORT LAST TEENSY LOG
 #if DO_TEENSY_DEBUG

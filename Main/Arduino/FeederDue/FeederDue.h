@@ -297,7 +297,8 @@ const float solOpenScaleArr[2] = { 1, 0.5 };
 // BIGEASYDRIVER
 const byte ezDirExtState = 1; // 1
 const byte ezDirRetState = 0; // 0
-const byte ezExtStps = 255; // max [255] 250
+const byte ezResetExtStps = 100; // max [255] 100
+const byte ezRewExtStps = 255; // max [255] 250
 const byte ezRestStps = 25; // max [255] 50
 const double ezStepPeriod = 1000; // (us)
 enum ezMicrostep { FULL, HALF, QUARTER, EIGHTH, SIXTEENTH };
