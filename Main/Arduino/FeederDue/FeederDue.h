@@ -29,7 +29,7 @@
 // DEBUG SETTING
 
 // CONSOLE
-#define DO_PRINT_DEBUG 1 // 0
+#define DO_PRINT_DEBUG 0 // 0
 #define DO_FAST_PRINT 0 // 0
 
 // TEENSY LOGGING

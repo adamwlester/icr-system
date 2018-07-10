@@ -433,7 +433,6 @@ void GetSerial()
 	char foot = 0;
 	char id = 0;
 	uint16_t pack = 0;
-	uint16_t t_s = 0;
 	uint32_t t_m = 0;
 	uint16_t line_num = 0;
 	char fun_abr[3] = { 0 };

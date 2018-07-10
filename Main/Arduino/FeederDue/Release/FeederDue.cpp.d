@@ -1,6 +1,6 @@
-C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDue.cpp.o: \
- C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDue.cpp \
- C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/arduino.h \
+C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o: \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp \
+ C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Arduino.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/avr/pgmspace.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/avr/interrupt.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/binary.h \
@@ -118,7 +118,6 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDu
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Printable.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/wiring_pulse.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\variants\arduino_due_x/variant.h \
- C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Arduino.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/UARTClass.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/USARTClass.h \
@@ -136,8 +135,8 @@ C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDu
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/USB/USBAPI.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Stream.h \
- C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDue.h \
- C:\Users\lester\AppData\Local\Temp\VMicroBuilds\FeederDue\arduino_due_x\FeederDue_PinMap.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue_PinMap.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\MemoryFree/MemoryFree.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\DueTimer/DueTimer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src/SPI.h \

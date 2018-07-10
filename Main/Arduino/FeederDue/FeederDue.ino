@@ -7298,7 +7298,7 @@ void DebugTeensy(const char *fun, int line, int mem, char id, char msg[])
 	int chk_diff = 0;
 	uint16_t b_ind = 0;
 	uint32_t t_str = micros();
-	uint16_t t_m = 0;
+	uint32_t t_m = 0;
 	uint16_t line_num = line-22;
 	char fun_abr[3] = { 0 };
 	byte mem_gb = 0;
