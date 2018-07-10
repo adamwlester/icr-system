@@ -2,7 +2,9 @@
 #ifndef FeederDue_PinMap_h
 #define FeederDue_PinMap_h
 
-// Pin mapping
+
+#pragma region ============== DEFINE PINS ==============
+
 struct PIN
 {
 	// Power button
@@ -15,15 +17,15 @@ struct PIN
 	const int AD_RST = 7; // (brown)
 
 	// XBees
-	const int XB_CTS_F = 28; // (blue)
-	const int XB_CTS_R = 26; // (blue)
-	const int XB_UNDEF_F = 29; // (yellow)
-	const int XB_UNDEF_R = 27; // (yellow)
+	const int XB_CTS_F = 26; // (blue)
+	const int XB_CTS_R = 28; // (blue)
+	const int XB_UNDEF_F = 27; // (yellow)
+	const int XB_UNDEF_R = 29; // (yellow)
 
 	// Teensy
-	const int Teensy_Unused = 36; // (green)
-	const int Teensy_SendLogs = 38; // (yellow)
-	const int Teensy_Resetting = 40; // (orange)
+	const int Teensy_Unused = 32; // (green)
+	const int Teensy_SendLogs = 34; // (yellow)
+	const int Teensy_Resetting = 36; // (orange)
 
 	// Display
 	const int Disp_CS = 8; // (white)
@@ -54,10 +56,10 @@ struct PIN
 	const int ED_SLP = 49; // (blue)
 	const int ED_DIR = 51; // (gray)
 	const int ED_STP = 53; // (white)
-	const int ED_ENBL = 33; // (brown)
-	const int ED_MS1 = 35; // (red)
-	const int ED_MS2 = 37; // (orange)
-	const int ED_MS3 = 39; // (yellow)
+	const int ED_ENBL = 33; // (yellow)
+	const int ED_MS1 = 35; // (orange)
+	const int ED_MS2 = 37; // (red)
+	const int ED_MS3 = 39; // (brown)
 
 	// OpenLog
 	const int OL_RST = 30; // (purple)
@@ -98,8 +100,11 @@ struct PIN
 // Initialize
 pin;
 
+#pragma endregion 
 
-// SETUP PINS
+
+#pragma region ============== SETUP PINS ===============
+
 void SetupPins() {
 	
 	// SETUP OUTPUT PINS
@@ -164,8 +169,8 @@ void SetupPins() {
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
-	// Teensy (start high)
-	digitalWrite(pin.Teensy_SendLogs, HIGH);
+	// Teensy
+	digitalWrite(pin.Teensy_SendLogs, LOW);
 	// Display
 	digitalWrite(pin.Disp_SCK, LOW);
 	digitalWrite(pin.Disp_MOSI, LOW);
@@ -223,5 +228,8 @@ void SetupPins() {
 	pinMode(pin.FeedSwitch, INPUT_PULLUP);
 	delayMicroseconds(100);
 }
+
+#pragma endregion 
+
 
 #endif

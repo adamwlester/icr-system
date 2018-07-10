@@ -34,6 +34,11 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % Raw_Data_File = {''};
 % var_before = 'Recording_File';
 % SS_IO_2 = AddNewVar(SS_IO_2, Raw_Data_File, var_before);
+feeder_version_cats = {'Static_Feeder', 'Mobile_Feeder'};
+Feeder_Version = categorical({'Static_Feeder'}, ...
+    feeder_version_cats);
+var_before = 'Implanted';
+SS_IO_2 = AddNewVar(SS_IO_2, Feeder_Version, var_before);
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 

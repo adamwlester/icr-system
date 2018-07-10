@@ -189,7 +189,7 @@ T.Laps_Per_Rotation = repmat({categorical(repmat({'<undefined>'},200,9), ...
 T.Days_Till_Rotation = repmat({categorical(repmat({'<undefined>'},200,1), ...
     days_till_rotation_cats)}, length(PAR.ratList),1);
 
-T.Notes = cell(length(PAR.ratList),1);
+T.Notes = repmat({''}, length(PAR.ratList), 1);
 
 % Set variable units
 T.Properties.VariableUnits{'Weight_Baseline'} = 'g';
@@ -409,6 +409,9 @@ T = table;
 T.Include_Analysis = true;
 
 T.Implanted = false;
+
+T.Feeder_Version = categorical({'<undefined>'}, ...
+    feeder_version_cats);
 
 T.Date = {''};
 

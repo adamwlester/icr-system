@@ -11,10 +11,10 @@
 
 * XBee DO (to UART rx) buffer = 202 bytes
 
-* ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO 512
+* ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO 1028
 Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
 
-* SerialUSB receive buffer size is now 512 (ARDUINO 1.5.2 BETA - 2013.02.06)
+* SerialUSB receive buffer size is now 1028 (ARDUINO 1.5.2 BETA - 2013.02.06)
 
 * DATA TYPES:
 byte = 1 byte
@@ -42,8 +42,11 @@ baud,escape,esc#,mode,verb,echo,ignoreRX
 // General
 
 #include "FeederDue.h"
+
 #include "FeederDue_PinMap.h"
+
 #include <Arduino.h>
+
 #include <string.h>
 
 // Memory
@@ -58,6 +61,7 @@ baud,escape,esc#,mode,verb,echo,ignoreRX
 // AutoDriver
 
 #include <SPI.h>
+
 #include <AutoDriver_Due.h>
 
 // Pixy
@@ -349,7 +353,7 @@ public:
 		-15,
 		-20,
 	};
-	int durationDefault = 2000; // (ms) 
+	int durationDefault = 2000; // (ms) 2000 
 	static const int zoneLng =
 		sizeof(zoneLocs) / sizeof(zoneLocs[0]);
 	double zoneBounds[zoneLng][2] = { { 0 } };
@@ -530,6 +534,17 @@ union UTAG {
 
 
 
+//UNION: UTAG TEENSY
+union UTAG_TEENSY {
+	byte b[16]; // (byte) 1 byte
+	char c[16]; // (char) 1 byte
+	uint16_t i16[8]; // (uint16_t) 2 byte
+	uint32_t i32[4]; // (uint32_t) 4 byte
+	uint64_t i64[2]; // (uint64_t) 8 byte
+};
+
+
+
 //INITILIZE OBJECTS
 
 // Initialize FUSER class instance
@@ -537,6 +552,9 @@ FUSER ekf;
 
 // Initialize UTAG union instance
 UTAG U;
+
+// Initialize UTAG union for teensy coms instance
+UTAG_TEENSY Utnsy;
 
 // Initialize AutoDriver_Due class instances
 AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
@@ -671,7 +689,7 @@ void HardwareTest();
 void CheckLoop();
 
 // LOG FUNCTION RUN TO TEENSY
-void DebugTeensy(const char *fun, int line, int mem, char msg1[], char msg2[] = { 0 });
+void DebugTeensy(const char *fun, int line, int mem, char id, char msg[] = { 0 });
 
 // GET LAST TEENSY LOG
 void GetTeensyDebug();
@@ -722,7 +740,7 @@ int GetAD_Status(uint16_t stat_reg, char stat_str[]);
 void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf);
 
 // HOLD FOR CRITICAL ERRORS
-void RunErrorHold(char msg[], uint32_t t_kill = 0);
+void RunErrorHold(char msg[], uint32_t dt_shutdown = 0);
 
 // GET ID INDEX
 template <typename T> int ID_Ind(char id, T *r24);
@@ -3750,7 +3768,7 @@ void LOGGER::QueueLog(char msg[], uint32_t t)
 		str[100] = '\0';
 
 		// Store overflow error instead
-		sprintf(msg_copy, "MESSAGE TOO LONG: msg_lng=%d max_lng=%d \"%s%s\"",
+		sprintf(msg_copy, "MESSAGE TOO LONG: msg_bytes=%d max_bytes=%d \"%s%s\"",
 			strlen(msg), maxMsgStrLng, str, "...");
 	}
 
@@ -4171,7 +4189,7 @@ void LOGGER::StreamLogs()
 	// Com summary info Teensy
 #if DO_TEENSY_DEBUG
 	sprintf(str, "COM SUMMARY TEENSY: R2T=|pind=%d|ptot=%lu|",
-		r2t.packInd, r2t.packTot);
+		r2t.packInd, r2t.packSentAll);
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	r2c.port.write(logQueue[logQueueIndStore]);
 	delay(50);
@@ -5049,9 +5067,9 @@ bool SendPacket(R2 *r2)
 	*/
 
 	// Local vars
-	const int msg_lng = sendQueueBytes;
+	const int msg_bytes = sendQueueBytes;
 	static char dat_str[200] = { 0 }; dat_str[0] = '\0';
-	byte msg[msg_lng];
+	byte msg[msg_bytes];
 	uint32_t t_str = millis();
 	int dt_sent = 0;
 	int dt_rcvd = 0;
@@ -5122,10 +5140,10 @@ bool SendPacket(R2 *r2)
 	}
 
 	// Send
-	r2->port.write(r2->sendQueue[r2->sendQueueIndRead], msg_lng);
+	r2->port.write(r2->sendQueue[r2->sendQueueIndRead], msg_bytes);
 
 	// Store bytes sent
-	cnt_bytesSent = msg_lng;
+	cnt_bytesSent = msg_bytes;
 
 	// Update dt stuff
 	r2->dt_sent = r2->t_sent > 0 ? millis() - r2->t_sent : 0;
@@ -6657,7 +6675,7 @@ float CheckBattery(bool force_check)
 		if (do_shutdown) {
 			// Run error hold then shutdown after 5 min
 			sprintf(str, "BATT LOW %0.2fV", vccAvg);
-			RunErrorHold(str, 5*60000);
+			RunErrorHold(str, 5 * 60 * 1000);
 		}
 	}
 
@@ -7174,7 +7192,7 @@ void CheckLoop()
 	int a_tx = 0;
 
 	// Keep short count of loops
-	cnt_loopShort = cnt_loopShort < 999 ? cnt_loopShort + 1 : 1;
+	cnt_loopShort++;
 
 	// Bail till ses started
 	if (!fc.isSesStarted) {
@@ -7248,58 +7266,46 @@ void CheckLoop()
 }
 
 // LOG FUNCTION RUN TO TEENSY msg=["S", "E", other]
-void DebugTeensy(const char *fun, int line, int mem, char where_str[], char msg[])
+void DebugTeensy(const char *fun, int line, int mem, char id, char msg[])
 {
 	// Notes
 	/*
-	!!!!CALLING ANY OTHER METHOD FROM HERE WILL RESULT IN RECURSIVE CALL!!!!!
+		!!!!CALLING ANY OTHER METHOD FROM HERE WILL RESULT IN RECURSIVE CALL!!!!!
+		// Coms Union (20B):
+			1B/1B: (char)head: c[0]
+			1B/2B: (char)id: c[1]
+			2B/4B: (uint16_t)pack: i16[1]
+			4B/8B: (uint32_t)time_ms: i32[1]
+			2B/10B: (uint16_t)line_number: i16[4]
+			2B/12B: (char)function_abreviation: c[10-11]
+			1B/13B: (byte)loop_count: b[12]
+			1B/14B: (byte)skip_count: b[13]
+			1B/15B: (byte)memory_GB: b[14]
+			1B/16B: (char)foot: c[15]
 	*/
 
 #if DO_TEENSY_DEBUG
 
 	// Local vars
 	static char str[maxStoreStrLng] = { 0 }; str[0] = '\0';
-	static char msg_out[100] = { 0 }; msg_out[0] = '\0';
 	static char fun_last[100] = { 0 };
-	static byte head_byte[1] = { r2t.head };
-	static byte foot_byte[1] = { r2t.foot };
-	static float t_s = 0;
 	static bool do_skip_repeat = false;
-	static int  cnt_long_dt_skip = 0;
 	static uint32_t dt_run = 0;
 	static uint32_t cnt_chk = 0;
 	static uint32_t chk_last = 0;
+	uint32_t dt_send_wait = 1000; // (us)
 	int cnt_skip = 0;
 	int chk_diff = 0;
 	uint16_t b_ind = 0;
 	uint32_t t_str = micros();
+	uint16_t t_m = 0;
+	uint16_t line_num = line-22;
+	char fun_abr[3] = { 0 };
+	byte mem_gb = 0;
+	static byte msg_bytes = sizeof(Utnsy.b);
 
 	// Bail if not ready
 	if (!fc.isTeensyReady) {
-		return;
-	}
-
-	// Itterate count
-	cnt_chk++;
-
-	// Set to skip twice if last run took too long
-	if (dt_run > 500) {
-
-		// Reset dt
-		dt_run = 0;
-
-		// Set skip count
-		cnt_long_dt_skip = 2;
-	}
-
-	// Bail if skip run unless special call
-	if (cnt_long_dt_skip > 0 &&
-		strcmp(where_str, "S") == 0) {
-
-		// Decriment count
-		cnt_long_dt_skip--;
-
-		// Bail
 		return;
 	}
 
@@ -7308,7 +7314,7 @@ void DebugTeensy(const char *fun, int line, int mem, char where_str[], char msg[
 
 		// Only bail for repeat start message
 		if (do_skip_repeat ||
-			strcmp(where_str, "S") == 0) {
+			id == 'S') {
 
 			// Set flag and bail
 			do_skip_repeat = true;
@@ -7319,60 +7325,128 @@ void DebugTeensy(const char *fun, int line, int mem, char where_str[], char msg[
 	// Reset flag
 	do_skip_repeat = false;
 
-	// Store time
-	t_s = (float)(millis() - t_sync) / 1000.0f;
+	// Itterate count
+	cnt_chk++;
+
+	// Wait if message just sent
+	uint32_t dt_send = micros() - r2t.t_sent;
+	uint32_t t_send_wait =
+		dt_send < dt_send_wait ? micros() + (dt_send_wait - dt_send) : 0;
+	while (micros() < t_send_wait) {
+		if (micros() > t_send_wait) {
+			break;
+		}
+		else {
+			delayMicroseconds(10);
+		}
+	}
+
+	// Bail if buffer still full
+	if (r2t.port.availableForWrite() < 2 * msg_bytes) {
+		return;
+	}
 
 	// Copy function for start calls
-	if (strcmp(where_str, "S") == 0) {
+	if (id == 'S') {
 		strcpy(fun_last, fun);
 	}
 
 	// Get number of times skipped logging
-	cnt_skip = cnt_chk - chk_last;
-
-	// Send only message if included
-	if (msg[0] != '\0') {
-		sprintf(msg_out, msg);
-	}
-
-	// Short summary [time sec, function, message arg, loop count, skip count, memory GB]
-	else {
-		sprintf(msg_out, "%0.0f %s_%s l%d s%d m%0.2f",
-			t_s, fun, where_str, cnt_loopShort, cnt_skip, (float)mem / 1000);
-	}
-
-	// Store cnt
+	cnt_skip = cnt_chk - chk_last - 1;
 	chk_last = cnt_chk;
+
+	// Get abreviated function name
+	for (int i = 0; i < strlen(fun); i++) {
+		if (isUpperCase(fun[i])) {
+
+			// Store first char
+			if (fun_abr[0] == '\0') {
+				fun_abr[0] = fun[i];
+			}
+
+			// Store second char and break
+			else {
+				fun_abr[1] = fun[i];
+				break;
+			}
+
+		}
+	}
+
+	// Store time
+	t_m = (millis() - t_sync);
+
+	// Store memory
+	mem_gb = (byte)((float)mem / 1000);
 
 	// Iterate packet
 	r2t.packInd++;
 
 	// Reset packet if out of range
-	if (r2t.packInd > r2t.packRange[1])
-	{
+	if (r2t.packInd > r2t.packRange[1]) {
 		// Note: cannot log/print this or will result in recursive call
 		r2t.packInd = r2t.packRange[0];
 	}
 
 	// Update packet total
-	r2t.packTot++;
+	r2t.packSentAll++;
 
-	// Send head
-	r2t.port.write(head_byte, 1);
+	// Clear union entries
+	Utnsy.i64[0] = 0;
+	Utnsy.i64[1] = 0;
 
-	// Send packet number
-	U.f = 0;
-	U.i16[0] = r2t.packInd;
-	r2t.port.write(U.b, 2);
+	// Store header
+	Utnsy.c[0] = r2t.head;
+	// Store message id
+	Utnsy.c[1] = id;
+	// Store packet number
+	Utnsy.i16[1] = r2t.packInd;
+
+	// Store only message if included
+	if (msg[0] != '\0') {
+
+		// Itterate through message
+		int b_ind = 4;
+		for (int i = 0; i < strlen(msg); i++) {
+
+			// Store char
+			Utnsy.c[b_ind] = msg[i];
+			b_ind++;
+		}
+		Utnsy.c[b_ind] = '\0';
+
+	}
+
+	// Store call function details
+	else {
+
+		// Store time
+		Utnsy.i32[1] = t_m;
+		// Store line number
+		Utnsy.i16[4] = line_num;
+		// Store function abbreviation
+		Utnsy.c[10] = fun_abr[0];
+		Utnsy.c[11] = fun_abr[1];
+		// Store loop count
+		Utnsy.b[12] = cnt_loopShort;
+		// Store skip count
+		Utnsy.b[13] = (byte)cnt_skip;
+		// Store memory
+		Utnsy.b[14] = mem_gb;
+
+	}
+
+	// Store footer
+	Utnsy.c[15] = r2t.foot;
 
 	// Send message
-	r2t.port.write(msg_out);
-
-	// Send foot
-	r2t.port.write(foot_byte, 1);
+	r2t.port.write(Utnsy.b, msg_bytes);
 
 	// Get dt run
 	dt_run = micros() - t_str;
+
+	// Store send time
+	r2t.t_sent = micros();
 
 #endif
 }
@@ -7399,13 +7473,13 @@ void GetTeensyDebug()
 	DebugFlow(__FUNCTION__, __LINE__, str);
 	DoAll("PrintDebug");
 
-	// Set send pin low for 150 ms
-	digitalWrite(pin.Teensy_SendLogs, LOW);
+	// Set send pin high for 150 ms
+	digitalWrite(pin.Teensy_SendLogs, HIGH);
 	delay(10);
 	// Send start string
 	r2t.port.write("<<<");
-	delay(150);
-	digitalWrite(pin.Teensy_SendLogs, HIGH);
+	delay(140);
+	digitalWrite(pin.Teensy_SendLogs, LOW);
 
 	// Start getting logs
 	while (strcmp(c_arr, ">>>") != 0 &&
@@ -7535,7 +7609,7 @@ void GetTeensyDebug()
 		}
 	}
 
-	if (is_reset[0] && is_reset[2]) {
+	if (is_reset[0] && is_reset[1]) {
 		DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Teensy Reset");
 
 		// Hold for 100 ms for Teensy to finish reset
@@ -8347,7 +8421,7 @@ void TestSendPack(R2 *r2, char id, float dat1, float dat2, float dat3, uint16_t 
 }
 
 // HOLD FOR CRITICAL ERRORS
-void RunErrorHold(char msg[], uint32_t t_kill)
+void RunErrorHold(char msg[], uint32_t dt_shutdown)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -8355,7 +8429,7 @@ void RunErrorHold(char msg[], uint32_t t_kill)
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
-	static uint32_t t_shutdown = t_kill > 0 ? millis() + t_kill : 0;
+	static uint32_t t_shutdown = dt_shutdown > 0 ? millis() + (dt_shutdown * 1000) : 0;
 	int duty[2] = { 255, 0 };
 	bool do_led_on = true;
 	int dt = 250;
@@ -9088,8 +9162,8 @@ void setup() {
 	fc.isTeensyReady = true;
 
 	// Send log number to Teensy as optional argument
-	sprintf(str, "LOG%05u", Log.logNum);
-	DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), "", str);
+	sprintf(str, "%05u", Log.logNum);
+	DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), 'L', str);
 
 	// Log everything in queue
 	DoAll("WriteLog", 5000);
@@ -9104,8 +9178,8 @@ void setup() {
 	DoAll("PrintDebug");
 
 	// CHECK SERIAL BUFFER SIZE
-	sprintf(str, "SERIAL BUFFER SIZE: ACTUAL=%dB EXPECTED=512B", SERIAL_BUFFER_SIZE);
-	if (SERIAL_BUFFER_SIZE == 512) {
+	sprintf(str, "SERIAL BUFFER SIZE: ACTUAL=%dB EXPECTED=1028B", SERIAL_BUFFER_SIZE);
+	if (SERIAL_BUFFER_SIZE == 1028) {
 		DebugFlow(__FUNCTION__, __LINE__, str);
 	}
 	// Buffer size is wrong
@@ -9142,7 +9216,7 @@ void setup() {
 	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Setup");
 	DoAll("PrintDebug");
 
-}
+	}
 
 
 void loop() {

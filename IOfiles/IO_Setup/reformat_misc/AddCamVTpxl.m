@@ -1,20 +1,15 @@
 PAR.DIR.topRun = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running';
 PAR.DIR.io = [PAR.DIR.topRun, '\IOfiles\SessionData'];
 PAR.DIR.opp = [PAR.DIR.topRun, '\IOfiles\Operational'];
+S = load(fullfile(PAR.DIR.io, 'SS_IO_1.mat'));
+SS_IO_1 = S.SS_IO_2;
 S = load(fullfile(PAR.DIR.io, 'SS_IO_2.mat'));
 SS_IO_2 = S.SS_IO_2;
 clear S;
 
-oppDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\IOfiles\Operational';
+camCfgDate = '05/01/16';
 
-trkBndsFi = [...
-    {'track_bounds_171219.mat'}, ...
-    {'track_bounds_150804.mat'}, ...
-    {'track_bounds_140101.mat'}];
 
-camCfgDate = ...
-    {'12/01/17', ...
-    '08/01/15'};
 
 ratList = fieldnames(SS_IO_2);
 for z_r = 1:length(ratList)

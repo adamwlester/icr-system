@@ -3,6 +3,7 @@
 #define FeederDue_h
 #include "FeederDue_PinMap.h"
 
+
 #pragma region =============== EXT DEFS ================
 
 // TinyEKF
@@ -18,6 +19,7 @@
 
 #pragma endregion 
 
+
 #pragma region ============ DEBUG SETTINGS =============
 
 
@@ -27,11 +29,11 @@
 // DEBUG SETTING
 
 // CONSOLE
-#define DO_PRINT_DEBUG 0 // 0
+#define DO_PRINT_DEBUG 1 // 0
 #define DO_FAST_PRINT 0 // 0
 
 // TEENSY LOGGING
-#define DO_TEENSY_DEBUG 0 // 0
+#define DO_TEENSY_DEBUG 1 // 0
 
 // OPENLOG LOGGING
 #define DO_LOG 1 // 1
@@ -127,11 +129,12 @@ int cal_nMeasPerSteps = 10;
 // DEBUG VIA TEENSY
 
 // Put at start of function
-#define DB_FUN_STR() DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), "S");
+#define DB_FUN_STR() DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), 'S');
 // Put at end of function
-#define DB_FUN_END() DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), "E");
+#define DB_FUN_END() DebugTeensy(__FUNCTION__, __LINE__, freeMemory(), 'E');
 
 #pragma endregion
+
 
 #pragma region ============= VARIABLE SETUP ============
 
@@ -177,7 +180,7 @@ fc;
 
 // DEBUGGING GENERAL
 uint32_t cnt_loopTot = 0;
-uint16_t cnt_loopShort = 0;
+byte cnt_loopShort = 0;
 uint16_t cnt_warn = 0;
 uint16_t cnt_err = 0;
 uint16_t warn_line[100] = { 0 };
@@ -359,6 +362,7 @@ volatile byte v_stepTarg = 0;
 volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 
+
 
 #pragma region ============ COM STRUCT SETUP ===========
 
@@ -688,9 +692,10 @@ struct R2T
 	const char foot;
 	const char *id;
 	uint16_t packInd;
-	uint32_t packTot;
+	uint32_t packSentAll;
+	uint32_t packRcvdAll;
 	int cnt_dropped;
-	uint32_t t_rcvd; // (ms)
+	uint32_t t_sent; // (ms)
 	int dt_rcvd; // (ms)
 };
 
@@ -706,18 +711,20 @@ R2T r2t
 	// lng
 	0,
 	// head
-	'(',
+	'{',
 	// foot
-	')',
+	'}',
 	// id
 	tnsy_id_list,
 	// packInd
 	lower_pack_range[0]-1,
-	// packTot
+	// packSentAll
+	0,
+	// packRcvdAll
 	0,
 	// cnt_dropped
 	0,
-	// t_rcvd
+	// t_sent
 	0,
 	// dt_rcvd
 	0,
