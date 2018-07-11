@@ -194,12 +194,13 @@ namespace ICR_Run
             _lock_is_done: new object(),
             _pack_range: lower_pack_range,
             _id:
-            new char[7] {
+            new char[8] {
             'h', // setup handshake
             'J', // battery voltage
             'Z', // reward zone
             'K', // feederdue status
             'Y', // task done
+            'F', // confirm save
             'E', // enable exit
             'C', // confirm close
              },
@@ -1151,6 +1152,11 @@ namespace ICR_Run
                     fc.DebugError("ABORTED: WAIT FOR: ICR_GUI to Save");
                 }
             }
+
+            // SEND SAVE CONFIRMATION TO MATLAB
+            
+            SendMatCom_Thread(id: 'F', dat1: 1);
+            logger_CS.LogDebug("FINIISHED: Send ICR_GUI Save Confirmation...");
 
             // WAIT FOR MATLAB QUIT COMMAND
 
@@ -3884,7 +3890,7 @@ namespace ICR_Run
 
             // Remove cammas from message
             msg_log = st_str + msg_in;
-            msg_log = msg_in.Replace(",", string.Empty);
+            msg_log = msg_log.Replace(",", string.Empty);
 
             // Store in logger 
 
