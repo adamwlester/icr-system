@@ -104,25 +104,25 @@ const uint32_t t_LED_Dur = 250; // (ms)
 struct PINS
 {
 	// POT switch test
-	int POT_Gnd = A10;
-	int POT_In = A9;
-	int POT_Vcc = A8;
+	int POT_GRN = A10;
+	int POT_IN = A9;
+	int POT_VCC = A8;
 
 	//// Stepper Rotation Test
-	int StpSwitch_R = A8;
-	int StpSwitch_F = A10;
-	int StpSwitch_Gnd_R = A9;
-	int StpSwitch_Gnd_F = A11;
+	int SWITCH_WHEEL_R = A8;
+	int SWITCH_WHEEL_F = A10;
+	int SWITCH_WHEEL_GRN_R = A9;
+	int SWITCH_WHEEL_GRN_F = A11;
 	//// Stepper Rotation Test
-	//int StpSwitch_R = A7;
-	//int StpSwitch_F = A5;
-	//int StpSwitch_Gnd_R = A6;
-	//int StpSwitch_Gnd_F = A4;
+	//int SWITCH_WHEEL_R = A7;
+	//int SWITCH_WHEEL_F = A5;
+	//int SWITCH_WHEEL_GRN_R = A6;
+	//int SWITCH_WHEEL_GRN_F = A4;
 
 	// IR detector test
-	int IRdetect_Relay = 51;
-	int IRdetect_PlsIn = 24;
-	int CheetahDueID_Gnd = A8;
+	int INTERUPT_IR_DETECT_Relay = 51;
+	int INTERUPT_IR_DETECT_PlsIn = 24;
+	int CheetahDueID_GRN = A8;
 	int CheetahDueID_IP = A9;
 }
 // Initialize
@@ -228,7 +228,7 @@ AutoDriver_Due AD_R(pin.AD_CSP_R, pin.AD_RST);
 AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 
 // LCD
-LCD5110 LCD(pin.Disp_CS, pin.Disp_RST, pin.Disp_DC, pin.Disp_MOSI, pin.Disp_SCK);
+LCD5110 LCD(pin.LCD_CS, pin.LCD_RST, pin.LCD_DC, pin.LCD_MOSI, pin.LCD_SCK);
 extern unsigned char SmallFont[];
 
 #pragma endregion
@@ -328,28 +328,28 @@ void setup()
 
 	// POT vcc and Gnd
 	if (do_POT_Test) {
-		pinMode(pins.POT_Gnd, OUTPUT);
-		pinMode(pins.POT_Vcc, OUTPUT);
-		digitalWrite(pins.POT_Vcc, HIGH);
-		digitalWrite(pins.POT_Gnd, LOW);
-		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), InteruptIRproxHalt, FALLING);
-		attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), InteruptIRproxHalt, FALLING);
+		pinMode(pins.POT_GRN, OUTPUT);
+		pinMode(pins.POT_VCC, OUTPUT);
+		digitalWrite(pins.POT_VCC, HIGH);
+		digitalWrite(pins.POT_GRN, LOW);
+		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_R), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_L), InteruptIRproxHalt, FALLING);
 	}
 
 	// Stepper Rotation Test
 	if (do_Step_Rot_Test) {
 
 		// Setup pins
-		pinMode(pins.StpSwitch_R, INPUT_PULLUP);
-		pinMode(pins.StpSwitch_F, INPUT_PULLUP);
-		pinMode(pins.StpSwitch_Gnd_R, OUTPUT);
-		pinMode(pins.StpSwitch_Gnd_F, OUTPUT);
-		digitalWrite(pins.StpSwitch_Gnd_R, LOW);
-		digitalWrite(pins.StpSwitch_Gnd_F, LOW);
+		pinMode(pins.SWITCH_WHEEL_R, INPUT_PULLUP);
+		pinMode(pins.SWITCH_WHEEL_F, INPUT_PULLUP);
+		pinMode(pins.SWITCH_WHEEL_GRN_R, OUTPUT);
+		pinMode(pins.SWITCH_WHEEL_GRN_F, OUTPUT);
+		digitalWrite(pins.SWITCH_WHEEL_GRN_R, LOW);
+		digitalWrite(pins.SWITCH_WHEEL_GRN_F, LOW);
 
 		// Setup interupts
-		attachInterrupt(digitalPinToInterrupt(pins.StpSwitch_R), InteruptStpSwitch_R, FALLING);
-		attachInterrupt(digitalPinToInterrupt(pins.StpSwitch_F), InteruptStpSwitch_F, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pins.SWITCH_WHEEL_R), InteruptSWITCH_WHEEL_R, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pins.SWITCH_WHEEL_F), InteruptSWITCH_WHEEL_F, FALLING);
 	}
 
 	// Initialize bat volt array
@@ -361,30 +361,30 @@ void setup()
 	if (do_IR_ComTest)
 	{
 		pinMode(pins.CheetahDueID_IP, INPUT_PULLUP);
-		pinMode(pins.CheetahDueID_Gnd, OUTPUT);
-		digitalWrite(pins.CheetahDueID_Gnd, LOW);
+		pinMode(pins.CheetahDueID_GRN, OUTPUT);
+		digitalWrite(pins.CheetahDueID_GRN, LOW);
 		delay(10);
 		// Detect if code is running on FeederDue
 		if (digitalRead(pins.CheetahDueID_IP) == HIGH)
 		{
 			is_FeederDue = true;
-			attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, HIGH);
-			attachInterrupt(digitalPinToInterrupt(pins.IRdetect_PlsIn), Interupt_Pulse_Detect, HIGH);
+			attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IR_DETECT), Interupt_IR_Detect, HIGH);
+			attachInterrupt(digitalPinToInterrupt(pins.INTERUPT_IR_DETECT_PlsIn), Interupt_Pulse_Detect, HIGH);
 			SerialUSB.println("Running on FeederDue");
 		}
 		else
 		{
 			// Set all relays low on CheetahDue
-			pinMode(pins.IRdetect_Relay, OUTPUT);
+			pinMode(pins.INTERUPT_IR_DETECT_Relay, OUTPUT);
 			pinMode(11, OUTPUT);
 			pinMode(12, OUTPUT);
-			digitalWrite(pins.IRdetect_Relay, LOW);
+			digitalWrite(pins.INTERUPT_IR_DETECT_Relay, LOW);
 			digitalWrite(11, LOW);
 			digitalWrite(12, LOW);
 			SerialUSB.println("Running on CheetahDue");
 		}
 		pinMode(pins.CheetahDueID_IP, INPUT);
-		pinMode(pins.CheetahDueID_Gnd, INPUT);
+		pinMode(pins.CheetahDueID_GRN, INPUT);
 	}
 
 	// PRINT TEST
@@ -509,7 +509,7 @@ void loop()
 
 bool POT_Run() {
 
-	vccNow = analogRead(pins.POT_In);
+	vccNow = analogRead(pins.POT_IN);
 	vccNorm = vccNow / vccMax;
 	velNow = round(vccNorm * maxSpeed * 100) / 100;
 	runSpeed = velNow * cm2stp;
@@ -623,7 +623,7 @@ void RetractFeedArm()
 		// Set arm direction
 		digitalWrite(pin.ED_DIR, HIGH); // retract
 
-		while (digitalRead(pin.FeedSwitch) == HIGH)
+		while (digitalRead(pin.SWITCH_DISH) == HIGH)
 		{
 			if (!armStpOn)
 			{
@@ -704,13 +704,13 @@ void StepRun()
 		SerialUSB.println("\r\nResseting Position");
 		runSteps = 10 * cm2stp;
 		AD_R.run(FWD, runSteps);
-		while (digitalRead(pins.StpSwitch_R) == HIGH);
-		while (digitalRead(pins.StpSwitch_R) == LOW);
+		while (digitalRead(pins.SWITCH_WHEEL_R) == HIGH);
+		while (digitalRead(pins.SWITCH_WHEEL_R) == LOW);
 		delay(100);
 		AD_R.hardStop();
 		AD_F.run(FWD, runSteps);
-		while (digitalRead(pins.StpSwitch_F) == HIGH);
-		while (digitalRead(pins.StpSwitch_F) == LOW);
+		while (digitalRead(pins.SWITCH_WHEEL_F) == HIGH);
+		while (digitalRead(pins.SWITCH_WHEEL_F) == LOW);
 		delay(100);
 		AD_F.hardStop();
 
@@ -763,7 +763,7 @@ void StepRun()
 			////TEMP
 			//static uint32_t t_print = millis() + 100;
 			//if (millis() > t_print) {
-			//	sprintf(str, "Rear=%s Front=%s", digitalRead(pins.StpSwitch_R) ? "HIGH" : "LOW", digitalRead(pins.StpSwitch_F) ? "HIGH" : "LOW");
+			//	sprintf(str, "Rear=%s Front=%s", digitalRead(pins.SWITCH_WHEEL_R) ? "HIGH" : "LOW", digitalRead(pins.SWITCH_WHEEL_F) ? "HIGH" : "LOW");
 			//	SerialUSB.println(str);
 			//	t_print = millis() + 100;
 			//}
@@ -892,30 +892,30 @@ void CheckBattery()
 	byte vcc_bit_out;
 
 	// Make sure relay is open
-	//if (digitalRead(pin.Rel_Vcc) == LOW) {
-	//	digitalWrite(pin.Rel_Vcc, HIGH);
+	//if (digitalRead(pin.REL_VCC) == LOW) {
+	//	digitalWrite(pin.REL_VCC, HIGH);
 	//}
 
-	if (digitalRead(pin.Rel_Vcc) == LOW &&
+	if (digitalRead(pin.REL_VCC) == LOW &&
 		millis() > t_relOpen + dt_relOpen * 2)
 	{
-		digitalWrite(pin.Rel_Vcc, HIGH);
+		digitalWrite(pin.REL_VCC, HIGH);
 		t_relOpen = millis();
 		char str[200];
 		sprintf(str, "\r\nVOLTAGE RELAY OPEN", volt_avg, vcc_bit_out);
 		SerialUSB.print(str);
 	}
-	else if (digitalRead(pin.Rel_Vcc) == HIGH &&
+	else if (digitalRead(pin.REL_VCC) == HIGH &&
 		millis() > t_relOpen + dt_relOpen)
 	{
-		digitalWrite(pin.Rel_Vcc, LOW);
+		digitalWrite(pin.REL_VCC, LOW);
 		char str[200];
 		sprintf(str, "\r\nVOLTAGE RELAY CLOSED", volt_avg, vcc_bit_out);
 		SerialUSB.print(str);
 	}
 
 	// Calculate voltage
-	vcc_bit_in = analogRead(pin.BatVcc);
+	vcc_bit_in = analogRead(pin.BAT_VCC);
 	volt_in = (float)vcc_bit_in * bit2volt;
 
 	// Shift array and compute average
@@ -986,7 +986,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur + t_IR_Del
 			)
 		{
-			digitalWrite(pins.IRdetect_Relay, HIGH);
+			digitalWrite(pins.INTERUPT_IR_DETECT_Relay, HIGH);
 			t_IR_Sent = millis();
 			cnt_IR_Sent++;
 			is_IR_On = true;
@@ -998,7 +998,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur
 			)
 		{
-			digitalWrite(pins.IRdetect_Relay, LOW);
+			digitalWrite(pins.INTERUPT_IR_DETECT_Relay, LOW);
 			is_IR_On = false;
 			SerialUSB.println("IR Off");
 		}
@@ -1045,7 +1045,7 @@ void IR_LatComp()
 		if (is_IR_Rcvd && is_Pls_Rcvd)
 		{
 			// Turn on tracker LED
-			analogWrite(pin.TrackLED, 100);
+			analogWrite(pin.LED_TRACKER, 100);
 			// Compute delay between pulse and IR
 			t_IR_Lat = t_IR_Rcvd - t_Pls_Rcvd;
 			// Print info
@@ -1075,14 +1075,14 @@ void IR_LatComp()
 			)
 		{
 			// Turn off tracker LED
-			analogWrite(pin.TrackLED, 0);
+			analogWrite(pin.LED_TRACKER, 0);
 			is_IR_On = false;
 		}
 	}
 }
 
-void FeedSwitch() {
-	if (digitalRead(pin.FeedSwitch) == LOW)
+void SWITCH_DISH() {
+	if (digitalRead(pin.SWITCH_DISH) == LOW)
 	{
 
 	}
@@ -1091,7 +1091,7 @@ void FeedSwitch() {
 void CheckButtons()
 {
 	// RUN BUTTON 1 OPPERATIONS
-	if (digitalRead(pin.Btn[0]) == LOW)
+	if (digitalRead(pin.BTN[0]) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[0] > millis()) return;
@@ -1106,15 +1106,15 @@ void CheckButtons()
 		// Solenoid Test
 		if (do_SolTest)
 		{
-			if (digitalRead(pin.Rel_Rew) == LOW)
-				digitalWrite(pin.Rel_Rew, HIGH);
-			else digitalWrite(pin.Rel_Rew, LOW);
+			if (digitalRead(pin.REL_FOOD) == LOW)
+				digitalWrite(pin.REL_FOOD, HIGH);
+			else digitalWrite(pin.REL_FOOD, LOW);
 		}
 
 		SerialUSB.println("Button 1");
 	}
 	// RUN BUTTON 2 OPPERATIONS
-	else if (digitalRead(pin.Btn[1]) == LOW)
+	else if (digitalRead(pin.BTN[1]) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[1] > millis()) return;
@@ -1129,15 +1129,15 @@ void CheckButtons()
 		// Solenoid Test
 		if (do_SolTest)
 		{
-			if (digitalRead(pin.Rel_EtOH) == LOW)
-				digitalWrite(pin.Rel_EtOH, HIGH);
-			else digitalWrite(pin.Rel_EtOH, LOW);
+			if (digitalRead(pin.REL_ETOH) == LOW)
+				digitalWrite(pin.REL_ETOH, HIGH);
+			else digitalWrite(pin.REL_ETOH, LOW);
 		}
 
 		SerialUSB.println("Button 2");
 	}
 	// RUN BUTTON 3 OPPERATIONS
-	else if (digitalRead(pin.Btn[2]) == LOW)
+	else if (digitalRead(pin.BTN[2]) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[2] > millis()) return;
@@ -1147,8 +1147,8 @@ void CheckButtons()
 		if (do_IR_ComTest)
 		{
 			static bool is_LCD_On = false;
-			if (is_LCD_On) { analogWrite(pin.Disp_LED, 25); }
-			else { analogWrite(pin.Disp_LED, 0); }
+			if (is_LCD_On) { analogWrite(pin.LCD_LED, 25); }
+			else { analogWrite(pin.LCD_LED, 0); }
 			is_LCD_On = !is_LCD_On;
 		}
 
@@ -1158,7 +1158,7 @@ void CheckButtons()
 	else return;
 }
 
-void InteruptStpSwitch_R()
+void InteruptSWITCH_WHEEL_R()
 {
 	// Bail if blocking
 	if (!v_do_step_interupt_R) {
@@ -1191,7 +1191,7 @@ void InteruptStpSwitch_R()
 	}
 }
 
-void InteruptStpSwitch_F()
+void InteruptSWITCH_WHEEL_F()
 {
 	// Bail if blocking
 	if (!v_do_step_interupt_F) {
@@ -1238,18 +1238,18 @@ void SetupBlink()
 	// Flash sequentially
 	for (int i = 0; i < 8; i++)
 	{
-		analogWrite(pin.Disp_LED, duty[(int)isOn]);
+		analogWrite(pin.LCD_LED, duty[(int)isOn]);
 		delay(del);
-		analogWrite(pin.TrackLED, duty[(int)isOn]);
+		analogWrite(pin.LED_TRACKER, duty[(int)isOn]);
 		delay(del);
-		analogWrite(pin.RewLED_R, duty[(int)isOn]);
+		analogWrite(pin.LED_REW_R, duty[(int)isOn]);
 		delay(del);
 		isOn = !isOn;
 	}
 	// Reset LEDs
-	analogWrite(pin.Disp_LED, 0);
-	analogWrite(pin.TrackLED, trackLEDduty);
-	analogWrite(pin.RewLED_R, rewLEDmin);
+	analogWrite(pin.LCD_LED, 0);
+	analogWrite(pin.LED_TRACKER, trackLEDduty);
+	analogWrite(pin.LED_REW_R, rewLEDmin);
 }
 
 int CheckAD_Status(uint16_t stat_reg, String stat_id)

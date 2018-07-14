@@ -84,52 +84,52 @@ db;
 struct PIN
 {
 	// Relays
-	const int relIR = 51;				// port=PC due=51 sam=12
-	const int relRewTone = 47;			// port=PC due=47 sam=16
-	const int relWhiteNoise = 45;		// port=PC due=45 sam=18
+	const int REL_IR = 51;				// port=PC due=51 sam=12
+	const int REL_TONE = 47;			// port=PC due=47 sam=16
+	const int REL_WHITE = 45;		// port=PC due=45 sam=18
 
 	// TTL
-	const int ttlIR = 50;				// port=PC due=50 sam=13 nlx=1,7
-	const int ttlRewTone = 46;			// port=PC due=46 sam=17 nlx=1,4
-	const int ttlWhiteNoise = 44;		// port=PC due=44 sam=19 nlx=1,5
-	const int ttlRewOn = 34;			// port=PC due=34 sam=2  nlx=1,0
-	const int ttlRewOff = 36;			// port=PC due=36 sam=4  nlx=1,1
+	const int TTL_IR = 50;				// port=PC due=50 sam=13 nlx=1,7
+	const int TTL_TONE = 46;			// port=PC due=46 sam=17 nlx=1,4
+	const int TTL_WHITE = 44;		// port=PC due=44 sam=19 nlx=1,5
+	const int TTL_REW_ON = 34;			// port=PC due=34 sam=2  nlx=1,0
+	const int TTL_REW_OFF = 36;			// port=PC due=36 sam=4  nlx=1,1
 
 	// SAM3X pin
-	const int sam_relIR = 12;			// port=PC due=51 sam=12
-	const int sam_relRewTone = 16;		// port=PC due=47 sam=16
-	const int sam_relWhiteNoise = 18;	// port=PC due=45 sam=18
-	const int sam_ttlIR = 13;			// port=PC due=50 sam=13 nlx=1,7
-	const int sam_ttlRewTone = 17;		// port=PC due=46 sam=17 nlx=1,4
-	const int sam_ttlWhiteNoise = 19;	// port=PC due=44 sam=19 nlx=1,5
-	const int sam_ttlRewOn = 2;			// port=PC due=34 sam=2  nlx=1,0
-	const int sam_ttlRewOff = 4;		// port=PC due=36 sam=4  nlx=1,1
+	const int SAM_REL_IR = 12;			// port=PC due=51 sam=12
+	const int SAM_REL_TONE = 16;		// port=PC due=47 sam=16
+	const int SAM_REL_WHITE = 18;	// port=PC due=45 sam=18
+	const int SAM_TTL_IR = 13;			// port=PC due=50 sam=13 nlx=1,7
+	const int SAM_TTL_TONE = 17;		// port=PC due=46 sam=17 nlx=1,4
+	const int SAM_TTL_WHITE = 19;	// port=PC due=44 sam=19 nlx=1,5
+	const int SAM_TTL_REW_ON = 2;			// port=PC due=34 sam=2  nlx=1,0
+	const int SAM_TTL_REW_OFF = 4;		// port=PC due=36 sam=4  nlx=1,1
 
 	// PID
-	const int ttlPidRun = 26;
-	const int ttlPidStop = 28;
+	const int TTL_PID_RUN = 26;
+	const int TTL_PID_STOP = 28;
 
 	// Bulldozer
-	const int ttlBullRun = 30;
-	const int ttlBullStop = 32;
+	const int TTL_BULL_RUN = 30;
+	const int TTL_BULL_STOP = 32;
 
 	// IR blink switch
 	/*
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int BlinkSwitch_Gnd = 11;
-	const int BlinkSwitch = 12;
+	const int SWITCH_BLINK_GRN = 11;
+	const int SWITCH_BLINK = 12;
 
 	// PT
-	const int ttlNorthOn = A7;
-	const int ttlWestOn = A6;
-	const int ttlSouthOn = A5;
-	const int ttlEastOn = A4;
-	const int ptNorthOn = A3;
-	const int ptWestOn = A2;
-	const int ptSouthOn = A1;
-	const int ptEastOn = A0;
+	const int TTL_NORTH = A7;
+	const int TTL_WEST = A6;
+	const int TTL_SOUTH = A5;
+	const int TTL_EAST = A4;
+	const int PT_NORTH = A3;
+	const int PT_WEST = A2;
+	const int PT_SOUTH = A1;
+	const int PT_EAST = A0;
 }
 // Initialize
 pin;
@@ -433,7 +433,7 @@ bool CheckForStart()
 	}
 
 	// Check if IR should be pulsed 
-	if (digitalRead(pin.BlinkSwitch) == LOW || is_irOn)
+	if (digitalRead(pin.SWITCH_BLINK) == LOW || is_irOn)
 	{
 		// Turn on without triggering ttl
 		PulseIR(dt_irSyncPulse, dt_irSyncPulseOn, 2, false);
@@ -1282,8 +1282,8 @@ void StartRew()
 	t_rewEnd = millis() + rewDur;
 
 	// Signal PID stopped
-	digitalWrite(pin.ttlPidRun, LOW);
-	digitalWrite(pin.ttlPidStop, HIGH);
+	digitalWrite(pin.TTL_PID_RUN, LOW);
+	digitalWrite(pin.TTL_PID_STOP, HIGH);
 	DebugFlow(__FUNCTION__, __LINE__, "PID STOPPED");
 
 	// Set flag
@@ -1323,22 +1323,22 @@ void DebugPinMap()
 	delay(5000);
 	bool p_flow = db.print_flow;
 	db.print_flow = true;
-	digitalWrite(pin.ttlNorthOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "North TTL"); delay(1000); digitalWrite(pin.ttlNorthOn, LOW);
-	digitalWrite(pin.ttlWestOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "West TTL"); delay(1000); digitalWrite(pin.ttlWestOn, LOW);
-	digitalWrite(pin.ttlSouthOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "South TTL"); delay(1000); digitalWrite(pin.ttlSouthOn, LOW);
-	digitalWrite(pin.ttlEastOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "East TTL"); delay(1000); digitalWrite(pin.ttlEastOn, LOW);
-	digitalWrite(pin.ttlIR, HIGH); DebugFlow(__FUNCTION__, __LINE__, "IR Sync TTL"); delay(1000); digitalWrite(pin.ttlIR, LOW);
-	digitalWrite(pin.ttlWhiteNoise, HIGH); DebugFlow(__FUNCTION__, __LINE__, "White Noise TTL"); delay(1000); digitalWrite(pin.ttlWhiteNoise, LOW);
-	digitalWrite(pin.ttlRewTone, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Tone TTL"); delay(1000); digitalWrite(pin.ttlRewTone, LOW);
-	digitalWrite(pin.ttlRewOn, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward On TTL"); delay(1000); digitalWrite(pin.ttlRewOn, LOW);
-	digitalWrite(pin.ttlRewOff, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Off TTL"); delay(1000); digitalWrite(pin.ttlRewOff, LOW);
-	digitalWrite(pin.ttlPidRun, HIGH); DebugFlow(__FUNCTION__, __LINE__, "PID Run TTL"); delay(1000); digitalWrite(pin.ttlPidRun, LOW);
-	digitalWrite(pin.ttlPidStop, HIGH); DebugFlow(__FUNCTION__, __LINE__, "PID Stop TTL"); delay(1000); digitalWrite(pin.ttlPidStop, LOW);
-	digitalWrite(pin.ttlBullRun, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Bull Run TTL"); delay(1000); digitalWrite(pin.ttlBullRun, LOW);
-	digitalWrite(pin.ttlBullStop, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Bull Stop TTL"); delay(1000); digitalWrite(pin.ttlBullStop, LOW);
-	digitalWrite(pin.relIR, HIGH); DebugFlow(__FUNCTION__, __LINE__, "IR Sync Relay"); delay(1000); digitalWrite(pin.relIR, LOW);
-	digitalWrite(pin.relRewTone, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Tone Relay"); delay(1000); digitalWrite(pin.relRewTone, LOW);
-	digitalWrite(pin.relWhiteNoise, HIGH); DebugFlow(__FUNCTION__, __LINE__, "White Noise Relay"); delay(1000); digitalWrite(pin.relWhiteNoise, LOW);
+	digitalWrite(pin.TTL_NORTH, HIGH); DebugFlow(__FUNCTION__, __LINE__, "North TTL"); delay(1000); digitalWrite(pin.TTL_NORTH, LOW);
+	digitalWrite(pin.TTL_WEST, HIGH); DebugFlow(__FUNCTION__, __LINE__, "West TTL"); delay(1000); digitalWrite(pin.TTL_WEST, LOW);
+	digitalWrite(pin.TTL_SOUTH, HIGH); DebugFlow(__FUNCTION__, __LINE__, "South TTL"); delay(1000); digitalWrite(pin.TTL_SOUTH, LOW);
+	digitalWrite(pin.TTL_EAST, HIGH); DebugFlow(__FUNCTION__, __LINE__, "East TTL"); delay(1000); digitalWrite(pin.TTL_EAST, LOW);
+	digitalWrite(pin.TTL_IR, HIGH); DebugFlow(__FUNCTION__, __LINE__, "IR Sync TTL"); delay(1000); digitalWrite(pin.TTL_IR, LOW);
+	digitalWrite(pin.TTL_WHITE, HIGH); DebugFlow(__FUNCTION__, __LINE__, "White Noise TTL"); delay(1000); digitalWrite(pin.TTL_WHITE, LOW);
+	digitalWrite(pin.TTL_TONE, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Tone TTL"); delay(1000); digitalWrite(pin.TTL_TONE, LOW);
+	digitalWrite(pin.TTL_REW_ON, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward On TTL"); delay(1000); digitalWrite(pin.TTL_REW_ON, LOW);
+	digitalWrite(pin.TTL_REW_OFF, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Off TTL"); delay(1000); digitalWrite(pin.TTL_REW_OFF, LOW);
+	digitalWrite(pin.TTL_PID_RUN, HIGH); DebugFlow(__FUNCTION__, __LINE__, "PID Run TTL"); delay(1000); digitalWrite(pin.TTL_PID_RUN, LOW);
+	digitalWrite(pin.TTL_PID_STOP, HIGH); DebugFlow(__FUNCTION__, __LINE__, "PID Stop TTL"); delay(1000); digitalWrite(pin.TTL_PID_STOP, LOW);
+	digitalWrite(pin.TTL_BULL_RUN, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Bull Run TTL"); delay(1000); digitalWrite(pin.TTL_BULL_RUN, LOW);
+	digitalWrite(pin.TTL_BULL_STOP, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Bull Stop TTL"); delay(1000); digitalWrite(pin.TTL_BULL_STOP, LOW);
+	digitalWrite(pin.REL_IR, HIGH); DebugFlow(__FUNCTION__, __LINE__, "IR Sync Relay"); delay(1000); digitalWrite(pin.REL_IR, LOW);
+	digitalWrite(pin.REL_TONE, HIGH); DebugFlow(__FUNCTION__, __LINE__, "Reward Tone Relay"); delay(1000); digitalWrite(pin.REL_TONE, LOW);
+	digitalWrite(pin.REL_WHITE, HIGH); DebugFlow(__FUNCTION__, __LINE__, "White Noise Relay"); delay(1000); digitalWrite(pin.REL_WHITE, LOW);
 	db.print_flow = p_flow;
 	delay(5000);
 }
@@ -1681,13 +1681,13 @@ void HardwareTest(int test_num)
 	{
 		// Write pins high then low
 		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: Reward Tone");
-		digitalWrite(pin.relWhiteNoise, LOW);
-		digitalWrite(pin.ttlWhiteNoise, LOW);
-		digitalWrite(pin.relRewTone, HIGH);
-		digitalWrite(pin.ttlRewTone, HIGH);
+		digitalWrite(pin.REL_WHITE, LOW);
+		digitalWrite(pin.TTL_WHITE, LOW);
+		digitalWrite(pin.REL_TONE, HIGH);
+		digitalWrite(pin.TTL_TONE, HIGH);
 		delay(dt_on);
-		digitalWrite(pin.relRewTone, LOW);
-		digitalWrite(pin.ttlRewTone, LOW);
+		digitalWrite(pin.REL_TONE, LOW);
+		digitalWrite(pin.TTL_TONE, LOW);
 	}
 	break;
 
@@ -1695,11 +1695,11 @@ void HardwareTest(int test_num)
 	case 2:
 	{
 		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: White Noise");
-		digitalWrite(pin.relWhiteNoise, HIGH);
-		digitalWrite(pin.ttlWhiteNoise, HIGH);
+		digitalWrite(pin.REL_WHITE, HIGH);
+		digitalWrite(pin.TTL_WHITE, HIGH);
 		delay(dt_on);
-		digitalWrite(pin.relWhiteNoise, LOW);
-		digitalWrite(pin.ttlWhiteNoise, LOW);
+		digitalWrite(pin.REL_WHITE, LOW);
+		digitalWrite(pin.TTL_WHITE, LOW);
 	}
 	break;
 
@@ -1708,10 +1708,10 @@ void HardwareTest(int test_num)
 	{
 		// Create port word for rew event pins only
 		DebugFlow(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward Event Only");
-		int sam_on_pins[1] = { pin.sam_ttlRewOn };
-		word_rewStr = GetPortWord(0x0, sam_on_pins, 1);
-		int sam_off_pins[1] = { pin.sam_ttlRewOff };
-		word_rewEnd = GetPortWord(0x0, sam_off_pins, 1);
+		int SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
+		word_rewStr = GetPortWord(0x0, SAM_on_pins, 1);
+		int SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
+		word_rewEnd = GetPortWord(0x0, SAM_off_pins, 1);
 
 		// Write word on then off
 		SetPort(word_rewStr, word_rewEnd);
@@ -1725,10 +1725,10 @@ void HardwareTest(int test_num)
 	{
 		// Create port word for white and tone pins
 		DebugFlow(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward With Sound");
-		int sam_on_pins[3] = { pin.sam_relRewTone, pin.sam_ttlRewTone, pin.sam_ttlRewOn };
-		word_rewStr = GetPortWord(0x0, sam_on_pins, 3);
-		int sam_off_pins[3] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise, pin.sam_ttlRewOff };
-		word_rewEnd = GetPortWord(0x0, sam_off_pins, 3);
+		int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
+		word_rewStr = GetPortWord(0x0, SAM_on_pins, 3);
+		int SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
+		word_rewEnd = GetPortWord(0x0, SAM_off_pins, 3);
 
 		// Write word on then off
 		SetPort(word_rewStr, word_rewEnd);
@@ -1742,11 +1742,11 @@ void HardwareTest(int test_num)
 	{
 		// Write pins high then low
 		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: IR");
-		digitalWrite(pin.relIR, HIGH);
-		digitalWrite(pin.ttlIR, HIGH);
+		digitalWrite(pin.REL_IR, HIGH);
+		digitalWrite(pin.TTL_IR, HIGH);
 		delay(dt_on);
-		digitalWrite(pin.relIR, LOW);
-		digitalWrite(pin.ttlIR, LOW);
+		digitalWrite(pin.REL_IR, LOW);
+		digitalWrite(pin.TTL_IR, LOW);
 	}
 	break;
 
@@ -1769,11 +1769,11 @@ void HardwareTest(int test_num)
 	{
 		// Write pins high then low
 		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: PID");
-		digitalWrite(pin.ttlPidRun, HIGH);
-		digitalWrite(pin.ttlPidStop, LOW);
+		digitalWrite(pin.TTL_PID_RUN, HIGH);
+		digitalWrite(pin.TTL_PID_STOP, LOW);
 		delay(dt_on);
-		digitalWrite(pin.ttlPidRun, LOW);
-		digitalWrite(pin.ttlPidStop, HIGH);
+		digitalWrite(pin.TTL_PID_RUN, LOW);
+		digitalWrite(pin.TTL_PID_STOP, HIGH);
 	}
 	break;
 
@@ -1783,11 +1783,11 @@ void HardwareTest(int test_num)
 	{
 		// Write pins high then low
 		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: BULL");
-		digitalWrite(pin.ttlBullRun, HIGH);
-		digitalWrite(pin.ttlBullStop, LOW);
+		digitalWrite(pin.TTL_BULL_RUN, HIGH);
+		digitalWrite(pin.TTL_BULL_STOP, LOW);
 		delay(dt_on);
-		digitalWrite(pin.ttlBullRun, LOW);
-		digitalWrite(pin.ttlBullStop, HIGH);
+		digitalWrite(pin.TTL_BULL_RUN, LOW);
+		digitalWrite(pin.TTL_BULL_STOP, HIGH);
 	}
 	break;
 
@@ -1796,18 +1796,18 @@ void HardwareTest(int test_num)
 	{
 		// Write pins high then low
 		DebugFlow(__FUNCTION__, __LINE__, "TEST DUE PIN: PT");
-		digitalWrite(pin.ttlNorthOn, HIGH);
+		digitalWrite(pin.TTL_NORTH, HIGH);
 		delay(10);
-		digitalWrite(pin.ttlWestOn, HIGH);
+		digitalWrite(pin.TTL_WEST, HIGH);
 		delay(10);
-		digitalWrite(pin.ttlSouthOn, HIGH);
+		digitalWrite(pin.TTL_SOUTH, HIGH);
 		delay(10);
-		digitalWrite(pin.ttlEastOn, HIGH);
+		digitalWrite(pin.TTL_EAST, HIGH);
 		delay(dt_on);
-		digitalWrite(pin.ttlNorthOn, LOW);
-		digitalWrite(pin.ttlWestOn, LOW);
-		digitalWrite(pin.ttlSouthOn, LOW);
-		digitalWrite(pin.ttlEastOn, LOW);
+		digitalWrite(pin.TTL_NORTH, LOW);
+		digitalWrite(pin.TTL_WEST, LOW);
+		digitalWrite(pin.TTL_SOUTH, LOW);
+		digitalWrite(pin.TTL_EAST, LOW);
 	}
 	break;
 
@@ -1854,21 +1854,21 @@ void QuitBeep()
 	{
 		if (tone)
 		{
-			digitalWrite(pin.relRewTone, HIGH);
-			digitalWrite(pin.relWhiteNoise, LOW);
+			digitalWrite(pin.REL_TONE, HIGH);
+			digitalWrite(pin.REL_WHITE, LOW);
 			delay(100);
 		}
 		else
 		{
-			digitalWrite(pin.relWhiteNoise, HIGH);
-			digitalWrite(pin.relRewTone, LOW);
+			digitalWrite(pin.REL_WHITE, HIGH);
+			digitalWrite(pin.REL_TONE, LOW);
 			delay(50);
 			cnt_beep++;
 		}
 		tone = !tone;
 	}
-	digitalWrite(pin.relWhiteNoise, HIGH);
-	digitalWrite(pin.relRewTone, LOW);
+	digitalWrite(pin.REL_WHITE, HIGH);
+	digitalWrite(pin.REL_TONE, LOW);
 }
 
 // PULSE IR: force_state=[0,1,2]
@@ -2002,7 +2002,7 @@ void ResetTTL()
 		// Set back to LOW
 		if (millis() - v_t_outLastNorth > dt_ttlPulse) {
 
-			digitalWrite(pin.ttlNorthOn, LOW);
+			digitalWrite(pin.TTL_NORTH, LOW);
 			v_isOnNorth = false;
 			// Print
 			if (db.print_flow) {
@@ -2023,7 +2023,7 @@ void ResetTTL()
 		// Set back to LOW
 		if (millis() - v_t_outLastWest > dt_ttlPulse) {
 
-			digitalWrite(pin.ttlWestOn, LOW);
+			digitalWrite(pin.TTL_WEST, LOW);
 			v_isOnWest = false;
 
 			// Print
@@ -2045,7 +2045,7 @@ void ResetTTL()
 		// Set back to LOW
 		if (millis() - v_t_outLastSouth > dt_ttlPulse) {
 
-			digitalWrite(pin.ttlSouthOn, LOW);
+			digitalWrite(pin.TTL_SOUTH, LOW);
 			v_isOnSouth = false;
 
 			// Print
@@ -2067,7 +2067,7 @@ void ResetTTL()
 		// Set back to LOW
 		if (millis() - v_t_outLastEast > dt_ttlPulse) {
 
-			digitalWrite(pin.ttlEastOn, LOW);
+			digitalWrite(pin.TTL_EAST, LOW);
 			v_isOnEast = false;
 
 			// Print
@@ -2092,7 +2092,7 @@ void Interrupt_North()
 	{
 		if (millis() - v_t_inLastNorth > t_debounce) {
 
-			digitalWrite(pin.ttlNorthOn, HIGH);
+			digitalWrite(pin.TTL_NORTH, HIGH);
 			v_t_outLastNorth = millis();
 			v_doPrintNorth = true;
 			v_isOnNorth = true;
@@ -2108,7 +2108,7 @@ void Interrupt_West()
 	if (v_doPTInterupt)
 	{
 		if (millis() - v_t_inLastWest > t_debounce) {
-			digitalWrite(pin.ttlWestOn, HIGH);
+			digitalWrite(pin.TTL_WEST, HIGH);
 			v_t_outLastWest = millis();
 			v_doPrintWest = true;
 			v_isOnWest = true;
@@ -2125,7 +2125,7 @@ void Interrupt_South()
 	{
 		if (millis() - v_t_inLastSouth > t_debounce) {
 
-			digitalWrite(pin.ttlSouthOn, HIGH);
+			digitalWrite(pin.TTL_SOUTH, HIGH);
 			v_t_outLastSouth = millis();
 			v_doPrintSouth = true;
 			v_isOnSouth = true;
@@ -2142,7 +2142,7 @@ void Interrupt_East()
 	{
 		if (millis() - v_t_inLastEast > t_debounce) {
 
-			digitalWrite(pin.ttlEastOn, HIGH);
+			digitalWrite(pin.TTL_EAST, HIGH);
 			v_t_outLastEast = millis();
 			v_doPrintEast = true;
 			v_isOnEast = true;
@@ -2165,49 +2165,49 @@ void setup()
 	// SETUP PINS
 
 	// Set PT pin direction
-	pinMode(pin.ptNorthOn, INPUT);
-	pinMode(pin.ptWestOn, INPUT);
-	pinMode(pin.ptSouthOn, INPUT);
-	pinMode(pin.ptEastOn, INPUT);
-	pinMode(pin.ttlNorthOn, OUTPUT);
-	pinMode(pin.ttlWestOn, OUTPUT);
-	pinMode(pin.ttlSouthOn, OUTPUT);
-	pinMode(pin.ttlEastOn, OUTPUT);
+	pinMode(pin.PT_NORTH, INPUT);
+	pinMode(pin.PT_WEST, INPUT);
+	pinMode(pin.PT_SOUTH, INPUT);
+	pinMode(pin.PT_EAST, INPUT);
+	pinMode(pin.TTL_NORTH, OUTPUT);
+	pinMode(pin.TTL_WEST, OUTPUT);
+	pinMode(pin.TTL_SOUTH, OUTPUT);
+	pinMode(pin.TTL_EAST, OUTPUT);
 
 	// Set PT pins low
-	digitalWrite(pin.ttlNorthOn, LOW);
-	digitalWrite(pin.ttlWestOn, LOW);
-	digitalWrite(pin.ttlSouthOn, LOW);
-	digitalWrite(pin.ttlEastOn, LOW);
+	digitalWrite(pin.TTL_NORTH, LOW);
+	digitalWrite(pin.TTL_WEST, LOW);
+	digitalWrite(pin.TTL_SOUTH, LOW);
+	digitalWrite(pin.TTL_EAST, LOW);
 
 	// Set relay/ttl pin direction
-	pinMode(pin.relIR, OUTPUT);
-	pinMode(pin.relWhiteNoise, OUTPUT);
-	pinMode(pin.relRewTone, OUTPUT);
-	pinMode(pin.ttlIR, OUTPUT);
-	pinMode(pin.ttlRewTone, OUTPUT);
-	pinMode(pin.ttlWhiteNoise, OUTPUT);
+	pinMode(pin.REL_IR, OUTPUT);
+	pinMode(pin.REL_WHITE, OUTPUT);
+	pinMode(pin.REL_TONE, OUTPUT);
+	pinMode(pin.TTL_IR, OUTPUT);
+	pinMode(pin.TTL_TONE, OUTPUT);
+	pinMode(pin.TTL_WHITE, OUTPUT);
 
 	// Set relay/ttl pins low
-	digitalWrite(pin.relIR, LOW);
-	digitalWrite(pin.relRewTone, LOW);
-	digitalWrite(pin.relWhiteNoise, LOW);
-	digitalWrite(pin.ttlIR, LOW);
-	digitalWrite(pin.ttlRewTone, LOW);
-	digitalWrite(pin.ttlWhiteNoise, LOW);
+	digitalWrite(pin.REL_IR, LOW);
+	digitalWrite(pin.REL_TONE, LOW);
+	digitalWrite(pin.REL_WHITE, LOW);
+	digitalWrite(pin.TTL_IR, LOW);
+	digitalWrite(pin.TTL_TONE, LOW);
+	digitalWrite(pin.TTL_WHITE, LOW);
 
 	// Set other ttl pins
-	pinMode(pin.ttlRewOn, OUTPUT);
-	pinMode(pin.ttlRewOff, OUTPUT);
-	pinMode(pin.ttlBullRun, OUTPUT);
-	pinMode(pin.ttlBullStop, OUTPUT);
-	pinMode(pin.ttlPidRun, OUTPUT);
-	pinMode(pin.ttlPidStop, OUTPUT);
+	pinMode(pin.TTL_REW_ON, OUTPUT);
+	pinMode(pin.TTL_REW_OFF, OUTPUT);
+	pinMode(pin.TTL_BULL_RUN, OUTPUT);
+	pinMode(pin.TTL_BULL_STOP, OUTPUT);
+	pinMode(pin.TTL_PID_RUN, OUTPUT);
+	pinMode(pin.TTL_PID_STOP, OUTPUT);
 
 	// Set ir blink switch
-	pinMode(pin.BlinkSwitch_Gnd, OUTPUT);
-	digitalWrite(pin.BlinkSwitch_Gnd, LOW);
-	pinMode(pin.BlinkSwitch, INPUT_PULLUP);
+	pinMode(pin.SWITCH_BLINK_GRN, OUTPUT);
+	digitalWrite(pin.SWITCH_BLINK_GRN, LOW);
+	pinMode(pin.SWITCH_BLINK, INPUT_PULLUP);
 
 	// SET UP SERIAL STUFF
 
@@ -2238,21 +2238,21 @@ void setup()
 	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output port
 
 	// Get ir words
-	int sam_ir_all_pins[2] = { pin.sam_ttlIR, pin.sam_relIR };
-	word_irAll = GetPortWord(0x0, sam_ir_all_pins, 2);
-	int sam_ir_rel_pins[1] = { pin.sam_relIR };
-	word_irRel = GetPortWord(0x0, sam_ir_rel_pins, 1);
+	int SAM_ir_all_pins[2] = { pin.SAM_TTL_IR, pin.SAM_REL_IR };
+	word_irAll = GetPortWord(0x0, SAM_ir_all_pins, 2);
+	int SAM_ir_rel_pins[1] = { pin.SAM_REL_IR };
+	word_irRel = GetPortWord(0x0, SAM_ir_rel_pins, 1);
 
 	// SETUP INTERUPTS
 
 	// North
-	attachInterrupt(digitalPinToInterrupt(pin.ptNorthOn), Interrupt_North, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.PT_NORTH), Interrupt_North, RISING);
 	// West
-	attachInterrupt(digitalPinToInterrupt(pin.ptWestOn), Interrupt_West, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.PT_WEST), Interrupt_West, RISING);
 	// South
-	attachInterrupt(digitalPinToInterrupt(pin.ptSouthOn), Interrupt_South, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.PT_SOUTH), Interrupt_South, RISING);
 	// East
-	attachInterrupt(digitalPinToInterrupt(pin.ptEastOn), Interrupt_East, RISING);
+	attachInterrupt(digitalPinToInterrupt(pin.PT_EAST), Interrupt_East, RISING);
 
 	// PRINT PIN MAPPING
 	/*
@@ -2299,7 +2299,7 @@ void setup()
 	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Setup");
 
 	// SET WHITE NOISE RELAY HIGH
-	digitalWrite(pin.relWhiteNoise, HIGH);
+	digitalWrite(pin.REL_WHITE, HIGH);
 
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);
@@ -2498,10 +2498,10 @@ void loop()
 			if (fc.doWhiteNoise && fc.doRewTone) {
 
 				// Create word
-				int sam_on_pins[3] = { pin.sam_relRewTone, pin.sam_ttlRewTone, pin.sam_ttlRewOn };
-				word_rewStr = GetPortWord(0x0, sam_on_pins, 3);
-				int sam_off_pins[3] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise, pin.sam_ttlRewOff };
-				word_rewEnd = GetPortWord(0x0, sam_off_pins, 3);
+				int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
+				word_rewStr = GetPortWord(0x0, SAM_on_pins, 3);
+				int SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
+				word_rewEnd = GetPortWord(0x0, SAM_off_pins, 3);
 
 			}
 
@@ -2509,21 +2509,21 @@ void loop()
 			else {
 
 				// Create word
-				int sam_on_pins[1] = { pin.sam_ttlRewOn };
-				word_rewStr = GetPortWord(0x0, sam_on_pins, 1);
-				int sam_off_pins[1] = { pin.sam_ttlRewOff };
-				word_rewEnd = GetPortWord(0x0, sam_off_pins, 1);
+				int SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
+				word_rewStr = GetPortWord(0x0, SAM_on_pins, 1);
+				int SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
+				word_rewEnd = GetPortWord(0x0, SAM_off_pins, 1);
 			}
 
 			// Turn on white noise
 			if (fc.doWhiteNoise) {
 
 				// Set relay back to low first
-				digitalWrite(pin.relWhiteNoise, LOW);
+				digitalWrite(pin.REL_WHITE, LOW);
 
 				// Set port 
-				int sam_white_pins[2] = { pin.sam_relWhiteNoise, pin.sam_ttlWhiteNoise };
-				uint32_t word_white = GetPortWord(0x0, sam_white_pins, 2);
+				int SAM_white_pins[2] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE };
+				uint32_t word_white = GetPortWord(0x0, SAM_white_pins, 2);
 				SetPort(word_white, 0x0);
 			}
 
@@ -2534,15 +2534,15 @@ void loop()
 			// Signal PID stopped
 			if (r2a.dat[0] == 0)
 			{
-				digitalWrite(pin.ttlPidStop, HIGH);
-				digitalWrite(pin.ttlPidRun, LOW);
+				digitalWrite(pin.TTL_PID_STOP, HIGH);
+				digitalWrite(pin.TTL_PID_RUN, LOW);
 				DebugFlow(__FUNCTION__, __LINE__, "PID Stopped");
 			}
 			// Signal PID running
 			else if (r2a.dat[0] == 1)
 			{
-				digitalWrite(pin.ttlPidRun, HIGH);
-				digitalWrite(pin.ttlPidStop, LOW);
+				digitalWrite(pin.TTL_PID_RUN, HIGH);
+				digitalWrite(pin.TTL_PID_STOP, LOW);
 				DebugFlow(__FUNCTION__, __LINE__, "PID Started");
 			}
 		}
@@ -2552,15 +2552,15 @@ void loop()
 			// Signal Bull stopped
 			if (r2a.dat[0] == 0)
 			{
-				digitalWrite(pin.ttlBullStop, HIGH);
-				digitalWrite(pin.ttlBullRun, LOW);
+				digitalWrite(pin.TTL_BULL_STOP, HIGH);
+				digitalWrite(pin.TTL_BULL_RUN, LOW);
 				DebugFlow(__FUNCTION__, __LINE__, "Bull Stopped");
 			}
 			// Signal Bull running
 			else if (r2a.dat[0] == 1)
 			{
-				digitalWrite(pin.ttlBullRun, HIGH);
-				digitalWrite(pin.ttlBullStop, LOW);
+				digitalWrite(pin.TTL_BULL_RUN, HIGH);
+				digitalWrite(pin.TTL_BULL_STOP, LOW);
 				DebugFlow(__FUNCTION__, __LINE__, "Bull Started");
 			}
 		}

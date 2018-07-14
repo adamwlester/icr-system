@@ -564,7 +564,7 @@ AutoDriver_Due AD_F(pin.AD_CSP_F, pin.AD_RST);
 PIXY PixyCom;
 
 // Initialize LCD5110 class instance
-LCD5110 LCD(pin.Disp_SCK, pin.Disp_MOSI, pin.Disp_DC, pin.Disp_RST, pin.Disp_CS);
+LCD5110 LCD(pin.LCD_SCK, pin.LCD_MOSI, pin.LCD_DC, pin.LCD_RST, pin.LCD_CS);
 
 // Initialize array of POSTRACK class instances
 POSTRACK Pos[3] = {
@@ -2487,11 +2487,11 @@ void REWARD::StartRew()
 	}
 
 	// Turn on reward LED
-	analogWrite(pin.RewLED_R, rewLEDduty[1]);
-	analogWrite(pin.RewLED_C, rewLEDduty[1]);
+	analogWrite(pin.LED_REW_R, rewLEDduty[1]);
+	analogWrite(pin.LED_REW_C, rewLEDduty[1]);
 
 	// Open solenoid
-	digitalWrite(pin.Rel_Rew, HIGH);
+	digitalWrite(pin.REL_FOOD, HIGH);
 
 	// Compute reward end time
 	t_rewStr = millis();
@@ -2552,8 +2552,8 @@ bool REWARD::EndRew()
 	}
 
 	// Close solenoid
-	if (digitalRead(pin.Rel_Rew) == HIGH) {
-		digitalWrite(pin.Rel_Rew, LOW);
+	if (digitalRead(pin.REL_FOOD) == HIGH) {
+		digitalWrite(pin.REL_FOOD, LOW);
 
 		// Store actual time
 		t_closeSol = millis();
@@ -2570,8 +2570,8 @@ bool REWARD::EndRew()
 	}
 
 	// Turn off reward LED
-	analogWrite(pin.RewLED_R, rewLEDduty[0]);
-	analogWrite(pin.RewLED_C, rewLEDduty[0]);
+	analogWrite(pin.LED_REW_R, rewLEDduty[0]);
+	analogWrite(pin.LED_REW_C, rewLEDduty[0]);
 
 	// Store actual time
 	t_rewEnd = millis();
@@ -3029,7 +3029,7 @@ void REWARD::CheckFeedArm()
 
 	// Release switch when switch triggered on retract
 	if (v_stepDir == 'r' &&
-		digitalRead(pin.FeedSwitch) == LOW) {
+		digitalRead(pin.SWITCH_DISH) == LOW) {
 
 		// Block handler
 		v_doStepTimer = false;
@@ -4487,13 +4487,13 @@ bool CheckForStart()
 	// Pulse tracker led
 	if (!is_on && millis() >= t_pulse_last + dt_blink_on + dt_blink_off) {
 
-		analogWrite(pin.TrackLED, trackLEDduty[1]);
+		analogWrite(pin.LED_TRACKER, trackLEDduty[1]);
 		t_pulse_last = millis();
 		is_on = true;
 	}
 	else if (is_on && millis() >= t_pulse_last + dt_blink_on) {
 
-		analogWrite(pin.TrackLED, 0);
+		analogWrite(pin.LED_TRACKER, 0);
 		is_on = false;
 	}
 
@@ -4538,10 +4538,10 @@ bool CheckForStart()
 	ClearLCD();
 
 	// Reset solonoids
-	if (digitalRead(pin.Rel_EtOH) == HIGH) {
+	if (digitalRead(pin.REL_ETOH) == HIGH) {
 		OpenCloseEtOHSolenoid();
 	}
-	if (digitalRead(pin.Rel_Rew) == HIGH) {
+	if (digitalRead(pin.REL_FOOD) == HIGH) {
 		OpenCloseRewSolenoid();
 	}
 
@@ -5589,8 +5589,8 @@ void IRprox_Halt()
 
 	// Bail if MoveTo active and IRs no longer active
 	if (strcmp(fc.motorControl, "MoveTo") == 0 &&
-		digitalRead(pin.IRprox_Rt) == HIGH &&
-		digitalRead(pin.IRprox_Lft) == HIGH) {
+		digitalRead(pin.INTERUPT_IRPROX_R) == HIGH &&
+		digitalRead(pin.INTERUPT_IRPROX_L) == HIGH) {
 
 		// Log/print warning
 		DebugWarning(__FUNCTION__, __LINE__, "Ignoring IR Interupt Because MoveTo Active");
@@ -6040,7 +6040,7 @@ void CheckSampDT()
 
 		// Log/print if > 1 sec sinse last swap
 		if (millis() - t_swap_vt > 1000) {
-			sprintf(str, "Swapped VT with Pixy");
+			sprintf(str, "Swapped VT for Pixy");
 		}
 
 		// Swap
@@ -6056,7 +6056,7 @@ void CheckSampDT()
 
 		// Log/print if > 1 sec sinse last swap
 		if (millis() - t_swap_pixy > 1000) {
-			sprintf(str, "Swapped Pixy with VT");
+			sprintf(str, "Swapped Pixy for VT");
 		}
 
 		// Swap
@@ -6217,7 +6217,7 @@ bool GetButtonInput()
 	for (int i = 0; i < 3; i++) {
 
 		do_check = do_check ||
-			digitalRead(pin.Btn[i]) == LOW ||
+			digitalRead(pin.BTN[i]) == LOW ||
 			is_pressed[i] ||
 			is_running[i];
 	}
@@ -6234,7 +6234,7 @@ bool GetButtonInput()
 
 		// Detect press
 		if (
-			digitalRead(pin.Btn[i]) == LOW &&
+			digitalRead(pin.BTN[i]) == LOW &&
 			!is_pressed[i])
 		{
 			// Exit if < debounce time has not passed
@@ -6267,7 +6267,7 @@ bool GetButtonInput()
 
 			// Check for short hold
 			bool is_short_hold =
-				digitalRead(pin.Btn[i]) == HIGH &&
+				digitalRead(pin.BTN[i]) == HIGH &&
 				millis() < t_long_hold[i];
 
 			// Check for long hold
@@ -6291,7 +6291,7 @@ bool GetButtonInput()
 				}
 
 				// Make tracker LED brighter
-				analogWrite(pin.TrackLED, 255);
+				analogWrite(pin.LED_TRACKER, 255);
 
 				// Set running flag
 				is_running[i] = true;
@@ -6302,7 +6302,7 @@ bool GetButtonInput()
 		}
 
 		// Check if needs to be reset
-		else if (digitalRead(pin.Btn[i]) == HIGH &&
+		else if (digitalRead(pin.BTN[i]) == HIGH &&
 			is_pressed[i]) {
 
 			if (is_running[i] ||
@@ -6314,7 +6314,7 @@ bool GetButtonInput()
 
 				// Reset flags etc
 				t_debounce[i] = millis() + dt_debounce[i];
-				analogWrite(pin.TrackLED, trackLEDduty[1]);
+				analogWrite(pin.LED_TRACKER, trackLEDduty[1]);
 				is_running[i] = false;
 				t_hold_min[i] = 0;
 				t_long_hold[i] = 0;
@@ -6391,7 +6391,7 @@ void OpenCloseRewSolenoid()
 #endif
 
 	// Local vars
-	byte is_sol_open = digitalRead(pin.Rel_Rew);
+	byte is_sol_open = digitalRead(pin.REL_FOOD);
 	static char lcd_str1[100] = { 0 }; lcd_str1[0] = '\0';
 	static char lcd_str2[100] = { 0 }; lcd_str2[0] = '\0';
 
@@ -6407,11 +6407,11 @@ void OpenCloseRewSolenoid()
 	}
 
 	// Open/close solenoid
-	digitalWrite(pin.Rel_Rew, is_sol_open);
+	digitalWrite(pin.REL_FOOD, is_sol_open);
 
 	// Print etoh and rew sol state to LCD
-	sprintf(lcd_str1, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
-	sprintf(lcd_str2, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
+	sprintf(lcd_str1, "Food   %s", digitalRead(pin.REL_FOOD) == HIGH ? "OPEN  " : "CLOSED");
+	sprintf(lcd_str2, "EtOH   %s", digitalRead(pin.REL_ETOH) == HIGH ? "OPEN  " : "CLOSED");
 	PrintLCD(true, lcd_str1, lcd_str2, 's');
 
 }
@@ -6424,7 +6424,7 @@ void OpenCloseEtOHSolenoid()
 #endif
 
 	// Local vars
-	byte is_sol_open = digitalRead(pin.Rel_EtOH);
+	byte is_sol_open = digitalRead(pin.REL_ETOH);
 	static char lcd_str1[100] = { 0 }; lcd_str1[0] = '\0';
 	static char lcd_str2[100] = { 0 }; lcd_str2[0] = '\0';
 
@@ -6432,7 +6432,7 @@ void OpenCloseEtOHSolenoid()
 	is_sol_open = !is_sol_open;
 
 	// Open/close solenoid
-	digitalWrite(pin.Rel_EtOH, is_sol_open);
+	digitalWrite(pin.REL_ETOH, is_sol_open);
 
 	// Store time and make sure periodic drip does not run
 	if (is_sol_open) {
@@ -6445,8 +6445,8 @@ void OpenCloseEtOHSolenoid()
 	}
 
 	// Print etoh and rew sol state to LCD
-	sprintf(lcd_str1, "Food   %s", digitalRead(pin.Rel_Rew) == HIGH ? "OPEN  " : "CLOSED");
-	sprintf(lcd_str2, "EtOH   %s", digitalRead(pin.Rel_EtOH) == HIGH ? "OPEN  " : "CLOSED");
+	sprintf(lcd_str1, "Food   %s", digitalRead(pin.REL_FOOD) == HIGH ? "OPEN  " : "CLOSED");
+	sprintf(lcd_str2, "EtOH   %s", digitalRead(pin.REL_ETOH) == HIGH ? "OPEN  " : "CLOSED");
 	PrintLCD(true, lcd_str1, lcd_str2, 's');
 
 }
@@ -6457,7 +6457,7 @@ void CheckEtOH()
 
 	// Local vars
 	static char str[200] = { 0 }; str[0] = '\0';
-	byte is_sol_open = digitalRead(pin.Rel_EtOH);
+	byte is_sol_open = digitalRead(pin.REL_ETOH);
 	int dt_open = 0;
 	int dt_close = 0;
 	bool do_open = false;
@@ -6500,7 +6500,7 @@ void CheckEtOH()
 		GetAD_Status(adF_stat, "MOT_STATUS") == 0) {
 
 		// Open solenoid
-		digitalWrite(pin.Rel_EtOH, HIGH);
+		digitalWrite(pin.REL_ETOH, HIGH);
 
 		// Store current time and pos
 		t_solOpen = millis();
@@ -6517,7 +6517,7 @@ void CheckEtOH()
 	else if (do_close) {
 
 		// Close solenoid
-		digitalWrite(pin.Rel_EtOH, LOW);
+		digitalWrite(pin.REL_ETOH, LOW);
 
 		// Store current time 
 		t_solClose = millis();
@@ -6571,7 +6571,7 @@ float CheckBattery(bool force_check)
 			cnt_samples = 0;
 
 			// Turn off switch and bail
-			digitalWrite(pin.Rel_Vcc, LOW);
+			digitalWrite(pin.REL_VCC, LOW);
 			return vccAvg;
 		}
 	}
@@ -6580,16 +6580,16 @@ float CheckBattery(bool force_check)
 	if (runSpeedNow > 0) {
 
 		// Turn off switch and bail
-		digitalWrite(pin.Rel_Vcc, LOW);
+		digitalWrite(pin.REL_VCC, LOW);
 		return vccAvg;
 
 	}
 
 	// Turn on relay and skip this run to alow switch to open
-	if (digitalRead(pin.Rel_Vcc) == LOW) {
+	if (digitalRead(pin.REL_VCC) == LOW) {
 
 		// Turn on switch 
-		digitalWrite(pin.Rel_Vcc, HIGH);
+		digitalWrite(pin.REL_VCC, HIGH);
 
 		// Allow time for switch to activate
 		t_relay_ready = millis() + 10;
@@ -6609,7 +6609,7 @@ float CheckBattery(bool force_check)
 #endif
 
 	// Calculate voltage
-	vcc_bit_in = analogRead(pin.BatVcc);
+	vcc_bit_in = analogRead(pin.BAT_VCC);
 	vccNow = (float)vcc_bit_in * bit2volt;
 	vcc_sum = 0;
 
@@ -6711,7 +6711,7 @@ void ChangeLCDlight(uint32_t duty)
 	DebugFlow(__FUNCTION__, __LINE__, str);
 
 	// Set LCD duty
-	analogWrite(pin.Disp_LED, duty);
+	analogWrite(pin.LCD_LED, duty);
 }
 
 // QUIT AND RESTART ARDUINO
@@ -6876,15 +6876,15 @@ void HardwareTest()
 				RunMotor(runDirNow == 'f' ? 'r' : 'f', run_speed[cnt_stress], "Override");
 
 				// Open Solenoids
-				digitalWrite(pin.Rel_Rew, HIGH);
-				digitalWrite(pin.Rel_EtOH, HIGH);
+				digitalWrite(pin.REL_FOOD, HIGH);
+				digitalWrite(pin.REL_ETOH, HIGH);
 
 				// Change LEDS
-				analogWrite(pin.Disp_LED, is_stressin ? 255 : 0);
-				analogWrite(pin.TrackLED, 255);
+				analogWrite(pin.LCD_LED, is_stressin ? 255 : 0);
+				analogWrite(pin.LED_TRACKER, 255);
 				if (!is_pixy_led_on) {
-					analogWrite(pin.RewLED_C, is_stressin ? 255 : 0);
-					analogWrite(pin.RewLED_R, is_stressin ? 255 : 0);
+					analogWrite(pin.LED_REW_C, is_stressin ? 255 : 0);
+					analogWrite(pin.LED_REW_R, is_stressin ? 255 : 0);
 				}
 
 				// Print to LCD
@@ -6929,12 +6929,12 @@ void HardwareTest()
 				HardStop("HardwareTest", true);
 
 				// Turn all off
-				analogWrite(pin.Disp_LED, 0);
-				analogWrite(pin.RewLED_C, 0);
-				analogWrite(pin.RewLED_R, 0);
-				analogWrite(pin.TrackLED, 0);
-				digitalWrite(pin.Rel_Rew, LOW);
-				digitalWrite(pin.Rel_EtOH, LOW);
+				analogWrite(pin.LCD_LED, 0);
+				analogWrite(pin.LED_REW_C, 0);
+				analogWrite(pin.LED_REW_R, 0);
+				analogWrite(pin.LED_TRACKER, 0);
+				digitalWrite(pin.REL_FOOD, LOW);
+				digitalWrite(pin.REL_ETOH, LOW);
 
 				// Get averages
 				for (int i = 0; i < n_stress_samp; i++) {
@@ -6977,13 +6977,13 @@ void HardwareTest()
 			if (millis() > t_stress_run + dt_close_sol) {
 
 				// Close reward sol
-				if (digitalRead(pin.Rel_Rew) == HIGH) {
-					digitalWrite(pin.Rel_Rew, LOW);
+				if (digitalRead(pin.REL_FOOD) == HIGH) {
+					digitalWrite(pin.REL_FOOD, LOW);
 				}
 
 				// Close reward sol
-				if (digitalRead(pin.Rel_EtOH) == HIGH) {
-					digitalWrite(pin.Rel_EtOH, LOW);
+				if (digitalRead(pin.REL_ETOH) == HIGH) {
+					digitalWrite(pin.REL_ETOH, LOW);
 				}
 			}
 
@@ -7009,8 +7009,8 @@ void HardwareTest()
 				is_pixy_led_on = !is_pixy_led_on;
 
 				// Turn on/off LED
-				analogWrite(pin.RewLED_R, is_pixy_led_on ? 15 : 0);
-				analogWrite(pin.RewLED_C, 0);
+				analogWrite(pin.LED_REW_R, is_pixy_led_on ? 15 : 0);
+				analogWrite(pin.LED_REW_C, 0);
 				t_pixy_check = millis();
 
 				// Check pixy and store pos
@@ -7202,7 +7202,7 @@ void CheckLoop()
 	// Flicker led
 	if (!StatusBlink()) {
 		if (millis() > t_led) {
-			analogWrite(pin.TrackLED, is_led_high ? trackLEDduty[0] : trackLEDduty[1]);
+			analogWrite(pin.LED_TRACKER, is_led_high ? trackLEDduty[0] : trackLEDduty[1]);
 			is_led_high = !is_led_high;
 			t_led = millis() + 100;
 		}
@@ -7299,7 +7299,7 @@ void DebugTeensy(const char *fun, int line, int mem, char id, char msg[])
 	uint16_t b_ind = 0;
 	uint32_t t_str = micros();
 	uint32_t t_m = 0;
-	uint16_t line_num = line-22;
+	uint16_t line_num = line - 22;
 	char fun_abr[3] = { 0 };
 	byte mem_gb = 0;
 	static byte msg_bytes = sizeof(Utnsy.b);
@@ -7474,12 +7474,12 @@ void GetTeensyDebug()
 	DoAll("PrintDebug");
 
 	// Set send pin high for 150 ms
-	digitalWrite(pin.Teensy_SendLogs, HIGH);
+	digitalWrite(pin.TEENSY_SEND, HIGH);
 	delay(10);
 	// Send start string
 	r2t.port.write("<<<");
 	delay(140);
-	digitalWrite(pin.Teensy_SendLogs, LOW);
+	digitalWrite(pin.TEENSY_SEND, LOW);
 
 	// Start getting logs
 	while (strcmp(c_arr, ">>>") != 0 &&
@@ -7533,7 +7533,7 @@ void GetTeensyDebug()
 		}
 
 		// Check for end signal
-		else if (digitalRead(pin.Teensy_Resetting) == HIGH) {
+		else if (digitalRead(pin.TEENSY_RESET) == HIGH) {
 
 			// Set flag
 			is_com_fail = true;
@@ -7599,11 +7599,11 @@ void GetTeensyDebug()
 
 		// Check for pin high
 		if (!is_reset[0]) {
-			if (digitalRead(pin.Teensy_Resetting) == HIGH) {
+			if (digitalRead(pin.TEENSY_RESET) == HIGH) {
 				is_reset[0] = true;
 			}
 		}
-		else if (digitalRead(pin.Teensy_Resetting) == LOW) {
+		else if (digitalRead(pin.TEENSY_RESET) == LOW) {
 			is_reset[1] = true;
 			break;
 		}
@@ -8452,8 +8452,8 @@ void RunErrorHold(char msg[], uint32_t dt_shutdown)
 	while (true)
 	{
 		// Flicker lights
-		analogWrite(pin.RewLED_R, duty[(int)do_led_on]);
-		analogWrite(pin.TrackLED, duty[(int)do_led_on]);
+		analogWrite(pin.LED_REW_R, duty[(int)do_led_on]);
+		analogWrite(pin.LED_TRACKER, duty[(int)do_led_on]);
 		delay(dt);
 		do_led_on = !do_led_on;
 
@@ -8544,13 +8544,13 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		if (millis() > t_blink_last + dt_cycle) {
 
 			// Set LEDs
-			analogWrite(pin.TrackLED, duty[(int)do_led_on]);
+			analogWrite(pin.LED_TRACKER, duty[(int)do_led_on]);
 			if (!is_rat_blink) {
-				analogWrite(pin.Disp_LED, duty[(int)do_led_on]);
-				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
+				analogWrite(pin.LCD_LED, duty[(int)do_led_on]);
+				analogWrite(pin.LED_REW_C, duty[(int)do_led_on]);
 			}
 			else {
-				analogWrite(pin.RewLED_C, duty[(int)do_led_on]);
+				analogWrite(pin.LED_REW_C, duty[(int)do_led_on]);
 			}
 
 			// Update stuff
@@ -8564,9 +8564,9 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 	// Reset LEDs
 	else {
 		ChangeLCDlight(0);
-		analogWrite(pin.RewLED_C, rewLEDduty[0]);
-		analogWrite(pin.RewLED_R, rewLEDduty[0]);
-		analogWrite(pin.TrackLED, trackLEDduty[1]);
+		analogWrite(pin.LED_REW_C, rewLEDduty[0]);
+		analogWrite(pin.LED_REW_R, rewLEDduty[0]);
+		analogWrite(pin.LED_TRACKER, trackLEDduty[1]);
 		do_led_on = true;
 		cnt_blink = 0;
 		do_blink = false;
@@ -8684,7 +8684,7 @@ void Interupt_TimerHandler()
 
 	// Release switch triggered
 	else if (v_stepDir == 'r' &&
-		digitalRead(pin.FeedSwitch) == LOW) {
+		digitalRead(pin.SWITCH_DISH) == LOW) {
 
 		// Set flag
 		is_done = true;
@@ -8767,7 +8767,7 @@ void Interupt_IR_Detect()
 	if (db.do_v_irSyncTest) {
 
 		// Set tracker LED high
-		digitalWrite(pin.Test_Signal, HIGH);
+		digitalWrite(pin.TEST_SIGNAL, HIGH);
 	}
 
 	// Store time
@@ -8857,7 +8857,7 @@ void setup() {
 
 	// Wait for button release
 	while (!DO_DEBUG && !DO_AUTO_POWER &&
-		digitalRead(pin.PWR_Swtch) == LOW) {
+		digitalRead(pin.PWR_SWITCH) == LOW) {
 		delay(10);
 	}
 
@@ -8866,7 +8866,7 @@ void setup() {
 
 	// Wait for button press
 	if (!DO_DEBUG && !DO_AUTO_POWER) {
-		while (digitalRead(pin.PWR_Swtch) == HIGH);
+		while (digitalRead(pin.PWR_SWITCH) == HIGH);
 	}
 
 	// Otherwise pause before powering on
@@ -8889,7 +8889,7 @@ void setup() {
 
 	// Wait for button release
 	while (!DO_DEBUG && !DO_AUTO_POWER &&
-		digitalRead(pin.PWR_Swtch) == LOW) {
+		digitalRead(pin.PWR_SWITCH) == LOW) {
 		delay(10);
 	}
 
@@ -8988,8 +8988,8 @@ void setup() {
 	v_cnt_steps = 0;
 	v_stepTarg = 0;
 	v_stepDir = 'e';
-	digitalWrite(pin.Rel_Rew, LOW);
-	digitalWrite(pin.Rel_EtOH, LOW);
+	digitalWrite(pin.REL_FOOD, LOW);
+	digitalWrite(pin.REL_ETOH, LOW);
 
 	// GET BATTERY LEVEL
 	uint32_t t_check_vcc = millis() + 1000;
@@ -9058,13 +9058,13 @@ void setup() {
 
 	// Check if IR detector already low
 	while (!is_ir_off && millis() < t_check_ir) {
-		is_ir_off = digitalRead(pin.IRdetect) == HIGH;
+		is_ir_off = digitalRead(pin.INTERUPT_IR_DETECT) == HIGH;
 	}
 
 	// Enable ir detector interupt
 	if (is_ir_off) {
 		// IR detector
-		attachInterrupt(digitalPinToInterrupt(pin.IRdetect), Interupt_IR_Detect, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IR_DETECT), Interupt_IR_Detect, FALLING);
 	}
 
 	// Do not enable if ir detector pin already low
@@ -9077,14 +9077,14 @@ void setup() {
 
 	// Power off
 #if !DO_AUTO_POWER
-	attachInterrupt(digitalPinToInterrupt(pin.PWR_Swtch), Interupt_Power, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin.PWR_SWITCH), Interupt_Power, FALLING);
 #endif
 
 	// IR prox right
-	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Rt), Interupt_IRprox_Halt, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_R), Interupt_IRprox_Halt, FALLING);
 
 	// IR prox left
-	attachInterrupt(digitalPinToInterrupt(pin.IRprox_Lft), Interupt_IRprox_Halt, FALLING);
+	attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_L), Interupt_IRprox_Halt, FALLING);
 
 	// Log/print interupts setup
 	PrintLCD(true, "DONE SETUP", "Interrupts");
@@ -9216,7 +9216,7 @@ void setup() {
 	DebugFlow(__FUNCTION__, __LINE__, "FINISHED: Setup");
 	DoAll("PrintDebug");
 
-	}
+}
 
 
 void loop() {
@@ -9359,11 +9359,6 @@ void loop() {
 	// CHECK STATUS BLINK
 	StatusBlink();
 
-	// WAIT FOR HANDSHAKE
-	if (!CheckForStart()) {
-		return;
-	}
-
 #pragma endregion
 
 #pragma region //--- (T) SYSTEM TESTS ---
@@ -9434,7 +9429,7 @@ void loop() {
 					// Set tracker duty to max
 					trackLEDduty[0] = 255;
 					trackLEDduty[1] = 255;
-					analogWrite(pin.TrackLED, trackLEDduty[0]);
+					analogWrite(pin.LED_TRACKER, trackLEDduty[0]);
 
 					// Print speed
 					sprintf(horeStr, "VT CALIBRATION SPEED = %0.0f cm/sec", new_speed);
@@ -9459,7 +9454,7 @@ void loop() {
 				// Set tracker duty to default
 				trackLEDduty[0] = trackLEDdutyDefault[0];
 				trackLEDduty[1] = trackLEDdutyDefault[1];
-				analogWrite(pin.TrackLED, trackLEDduty[0]);
+				analogWrite(pin.LED_TRACKER, trackLEDduty[0]);
 
 
 			}
@@ -9538,6 +9533,22 @@ void loop() {
 		}
 	}
 
+	// Graph pin state
+	if (db.do_digitalpinGraph) {
+		/*
+		millis()%10 == 0
+		{@ReportDigital}
+		*/
+
+	}
+	if (db.do_analogpinGraph) {
+		/* 
+		millis()%10 == 0 
+		{@ReportAnalog}
+		*/
+
+	}
+
 	// Run position debugging
 	if (db.do_posDebug)
 	{
@@ -9597,7 +9608,7 @@ void loop() {
 				/*
 				{@Plot.WinPos.PosRatVT.Blue Pos[0].posRel}{@Plot.WinPos.PosRatPixy.Green Pos[2].posRel}{@Plot.WinPos.PosRobVT.Orange Pos[1].posRel}{@Plot.WinPos.RatEKF.Black kal.RatPos}{@Plot.WinPos.RobEKF.Red kal.RobPos}
 				*/
-				millis();
+
 			}
 
 			// Turn on rew led when near setpoint
@@ -9605,10 +9616,10 @@ void loop() {
 				Pos[0].is_streamStarted &&
 				Pos[1].is_streamStarted) {
 
-				analogWrite(pin.RewLED_C, 10);
+				analogWrite(pin.LED_REW_C, 10);
 			}
 			else {
-				analogWrite(pin.RewLED_C, rewLEDduty[0]);
+				analogWrite(pin.LED_REW_C, rewLEDduty[0]);
 			}
 
 			// Compute distances
@@ -9650,12 +9661,12 @@ void loop() {
 			millis()%50 == 0
 			{Pid.cal_isCalFinished}{"SPEED"}{Pid.cal_ratVel}{"ERROR"}{Pid.cal_errNow}{Pid.cal_errArr[0]}{Pid.cal_errArr[1]}{Pid.cal_errArr[2]}{Pid.cal_errArr[3]}{"PERIOD"}{Pid.cal_PcNow}{Pid.cal_cntPcArr[0]}{Pid.cal_PcArr[0]}{Pid.cal_cntPcArr[1]}{Pid.cal_PcArr[1]}{Pid.cal_cntPcArr[2]}{Pid.cal_PcArr[2]}{Pid.cal_cntPcArr[3]}{Pid.cal_PcArr[3]}{Pid.cal_PcAll}
 			*/
-			millis();
+
 			// Plot error
 			/*
 			{@Plot.WinPID.Error.Red Pid.cal_errNow} {@Plot.WinPID.Setpoint.Black 0}
 			*/
-			millis();
+
 			// Reset flag
 			Pid.cal_isPidUpdated = false;
 		}
@@ -9664,12 +9675,21 @@ void loop() {
 	// Run IR sync time
 	if (db.do_v_irSyncTest) {
 
-		// Set "Test_Signal" to LOW after 50ms
-		if (digitalRead(pin.Test_Signal) == HIGH &&
+		// Set "TEST_SIGNAL" to LOW after 50ms
+		if (digitalRead(pin.TEST_SIGNAL) == HIGH &&
 			millis() - v_t_irSyncLast > 10) {
-			digitalWrite(pin.Test_Signal, LOW);
+			digitalWrite(pin.TEST_SIGNAL, LOW);
 		}
 
+	}
+
+#pragma endregion
+
+#pragma region //--- CHECK FOR HANDSHAKE ---
+
+	// WAIT FOR HANDSHAKE
+	if (!CheckForStart()) {
+		return;
 	}
 
 #pragma endregion
@@ -9768,8 +9788,8 @@ void loop() {
 				rewLEDduty[0] = rewLEDmin[1];
 
 				// Set to min
-				analogWrite(pin.RewLED_R, rewLEDduty[0]);
-				analogWrite(pin.RewLED_C, rewLEDduty[0]);
+				analogWrite(pin.LED_REW_R, rewLEDduty[0]);
+				analogWrite(pin.LED_REW_C, rewLEDduty[0]);
 
 				// Change autodriver max acc
 				maxAcc = maxAccArr[1];

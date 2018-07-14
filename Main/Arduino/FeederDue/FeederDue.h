@@ -97,6 +97,8 @@ struct DB
 	const bool do_posDebug = false;
 	const bool do_posPrint = false;
 	const bool do_posPlot = false;
+	const bool do_digitalpinGraph = false;
+	const bool do_analogpinGraph = false;
 
 	// Set by system
 	bool is_runTest = false;

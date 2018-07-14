@@ -102,11 +102,8 @@ namespace ICR_Run
         private static long t_sync = 0;
 
         // Create lock objects and thread lists for safe threading
-        static readonly object lock_m2cPack = new object();
-        static readonly object lock_c2mPack = new object();
+        static readonly object lock_matCom = new object();
         static readonly object lock_sendPack = new object();
-        static readonly object lock_isConf = new object();
-        static readonly object lock_isDone = new object();
 
         // Initialize vt blocking object
         private static VT_Handler vtHandler = new VT_Handler(stop_watch: sw_main);
@@ -163,8 +160,6 @@ namespace ICR_Run
         // Matlab to CS
         private static Com_Track m2c = new Com_Track(
             _obj_id: "m2c",
-            _lock_is_conf: new object(),
-            _lock_is_done: new object(),
             _pack_range: lower_pack_range,
             _id:
             new char[16]{ // prefix giving masage id
@@ -190,8 +185,6 @@ namespace ICR_Run
         // CS to Matlab
         private static Com_Track c2m = new Com_Track(
             _obj_id: "c2m",
-            _lock_is_conf: new object(),
-            _lock_is_done: new object(),
             _pack_range: lower_pack_range,
             _id:
             new char[8] {
@@ -213,8 +206,6 @@ namespace ICR_Run
         // CS to FeederDue
         private static Com_Track c2r = new Com_Track(
             _obj_id: "c2r",
-            _lock_is_conf: lock_isConf,
-            _lock_is_done: lock_isDone,
             _pack_range: lower_pack_range,
             _id:
             new char[18] {
@@ -247,8 +238,6 @@ namespace ICR_Run
         // FeederDue to CS
         private static Com_Track r2c = new Com_Track(
             _obj_id: "r2c",
-            _lock_is_conf: lock_isConf,
-            _lock_is_done: lock_isDone,
             _pack_range: upper_pack_range,
             _id:
             new char[18] {
@@ -279,8 +268,6 @@ namespace ICR_Run
         // Ard to CS
         private static Com_Track a2c = new Com_Track(
             _obj_id: "a2c",
-            _lock_is_conf: new object(),
-            _lock_is_done: new object(),
             _pack_range: lower_pack_range,
             _id:
             new char[1] {
@@ -383,8 +370,10 @@ namespace ICR_Run
 
             logger_CS.LogDebug("RUNNNING: Create mCOM Global Variables...");
             System.Array m2c_pack = new double[6] { 0, 0, 0, 0, 0, 0 };
-            com_Matlab.PutWorkspaceData("m2c_pack", "global", m2c_pack);
-            com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
+            lock (lock_matCom)
+                com_Matlab.PutWorkspaceData("m2c_pack", "global", m2c_pack);
+            lock (lock_matCom)
+                com_Matlab.PutWorkspaceData("m2c_dir", "global", " ");
             logger_CS.LogDebug("FINISHED: Create mCOM Global Variables");
 
             // SETUP/START ICR_GUI BACKROUND WORKER
@@ -419,8 +408,8 @@ namespace ICR_Run
                 logger_CS.LogDebug("RUNNING: Setup Debugging...");
 
                 // Show matlab app window
-
-                com_Matlab.Visible = 1;
+                lock (lock_matCom)
+                    com_Matlab.Visible = 1;
 
                 // Check for break line input
                 if (db.is_debugRun)
@@ -442,7 +431,8 @@ namespace ICR_Run
             else
             {
                 // Hide matlab app window
-                com_Matlab.Visible = 0;
+                lock (lock_matCom)
+                    com_Matlab.Visible = 0;
             }
 
             // WAIT FOR INITIAL MATLAB HANDSHAKE
@@ -1098,6 +1088,9 @@ namespace ICR_Run
                 }
             }
 
+            // Wait for robot to wrap up logging stuff
+            Thread.Sleep(1000);
+
             // SEND/WAIT FOR FEEDERDUE QUIT COMMAND
 
             if (!fc.doSessionICR || !sp_Xbee.IsOpen)
@@ -1135,11 +1128,10 @@ namespace ICR_Run
                     logger_CS.LogDebug("SUCCEEDED: WAIT FOR: ICR_GUI to Save");
 
                     // Get NLX dir
-                    lock (lock_m2cPack)
-                    {
-                        dynamic nlx_rec_dir = com_Matlab.GetVariable("m2c_dir", "global");
-                        nlxRecDir = (string)nlx_rec_dir;
-                    }
+                    dynamic nlx_rec_dir;
+                    lock (lock_matCom)
+                        nlx_rec_dir = com_Matlab.GetVariable("m2c_dir", "global");
+                    nlxRecDir = (string)nlx_rec_dir;
 
                     // Confirm log saved
                     logger_CS.LogDebug(String.Format("SET RECORDING DIR TO \"{0}\"", nlxRecDir));
@@ -1154,7 +1146,7 @@ namespace ICR_Run
             }
 
             // SEND SAVE CONFIRMATION TO MATLAB
-            
+
             SendMatCom_Thread(id: 'F', dat1: 1);
             logger_CS.LogDebug("FINIISHED: Send ICR_GUI Save Confirmation...");
 
@@ -1256,7 +1248,8 @@ namespace ICR_Run
             if (!fc.isMatFailed)
             {
                 logger_CS.LogDebug(String.Format("RUNNING: Clear MatCom Globals: msg=\"{0}\"", msg));
-                com_Matlab.Execute(msg);
+                lock (lock_matCom)
+                    com_Matlab.Execute(msg);
             }
             else
             {
@@ -1269,7 +1262,8 @@ namespace ICR_Run
             {
                 // Show Matlab window
                 if (!fc.isMatFailed)
-                    com_Matlab.Visible = 1;
+                    lock (lock_matCom)
+                        com_Matlab.Visible = 1;
 
                 // Pause to let printing finish
                 Thread.Sleep(1000);
@@ -1307,8 +1301,8 @@ namespace ICR_Run
             if (!fc.isMatFailed)
             {
                 Thread.Sleep(100);
-
-                com_Matlab.Quit();
+                lock (lock_matCom)
+                    com_Matlab.Quit();
                 logger_CS.LogDebug("FINISHED: Close MatCOM");
             }
 
@@ -1539,11 +1533,14 @@ namespace ICR_Run
                     // Log/print
                     fc.DebugWarning_Thread(String.Format("c2r Queue HANGING: {0}", dat_str + buff_str));
 
-                    // Bail if this is pos data
+                    // Bail for pos data if recently updated
                     if (id == 'P')
                     {
-                        c2r.packInd--;
-                        return pack;
+                        if (vtHandler.GetSendDT((int)dat[0], "now") < 150)
+                        {
+                            c2r.packInd--;
+                            return pack;
+                        }
                     }
                 }
 
@@ -2525,12 +2522,14 @@ namespace ICR_Run
 
             // Run startup.m
             logger_CS.LogDebug_Thread("RUNNING: startup.m...");
-            com_Matlab.Feval("startup", 0, out startup_result);
+            lock (lock_matCom)
+                com_Matlab.Feval("startup", 0, out startup_result);
             logger_CS.LogDebug_Thread("FINISHED: startup.m...");
 
             // Run ICR_GUI.m
             logger_CS.LogDebug_Thread("RUNNING: ICR_GUI.m...");
-            com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.breakDebug, db.do_autoloadUI);
+            lock (lock_matCom)
+                com_Matlab.Feval("ICR_GUI", 1, out icr_gui_result, db.systemTest, db.breakDebug, db.do_autoloadUI);
 
             // Get status
             object[] res = icr_gui_result as object[];
@@ -2653,7 +2652,7 @@ namespace ICR_Run
 
                 // Get global variable
                 dynamic _m2c_pack;
-                lock (lock_m2cPack)
+                lock (lock_matCom)
                     _m2c_pack = com_Matlab.GetVariable("m2c_pack", "global");
 
                 // Check for incoming packet
@@ -2676,8 +2675,7 @@ namespace ICR_Run
                     worker.ReportProgress(0, new System.Tuple<char, double, double, double, UInt16>(id, dat1, dat2, dat3, pack));
 
                     // Set pack and flag back to zero
-                    lock (lock_m2cPack)
-                        SendMatCom(msg: "m2c_pack(6) = 0;", do_print: false);
+                    SendMatCom(msg: "m2c_pack(6) = 0;", do_print: false);
 
                 }
 
@@ -2921,7 +2919,7 @@ namespace ICR_Run
                             id, dat1, dat2, dat3, pack);
 
                     // Update Matlab variable
-                    lock (lock_c2mPack)
+                    lock (lock_matCom)
                         com_Matlab.Execute(msg);
 
                     // Update sent
@@ -2954,7 +2952,8 @@ namespace ICR_Run
                 {
 
                     // Execute command
-                    com_Matlab.Execute(msg);
+                    lock (lock_matCom)
+                        com_Matlab.Execute(msg);
 
                     // Log/print queued
                     if (do_print)
@@ -3739,9 +3738,7 @@ namespace ICR_Run
         // PRIVATE VARS
         private Stopwatch _sw = new Stopwatch();
         private string[] _logList = new string[100000];
-        private readonly object _lock_logFlags = new object();
-        private readonly object _lock_updateList = new object();
-        private readonly object _lock_bytesToRcv = new object();
+        private readonly object _lock_updateLog = new object();
         private readonly object _lock_console = new object();
         private long _t_logStart = 0;
         private string _lastLogStr = " ";
@@ -3749,7 +3746,6 @@ namespace ICR_Run
         private bool _isLogging = false;
         private bool _isSaved = false;
         private bool _isAborted = false;
-        private int _bytesToRcv = 0;
         private int next_milestone = 0;
         private const int _n_updates = 10;
         private int[] _importUpdateBytes = new int[_n_updates];
@@ -3766,6 +3762,7 @@ namespace ICR_Run
         public long cnt_warn = 0;
         public int cnt_err = 0;
         public string[] err_list = new string[100];
+        public int bytesToRcv = 0;
 
         // Special public vars
         public bool isLogging
@@ -3775,11 +3772,11 @@ namespace ICR_Run
                 // Store total log time
                 if (value)
                 {
-                    lock (_lock_logFlags)
-                    {
-                        _t_logStart = _sw.ElapsedMilliseconds;
-                        _isStarted = true;
-                    }
+                    // Store log start time
+                    _t_logStart = _sw.ElapsedMilliseconds;
+
+                    // Set flag once
+                    _isStarted = true;
                 }
                 _isLogging = value;
             }
@@ -3791,7 +3788,7 @@ namespace ICR_Run
             {
                 if (cnt_logsStored > 0 &&
                     cnt_dropped[1] == 0 &&
-                    (_bytesToRcv == 0 || bytesRead > _bytesToRcv))
+                    (bytesToRcv == 0 || bytesRead > bytesToRcv))
                     return true;
                 else
                     return false;
@@ -3801,18 +3798,12 @@ namespace ICR_Run
         {
             get
             {
-                lock (_lock_logFlags)
-                    return _isSaved || _isAborted || !_isStarted;
+                return _isSaved || _isAborted || !_isStarted;
             }
         }
         public long logDT
         {
             get { return _sw.ElapsedMilliseconds - _t_logStart; }
-        }
-        public int bytesToRcv
-        {
-            set { lock (_lock_bytesToRcv) _bytesToRcv = value; }
-            get { lock (_lock_bytesToRcv) return _bytesToRcv; }
         }
 
         // CONSTRUCTOR
@@ -3893,8 +3884,8 @@ namespace ICR_Run
             msg_log = msg_log.Replace(",", string.Empty);
 
             // Store in logger 
-
-            UpdateLog(msg: msg_log, t: t_m_sync);
+            lock (_lock_updateLog)
+                UpdateLog(msg: msg_log, t: t_m_sync);
 
             // Store error info
             if (is_error)
@@ -3918,50 +3909,46 @@ namespace ICR_Run
             string str = "";
             string err_str = "";
 
-            lock (_lock_updateList)
+            // Check for repeat
+            if (msg != _lastLogStr)
             {
-                // Check for repeat
-                if (msg != _lastLogStr)
-                {
-                    // Save log string
-                    _lastLogStr = msg;
+                // Save log string
+                _lastLogStr = msg;
 
-                    // Itterate count
-                    cnt_logsStored++;
+                // Itterate count
+                cnt_logsStored++;
 
-                    // Reset consecutive dropped logs
-                    cnt_dropped[0] = 0;
+                // Reset consecutive dropped logs
+                cnt_dropped[0] = 0;
 
+                // Add count and time
+                if (t < 0)
+                    // Add count but skip time
+                    str = String.Format("{0},{1}", cnt_logsStored, msg);
+                else
                     // Add count and time
-                    if (t < 0)
-                        // Add count but skip time
-                        str = String.Format("{0},{1}", cnt_logsStored, msg);
-                    else
-                        // Add count and time
-                        str = String.Format("{0},{1},{2}", cnt_logsStored, t, msg);
+                    str = String.Format("{0},{1},{2}", cnt_logsStored, t, msg);
 
-                    // Add to list
-                    if (cnt_logsStored <= _logList.Length)
-                    {
-                        _logList[cnt_logsStored - 1] = str;
-                    }
+                // Add to list
+                if (cnt_logsStored <= _logList.Length)
+                {
+                    _logList[cnt_logsStored - 1] = str;
+                }
 
-                    // Max logs stored and end reachedd
-                    else
-                    {
-                        // Set to last entry in array
-                        cnt_logsStored = _logList.Length;
+                // Max logs stored and end reachedd
+                else
+                {
+                    // Set to last entry in array
+                    cnt_logsStored = _logList.Length;
 
-                        // Format error string
-                        err_str = String.Format("!!ERROR!! LOG OVERFLOWED {0} ENTRIES", _logList.Length);
+                    // Format error string
+                    err_str = String.Format("!!ERROR!! LOG OVERFLOWED {0} ENTRIES", _logList.Length);
 
-                        // Store error in last entry
-                        _logList[cnt_logsStored - 1] = err_str;
+                    // Store error in last entry
+                    _logList[cnt_logsStored - 1] = err_str;
 
-                        // Add to error list
-                        err_list[cnt_err++] = err_str;
-                    }
-
+                    // Add to error list
+                    err_list[cnt_err++] = err_str;
                 }
             }
         }
@@ -3980,14 +3967,14 @@ namespace ICR_Run
             string str;
 
             // Add bytes to UnionHack var
-            _bytesToRcv = (int)dat[0];
+            bytesToRcv = (int)dat[0];
 
             // Compute print update milestones
             for (int i = 0; i <= _n_updates; i++)
             {
                 // Get milestone value
                 if (i < _n_updates)
-                    _importUpdateBytes[i] = (int)((double)_bytesToRcv * i / 10);
+                    _importUpdateBytes[i] = (int)((double)bytesToRcv * i / 10);
 
                 // Get string
                 str = String.Format("{0}% Complete", i * _n_updates);
@@ -4117,8 +4104,6 @@ namespace ICR_Run
         // CONSTRUCTOR
         public Com_Track(
             string _obj_id,
-            object _lock_is_conf,
-            object _lock_is_done,
             UInt16[] _pack_range,
             char[] _id,
             byte _head = 0,
@@ -4129,8 +4114,6 @@ namespace ICR_Run
             )
         {
             _objID = _obj_id;
-            _lock_isConf = _lock_is_conf;
-            _lock_isDone = _lock_is_done;
             packRange[0] = _pack_range[0];
             packRange[1] = _pack_range[1];
             packInd = _pack_range[0];
@@ -4358,7 +4341,6 @@ namespace ICR_Run
 
         // PRIVATE VARS
         private static Stopwatch _sw = new Stopwatch();
-        private static readonly object _lockBlock = new object();
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
         private static long _blockFor = 60; // (ms) 
@@ -4384,11 +4366,8 @@ namespace ICR_Run
         {
             if (id != 'P')
             {
-                lock (_lockBlock)
-                {
-                    _cntThread++;
-                    _t_blockTim = _sw.ElapsedMilliseconds + _blockFor;
-                }
+                _cntThread++;
+                _t_blockTim = _sw.ElapsedMilliseconds + _blockFor;
             }
         }
 
@@ -4397,10 +4376,7 @@ namespace ICR_Run
         {
             if (id != 'P')
             {
-                lock (_lockBlock)
-                {
-                    _cntThread--;
-                }
+                _cntThread--;
             }
         }
 

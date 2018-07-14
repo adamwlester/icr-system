@@ -7,7 +7,8 @@
 	Cant 'see' these directives from script for some reason
 */
 
-// Set to print debug info to console
+// DEBUGGING
+
 #define DO_PRINT_DEBUG 0
 #define DO_LOG_DEBUG 1
 #define DO_PRINT_LOGS 0
@@ -15,6 +16,7 @@
 #include <SPI.h>
 
 #include "SdFat.h"
+
 
 #pragma region ============ VARIABLE SETUP =============
 
@@ -25,9 +27,9 @@ struct PIN
 	int StatLED = 13;
 
 	// Due coms
-	int Teensy_Unused = 14;
-	int Teensy_SendLogs = 15;
-	int Teensy_Resetting = 16;
+	int TEENSY_UNUSED = 14;
+	int TEENSY_SEND = 15;
+	int TEENSY_RESET = 16;
 }
 // Initialize
 pin;
@@ -157,6 +159,9 @@ void SetLogDir();
 // OPEN NEW LOG FOR WRITING
 void OpenNewLog(bool is_log_named);
 
+// GET REMAINING MEMORY ON CARD
+float GetMemGB();
+
 // GET LOG NUMBER
 uint32_t GetFileCount();
 
@@ -219,7 +224,7 @@ void RunReset() {
 	// Set reset indicator pin high
 	sprintf(str, "[RunReset] Setting Reset Pin High");
 	DebugTeensy(str);
-	digitalWrite(pin.Teensy_Resetting, HIGH);
+	digitalWrite(pin.TEENSY_RESET, HIGH);
 
 	// Flicker LED
 	t_flicker = millis() + 500;
@@ -229,7 +234,7 @@ void RunReset() {
 	}
 
 	// Set reset indicator pin back to low
-	digitalWrite(pin.Teensy_Resetting, LOW);
+	digitalWrite(pin.TEENSY_RESET, LOW);
 	sprintf(str, "[RunReset] Setting Reset Pin Low");
 	DebugTeensy(str);
 
@@ -262,6 +267,10 @@ void RunReset() {
 	else {
 		DebugTeensy("!!ERROR!! [RunReset] FAILED: SET SD TO ROOT DIRECTORY");
 	}
+
+	// Print available memory
+	sprintf(str, "[RunReset] AVAILABLE SPACE ON SD %0.2fGB", GetMemGB());
+	DebugTeensy(str);
 
 	// Print status
 	sprintf(str, "[RunReset] FINISHED RESET %d", cnt_reset);
@@ -329,6 +338,23 @@ void OpenNewLog(bool is_log_named) {
 		sprintf(str, "!!ERROR!! [OpenNewLog] FAILED: CREATE & OPEN \"%s\"", file_str);
 	}
 	DebugTeensy(str);
+
+}
+
+// GET REMAINING MEMORY ON CARD
+float GetMemGB()
+{
+	// Local vars
+	uint32_t free_kb = 0;
+	float free_gb = 0;
+
+	// Get memory on card
+	free_kb = sdEx.vol()->freeClusterCount();
+	free_kb *= sdEx.vol()->blocksPerCluster() / 2;
+	free_gb = (float)free_kb / 1000000;
+	
+	// Return value in GB
+	return free_gb;
 
 }
 
@@ -443,7 +469,7 @@ void GetSerial()
 
 	// Bail if old logs not sent yet
 	if (!isLoggingReady ||
-		digitalRead(pin.Teensy_SendLogs) == HIGH) {
+		digitalRead(pin.TEENSY_SEND) == HIGH) {
 		return;
 	}
 
@@ -675,7 +701,7 @@ void SendLastLogs()
 	char c_arr[4] = { 0 };
 
 	// Check for high pin
-	if (digitalRead(pin.Teensy_SendLogs) != HIGH) {
+	if (digitalRead(pin.TEENSY_SEND) != HIGH) {
 		return;
 	}
 
@@ -683,7 +709,7 @@ void SendLastLogs()
 	while (millis() < t_check) {
 
 		// Check for high pin
-		if (digitalRead(pin.Teensy_SendLogs) != HIGH) {
+		if (digitalRead(pin.TEENSY_SEND) != HIGH) {
 			return;
 		}
 
@@ -736,8 +762,8 @@ void SendLastLogs()
 			}
 
 		// Format summary
-		sprintf(str, "TEENSY SUMMARY \"%s\": SENT=%d RCVD=%lu SKIPPED=%d DROPPED=%d FILES=%d",
-			logFiStr, r42t.packSentAll, r42t.packRcvdAll, cnt_logsSkipped, r42t.cnt_dropped, cnt_logsFiles);
+		sprintf(str, "TEENSY SUMMARY \"%s\": SENT=%d RCVD=%lu SKIPPED=%d DROPPED=%d FILES=%d SPACE=%0.2fGB",
+			logFiStr, r42t.packSentAll, r42t.packRcvdAll, cnt_logsSkipped, r42t.cnt_dropped, cnt_logsFiles, GetMemGB());
 		sprintf(msg_str, "%c%s%c", r42t.head, str, r42t.foot);
 		
 		// Send summary
@@ -870,13 +896,13 @@ void setup()
 	// SETUP PINS
 
 	// Set direction
-	pinMode(pin.Teensy_SendLogs, INPUT);
-	pinMode(pin.Teensy_Resetting, OUTPUT);
+	pinMode(pin.TEENSY_SEND, INPUT);
+	pinMode(pin.TEENSY_RESET, OUTPUT);
 	pinMode(pin.StatLED, OUTPUT);
 
 	// Set initial state
 	digitalWrite(pin.StatLED, LOW);
-	digitalWrite(pin.Teensy_Resetting, LOW);
+	digitalWrite(pin.TEENSY_RESET, LOW);
 
 	// Show setup blink
 	uint32_t t_flicker = millis() + 500;

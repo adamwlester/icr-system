@@ -1,4 +1,75 @@
 
+// NOTES
+/*
+	PIN MAP:
+		0,RX_R24T,blue
+		1,TX_R24T,purple
+		2,LED_REW_C,white
+		3,LED_REW_R,yellow
+		4,LED_TRACKER,red
+		5,AD_CSP_R,yellow
+		6,AD_CSP_F,red
+		7,AD_RST,brown
+		8,LCD_CS,white
+		9,LCD_RST,gray
+		10,LCD_DC,purple
+		11,LCD_MOSI,blue
+		12,LCD_SCK,green
+		13,LCD_LED,yellow
+		14,TX_R24C,orange
+		15,RX_R24C,purple
+		16,TX_R24A,orange
+		17,RX_R24A,purple
+		18,TX_OL,blue
+		19,RX_OL,green
+		20,SLA_PIXY,white
+		21,SCL_PIXY,green
+		22,REL_FOOD,green
+		23,REL_ETOH,blue
+		24,PWR_SWITCH,white
+		25,PWR_SWITCH_GRN,black
+		26,XB_CTS_F,blue
+		27,XB_UNDEF_F,yellow
+		28,XB_CTS_R,blue
+		29,XB_UNDEF_R,yellow
+		30,OL_RST,purple
+		31,INTERUPT_IR_DETECT,white
+		32,TEENSY_UNUSED,green
+		33,ED_ENBL,yellow
+		34,TEENSY_SEND,yellow
+		35,ED_MS1,orange
+		36,TEENSY_RESET,orange
+		37,ED_MS2,red
+		38,UNUSED,NA
+		39,ED_MS3,brown
+		40,SWITCH_DISH,red
+		41,SWITCH_DISH_GRN,black
+		42,INTERUPT_IRPROX_R,green
+		43,INTERUPT_IRPROX_L,blue
+		44,PWR_OFF,gray
+		45,PWR_ON,white
+		46,REG_5V2_ENBLE,blue
+		47,ED_RST,green
+		48,REG_5V1_ENBLE,green
+		49,ED_SLP,blue
+		50,REG_12V2_ENBLE,yellow
+		51,ED_DIR,gray
+		52,UNUSED,NA
+		53,ED_STP,white
+		54,BTN[2],white
+		55,BTN[1],purple
+		56,BTN[0],blue
+		57,REL_VCC,orange
+		58,REG_24V_ENBLE,red
+		59,BAT_VCC,brown
+		60,UNUSED,NA
+		61,UNUSED,NA
+		62,TEST_SIGNAL,NA
+		63,UNUSED,NA
+		64,UNUSED,NA
+		65,UNUSED,NA
+
+*/
 #ifndef FeederDue_PinMap_h
 #define FeederDue_PinMap_h
 
@@ -23,27 +94,27 @@ struct PIN
 	const int XB_UNDEF_R = 29; // (yellow)
 
 	// Teensy
-	const int Teensy_Unused = 32; // (green)
-	const int Teensy_SendLogs = 34; // (yellow)
-	const int Teensy_Resetting = 36; // (orange)
+	const int TEENSY_UNUSED = 32; // (green)
+	const int TEENSY_SEND = 34; // (yellow)
+	const int TEENSY_RESET = 36; // (orange)
 
 	// Display
-	const int Disp_CS = 8; // (white)
-	const int Disp_RST = 9; // (gray)
-	const int Disp_DC = 10; // (purple)
-	const int Disp_MOSI = 11; // (blue)
-	const int Disp_SCK = 12; // (green)
-	const int Disp_LED = 13; // (yellow)
+	const int LCD_CS = 8; // (white)
+	const int LCD_RST = 9; // (gray)
+	const int LCD_DC = 10; // (purple)
+	const int LCD_MOSI = 11; // (blue)
+	const int LCD_SCK = 12; // (green)
+	const int LCD_LED = 13; // (yellow)
 
 	// LEDs
-	const int RewLED_C = 2; // (white)
-	const int RewLED_R = 3; // (yellow)
-	const int TrackLED = 4; // (red)
+	const int LED_REW_C = 2; // (white)
+	const int LED_REW_R = 3; // (yellow)
+	const int LED_TRACKER = 4; // (red)
 
 	// Relays
-	const int Rel_EtOH = 22; // (green)
-	const int Rel_Rew = 23; // (blue)
-	const int Rel_Vcc = A3; // (orange)
+	const int REL_FOOD = 22; // (green)
+	const int REL_ETOH = 23; // (blue)
+	const int REL_VCC = A3; // (orange)
 
 	// Voltage Regulators
 	const int REG_24V_ENBLE = A4; // (red)
@@ -69,17 +140,17 @@ struct PIN
 	Note: Do not use real ground pin as this will cause
 	an upload error if switch is shorted when writing sketch
 	*/
-	const int FeedSwitch = 40; // (red)
-	const int FeedSwitch_Gnd = 41; // (black)
+	const int SWITCH_DISH = 40; // (red)
+	const int SWITCH_DISH_GRN = 41; // (black)
 
 	// Voltage monitor
-	const int BatVcc = A5; // (brown)
+	const int BAT_VCC = A5; // (brown)
 
 	// Buttons
-	const int Btn[3] = { A2, A1, A0 }; // (blue, purple, white)
+	const int BTN[3] = { A2, A1, A0 }; // (blue, purple, white)
 
 	// Testing
-	int Test_Signal = A8;
+	int TEST_SIGNAL = A8;
 
 	/*
 	Note: pins bellow are all used for external interupts
@@ -87,15 +158,15 @@ struct PIN
 	*/
 
 	// Power button
-	const int PWR_Swtch = 24; // (white)
-	const int PWR_Swtch_Grn = 25; // (black)
+	const int PWR_SWITCH = 24; // (white)
+	const int PWR_SWITCH_GRN = 25; // (black)
 
 	// IR proximity sensors
-	const int IRprox_Rt = 42; // (green)
-	const int IRprox_Lft = 43; // (blue)
+	const int INTERUPT_IRPROX_R = 42; // (green)
+	const int INTERUPT_IRPROX_L = 43; // (blue)
 
 	// IR detector
-	const int IRdetect = 31; // (white)
+	const int INTERUPT_IR_DETECT = 31; // (white)
 }
 // Initialize
 pin;
@@ -112,7 +183,7 @@ void SetupPins() {
 	// Power
 	pinMode(pin.PWR_OFF, OUTPUT);
 	pinMode(pin.PWR_ON, OUTPUT);
-	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
+	pinMode(pin.PWR_SWITCH_GRN, OUTPUT);
 	// Voltage Regulators
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
 	pinMode(pin.REG_12V2_ENBLE, OUTPUT);
@@ -123,22 +194,22 @@ void SetupPins() {
 	pinMode(pin.AD_CSP_F, OUTPUT);
 	pinMode(pin.AD_RST, OUTPUT);
 	// Teensy
-	pinMode(pin.Teensy_SendLogs, OUTPUT);
+	pinMode(pin.TEENSY_SEND, OUTPUT);
 	// Display
-	pinMode(pin.Disp_SCK, OUTPUT);
-	pinMode(pin.Disp_MOSI, OUTPUT);
-	pinMode(pin.Disp_DC, OUTPUT);
-	pinMode(pin.Disp_RST, OUTPUT);
-	pinMode(pin.Disp_CS, OUTPUT);
-	pinMode(pin.Disp_LED, OUTPUT);
+	pinMode(pin.LCD_SCK, OUTPUT);
+	pinMode(pin.LCD_MOSI, OUTPUT);
+	pinMode(pin.LCD_DC, OUTPUT);
+	pinMode(pin.LCD_RST, OUTPUT);
+	pinMode(pin.LCD_CS, OUTPUT);
+	pinMode(pin.LCD_LED, OUTPUT);
 	// LEDs
-	pinMode(pin.RewLED_R, OUTPUT);
-	pinMode(pin.RewLED_C, OUTPUT);
-	pinMode(pin.TrackLED, OUTPUT);
+	pinMode(pin.LED_REW_R, OUTPUT);
+	pinMode(pin.LED_REW_C, OUTPUT);
+	pinMode(pin.LED_TRACKER, OUTPUT);
 	// Relays
-	pinMode(pin.Rel_Rew, OUTPUT);
-	pinMode(pin.Rel_EtOH, OUTPUT);
-	pinMode(pin.Rel_Vcc, OUTPUT);
+	pinMode(pin.REL_FOOD, OUTPUT);
+	pinMode(pin.REL_ETOH, OUTPUT);
+	pinMode(pin.REL_VCC, OUTPUT);
 	// BigEasyDriver
 	pinMode(pin.ED_RST, OUTPUT);
 	pinMode(pin.ED_SLP, OUTPUT);
@@ -151,15 +222,15 @@ void SetupPins() {
 	// OpenLog
 	pinMode(pin.OL_RST, OUTPUT);
 	// Feeder switch
-	pinMode(pin.FeedSwitch_Gnd, OUTPUT);
+	pinMode(pin.SWITCH_DISH_GRN, OUTPUT);
 	delayMicroseconds(100);
 	// Test Pins
-	pinMode(pin.Test_Signal, OUTPUT);
+	pinMode(pin.TEST_SIGNAL, OUTPUT);
 
 	// Power
 	digitalWrite(pin.PWR_OFF, LOW);
 	digitalWrite(pin.PWR_ON, LOW);
-	digitalWrite(pin.PWR_Swtch_Grn, LOW);
+	digitalWrite(pin.PWR_SWITCH_GRN, LOW);
 	// Voltage Regulators (start high)
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
@@ -170,22 +241,22 @@ void SetupPins() {
 	digitalWrite(pin.AD_CSP_F, LOW);
 	digitalWrite(pin.AD_RST, LOW);
 	// Teensy
-	digitalWrite(pin.Teensy_SendLogs, LOW);
+	digitalWrite(pin.TEENSY_SEND, LOW);
 	// Display
-	digitalWrite(pin.Disp_SCK, LOW);
-	digitalWrite(pin.Disp_MOSI, LOW);
-	digitalWrite(pin.Disp_DC, LOW);
-	digitalWrite(pin.Disp_RST, LOW);
-	digitalWrite(pin.Disp_CS, LOW);
-	digitalWrite(pin.Disp_LED, LOW);
+	digitalWrite(pin.LCD_SCK, LOW);
+	digitalWrite(pin.LCD_MOSI, LOW);
+	digitalWrite(pin.LCD_DC, LOW);
+	digitalWrite(pin.LCD_RST, LOW);
+	digitalWrite(pin.LCD_CS, LOW);
+	digitalWrite(pin.LCD_LED, LOW);
 	// LEDs
-	digitalWrite(pin.RewLED_R, LOW);
-	digitalWrite(pin.RewLED_C, LOW);
-	digitalWrite(pin.TrackLED, LOW);
+	digitalWrite(pin.LED_REW_R, LOW);
+	digitalWrite(pin.LED_REW_C, LOW);
+	digitalWrite(pin.LED_TRACKER, LOW);
 	// Relays
-	digitalWrite(pin.Rel_Rew, LOW);
-	digitalWrite(pin.Rel_EtOH, LOW);
-	digitalWrite(pin.Rel_Vcc, LOW);
+	digitalWrite(pin.REL_FOOD, LOW);
+	digitalWrite(pin.REL_ETOH, LOW);
+	digitalWrite(pin.REL_VCC, LOW);
 	// Big Easy Driver
 	digitalWrite(pin.ED_MS1, LOW);
 	digitalWrite(pin.ED_MS2, LOW);
@@ -198,34 +269,34 @@ void SetupPins() {
 	// OpenLog
 	digitalWrite(pin.OL_RST, LOW);
 	// Feeder switch
-	digitalWrite(pin.FeedSwitch_Gnd, LOW);
+	digitalWrite(pin.SWITCH_DISH_GRN, LOW);
 	delayMicroseconds(100);
 	// Test Pins
-	digitalWrite(pin.Test_Signal, LOW);
+	digitalWrite(pin.TEST_SIGNAL, LOW);
 
 	// SET INPUT PINS
 
 	// Power
-	pinMode(pin.PWR_Swtch, INPUT);
+	pinMode(pin.PWR_SWITCH, INPUT);
 	// XBees
 	pinMode(pin.XB_CTS_F, INPUT);
 	pinMode(pin.XB_CTS_R, INPUT);
 	// Teensy
-	pinMode(pin.Teensy_Resetting, INPUT);
+	pinMode(pin.TEENSY_RESET, INPUT);
 	// Battery monitor
-	pinMode(pin.BatVcc, INPUT);
+	pinMode(pin.BAT_VCC, INPUT);
 	// IR proximity sensors
-	pinMode(pin.IRprox_Rt, INPUT);
-	pinMode(pin.IRprox_Lft, INPUT);
+	pinMode(pin.INTERUPT_IRPROX_R, INPUT);
+	pinMode(pin.INTERUPT_IRPROX_L, INPUT);
 	// IR detector
-	pinMode(pin.IRdetect, INPUT);
+	pinMode(pin.INTERUPT_IR_DETECT, INPUT);
 
 	// Set power, button and switch internal pullup
-	pinMode(pin.PWR_Swtch, INPUT_PULLUP);
+	pinMode(pin.PWR_SWITCH, INPUT_PULLUP);
 	for (int i = 0; i <= 2; i++) {
-		pinMode(pin.Btn[i], INPUT_PULLUP);
+		pinMode(pin.BTN[i], INPUT_PULLUP);
 	}
-	pinMode(pin.FeedSwitch, INPUT_PULLUP);
+	pinMode(pin.SWITCH_DISH, INPUT_PULLUP);
 	delayMicroseconds(100);
 }
 
