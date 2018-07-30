@@ -574,7 +574,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % m2c packet tracking
-        m2c.packRange = [1, intmax('uint16')];
+        m2c.packRange = [1, intmax('uint16') - 1];
         m2c.packInd = 0;
         m2c.packTot = 0;
         
@@ -602,7 +602,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         c2m_com = c2m;
         
         % c2m packet tracking
-        c2m_pack.packRange = [1, intmax('uint16')];
+        c2m_pack.packRange = [1, intmax('uint16') - 1];
         c2m_pack.packInd = 0;
         c2m_pack.packTot = 0;
         

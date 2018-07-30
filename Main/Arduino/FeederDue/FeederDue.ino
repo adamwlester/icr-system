@@ -1556,8 +1556,6 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 
 	// Check if ind should roll over 
 	if (PQ_StoreInd == PQ_Capacity) {
-
-		// Reset store ind
 		PQ_StoreInd = 0;
 	}
 
@@ -1757,7 +1755,7 @@ char* DEBUG::FormatSpecialChars(char chr, bool do_show_byte)
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
 	byte b = chr;
 
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < buffMed; i++) {
 		buff_med[i] = '\0';
 	}
 
@@ -1824,8 +1822,8 @@ void DEBUG::sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...) {
 	// Local vars
 	static const uint16_t buff_size = buffMax * 2;
 	static char buff[buff_size]; buff[0] = '\0';
-	char str_prfx_med_1[buffMed] = "[**TRUNCATED**]";
-	char str_prfx_med_2[buffMed] = "*T*";
+	const char str_prfx_med_1[buffMed] = "[**TRUNCATED**]";
+	const char str_prfx_med_2[buffMed] = "*T*";
 	int cut_ind = 0;
 
 	// Reset output buffer
@@ -4790,11 +4788,8 @@ bool LOGGER::SetToCmdMode()
 		delayMicroseconds(del);
 	}
 
-	// Copy command to buffer
-	Debug.sprintf_safe(buffTerm, buff_sml, "%s", str_sml_reset.data());
-
 	//Send 3x escape char (byte)26 command mode
-	if (SendCommand(buff_sml, true, 500) == '>')
+	if (SendCommand(str_sml_reset.data(), true, 500) == '>')
 	{
 		// Set flag
 		pass = true;
@@ -5128,8 +5123,6 @@ void LOGGER::QueueLog(char *p_msg, uint32_t t)
 
 	// Check if ind should roll over 
 	if (LQ_StoreInd == LQ_Capacity) {
-
-		// Reset queueIndWrite
 		LQ_StoreInd = 0;
 	}
 
@@ -5232,8 +5225,6 @@ bool LOGGER::WriteLog()
 
 	// Update bytes stored
 	cnt_logBytesStored += strlen(LQ_Queue[LQ_ReadInd]);
-
-
 
 	// Print stored log
 	if (Debug.flag.print_logWrite) {
@@ -6488,8 +6479,6 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 
 	// Check if ind should roll over 
 	if (p_r2->SQ_StoreInd == SQ_Capacity) {
-
-		// Reset queueIndWrite
 		p_r2->SQ_StoreInd = 0;
 	}
 
@@ -9011,13 +9000,15 @@ void PingTest()
 	// ------------------------ LOCAL VARS ------------------------
 
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static char buff_lrg_mat[2][buffLrg] = { { 0 } };
+	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
+	static char buff_lrg_3[buffLrg] = { 0 }; buff_lrg_3[0] = '\0';
 	VEC<uint16_t> cnt_ping(2, __LINE__);
 	bool _do_send_ping[2] = { true, true };
 	VEC<bool> do_send_ping(2, __LINE__, _do_send_ping);
 	const int dt_timeout = 10000;
 	uint32_t t_test_start = 0;
-	uint32_t dt_ping_mat[2][50] = { { 0 } };
+	VEC<uint32_t> dt_ping_mat_cs(50, __LINE__);
+	VEC<uint32_t> dt_ping_mat_ard(50, __LINE__);
 	uint32_t dt_ping_sum = 0;
 	byte r2i = 0;
 	R2_COM<USARTClass> *p_r2;
@@ -9057,7 +9048,12 @@ void PingTest()
 			p_r4->dat[0] == cnt_ping[r2i]) {
 
 			// Store dt send
-			dt_ping_mat[r2i][cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
+			if (r2i == 0) {
+				dt_ping_mat_cs[cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
+			}
+			else {
+				dt_ping_mat_ard[cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
+			}
 
 			// Incriment count
 			cnt_ping[r2i]++;
@@ -9081,8 +9077,8 @@ void PingTest()
 
 			// Send pack
 			float dat1 = cnt_ping[r2i];
-			float dat2 = cnt_ping[0] > 0 ? dt_ping_mat[0][cnt_ping[0] - 1] : 0;
-			float dat3 = cnt_ping[1] > 0 ? dt_ping_mat[1][cnt_ping[1] - 1] : 0;
+			float dat2 = cnt_ping[0] > 0 ? dt_ping_mat_cs[cnt_ping[0] - 1] : 0;
+			float dat3 = cnt_ping[1] > 0 ? dt_ping_mat_ard[cnt_ping[1] - 1] : 0;
 			QueuePacket(p_r2, 'n', dat1, dat2, dat3, 0, true);
 
 			// Send now
@@ -9107,9 +9103,18 @@ void PingTest()
 		// Loop pings
 		for (int j = 0; j < n_testPings; j++) {
 
-			dt_ping_sum += dt_ping_mat[i][j];
-			Debug.sprintf_safe(buffLrg, buff_lrg, "%d|", dt_ping_mat[i][j]);
-			strcat(buff_lrg_mat[i], buff_lrg);
+			uint32_t dt = r2i == 0 ? dt_ping_mat_cs[j] : dt_ping_mat_ard[j];
+			dt_ping_sum += dt;
+			Debug.sprintf_safe(buffLrg, buff_lrg, "%d|", dt);
+
+			// Add to string
+			if (r2i == 0) {
+				strcat(buff_lrg_2, buff_lrg);
+			}
+			else {
+				strcat(buff_lrg_3, buff_lrg);
+			}
+
 		}
 
 		// Compute average
@@ -9124,9 +9129,9 @@ void PingTest()
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED PING TEST");
 
 	// Log/print ping time
-	Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_mat[0]);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_2);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-	Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_mat[1]);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_3);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 }

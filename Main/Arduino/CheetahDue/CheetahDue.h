@@ -16,7 +16,7 @@
 #define DO_LOG 1 // 1
 
 // DEBUG SAFEVECTOR ERRORS TO CONSOLE
-#define DO_VEC_DEBUG 0 // 0
+#define DO_VEC_DEBUG 1 // 0
 
 //============== INCLUDE ===============
 
@@ -96,7 +96,6 @@ struct FC
 fc;
 
 // DEBUGGING BUFFER PARAMETERS
-const uint16_t buffSml = 10;
 const uint16_t buffMed = 50;
 const uint16_t buffLrg = 250;
 const uint16_t buffMax = buffLrg + 100;
@@ -212,7 +211,7 @@ const int SQ_Capacity = 10;
 const int SQ_MsgBytes = 18;
 
 // Packet range
-const uint16_t _pack_range[2] = { 1, UINT16_MAX };
+const uint16_t _pack_range[2] = { 1, UINT16_MAX-1 };
 
 // COM INSTANCE ID
 namespace COM
@@ -308,9 +307,6 @@ struct A2_COM
 };
 A2_COM<USARTClass> a2r(Serial1, COM::ID::a2r, '{', '}', _rob_id_list, _pack_range);
 A2_COM<UARTClass> a2c(Serial, COM::ID::a2c, '<', '>', _cs_id_list, _pack_range);
-//// TEMP
-//A2_COM<USARTClass> a2r(Serial2, COM::ID::a2r, '{', '}', _rob_id_list, _pack_range);
-//A2_COM<USARTClass> a2c(Serial3, COM::ID::a2c, '<', '>', _cs_id_list, _pack_range);
 
 // FEEDERDUE INCOMING SERIAL
 template <typename HW>
@@ -359,9 +355,6 @@ struct A4_COM
 };
 A4_COM<USARTClass> r2a(Serial1, COM::ID::r2a, '{', '}', _rob_id_list, _pack_range);
 A4_COM<UARTClass> c2a(Serial, COM::ID::c2a, '<', '>', _cs_id_list, _pack_range);
-//// TEMP
-//A4_COM<USARTClass> r2a(Serial2, COM::ID::r2a, '{', '}', _rob_id_list, _pack_range);
-//A4_COM<USARTClass> c2a(Serial3, COM::ID::c2a, '<', '>', _cs_id_list, _pack_range);
 
 #pragma endregion 
 

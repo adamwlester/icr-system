@@ -127,7 +127,7 @@ namespace ICR_Run
         private static string netcomServerIP = "192.168.3.100"; // host computer IP 9"127.0.0.1")
         private static string csXbeePort = "COM5";
         private static string csCheetahDuePort = "COM3";
-        static UInt16[] pack_range = { 1, UInt16.MaxValue };
+        static UInt16[] pack_range = { 1, UInt16.MaxValue - 1 };
 
         // Matlab to CS
         private static COM_TRACK m2c = new COM_TRACK(

@@ -18,7 +18,6 @@
 // MEMORY
 #include <MemoryFree.h>
 
-
 #pragma region ========== CLASS DECLARATIONS ===========
 
 
@@ -31,11 +30,12 @@ public:
 	DB_FLAG flag;
 	uint16_t cnt_warn = 0;
 	uint16_t cnt_err = 0;
-	uint16_t warn_line[100] = { 0 };
-	uint16_t err_line[100] = { 0 };
+	uint16_t err_cap = 100;
+	VEC<uint16_t> warn_line;
+	VEC<uint16_t> err_line;
 
 	// METHODS
-
+	DEBUG();
 	// LOG/PRING MAIN EVENT
 	void DB_General(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
 	// LOG/PRINT WARNINGS
@@ -64,6 +64,8 @@ public:
 	int GetPrintQueueAvailable();
 	// GET CURRENT NUMBER OF ENTRIES IN LOG QUEUE
 	int GetLogQueueAvailable();
+	// FORMAT INT AS BINARY
+	char* FormatBinary(unsigned int int_in);
 	// SAFE VERSION OF SPRINTF
 	void sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...);
 	// HOLD FOR CRITICAL ERRORS
@@ -112,7 +114,7 @@ bool SetIR(int dt_off, int dt_on, SETIRSTATE force_state = FREE, bool do_ttl = t
 // GET ID INDEX
 template <typename A24> int ID_Ind(char id, A24 *p_r24);
 // GET 32 BIT WORD FOR PORT
-uint32_t GetPortWord(uint32_t word, int *p_pin_arr, int arr_size);
+uint32_t GetPortWord(uint32_t word, VEC<int> pin_vec);
 // SET PORT
 void SetPort(uint32_t word_on, uint32_t word_off);
 // RESET PT PINS
@@ -135,6 +137,11 @@ void Interrupt_East();
 
 #pragma region ----------CLASS: DEBUG----------
 
+DEBUG::DEBUG() :
+	warn_line(err_cap, __LINE__),
+	err_line(err_cap, __LINE__)
+{}
+
 void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 {
 	// Local vars
@@ -155,7 +162,13 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s", p_fun, line - 23, p_msg);
 
 	if (do_print) {
+		// TEMP
+		SerialUSB.print("DB_General: ");
+		SerialUSB.println(__LINE__ - 7);
 		Queue(buff_store, t);
+		// TEMP
+		SerialUSB.print("DB_General: ");
+		SerialUSB.println(__LINE__ - 7);
 	}
 
 	if (do_log) {
@@ -414,8 +427,6 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 
 	// Check if ind should roll over 
 	if (PQ_StoreInd == PQ_Capacity) {
-
-		// Reset queueIndWrite
 		PQ_StoreInd = 0;
 	}
 
@@ -435,14 +446,41 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 		return;
 	}
 
+	// TEMP
+	SerialUSB.print("Queue: ");
+	SerialUSB.println(__LINE__ - 7);
+
 	// Get sync correction
 	t_m = t - t_sync;
 
 	// Convert to seconds
 	t_s = (float)(t_m) / 1000.0f;
 
+	// TEMP
+	SerialUSB.println(t);
+	SerialUSB.println(t_sync);
+	SerialUSB.println(t_m);
+	SerialUSB.println(t_s);
+	SerialUSB.println(cnt_loopShort);
+
+	// TEMP
+	if (t_m == 1) {
+		SerialUSB.println("!!!!!!!!!!!!!!!!!!!!!!!!!");
+		SerialUSB.print("Queue: ");
+		SerialUSB.println(__LINE__ - 7);
+		float t_ss = (float)(1) / 1000.0f;
+		sprintf(buff_lrg, "[%0.3f]", t_ss);
+		SerialUSB.print("Queue: ");
+		SerialUSB.println(__LINE__ - 7);
+	}
+
 	// Make time string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
+	// TEMP Debug.sprintf_safe(buffLrg, buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
+	sprintf(buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
+
+	// TEMP
+	SerialUSB.print("Queue: ");
+	SerialUSB.println(__LINE__ - 7);
 
 	// Add space after time
 	Debug.sprintf_safe(buffMed, buff_med_1, "%%%ds", 20 - strlen(buff_lrg));
@@ -599,13 +637,46 @@ int DEBUG::GetLogQueueAvailable() {
 
 }
 
+char* DEBUG::FormatBinary(unsigned int int_in)
+{
+	static char bit_str[100]; bit_str[0] = '\0';
+	UNION_SERIAL U;
+	byte bit_ind = 0;
+
+	U.i32 = int_in;
+
+	bool do_write = false;
+	for (int i = 3; i >= 0; i--)
+	{
+		do_write = do_write || U.b[i] > 0;
+		if (!do_write) {
+			continue;
+		}
+
+		for (int j = 7; j >= 0; j--) {
+			bit_str[bit_ind++] = ((U.b[i] >> j) & 0x01) == 1 ? '1' : '0';
+			//SerialUSB.print(((U.b[i] >> j) & 0x01) == 1 ? "1" : "0");
+		}
+
+		if (i>0) {
+			bit_str[bit_ind++] = ',';
+			//SerialUSB.print(",");
+		}
+	}
+	bit_str[bit_ind++] = '\0';
+	//SerialUSB.println(bit_str);
+	//SerialUSB.print('\n');
+
+	return bit_str;
+}
+
 void DEBUG::sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...) {
 
 	// Local vars
 	static const uint16_t buff_size = buffMax * 2;
 	static char buff[buff_size]; buff[0] = '\0';
-	char str_prfx_med_1[buffMed] = "*T*";
-	char str_prfx_med_2[buffMed] = "[**TRUNCATED**]";
+	const char str_prfx_med_1[buffMed] = "*T*";
+	const char str_prfx_med_2[buffMed] = "[**TRUNCATED**]";
 	int cut_ind = 0;
 
 	// Reset output buffer
@@ -714,7 +785,7 @@ bool CheckForHandshake()
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static uint32_t t_timeout = 0;
-	byte in_byte[1] = { 0 };
+	VEC<byte> in_byte(1, __LINE__);
 	uint32_t ir_start = 0;
 
 	// Bail if session started
@@ -763,28 +834,64 @@ bool CheckForHandshake()
 		// Turn IR back on
 		SetIR(0, 0, FORCE_ON);
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Store most resent pulse time
 		t_sync = t_irSyncLast;
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Log pulse time
-		Debug.sprintf_safe(buffLrg, buff_lrg, "%dms IR SYNC PULSE SENT", t_sync - ir_start);
+		int dt_pulse = t_sync - ir_start;
+		Debug.sprintf_safe(buffLrg, buff_lrg, "%dms IR SYNC PULSE SENT", dt_pulse);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
+		SerialUSB.println("!!!!! CRASH !!!!!!!");
+		Debug.DB_General(__FUNCTION__, __LINE__, "!!!!! CRASH !!!!!!!");
+		
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 
 		// Turn IR back off
 		delayMicroseconds(dt_irSyncPulseOn * 1000);
 		SetIR(0, 0, FORCE_OFF);
+
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 
 		// Dump CS buffer
 		while (c2a.hwSerial.available()) {
 			c2a.hwSerial.read();
 		}
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Set flag
 		fc.is_CSHandshakeDone = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "CS Handshake Confirmed");
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Set abort time
 		t_timeout = millis() + dt_timeoutHandshake;
+
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 
 	}
 
@@ -792,41 +899,75 @@ bool CheckForHandshake()
 	if (!fc.is_FeederDueHandshakeDone && r2a.idNow == 'h' && r2a.is_new)
 	{
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Set flag
 		fc.is_FeederDueHandshakeDone = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "CheetaDue Handshake Confirmed");
+
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 
 	}
 
 	// Check if handshake complete
 	if (fc.is_CSHandshakeDone && fc.is_FeederDueHandshakeDone) {
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Log sync time
 		Debug.sprintf_safe(buffLrg, buff_lrg, "SET SYNC TIME: %dms", t_sync);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, t_sync);
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Enable PT interupts
 		v_doPTInterupt = true;
+
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 
 		// Dump Xbee buffer
 		while (r2a.hwSerial.available() > 0) {
 			r2a.hwSerial.read();
 		}
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
+
 		// Set flag
 		fc.is_SesStarted = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "HANDSHAKE COMPLETE");
 
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 	}
 
 	// Check for handshake timeout
 	else if (t_timeout > 0 && millis() > t_timeout) {
+
+		// TEMP
+		SerialUSB.print("CheckForHandshake: ");
+		SerialUSB.println(__LINE__ - 7);
 
 		// Format message
 		Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE TIMEDOUT AFTER %d ms: |%s%s",
 			dt_timeoutHandshake,
 			!fc.is_CSHandshakeDone ? "NO CS HANDSHAKE|" : "",
 			!fc.is_FeederDueHandshakeDone ? "NO FEEDERDUE HANDSHAKE|" : "");
+
+		//TEMP
+		Debug.Print();
 
 		// Run error hold and restart
 		Debug.RunErrorHold(buff_lrg, 15);
@@ -858,7 +999,7 @@ void GetSerial()
 	byte b = 0;
 	char head = ' ';
 	char id = ' ';
-	float dat[3] = { 0 };
+	VEC<float> dat(3, __LINE__);
 	char foot = ' ';
 	bool do_conf = false;
 	bool is_conf = false;
@@ -1170,7 +1311,8 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	int id_ind = 0;
-	float dat[3] = { dat1 , dat2 , dat3 };
+	float _dat[3] = { dat1 , dat2 , dat3 };
+	VEC<float> dat(3, __LINE__, _dat);
 	byte conf_flag = 0;
 
 	// Set conf_flag
@@ -1185,8 +1327,6 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 
 	// Check if ind should roll over 
 	if (a2r.SQ_StoreInd == SQ_Capacity) {
-
-		// Reset queueIndWrite
 		a2r.SQ_StoreInd = 0;
 	}
 
@@ -1291,7 +1431,7 @@ bool SendPacket()
 	int dt_rcvd = 0;
 	int dt_queue = 0;
 	char id = '\0';
-	float dat[3] = { 0 };
+	VEC<float> dat(3, __LINE__);
 	bool do_conf = false;
 	bool is_conf = false;
 	bool is_resend = false;
@@ -1433,8 +1573,6 @@ void QueueLog(char *p_msg, uint32_t t)
 
 	// Check if ind should roll over 
 	if (LQ_StoreInd == LQ_Capacity) {
-
-		// Reset queueIndWrite
 		LQ_StoreInd = 0;
 	}
 
@@ -1511,6 +1649,7 @@ bool SendLog()
 	if (!fc.is_SesStarted ||
 		LQ_ReadInd == LQ_StoreInd &&
 		LQ_Queue[LQ_StoreInd][0] == '\0') {
+
 		return false;
 	}
 
@@ -1680,10 +1819,12 @@ void HardwareTest(int test_num)
 	{
 		// Create hwSerial word for rew event pins only
 		Debug.DB_General(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward Event Only");
-		int SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
-		word_rewStr = GetPortWord(0x0, SAM_on_pins, 1);
-		int SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
-		word_rewEnd = GetPortWord(0x0, SAM_off_pins, 1);
+		int _SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
+		VEC<int> SAM_on_pins(1, __LINE__, _SAM_on_pins);
+		word_rewStr = GetPortWord(0x0, SAM_on_pins);
+		int _SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
+		VEC<int> SAM_off_pins(1, __LINE__, _SAM_off_pins);
+		word_rewEnd = GetPortWord(0x0, SAM_off_pins);
 
 		// Write word on then off
 		SetPort(word_rewStr, word_rewEnd);
@@ -1697,10 +1838,12 @@ void HardwareTest(int test_num)
 	{
 		// Create hwSerial word for white and tone pins
 		Debug.DB_General(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward With Sound");
-		int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
-		word_rewStr = GetPortWord(0x0, SAM_on_pins, 3);
-		int SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
-		word_rewEnd = GetPortWord(0x0, SAM_off_pins, 3);
+		int _SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
+		VEC<int> SAM_on_pins(3, __LINE__, _SAM_on_pins);
+		word_rewStr = GetPortWord(0x0, SAM_on_pins);
+		int _SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
+		VEC<int> SAM_off_pins(3, __LINE__, _SAM_off_pins);
+		word_rewEnd = GetPortWord(0x0, SAM_off_pins);
 
 		// Write word on then off
 		SetPort(word_rewStr, word_rewEnd);
@@ -1957,12 +2100,12 @@ template <typename A24> int ID_Ind(char id, A24 *p_r24)
 }
 
 // GET 32 BIT WORD FOR PORT
-uint32_t GetPortWord(uint32_t word, int *p_pin_arr, int arr_size)
+uint32_t GetPortWord(uint32_t word, VEC<int> pin_vec)
 {
 
 	// Get 32 bit state
-	for (int i = 0; i < arr_size; i++) {
-		word = word | 0x01 << p_pin_arr[i];
+	for (int i = 0; i < pin_vec.lng(); i++) {
+		word = word | 0x01 << pin_vec[i];
 	}
 
 	return word;
@@ -2214,6 +2357,18 @@ void Interrupt_East()
 
 #pragma endregion
 
+// TEMP
+// GET 32 BIT WORD FOR PORT
+uint32_t GetPortWord_OLD(uint32_t word, int *p_pin_arr, int arr_size)
+{
+
+	// Get 32 bit state
+	for (int i = 0; i < arr_size; i++) {
+		word = word | 0x01 << p_pin_arr[i];
+	}
+
+	return word;
+}
 
 void setup()
 {
@@ -2232,7 +2387,7 @@ void setup()
 	}
 
 	// XBee
-	r2a.hwSerial.begin(57600);
+	a2r.hwSerial.begin(57600);
 
 	// CS through programming hwSerial
 	a2c.hwSerial.begin(57600);
@@ -2252,10 +2407,12 @@ void setup()
 	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output hwSerial
 
 	// Get ir words
-	int SAM_ir_all_pins[2] = { pin.SAM_TTL_IR, pin.SAM_REL_IR };
-	word_irAll = GetPortWord(0x0, SAM_ir_all_pins, 2);
-	int SAM_ir_rel_pins[1] = { pin.SAM_REL_IR };
-	word_irRel = GetPortWord(0x0, SAM_ir_rel_pins, 1);
+	int _SAM_ir_all_pins[2] = { pin.SAM_TTL_IR, pin.SAM_REL_IR };
+	VEC<int> SAM_ir_all_pins(2, __LINE__, _SAM_ir_all_pins);
+	word_irAll = GetPortWord(0x0, SAM_ir_all_pins);
+	int _SAM_ir_rel_pins[1] = { pin.SAM_REL_IR };
+	VEC<int> SAM_ir_rel_pins(1, __LINE__, _SAM_ir_rel_pins);
+	word_irRel = GetPortWord(0x0, SAM_ir_rel_pins);
 
 	// SETUP INTERUPTS
 
@@ -2529,10 +2686,12 @@ void loop()
 		if (fc.do_WhiteNoise && fc.do_RewTone) {
 
 			// Create word
-			int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
-			word_rewStr = GetPortWord(0x0, SAM_on_pins, 3);
-			int SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
-			word_rewEnd = GetPortWord(0x0, SAM_off_pins, 3);
+			int _SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
+			VEC<int> SAM_on_pins(3, __LINE__, _SAM_on_pins);
+			word_rewStr = GetPortWord(0x0, SAM_on_pins);
+			int _SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
+			VEC<int> SAM_off_pins(3, __LINE__, _SAM_off_pins);
+			word_rewEnd = GetPortWord(0x0, SAM_off_pins);
 
 		}
 
@@ -2540,10 +2699,12 @@ void loop()
 		else {
 
 			// Create word
-			int SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
-			word_rewStr = GetPortWord(0x0, SAM_on_pins, 1);
-			int SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
-			word_rewEnd = GetPortWord(0x0, SAM_off_pins, 1);
+			int _SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
+			VEC<int> SAM_on_pins(1, __LINE__, _SAM_on_pins);
+			word_rewStr = GetPortWord(0x0, SAM_on_pins);
+			int _SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
+			VEC<int> SAM_off_pins(1, __LINE__, _SAM_off_pins);
+			word_rewEnd = GetPortWord(0x0, SAM_off_pins);
 		}
 
 		// Turn on white noise
@@ -2553,8 +2714,9 @@ void loop()
 			digitalWrite(pin.REL_WHITE, LOW);
 
 			// Set hwSerial 
-			int SAM_white_pins[2] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE };
-			uint32_t word_white = GetPortWord(0x0, SAM_white_pins, 2);
+			int _SAM_white_pins[2] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE };
+			VEC<int> SAM_white_pins(2, __LINE__, _SAM_white_pins);
+			uint32_t word_white = GetPortWord(0x0, SAM_white_pins);
 			SetPort(word_white, 0x0);
 		}
 

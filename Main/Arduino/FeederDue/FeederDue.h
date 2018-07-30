@@ -476,6 +476,7 @@ volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma endregion 
 
+
 #pragma region ============== COM SETUP ===============
 
 // SERIAL QUEUE 
@@ -484,7 +485,7 @@ const int SQ_MsgBytes = 18;
 
 
 // PACKET RANGE
-const uint16_t _pack_range[2] = { 1, UINT16_MAX };
+const uint16_t _pack_range[2] = { 1, UINT16_MAX-1 };
 
 // COM INSTANCE ID
 namespace COM
