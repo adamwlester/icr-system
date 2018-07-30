@@ -624,13 +624,13 @@ void GetSerial()
 		pack - (r42t.packRange[0] - 1);
 
 	// Update dropped packets
-	int cnt_dropped = (pack - r42t.packInd) - 1;
-	r42t.cnt_dropped += pack_diff - 1;
+	int dropped = (pack - r42t.packInd) - 1;
+	r42t.cnt_dropped += dropped;
 
 	// Log/print dropped packs
 #if DO_PRINT_DEBUG || DO_LOG_DEBUG
-	if (cnt_dropped > 0) {
-		sprintf(str, "**WARNING** [GetSerial] DROPPED PACKETS: cnt=|%d|%d|", cnt_dropped, r42t.cnt_dropped);
+	if (dropped > 0) {
+		sprintf(str, "**WARNING** [GetSerial] DROPPED PACKETS: cnt=|%d|%d|", dropped, r42t.cnt_dropped);
 		DebugTeensy(str);
 	}
 #endif

@@ -1,78 +1,85 @@
+//######################################
 
-// NOTES
+//======== FeederDue_PinMap.h ==========
+
+//######################################
+
+
+#ifndef FEEDERDUE_PINMAP_H
+#define FEEDERDUE_PINMAP_H
+
+
+//============== NOTES =================
 /*
-	PIN MAP:
-		0,RX_R24T,blue
-		1,TX_R24T,purple
-		2,LED_REW_C,white
-		3,LED_REW_R,yellow
-		4,LED_TRACKER,red
-		5,AD_CSP_R,yellow
-		6,AD_CSP_F,red
-		7,AD_RST,brown
-		8,LCD_CS,white
-		9,LCD_RST,gray
-		10,LCD_DC,purple
-		11,LCD_MOSI,blue
-		12,LCD_SCK,green
-		13,LCD_LED,yellow
-		14,TX_R24C,orange
-		15,RX_R24C,purple
-		16,TX_R24A,orange
-		17,RX_R24A,purple
-		18,TX_OL,blue
-		19,RX_OL,green
-		20,SLA_PIXY,white
-		21,SCL_PIXY,green
-		22,REL_FOOD,green
-		23,REL_ETOH,blue
-		24,PWR_SWITCH,white
-		25,PWR_SWITCH_GRN,black
-		26,XB_CTS_F,blue
-		27,XB_UNDEF_F,yellow
-		28,XB_CTS_R,blue
-		29,XB_UNDEF_R,yellow
-		30,OL_RST,purple
-		31,INTERUPT_IR_DETECT,white
-		32,TEENSY_UNUSED,green
-		33,ED_ENBL,yellow
-		34,TEENSY_SEND,yellow
-		35,ED_MS1,orange
-		36,TEENSY_RESET,orange
-		37,ED_MS2,red
-		38,UNUSED,NA
-		39,ED_MS3,brown
-		40,SWITCH_DISH,red
-		41,SWITCH_DISH_GRN,black
-		42,INTERUPT_IRPROX_R,green
-		43,INTERUPT_IRPROX_L,blue
-		44,PWR_OFF,gray
-		45,PWR_ON,white
-		46,REG_5V2_ENBLE,blue
-		47,ED_RST,green
-		48,REG_5V1_ENBLE,green
-		49,ED_SLP,blue
-		50,REG_12V2_ENBLE,yellow
-		51,ED_DIR,gray
-		52,UNUSED,NA
-		53,ED_STP,white
-		54,BTN[2],white
-		55,BTN[1],purple
-		56,BTN[0],blue
-		57,REL_VCC,orange
-		58,REG_24V_ENBLE,red
-		59,BAT_VCC,brown
-		60,UNUSED,NA
-		61,UNUSED,NA
-		62,TEST_SIGNAL,NA
-		63,UNUSED,NA
-		64,UNUSED,NA
-		65,UNUSED,NA
+PIN MAP:
+0,RX_R24T,blue
+1,TX_R24T,purple
+2,LED_REW_C,white
+3,LED_REW_R,yellow
+4,LED_TRACKER,red
+5,AD_CSP_R,yellow
+6,AD_CSP_F,red
+7,AD_RST,brown
+8,LCD_CS,white
+9,LCD_RST,gray
+10,LCD_DC,purple
+11,LCD_MOSI,blue
+12,LCD_SCK,green
+13,LCD_LED,yellow
+14,TX_R24C,orange
+15,RX_R24C,purple
+16,TX_R24A,orange
+17,RX_R24A,purple
+18,TX_OL,blue
+19,RX_OL,green
+20,SLA_PIXY,white
+21,SCL_PIXY,green
+22,REL_FOOD,green
+23,REL_ETOH,blue
+24,PWR_SWITCH,white
+25,PWR_SWITCH_GRN,black
+26,XB_CTS_F,blue
+27,XB_UNDEF_F,yellow
+28,XB_CTS_R,blue
+29,XB_UNDEF_R,yellow
+30,OL_RST,purple
+31,INTERUPT_IR_DETECT,white
+32,TEENSY_UNUSED,green
+33,ED_ENBL,yellow
+34,TEENSY_SEND,yellow
+35,ED_MS1,orange
+36,TEENSY_RESET,orange
+37,ED_MS2,red
+38,UNUSED,NA
+39,ED_MS3,brown
+40,SWITCH_DISH,red
+41,SWITCH_DISH_GRN,black
+42,INTERUPT_IRPROX_R,green
+43,INTERUPT_IRPROX_L,blue
+44,PWR_OFF,gray
+45,PWR_ON,white
+46,REG_5V2_ENBLE,blue
+47,ED_RST,green
+48,REG_5V1_ENBLE,green
+49,ED_SLP,blue
+50,REG_12V2_ENBLE,yellow
+51,ED_DIR,gray
+52,UNUSED,NA
+53,ED_STP,white
+54,BTN_3,white
+55,BTN_2,purple
+56,BTN_1,blue
+57,REL_VCC,orange
+58,REG_24V_ENBLE,red
+59,BAT_VCC,brown
+60,UNUSED,NA
+61,UNUSED,NA
+62,TEST_SIGNAL,NA
+63,UNUSED,NA
+64,UNUSED,NA
+65,UNUSED,NA
 
 */
-#ifndef FeederDue_PinMap_h
-#define FeederDue_PinMap_h
-
 
 #pragma region ============== DEFINE PINS ==============
 
@@ -147,14 +154,16 @@ struct PIN
 	const int BAT_VCC = A5; // (brown)
 
 	// Buttons
-	const int BTN[3] = { A2, A1, A0 }; // (blue, purple, white)
+	const int BTN_1 = A2; // (blue)
+	const int BTN_2 = A1; // (purple)
+	const int BTN_3 = A0; // (white)
 
 	// Testing
 	int TEST_SIGNAL = A8;
 
 	/*
 	Note: pins bellow are all used for external interupts
-	and must all be members of the same port (PortA)
+	and must all be members of the same hwSerial (PortA)
 	*/
 
 	// Power button
@@ -293,9 +302,9 @@ void SetupPins() {
 
 	// Set power, button and switch internal pullup
 	pinMode(pin.PWR_SWITCH, INPUT_PULLUP);
-	for (int i = 0; i <= 2; i++) {
-		pinMode(pin.BTN[i], INPUT_PULLUP);
-	}
+	pinMode(pin.BTN_1, INPUT_PULLUP);
+	pinMode(pin.BTN_2, INPUT_PULLUP);
+	pinMode(pin.BTN_3, INPUT_PULLUP);
 	pinMode(pin.SWITCH_DISH, INPUT_PULLUP);
 	delayMicroseconds(100);
 }

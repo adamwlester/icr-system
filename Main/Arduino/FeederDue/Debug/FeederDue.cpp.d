@@ -137,6 +137,7 @@ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\Feeder
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Stream.h \
  C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue.h \
  C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\FeederDue_PinMap.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\SafeVector.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\MemoryFree/MemoryFree.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\DueTimer/DueTimer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\SPI\src/SPI.h \
@@ -148,5 +149,4 @@ C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Debug\Feeder
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\LCD5110_Basic/hardware/arm/HW_ARM_defines.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\TinyEKF/TinyEKF.h \
  C:\Users\lester\MeDocuments\AppData\Arduino\libraries\TinyEKF/tiny_ekf_struct.h \
- C:\Program\ Files\ (x86)\Microsoft\ Visual\ Studio\2017\Community\Common7\IDE\Extensions\53ggn0bh.0i3\Micro\ Platforms\default\debuggers\VM_DBG/VM_DBG.h \
- C:\Program\ Files\ (x86)\Microsoft\ Visual\ Studio\2017\Community\Common7\IDE\Extensions\53ggn0bh.0i3\Micro\ Platforms\default\debuggers\VM_DBG/VM_Boards.h
+ C:\Program\ Files\ (x86)\Microsoft\ Visual\ Studio\2017\Community\Common7\IDE\Extensions\53ggn0bh.0i3\Micro\ Platforms\default\debuggers\VM_DBG/VM_DBG.h

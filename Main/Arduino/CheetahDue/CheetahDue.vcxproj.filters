@@ -165,6 +165,15 @@
     <ClInclude Include="..\..\..\..\..\..\..\..\AppData\Arduino\libraries\Arduino-MemoryFree\pgmStrToRAM.h">
       <Filter>src\_micro-api-readonly\libraries\Arduino-MemoryFree</Filter>
     </ClInclude>
+    <ClInclude Include="CheetahDue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CheetahDue_PinMap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SafeVector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\abi.cpp">

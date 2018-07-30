@@ -135,5 +135,7 @@ C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\Che
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/USB/USBAPI.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/RingBuffer.h \
  C:\Users\lester\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino/Stream.h \
- C:\Users\lester\MeDocuments\AppData\Arduino\libraries\MemoryFree/MemoryFree.h \
- C:\Users\lester\MeDocuments\AppData\Arduino\libraries\DueTimer/DueTimer.h
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\CheetahDue_PinMap.h \
+ C:\Users\lester\AppData\Local\Temp\VMBuilds\CheetahDue\arduino_due_x\Release\SafeVector.h \
+ C:\Users\lester\MeDocuments\AppData\Arduino\libraries\MemoryFree/MemoryFree.h

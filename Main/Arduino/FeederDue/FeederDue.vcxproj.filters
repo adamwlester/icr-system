@@ -228,6 +228,9 @@
     <ClInclude Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\libraries\Wire\src\Wire.h">
       <Filter>src\_micro-api-readonly\libraries\Wire</Filter>
     </ClInclude>
+    <ClInclude Include="SafeVector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\..\..\..\..\AppData\Local\arduino15\packages\arduino\hardware\sam\1.6.11\cores\arduino\abi.cpp">
