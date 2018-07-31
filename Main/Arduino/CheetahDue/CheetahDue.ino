@@ -36,6 +36,8 @@ public:
 
 	// METHODS
 	DEBUG();
+	// CHECK EVERY LOOP
+	void CheckLoop();
 	// LOG/PRING MAIN EVENT
 	void DB_General(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
 	// LOG/PRINT WARNINGS
@@ -43,11 +45,11 @@ public:
 	// LOG/PRINT ERRORS
 	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
 	// LOG/PRINT RCVD PACKET
-	void DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, bool is_conf);
+	void DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte);
 	// LOG/PRINT QUEUED SEND PACKET
 	void DB_SendQueued(char *p_msg, uint32_t t);
 	// LOG/PRINT SENT PACKET
-	void DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, bool is_conf);
+	void DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte);
 	// PRINT LOG SEND
 	void DB_LogSend(char *p_msg);
 	// TEST PIN MAPPING
@@ -85,48 +87,70 @@ DEBUG Debug;
 
 // CHECK FOR HANDSHAKE
 bool CheckForHandshake();
+
 // PARSE SERIAL INPUT
 void GetSerial();
+
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(char mtch = '\0');
+
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf);
+void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf, bool is_done);
+
 // SEND SERIAL PACKET DATA
 bool SendPacket();
+
 // STORE LOG STRING
 void QueueLog(char *p_msg, uint32_t t);
+
 // SEND LOG DATA OVER SERIAL
 bool SendLog();
+
 // START REWARD
 void StartRew();
+
 // END REWARD
 void EndRew();
-// SEND TEST PACKET
-void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf);
+
 // HARDWARE TEST
 void HardwareTest(int test_num);
+
 // BLINK LEDS AT RESTART/UPLOAD
 void StatusBlink();
+
 // PULSE SYNC IR
 bool IR_SyncPulse();
+
 // SET IR
 bool SetIR(int dt_off, int dt_on, SETIRSTATE force_state = FREE, bool do_ttl = true);
+
 // GET ID INDEX
 template <typename A24> int ID_Ind(char id, A24 *p_r24);
+
+// GET/SET BYTE BIT VALUE
+bool GetSetByteBit(byte * b_set, int bit, bool do_set);
+
 // GET 32 BIT WORD FOR PORT
-uint32_t GetPortWord(uint32_t word, VEC<int> pin_vec);
+uint32_t GetPortWord(uint32_t word, int *p_pin_arr, int arr_size);
+
 // SET PORT
 void SetPort(uint32_t word_on, uint32_t word_off);
+
 // RESET PT PINS
 void ResetTTL();
+
 // QUIT AND RESTART ARDUINO
 void QuitSession();
+
 // NORTH PT
 void Interrupt_North();
+
 // WEST PT
 void Interrupt_West();
+
 // SOUTH PT
 void Interrupt_South();
+
 // EAST PT
 void Interrupt_East();
 
@@ -141,6 +165,31 @@ DEBUG::DEBUG() :
 	warn_line(err_cap, __LINE__),
 	err_line(err_cap, __LINE__)
 {}
+
+void DEBUG::CheckLoop()
+{
+
+	// Keep short count of loops
+	cnt_loopShort++;
+
+	// Track total loops
+	cnt_loopTot++;
+
+	// Check for VEC errors
+#if DO_VEC_DEBUG
+
+	// Log/print each error
+	if (VEC_CNT_ERR > 0) {
+		for (size_t i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
+			Debug.DB_Error(__FUNCTION__, __LINE__, VEC_STR_LIST_ERR[i]);
+		}
+	}
+
+	// Reset counter
+	VEC_CNT_ERR = 0;
+#endif
+
+}
 
 void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 {
@@ -162,13 +211,7 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s", p_fun, line - 23, p_msg);
 
 	if (do_print) {
-		// TEMP
-		SerialUSB.print("DB_General: ");
-		SerialUSB.println(__LINE__ - 7);
 		Queue(buff_store, t);
-		// TEMP
-		SerialUSB.print("DB_General: ");
-		SerialUSB.println(__LINE__ - 7);
 	}
 
 	if (do_log) {
@@ -248,7 +291,7 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 	err_line[cnt_err < 100 ? cnt_err++ : 99] = cnt_logsStored;
 }
 
-void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, bool is_conf)
+void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -270,7 +313,17 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, bool is_conf)
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [%sRCVD%s:%s] %s %s", is_resend ? "*RE*-" : "", is_conf ? "-CONF" : "", "r2a", p_msg_1, p_msg_2);
+	Debug.sprintf_safe(buffMax, buff_store, "   [%sRCVD%s%s:%s] %s %s", 
+		is_resend ? "RE-" : "", 
+		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
+		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
+		"r2c", p_msg_1, p_msg_2);
+
+	// Log as warning if resent
+	if (is_resend) {
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_store, r2a.t_rcvd);
+		return;
+	}
 
 	// Add to print queue
 	if (do_print) {
@@ -317,7 +370,7 @@ void DEBUG::DB_SendQueued(char *p_msg, uint32_t t)
 
 }
 
-void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, bool is_conf)
+void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -340,10 +393,17 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, bool is_conf)
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [%sSENT%s:%s] %s %s",
-		is_resend ? "*RE*-" : "",
-		is_conf ? "-CONF" : "",
+	Debug.sprintf_safe(buffMax, buff_store, "   [%sSENT%s%s:%s] %s %s",
+		is_resend ? "RE-" : "",
+		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
+		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		"a2r", p_msg_1, p_msg_2);
+
+	// Log as warning if resending
+	if (is_resend) {
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_store, a2r.t_sent);
+		return;
+	}
 
 	// Store
 	if (do_print) {
@@ -446,41 +506,14 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 		return;
 	}
 
-	// TEMP
-	SerialUSB.print("Queue: ");
-	SerialUSB.println(__LINE__ - 7);
-
 	// Get sync correction
 	t_m = t - t_sync;
 
 	// Convert to seconds
 	t_s = (float)(t_m) / 1000.0f;
 
-	// TEMP
-	SerialUSB.println(t);
-	SerialUSB.println(t_sync);
-	SerialUSB.println(t_m);
-	SerialUSB.println(t_s);
-	SerialUSB.println(cnt_loopShort);
-
-	// TEMP
-	if (t_m == 1) {
-		SerialUSB.println("!!!!!!!!!!!!!!!!!!!!!!!!!");
-		SerialUSB.print("Queue: ");
-		SerialUSB.println(__LINE__ - 7);
-		float t_ss = (float)(1) / 1000.0f;
-		sprintf(buff_lrg, "[%0.3f]", t_ss);
-		SerialUSB.print("Queue: ");
-		SerialUSB.println(__LINE__ - 7);
-	}
-
 	// Make time string
-	// TEMP Debug.sprintf_safe(buffLrg, buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
-	sprintf(buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
-
-	// TEMP
-	SerialUSB.print("Queue: ");
-	SerialUSB.println(__LINE__ - 7);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
 
 	// Add space after time
 	Debug.sprintf_safe(buffMed, buff_med_1, "%%%ds", 20 - strlen(buff_lrg));
@@ -655,12 +688,10 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 
 		for (int j = 7; j >= 0; j--) {
 			bit_str[bit_ind++] = ((U.b[i] >> j) & 0x01) == 1 ? '1' : '0';
-			//SerialUSB.print(((U.b[i] >> j) & 0x01) == 1 ? "1" : "0");
 		}
 
 		if (i>0) {
 			bit_str[bit_ind++] = ',';
-			//SerialUSB.print(",");
 		}
 	}
 	bit_str[bit_ind++] = '\0';
@@ -834,140 +865,68 @@ bool CheckForHandshake()
 		// Turn IR back on
 		SetIR(0, 0, FORCE_ON);
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Store most resent pulse time
 		t_sync = t_irSyncLast;
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Log pulse time
-		int dt_pulse = t_sync - ir_start;
-		Debug.sprintf_safe(buffLrg, buff_lrg, "%dms IR SYNC PULSE SENT", dt_pulse);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "%dms IR SYNC PULSE SENT", t_sync - ir_start);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
-		SerialUSB.println("!!!!! CRASH !!!!!!!");
-		Debug.DB_General(__FUNCTION__, __LINE__, "!!!!! CRASH !!!!!!!");
-		
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 
 		// Turn IR back off
 		delayMicroseconds(dt_irSyncPulseOn * 1000);
 		SetIR(0, 0, FORCE_OFF);
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 
 		// Dump CS buffer
 		while (c2a.hwSerial.available()) {
 			c2a.hwSerial.read();
 		}
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Set flag
 		fc.is_CSHandshakeDone = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "CS Handshake Confirmed");
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Set abort time
 		t_timeout = millis() + dt_timeoutHandshake;
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 
 	}
 
 	// Check for handshake confirmation from FeederDue
-	if (!fc.is_FeederDueHandshakeDone && r2a.idNow == 'h' && r2a.is_new)
+	if (!fc.is_FeederDueHandshakeDone && r2a.idNew == 'h' && r2a.is_new)
 	{
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Set flag
 		fc.is_FeederDueHandshakeDone = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "CheetaDue Handshake Confirmed");
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 
 	}
 
 	// Check if handshake complete
 	if (fc.is_CSHandshakeDone && fc.is_FeederDueHandshakeDone) {
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Log sync time
 		Debug.sprintf_safe(buffLrg, buff_lrg, "SET SYNC TIME: %dms", t_sync);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, t_sync);
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Enable PT interupts
 		v_doPTInterupt = true;
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 
 		// Dump Xbee buffer
 		while (r2a.hwSerial.available() > 0) {
 			r2a.hwSerial.read();
 		}
 
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
-
 		// Set flag
 		fc.is_SesStarted = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "HANDSHAKE COMPLETE");
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 	}
 
 	// Check for handshake timeout
 	else if (t_timeout > 0 && millis() > t_timeout) {
-
-		// TEMP
-		SerialUSB.print("CheckForHandshake: ");
-		SerialUSB.println(__LINE__ - 7);
 
 		// Format message
 		Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE TIMEDOUT AFTER %d ms: |%s%s",
 			dt_timeoutHandshake,
 			!fc.is_CSHandshakeDone ? "NO CS HANDSHAKE|" : "",
 			!fc.is_FeederDueHandshakeDone ? "NO FEEDERDUE HANDSHAKE|" : "");
-
-		//TEMP
-		Debug.Print();
 
 		// Run error hold and restart
 		Debug.RunErrorHold(buff_lrg, 15);
@@ -984,7 +943,7 @@ bool CheckForHandshake()
 void GetSerial()
 {
 	/*
-	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
+	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]flag_byte, [8]footer
 	*/
 
 	// Local vars
@@ -1004,7 +963,7 @@ void GetSerial()
 	bool do_conf = false;
 	bool is_conf = false;
 	bool is_resend = false;
-	byte conf_flag = 0;
+	byte flag_byte = 0;
 	uint16_t pack = 0;
 	int id_ind = ' ';
 
@@ -1012,7 +971,7 @@ void GetSerial()
 	cnt_bytesRead = 0;
 	cnt_bytesDiscarded = 0;
 	r2a.is_new = false;
-	r2a.idNow = ' ';
+	r2a.idNew = ' ';
 
 	// Bail if no new input
 	if (r2a.hwSerial.available() == 0) {
@@ -1051,9 +1010,9 @@ void GetSerial()
 	// Get confirmation flag
 	U.f = 0.0f;
 	U.b[0] = WaitBuffRead();
-	conf_flag = U.b[0];
-	do_conf = conf_flag == 1 ? true : false;
-	is_conf = conf_flag == 2 ? true : false;
+	flag_byte = U.b[0];
+	do_conf = GetSetByteBit(&flag_byte, 0, false);
+	is_conf = GetSetByteBit(&flag_byte, 1, false);
 
 	// Get footer
 	foot = WaitBuffRead();
@@ -1067,8 +1026,8 @@ void GetSerial()
 	dt_sent = a2r.t_sent > 0 ? millis() - a2r.t_sent : 0;
 
 	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d conf_flag=%d",
-		id, dat[0], dat[1], dat[2], pack, conf_flag);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
 		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, r2a.dt_rcvd, dt_parse);
 
@@ -1089,7 +1048,7 @@ void GetSerial()
 
 		// Send confirmation
 		if (do_conf) {
-			QueuePacket(id, dat[0], dat[1], dat[2], pack, false, true);
+			QueuePacket(id, dat[0], dat[1], dat[2], pack, false, true, false);
 		}
 
 		// Get id ind
@@ -1118,6 +1077,11 @@ void GetSerial()
 			r2a.packArr[id_ind] = pack;
 		else
 			r2a.packConfArr[id_ind] = pack;
+
+		// Update data
+		r2a.dat[0] = dat[0];
+		r2a.dat[1] = dat[1];
+		r2a.dat[2] = dat[2];
 
 		// Update for new packets
 		if (!is_conf && !is_resend) {
@@ -1151,19 +1115,14 @@ void GetSerial()
 			// Increment packets recieved
 			r2a.packRcvdAll++;
 
-		}
-
-		// Update message info
-		if (!is_resend) {
+			// Update new message info
+			r2a.idNew = id;
 			r2a.is_new = true;
-			r2a.idNow = id;
-			r2a.dat[0] = dat[0];
-			r2a.dat[1] = dat[1];
-			r2a.dat[2] = dat[2];
+
 		}
 
 		// Log/print recieved
-		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_resend, is_conf);
+		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_resend, flag_byte);
 
 	}
 
@@ -1301,11 +1260,11 @@ byte WaitBuffRead(char mtch)
 }
 
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf)
+void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf, bool is_done)
 {
 	/*
 	STORE DATA FOR ROBOT
-	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]conf_flag, [8]footer
+	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]flag_byte, [8]footer
 	*/
 
 	// Local vars
@@ -1313,10 +1272,12 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	int id_ind = 0;
 	float _dat[3] = { dat1 , dat2 , dat3 };
 	VEC<float> dat(3, __LINE__, _dat);
-	byte conf_flag = 0;
+	byte flag_byte = 0;
 
-	// Set conf_flag
-	conf_flag = do_conf ? 1 : is_conf ? 2 : 0;
+	// Set flag_byte
+	GetSetByteBit(&flag_byte, 0, do_conf);
+	GetSetByteBit(&flag_byte, 1, is_conf);
+	GetSetByteBit(&flag_byte, 2, is_done);
 
 	// Get buffers
 	uint16_t tx_size = SERIAL_BUFFER_SIZE - 1 - a2r.hwSerial.availableForWrite();
@@ -1400,7 +1361,7 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	a2r.SQ_Queue[a2r.SQ_StoreInd][b_ind++] = U.b[0];
 	a2r.SQ_Queue[a2r.SQ_StoreInd][b_ind++] = U.b[1];
 	// Store confirm type flag
-	a2r.SQ_Queue[a2r.SQ_StoreInd][b_ind++] = conf_flag;
+	a2r.SQ_Queue[a2r.SQ_StoreInd][b_ind++] = flag_byte;
 	// Store footer
 	a2r.SQ_Queue[a2r.SQ_StoreInd][b_ind++] = a2r.foot;
 
@@ -1409,8 +1370,8 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	a2r.t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d conf_flag=%d",
-		id, dat[0], dat[1], dat[2], pack, conf_flag);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 
 	// Log/print sent
 	Debug.DB_SendQueued(buff_lrg, a2r.t_queuedArr[id_ind]);
@@ -1421,7 +1382,7 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 bool SendPacket()
 {
 	/*
-	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]conf_flag, [8]footer
+	FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]flag_byte, [8]footer
 	*/
 
 	// Local vars
@@ -1435,7 +1396,7 @@ bool SendPacket()
 	bool do_conf = false;
 	bool is_conf = false;
 	bool is_resend = false;
-	byte conf_flag = 0;
+	byte flag_byte = 0;
 	uint16_t pack = 0;
 	uint16_t tx_size;
 	uint16_t rx_size;
@@ -1506,11 +1467,9 @@ bool SendPacket()
 	U.b[1] = a2r.SQ_Queue[a2r.SQ_ReadInd][b_ind++];
 	pack = U.i16[0];
 	// conf flag
-	conf_flag = a2r.SQ_Queue[a2r.SQ_ReadInd][b_ind++];
-	// do_conf 
-	do_conf = conf_flag == 1 ? true : false;
-	// is_conf
-	is_conf = conf_flag == 2 ? true : false;
+	flag_byte = a2r.SQ_Queue[a2r.SQ_ReadInd][b_ind++];
+	do_conf = GetSetByteBit(&flag_byte, 0, false);
+	is_conf = GetSetByteBit(&flag_byte, 1, false);
 
 	// Set entry to null
 	a2r.SQ_Queue[a2r.SQ_ReadInd][0] = '\0';
@@ -1539,13 +1498,13 @@ bool SendPacket()
 		r2a.packConfArr[id_ind] = pack;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d conf_flag=%d",
-		id, dat[0], dat[1], dat[2], pack, conf_flag);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d|",
 		SQ_MsgBytes, tx_size, rx_size, a2r.dt_sent, dt_rcvd, dt_queue);
 
 	// Log/print sent
-	Debug.DB_Sent(buff_lrg_2, buff_lrg_3, is_resend, is_conf);
+	Debug.DB_Sent(buff_lrg_2, buff_lrg_3, is_resend, flag_byte);
 
 	// Return success
 	return true;
@@ -1648,7 +1607,8 @@ bool SendLog()
 	// Bail if serial not established or no logs to store
 	if (!fc.is_SesStarted ||
 		LQ_ReadInd == LQ_StoreInd &&
-		LQ_Queue[LQ_StoreInd][0] == '\0') {
+		LQ_Queue[LQ_StoreInd][0] == '\0') 
+	{
 
 		return false;
 	}
@@ -1814,17 +1774,15 @@ void HardwareTest(int test_num)
 	}
 	break;
 
-	// Test hwSerial set reward only
+	// Test port set reward only
 	case 3:
 	{
-		// Create hwSerial word for rew event pins only
+		// Create port word for rew event pins only
 		Debug.DB_General(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward Event Only");
-		int _SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
-		VEC<int> SAM_on_pins(1, __LINE__, _SAM_on_pins);
-		word_rewStr = GetPortWord(0x0, SAM_on_pins);
-		int _SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
-		VEC<int> SAM_off_pins(1, __LINE__, _SAM_off_pins);
-		word_rewEnd = GetPortWord(0x0, SAM_off_pins);
+		int SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
+		word_rewStr = GetPortWord(0x0, SAM_on_pins, 1);
+		int SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
+		word_rewEnd = GetPortWord(0x0, SAM_off_pins, 1);
 
 		// Write word on then off
 		SetPort(word_rewStr, word_rewEnd);
@@ -1833,17 +1791,15 @@ void HardwareTest(int test_num)
 	}
 	break;
 
-	// Test hwSerial set reward with sound
+	// Test port set reward with sound
 	case 4:
 	{
-		// Create hwSerial word for white and tone pins
+		// Create port word for white and tone pins
 		Debug.DB_General(__FUNCTION__, __LINE__, "TEST PORT WORD: Reward With Sound");
-		int _SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
-		VEC<int> SAM_on_pins(3, __LINE__, _SAM_on_pins);
-		word_rewStr = GetPortWord(0x0, SAM_on_pins);
-		int _SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
-		VEC<int> SAM_off_pins(3, __LINE__, _SAM_off_pins);
-		word_rewEnd = GetPortWord(0x0, SAM_off_pins);
+		int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
+		word_rewStr = GetPortWord(0x0, SAM_on_pins, 3);
+		int SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
+		word_rewEnd = GetPortWord(0x0, SAM_off_pins, 3);
 
 		// Write word on then off
 		SetPort(word_rewStr, word_rewEnd);
@@ -1868,7 +1824,7 @@ void HardwareTest(int test_num)
 	// Test arduino pin IR
 	case 6:
 	{
-		// Create hwSerial word for white and tone pins
+		// Create port word for white and tone pins
 		Debug.DB_General(__FUNCTION__, __LINE__, "TEST PORT WORD: IR");
 
 		// Write word on then off
@@ -1929,39 +1885,6 @@ void HardwareTest(int test_num)
 	default:
 		break;
 	}
-}
-
-// SEND TEST PACKET
-void TestSendPack(char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf)
-{
-	// EXAMPLE:
-	/*
-	static uint32_t t_s = 0;
-	static int send_cnt = 0;
-	static uint16_t pack = 0;
-	if (send_cnt == 0 && millis()>t_s + 30) {
-	pack++;
-	TestSendPack('r', 0, 0, 0, 1, true);
-	t_s = millis();
-	send_cnt++;
-	}
-	*/
-
-	//// Only send once
-	//if (cnt_loopShort > 0 || cnt_loop_tot > 0) {
-	//	return;
-	//}
-
-	// Queue packet
-	QueuePacket(id, dat1, dat2, dat3, pack, do_conf, is_conf);
-
-	// Fuck with packet: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]do_conf, [8]footer
-
-	// Send packet
-	SendPacket();
-
-	// Print everything
-	while (Debug.Print());
 }
 
 #pragma endregion
@@ -2036,7 +1959,7 @@ bool SetIR(int dt_pulse, int dt_on, SETIRSTATE force_state, bool do_ttl)
 			millis() > t_irSyncLast + dt_pulse)
 		)
 	{
-		// Set ir hwSerial on
+		// Set ir port on
 		if (do_ttl) {
 			SetPort(word_irAll, 0x0);
 		}
@@ -2060,7 +1983,7 @@ bool SetIR(int dt_pulse, int dt_on, SETIRSTATE force_state, bool do_ttl)
 			millis() > t_irSyncLast + dt_on)
 		)
 	{
-		// Set ir hwSerial off
+		// Set ir port off
 		SetPort(0x0, word_irAll);
 
 		// Update flags
@@ -2099,13 +2022,25 @@ template <typename A24> int ID_Ind(char id, A24 *p_r24)
 
 }
 
+// GET/SET BYTE BIT VALUE
+bool GetSetByteBit(byte * b_set, int bit, bool do_set)
+{
+	// Set bit
+	if (do_set) {
+		*b_set = *b_set | 0x01 << bit;
+	}
+
+	// Return state
+	return ((*b_set >> bit) & 0x01) == 1;
+}
+
 // GET 32 BIT WORD FOR PORT
-uint32_t GetPortWord(uint32_t word, VEC<int> pin_vec)
+uint32_t GetPortWord(uint32_t word, int *p_pin_arr, int arr_size)
 {
 
-	// Get 32 bit state
-	for (int i = 0; i < pin_vec.lng(); i++) {
-		word = word | 0x01 << pin_vec[i];
+	// Set 32 bit word bit state
+	for (int i = 0; i < arr_size; i++) {
+		word = word | 0x01 << p_pin_arr[i];
 	}
 
 	return word;
@@ -2124,7 +2059,7 @@ void SetPort(uint32_t word_on, uint32_t word_off)
 	// Set on entries
 	word_new |= word_on;
 
-	// Update hwSerial registry
+	// Update port registry
 	REG_PIOC_ODSR = word_new;
 
 }
@@ -2357,18 +2292,6 @@ void Interrupt_East()
 
 #pragma endregion
 
-// TEMP
-// GET 32 BIT WORD FOR PORT
-uint32_t GetPortWord_OLD(uint32_t word, int *p_pin_arr, int arr_size)
-{
-
-	// Get 32 bit state
-	for (int i = 0; i < arr_size; i++) {
-		word = word | 0x01 << p_pin_arr[i];
-	}
-
-	return word;
-}
 
 void setup()
 {
@@ -2389,7 +2312,7 @@ void setup()
 	// XBee
 	a2r.hwSerial.begin(57600);
 
-	// CS through programming hwSerial
+	// CS through programming port
 	a2c.hwSerial.begin(57600);
 
 	// Dump CS buffers
@@ -2400,19 +2323,47 @@ void setup()
 	// SETUP PINS
 	SetupPins();
 
+	// LOG/PRINT SETUP RUNNING
+
+	// Print run mode
+	if (DO_DEBUG) {
+		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = DEBUG");
+	}
+	else {
+		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
+	}
+
+	// Log/print compile time
+	Debug.sprintf_safe(buffLrg, buff_lrg, "BUILD DATE: %s %s", __DATE__, __TIME__);
+	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+	// Log and print to console
+	Debug.DB_General(__FUNCTION__, __LINE__, "RUNNING: Setup...");
+	Debug.PrintAll(1000);
+
 	// SETUP TTL PORTS
 
-	// Setup reward ttl stuff on hwSerial C
+	// Setup reward ttl stuff on port C
 	REG_PIOC_OWER = 0xFFFFFFFF;     // enable PORT C
-	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output hwSerial
+	REG_PIOC_OER = 0xFFFFFFFF;     // set PORT C as output port
 
-	// Get ir words
-	int _SAM_ir_all_pins[2] = { pin.SAM_TTL_IR, pin.SAM_REL_IR };
-	VEC<int> SAM_ir_all_pins(2, __LINE__, _SAM_ir_all_pins);
-	word_irAll = GetPortWord(0x0, SAM_ir_all_pins);
-	int _SAM_ir_rel_pins[1] = { pin.SAM_REL_IR };
-	VEC<int> SAM_ir_rel_pins(1, __LINE__, _SAM_ir_rel_pins);
-	word_irRel = GetPortWord(0x0, SAM_ir_rel_pins);
+	// Get ir all word
+	int SAM_ir_all_pins[2] = { pin.SAM_TTL_IR, pin.SAM_REL_IR };
+	word_irAll = GetPortWord(0x0, SAM_ir_all_pins, 2);
+	Debug.sprintf_safe(buffLrg, buff_lrg,
+		"Created Port Word \"%s\": pins=|%d|%d| word=%s",
+		"word_irAll", SAM_ir_all_pins[0], SAM_ir_all_pins[1], Debug.FormatBinary(word_irAll));
+	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+	Debug.PrintAll(1000);
+
+	// Get ir relay word
+	int SAM_ir_rel_pins[1] = { pin.SAM_REL_IR };
+	word_irRel = GetPortWord(0x0, SAM_ir_rel_pins, 1);
+	Debug.sprintf_safe(buffLrg, buff_lrg,
+		"Created Port Word \"%s\": pins=|%d| word=%s",
+		"word_irRel", SAM_ir_rel_pins[0], Debug.FormatBinary(word_irRel));
+	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+	Debug.PrintAll(1000);
 
 	// SETUP INTERUPTS
 
@@ -2432,18 +2383,6 @@ void setup()
 	Debug.DB_PinMap();
 
 	// PRINT DEBUG STATUS
-
-	// Print run mode
-	if (DO_DEBUG) {
-		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = DEBUG");
-	}
-	else {
-		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
-	}
-
-	// Log/print compile time
-	Debug.sprintf_safe(buffLrg, buff_lrg, "BUILD DATE: %s %s", __DATE__, __TIME__);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Print settings
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUNNING IN %s MODE: |%s%s",
@@ -2468,15 +2407,17 @@ void setup()
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 	}
 
-	// PRINT SETUP FINISHED
-	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED: Setup");
-
 	// SET WHITE NOISE RELAY HIGH
 	digitalWrite(pin.REL_WHITE, HIGH);
 
 	// SHOW RESTART BLINK
 	delayMicroseconds(100);
 	StatusBlink();
+
+	// PRINT SETUP FINISHED
+	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED: Setup");
+	Debug.PrintAll(500);
+
 }
 
 
@@ -2488,9 +2429,8 @@ void loop()
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
-	// TRACK LOOPS
-	cnt_loopTot = 0;
-	cnt_loopShort = cnt_loopShort < 999 ? cnt_loopShort + 1 : 1;
+	// DO LOOP CHECK
+	Debug.CheckLoop();
 
 	// RESET TTL PINS
 	ResetTTL();
@@ -2529,7 +2469,7 @@ void loop()
 #pragma region //--- PROCESS NEW MESSAGES ---
 
 	// (t) SESTEM TEST
-	if (r2a.is_new && r2a.idNow == 't') {
+	if (r2a.is_new && r2a.idNew == 't') {
 
 		// Wall IR timing test
 		if (r2a.dat[0] == 5)
@@ -2640,7 +2580,7 @@ void loop()
 	}
 
 	// (r) RUN REWARD TONE
-	if (r2a.is_new && r2a.idNow == 'r') {
+	if (r2a.is_new && r2a.idNew == 'r') {
 
 		// Get reward duration and convert to ms
 		rewDur = (uint32_t)r2a.dat[0];
@@ -2650,7 +2590,7 @@ void loop()
 	}
 
 	// (s) SESSION SETUP
-	if (r2a.is_new && r2a.idNow == 's') {
+	if (r2a.is_new && r2a.idNew == 's') {
 
 		// No noise
 		if (r2a.dat[0] == 0)
@@ -2686,12 +2626,19 @@ void loop()
 		if (fc.do_WhiteNoise && fc.do_RewTone) {
 
 			// Create word
-			int _SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
-			VEC<int> SAM_on_pins(3, __LINE__, _SAM_on_pins);
-			word_rewStr = GetPortWord(0x0, SAM_on_pins);
-			int _SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
-			VEC<int> SAM_off_pins(3, __LINE__, _SAM_off_pins);
-			word_rewEnd = GetPortWord(0x0, SAM_off_pins);
+			int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
+			word_rewStr = GetPortWord(0x0, SAM_on_pins, 3);
+			Debug.sprintf_safe(buffLrg, buff_lrg,
+				"Created Port Word \"%s\": pins=|%d|%d|%d| word=%s",
+				"word_rewStr", SAM_on_pins[0], SAM_on_pins[1], SAM_on_pins[2], Debug.FormatBinary(word_rewStr));
+			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+			int SAM_off_pins[3] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE, pin.SAM_TTL_REW_OFF };
+			word_rewEnd = GetPortWord(0x0, SAM_off_pins, 3);
+			Debug.sprintf_safe(buffLrg, buff_lrg,
+				"Created Port Word \"%s\": pins=|%d|%d|%d| word=%s",
+				"word_rewEnd", SAM_off_pins[0], SAM_off_pins[1], SAM_off_pins[2], Debug.FormatBinary(word_rewEnd));
+			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 		}
 
@@ -2699,12 +2646,19 @@ void loop()
 		else {
 
 			// Create word
-			int _SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
-			VEC<int> SAM_on_pins(1, __LINE__, _SAM_on_pins);
-			word_rewStr = GetPortWord(0x0, SAM_on_pins);
-			int _SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
-			VEC<int> SAM_off_pins(1, __LINE__, _SAM_off_pins);
-			word_rewEnd = GetPortWord(0x0, SAM_off_pins);
+			int SAM_on_pins[1] = { pin.SAM_TTL_REW_ON };
+			word_rewStr = GetPortWord(0x0, SAM_on_pins, 1);
+			Debug.sprintf_safe(buffLrg, buff_lrg,
+				"Created Port Word \"%s\": pins=|%d| word=%s",
+				"word_rewStr", SAM_on_pins[0], Debug.FormatBinary(word_rewStr));
+			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+			int SAM_off_pins[1] = { pin.SAM_TTL_REW_OFF };
+			word_rewEnd = GetPortWord(0x0, SAM_off_pins, 1);
+			Debug.sprintf_safe(buffLrg, buff_lrg,
+				"Created Port Word \"%s\": pins=|%d| word=%s",
+				"word_rewEnd", SAM_off_pins[0], Debug.FormatBinary(word_rewEnd));
+			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 		}
 
 		// Turn on white noise
@@ -2713,17 +2667,23 @@ void loop()
 			// Set relay back to low first
 			digitalWrite(pin.REL_WHITE, LOW);
 
-			// Set hwSerial 
-			int _SAM_white_pins[2] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE };
-			VEC<int> SAM_white_pins(2, __LINE__, _SAM_white_pins);
-			uint32_t word_white = GetPortWord(0x0, SAM_white_pins);
+			// Create word
+			int SAM_white_pins[2] = { pin.SAM_REL_WHITE, pin.SAM_TTL_WHITE };
+			uint32_t word_white = GetPortWord(0x0, SAM_white_pins, 2);
+			Debug.sprintf_safe(buffLrg, buff_lrg,
+				"Created Port Word \"%s\": pins=|%d|%d| word=%s",
+				"word_white", SAM_white_pins[0], SAM_white_pins[1], Debug.FormatBinary(word_white));
+			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+			// Set port
 			SetPort(word_white, 0x0);
+			
 		}
 
 	}
 
 	// (p) SIGNAL PID MODE
-	if (r2a.is_new && r2a.idNow == 'p') {
+	if (r2a.is_new && r2a.idNew == 'p') {
 		// Signal PID stopped
 		if (r2a.dat[0] == 0)
 		{
@@ -2741,7 +2701,7 @@ void loop()
 	}
 
 	// (b) SIGNAL BULLDOZE MODE
-	if (r2a.is_new && r2a.idNow == 'b') {
+	if (r2a.is_new && r2a.idNew == 'b') {
 		// Signal Bull stopped
 		if (r2a.dat[0] == 0)
 		{
@@ -2759,7 +2719,7 @@ void loop()
 	}
 
 	// (q) DO QUIT
-	if (r2a.is_new && r2a.idNow == 'q') {
+	if (r2a.is_new && r2a.idNew == 'q') {
 
 		// Log/print suammry
 		Debug.DoSummary();

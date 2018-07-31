@@ -182,7 +182,7 @@ namespace ICR_Run
             objID: "c2r",
             packRange: pack_range,
             id:
-            new char[18] {
+            new char[17] {
             'h', // setup handshake
 			'n', // ping test packets
 			'T', // system test
@@ -199,7 +199,6 @@ namespace ICR_Run
 			'Z', // reward zone
             'O', // confirm task done
 			'U', // log size
-            'D', // execution done
 			'P', // position data
              },
             head: (byte)'<',
@@ -214,7 +213,7 @@ namespace ICR_Run
             objID: "r2c",
             packRange: pack_range,
             id:
-            new char[18] {
+            new char[17] {
             'h', // setup handshake
 			'n', // ping test packets
 			'T', // system test command
@@ -231,7 +230,6 @@ namespace ICR_Run
 			'Z', // reward zone
             'O', // confirm task done
 			'U', // log size
-			'D', // execution done
 			'P', // position data
              },
             head: (byte)'<',
@@ -1252,7 +1250,7 @@ namespace ICR_Run
                             send_count, id, dat[0], dat[1], dat[2], pack, do_conf, is_conf, do_check_done));
 
                         // Resend
-                        SendFeederDueCom(id: id, dat: dat, pack: pack, do_conf: do_conf, is_conf: is_conf, do_check_done: do_check_done);
+                        SendFeederDueCom(id: id, dat: dat, pack: pack, do_conf: do_conf, is_conf: is_conf, do_check_done: do_check_done, is_resend: true);
                         t_resend = DEBUG.DT() + c2r.dt_resend;
                         send_count++;
                     }
@@ -1283,11 +1281,11 @@ namespace ICR_Run
         }
 
         // SEND PACK DATA
-        public static UInt16 SendFeederDueCom(char id, double[] dat, UInt16 pack, bool do_conf, bool is_conf, bool do_check_done)
+        public static UInt16 SendFeederDueCom(char id, double[] dat, UInt16 pack, bool do_conf, bool is_conf, bool do_check_done, bool is_resend = false)
         {
             /* 
             SEND DATA TO FEEDERDUE 
-            FORMAT: [0]head, [1]id, [2:5]dat1, [6:9]dat2, [10:13]dat2, [14:15]pack, [16]conf_flag, [17]footer
+            FORMAT: [0]head, [1]id, [2:5]dat1, [6:9]dat2, [10:13]dat2, [14:15]pack, [16]flag_byte, [17]footer
             EXAMPLE: ASCII {'<','L','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','ÿ','\0','>','c'} DEC {60,76,1,255,255,0,60}
             */
 
@@ -1307,14 +1305,18 @@ namespace ICR_Run
             string buff_dat_2 = "";
             long dt_rcvd = 0;
             long dt_queued = 0;
-            byte conf_flag = (byte)(do_conf ? 1 : is_conf ? 2 : 0);
+            byte flag_byte = 0;
+
+            // Set flag byte
+            GetSetByteBit(ref flag_byte, 0, do_conf);
+            GetSetByteBit(ref flag_byte, 1, is_conf);
 
             // Track when data queued
             long t_queued = DEBUG.DT();
 
             // Format data string
-            buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} conf_flag={5} do_check_done={6}",
-                id, dat[0], dat[1], dat[2], pack, conf_flag, do_check_done);
+            buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5} do_check_done={6}",
+                id, dat[0], dat[1], dat[2], pack, DEBUG.FormatBinary(flag_byte), do_check_done);
 
             // Log/print packet queued
             if (id != 'P')
@@ -1342,8 +1344,8 @@ namespace ICR_Run
                     pack = c2r.PackIncriment(1);
 
                 // Format data string with updated packet
-                buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} conf_flag={5} do_check_done={6}",
-                    id, dat[0], dat[1], dat[2], pack, conf_flag, do_check_done);
+                buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5} do_check_done={6}",
+                    id, dat[0], dat[1], dat[2], pack, DEBUG.FormatBinary(flag_byte), do_check_done);
 
                 // Wait for next safe send time
                 while (do_loop)
@@ -1424,8 +1426,8 @@ namespace ICR_Run
                     msg_data[b_ind++] = U.b_3;
                 }
 
-                // Store conf_flag 
-                msg_conf[0] = conf_flag;
+                // Store flag_byte 
+                msg_conf[0] = flag_byte;
 
                 // Add header
                 msg_head.CopyTo(msgByteArr, 0);
@@ -1435,7 +1437,7 @@ namespace ICR_Run
                 msg_data.CopyTo(msgByteArr, msg_head.Length + msg_id.Length);
                 // Add packet number
                 msg_pack.CopyTo(msgByteArr, msg_head.Length + msg_id.Length + msg_data.Length);
-                // Add conf_flag
+                // Add flag_byte
                 msg_conf.CopyTo(msgByteArr, msg_head.Length + msg_id.Length + msg_data.Length + msg_pack.Length);
                 // Add footer
                 msg_foot.CopyTo(msgByteArr, msg_head.Length + msg_id.Length + msg_data.Length + msg_pack.Length + msg_conf.Length);
@@ -1444,7 +1446,7 @@ namespace ICR_Run
                 sp_Xbee.Write(msgByteArr, 0, msgByteArr.Length);
 
                 // Update c2r info
-                var result = c2r.UpdateSent(id: id, dat: dat, pack: pack, t: DEBUG.DT(), is_conf: is_conf);
+                var result = c2r.UpdateSent(id: id, dat: dat, pack: pack, t: DEBUG.DT(), is_conf: is_conf, is_resend: is_resend);
                 string str_prfx = result.Item1;
 
                 // Check for vt data
@@ -1452,7 +1454,11 @@ namespace ICR_Run
                 {
                     // Log/print send info
                     string str_print = String.Format("{0} {1}", buff_dat_1, buff_dat_2);
-                    DEBUG.DB_General_Thread(str_print, t: c2r.t_new, str_prfx: str_prfx, indent: 5);
+                    if (!is_resend)
+                        DEBUG.DB_General_Thread(str_print, t: c2r.t_new, str_prfx: str_prfx, indent: 5);
+                    else
+                        DEBUG.DB_Warning_Thread(str_print, t: c2r.t_new, str_prfx: str_prfx);
+
                 }
 
                 // Update vt info
@@ -1649,7 +1655,7 @@ namespace ICR_Run
         {
             /* 
             RECIEVE DATA FROM FEEDERDUE 
-            FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]conf_flag, [8]footer
+            FORMAT: [0]head, [1]id, [2:4]dat, [5:6]pack, [7]flag_byte, [8]footer
             */
 
             // Dump anything in buffers on first run
@@ -1685,9 +1691,10 @@ namespace ICR_Run
                 char id = ' ';
                 double[] dat = new double[3];
                 UInt16 pack = 0;
-                byte conf_flag = 0;
+                byte flag_byte = 0;
                 bool do_conf = false;
                 bool is_conf = false;
+                bool is_done = false;
                 char foot = ' ';
 
                 // Store parse start time
@@ -1766,9 +1773,10 @@ namespace ICR_Run
                         sp_Xbee.Read(conf_bytes, 0, 1);
                         bytes_read += 1;
                         // Get confirm flags
-                        conf_flag = conf_bytes[0];
-                        do_conf = conf_flag == 1 ? true : false;
-                        is_conf = conf_flag == 2 ? true : false;
+                        flag_byte = conf_bytes[0];
+                        do_conf = GetSetByteBit(ref flag_byte, 0, false);
+                        is_conf = GetSetByteBit(ref flag_byte, 1, false);
+                        is_done = GetSetByteBit(ref flag_byte, 2, false);
                     }
 
                     // Find footer
@@ -1795,8 +1803,8 @@ namespace ICR_Run
                 long dt_parse = DEBUG.DT(t1: r2c.t_parseStr);
 
                 // Format data string
-                string buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} conf_flag={5}",
-                        id, dat[0], dat[1], dat[2], pack, conf_flag);
+                string buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5}",
+                        id, dat[0], dat[1], dat[2], pack, DEBUG.FormatBinary(flag_byte));
                 string buff_dat_2 = String.Format("b_read={0} rx={1} tx={2} dt(snd|rcv|prs)=|{3}|{4}|{5}|",
                     bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, c2r.DT_SentRcvd(), dt_rcvd, dt_parse);
 
@@ -1804,9 +1812,22 @@ namespace ICR_Run
                 if (r2c_foot_found)
                 {
                     // Update message info
-                    var result = r2c.UpdateRcvd(id: id, dat: dat, pack: pack, t: r2c.t_parseStr, is_conf: is_conf);
+                    var result = r2c.UpdateRcvd(id: id, dat: dat, pack: pack, t: r2c.t_parseStr, is_conf: is_conf, is_done: is_done);
                     string str_prfx = result.Item1;
+                    bool is_resend = result.Item2;
                     int dropped = result.Item3;
+
+                    // Update check com flags
+                    r2c.SetMsgState(id: id, set_is_sent_rcvd: true);
+                    c2r.SetMsgState(id: id, set_is_conf: is_conf, set_is_done: is_done);
+
+                    // Send recieve confirmation
+                    if (do_conf)
+                        RepeatSendFeederDueCom_Thread(send_max: 1, id: id, dat1: dat[0], dat2: dat[1], dat3: dat[2], pack: pack, do_conf: false, is_conf: true);
+
+                    // Check if data should be relayed to Matlab
+                    if (c2m.ID_Ind(id) != -1)
+                        SendMatCom_Thread(id: id, dat1: dat[0]);
 
                     // Log/print missed packets
                     if (dropped > 0)
@@ -1817,23 +1838,10 @@ namespace ICR_Run
 
                     // Log/print rcvd details
                     string str_print = String.Format("{0} {1}", buff_dat_1, buff_dat_2);
-                    DEBUG.DB_General_Thread(str_print, t: r2c.t_new, str_prfx: str_prfx, indent: 5);
-
-                    // Update check com flags
-                    r2c.SetMsgState(id: id, set_is_sent_rcvd: true);
-                    c2r.SetMsgState(id: id, set_is_conf: true);
-
-                    // Check if this is a done confirmation
-                    if (id == 'D')
-                        c2r.SetMsgState(pack: pack, set_is_done: true);
-
-                    // Send recieve confirmation
-                    if (do_conf)
-                        RepeatSendFeederDueCom_Thread(send_max: 1, id: id, dat1: dat[0], dat2: dat[1], dat3: dat[2], pack: pack, do_conf: false, is_conf: true);
-
-                    // Check if data should be relayed to Matlab
-                    if (c2m.ID_Ind(id) != -1)
-                        SendMatCom_Thread(id: id, dat1: dat[0]);
+                    if (!is_resend)
+                        DEBUG.DB_General_Thread(str_print, t: r2c.t_new, str_prfx: str_prfx, indent: 5);
+                    else
+                        DEBUG.DB_Warning_Thread(str_print, t: r2c.t_new, str_prfx: str_prfx);
 
                 }
 
@@ -2014,21 +2022,15 @@ namespace ICR_Run
                 if (head_found && foot_found)
                 {
                     // Update list
-                    logger_cheetahDue.UpdateLog(str_log);
+                    logger_cheetahDue.UpdateLog(str_log, t:-1);
 
                     // print data received
                     if (DEBUG.flag.do_printDueLog)
                     {
-                        // Update list
-                        logger_cheetahDue.UpdateLog(str_log);
-
-                        // Print
-                        if (DEBUG.flag.do_printDueLog)
-                        {
                             string str_prfx = String.Format("[LOG] a2c[{0}]", logger_cheetahDue.cnt_logsStored);
                             string str_print = String.Format("message=\"{0}\" chksum={1} b_read={2} rx={3} tx={4}", str_log, chksum, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite);
                             DEBUG.DB_General_Thread(str_print, str_prfx: str_prfx, indent: 5);
-                        }
+                        
                     }
 
                     // Change com status
@@ -2344,7 +2346,7 @@ namespace ICR_Run
                         }
 
                         // Update list
-                        logger_feederDue.UpdateLog(new_log);
+                        logger_feederDue.UpdateLog(new_log, t: -1);
 
                         // Save record number 
                         rec_last = rec_now;
@@ -2579,7 +2581,7 @@ namespace ICR_Run
             bool do_check_done = false;
 
             // Update com info
-            var result = m2c.UpdateRcvd(id: id, dat: dat, pack: pack, t: DEBUG.DT(), is_conf: false);
+            var result = m2c.UpdateRcvd(id: id, dat: dat, pack: pack, t: DEBUG.DT());
             string str_prfx = result.Item1;
             bool is_resend = result.Item2;
 
@@ -2843,7 +2845,7 @@ namespace ICR_Run
 
                     // Update com info
                     double[] dat = new double[3] { dat1, 0, 0 };
-                    var result = c2m.UpdateSent(id: id, dat: dat, pack: pack, t: DEBUG.DT(), is_conf: false);
+                    var result = c2m.UpdateSent(id: id, dat: dat, pack: pack, t: DEBUG.DT());
                     string str_prfx = result.Item1;
                     c2m.SetMsgState(id: id, set_is_sent_rcvd: true);
 
@@ -3299,6 +3301,34 @@ namespace ICR_Run
                 DEBUG.DB_Warning_Thread(String.Format("SKIPPED: COPY LOG \"{0}\" TO \"{1}\"", matLogFi, copy_dir));
 
         }
+
+        // GET/SET BYTE BIT VALUE
+        public static bool GetSetByteBit(ref byte b_set, int bit, bool do_set)
+        {
+            // Local vars
+            bool is_set = false;
+            int b_ind = 0;
+            byte mask = 0;
+
+            // Get bit ind and mask
+            b_ind = bit % 8;
+            mask = (byte)(1 << b_ind);
+
+            // Get state
+            is_set = (b_set & mask) != 0;
+
+            // Set value
+            if (do_set)
+            {
+                b_set |= mask;
+                is_set = true;
+            }
+
+            // Return state
+            return is_set;
+
+        }
+
         #endregion
 
     }
@@ -3494,7 +3524,7 @@ namespace ICR_Run
 
 
         // Log/Print Warnings
-        public static void DB_Warning_Thread(string msg, long t = 0, string fun = "", int line = 0)
+        public static void DB_Warning_Thread(string msg, long t = 0, string fun = "", int line = 0, string str_prfx = "")
         {
 
             // Get calling function info
@@ -3511,14 +3541,12 @@ namespace ICR_Run
             // Run on seperate thread
             new Thread(delegate ()
             {
-                DB_Warning(msg: msg, t: t, fun: fun, line: line);
+                DB_Warning(msg: msg, t: t, fun: fun, line: line, str_prfx: str_prfx);
             }).Start();
 
         }
-        public static void DB_Warning(string msg, long t = 0, string fun = "", int line = 0)
+        public static void DB_Warning(string msg, long t = 0, string fun = "", int line = 0, string str_prfx = "")
         {
-            // Local vars
-            string str_prfx = " ";
 
             // Get calling function info
             if (fun == "")
@@ -3529,7 +3557,7 @@ namespace ICR_Run
             }
 
             // Get calling method and line number
-            str_prfx = String.Format("**WARNING** [{0}:{1}] ", fun, line);
+            str_prfx = String.Format("**WARNING** [{0}:{1}] {2}", fun, line, str_prfx);
 
             // Call to log on current thread with warning
             DB_LogPrint(msg, t: t, is_warning: true, fun: fun, line: line, str_prfx: str_prfx, indent: 0);
@@ -3814,6 +3842,42 @@ namespace ICR_Run
 
             // Return DT
             return t_2 - t_1;
+
+        }
+
+        // FORMAT INT AS BINARY
+        public static string FormatBinary(UInt32 int_in)
+        {
+            string bit_str = "";
+            UNION_HACK U = new UNION_HACK(0, '0', 0, 0, 0);
+            U.i32 = int_in;
+
+            bool do_write = false;
+            for (int i = 3; i >= 0; i--)
+            {
+                byte b = i == 0 ? U.b_0 :
+                    i == 1 ? U.b_1 :
+                    i == 2 ? U.b_2 :
+                    U.b_3;
+
+                do_write = do_write || b > 0;
+                if (!do_write)
+                {
+                    continue;
+                }
+
+                for (int j = 7; j >= 0; j--)
+                {
+                    bit_str += (b & (byte)(1 << j)) != 0 ? "1" : "0";
+                }
+
+                if (i > 0)
+                {
+                    bit_str += ",";
+                }
+            }
+
+            return bit_str;
 
         }
 
@@ -4271,7 +4335,10 @@ namespace ICR_Run
                     cnt_dropped[0] = 0;
 
                     // Add count and time
-                    str = String.Format("{0},{1},{2}", cnt_logsStored, t, msg);
+                    if (t > -1)
+                        str = String.Format("{0},{1},{2}", cnt_logsStored, t, msg);
+                    else
+                        str = String.Format("{0},{1}", cnt_logsStored, msg);
 
                     // Add to list
                     if (cnt_logsStored <= _logList.Length)
@@ -4540,7 +4607,7 @@ namespace ICR_Run
         }
 
         // Set check status
-        public void SetMsgState(char id = ' ', UInt16 pack = 0, bool set_is_sent_rcvd = false, bool set_is_conf = false, bool set_is_done = false, bool state = true, bool do_print = true)
+        public void SetMsgState(char id = ' ', UInt16 pack = 0, bool set_is_sent_rcvd = false, bool set_is_conf = false, bool set_is_done = false, bool do_print = true)
         {
             // Local vars
             int id_ind = id != ' ' ? ID_Ind(id) : ID_Pack_Ind(pack);
@@ -4549,27 +4616,27 @@ namespace ICR_Run
             if (set_is_sent_rcvd)
             {
                 lock (_lock_isSentRcv)
-                    _isSentRcv[id_ind] = state;
+                    _isSentRcv[id_ind] = true;
                 if (do_print)
-                    DEBUG.DB_General_Thread(String.Format("SET {0} '{1}' |Send/Rcv| {2}", _objID, id, state), indent: 10);
+                    DEBUG.DB_General_Thread(String.Format("SET {0} '{1}' |Send/Rcv| {2}", _objID, id, true), indent: 10);
             }
 
             // Set received check flag
-            else if (set_is_conf)
+            if (set_is_conf)
             {
                 lock (_lock_isConf)
-                    _isConf[id_ind] = state;
+                    _isConf[id_ind] = true;
                 if (do_print)
-                    DEBUG.DB_General_Thread(String.Format("SET {0} '{1}' |Conf| {2}", _objID, id, state), indent: 10);
+                    DEBUG.DB_General_Thread(String.Format("SET {0} '{1}' |Conf| {2}", _objID, id, true), indent: 10);
             }
 
             // Set done check flag
-            else if (set_is_done)
+            if (set_is_done)
             {
                 lock (_lock_isDone)
-                    _isDone[id_ind] = state;
+                    _isDone[id_ind] = true;
                 if (do_print)
-                    DEBUG.DB_General_Thread(String.Format("SET {0} '{1}' |Done| {2}", _objID, id, state), indent: 10);
+                    DEBUG.DB_General_Thread(String.Format("SET {0} '{1}' |Done| {2}", _objID, id, true), indent: 10);
             }
 
         }
@@ -4616,12 +4683,11 @@ namespace ICR_Run
         }
 
         // Update sent packet info
-        public Tuple<string, bool> UpdateSent(char id, double[] dat, UInt16 pack, long t, bool is_conf)
+        public Tuple<string, bool> UpdateSent(char id, double[] dat, UInt16 pack, long t, bool is_conf = false, bool is_resend = false)
         {
 
             // Local vars
             int id_ind = 0;
-            bool is_resend = false;
             UInt16 pack_last = 0;
             string str_prfx = "";
 
@@ -4644,9 +4710,6 @@ namespace ICR_Run
             else
                 pack_last = _packConfArr[id_ind];
 
-            // Flag resent pack
-            is_resend = pack == pack_last;
-
             // Incriment repeat
             if (is_resend)
                 _cnt_repeat++;
@@ -4664,7 +4727,9 @@ namespace ICR_Run
             // Format prefix string
             str_prfx =
                 String.Format("[{0}SENT{1}:{2}]",
-                is_resend ? "*RE*-" : "", is_conf ? "-CONF" : "", _objID);
+                is_resend ? "RE-" : "",
+                is_conf ? "-CONF" : "",
+                _objID);
 
             // Format tuple 
             var tuple = new Tuple<string, bool>(str_prfx, is_resend);
@@ -4675,7 +4740,7 @@ namespace ICR_Run
         }
 
         // Update recived packet info
-        public Tuple<string, bool, int> UpdateRcvd(char id, double[] dat, UInt16 pack, long t, bool is_conf)
+        public Tuple<string, bool, int> UpdateRcvd(char id, double[] dat, UInt16 pack, long t, bool is_conf = false, bool is_done = false)
         {
 
             // Local vars
@@ -4718,7 +4783,7 @@ namespace ICR_Run
                 _packConfArr[id_ind] = pack;
 
             // Update for new packets
-            if (!is_resend && !is_conf && id != 'D')
+            if (!is_resend && !is_conf && !is_done)
             {
 
                 // Get pack diff accounting for packet rollover
@@ -4744,8 +4809,11 @@ namespace ICR_Run
 
             // Format prefix string
             str_prfx =
-               String.Format("[{0}RCVD{1}:{2}]",
-               is_resend ? "*RE*-" : "", is_conf ? "-CONF" : "", _objID);
+               String.Format("[{0}RCVD{1}{2}:{3}]",
+               is_resend ? "RE-" : "",
+               is_conf ? "-CONF" : "",
+               is_done ? "-DONE" : "",
+               _objID);
 
             // Format tuple 
             var tuple = new Tuple<string, bool, int>(str_prfx, is_resend, dropped);

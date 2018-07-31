@@ -10,7 +10,7 @@
 //========== DEBUG EXT DEFS =============
 
 // DEBUG TO CONSOLE
-#define DO_PRINT_DEBUG 1 // 0
+#define DO_PRINT_DEBUG 0 // 0
 
 // DEBUG TO OPENLOG LOGGER
 #define DO_LOG 1 // 1
@@ -503,7 +503,7 @@ namespace COM
 }
 
 // CS COMS IDs
-const char _cs_id_list[19] =
+const char _cs_id_list[18] =
 {
 	'h', // setup handshake
 	'n', // ping test packets
@@ -521,7 +521,6 @@ const char _cs_id_list[19] =
 	'Z', // reward zone
 	'O', // confirm task or sleep done
 	'U', // log size
-	'D', // execution done
 	'P', // position data
 	'\0'
 };
@@ -593,6 +592,7 @@ struct R2_COM
 	VEC<float> dat1;
 	VEC<float> dat2;
 	VEC<float> dat3;
+	VEC<byte> flagArr;
 	VEC<uint32_t> t_sentArr;
 	VEC<uint32_t> t_queuedArr;
 	VEC<bool> do_rcvCheckArr;
@@ -619,6 +619,7 @@ struct R2_COM
 		dat1(lng, __LINE__),
 		dat2(lng, __LINE__),
 		dat3(lng, __LINE__),
+		flagArr(lng, __LINE__),
 		t_sentArr(lng, __LINE__),
 		t_queuedArr(lng, __LINE__),
 		do_rcvCheckArr(lng, __LINE__),
@@ -654,7 +655,7 @@ struct R4_COM
 	VEC<float> dat;
 	uint32_t cnt_repeat;
 	uint32_t cnt_dropped;
-	char idNow;
+	char idNew;
 	bool is_new;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
@@ -674,7 +675,7 @@ struct R4_COM
 		dat(3, __LINE__),
 		cnt_repeat(0),
 		cnt_dropped(0),
-		idNow('\0'),
+		idNew('\0'),
 		is_new(false),
 		t_rcvd(0),
 		dt_rcvd(0)

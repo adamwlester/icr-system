@@ -1732,9 +1732,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % track roh limits
         D.P.trackRohBnd(1) = 1 - (D.UI.trkWdt/D.UI.arnRad);
         D.P.trackRohBnd(2) = 1;
-        % track roh cutoff -10 - +15 cm
+        % track roh cutoff -10 to +10 cm
         D.P.trackRohCut(1) = D.P.trackRohBnd(1) - 10/D.UI.arnRad;
-        D.P.trackRohCut(2) = D.P.trackRohBnd(2) + 15/D.UI.arnRad;
+        D.P.trackRohCut(2) = D.P.trackRohBnd(2) + 10/D.UI.arnRad;
         % forage roh limits
         D.P.frgRohBnd(1) = (D.UI.frgRad/D.UI.arnRad) - (D.UI.frgTargDpth/D.UI.arnRad);
         D.P.frgRohBnd(2) = D.UI.frgRad/D.UI.arnRad;

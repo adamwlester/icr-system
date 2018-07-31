@@ -10,7 +10,7 @@
 //========== DEBUG EXT DEFS ============
 
 // CONSOLE
-#define DO_PRINT_DEBUG 1 // 0
+#define DO_PRINT_DEBUG 0 // 0
 
 // SERIAL LOGGING
 #define DO_LOG 1 // 1
@@ -103,7 +103,7 @@ const uint16_t buffMax = buffLrg + 100;
 // DEBUGGING GENERAL
 uint32_t dt_timeoutHandshake = 5000; // (ms)
 uint32_t cnt_loopTot = 0;
-uint16_t cnt_loopShort = 0;
+byte cnt_loopShort = 0;
 uint32_t cnt_overflowRX = 0;
 uint32_t cnt_timeoutRX = 0;
 
@@ -327,7 +327,7 @@ struct A4_COM
 	VEC<float> dat;
 	uint32_t cnt_repeat;
 	uint32_t cnt_dropped;
-	char idNow;
+	char idNew;
 	bool is_new;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
@@ -347,7 +347,7 @@ struct A4_COM
 		dat(3, __LINE__),
 		cnt_repeat(0),
 		cnt_dropped(0),
-		idNow('\0'),
+		idNew('\0'),
 		is_new(false),
 		t_rcvd(0),
 		dt_rcvd(0)
