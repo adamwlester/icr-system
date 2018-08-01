@@ -1185,7 +1185,7 @@ namespace ICR_Run
             // Print logging summary
             DEBUG.DB_General(String.Format("CS LOGGING SUMMARY: logged={0}", logger_cheetahDue.cnt_logsStored));
 
-            // COPY LOG FILES TO TEMP REC DIRECTORY
+            // COPY LOG FILES TO TEMPORARY REC DIRECTORY
             if (fc.is_NlxDirCreated)
                 // Copy all files
                 CopyLogFiles(System.IO.Path.Combine(nlxTempTop, nlxRecSub));

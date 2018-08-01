@@ -33,6 +33,10 @@ public:
 	uint16_t err_cap = 100;
 	VEC<uint16_t> warn_line;
 	VEC<uint16_t> err_line;
+	char buff_lrg_sprintfErr[buffLrg] = { 0 };
+	char cnt_sprintfErr = 0;
+	char buff_lrg_strcatErr[buffLrg] = { 0 };
+	char cnt_strcatErr = 0;
 
 	// METHODS
 	DEBUG();
@@ -69,7 +73,9 @@ public:
 	// FORMAT INT AS BINARY
 	char* FormatBinary(unsigned int int_in);
 	// SAFE VERSION OF SPRINTF
-	void sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...);
+	void sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...);
+	// SAFE VERSION OF STRCAT
+	void strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, uint16_t buff_lng_2, char *p_buff_2);
 	// HOLD FOR CRITICAL ERRORS
 	void RunErrorHold(char *p_msg_print, uint32_t dt_shutdown_sec);
 
@@ -169,6 +175,9 @@ DEBUG::DEBUG() :
 void DEBUG::CheckLoop()
 {
 
+	// Local static vars
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+
 	// Keep short count of loops
 	cnt_loopShort++;
 
@@ -177,24 +186,45 @@ void DEBUG::CheckLoop()
 
 	// Check for VEC errors
 #if DO_VEC_DEBUG
-
 	// Log/print each error
 	if (VEC_CNT_ERR > 0) {
-		for (size_t i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
+		for (int i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
 			Debug.DB_Error(__FUNCTION__, __LINE__, VEC_STR_LIST_ERR[i]);
 		}
 	}
-
 	// Reset counter
 	VEC_CNT_ERR = 0;
 #endif
 
+	// Check for SPRINTF_SAFE error
+	if (cnt_sprintfErr > 0) {
+		// Use standard sprintf()
+		sprintf(buff_lrg, "**SPRINTF_SAFE**: cnt=%d buff=\"%s\"",
+			cnt_sprintfErr, buff_lrg_sprintfErr);
+		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+	}
+	// Reset counter and buff
+	buff_lrg_sprintfErr[0] = '\0';
+	cnt_sprintfErr = 0;
+
+	// Check for STRCAT_SAFE error
+	if (cnt_strcatErr > 0) {
+		// Use standard sprintf()
+		sprintf(buff_lrg, "**STRCAT_SAFE**: cnt=%d buff=\"%s\"",
+			cnt_strcatErr, buff_lrg_strcatErr);
+		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+	}
+	// Reset counter and buff
+	buff_lrg_strcatErr[0] = '\0';
+	cnt_strcatErr = 0;
+
 }
+
 
 void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 {
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -208,14 +238,14 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 	}
 
 	// Add funciton and line number
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s", p_fun, line - 23, p_msg);
 
 	if (do_print) {
-		Queue(buff_store, t);
+		Queue(buff_max, t);
 	}
 
 	if (do_log) {
-		QueueLog(buff_store, t);
+		QueueLog(buff_max, t);
 	}
 
 }
@@ -227,7 +257,7 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 #endif
 
 	// Local vars
-	char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -241,16 +271,16 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 	}
 
 	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_store, "%s [%s:%d] %s", "**WARNING**", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "**WARNING**", p_fun, line - 23, p_msg);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, t);
+		Queue(buff_max, t);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_store, t);
+		QueueLog(buff_max, t);
 	}
 
 	// Store warning info
@@ -261,7 +291,7 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 {
 	// Local vars
-	char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -275,16 +305,16 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 	}
 
 	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_store, "%s [%s:%d] %s", "!!ERROR!!", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "!!ERROR!!", p_fun, line - 23, p_msg);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, t);
+		Queue(buff_max, t);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_store, t);
+		QueueLog(buff_max, t);
 	}
 
 	// Store error info
@@ -298,7 +328,7 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
@@ -313,7 +343,7 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [%sRCVD%s%s:%s] %s %s", 
+	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s%s:%s] %s %s", 
 		is_resend ? "RE-" : "", 
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
@@ -321,18 +351,18 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 
 	// Log as warning if resent
 	if (is_resend) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_store, r2a.t_rcvd);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, r2a.t_rcvd);
 		return;
 	}
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_store, r2a.t_rcvd);
+		Debug.Queue(buff_max, r2a.t_rcvd);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_store, r2a.t_rcvd);
+		QueueLog(buff_max, r2a.t_rcvd);
 	}
 
 }
@@ -344,7 +374,7 @@ void DEBUG::DB_SendQueued(char *p_msg, uint32_t t)
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -358,14 +388,14 @@ void DEBUG::DB_SendQueued(char *p_msg, uint32_t t)
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [SEND-QUEUED:%s] %s", "a2r", p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "   [SEND-QUEUED:%s] %s", "a2r", p_msg);
 
 	if (do_print) {
-		Debug.Queue(buff_store, t);
+		Debug.Queue(buff_max, t);
 	}
 
 	if (do_log) {
-		QueueLog(buff_store, t);
+		QueueLog(buff_max, t);
 	}
 
 }
@@ -377,7 +407,7 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -393,7 +423,7 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [%sSENT%s%s:%s] %s %s",
+	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
 		is_resend ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
@@ -401,17 +431,17 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 
 	// Log as warning if resending
 	if (is_resend) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_store, a2r.t_sent);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, a2r.t_sent);
 		return;
 	}
 
 	// Store
 	if (do_print) {
-		Debug.Queue(buff_store, a2r.t_sent);
+		Debug.Queue(buff_max, a2r.t_sent);
 	}
 
 	if (do_log) {
-		QueueLog(buff_store, a2r.t_sent);
+		QueueLog(buff_max, a2r.t_sent);
 	}
 
 }
@@ -625,7 +655,7 @@ void DEBUG::DoSummary()
 	Debug.sprintf_safe(buffLrg, buff_lrg, "ON LINES |");
 	for (int i = 0; i < cnt_warn; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", warn_line[i]);
-		strcat(buff_lrg, buff_med);
+		Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_med), buff_med);
 	}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL WARNINGS: %d %s", cnt_warn, cnt_warn > 0 ? buff_lrg : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -634,7 +664,7 @@ void DEBUG::DoSummary()
 	Debug.sprintf_safe(buffLrg, buff_lrg, "ON LINES |");
 	for (int i = 0; i < cnt_err; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", err_line[i]);
-		strcat(buff_lrg, buff_med);
+		Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_med), buff_med);
 	}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL ERRORS:  %d %s", cnt_err, cnt_err > 0 ? buff_lrg : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -701,13 +731,12 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 	return bit_str;
 }
 
-void DEBUG::sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...) {
+void DEBUG::sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...) {
 
 	// Local vars
 	static const uint16_t buff_size = buffMax * 2;
 	static char buff[buff_size]; buff[0] = '\0';
-	const char str_prfx_med_1[buffMed] = "*T*";
-	const char str_prfx_med_2[buffMed] = "[**TRUNCATED**]";
+	const char str_prfx_med[buffMed] = "*T*";
 	int cut_ind = 0;
 
 	// Reset output buffer
@@ -730,30 +759,74 @@ void DEBUG::sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...) {
 
 #endif
 
-	// Abridge message if too long
-	if (strlen(buff) + 1 > buff_cut) {
+	// Formated string too long
+	if (strlen(buff) + 1 > buff_cap) {
 
-		// Get cut ind and trunkate buff
-		cut_ind = buff_cut - strlen(str_prfx_med_1) - 1;
+		// Store part of buff for error
+		int err_str_len = min(50, buff_cap);
+		for (int i = 0; i < err_str_len; i++)
+		{
+			buff_lrg_sprintfErr[i] = buff[i];
+		}
+		buff_lrg_sprintfErr[err_str_len] = '\0';
+		cnt_sprintfErr++;
+
+		// Get cut ind and truncate buff
+		cut_ind = buff_cap - strlen(str_prfx_med);
 
 		// Check for negative cut ind
 		if (cut_ind > 0) {
-			// Cut buff and add long error prefix to output buff
+			// Cut buff
 			buff[cut_ind] = '\0';
-			strcat(p_buff, str_prfx_med_2);
+		}
+		else {
+			// Clear buff
+			buff[0] = '\0';
 		}
 
-		// Return only short error
-		else {
-			// Clear buff and add short error prefix to output buff
-			buff[0] = '\0';
-			strcat(p_buff, str_prfx_med_1);
-		}
+		// Append error prefix
+		strcat(p_buff, str_prfx_med);
+
 
 	}
 
 	// Copy/concat buff to p_buff
 	strcat(p_buff, buff);
+
+}
+
+void DEBUG::strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, uint16_t buff_lng_2, char *p_buff_2)
+{
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	const char str_prfx_med[buffMed] = "*T*";
+	int cut_ind = 0;
+
+	// Make sure buffer large enough
+	if (buff_cap > buff_lng_1 + buff_lng_2) {
+
+		// Concatinate strings
+		strcat(p_buff_1, p_buff_2);
+	}
+
+	// String too long
+	else {
+
+		// Store part of buff for error
+		int err_str_len = min(50, buff_lng_1);
+		for (int i = 0; i < err_str_len; i++)
+		{
+			buff_lrg_strcatErr[i] = p_buff_1[i];
+		}
+		buff_lrg_strcatErr[err_str_len] = '\0';
+		cnt_strcatErr++;
+
+		// Insert prefix at front of buffer 1
+		for (int i = 0; i < strlen(str_prfx_med); i++)
+		{
+			p_buff_1[i] = str_prfx_med[i];
+		}
+
+	}
 
 }
 
@@ -1225,31 +1298,28 @@ byte WaitBuffRead(char mtch)
 
 	// Store current info
 	char buff_print = b == 10 ? 'n' : b == 13 ? 'r' : b;
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, " buff_lrg=%c b_read=%d b_dump=%d rx_start=%d rx_now=%d tx_now=%d dt_chk=%d",
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "buff_lrg=%c b_read=%d b_dump=%d rx_start=%d rx_now=%d tx_now=%d dt_chk=%d",
 		buff_print, cnt_bytesRead, cnt_bytesDiscarded, rx_size_start, rx_size, tx_size, (millis() - t_timeout) + timeout);
 
 
 	// Buffer flooded
 	if (is_overflowed) {
 		cnt_overflowRX++;
-		Debug.sprintf_safe(buffLrg, buff_lrg, "BUFFER OVERFLOWED: cnt=%d", cnt_overflowRX);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "BUFFER OVERFLOWED: cnt=%d %s", cnt_overflowRX, buff_lrg_2);
 	}
 	// Timed out
 	else if (millis() > t_timeout) {
 		cnt_timeoutRX++;
-		Debug.sprintf_safe(buffLrg, buff_lrg, "TIMEDOUT: cnt=%d", cnt_timeoutRX);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "TIMEDOUT: cnt=%d %s", cnt_timeoutRX, buff_lrg_2);
 	}
 	// Byte not found
 	else if (mtch != '\0') {
-		Debug.sprintf_safe(buffLrg, buff_lrg, "CHAR \'%c\' NOT FOUND:", mtch);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "CHAR \'%c\' NOT FOUND: %s", mtch, buff_lrg_2);
 	}
 	// Failed for unknown reason
 	else {
-		Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED FOR UNKNOWN REASON:");
+		Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED FOR UNKNOWN REASON: %s", buff_lrg_2);
 	}
-
-	// Compbine strings
-	strcat(buff_lrg, buff_lrg_2);
 
 	// Log/print error
 	Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);

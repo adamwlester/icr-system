@@ -34,6 +34,8 @@ struct PIN
 // Initialize
 pin;
 
+// OTHER
+
 // SERIAL COMS
 
 // Lower packet range
@@ -154,7 +156,7 @@ union u_tag {
 void RunReset();
 
 // CHANGE TO LOG DIRECTORY
-void SetLogDir();
+void SetLogDir(char * p_cwd, int char_lng);
 
 // OPEN NEW LOG FOR WRITING
 void OpenNewLog(bool is_log_named);
@@ -260,13 +262,18 @@ void RunReset() {
 		DebugTeensy("!!ERROR!! [RunReset] FAILED: INITIALIZE SD");
 	}
 
-	// Start in root directory
-	if (sdEx.chdir()) {
-		DebugTeensy("[RunReset] FINISHED: SET SD TO ROOT DIRECTORY");
-	}
-	else {
-		DebugTeensy("!!ERROR!! [RunReset] FAILED: SET SD TO ROOT DIRECTORY");
-	}
+	// Get starting dir
+	char cwd_start_str[20];
+	sdEx.vwd()->getName(cwd_start_str,20);
+	
+	// Change to log dir
+	char cwd_end_str[20];
+	SetLogDir(cwd_end_str, 20);
+
+	// Print starting directory
+	sprintf(str, "[RunReset] SET DIR FROM \"%s\" TO \"%s\": ACTUAL=%dB EXPECTED=512B", 
+		cwd_start_str, cwd_end_str);
+	DebugTeensy(str);
 
 	// Print available memory
 	sprintf(str, "[RunReset] AVAILABLE SPACE ON SD %0.2fGB", GetMemGB());
@@ -284,9 +291,10 @@ void OpenNewLog(bool is_log_named) {
 	// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
 	static char file_str[50] = { 0 };
+	char cwd_str[20];
 
 	// Go to log directory
-	SetLogDir();
+	SetLogDir(cwd_str, 20);
 
 	// Get next log number
 	cnt_logsFiles = GetFileCount();
@@ -315,7 +323,7 @@ void OpenNewLog(bool is_log_named) {
 		sdEx.begin();
 
 		// Create/change to log directory
-		SetLogDir();
+		SetLogDir(cwd_str, 20);
 
 		// Get new log number
 		cnt_logsFiles = GetFileCount();
@@ -359,7 +367,7 @@ float GetMemGB()
 }
 
 // CHANGE TO LOG DIRECTORY
-void SetLogDir() {
+void SetLogDir(char * p_cwd, int char_lng) {
 
 	// Local vars
 	static char str[100] = { 0 }; str[0] = '\0';
@@ -390,6 +398,9 @@ void SetLogDir() {
 		sprintf(str, "**WARNING** [GetFileCount] SKIPPED: CD TO \"%s\" DIR", logDir);
 	}
 	DebugTeensy(str);
+
+	// Store current dir
+	sdEx.vwd()->getName(p_cwd, char_lng);
 
 }
 

@@ -10,7 +10,7 @@
 //========== DEBUG EXT DEFS =============
 
 // DEBUG TO CONSOLE
-#define DO_PRINT_DEBUG 0 // 0
+#define DO_PRINT_DEBUG 1 // 0
 
 // DEBUG TO OPENLOG LOGGER
 #define DO_LOG 1 // 1
@@ -444,14 +444,14 @@ float vccAvg = 0;
 float vccCutoff = 11.6;
 
 // LEDs
-const int _trackLEDdutyDefault[2] = { 175, 250 };
-const VEC<int> trackLEDdutyDefault(2, __LINE__, _trackLEDdutyDefault);
-const int _trackLEDduty[2] = { trackLEDdutyDefault[0], trackLEDdutyDefault[1] };
-VEC<int> trackLEDduty(2, __LINE__, _trackLEDduty);
-const int _rewLEDmin[2] = { 0, 2 };
-const VEC<int> rewLEDmin(2, __LINE__, _rewLEDmin);
-const int _rewLEDduty[2] = { rewLEDmin[0], 15 };
-VEC<int> rewLEDduty(2, __LINE__, _rewLEDduty);
+const byte _trackLEDdutyDefault[2] = { 175, 250 };
+const VEC<byte> trackLEDdutyDefault(2, __LINE__, _trackLEDdutyDefault);
+const byte _trackLEDduty[2] = { trackLEDdutyDefault[0], trackLEDdutyDefault[1] };
+VEC<byte> trackLEDduty(2, __LINE__, _trackLEDduty);
+const byte _rewLEDmin[2] = { 0, 2 };
+const VEC<byte> rewLEDmin(2, __LINE__, _rewLEDmin);
+const byte _rewLEDduty[2] = { rewLEDmin[0], 15 };
+VEC<byte> rewLEDduty(2, __LINE__, _rewLEDduty);
 
 // LCD
 extern unsigned char SmallFont[];

@@ -99,6 +99,10 @@ public:
 	uint16_t err_cap = 100;
 	VEC<uint16_t> warn_line;
 	VEC<uint16_t> err_line;
+	char buff_lrg_sprintfErr[buffLrg] = { 0 };
+	char cnt_sprintfErr = 0;
+	char buff_lrg_strcatErr[buffLrg] = { 0 };
+	char cnt_strcatErr = 0;
 
 	// METHODS
 	DEBUG();
@@ -149,7 +153,9 @@ public:
 	// GET CURRENT NUMBER OF ENTRIES IN PRINT QUEUE
 	int GetPrintQueueAvailable();
 	// SAFE VERSION OF SPRINTF
-	void sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...);
+	void sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...);
+	// SAFE VERSION OF STRCAT
+	void strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, uint16_t buff_lng_2, char *p_buff_2);
 	// RUN ERROR HOLD WITH OPTIONAL SHUTDOWN
 	void RunErrorHold(char *p_msg_lcd, char *p_msg_print, uint32_t dt_shutdown_sec = 0);
 
@@ -460,8 +466,8 @@ public:
 		sizeof(_zoneLocs) / sizeof(_zoneLocs[0]);
 	VEC<double> zoneBoundMin;
 	VEC<double> zoneBoundMax;
-	VEC<double> zoneOccTim;
-	VEC<double> zoneOccCnt;
+	VEC<int> zoneOccTim;
+	VEC<int> zoneOccCnt;
 	VEC<double> zoneBoundRewarded;
 	char str_med_rew[buffMed] = { 0 };
 	double rewPos = 0;
@@ -871,17 +877,37 @@ void DEBUG::CheckLoop()
 
 	// Check for VEC errors
 #if DO_VEC_DEBUG
-
 	// Log/print each error
 	if (VEC_CNT_ERR > 0) {
-		for (size_t i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
+		for (int i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
 			Debug.DB_Error(__FUNCTION__, __LINE__, VEC_STR_LIST_ERR[i]);
 		}
 	}
-
 	// Reset counter
 	VEC_CNT_ERR = 0;
 #endif
+
+	// Check for SPRINTF_SAFE error
+	if (cnt_sprintfErr > 0) {
+		// Use standard sprintf()
+		sprintf(buff_lrg, "**SPRINTF_SAFE**: cnt=%d buff=\"%s\"",
+			cnt_sprintfErr, buff_lrg_sprintfErr);
+		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+	}
+	// Reset counter and buff
+	buff_lrg_sprintfErr[0] = '\0';
+	cnt_sprintfErr = 0;
+
+	// Check for STRCAT_SAFE error
+	if (cnt_strcatErr > 0) {
+		// Use standard sprintf()
+		sprintf(buff_lrg, "**STRCAT_SAFE**: cnt=%d buff=\"%s\"",
+			cnt_strcatErr, buff_lrg_strcatErr);
+		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+	}
+	// Reset counter and buff
+	buff_lrg_strcatErr[0] = '\0';
+	cnt_strcatErr = 0;
 
 	// Bail till ses started
 	if (!fc.is_SesStarted) {
@@ -965,7 +991,7 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -979,16 +1005,16 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 	}
 
 	// Add funciton and line number
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s", p_fun, line - 23, p_msg);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, t);
+		Queue(buff_max, t);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, t);
+		Log.QueueLog(buff_max, t);
 	}
 
 }
@@ -1000,7 +1026,7 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 #endif
 
 	// Local vars
-	char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1017,16 +1043,16 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 	}
 
 	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_store, "%s [%s:%d] %s", "**WARNING**", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "**WARNING**", p_fun, line - 23, p_msg);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, t);
+		Queue(buff_max, t);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, t);
+		Log.QueueLog(buff_max, t);
 	}
 
 	// Store warning info
@@ -1041,7 +1067,7 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 #endif
 
 	// Local vars
-	char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1058,16 +1084,16 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 	}
 
 	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_store, "%s [%s:%d] %s", "!!ERROR!!", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "!!ERROR!!", p_fun, line - 23, p_msg);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, t);
+		Queue(buff_max, t);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, t);
+		Log.QueueLog(buff_max, t);
 	}
 
 	// Store error info
@@ -1082,8 +1108,9 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
-	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
+	static char buff_med_1[buffMed] = { 0 }; buff_med_1[0] = '\0';
+	static char buff_med_2[buffMed] = { 0 }; buff_med_2[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1100,35 +1127,41 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 		return;
 	}
 
-	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [%sRCVD%s%s:%s] %s %s",
+	// Format prefix
+	Debug.sprintf_safe(buffMed, buff_med_1, "   [%sRCVD%s%s:%s]",
 		is_resend ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
-		COM::str_list_id[p_r4->comID], p_msg_1, p_msg_2);
+		COM::str_list_id[p_r4->comID]);
 
+	// Format message
+	if (p_r4->idNew != 'P') {
+		Debug.sprintf_safe(buffMax, buff_max, "   %s %s %s",
+			buff_med_1, p_msg_1, p_msg_2);
+	}
 	// Add samp dt for pos data
-	if (p_r4->idNew == 'P') {
+	else {
 		U.f = p_r4->dat[2];
-		Debug.sprintf_safe(buffLrg, buff_lrg, " ts_int=%d dt_samp=%d",
+		Debug.sprintf_safe(buffMed, buff_med_2, "ts_int=%d dt_samp=%d",
 			U.i32, millis() - Pos[cmd.vtEnt].t_update);
-		strcat(buff_store, buff_lrg);
+		Debug.sprintf_safe(buffMax, buff_max, "   %s %s %s %s",
+			buff_med_1, buff_med_2, p_msg_1, p_msg_2);
 	}
 
 	// Log as warning if resent
 	if (is_resend) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_store, p_r4->t_rcvd);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, p_r4->t_rcvd);
 		return;
 	}
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_store, p_r4->t_rcvd);
+		Debug.Queue(buff_max, p_r4->t_rcvd);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, p_r4->t_rcvd);
+		Log.QueueLog(buff_max, p_r4->t_rcvd);
 	}
 
 }
@@ -1140,7 +1173,7 @@ void DEBUG::DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t)
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1159,14 +1192,14 @@ void DEBUG::DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t)
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [SEND-QUEUED:%s] %s", COM::str_list_id[p_r2->comID], p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "   [SEND-QUEUED:%s] %s", COM::str_list_id[p_r2->comID], p_msg);
 
 	if (do_print) {
-		Debug.Queue(buff_store, t);
+		Debug.Queue(buff_max, t);
 	}
 
 	if (do_log) {
-		Log.QueueLog(buff_store, t);
+		Log.QueueLog(buff_max, t);
 	}
 
 }
@@ -1178,7 +1211,7 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1196,7 +1229,7 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "   [%sSENT%s%s:%s] %s %s",
+	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
 		is_resend ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
@@ -1204,17 +1237,17 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 
 	// Log as warning if resending
 	if (is_resend) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_store, p_r2->t_sent);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, p_r2->t_sent);
 		return;
 	}
 
 	// Store
 	if (do_print) {
-		Debug.Queue(buff_store, p_r2->t_sent);
+		Debug.Queue(buff_max, p_r2->t_sent);
 	}
 
 	if (do_log) {
-		Log.QueueLog(buff_store, p_r2->t_sent);
+		Log.QueueLog(buff_max, p_r2->t_sent);
 	}
 
 }
@@ -1226,7 +1259,7 @@ void DEBUG::DB_LogWrite(char *p_msg)
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 
 	// Get print and log flags
@@ -1238,11 +1271,11 @@ void DEBUG::DB_LogWrite(char *p_msg)
 	}
 
 	// Add prefix
-	Debug.sprintf_safe(buffMax, buff_store, "   [LOG-WRITE] %s", p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "   [LOG-WRITE] %s", p_msg);
 
 	// Store
 	if (do_print) {
-		Debug.Queue(buff_store, millis());
+		Debug.Queue(buff_max, millis());
 	}
 
 }
@@ -1254,7 +1287,7 @@ void DEBUG::DB_MotorControl(const char *p_fun, int line, char *p_msg)
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1268,16 +1301,16 @@ void DEBUG::DB_MotorControl(const char *p_fun, int line, char *p_msg)
 	}
 
 	// Add funciton and line number
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s", p_fun, line - 23, p_msg);
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s", p_fun, line - 23, p_msg);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, millis());
+		Queue(buff_max, millis());
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, millis());
+		Log.QueueLog(buff_max, millis());
 	}
 
 }
@@ -1289,7 +1322,7 @@ void DEBUG::DB_RunSpeed(const char *p_fun, int line, MC_CALL::ID caller, double 
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1303,17 +1336,17 @@ void DEBUG::DB_RunSpeed(const char *p_fun, int line, MC_CALL::ID caller, double 
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] Changed Motor Speed: caller=%s speed_last=%0.2f speed_new=%0.2f",
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] Changed Motor Speed: caller=%s speed_last=%0.2f speed_new=%0.2f",
 		p_fun, line - 23, MC_CALL::str_list_id[caller], speed_last, speed_now);
 
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_store, millis());
+		Queue(buff_max, millis());
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, millis());
+		Log.QueueLog(buff_max, millis());
 	}
 
 }
@@ -1321,7 +1354,7 @@ void DEBUG::DB_RunSpeed(const char *p_fun, int line, MC_CALL::ID caller, double 
 void DEBUG::DB_Pixy(const char *p_fun, int line, char *p_msg)
 {
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
@@ -1344,22 +1377,22 @@ void DEBUG::DB_Pixy(const char *p_fun, int line, char *p_msg)
 		Pixy.p_str_list_blockType[Pixy.blockType], Pixy.wordNew, Pixy.wordLast, Pixy.checksum, Pixy.cnt_blocks);
 
 	// Format string
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s: %s", p_fun, line - 23, p_msg, buff_lrg);
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: %s", p_fun, line - 23, p_msg, buff_lrg);
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_store, millis());
+		Debug.Queue(buff_max, millis());
 	}
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, millis());
+		Log.QueueLog(buff_max, millis());
 	}
 }
 
 void DEBUG::DB_Pid(const char *p_fun, int line, char *p_msg)
 {
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1373,16 +1406,16 @@ void DEBUG::DB_Pid(const char *p_fun, int line, char *p_msg)
 	}
 
 	// Format string
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s: mode=\"%s\" mot_ctrl=\"%s\"",
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: mode=\"%s\" mot_ctrl=\"%s\"",
 		p_fun, line - 23, p_msg, Pid.p_str_list_pidMode[Pid.pidMode], MC_CON::str_list_id[motorControl]);
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_store, millis());
+		Debug.Queue(buff_max, millis());
 	}
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, millis());
+		Log.QueueLog(buff_max, millis());
 	}
 }
 
@@ -1393,7 +1426,7 @@ void DEBUG::DB_Bull(const char *p_fun, int line, char *p_msg)
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1407,16 +1440,16 @@ void DEBUG::DB_Bull(const char *p_fun, int line, char *p_msg)
 	}
 
 	// Format string
-	Debug.sprintf_safe(buffMax, buff_store, "[%s:%d] %s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\"",
+	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\"",
 		p_fun, line - 23, p_msg, Bull.p_str_list_bullState[Bull.bullState], Bull.p_str_bullMode[Bull.bullMode], MC_CON::str_list_id[motorControl]);
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_store, millis());
+		Debug.Queue(buff_max, millis());
 	}
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_store, millis());
+		Log.QueueLog(buff_max, millis());
 	}
 }
 
@@ -1433,7 +1466,7 @@ void DEBUG::DB_TrackData()
 #endif
 
 	// Local vars
-	static char buff_store[buffMax] = { 0 }; buff_store[0] = '\0';
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
 	static const byte n_samps = 40;
 	static int16_t pos_hist[10][n_samps] = { { 0 } };
@@ -1504,17 +1537,17 @@ void DEBUG::DB_TrackData()
 			}
 
 			// Add identfiyer string
-			Debug.sprintf_safe(buffMax, buff_store, "%s", str_med_mat[i]);
+			Debug.sprintf_safe(buffMax, buff_max, "%s", str_med_mat[i]);
 
 			// Store each value in string
 			for (int j = 0; j < hist_ind; j++) {
 
 				Debug.sprintf_safe(buffMed, buff_med, "%d|", pos_hist[i][j]);
-				strcat(buff_store, buff_med);
+				Debug.strcat_safe(buffMax, strlen(buff_max), buff_max, strlen(buff_med), buff_med);
 			}
 
 			// Log
-			Log.QueueLog(buff_store, kal.t_last);
+			Log.QueueLog(buff_max, kal.t_last);
 		}
 
 		// Reset vals
@@ -1864,13 +1897,12 @@ int DEBUG::GetPrintQueueAvailable() {
 	return PQ_Capacity - n_entries;
 }
 
-void DEBUG::sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...) {
+void DEBUG::sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...) {
 
 	// Local vars
 	static const uint16_t buff_size = buffMax * 2;
 	static char buff[buff_size]; buff[0] = '\0';
-	const char str_prfx_med_1[buffMed] = "[**TRUNCATED**]";
-	const char str_prfx_med_2[buffMed] = "*T*";
+	const char str_prfx_med[buffMed] = "*T*";
 	int cut_ind = 0;
 
 	// Reset output buffer
@@ -1893,30 +1925,74 @@ void DEBUG::sprintf_safe(uint16_t buff_cut, char *p_buff, char *p_fmt, ...) {
 
 #endif
 
-	// Abridge message if too long
-	if (strlen(buff) + 1 > buff_cut) {
+	// Formated string too long
+	if (strlen(buff) + 1 > buff_cap) {
 
-		// Get cut ind and trunkate buff
-		cut_ind = buff_cut - strlen(str_prfx_med_1) - 1;
+		// Store part of buff for error
+		int err_str_len = min(50, buff_cap);
+		for (int i = 0; i < err_str_len; i++)
+		{
+			buff_lrg_sprintfErr[i] = buff[i];
+		}
+		buff_lrg_sprintfErr[err_str_len] = '\0';
+		cnt_sprintfErr++;
+
+		// Get cut ind and truncate buff
+		cut_ind = buff_cap - strlen(str_prfx_med);
 
 		// Check for negative cut ind
 		if (cut_ind > 0) {
-			// Cut buff and add long error prefix to output buff
+			// Cut buff
 			buff[cut_ind] = '\0';
-			strcat(p_buff, str_prfx_med_1);
+		}
+		else {
+			// Clear buff
+			buff[0] = '\0';
 		}
 
-		// Return only short error
-		else {
-			// Clear buff and add short error prefix to output buff
-			buff[0] = '\0';
-			strcat(p_buff, str_prfx_med_2);
-		}
+		// Append error prefix
+		strcat(p_buff, str_prfx_med);
+
 
 	}
 
 	// Copy/concat buff to p_buff
 	strcat(p_buff, buff);
+
+}
+
+void DEBUG::strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, uint16_t buff_lng_2, char *p_buff_2)
+{
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	const char str_prfx_med[buffMed] = "*T*";
+	int cut_ind = 0;
+
+	// Make sure buffer large enough
+	if (buff_cap > buff_lng_1 + buff_lng_2) {
+
+		// Concatinate strings
+		strcat(p_buff_1, p_buff_2);
+	}
+
+	// String too long
+	else {
+
+		// Store part of buff for error
+		int err_str_len = min(50, buff_lng_1);
+		for (int i = 0; i < err_str_len; i++)
+		{
+			buff_lrg_strcatErr[i] = p_buff_1[i];
+		}
+		buff_lrg_strcatErr[err_str_len] = '\0';
+		cnt_strcatErr++;
+
+		// Insert prefix at front of buffer 1
+		for (int i = 0; i < strlen(str_prfx_med); i++)
+		{
+			p_buff_1[i] = str_prfx_med[i];
+		}
+
+	}
 
 }
 
@@ -1929,8 +2005,8 @@ void DEBUG::RunErrorHold(char *p_msg_lcd, char *p_msg_print, uint32_t dt_shutdow
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static uint32_t t_shutdown = 0;
-	int _duty[2] = { 255, 0 };
-	VEC<int> duty(2, __LINE__, _duty);
+	byte _duty[2] = { 255, 0 };
+	VEC<byte> duty(2, __LINE__, _duty);
 	bool do_led_on = true;
 	int dt_cycle = 100;
 	float t_s = 0;
@@ -2132,7 +2208,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	pixy_pos_y = Pixy.block.y;
 
 	// Transform to CM
-	for (size_t i = 0; i < pixyOrd; i++) {
+	for (int i = 0; i < pixyOrd; i++) {
 		pixy_rel += pixyCoeff[i] * pow(pixy_pos_y, pixyOrd - 1 - i);
 	}
 
@@ -2319,7 +2395,7 @@ bool PIXY::PixyCheckStart()
 	wordLast = 0xffff;
 
 	// Read 1-2 words
-	for (size_t i = 0; i < 2; i++)
+	for (int i = 0; i < 2; i++)
 	{
 
 		// Get next word
@@ -4010,7 +4086,7 @@ void REWARD::ProcRewCmd(byte cmd_type, float cmd_pos, int cmd_zone_delay)
 
 	// Format string
 	Debug.sprintf_safe(buffMed, str_med_rew, "REWARD \"%s\" [%d/%d]",
-		cnt_rew, cnt_cmd);
+		p_str_list_rewMode[rewMode], cnt_rew, cnt_cmd);
 
 	// Update counts
 	if (rewMode != BUTTON) {
@@ -4576,7 +4652,7 @@ void REWARD::RewardReset(bool was_rewarded)
 		Debug.sprintf_safe(buffLrg, buff_lrg, "ZONE OCC:");
 		for (int i = zoneMin; i <= zoneMax; i++) {
 			Debug.sprintf_safe(buffMed, buff_med, " z%d=%dms", i + 1, zoneOccTim[i]);
-			strcat(buff_lrg, buff_med);
+			Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_med), buff_med);
 		}
 		// Log/print
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -4585,7 +4661,7 @@ void REWARD::RewardReset(bool was_rewarded)
 		Debug.sprintf_safe(buffLrg, buff_lrg, "ZONE CNT:");
 		for (int i = zoneMin; i <= zoneMax; i++) {
 			Debug.sprintf_safe(buffMed, buff_med, " z%d=%d", i + 1, zoneOccCnt[i]);
-			strcat(buff_lrg, buff_med);
+			Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_med), buff_med);
 		}
 		// Log/print
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -4672,7 +4748,7 @@ bool LOGGER::Setup()
 	if (SendCommand("get\r") == '!') {
 		return false;
 	}
-	else if (strlen(buff_rcvdArr) < buffLrg) {
+	else if (strlen(buff_rcvdArr) + 10 < buffLrg) {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "%s", buff_rcvdArr);
 	}
 
@@ -4954,7 +5030,7 @@ char LOGGER::GetReply(uint32_t timeout)
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
-	VEC<bool> p_arr(3, __LINE__);
+	VEC<bool> f_arr(3, __LINE__);
 	uint32_t t_start = millis();
 	uint32_t t_timeout = millis() + timeout;
 	VEC<int> dat_ind(2, __LINE__);
@@ -5007,11 +5083,11 @@ char LOGGER::GetReply(uint32_t timeout)
 			for (int i = arr_ind; i >= 0; i--)
 			{
 				// Check that certain specific comnination of chars recieved
-				p_arr[0] = buff_rcvdArr[i] == '\r' || buff_rcvdArr[i] == '1' || buff_rcvdArr[i] == '~' ? true : p_arr[0];
-				p_arr[1] = buff_rcvdArr[i] == '\n' || buff_rcvdArr[i] == '2' || buff_rcvdArr[i] == '~' ? true : p_arr[1];
-				p_arr[2] = buff_rcvdArr[i] == '>' || buff_rcvdArr[i] == '<' ? true : p_arr[2];
+				f_arr[0] = buff_rcvdArr[i] == '\r' || buff_rcvdArr[i] == '1' || buff_rcvdArr[i] == '~' ? true : f_arr[0];
+				f_arr[1] = buff_rcvdArr[i] == '\n' || buff_rcvdArr[i] == '2' || buff_rcvdArr[i] == '~' ? true : f_arr[1];
+				f_arr[2] = buff_rcvdArr[i] == '>' || buff_rcvdArr[i] == '<' ? true : f_arr[2];
 			}
-			if (p_arr[0] && p_arr[1] && p_arr[2]) {
+			if (f_arr[0] && f_arr[1] && f_arr[2]) {
 				pass = true;
 			}
 		}
@@ -5415,9 +5491,7 @@ void LOGGER::StreamLogs()
 		// Store error
 		Debug.sprintf_safe(buffLrg, buff_lrg, "\"%c%c%c\" Failed: cnt=%d|",
 			26, 26, 26, cnt_err_change_mode);
-		if (strlen(buff_lrg_2) + strlen(buff_lrg) < buffLrg) {
-			strcat(buff_lrg_2, buff_lrg);
-		}
+		Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
 	}
 
 	// Print anything left in queue
@@ -5505,9 +5579,7 @@ void LOGGER::StreamLogs()
 					// Store error
 					Debug.sprintf_safe(buffLrg, buff_lrg, "Read Timedout: cnt=%d read_ind=%d dt_read=%d|",
 						cnt_err_read_timeout, read_ind, millis() - t_last_read);
-					if (strlen(buff_lrg_2) + strlen(buff_lrg) < buffLrg) {
-						strcat(buff_lrg_2, buff_lrg);
-					}
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
 
 					// Break
 					break;
@@ -5555,9 +5627,7 @@ void LOGGER::StreamLogs()
 
 					// Store error
 					Debug.sprintf_safe(buffLrg, buff_lrg, "\"read\" Failed: cnt=%d|", cnt_err_read_request);
-					if (strlen(buff_lrg_2) + strlen(buff_lrg) < buffLrg) {
-						strcat(buff_lrg_2, buff_lrg);
-					}
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
 
 					// Break
 					break;
@@ -5614,9 +5684,7 @@ void LOGGER::StreamLogs()
 
 		do_abort = true;
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Send Timedout|");
-		if (strlen(buff_lrg_2) + strlen(buff_lrg) < buffLrg) {
-			strcat(buff_lrg_2, buff_lrg);
-		}
+		Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
 	}
 
 	// Unblock log store
@@ -5676,7 +5744,7 @@ void LOGGER::StreamLogs()
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "ON LINES |");
 	for (int i = 0; i < Debug.cnt_warn; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", Debug.warn_line[i]);
-		strcat(buff_lrg_3, buff_med);
+		Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_med), buff_med);
 	}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL WARNINGS: %d %s", Debug.cnt_warn, Debug.cnt_warn > 0 ? buff_lrg_3 : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -5688,7 +5756,7 @@ void LOGGER::StreamLogs()
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "ON LINES |");
 	for (int i = 0; i < Debug.cnt_err; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", Debug.err_line[i]);
-		strcat(buff_lrg_3, buff_med);
+		Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_med), buff_med);
 	}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL ERRORS:  %d %s", Debug.cnt_err, Debug.cnt_err > 0 ? buff_lrg_3 : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -6007,7 +6075,7 @@ bool CheckForHandshake()
 	}
 
 	// Check for handshake confirmation from CS
-	else if (!fc.is_CSHandshakeDone){
+	else if (!fc.is_CSHandshakeDone) {
 
 		if (!r2c.do_rcvCheckArr[ID_Ind<R2_COM<USARTClass>>('h', &r2c)]) {
 
@@ -6023,7 +6091,7 @@ bool CheckForHandshake()
 	}
 
 	// Check for handshake confirmation from CheetahDue
-	else if (!fc.is_CheetahDueHandshakeDone){
+	else if (!fc.is_CheetahDueHandshakeDone) {
 
 		if (!r2a.do_rcvCheckArr[ID_Ind<R2_COM<USARTClass>>('h', &r2a)]) {
 
@@ -6477,7 +6545,7 @@ byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch)
 	}
 
 	// Compbine strings
-	strcat(buff_lrg, buff_lrg_2);
+	Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_lrg_2), buff_lrg_2);
 
 	// Log/print error
 	Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
@@ -6856,7 +6924,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 			pack = is_done ? p_r2->packArr[i] : 0;
 
 			// Queue packet
-			QueuePacket(p_r2, p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], true, false, is_done);
+			QueuePacket(p_r2, p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], pack, true, false, is_done);
 
 			// Update count
 			p_r2->cnt_repeatArr[i]++;
@@ -7568,7 +7636,7 @@ bool RunMotor(char dir, double new_speed, MC_CALL::ID caller)
 	Debug.DB_RunSpeed(__FUNCTION__, __LINE__, caller, runSpeedNow, new_speed);
 
 	// Scale vel for each motor
-	for (size_t i = 0; i < velOrd; i++) {
+	for (int i = 0; i < velOrd; i++) {
 		speed_rear += rearVelCoeff[i] * pow(new_speed, velOrd - 1 - i);
 		speed_front += frontVelCoeff[i] * pow(new_speed, velOrd - 1 - i);
 	}
@@ -8704,6 +8772,7 @@ float CheckBattery(bool force_check)
 	vccArr[vccMaxSamp - 1] = vccNow;
 	vcc_avg = vcc_sum / vccMaxSamp;
 
+
 	// Return 0 till array full
 	cnt_samples = cnt_samples < vccMaxSamp ? cnt_samples + 1 : vccMaxSamp;
 	if (cnt_samples < vccMaxSamp) {
@@ -8726,7 +8795,7 @@ float CheckBattery(bool force_check)
 		millis() > t_vcc_send + dt_vccSend) {
 
 		// Send vcc
-		QueuePacket(&r2c, 'J', vccAvg, 0, 0, 0, false);
+		QueuePacket(&r2c, 'J', vccAvg, 0, 0, 0, true);
 
 		// Store time
 		t_vcc_send = millis();
@@ -8825,7 +8894,7 @@ void QuitSession()
 		fc.is_QuitConfirmed = true;
 		return;
 	}
-	
+
 	// Set quit time 100 ms
 	if (t_quit == 0) {
 		t_quit = millis() + 100;
@@ -9167,10 +9236,10 @@ void PingTest()
 
 			// Add to string
 			if (i == 0) {
-				strcat(buff_lrg_2, buff_lrg);
+				Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
 			}
 			else {
-				strcat(buff_lrg_3, buff_lrg);
+				Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_lrg), buff_lrg);
 			}
 
 		}
@@ -9383,22 +9452,22 @@ void HardwareTest()
 					// LCD
 					lcd_sum += lcd_arr[i];
 					Debug.sprintf_safe(buffLrg, buff_lrg, "%0.2f|", (double)lcd_arr[i] / 1000);
-					strcat(buff_lrg_2, buff_lrg);
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
 
 					// Print
 					print_sum += print_arr[i];
 					Debug.sprintf_safe(buffLrg, buff_lrg, "%0.2f|", (double)print_arr[i] / 1000);
-					strcat(buff_lrg_3, buff_lrg);
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_lrg), buff_lrg);
 
 					// Log
 					log_sum += log_arr[i];
 					Debug.sprintf_safe(buffLrg, buff_lrg, "%0.2f|", (double)log_arr[i] / 1000);
-					strcat(buff_lrg_4, buff_lrg);
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_4), buff_lrg_4, strlen(buff_lrg), buff_lrg);
 
 					// VCC
 					vcc_sum += vcc_arr[i];
 					Debug.sprintf_safe(buffLrg, buff_lrg, "%0.2f|", vcc_arr[i]);
-					strcat(buff_lrg_5, buff_lrg);
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_5), buff_lrg_5, strlen(buff_lrg), buff_lrg);
 				}
 
 				// Compute average
@@ -9473,7 +9542,7 @@ void HardwareTest()
 
 					pixy_pos_sum += pixy_pos_arr[i];
 					Debug.sprintf_safe(buffLrg, buff_lrg, "%0.2f|", pixy_pos_arr[i]);
-					strcat(buff_lrg_6, buff_lrg);
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_6), buff_lrg_6, strlen(buff_lrg), buff_lrg);
 				}
 
 				// Compute average
@@ -10446,7 +10515,7 @@ void loop() {
 				Debug.DB_General(__FUNCTION__, __LINE__, "DO BEHAVIOR SESSION");
 
 				// Update pixy coeff
-				for (size_t i = 0; i < pixyOrd; i++) {
+				for (int i = 0; i < pixyOrd; i++) {
 					pixyCoeff[i] = pixyPackCoeff[i];
 				}
 
@@ -10459,7 +10528,7 @@ void loop() {
 				Debug.DB_General(__FUNCTION__, __LINE__, "DO IMPLANT SESSION");
 
 				// Update pixy coeff
-				for (size_t i = 0; i < pixyOrd; i++) {
+				for (int i = 0; i < pixyOrd; i++) {
 					pixyCoeff[i] = pixyPackCoeff[i];
 				}
 
