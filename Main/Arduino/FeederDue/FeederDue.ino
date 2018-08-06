@@ -115,11 +115,11 @@ public:
 	// LOG/PRINT ERRORS
 	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
 	// LOG/PRINT RCVD PACKET
-	void DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte);
+	void DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// LOG/PRINT QUEUED SEND PACKET
 	void DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t);
 	// LOG/PRINT SENT PACKET
-	void DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte);
+	void DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// PRINT LOG WRITE
 	void DB_LogWrite(char *p_msg);
 	// LOG/PRINT MOTOR CONTROL DEBUG STRING
@@ -720,7 +720,7 @@ uint16_t GetPixy(bool is_hardware_test);
 byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch = '\0');
 
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true, bool is_conf = false, bool is_done = false);
+void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1 = 0, float dat2 = 0, float dat3 = 0, uint16_t pack = 0, bool do_conf = true, bool is_conf = false, bool is_done = false, bool is_resend = false);
 
 // SEND SERIAL PACKET DATA
 bool SendPacket(R2_COM<USARTClass> *p_r2);
@@ -1101,7 +1101,7 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 
 }
 
-void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte)
+void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1129,7 +1129,7 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 
 	// Format prefix
 	Debug.sprintf_safe(buffMed, buff_med_1, "   [%sRCVD%s%s:%s]",
-		is_resend ? "RE-" : "",
+		is_repeat ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		COM::str_list_id[p_r4->comID]);
@@ -1149,7 +1149,7 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 	}
 
 	// Log as warning if resent
-	if (is_resend) {
+	if (is_repeat) {
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, p_r4->t_rcvd);
 		return;
 	}
@@ -1204,7 +1204,7 @@ void DEBUG::DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t)
 
 }
 
-void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte)
+void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1230,13 +1230,13 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
-		is_resend ? "RE-" : "",
+		is_repeat ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		COM::str_list_id[p_r2->comID], p_msg_1, p_msg_2);
 
 	// Log as warning if resending
-	if (is_resend) {
+	if (is_repeat) {
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, p_r2->t_sent);
 		return;
 	}
@@ -2645,8 +2645,9 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 
 	// Check for errors
 	bool is_error =
-		dt_sec == 0 ||
-		vel_diff > 300;
+		(fc.is_RatOnTrack || this->objID == RobVT) &&
+		(dt_sec == 0 ||
+			vel_diff > 300);
 
 	// Log/print error
 	if (is_error) {
@@ -3937,11 +3938,6 @@ void REWARD::StartRew()
 	// Hard stop
 	HardStop(__FUNCTION__, __LINE__);
 
-	// Add to count
-	if (rewMode != BUTTON) {
-		cnt_rew++;
-	}
-
 	// Send ard packet imediately
 	if (fc.is_SesStarted) {
 		QueuePacket(&r2a, 'r', duration, cnt_rew);
@@ -4011,7 +4007,7 @@ bool REWARD::CheckEnd()
 	// Check if not time to close solonoid
 	if (millis() < t_closeSol) {
 		return false;
-	}
+}
 
 	// Close solenoid
 	if (digitalRead(pin.REL_FOOD) == HIGH) {
@@ -4084,15 +4080,15 @@ void REWARD::ProcRewCmd(byte cmd_type, float cmd_pos, int cmd_zone_delay)
 		cmd_type == 2 ? REWMODE::CUE :
 		REWMODE::FREE;
 
-	// Format string
-	Debug.sprintf_safe(buffMed, str_med_rew, "REWARD \"%s\" [%d/%d]",
-		p_str_list_rewMode[rewMode], cnt_rew, cnt_cmd);
-
 	// Update counts
 	if (rewMode != BUTTON) {
 		cnt_cmd++;
-		cnt_rew++;
 	}
+	cnt_rew++;
+
+	// Format string
+	Debug.sprintf_safe(buffMed, str_med_rew, "REWARD \"%s\" [%d/%d]",
+		p_str_list_rewMode[rewMode], cnt_rew, cnt_cmd);
 
 	// Handle zone/delay arg
 	if (rewMode == NOW || rewMode == CUE) {
@@ -4512,7 +4508,7 @@ void REWARD::CheckFeedArm()
 			// Set to retract
 			RetractFeedArm();
 		}
-	}
+}
 
 	// Bail if still nothing to do
 	if (!do_ExtendArm &&
@@ -5745,7 +5741,7 @@ void LOGGER::StreamLogs()
 	for (int i = 0; i < Debug.cnt_warn; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", Debug.warn_line[i]);
 		Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_med), buff_med);
-	}
+}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL WARNINGS: %d %s", Debug.cnt_warn, Debug.cnt_warn > 0 ? buff_lrg_3 : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	// Send
@@ -6072,7 +6068,7 @@ bool CheckForHandshake()
 
 		}
 
-	}
+}
 
 	// Check for handshake confirmation from CS
 	else if (!fc.is_CSHandshakeDone) {
@@ -6197,7 +6193,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	char foot = ' ';
 	bool do_conf = false;
 	bool is_conf = false;
-	bool is_resend = false;
+	bool is_repeat = false;
 	byte flag_byte = 0;
 	R2_COM<USARTClass> *p_r2;
 	R2_COM<USARTClass> *p_r2o;
@@ -6236,7 +6232,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	if (b == 0) {
 
 		return;
-	}
+}
 
 	// Store header
 	head = b;
@@ -6330,10 +6326,10 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 			pack_last = p_r4->packConfArr[r4_ind];
 
 		// Flag resent pack
-		is_resend = pack == pack_last;
+		is_repeat = pack == pack_last;
 
 		// Incriment repeat count
-		if (is_resend)
+		if (is_repeat)
 			p_r4->cnt_repeat++;
 
 		// Update packet history
@@ -6348,7 +6344,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 		p_r4->dat[2] = dat[2];
 
 		// Update for new packets
-		if (!is_conf && !is_resend) {
+		if (!is_conf && !is_repeat) {
 
 			// Get pack diff accounting for packet rollover
 			int pack_diff =
@@ -6385,7 +6381,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 		}
 
 		// Log/print recieved
-		Debug.DB_Rcvd(p_r4, buff_lrg_2, buff_lrg_3, is_resend, flag_byte);
+		Debug.DB_Rcvd(p_r4, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 
 	}
 
@@ -6558,7 +6554,7 @@ byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch)
 }
 
 // STORE PACKET DATA TO BE SENT
-void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf, bool is_done)
+void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, float dat3, uint16_t pack, bool do_conf, bool is_conf, bool is_done, bool is_resend)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -6589,6 +6585,7 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 	GetSetByteBit(&flag_byte, 0, do_conf);
 	GetSetByteBit(&flag_byte, 1, is_conf);
 	GetSetByteBit(&flag_byte, 2, is_done);
+	GetSetByteBit(&flag_byte, 3, is_resend);
 
 	// Get buffers
 	uint16_t tx_size = SERIAL_BUFFER_SIZE - 1 - p_r2->hwSerial.availableForWrite();
@@ -6712,6 +6709,7 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	VEC<float> dat(3, __LINE__);
 	bool do_conf = false;
 	bool is_conf = false;
+	bool is_repeat = false;
 	bool is_resend = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
@@ -6808,6 +6806,7 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	flag_byte = p_r2->SQ_Queue[p_r2->SQ_ReadInd][b_ind++];
 	do_conf = GetSetByteBit(&flag_byte, 0, false);
 	is_conf = GetSetByteBit(&flag_byte, 1, false);
+	is_resend = GetSetByteBit(&flag_byte, 3, false);
 
 	// Set entry to null
 	p_r2->SQ_Queue[p_r2->SQ_ReadInd][0] = '\0';
@@ -6828,10 +6827,10 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 		pack_last = p_r2->packConfArr[id_ind];
 
 	// Flag resent pack
-	is_resend = pack == pack_last;
+	is_repeat = is_resend || pack == pack_last;
 
 	// Incriment repeat count
-	if (is_resend)
+	if (is_repeat)
 		p_r2->cnt_repeat++;
 
 	// Update packet history
@@ -6850,11 +6849,11 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	// Format data string
 	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
 		id, dat[0], dat[1], dat[2], pack, flag_byte);
-	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d|",
-		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue);
+	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d| ez_on=%d ez_act=%d",
+		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue, digitalRead(pin.ED_SLP), v_doStepTimer);
 
 	// Log/print sent
-	Debug.DB_Sent(p_r2, buff_lrg_2, buff_lrg_3, is_resend, flag_byte);
+	Debug.DB_Sent(p_r2, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 
 	// Return success
 	return true;
@@ -6924,7 +6923,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 			pack = is_done ? p_r2->packArr[i] : 0;
 
 			// Queue packet
-			QueuePacket(p_r2, p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], pack, true, false, is_done);
+			QueuePacket(p_r2, p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], pack, true, false, is_done, true);
 
 			// Update count
 			p_r2->cnt_repeatArr[i]++;
@@ -6948,7 +6947,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		// Reset flag
 		p_r2->do_rcvCheckArr[i] = false;
 
-	}
+}
 
 	// Return
 	return is_waiting_for_pack;
@@ -7595,7 +7594,7 @@ void IRprox_Halt()
 
 		// Bail
 		return;
-	}
+}
 
 	// Bail if MoveTo active and IRs no longer active
 	if (motorControl == MC_CON::ID::MOVETO &&
@@ -8118,7 +8117,7 @@ void CheckSampDT()
 		// Swap
 		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_update);
 		t_swap_vt = millis();
-	}
+}
 
 	// Use VT for Pixy data
 	if (do_swap_pixy && !do_swap_vt) {
@@ -8275,7 +8274,7 @@ void IR_SyncCheck()
 		Debug.sprintf_safe(buffLrg, buff_lrg, "IR Sync Event: dt=%dms", v_dt_ir);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, v_t_irSyncLast);
 
-	}
+}
 
 	// Reset flag
 	v_isNewIR = false;
@@ -8427,7 +8426,7 @@ bool GetButtonInput()
 			}
 		}
 
-	}
+}
 
 	// Bail if no new flags
 	if (!is_new_input) {
@@ -8502,7 +8501,7 @@ void ProcButtonInput()
 			Reward.StartRew();
 		}
 		fc.do_BtnRew = false;
-	}
+}
 
 	// OPEN/CLOSE REW SOL
 	if (fc.do_RewSolStateChange) {
@@ -8964,7 +8963,7 @@ void TestUpdate()
 		{@ReportDigital}
 		*/
 
-	}
+}
 	if (Debug.flag.do_analogpinGraph) {
 		/*
 		millis()%10 == 0
@@ -9678,7 +9677,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 			t_blink_last = millis();
 			do_led_on = !do_led_on;
 			cnt_blink += !do_led_on ? 1 : 0;
-		}
+}
 		return true;
 	}
 
@@ -10334,11 +10333,47 @@ void loop() {
 		QuitSession();
 	}
 
+	// WAIT FOR HANDSHAKE
+	if (!CheckForHandshake()) {
+		return;
+	}
+
+	// UPDATE PIXY
+	Pixy.PixyUpdate();
+
+	// CHECK IF RAT POS FRAMES DROPPING
+	CheckSampDT();
+
+	// INITIALIZE RAT AHEAD
+	InitializeTracking();
+
+	// UPDATE EKF
+	UpdateEKF();
+
+	// UPDATE PID AND SPEED
+	double new_speed = Pid.PidUpdate();
+	if (new_speed >= 0) {
+		RunMotor('f', new_speed, MC_CALL::ID::PID);
+	}
+
+	// UPDATE BULLDOZER
+	Bull.UpdateBull();
+
+	// LOG TRACKING DATA
+	Debug.DB_TrackData();
+
 #pragma endregion
 
-#pragma region //--- (T) SYSTEM TESTS ---
+#pragma region //--- PROCESS NEW MESSAGES ---
 
-	if (c2r.idNew == 'T' && c2r.is_new)
+	// CONTINUE LOOP IF NO NEW MESSAGE
+	if (!c2r.is_new) {
+		return;
+	}
+
+	//-------------- (T) SYSTEM TESTS --------------
+
+	if (c2r.idNew == 'T')
 	{
 		// Store message data
 		cmd.testCond = (byte)c2r.dat[0];
@@ -10466,19 +10501,10 @@ void loop() {
 
 	}
 
-#pragma endregion
 
-#pragma region //--- HANDSHAKE ---
+	//-------------- (S) SESSION SETUP --------------
 
-	// WAIT FOR HANDSHAKE
-	if (!CheckForHandshake()) {
-		return;
-	}
-
-#pragma endregion
-
-#pragma region //--- (S) SESSION SETUP ---
-	if (c2r.idNew == 'S' && c2r.is_new)
+	if (c2r.idNew == 'S')
 	{
 		// Store message data
 		cmd.sesMsg = (byte)c2r.dat[0];
@@ -10620,10 +10646,11 @@ void loop() {
 		}
 
 	}
-#pragma endregion
 
-#pragma region //--- (Q) QUIT SESSION ---
-	if (c2r.idNew == 'Q' && c2r.is_new) {
+
+	//-------------- (Q) QUIT SESSION --------------
+
+	if (c2r.idNew == 'Q') {
 
 		// Log/print event
 		Debug.DB_General(__FUNCTION__, __LINE__, "DO QUIT");
@@ -10646,10 +10673,11 @@ void loop() {
 
 	}
 
-#pragma endregion
 
-#pragma region //--- (M) DO MOVE ---
-	if (c2r.idNew == 'M' && c2r.is_new) {
+
+	//-------------- (M) DO MOVE --------------
+
+	if (c2r.idNew == 'M') {
 
 		// Store move count and pos
 		cmd.cnt_move = (byte)c2r.dat[0];
@@ -10663,10 +10691,11 @@ void loop() {
 
 	}
 
-#pragma endregion
 
-#pragma region //--- (R) REWARD ---
-	if (c2r.idNew == 'R' && c2r.is_new) {
+
+	//-------------- (R) REWARD --------------
+
+	if (c2r.idNew == 'R') {
 
 		// Store message data
 		cmd.rewType = (byte)c2r.dat[0];
@@ -10711,10 +10740,10 @@ void loop() {
 
 	}
 
-#pragma endregion
 
-#pragma region //--- (H) HALT ROBOT STATUS ---
-	if (c2r.idNew == 'H' && c2r.is_new) {
+	//-------------- (H) HALT ROBOT STATUS --------------
+
+	if (c2r.idNew == 'H') {
 
 		// Store message data
 		fc.do_Halt = c2r.dat[0] != 0 ? true : false;
@@ -10748,10 +10777,11 @@ void loop() {
 
 		}
 	}
-#pragma endregion
 
-#pragma region //--- (B) BULLDOZE RAT STATUS ---
-	if (c2r.idNew == 'B' && c2r.is_new) {
+
+	//-------------- (B) BULLDOZE RAT STATUS --------------
+
+	if (c2r.idNew == 'B') {
 
 		// Store message data
 		cmd.bullDel = c2r.dat[0];
@@ -10823,10 +10853,11 @@ void loop() {
 		}
 
 	}
-#pragma endregion
 
-#pragma region //--- (I) RAT IN ---
-	if (c2r.idNew == 'I' && c2r.is_new)
+
+	//-------------- (I) RAT IN --------------
+
+	if (c2r.idNew == 'I')
 	{
 		// Store message data
 		fc.is_RatOnTrack = c2r.dat[0] == 1 ? true : false;
@@ -10847,10 +10878,11 @@ void loop() {
 		}
 
 	}
-#pragma endregion
 
-#pragma region //--- (O) TASK DONE ---
-	if (c2r.idNew == 'O' && c2r.is_new)
+
+	//-------------- (O) TASK DONE --------------
+
+	if (c2r.idNew == 'O')
 	{
 		// Store message data
 		fc.is_TaskDone = c2r.dat[0] > 0 ? true : false;
@@ -10871,10 +10903,11 @@ void loop() {
 			fc.is_TrackingEnabled = false;
 		}
 	}
-#pragma endregion
 
-#pragma region //--- (P) VT DATA RECIEVED ---
-	if (c2r.idNew == 'P' && c2r.is_new)
+
+	//-------------- (P) VT DATA RECIEVED --------------
+
+	if (c2r.idNew == 'P')
 	{
 		// Store message data
 		cmd.vtEnt = (byte)c2r.dat[0];
@@ -10946,10 +10979,11 @@ void loop() {
 		}
 
 	}
-#pragma endregion
 
-#pragma region //--- (L) SEND LOG ---
-	if (c2r.idNew == 'L' && c2r.is_new) {
+
+	//-------------- (L) SEND LOG --------------
+
+	if (c2r.idNew == 'L') {
 
 		// Flag to begin sending
 		fc.do_LogSend = c2r.dat[0] == 1 ? true : false;
@@ -10984,33 +11018,6 @@ void loop() {
 
 	}
 
-#pragma endregion
-
-#pragma region //--- UPDATE TRACKING ---
-
-	// UPDATE PIXY
-	Pixy.PixyUpdate();
-
-	// CHECK IF RAT POS FRAMES DROPPING
-	CheckSampDT();
-
-	// INITIALIZE RAT AHEAD
-	InitializeTracking();
-
-	// UPDATE EKF
-	UpdateEKF();
-
-	// UPDATE PID AND SPEED
-	double new_speed = Pid.PidUpdate();
-	if (new_speed >= 0) {
-		RunMotor('f', new_speed, MC_CALL::ID::PID);
-	}
-
-	// UPDATE BULLDOZER
-	Bull.UpdateBull();
-
-	// LOG TRACKING DATA
-	Debug.DB_TrackData();
 
 #pragma endregion
 

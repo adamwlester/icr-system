@@ -10,7 +10,7 @@
 //========== DEBUG EXT DEFS =============
 
 // DEBUG TO CONSOLE
-#define DO_PRINT_DEBUG 1 // 0
+#define DO_PRINT_DEBUG 0 // 0
 
 // DEBUG TO OPENLOG LOGGER
 #define DO_LOG 1 // 1

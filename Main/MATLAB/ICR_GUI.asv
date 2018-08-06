@@ -104,7 +104,7 @@ D.DB.ratLab = 'r9999'; %'r9999';
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.Run_Cheetah = true;
+D.DB.Run_Cheetah = false;
 D.DB.Run_SS3D = false;
 D.DB.Rec_Raw = false;
 
@@ -9449,7 +9449,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'MarkerEdgeColor', [0, 0, 0], ...
                     'MarkerSize', 10, ...
                     'HitTest', 'off', ...
-                    'Parent', D.UI.axH(4));
+                    'Parent', D.UI.axH(3));
             else
                 Safe_Set(D.UI.Rat.mrkPosNowH, ...
                     'XData', x, ...

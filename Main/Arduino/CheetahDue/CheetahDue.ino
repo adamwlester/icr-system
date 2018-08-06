@@ -49,11 +49,11 @@ public:
 	// LOG/PRINT ERRORS
 	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
 	// LOG/PRINT RCVD PACKET
-	void DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte);
+	void DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// LOG/PRINT QUEUED SEND PACKET
 	void DB_SendQueued(char *p_msg, uint32_t t);
 	// LOG/PRINT SENT PACKET
-	void DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte);
+	void DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// PRINT LOG SEND
 	void DB_LogSend(char *p_msg);
 	// TEST PIN MAPPING
@@ -321,7 +321,7 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 	err_line[cnt_err < 100 ? cnt_err++ : 99] = cnt_logsStored;
 }
 
-void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte)
+void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -344,13 +344,13 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s%s:%s] %s %s", 
-		is_resend ? "RE-" : "", 
+		is_repeat ? "RE-" : "", 
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		"r2c", p_msg_1, p_msg_2);
 
 	// Log as warning if resent
-	if (is_resend) {
+	if (is_repeat) {
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, r2a.t_rcvd);
 		return;
 	}
@@ -400,7 +400,7 @@ void DEBUG::DB_SendQueued(char *p_msg, uint32_t t)
 
 }
 
-void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte)
+void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -424,13 +424,13 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_resend, byte flag_byte
 
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
-		is_resend ? "RE-" : "",
+		is_repeat ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		"a2r", p_msg_1, p_msg_2);
 
 	// Log as warning if resending
-	if (is_resend) {
+	if (is_repeat) {
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, a2r.t_sent);
 		return;
 	}
@@ -968,7 +968,7 @@ bool CheckForHandshake()
 	{
 		// Set flag
 		fc.is_FeederDueHandshakeDone = true;
-		Debug.DB_General(__FUNCTION__, __LINE__, "CheetaDue Handshake Confirmed");
+		Debug.DB_General(__FUNCTION__, __LINE__, "FeederDue Handshake Confirmed");
 
 	}
 
@@ -1035,7 +1035,7 @@ void GetSerial()
 	char foot = ' ';
 	bool do_conf = false;
 	bool is_conf = false;
-	bool is_resend = false;
+	bool is_repeat = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
 	int id_ind = ' ';
@@ -1139,10 +1139,10 @@ void GetSerial()
 			pack_last = r2a.packConfArr[id_ind];
 
 		// Flag resent pack
-		is_resend = pack == pack_last;
+		is_repeat = pack == pack_last;
 
 		// Incriment repeat count
-		if (is_resend)
+		if (is_repeat)
 			r2a.cnt_repeat++;
 
 		// Update packet history
@@ -1157,7 +1157,7 @@ void GetSerial()
 		r2a.dat[2] = dat[2];
 
 		// Update for new packets
-		if (!is_conf && !is_resend) {
+		if (!is_conf && !is_repeat) {
 
 			// Get pack diff accounting for packet rollover
 			int pack_diff =
@@ -1195,7 +1195,7 @@ void GetSerial()
 		}
 
 		// Log/print recieved
-		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_resend, flag_byte);
+		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 
 	}
 
@@ -1465,7 +1465,7 @@ bool SendPacket()
 	VEC<float> dat(3, __LINE__);
 	bool do_conf = false;
 	bool is_conf = false;
-	bool is_resend = false;
+	bool is_repeat = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
 	uint16_t tx_size;
@@ -1555,10 +1555,10 @@ bool SendPacket()
 		pack_last = r2a.packConfArr[id_ind];
 
 	// Flag resent pack
-	is_resend = pack == pack_last;
+	is_repeat = pack == pack_last;
 
 	// Incriment repeat count
-	if (is_resend)
+	if (is_repeat)
 		r2a.cnt_repeat++;
 
 	// Update packet history
@@ -1574,7 +1574,7 @@ bool SendPacket()
 		SQ_MsgBytes, tx_size, rx_size, a2r.dt_sent, dt_rcvd, dt_queue);
 
 	// Log/print sent
-	Debug.DB_Sent(buff_lrg_2, buff_lrg_3, is_resend, flag_byte);
+	Debug.DB_Sent(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 
 	// Return success
 	return true;
@@ -2537,9 +2537,14 @@ void loop()
 #pragma endregion
 
 #pragma region //--- PROCESS NEW MESSAGES ---
+	
+	// CONTINUE LOOP IF NO NEW MESSAGE
+	if (!r2a.is_new) {
+		return;
+	}
 
 	// (t) SESTEM TEST
-	if (r2a.is_new && r2a.idNew == 't') {
+	if (r2a.idNew == 't') {
 
 		// Wall IR timing test
 		if (r2a.dat[0] == 5)
@@ -2650,7 +2655,7 @@ void loop()
 	}
 
 	// (r) RUN REWARD TONE
-	if (r2a.is_new && r2a.idNew == 'r') {
+	if (r2a.idNew == 'r') {
 
 		// Get reward duration and convert to ms
 		rewDur = (uint32_t)r2a.dat[0];
@@ -2660,7 +2665,7 @@ void loop()
 	}
 
 	// (s) SESSION SETUP
-	if (r2a.is_new && r2a.idNew == 's') {
+	if (r2a.idNew == 's') {
 
 		// No noise
 		if (r2a.dat[0] == 0)
@@ -2753,7 +2758,7 @@ void loop()
 	}
 
 	// (p) SIGNAL PID MODE
-	if (r2a.is_new && r2a.idNew == 'p') {
+	if (r2a.idNew == 'p') {
 		// Signal PID stopped
 		if (r2a.dat[0] == 0)
 		{
@@ -2771,7 +2776,7 @@ void loop()
 	}
 
 	// (b) SIGNAL BULLDOZE MODE
-	if (r2a.is_new && r2a.idNew == 'b') {
+	if (r2a.idNew == 'b') {
 		// Signal Bull stopped
 		if (r2a.dat[0] == 0)
 		{
@@ -2789,7 +2794,7 @@ void loop()
 	}
 
 	// (q) DO QUIT
-	if (r2a.is_new && r2a.idNew == 'q') {
+	if (r2a.idNew == 'q') {
 
 		// Log/print suammry
 		Debug.DoSummary();

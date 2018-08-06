@@ -40,7 +40,7 @@ namespace ICR_Run
         /*Autoload rat data
             true: Load rat data based on ICR_GUI hardcoded values
             false: Start normally */
-        do_autoloadUI: false, // false
+        do_autoloadUI: true, // false
 
         // Print all blocked vt recs
         do_printBlockedVT: false, // false
@@ -1249,8 +1249,8 @@ namespace ICR_Run
                         DEBUG.DB_Warning_Thread(String.Format("Resending c2r: cnt={0} id='{1}' dat=|{2:0.00}|{3:0.00}|{4:0.00}| pack={5} do_conf={6} is_conf={7} do_check_done={8}",
                             send_count, id, dat[0], dat[1], dat[2], pack, do_conf, is_conf, do_check_done));
 
-                        // Resend
-                        SendFeederDueCom(id: id, dat: dat, pack: pack, do_conf: do_conf, is_conf: is_conf, do_check_done: do_check_done, is_resend: true);
+                        // Resend with new packet
+                        SendFeederDueCom(id: id, dat: dat, pack: 0, do_conf: do_conf, is_conf: is_conf, do_check_done: do_check_done, is_resend: true);
                         t_resend = DEBUG.DT() + c2r.dt_resend;
                         send_count++;
                     }
@@ -1298,6 +1298,7 @@ namespace ICR_Run
             byte[] msg_pack = new byte[2];
             byte[] msg_conf = new byte[1];
             bool do_loop = true;
+            bool is_repeat = false;
             bool is_min_dt_send_rcv = false;
             bool is_buff_ready = false;
             bool is_hanging = false;
@@ -1448,13 +1449,14 @@ namespace ICR_Run
                 // Update c2r info
                 var result = c2r.UpdateSent(id: id, dat: dat, pack: pack, t: DEBUG.DT(), is_conf: is_conf, is_resend: is_resend);
                 string str_prfx = result.Item1;
+                is_repeat = result.Item2;
 
                 // Check for vt data
                 if (id != 'P')
                 {
                     // Log/print send info
                     string str_print = String.Format("{0} {1}", buff_dat_1, buff_dat_2);
-                    if (!is_resend)
+                    if (!is_repeat)
                         DEBUG.DB_General_Thread(str_print, t: c2r.t_new, str_prfx: str_prfx, indent: 5);
                     else
                         DEBUG.DB_Warning_Thread(str_print, t: c2r.t_new, str_prfx: str_prfx);
@@ -4688,6 +4690,7 @@ namespace ICR_Run
 
             // Local vars
             int id_ind = 0;
+            bool is_repeat = false;
             UInt16 pack_last = 0;
             string str_prfx = "";
 
@@ -4710,6 +4713,9 @@ namespace ICR_Run
             else
                 pack_last = _packConfArr[id_ind];
 
+            // Flag repeat pack
+            is_repeat = is_resend || pack == pack_last;
+
             // Incriment repeat
             if (is_resend)
                 _cnt_repeat++;
@@ -4721,7 +4727,7 @@ namespace ICR_Run
                 _packConfArr[id_ind] = pack;
 
             // Update for new packets
-            if (!is_resend && !is_conf)
+            if ((!is_repeat || is_resend) && !is_conf)
                 _packSentAll++;
 
             // Format prefix string
@@ -4732,7 +4738,7 @@ namespace ICR_Run
                 _objID);
 
             // Format tuple 
-            var tuple = new Tuple<string, bool>(str_prfx, is_resend);
+            var tuple = new Tuple<string, bool>(str_prfx, is_repeat);
 
             // Return outputs
             return tuple;
@@ -4745,7 +4751,7 @@ namespace ICR_Run
 
             // Local vars
             int id_ind = 0;
-            bool is_resend = false;
+            bool is_repeat = false;
             int dropped = 0;
             UInt16 pack_last = 0;
             string str_prfx = "";
@@ -4770,10 +4776,10 @@ namespace ICR_Run
                 pack_last = _packConfArr[id_ind];
 
             // Flag resent pack
-            is_resend = pack == pack_last;
+            is_repeat = pack == pack_last;
 
             // Incriment repeat
-            if (is_resend)
+            if (is_repeat)
                 _cnt_repeat++;
 
             // Update packet history
@@ -4783,7 +4789,7 @@ namespace ICR_Run
                 _packConfArr[id_ind] = pack;
 
             // Update for new packets
-            if (!is_resend && !is_conf && !is_done)
+            if (!is_repeat && !is_conf && !is_done)
             {
 
                 // Get pack diff accounting for packet rollover
@@ -4810,13 +4816,13 @@ namespace ICR_Run
             // Format prefix string
             str_prfx =
                String.Format("[{0}RCVD{1}{2}:{3}]",
-               is_resend ? "RE-" : "",
+               is_repeat ? "RE-" : "",
                is_conf ? "-CONF" : "",
                is_done ? "-DONE" : "",
                _objID);
 
             // Format tuple 
-            var tuple = new Tuple<string, bool, int>(str_prfx, is_resend, dropped);
+            var tuple = new Tuple<string, bool, int>(str_prfx, is_repeat, dropped);
 
             // Return outputs
             return tuple;
