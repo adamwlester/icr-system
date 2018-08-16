@@ -26,7 +26,7 @@ namespace ICR_Run
             5: Wall image IR sync timing
             6: IR sync timing
             7: Hardware test */
-        systemTest: 1, // 0
+        systemTest: 0, // 0
 
         /* Debug matlab
             [0]: Dont break on errors

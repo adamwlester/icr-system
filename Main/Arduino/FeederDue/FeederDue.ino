@@ -8306,8 +8306,8 @@ bool GetButtonInput()
 	const int _dt_debounce[3] = { 100, 100, 100 };
 	const VEC<int> dt_debounce(3, __LINE__, _dt_debounce);
 	bool is_new_input = false;
-	VEC<bool> is_pressed(3, __LINE__);
-	VEC<bool> is_running(3, __LINE__);
+	static VEC<bool> is_pressed(3, __LINE__);
+	static VEC<bool> is_running(3, __LINE__);
 	VEC<bool> do_flag_fun_shold(3, __LINE__);
 	VEC<bool> do_flag_fun_lhold(3, __LINE__);
 	static VEC<uint32_t> t_debounce(3, __LINE__);

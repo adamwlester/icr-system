@@ -98,7 +98,7 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r9999'; %'r9999';
+D.DB.ratLab = 'r0561'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
@@ -114,12 +114,12 @@ D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Tra
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
-D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
+D.DB.Feeder_Condition = 'C2'; % ['C1' 'C2']
 D.DB.Reward_Delay = '1.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
 D.DB.Cue_Condition = 'All'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NE'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Start_Quadrant = 'SW'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
@@ -5574,6 +5574,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.h_paxImg{2}(exc_cor) = [];
         D.UI.h_paxImg{3}(exc_hor) = [];
         
+        % Add lighting for 3d plot 
         light_pos = [max(D.UI.axe3dH.XLim), max(D.UI.axe3dH.YLim), max(D.UI.axe3dH.ZLim)];
         D.UI.h_light(1) = light(D.UI.axe3dH, ...
             'Style', 'local', ...
@@ -10664,9 +10665,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
     end
-
-% ---------------------TRACK SEND REWARD CHECK---------------------
-    
 
 % ------------------------TRACK REWARD CHECK-----------------------
     function Track_Reward_Check()
