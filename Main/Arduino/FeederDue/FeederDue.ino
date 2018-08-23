@@ -221,7 +221,7 @@ public:
 	int dt_skip = 0;
 	double velNow = 0.0f; // (cm/sec)
 	double velLast = 0.0f; // (cm/sec)
-	double posRel = 0.0f; // (cm)
+	double posCum = 0.0f; // (cm)
 	double posAbs = 0.0f; // (cm)
 	uint16_t cnt_err = 0;
 	uint16_t cnt_swap = 0;
@@ -344,7 +344,7 @@ public:
 	int bullDelay = 0; // (ms)
 	double bullSpeed = 0;
 	double posCheck = 0;
-	double posRel = 0;
+	double posCum = 0;
 	double distMoved = 0;
 	double guardPos = 0;
 	bool isMoved = false;
@@ -391,17 +391,14 @@ public:
 	int moveTimeout = 10000;
 	uint32_t t_tryTargSetTill = 0;
 	uint32_t t_tryMoveTill = 0;
-	float cmd_targPos = 0;
 	byte cnt_move = 0;
 	char str_med_move[buffMed] = { 0 };
 	bool do_AbortMove = false;
-	double posAbs = 0;
 	const int dt_update = 10;
 	uint32_t t_updateNext = 0;
 	double distLeft = 0;
-	double posRelStart = 0;
-	double posAbsStart = 0;
-	double targPos = 0;
+	double startPosCum = 0;
+	double targPosAbs = 0;
 	double targDist = 0;
 	char moveDir = 'f';
 	double baseSpeed = 0;
@@ -421,11 +418,11 @@ public:
 
 	// METHODS
 	MOVETO();
-	void ProcMoveCmd(byte cmd_cnt, float cmd_pos);
+	void ProcMoveCmd(byte cmd_cnt, float cmd_targ);
 	bool RunMove();
-	bool CompTarg(double now_pos, double targ_pos);
-	double DecelToTarg(double now_pos, double now_vel, double dist_decel, double speed_min);
-	double GetMoveError(double now_pos);
+	bool SetMoveTarg();
+	double DecelToTarg(double dist_decel, double speed_min);
+	double GetMoveError();
 	void MoveToReset();
 
 };
@@ -464,33 +461,28 @@ public:
 	const VEC<int> zoneLocs;
 	static const int zoneLng =
 		sizeof(_zoneLocs) / sizeof(_zoneLocs[0]);
-	VEC<double> zoneBoundMin;
-	VEC<double> zoneBoundMax;
+	VEC<double> zoneBoundCumMin;
+	VEC<double> zoneBoundCumMax;
 	VEC<int> zoneOccTim;
 	VEC<int> zoneOccCnt;
-	VEC<double> zoneBoundRewarded;
+	VEC<double> zoneBoundCumRewarded;
 	char str_med_rew[buffMed] = { 0 };
-	double rewPos = 0;
 	int cnt_cmd = 0;
 	int cnt_rew = 0;
 	uint32_t t_nowZoneCheck = 0;
 	uint32_t t_lastZoneCheck = 0;
-	int occThreshold = 0; // (ms)
-	int duration = 0; // (ms) 
+	int rewDelay = 0; // (ms)
+	int rewDuration = 0; // (ms) 
 	float solOpenScale = 1;
-	byte durationByte = 0; // (ms) 
 	int zoneMin = 0;
 	int zoneMax = 0;
-	double boundMin = 0;
-	double boundMax = 0;
 	uint32_t t_rewStr = 0;
 	uint32_t t_rewEnd = 0;
 	uint32_t t_closeSol = 0;
 	uint32_t t_retractArm = 0;
 	uint32_t t_moveArmStr = 0;
-	double rewCenterRel = 0;
+	double goalPosCum = 0;
 	bool isRewarding = false;
-	bool isBoundsSet = false;
 	bool isZoneTriggered = false;
 	bool isAllZonePassed = false;
 	bool is_ekfNew = false;
@@ -533,10 +525,10 @@ public:
 	bool RunReward();
 	void StartRew();
 	bool CheckEnd();
-	void ProcRewCmd(byte cmd_type, float cmd_pos = -1, int cmd_zone_delay = -1);
-	void SetZoneDur(int zone_ind);
-	bool CompZoneBounds(double now_pos);
-	bool CheckZoneBounds(double now_pos);
+	void ProcRewCmd(byte cmd_type, float cmd_goal = -1, int cmd_zone_delay = -1);
+	void SetZoneDur(int zone_ind = -1);
+	void SetZoneBounds(float cmd_goal);
+	bool CheckZoneBounds();
 	void ExtendFeedArm(byte ext_steps);
 	void RetractFeedArm();
 	void SetMicroSteps(MICROSTEP microstep);
@@ -1490,13 +1482,13 @@ void DEBUG::DB_TrackData()
 
 	// Store pos values
 	if (do_log[0]) {
-		pos_hist[0][hist_ind] = Pos[0].posRel;
+		pos_hist[0][hist_ind] = Pos[0].posCum;
 	}
 	if (do_log[1]) {
-		pos_hist[1][hist_ind] = Pos[2].posRel;
+		pos_hist[1][hist_ind] = Pos[2].posCum;
 	}
 	if (do_log[2]) {
-		pos_hist[2][hist_ind] = Pos[1].posRel;
+		pos_hist[2][hist_ind] = Pos[1].posCum;
 	}
 	if (do_log[3]) {
 		pos_hist[3][hist_ind] = kal.RatPos;
@@ -2081,7 +2073,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	static bool do_power_reset = false;
 	static bool do_pixy_reset = false;
 	static uint32_t t_power_reset = 0;
-	double pixy_rel = 0;
+	double pixy_cum = 0;
 	double pixy_abs = 0;
 	uint32_t t_pixy_ts = 0;
 	double pixy_pos_y = 0;
@@ -2090,23 +2082,23 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	// Bail if robot not streaming yet
 	if (!is_hardware_test &&
 		!Pos[1].is_streamStarted) {
-		return pixy_rel;
+		return pixy_cum;
 	}
 
 	// Bail if task done
 	if (fc.is_TaskDone) {
-		return pixy_rel;
+		return pixy_cum;
 	}
 
 	// Bail if rat not on track or doing simulation test
 	if (!is_hardware_test &&
 		(!fc.is_RatOnTrack || Debug.flag.do_simRatTest)) {
-		return pixy_rel;
+		return pixy_cum;
 	}
 
 	// Bail if not time to check
 	if (millis() < t_check) {
-		return pixy_rel;
+		return pixy_cum;
 	}
 
 #if DO_TEENSY_DEBUG
@@ -2133,7 +2125,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		}
 
 		// Bail
-		return pixy_rel;
+		return pixy_cum;
 
 	}
 
@@ -2156,7 +2148,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		}
 
 		// Bail
-		return pixy_rel;
+		return pixy_cum;
 
 	}
 
@@ -2182,7 +2174,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		t_power_reset = millis();
 
 		// Bail
-		return pixy_rel;
+		return pixy_cum;
 
 	}
 
@@ -2193,7 +2185,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		t_check = millis() + dt_pixyCheck[0];
 
 		// Bail
-		return pixy_rel;
+		return pixy_cum;
 	}
 
 	else {
@@ -2209,19 +2201,19 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 
 	// Transform to CM
 	for (int i = 0; i < pixyOrd; i++) {
-		pixy_rel += pixyCoeff[i] * pow(pixy_pos_y, pixyOrd - 1 - i);
+		pixy_cum += pixyCoeff[i] * pow(pixy_pos_y, pixyOrd - 1 - i);
 	}
 
 	// Shift pixy data
-	pixy_rel = pixy_rel + pixyShift;
+	pixy_cum = pixy_cum + pixyShift;
 
 	// Return rel val if testing
 	if (is_hardware_test) {
-		return pixy_rel;
+		return pixy_cum;
 	}
 
 	// Scale to abs space with rob vt data
-	pixy_abs = pixy_rel + Pos[1].posAbs;
+	pixy_abs = pixy_cum + Pos[1].posAbs;
 	pixy_abs = pixy_abs > (140 * PI) ? pixy_abs - (140 * PI) : pixy_abs;
 
 	// Update pixy pos and vel
@@ -2229,14 +2221,14 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 
 	// Log/print first sample
 	if (!Pos[2].is_streamStarted) {
-		Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT PIXY RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
-			Pos[2].posAbs, Pos[2].posRel, Pos[2].nLaps);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT PIXY RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+			Pos[2].posAbs, Pos[2].posCum, Pos[2].nLaps);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 		Pos[2].is_streamStarted = true;
 	}
 
 	// Return relative pos
-	return pixy_rel;
+	return pixy_cum;
 }
 
 uint16_t PIXY::PixyGetBlocks()
@@ -2565,7 +2557,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 	// Do not process early samples
 	if (this->cnt_samp < this->nSamp + 1) {
 
-		this->posRel = this->posRel;
+		this->posCum = this->posCum;
 		this->velNow = 0;
 
 		// Set flag
@@ -2597,7 +2589,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 	}
 
 	// Store cumulative position in cm
-	this->posRel = pos_new + this->nLaps*(140 * PI);
+	this->posCum = pos_new + this->nLaps*(140 * PI);
 
 	// COMPUTE VELOCITY
 	for (int i = 0; i < this->nSamp - 1; i++)
@@ -2677,7 +2669,7 @@ double POSTRACK::GetPos()
 	this->isNew = false;
 
 	// Return newest pos value
-	return this->posRel;
+	return this->posCum;
 }
 
 double POSTRACK::GetVel()
@@ -3185,12 +3177,12 @@ void BULLDOZE::UpdateBull()
 	DB_FUN_STR();
 #endif
 
-	// Update rat pos
-	posRel = kal.RatPos;
+	// Update cumulative rat pos
+	posCum = kal.RatPos;
 	guardPos = kal.RobPos + guardDist;
 
 	// Get distance traveled
-	distMoved = posRel - posCheck;
+	distMoved = posCum - posCheck;
 
 	// Check for movement
 	isMoved = distMoved >= moveMin ? true : false;
@@ -3215,7 +3207,7 @@ void BULLDOZE::UpdateBull()
 	// Has moved minimal distance
 	else {
 		// Reset check pos
-		posCheck = posRel;
+		posCheck = posCum;
 
 		// Reset bull next
 		t_bullNext = millis() + bullDelay;
@@ -3430,7 +3422,7 @@ void BULLDOZE::BullCheckMotorControl()
 
 MOVETO::MOVETO() {}
 
-void MOVETO::ProcMoveCmd(byte cmd_cnt, float cmd_pos)
+void MOVETO::ProcMoveCmd(byte cmd_cnt, float cmd_targ)
 {
 
 #if DO_TEENSY_DEBUG
@@ -3447,8 +3439,8 @@ void MOVETO::ProcMoveCmd(byte cmd_cnt, float cmd_pos)
 	moveEv = cmd_cnt == 0 ? LAST : cmd_cnt == 1 ? FIRST : OTHER;
 
 	// Align target pos to feeder
-	cmd_targPos = cmd_pos - feedDist;
-	cmd_targPos = cmd_targPos < 0 ? cmd_targPos + (140 * PI) : cmd_targPos;
+	targPosAbs = cmd_targ - feedDist;
+	targPosAbs = targPosAbs < 0 ? targPosAbs + (140 * PI) : targPosAbs;
 
 	// Format string
 	if (moveEv == OTHER) {
@@ -3461,7 +3453,7 @@ void MOVETO::ProcMoveCmd(byte cmd_cnt, float cmd_pos)
 	}
 
 	// Log/print setup
-	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: targ=%0.2fcm", str_med_move, cmd_targPos);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: targ=%0.2fcm", str_med_move, targPosAbs);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 }
@@ -3481,7 +3473,7 @@ bool MOVETO::RunMove()
 	if (!isTargSet && !do_AbortMove) {
 
 		// If succesfull
-		if (CompTarg(kal.RobPos, cmd_targPos)) {
+		if (SetMoveTarg()) {
 
 			// Start running
 			if (SetMotorControl(MC_CON::ID::MOVETO, MC_CALL::ID::MOVETO)) {
@@ -3530,7 +3522,7 @@ bool MOVETO::RunMove()
 	else if (!isTargReached && !do_AbortMove && !fc.do_Halt) {
 
 		// Do deceleration
-		double new_speed = DecelToTarg(kal.RobPos, kal.RobVel, moveToDecelDist, moveToSpeedMin);
+		double new_speed = DecelToTarg(moveToDecelDist, moveToSpeedMin);
 
 		// Change speed if > 0
 		if (new_speed > 0 && new_speed != runSpeedNow) {
@@ -3564,7 +3556,7 @@ bool MOVETO::RunMove()
 		// Log/print failure
 		else if (do_AbortMove) {
 			Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED: %s: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-				str_med_move, isTargSet, fc.is_EKFReady, isMoveStarted, targDist, GetMoveError(kal.RobPos), moveDir);
+				str_med_move, isTargSet, fc.is_EKFReady, isMoveStarted, targDist, GetMoveError(), moveDir);
 			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 		}
 
@@ -3573,7 +3565,7 @@ bool MOVETO::RunMove()
 
 			// Print success message
 			Debug.sprintf_safe(buffLrg, buff_lrg, "SUCCEEDED: %s: targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-				str_med_move, targDist, GetMoveError(kal.RobPos), moveDir);
+				str_med_move, targDist, GetMoveError(), moveDir);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 			// Send confirmation for first and last move
@@ -3603,7 +3595,7 @@ bool MOVETO::RunMove()
 
 }
 
-bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
+bool MOVETO::SetMoveTarg()
 {
 
 	// Run only if targ not set
@@ -3617,6 +3609,7 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	double pos_abs;
 	double move_diff = 0;
 	int lap_cm = 0;
 	int pos = 0;
@@ -3654,12 +3647,12 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 
 	// Current absolute pos on track
 	lap_cm = (int)(140 * PI * 100);
-	pos = (int)(now_pos * 100);
-	posAbs = (double)(pos % lap_cm) / 100;
-	posAbs = posAbs < 0 ? posAbs + (140 * PI) : posAbs;
+	pos = (int)(kal.RobPos * 100);
+	pos_abs = (double)(pos % lap_cm) / 100;
+	pos_abs = pos_abs < 0 ? pos_abs + (140 * PI) : pos_abs;
 
 	// Diff and absolute distance
-	move_diff = targ_pos_abs - posAbs;
+	move_diff = targPosAbs - pos_abs;
 
 	// Get minimum distance to target
 	targDist = min((140 * PI) - abs(move_diff), abs(move_diff));
@@ -3677,24 +3670,22 @@ bool MOVETO::CompTarg(double now_pos, double targ_pos_abs)
 	t_updateNext = millis();
 	baseSpeed = 0;
 
-	// Copy to public vars
-	targPos = targ_pos_abs;
-	posRelStart = now_pos;
-	posAbsStart = posAbs;
+	// Store starting pos
+	startPosCum = kal.RobPos;
 
 	// Set flag true
 	isTargSet = true;
 
 	// Log/print
-	Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: Set Move Target: start_rel=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
-		str_med_move, posRelStart, posAbsStart, targPos, targDist, moveDir);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: Set Move Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
+		str_med_move, pos_abs, startPosCum, targPosAbs, targDist, moveDir);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Retern flag
 	return isTargSet;
 }
 
-double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, double speed_min)
+double MOVETO::DecelToTarg(double dist_decel, double speed_min)
 {
 
 	// Local vars
@@ -3739,7 +3730,7 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	}
 
 	// Compute remaining distance
-	distLeft = targDist - abs(now_pos - posRelStart);
+	distLeft = targDist - abs(kal.RobPos - startPosCum);
 
 	// Check if motor stopped
 	if (distLeft > 1 && runSpeedNow == 0) {
@@ -3755,8 +3746,8 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	if (distLeft <= dist_decel) {
 
 		// Get base speed to decelerate from
-		if (baseSpeed == 0 && now_vel != 0) {
-			baseSpeed = abs(now_vel);
+		if (baseSpeed == 0 && kal.RobVel != 0) {
+			baseSpeed = abs(kal.RobVel);
 
 			// Log/print decel distance
 			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Reached %0.2fcm From Target", str_med_move, distLeft);
@@ -3778,8 +3769,8 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	if (distLeft < 1)
 	{
 		// Log/print
-		Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: start_rel=%0.2fcm now_rel=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
-			str_med_move, posRelStart, now_pos, targPos, targDist, distLeft);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: start_cum=%0.2fcm now_cum=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
+			str_med_move, startPosCum, kal.RobPos, targPosAbs, targDist, distLeft);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 		// Set flag true
@@ -3793,23 +3784,24 @@ double MOVETO::DecelToTarg(double now_pos, double now_vel, double dist_decel, do
 	return new_speed;
 }
 
-double MOVETO::GetMoveError(double now_pos)
+double MOVETO::GetMoveError()
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Local vars
+	double pos_abs;
 	int diam = 0;
 	int pos = 0;
 
 	// Current relative pos on track
 	diam = (int)(140 * PI * 100);
-	pos = (int)(now_pos * 100);
-	posAbs = (double)(pos % diam) / 100;
+	pos = (int)(kal.RobPos * 100);
+	pos_abs = (double)(pos % diam) / 100;
 
 	// Target error
-	return targPos - posAbs;
+	return targPosAbs - pos_abs;
 }
 
 void MOVETO::MoveToReset()
@@ -3834,14 +3826,101 @@ void MOVETO::MoveToReset()
 REWARD::REWARD() :
 	zoneRewDurs(zoneLng, __LINE__, _zoneRewDurs),
 	zoneLocs(zoneLng, __LINE__, _zoneLocs),
-	zoneBoundMin(zoneLng, __LINE__),
-	zoneBoundMax(zoneLng, __LINE__),
+	zoneBoundCumMin(zoneLng, __LINE__),
+	zoneBoundCumMax(zoneLng, __LINE__),
 	zoneOccTim(zoneLng, __LINE__),
 	zoneOccCnt(zoneLng, __LINE__),
-	zoneBoundRewarded(2, __LINE__)
+	zoneBoundCumRewarded(2, __LINE__)
 {
-	this->duration = durationDefault;
-	this->durationByte = (byte)(duration / 10);
+	this->rewDuration = durationDefault;
+}
+
+void REWARD::ProcRewCmd(byte cmd_type, float cmd_goal, int cmd_zone_delay)
+{
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// NOTE: arg2 = reward delay or zone ind or reward duration
+
+	// Local vars
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	int cmd_zone_ind = -1;
+	int cmd_delay = -1;
+
+	// Store mode
+	rewMode =
+		cmd_type == 0 ? REWMODE::BUTTON :
+		cmd_type == 1 ? REWMODE::NOW :
+		cmd_type == 2 ? REWMODE::CUE :
+		REWMODE::FREE;
+
+	// Update counts
+	if (rewMode != BUTTON) {
+		cnt_cmd++;
+	}
+	cnt_rew++;
+
+	// Format string
+	Debug.sprintf_safe(buffMed, str_med_rew, "REWARD \"%s\" [%d/%d]",
+		p_str_list_rewMode[rewMode], cnt_rew, cnt_cmd);
+
+	// Handle zone/delay arg
+	if (rewMode == NOW || rewMode == CUE) {
+
+		// Set to zero based index
+		cmd_zone_ind = cmd_zone_delay - 1;
+	}
+	else if (rewMode == FREE) {
+		cmd_delay = cmd_zone_delay;
+	}
+
+	// Setup "BUTTON" reward
+	if (rewMode == BUTTON) {
+
+		// Set duration to default
+		SetZoneDur();
+	}
+
+	// Setup "NOW" reward
+	else if (rewMode == NOW) {
+
+		// Set duration
+		SetZoneDur(cmd_zone_ind);
+	}
+
+	// Setup "CUE" reward
+	else if (rewMode == CUE) {
+
+		// Include specified zone
+		zoneMin = cmd_zone_ind;
+		zoneMax = cmd_zone_ind;
+
+		// Set zone bounds
+		SetZoneBounds(cmd_goal);
+
+		// Set delay to zero
+		rewDelay = 0;
+	}
+
+	// Setup "FREE" reward
+	else if (rewMode == FREE) {
+
+		// Include all zones
+		zoneMin = 0;
+		zoneMax = zoneLng - 1;
+
+		// Set zone bounds
+		SetZoneBounds(cmd_goal);
+
+		// Store reward delay time in ms
+		rewDelay = cmd_delay * 1000;
+	}
+
+	// Log/print
+	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: cmd_type=%d, cmd_goal=%0.2f, cmd_zone_delay=%d",
+		cmd_type, cmd_goal, cmd_zone_delay);
+	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 }
 
 bool REWARD::RunReward()
@@ -3860,24 +3939,11 @@ bool REWARD::RunReward()
 		return reward_done;
 	}
 
-	// Zone bounds not set yet
-	if (!isBoundsSet) {
-
-		// Compute bounds
-		CompZoneBounds(kal.RatPos);
-
-		// Print message
-		Debug.sprintf_safe(buffLrg, buff_lrg, "%s: SET REWARD ZONE: center=%0.2fcm from=%0.2fcm to=%0.2fcm",
-			str_med_rew, rewCenterRel, boundMin, boundMax);
-		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-	}
-
 	// Zone not triggered yet
-	else if (!isZoneTriggered) {
+	if (!isZoneTriggered) {
 
 		// Check each zone
-		if (CheckZoneBounds(kal.RatPos)) {
+		if (CheckZoneBounds()) {
 
 			// Start reward
 			StartRew();
@@ -3887,7 +3953,7 @@ bool REWARD::RunReward()
 
 			// Print message
 			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: REWARDED ZONE: occ=%dms zone=%d from=%0.2fcm to=%0.2fcm",
-				str_med_rew, occRewarded, zoneRewarded, zoneBoundRewarded[0], zoneBoundRewarded[1]);
+				str_med_rew, occRewarded, zoneRewarded, zoneBoundCumRewarded[0], zoneBoundCumRewarded[1]);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 			// Set done flag
@@ -3902,7 +3968,7 @@ bool REWARD::RunReward()
 
 		// Print reward missed
 		Debug.sprintf_safe(buffLrg, buff_lrg, "REWARD MISSED: %s: rat=%0.2fcm bound_max=%0.2fcm",
-			cnt_rew, cnt_cmd, kal.RatPos, boundMax);
+			str_med_rew, kal.RatPos, zoneBoundCumMin[zoneMax]);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 		// Decriment reward count
@@ -3940,7 +4006,7 @@ void REWARD::StartRew()
 
 	// Send ard packet imediately
 	if (fc.is_SesStarted) {
-		QueuePacket(&r2a, 'r', duration, cnt_rew);
+		QueuePacket(&r2a, 'r', rewDuration, cnt_rew);
 		SendPacket(&r2a);
 	}
 
@@ -3953,8 +4019,8 @@ void REWARD::StartRew()
 
 	// Compute reward end time
 	t_rewStr = millis();
-	t_rewEnd = t_rewStr + duration;
-	t_closeSol = t_rewStr + (int)((float)duration*solOpenScale);
+	t_rewEnd = t_rewStr + rewDuration;
+	t_closeSol = t_rewStr + (int)((float)rewDuration*solOpenScale);
 
 	// Extend feeder arm
 	if (!fc.is_ForageTask) {
@@ -3975,7 +4041,7 @@ void REWARD::StartRew()
 
 	// Log/print 
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUNNING: %s: dt_sol=%dms dt_rew=%dms dt_retract=%d...",
-		str_med_rew, t_closeSol - t_rewStr, duration, do_TimedRetract ? t_retractArm - t_rewStr : 0);
+		str_med_rew, t_closeSol - t_rewStr, rewDuration, do_TimedRetract ? t_retractArm - t_rewStr : 0);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, t_rewStr);
 
 
@@ -4007,7 +4073,7 @@ bool REWARD::CheckEnd()
 	// Check if not time to close solonoid
 	if (millis() < t_closeSol) {
 		return false;
-}
+	}
 
 	// Close solenoid
 	if (digitalRead(pin.REL_FOOD) == HIGH) {
@@ -4059,99 +4125,6 @@ bool REWARD::CheckEnd()
 
 }
 
-void REWARD::ProcRewCmd(byte cmd_type, float cmd_pos, int cmd_zone_delay)
-{
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
-
-	// NOTE: arg2 = reward delay or zone ind or reward duration
-
-	// Local vars
-	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
-	int cmd_zone_ind = 0;
-	int cmd_delay = 0;
-
-	// Store mode
-	rewMode =
-		cmd_type == 0 ? REWMODE::BUTTON :
-		cmd_type == 1 ? REWMODE::NOW :
-		cmd_type == 2 ? REWMODE::CUE :
-		REWMODE::FREE;
-
-	// Update counts
-	if (rewMode != BUTTON) {
-		cnt_cmd++;
-	}
-	cnt_rew++;
-
-	// Format string
-	Debug.sprintf_safe(buffMed, str_med_rew, "REWARD \"%s\" [%d/%d]",
-		p_str_list_rewMode[rewMode], cnt_rew, cnt_cmd);
-
-	// Handle zone/delay arg
-	if (rewMode == NOW || rewMode == CUE) {
-
-		// Set to zero based index
-		cmd_zone_ind = cmd_zone_delay - 1;
-	}
-	else if (rewMode == FREE) {
-		cmd_delay = cmd_zone_delay;
-	}
-
-	// Setup "BUTTON" reward
-	if (rewMode == BUTTON) {
-
-		// Set duration to default
-		duration = durationDefault;
-		Debug.sprintf_safe(buffMed, buff_med, "duration=%d", duration);
-	}
-
-	// Setup "NOW" reward
-	else if (rewMode == NOW) {
-
-		// Set duration
-		SetZoneDur(cmd_zone_ind);
-		Debug.sprintf_safe(buffMed, buff_med, "duration=%d", duration);
-
-		// Change duration default
-		durationDefault = duration;
-	}
-
-	// Setup "CUE" reward
-	else if (rewMode == CUE) {
-
-		// Include one zone
-		zoneMin = cmd_zone_ind;
-		zoneMax = cmd_zone_ind;
-
-		// Store reward pos
-		rewPos = cmd_pos;
-
-		// Store zone ind
-		occThreshold = 0;
-		Debug.sprintf_safe(buffMed, buff_med, "zone_ind=%d", cmd_zone_ind);
-	}
-
-	// Setup "FREE" reward
-	else if (rewMode == FREE) {
-
-		// Include all zones
-		zoneMin = 0;
-		zoneMax = zoneLng - 1;
-
-		// Store occupacy time min
-		occThreshold = cmd_delay * 1000;
-		Debug.sprintf_safe(buffMed, buff_med, "occ_thresh=%d", occThreshold);
-	}
-
-	// Log/print
-	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: %s",
-		str_med_rew, buff_med);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-}
-
 void REWARD::SetZoneDur(int zone_ind)
 {
 #if DO_TEENSY_DEBUG
@@ -4161,32 +4134,37 @@ void REWARD::SetZoneDur(int zone_ind)
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
-	// Set duration
-	duration = zoneRewDurs[zone_ind];
+	// Set zone ind
+	if (zone_ind != -1) {
+		zoneInd = zone_ind;
+	}
 
-	// Save zone ind
-	zoneInd = zone_ind;
+	// Find default ind
+	else {
+		for (int i = 0; i < zoneLng; i++) {
+			zoneInd = zoneRewDurs[i] == durationDefault ? i : zoneInd;
+		}
+	}
+
+	// Set duration
+	rewDuration = zoneRewDurs[zoneInd];
 
 	// Log/print
-	Debug.sprintf_safe(buffLrg, buff_lrg, "Set Reward Diration: zone_ind=%d duration=%d",
-		zone_ind, duration);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Set Reward Duration: zone_ind=%d duration=%d",
+		str_med_rew, zoneInd, rewDuration);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 }
 
-bool REWARD::CompZoneBounds(double now_pos)
+void REWARD::SetZoneBounds(float cmd_goal)
 {
 	// Local vars
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	int diam = 0;
 	int pos_int = 0;
-	double pos_rel = 0;
+	double pos_cum = 0;
 	double dist_center_cm = 0;
 	double dist_start_cm = 0;
 	double dist_end_cm = 0;
-
-	// Run only if bounds are not set
-	if (isBoundsSet) {
-		return isBoundsSet;
-	}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4194,15 +4172,15 @@ bool REWARD::CompZoneBounds(double now_pos)
 
 	// Compute laps
 	diam = (int)(140 * PI * 100);
-	pos_int = (int)(now_pos * 100);
-	lapN = round(now_pos / (140 * PI) - (float)(pos_int % diam) / diam);
+	pos_int = (int)(kal.RatPos * 100);
+	lapN = round(kal.RatPos / (140 * PI) - (float)(pos_int % diam) / diam);
 	// Check if rat 'ahead' of rew pos
-	pos_rel = (double)(pos_int % diam) / 100;
-	// add lap
-	lapN = pos_rel > rewPos ? lapN + 1 : lapN;
+	pos_cum = (double)(pos_int % diam) / 100;
+	// Add lap
+	lapN = pos_cum > cmd_goal ? lapN + 1 : lapN;
 
 	// Compute reward center
-	rewCenterRel = rewPos + lapN*(140 * PI);
+	goalPosCum = cmd_goal + lapN*(140 * PI);
 
 	// Compute bounds for each zone
 	for (int i = zoneMin; i <= zoneMax; i++)
@@ -4212,21 +4190,18 @@ bool REWARD::CompZoneBounds(double now_pos)
 		dist_start_cm = dist_center_cm - (2.5 * ((140 * PI) / 360));
 		dist_end_cm = dist_center_cm + (2.5 * ((140 * PI) / 360));
 		// Store in array
-		zoneBoundMin[i] = rewCenterRel + dist_start_cm;
-		zoneBoundMax[i] = rewCenterRel + dist_end_cm;
+		zoneBoundCumMin[i] = goalPosCum + dist_start_cm;
+		zoneBoundCumMax[i] = goalPosCum + dist_end_cm;
 	}
 
-	// Save bound min/max
-	boundMin = zoneBoundMin[zoneMin];
-	boundMax = zoneBoundMax[zoneMax];
+	// Print message
+	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Set Goal Zone: goal_pos_cum=%0.2fcm from=%0.2fcm to=%0.2fcm",
+		str_med_rew, goalPosCum, zoneBoundCumMin[zoneMin], zoneBoundCumMax[zoneMax]);
+	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
-	// Set flag
-	isBoundsSet = true;
-
-	return isBoundsSet;
 }
 
-bool REWARD::CheckZoneBounds(double now_pos)
+bool REWARD::CheckZoneBounds()
 {
 
 	// Run only if reward not already triggered
@@ -4247,13 +4222,13 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	is_ekfNew = false;
 
 	// Check if all bounds passed
-	if (now_pos > boundMax + 5) {
+	if (kal.RatPos > zoneBoundCumMax[zoneMax] + 5) {
 		isAllZonePassed = true;
 		return isZoneTriggered;
 	}
 
 	// Bail if first bound not reached
-	if (now_pos < boundMin) {
+	if (kal.RatPos < zoneBoundCumMin[zoneMin]) {
 		return isZoneTriggered;
 	}
 
@@ -4261,8 +4236,8 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	for (int i = zoneMin; i <= zoneMax; i++)
 	{
 		if (
-			now_pos > zoneBoundMin[i] &&
-			now_pos < zoneBoundMax[i]
+			kal.RatPos > zoneBoundCumMin[i] &&
+			kal.RatPos < zoneBoundCumMax[i]
 			) {
 
 			// Update timers
@@ -4275,7 +4250,7 @@ bool REWARD::CheckZoneBounds(double now_pos)
 			t_lastZoneCheck = t_nowZoneCheck;
 
 			// Check if occ thresh passed
-			if (zoneOccTim[i] >= occThreshold)
+			if (zoneOccTim[i] >= rewDelay)
 			{
 
 				// REWARD at this pos
@@ -4283,8 +4258,8 @@ bool REWARD::CheckZoneBounds(double now_pos)
 
 				// Store reward info for debugging
 				zoneRewarded = zoneLocs[i] * -1;
-				zoneBoundRewarded[0] = zoneBoundMin[i];
-				zoneBoundRewarded[1] = zoneBoundMax[i];
+				zoneBoundCumRewarded[0] = zoneBoundCumMin[i];
+				zoneBoundCumRewarded[1] = zoneBoundCumMax[i];
 				occRewarded = zoneOccTim[i];
 
 				// Set flag
@@ -4294,7 +4269,7 @@ bool REWARD::CheckZoneBounds(double now_pos)
 	}
 
 	return isZoneTriggered;
-}
+	}
 
 void REWARD::ExtendFeedArm(byte ext_steps)
 {
@@ -4319,7 +4294,7 @@ void REWARD::ExtendFeedArm(byte ext_steps)
 		// Log/print warning
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "ABORTED: Arm Already Extended");
 		return;
-	}
+}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4484,11 +4459,11 @@ void REWARD::CheckFeedArm()
 		// Make sure motor asleep if arm not extended
 		if (!isArmExtended && digitalRead(pin.ED_SLP) == HIGH) {
 			digitalWrite(pin.ED_SLP, LOW);
-		}
+	}
 
 		// Bail
 		return;
-	}
+}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4508,7 +4483,7 @@ void REWARD::CheckFeedArm()
 			// Set to retract
 			RetractFeedArm();
 		}
-}
+	}
 
 	// Bail if still nothing to do
 	if (!do_ExtendArm &&
@@ -4641,8 +4616,7 @@ void REWARD::RewardReset(bool was_rewarded)
 	Debug.DB_General(__FUNCTION__, __LINE__, "Reseting Reward");
 
 	// Log zone info
-	if (was_rewarded &&
-		(rewMode == FREE || rewMode == CUE))
+	if (rewMode == FREE || rewMode == CUE)
 	{
 		// Format zone occ message
 		Debug.sprintf_safe(buffLrg, buff_lrg, "ZONE OCC:");
@@ -4666,7 +4640,6 @@ void REWARD::RewardReset(bool was_rewarded)
 
 	// Reset flags etc
 	isRewarding = false;
-	isBoundsSet = false;
 	isZoneTriggered = false;
 	isAllZonePassed = false;
 	is_ekfNew = false;
@@ -4931,7 +4904,7 @@ bool LOGGER::SetToCmdMode()
 	}
 
 	return pass;
-}
+	}
 
 void LOGGER::GetCommand()
 {
@@ -5015,7 +4988,7 @@ char LOGGER::SendCommand(char *p_msg, bool do_conf, uint32_t timeout)
 
 	// Return mode
 	return reply;
-}
+	}
 
 char LOGGER::GetReply(uint32_t timeout)
 {
@@ -5173,7 +5146,7 @@ char LOGGER::GetReply(uint32_t timeout)
 
 	// Return cmd 
 	return cmd_reply;
-}
+	}
 
 bool LOGGER::SetToWriteMode()
 {
@@ -5212,7 +5185,7 @@ bool LOGGER::SetToWriteMode()
 	}
 
 	return pass;
-}
+	}
 
 void LOGGER::QueueLog(char *p_msg, uint32_t t)
 {
@@ -5370,7 +5343,7 @@ bool LOGGER::WriteLog()
 	return false;
 
 #endif
-}
+	}
 
 bool LOGGER::WriteAll(uint32_t timeout)
 {
@@ -5741,7 +5714,7 @@ void LOGGER::StreamLogs()
 	for (int i = 0; i < Debug.cnt_warn; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", Debug.warn_line[i]);
 		Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_med), buff_med);
-}
+	}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL WARNINGS: %d %s", Debug.cnt_warn, Debug.cnt_warn > 0 ? buff_lrg_3 : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	// Send
@@ -6068,7 +6041,7 @@ bool CheckForHandshake()
 
 		}
 
-}
+	}
 
 	// Check for handshake confirmation from CS
 	else if (!fc.is_CSHandshakeDone) {
@@ -6232,7 +6205,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	if (b == 0) {
 
 		return;
-}
+	}
 
 	// Store header
 	head = b;
@@ -6405,7 +6378,7 @@ uint16_t GetPixy(bool is_hardware_test)
 {
 
 
-}
+	}
 
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch)
@@ -6876,7 +6849,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 	for (int i = 0; i < p_r2->lng; i++)
 	{
 		is_waiting_for_pack = is_waiting_for_pack || p_r2->do_rcvCheckArr[i];
-	}
+}
 	if (!is_waiting_for_pack) {
 		return false;
 	}
@@ -6947,7 +6920,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		// Reset flag
 		p_r2->do_rcvCheckArr[i] = false;
 
-}
+	}
 
 	// Return
 	return is_waiting_for_pack;
@@ -7302,7 +7275,7 @@ void ImportTeensy()
 
 		// Hold for 100 ms for Teensy to finish reset
 		delay(100);
-	}
+}
 	else {
 		Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED: Teensy Reset");
 	}
@@ -7547,7 +7520,7 @@ void AD_CheckOC(bool force_check)
 		do_reset_disable = true;
 	}
 
-}
+	}
 
 // HARD STOP
 void HardStop(const char *p_fun, int line, bool do_block_hz)
@@ -7594,7 +7567,7 @@ void IRprox_Halt()
 
 		// Bail
 		return;
-}
+	}
 
 	// Bail if MoveTo active and IRs no longer active
 	if (motorControl == MC_CON::ID::MOVETO &&
@@ -7815,7 +7788,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 	}
 
 	return pass;
-}
+	}
 
 // BLOCK MOTOR TILL TIME ELLAPESED
 void BlockMotorTill(int dt)
@@ -7869,8 +7842,8 @@ void CheckBlockTimElapsed()
 	is_passed_feeder =
 		fc.is_TrackingEnabled &&
 		kal.RatPos - (kal.RobPos + feedTrackPastDist) > 0 &&
-		Pos[0].posRel - (kal.RobPos + feedTrackPastDist) > 0 &&
-		Pos[2].posRel - (kal.RobPos + feedTrackPastDist) > 0;
+		Pos[0].posCum - (kal.RobPos + feedTrackPastDist) > 0 &&
+		Pos[2].posCum - (kal.RobPos + feedTrackPastDist) > 0;
 
 	// Check if motor already running again
 	is_mot_running = runSpeedNow > 0;
@@ -7915,7 +7888,7 @@ void CheckBlockTimElapsed()
 
 	}
 
-}
+	}
 
 // GET AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char *p_status_name)
@@ -7985,12 +7958,12 @@ void InitializeTracking()
 	Debug.DB_General(__FUNCTION__, __LINE__, "RUNNING: Initialize Rat Tracking...");
 
 	// Check that pos values make sense
-	cm_diff = Pos[0].posRel - Pos[1].posRel;
+	cm_diff = Pos[0].posCum - Pos[1].posCum;
 	cm_dist = min((140 * PI) - abs(cm_diff), abs(cm_diff));
 
 	// Log/print rat and robot starting pos
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Starting Positions: pos(abs|rel|laps) rat_vt=%0.2f|%0.2f|%d rat_pixy=%0.2f|%0.2f|%d rob_vt=%0.2f|%0.2f|%d rat_dist=%0.2f",
-		Pos[0].posRel, Pos[0].posAbs, Pos[0].nLaps, Pos[2].posRel, Pos[2].posAbs, Pos[2].nLaps, Pos[1].posRel, Pos[1].posAbs, Pos[1].nLaps, cm_diff);
+		Pos[0].posCum, Pos[0].posAbs, Pos[0].nLaps, Pos[2].posCum, Pos[2].posAbs, Pos[2].nLaps, Pos[1].posCum, Pos[1].posAbs, Pos[1].nLaps, cm_diff);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Rat should be ahead of robot and by no more than 90 deg
@@ -8117,7 +8090,7 @@ void CheckSampDT()
 		// Swap
 		Pos[0].SwapPos(Pos[2].posAbs, Pos[2].t_update);
 		t_swap_vt = millis();
-}
+	}
 
 	// Use VT for Pixy data
 	if (do_swap_pixy && !do_swap_vt) {
@@ -8216,7 +8189,7 @@ void UpdateEKF()
 		if (!is_nans_last)
 		{
 			Debug.sprintf_safe(buffLrg, buff_lrg, "\"nan\" EKF Output: Pos[0]=%0.2f|%0.2f Pos[2]=%0.2f|%0.2f Pos[1]=%0.2f|%0.2f",
-				Pos[0].posRel, Pos[0].velNow, Pos[2].posRel, Pos[2].velNow, Pos[1].posRel, Pos[0].velNow);
+				Pos[0].posCum, Pos[0].velNow, Pos[2].posCum, Pos[2].velNow, Pos[1].posCum, Pos[0].velNow);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg, true);
 
 			// Set flag
@@ -8274,7 +8247,7 @@ void IR_SyncCheck()
 		Debug.sprintf_safe(buffLrg, buff_lrg, "IR Sync Event: dt=%dms", v_dt_ir);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, v_t_irSyncLast);
 
-}
+	}
 
 	// Reset flag
 	v_isNewIR = false;
@@ -8426,7 +8399,7 @@ bool GetButtonInput()
 			}
 		}
 
-}
+	}
 
 	// Bail if no new flags
 	if (!is_new_input) {
@@ -8501,7 +8474,7 @@ void ProcButtonInput()
 			Reward.StartRew();
 		}
 		fc.do_BtnRew = false;
-}
+	}
 
 	// OPEN/CLOSE REW SOL
 	if (fc.do_RewSolStateChange) {
@@ -8531,7 +8504,7 @@ void ProcButtonInput()
 		fc.do_MoveRobRev = false;
 	}
 
-}
+	}
 
 // OPEN/CLOSE REWARD SOLENOID
 void OpenCloseRewSolenoid()
@@ -8839,7 +8812,7 @@ float CheckBattery(bool force_check)
 
 	// Return battery voltage
 	return vccAvg;
-}
+	}
 
 // TURN LCD LIGHT ON/OFF
 void ChangeLCDlight(uint32_t duty)
@@ -8963,7 +8936,7 @@ void TestUpdate()
 		{@ReportDigital}
 		*/
 
-}
+	}
 	if (Debug.flag.do_analogpinGraph) {
 		/*
 		millis()%10 == 0
@@ -9018,10 +8991,10 @@ void TestUpdate()
 
 		// Check if position values changed
 		for (int i = 0; i < 3; i++) {
-			if (Pos[i].posRel != pos_last[i]) {
+			if (Pos[i].posCum != pos_last[i]) {
 				is_new = true;
 			}
-			pos_last[i] = Pos[i].posRel;
+			pos_last[i] = Pos[i].posCum;
 		}
 
 		// Plot and print new data
@@ -9051,13 +9024,13 @@ void TestUpdate()
 			}
 
 			// Compute distances
-			double rat_vt_dist = Pos[0].posRel - Pos[1].posRel;
-			double rat_pixy_dist = Pos[2].posRel - Pos[1].posRel;
+			double rat_vt_dist = Pos[0].posCum - Pos[1].posCum;
+			double rat_pixy_dist = Pos[2].posCum - Pos[1].posCum;
 
 			// Print pos data
 			if (Debug.flag.do_posPrint) {
 				Debug.sprintf_safe(buffLrg, buff_lrg, "POS DEBUG (abs|rel|laps|dist): rat_vt=%0.2f|%0.2f|%d|%0.2f rat_pixy=%0.2f|%0.2f|%d|%0.2f rob_vt=%0.2f|%0.2f|%d",
-					Pos[0].posRel, Pos[0].posAbs, Pos[0].nLaps, rat_vt_dist, Pos[2].posRel, Pos[2].posAbs, Pos[2].nLaps, rat_pixy_dist, Pos[1].posRel, Pos[1].posAbs, Pos[1].nLaps);
+					Pos[0].posCum, Pos[0].posAbs, Pos[0].nLaps, rat_vt_dist, Pos[2].posCum, Pos[2].posAbs, Pos[2].nLaps, rat_pixy_dist, Pos[1].posCum, Pos[1].posAbs, Pos[1].nLaps);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 			}
 
@@ -9111,7 +9084,7 @@ void TestUpdate()
 
 	}
 
-}
+	}
 
 // DO PING TEST
 void PingTest()
@@ -9677,7 +9650,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 			t_blink_last = millis();
 			do_led_on = !do_led_on;
 			cnt_blink += !do_led_on ? 1 : 0;
-}
+		}
 		return true;
 	}
 
@@ -9693,7 +9666,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		is_rat_blink = false;
 		return false;
 	}
-}
+	}
 
 #pragma endregion
 
@@ -10079,7 +10052,7 @@ void setup() {
 		t_sync = 1;
 		Debug.DB_Error(__FUNCTION__, __LINE__, "IR SENSOR DISABLED");
 		Debug.PrintAll(500);
-	}
+}
 
 	// Power off
 #if !DO_AUTO_POWER
@@ -10699,7 +10672,7 @@ void loop() {
 
 		// Store message data
 		cmd.rewType = (byte)c2r.dat[0];
-		cmd.rewPos = c2r.dat[1];
+		cmd.goalPos = c2r.dat[1];
 		cmd.rewZoneOrDelay = (byte)c2r.dat[2];
 
 		// Bail if in the process of rewarding
@@ -10721,7 +10694,7 @@ void loop() {
 		}
 
 		// Process reward command
-		Reward.ProcRewCmd(cmd.rewType, cmd.rewPos, cmd.rewZoneOrDelay);
+		Reward.ProcRewCmd(cmd.rewType, cmd.goalPos, cmd.rewZoneOrDelay);
 
 		// NOW reward
 		if (Reward.rewMode == REWARD::REWMODE::NOW) {
@@ -10932,8 +10905,8 @@ void loop() {
 			if (!Pos[1].is_streamStarted) {
 
 				// Log/print
-				Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
-					Pos[1].posAbs, Pos[1].posRel, Pos[1].nLaps);
+				Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+					Pos[1].posAbs, Pos[1].posCum, Pos[1].nLaps);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 				// Set flag
@@ -10967,8 +10940,8 @@ void loop() {
 				if (!Pos[0].is_streamStarted) {
 
 					// Log/print
-					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_rel=%0.2f n_laps=%d",
-						Pos[0].posAbs, Pos[0].posRel, Pos[0].nLaps);
+					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+						Pos[0].posAbs, Pos[0].posCum, Pos[0].nLaps);
 					Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 					// Set flag

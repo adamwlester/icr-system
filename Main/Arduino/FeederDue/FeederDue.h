@@ -562,7 +562,7 @@ struct CMD
 	float bullDel = 0;
 	float bullSpeed = 0;
 	byte rewType = 0;
-	float rewPos = 0;
+	float goalPos = 0;
 	byte rewZoneOrDelay = 0;
 	VEC<float> vtCM;
 	VEC<uint32_t> vtTS;

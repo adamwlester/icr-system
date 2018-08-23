@@ -10754,35 +10754,39 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Send cued reward
             if get(D.UI.toggDoCue, 'Value') == 1
                 
-                % Send cued reward command
+                % Store reward pos and zone
                 r_type = 2;
-                g_pos = D.UI.rewRatHead(D.I.rot);
+                r_pos = D.UI.rewRatHead(D.I.rot);
                 z_ind = D.I.zone_now;
-                Send_CS_Com('R', r_type, g_pos, z_ind);
+                
+                % Send cued reward command
+                Send_CS_Com('R', r_type, r_pos, z_ind);
                 
                 % Post NLX event: cue on
                 Send_NLX_Cmd(D.NLX.cue_on_evt);
                 
                 % Print reset bounds crossed
-                Log_Debug(sprintf('Sent "CUED" Reward: rew_type=%d goal_pos=%0.2f zone_ind=%d', ...
-                    r_type, g_pos, z_ind));
+                Log_Debug(sprintf('Sent "CUED" Reward: rew_type=%d zone_pos_rad=%0.2f zone_ind=%d', ...
+                    r_type, r_pos, z_ind));
             end
             
             % Send free reward reward
             if get(D.UI.toggDoCue, 'Value') == 0
                 
-                % Send free reward command
+                % Store reward center and delay
                 r_type = 3;
-                g_pos = D.UI.rewRatHead(D.I.rot);
+                r_pos = D.UI.rewRatHead(D.I.rot);
                 r_del = D.PAR.rewDel;
-                Send_CS_Com('R', r_type, g_pos, r_del);
+                
+                % Send free reward command
+                Send_CS_Com('R', r_type, r_pos, r_del);
                 
                 % Post NLX event: cue off
                 Send_NLX_Cmd(D.NLX.cue_off_evt);
                 
                 % Print reset bounds crossed
-                Log_Debug(sprintf('Sent "FREE" Reward: rew_type=%d goal_pos=%0.2f rew_del=%dsec', ...
-                    r_type, g_pos, r_del));
+                Log_Debug(sprintf('Sent "FREE" Reward: rew_type=%d zone_pos_rad=%0.2f rew_del=%dsec', ...
+                    r_type, r_pos, r_del));
             end
             
             % HIDE REWARD SEND PATCH
@@ -11024,23 +11028,23 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             rew_ellapsed = Sec_DT(now) - D.T.rew_last;
             D.T.rew_last = Sec_DT(now);
             
-            % Get total rewards and misses
-            rew_tot = sum([D.C.rew{:}]);
-            miss_tot = sum(D.C.missed_rew);
-            
             % Format list
             D.UI.rewInfoList = [...
                 D.UI.rewInfoList; ...
                 {sprintf('%d: T:%0.2f Z:%d M:%d', ...
-                rew_tot+miss_tot, ...
+                sum([D.C.rew{:}])+1, ...
                 rew_ellapsed, ...
                 -1*D.PAR.zoneLocs(D.I.zone_now), ...
-                miss_tot) ...
+                sum(D.C.missed_rew)) ...
                 }];
             
             % Compute reward percent
-            rew_percent = ...
-                    round((rew_tot/(miss_tot+rew_tot))*100);
+            if sum(D.C.missed_rew) == 0 || D.C.rew_cross == 0
+                rew_percent = 100;
+            else
+                rew_percent = ...
+                    round(100-(sum(D.C.missed_rew)/D.C.rew_cross)*100);
+            end
             
             % Update list
             infstr = [...
@@ -11109,13 +11113,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Send reward now command
             r_type = 1;
-            g_pos = 0;
+            r_pos = 0;
             z_ind = get(D.UI.popReward, 'Value');
-            Send_CS_Com('R', r_type, g_pos, z_ind);
+            Send_CS_Com('R', r_type, r_pos, z_ind);
             
-            % Log/print sent
-            Log_Debug(sprintf('Sent "NOW" Reward: rew_type=%d goal_pos=%0.2f zone_ind=%d', ...
-                r_type, g_pos, z_ind));
+              Log_Debug(sprintf('Sent "FREE" Reward: rew_type=%d zone_pos_rad=%0.2f rew_del=%dsec', ...
+                    r_type, r_pos, r_del));
             
             % Add to reward count
             D.C.rew{3}(end) = D.C.rew{3}(end) + 1;
@@ -17918,15 +17921,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
 % -------------------------------REWARD------------------------------------
     function Btn_Reward(~, ~, ~)
         
-        % Send imediate reward
+        % Set reward pos and cond
         r_type = 1;
-        g_pos = 0;
+        r_pos = 0;
+        
+        % Get reward zone/duration from dropdown handle
         z_ind = get(D.UI.popReward, 'Value');
-        Send_CS_Com('R', r_type, g_pos, z_ind);
-         
-        % Log/print reward sent
-        Log_Debug(sprintf('Sent "NOW" Reward: rew_type=%d goal_pos=%0.2f zone_ind=%d', ...
-            r_type, g_pos, z_ind));
+        
+        % Tell CS to trigger reward
+        Send_CS_Com('R', r_type, r_pos, z_ind);
         
         % Track round trip time
         D.T.btn_rew_sent = Sec_DT(now);
