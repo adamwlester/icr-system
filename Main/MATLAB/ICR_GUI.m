@@ -119,7 +119,7 @@ D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
 D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'SE'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Start_Quadrant = 'NE'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS

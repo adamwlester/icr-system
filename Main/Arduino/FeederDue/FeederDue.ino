@@ -8,46 +8,49 @@
 /*
 
 * ARDUINO DUE
-CPU						Atmel 32-bit SAM3XB8E
-Family					ARM Cortex-M3
-Clock Speed				84Mhz
-Operating Voltage		3.3V
-Input Voltage			7-12V
-Input Voltage (max)		6-20V
-Digital I/O Pins		54 (12 that support PWM)
-Analog Input Pins		12
-Analog Output Pins		2
-Flash Memory			512KB
-SRAM					96KB in 2 banks of 64KB and 32KB each
+	CPU						Atmel 32-bit SAM3XB8E
+	Family					ARM Cortex-M3
+	Clock Speed				84Mhz
+	Operating Voltage		3.3V
+	Input Voltage			7-12V
+	Input Voltage (max)		6-20V
+	Digital I/O Pins		54 (12 that support PWM)
+	Analog Input Pins		12
+	Analog Output Pins		2
+	Flash Memory			512KB
+	SRAM					96KB in 2 banks of 64KB and 32KB each
 
 * XBEE
-DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
-DO (to UART rx) buffer = 202 bytes
+	DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
+	DO (to UART rx) buffer = 202 bytes
 
 * ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO "expectedSerialBufferSize"
-Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
+	Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
 
-* Data Types
-DATA TYPE				SIZE (IN BYTES)				RANGE
-short int					2						-32,768 to 32,767
-unsigned short int			2						0 to 65,535
-unsigned int				4						0 to 4,294,967,295
-int							4						-2,147,483,648 to 2,147,483,647
-long int					4						-2,147,483,648 to 2,147,483,647
-unsigned long int			4						0 to 4,294,967,295
-long long int				8						-(2^63) to (2^63)-1
-unsigned long long int		8						0 to 18,446,744,073,709,551,615
-signed char					1						-128 to 127
-unsigned char				1						0 to 255
+* DATA TYPES
+	DATA TYPE				SIZE (IN BYTES)				RANGE
+	short int					2						-32,768 to 32,767
+	unsigned short int			2						0 to 65,535
+	unsigned int				4						0 to 4,294,967,295
+	int							4						-2,147,483,648 to 2,147,483,647
+	long int					4						-2,147,483,648 to 2,147,483,647
+	unsigned long int			4						0 to 4,294,967,295
+	long long int				8						-(2^63) to (2^63)-1
+	unsigned long long int		8						0 to 18,446,744,073,709,551,615
+	signed char					1						-128 to 127
+	unsigned char				1						0 to 255
 
 
 * Step down resistor for vcc monitoring:
-To ground = 2.2k Ohm
-To vcc = 8.2k Ohm
+	To ground = 2.2k Ohm
+	To vcc = 8.2k Ohm
 
 * OpenLog config.txt settings:
-57600,26,3,2,0,0,0
-baud,escape,esc#,mode,verb,echo,ignoreRX
+	57600,26,3,2,0,0,0
+	baud,escape,esc#,mode,verb,echo,ignoreRX
+
+* VARIABLE INFO
+	"flag_byte" = [0, 0, 0, 0, is_resend, is_done, is_conf, do_conf]
 
 */
 
@@ -157,7 +160,7 @@ public:
 	// SAFE VERSION OF STRCAT
 	void strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, uint16_t buff_lng_2, char *p_buff_2);
 	// RUN ERROR HOLD WITH OPTIONAL SHUTDOWN
-	void RunErrorHold(char *p_msg_lcd, char *p_msg_print, uint32_t dt_shutdown_sec = 0);
+	void RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdown_sec = 0);
 
 };
 #pragma endregion
@@ -792,8 +795,11 @@ float CheckBattery(bool force_check = false);
 // TURN LCD LIGHT ON/OFF
 void ChangeLCDlight(uint32_t duty = 256);
 
-// QUIT AND RESTART ARDUINO
+// HANDLE SESSION QUIT
 void QuitSession();
+
+// RESTART ARDUINO
+void RestartArduino();
 
 // UPDATE TESTS
 void TestUpdate();
@@ -1117,10 +1123,9 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 	}
 
 	// Format prefix
-	Debug.sprintf_safe(buffMed, buff_med_1, "   [%sRCVD%s%s:%s]",
+	Debug.sprintf_safe(buffMed, buff_med_1, "   [%sRCVD%s:%s]",
 		is_repeat ? "RE-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
-		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		COM::str_list_id[p_r4->comID]);
 
 	// Format message
@@ -1985,7 +1990,7 @@ void DEBUG::strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, 
 
 }
 
-void DEBUG::RunErrorHold(char *p_msg_lcd, char *p_msg_print, uint32_t dt_shutdown_sec)
+void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdown_sec)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -2004,7 +2009,7 @@ void DEBUG::RunErrorHold(char *p_msg_lcd, char *p_msg_print, uint32_t dt_shutdow
 	t_shutdown = dt_shutdown_sec > 0 ? millis() + (dt_shutdown_sec * 1000) : 0;
 
 	// Log/print error message
-	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD FOR %d sec: %s", dt_shutdown_sec / 1000, p_msg_print);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD FOR %d sec: %s", dt_shutdown_sec, p_msg_print);
 	DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Turn on LCD LED
@@ -2038,8 +2043,8 @@ void DEBUG::RunErrorHold(char *p_msg_lcd, char *p_msg_print, uint32_t dt_shutdow
 			// Set kill switch high
 			digitalWrite(pin.PWR_OFF, HIGH);
 
-			// Quit if still powered by USB
-			QuitSession();
+			// Restart
+			RestartArduino();
 		}
 
 	}
@@ -6134,7 +6139,7 @@ bool CheckForHandshake()
 			!fc.is_CheetahDueHandshakeDone ? "NO CHEEDAHDUE CONFERMATION|" : "");
 
 		// Run error hold and restart
-		Debug.RunErrorHold("HANDSHAKE", buff_lrg, 15);
+		Debug.RunErrorHold(buff_lrg, "HANDSHAKE", 15);
 	}
 
 	// Handshake not complete
@@ -6172,6 +6177,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	char foot = ' ';
 	bool do_conf = false;
 	bool is_conf = false;
+	bool is_resend = false;
 	bool is_repeat = false;
 	byte flag_byte = 0;
 	R2_COM<USARTClass> *p_r2;
@@ -6242,6 +6248,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	flag_byte = U.b[0];
 	do_conf = GetSetByteBit(&flag_byte, 0, false);
 	is_conf = GetSetByteBit(&flag_byte, 1, false);
+	is_resend = GetSetByteBit(&flag_byte, 3, false);
 
 	// Get footer
 	foot = WaitBuffRead(p_r4);
@@ -6255,8 +6262,8 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	dt_sent = p_r2->t_sent > 0 ? millis() - p_r2->t_sent : 0;
 
 	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, " b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
 		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, p_r4->dt_rcvd, dt_parse);
 
@@ -6305,7 +6312,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 			pack_last = p_r4->packConfArr[r4_ind];
 
 		// Flag resent pack
-		is_repeat = pack == pack_last;
+		is_repeat = is_resend || pack == pack_last;
 
 		// Incriment repeat count
 		if (is_repeat)
@@ -6658,8 +6665,8 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 	p_r2->t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 
 	// Log/print queued packet info
 	Debug.DB_SendQueued(p_r2, buff_lrg, p_r2->t_queuedArr[id_ind]);
@@ -6688,8 +6695,8 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	VEC<float> dat(3, __LINE__);
 	bool do_conf = false;
 	bool is_conf = false;
-	bool is_repeat = false;
 	bool is_resend = false;
+	bool is_repeat = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
 	uint16_t tx_size;
@@ -6826,8 +6833,8 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	p_r2->t_sentArr[id_ind] = p_r2->t_sent;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d| ez_on=%d ez_act=%d",
 		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue, digitalRead(pin.ED_SLP), v_doStepTimer);
 
@@ -6890,8 +6897,8 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		uint16_t rx_size = p_r2->hwSerial.available();
 
 		// Get dat string
-		Debug.sprintf_safe(buffLrg, buff_lrg_2, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d dt_sent=%dms tx=%d rx=%d",
-			p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], p_r2->flagArr[i], dt_sent, tx_size, rx_size);
+		Debug.sprintf_safe(buffLrg, buff_lrg_2, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s dt_sent=%dms tx=%d rx=%d",
+			p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], Debug.FormatBinary(p_r2->flagArr[i]), dt_sent, tx_size, rx_size);
 
 		// Get done flag
 		is_done = GetSetByteBit(&p_r2->flagArr[i], 2, false);
@@ -8720,11 +8727,15 @@ float CheckBattery(bool force_check)
 	static uint32_t t_relay_ready = 0;
 	static float vcc_avg = 0;
 	static float vcc_last = 0;
+	static float vcc_out = 0;
 	static int cnt_samples = 0;
 	uint32_t vcc_bit_in = 0;
 	float vcc_sum = 0;
 	bool is_mot_off = false;
 	byte do_shutdown = false;
+
+	// Set out to avg if enough samples collected
+	vcc_out = cnt_samples < vccMaxSamp ? 0 : vccAvg;
 
 	// Check for forced check
 	if (!force_check) {
@@ -8732,7 +8743,7 @@ float CheckBattery(bool force_check)
 		// Not time to check
 		if (millis() < t_update_start) {
 			// Bail
-			return vccAvg;
+			return vcc_out;
 		}
 
 		// Done checking
@@ -8746,7 +8757,7 @@ float CheckBattery(bool force_check)
 
 			// Turn off switch and bail
 			digitalWrite(pin.REL_VCC, LOW);
-			return vccAvg;
+			return vcc_out;
 		}
 	}
 
@@ -8755,7 +8766,7 @@ float CheckBattery(bool force_check)
 
 		// Turn off switch and bail
 		digitalWrite(pin.REL_VCC, LOW);
-		return vccAvg;
+		return vcc_out;
 
 	}
 
@@ -8769,12 +8780,12 @@ float CheckBattery(bool force_check)
 		t_relay_ready = millis() + 10;
 
 		// Bail
-		return vccAvg;
+		return vcc_out;
 	}
 
 	// Bail if relay not ready
 	if (millis() < t_relay_ready) {
-		return vccAvg;
+		return vcc_out;
 	}
 
 
@@ -8796,10 +8807,13 @@ float CheckBattery(bool force_check)
 	vcc_avg = vcc_sum / vccMaxSamp;
 
 
-	// Return 0 till array full
+	// Bail till array full
 	cnt_samples = cnt_samples < vccMaxSamp ? cnt_samples + 1 : vccMaxSamp;
 	if (cnt_samples < vccMaxSamp) {
-		return 0;
+		return vcc_out;
+	}
+	else {
+		vcc_out = vcc_avg;
 	}
 
 	// Store new voltage level
@@ -8850,11 +8864,11 @@ float CheckBattery(bool force_check)
 		if (do_shutdown) {
 
 			// Format messege
-			Debug.sprintf_safe(buffLrg, buff_lrg, "BATTERY CRITICALLY LOW AT < %0.2f", vccCutoff);
+			Debug.sprintf_safe(buffLrg, buff_lrg, "BATTERY CRITICALLY LOW AT < %0.2fv", vccCutoff);
 
 			// Run error hold then shutdown after 5 min
-			Debug.sprintf_safe(buffMed, buff_med, "BATT LOW %0.2fV", vccAvg);
-			Debug.RunErrorHold(buff_lrg, buff_med, 5 * 60 * 1000);
+			Debug.sprintf_safe(buffMed, buff_med, "VCC LOW %0.2fV", vccAvg);
+			Debug.RunErrorHold(buff_lrg, buff_med, dt_vccShutDown);
 		}
 	}
 
@@ -8862,7 +8876,7 @@ float CheckBattery(bool force_check)
 	t_vcc_update = millis();
 
 	// Return battery voltage
-	return vccAvg;
+	return vcc_out;
 }
 
 // TURN LCD LIGHT ON/OFF
@@ -8929,6 +8943,15 @@ void QuitSession()
 		return;
 	}
 
+	// Restart
+	RestartArduino();
+
+}
+
+// RESTART ARDUINO
+void RestartArduino()
+{
+
 	// Log/print quiting
 	Debug.DB_General(__FUNCTION__, __LINE__, "QUITING...");
 
@@ -8948,6 +8971,7 @@ void QuitSession()
 	REQUEST_EXTERNAL_RESET;
 
 }
+
 
 #pragma endregion
 
@@ -9867,22 +9891,25 @@ void setup() {
 #endif
 	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
-	// WAIT FOR POWER SWITCH
+	// HANDLE ANY PREVIOUS POWER OFF BUTTON PRESS
 
-	// Wait for button release
-	while (!DO_DEBUG && !DO_AUTO_POWER &&
-		digitalRead(pin.PWR_SWITCH) == LOW) {
+	// Wait for power on flag
+	bool do_wait_pwr = !DO_DEBUG && !DO_AUTO_POWER;
+
+	// Wait for button release 
+	while (do_wait_pwr && digitalRead(pin.PWR_SWITCH) == LOW) {
 		delay(10);
 	}
 
-	// Set off switch high
+	// Set off switch back to high
 	digitalWrite(pin.PWR_OFF, HIGH);
 
+	// WAIT FOR POWER ON BUTTON PRESS
+
 	// Wait for button press
-	if (!DO_DEBUG && !DO_AUTO_POWER) {
+	if (do_wait_pwr) {
 		while (digitalRead(pin.PWR_SWITCH) == HIGH);
 	}
-
 	// Otherwise pause before powering on
 	else {
 		delay(1000);
@@ -9902,8 +9929,7 @@ void setup() {
 	delayMicroseconds(100);
 
 	// Wait for button release
-	while (!DO_DEBUG && !DO_AUTO_POWER &&
-		digitalRead(pin.PWR_SWITCH) == LOW) {
+	while (do_wait_pwr && digitalRead(pin.PWR_SWITCH) == LOW) {
 		delay(10);
 	}
 

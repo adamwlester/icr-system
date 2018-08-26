@@ -36,7 +36,7 @@
 //========== EXT DEFS OTHER ============
 
 // POWER SETTING
-#define DO_AUTO_POWER 1 // 0
+#define DO_AUTO_POWER 0 // 0
 
 // TINY EKF
 #define N 4     // States
@@ -439,6 +439,8 @@ OLD NOTE: Updated when EtOH relay opened
 bit2volt = (3.3/1023) * (12.6/3)
 Set pot to 12.6V == 3V
 */
+const float vccCutoff = 11.6;
+const uint32_t dt_vccShutDown = 5*60; // (sec)
 const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;
@@ -447,7 +449,6 @@ const int dt_vccPrint = 30000;
 VEC<float> vccArr(vccMaxSamp, __LINE__);
 float vccNow = 0;
 float vccAvg = 0;
-float vccCutoff = 11.6;
 
 // LEDs
 const byte _trackLEDdutyDefault[2] = { 175, 250 };
