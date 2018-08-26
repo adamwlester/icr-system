@@ -95,7 +95,7 @@ struct DB_FLAG
 	const bool log_runSpeed = DO_LOG && false; // false
 	const bool log_pixy = DO_LOG && false; // false
 
-	// Tracking data
+					// Tracking data
 	const bool log_pos = DO_LOG && false; // false
 	const bool log_pos_rat_vt = DO_LOG && false; // false
 	const bool log_pos_rat_pixy = DO_LOG && false; // false
@@ -108,7 +108,7 @@ struct DB_FLAG
 	const bool log_vel_rat_ekf = DO_LOG && false; // false
 	const bool log_vel_rob_ekf = DO_LOG && false; // false
 
-	// CHECK LOOP
+					// CHECK LOOP
 	const bool do_loopCheck = true;
 	const bool do_loopCheckDT = do_loopCheck && true;
 	const bool do_loopCheckSerialOverflow = do_loopCheck && true;
@@ -231,6 +231,8 @@ uint16_t cnt_errAD = 0;
 uint16_t cnt_errEKF = 0;
 uint32_t cnt_overflowRX = 0;
 uint32_t cnt_timeoutRX = 0;
+uint32_t cnt_irProxHaltR = 0;
+uint32_t cnt_irProxHaltL = 0;
 byte n_testPings = 0;
 VEC<float> dt_pingRoundTrip(2, __LINE__);
 int memStart = 0;
@@ -307,8 +309,6 @@ const VEC<float> maxAccArr(2, __LINE__, _maxAccArr);
 float maxAcc = maxAccArr[0]; // (cm/sec) 
 const float maxDec = 160; // (cm/sec)
 const float maxSpeed = 100; // (cm/sec) 
-double runSpeedNow = 0;
-char runDirNow = 'f';
 uint16_t adR_stat = 0x0;
 uint16_t adF_stat = 0x0;
 const int dt_checkAD = 1000; // (ms)
@@ -329,6 +329,11 @@ const double _frontVelCoeff[velOrd] = {
 	0.021557249590414,
 };
 const VEC<double> frontVelCoeff(velOrd, __LINE__, _frontVelCoeff);
+
+// MOTOR CONTROL
+const int dt_irProxHold = 1000;
+double runSpeedNow = 0;
+char runDirNow = 'f';
 namespace MC_CALL
 {
 	enum ID {
@@ -357,7 +362,8 @@ namespace MC_CON
 	const char str_list_id[6][buffMed] =
 	{ { "HALT" },{ "MOVETO" },{ "BULL" },{ "PID" },{ "OPEN" },{ "HOLD" } };
 };
-MC_CON::ID motorControl = MC_CON::ID::HOLD;
+MC_CON::ID motorControlNow = MC_CON::ID::HOLD;
+MC_CON::ID motorControlLast = MC_CON::ID::HOLD;
 const static char str_med_statusList[16][buffMed] =
 {
 	"HiZ",
@@ -404,7 +410,7 @@ float moveToDecelDist = 40; // cm
 double feedTrackPastDist = 0; // (cm) 
 const double feedHeadPastDist = 10; // (cm)
 const int dt_rewBlock = 15000; // (ms)
-uint32_t t_rewBlockMove = 0; // (ms)
+uint32_t t_blockMoter = 0; // (ms)
 const float _solOpenScaleArr[2] = { 1, 0.5 };
 const VEC<float> solOpenScaleArr(2, __LINE__, _solOpenScaleArr);
 
@@ -429,9 +435,9 @@ uint32_t t_solClose = 0;
 
 // BATTERY
 /*
-	OLD NOTE: Updated when EtOH relay opened
-	bit2volt = (3.3/1023) * (12.6/3)
-	Set pot to 12.6V == 3V
+OLD NOTE: Updated when EtOH relay opened
+bit2volt = (3.3/1023) * (12.6/3)
+Set pot to 12.6V == 3V
 */
 const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;
@@ -465,7 +471,6 @@ volatile uint32_t t_sync = 0; // (ms)
 volatile uint32_t v_t_irSyncLast = 0; // (ms)
 volatile int v_dt_ir = 0;
 volatile byte v_cnt_ir = 0;
-volatile byte v_doIRhardStop = false;
 volatile byte v_isNewIR = false;
 volatile byte v_stepState = false;
 volatile byte v_doStepTimer = false;
@@ -479,13 +484,13 @@ volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma region ============== COM SETUP ===============
 
-// SERIAL QUEUE 
+		// SERIAL QUEUE 
 const int SQ_Capacity = 10;
 const int SQ_MsgBytes = 18;
 
 
 // PACKET RANGE
-const uint16_t _pack_range[2] = { 1, UINT16_MAX-1 };
+const uint16_t _pack_range[2] = { 1, UINT16_MAX - 1 };
 
 // COM INSTANCE ID
 namespace COM

@@ -643,7 +643,7 @@ namespace ICR_Run
             if (status.ToString() == "SUCCEEDED")
             {
                 DEBUG.DB_Status(msg: DEBUG.msg = "FeederDue MoveTo Start Done", status: DEBUG.STATUS.AWAITING);
-                status = WaitForFeederDueCom(id: 'M', chk_send: true, chk_conf: true, chk_done: true, do_abort: true);
+                status = WaitForFeederDueCom(id: 'M', chk_send: true, chk_conf: true, chk_done: true, do_abort: true, timeout: TIMEOUT_15);
                 DEBUG.DB_Status(msg: DEBUG.msg, status: status);
                 if (status.ToString() == "SUCCEEDED")
                 {
@@ -653,7 +653,11 @@ namespace ICR_Run
                 }
             }
             if (status.ToString() != "SUCCEEDED")
-                return false;
+            {
+                // ABORT RUN
+                run_pass = false;
+                fc.SetAbort(set_abort_cs: true, set_abort_mat: true);
+            }
 
             // WAIT FOR RAT IN CONFIRMATION
 
@@ -680,7 +684,7 @@ namespace ICR_Run
                     else
                     {
                         DEBUG.DB_Status(msg: DEBUG.msg, status: DEBUG.STATUS.FAILED);
-                        return false;
+                        run_pass = false;
                     }
                 }
                 else
@@ -2024,15 +2028,15 @@ namespace ICR_Run
                 if (head_found && foot_found)
                 {
                     // Update list
-                    logger_cheetahDue.UpdateLog(str_log, t:-1);
+                    logger_cheetahDue.UpdateLog(str_log, t: -1);
 
                     // print data received
                     if (DEBUG.flag.do_printDueLog)
                     {
-                            string str_prfx = String.Format("[LOG] a2c[{0}]", logger_cheetahDue.cnt_logsStored);
-                            string str_print = String.Format("message=\"{0}\" chksum={1} b_read={2} rx={3} tx={4}", str_log, chksum, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite);
-                            DEBUG.DB_General_Thread(str_print, str_prfx: str_prfx, indent: 5);
-                        
+                        string str_prfx = String.Format("[LOG] a2c[{0}]", logger_cheetahDue.cnt_logsStored);
+                        string str_print = String.Format("message=\"{0}\" chksum={1} b_read={2} rx={3} tx={4}", str_log, chksum, bytes_read, sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite);
+                        DEBUG.DB_General_Thread(str_print, str_prfx: str_prfx, indent: 5);
+
                     }
 
                     // Change com status

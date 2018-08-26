@@ -8,46 +8,46 @@
 /*
 
 * ARDUINO DUE
-	CPU						Atmel 32-bit SAM3XB8E
-	Family					ARM Cortex-M3
-	Clock Speed				84Mhz
-	Operating Voltage		3.3V
-	Input Voltage			7-12V
-	Input Voltage (max)		6-20V
-	Digital I/O Pins		54 (12 that support PWM)
-	Analog Input Pins		12
-	Analog Output Pins		2
-	Flash Memory			512KB
-	SRAM					96KB in 2 banks of 64KB and 32KB each
+CPU						Atmel 32-bit SAM3XB8E
+Family					ARM Cortex-M3
+Clock Speed				84Mhz
+Operating Voltage		3.3V
+Input Voltage			7-12V
+Input Voltage (max)		6-20V
+Digital I/O Pins		54 (12 that support PWM)
+Analog Input Pins		12
+Analog Output Pins		2
+Flash Memory			512KB
+SRAM					96KB in 2 banks of 64KB and 32KB each
 
 * XBEE
-	DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
-	DO (to UART rx) buffer = 202 bytes
+DI (from UART tx) buffer = 202 bytes or 100 bytes (maximum packet size)
+DO (to UART rx) buffer = 202 bytes
 
 * ARDUINO SERIAL_BUFFER_SIZE CHANGED FROM 128 TO "expectedSerialBufferSize"
-	Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
+Path: "C:\Users\lester\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.8\cores\arduino\RingBuffer.h"
 
 * Data Types
-	DATA TYPE				SIZE (IN BYTES)				RANGE
-	short int					2						-32,768 to 32,767
-	unsigned short int			2						0 to 65,535
-	unsigned int				4						0 to 4,294,967,295
-	int							4						-2,147,483,648 to 2,147,483,647
-	long int					4						-2,147,483,648 to 2,147,483,647
-	unsigned long int			4						0 to 4,294,967,295
-	long long int				8						-(2^63) to (2^63)-1
-	unsigned long long int		8						0 to 18,446,744,073,709,551,615
-	signed char					1						-128 to 127
-	unsigned char				1						0 to 255
+DATA TYPE				SIZE (IN BYTES)				RANGE
+short int					2						-32,768 to 32,767
+unsigned short int			2						0 to 65,535
+unsigned int				4						0 to 4,294,967,295
+int							4						-2,147,483,648 to 2,147,483,647
+long int					4						-2,147,483,648 to 2,147,483,647
+unsigned long int			4						0 to 4,294,967,295
+long long int				8						-(2^63) to (2^63)-1
+unsigned long long int		8						0 to 18,446,744,073,709,551,615
+signed char					1						-128 to 127
+unsigned char				1						0 to 255
 
 
 * Step down resistor for vcc monitoring:
-	To ground = 2.2k Ohm
-	To vcc = 8.2k Ohm
+To ground = 2.2k Ohm
+To vcc = 8.2k Ohm
 
 * OpenLog config.txt settings:
-	57600,26,3,2,0,0,0
-	baud,escape,esc#,mode,verb,echo,ignoreRX
+57600,26,3,2,0,0,0
+baud,escape,esc#,mode,verb,echo,ignoreRX
 
 */
 
@@ -240,7 +240,7 @@ public:
 		RatPixy
 	};
 	char *p_str_list_objID[3] =
-	{ { "RatVT" },{ "RobVT" }, {"RatPixy"} };
+	{ { "RatVT" },{ "RobVT" },{ "RatPixy" } };
 	POSOBJ objID;
 
 	// METHODS
@@ -506,7 +506,7 @@ public:
 		FREE,
 	};
 	const char *p_str_list_rewMode[4] =
-	{ { "BUTTON" },{ "NOW" },{ "CUE" }, { "FREE" } };
+	{ { "BUTTON" },{ "NOW" },{ "CUE" },{ "FREE" } };
 	REWMODE rewMode = BUTTON;
 	enum MICROSTEP {
 		FULL,
@@ -605,7 +605,7 @@ public:
 		this->setQ(2, 2, .0001); // Rat vel
 		this->setQ(3, 3, .0001); // Rob vel
 
-								 // Same for measurement noise
+	// Same for measurement noise
 		this->setR(0, 0, .001); // Rat pos vt
 		this->setR(1, 1, .001); // Rat pos pixy
 		this->setR(2, 2, .0001); // Rob pos vt
@@ -636,7 +636,7 @@ protected:
 		hx[4] = this->x[2]; // Rat vel pixy from previous state
 		hx[5] = this->x[3]; // Rob vel vt from previous state
 
-							// Jacobian of measurement function
+// Jacobian of measurement function
 		H[0][0] = 1; // Rat pos vt from previous state
 		H[1][0] = 1; // Rat pos pixy from previous state
 		H[2][1] = 1; // Rob pos vt from previous state
@@ -738,8 +738,8 @@ void AD_CheckOC(bool force_check = false);
 // HARD STOP
 void HardStop(const char *p_fun, int line, bool do_block_hz = false);
 
-// IR TRIGGERED HARD STOP
-void IRprox_Halt();
+// CHECK IF IR TRIGGERED
+void Check_IRprox_Halt();
 
 // RUN AUTODRIVER
 bool RunMotor(char dir, double new_speed, MC_CALL::ID caller);
@@ -818,9 +818,6 @@ void Interupt_TimerHandler();
 
 // POWER OFF
 void Interupt_Power();
-
-// HALT RUN ON IR TRIGGER
-void Interupt_IRprox_Halt();
 
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect();
@@ -1399,7 +1396,7 @@ void DEBUG::DB_Pid(const char *p_fun, int line, char *p_msg)
 
 	// Format string
 	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: mode=\"%s\" mot_ctrl=\"%s\"",
-		p_fun, line - 23, p_msg, Pid.p_str_list_pidMode[Pid.pidMode], MC_CON::str_list_id[motorControl]);
+		p_fun, line - 23, p_msg, Pid.p_str_list_pidMode[Pid.pidMode], MC_CON::str_list_id[motorControlNow]);
 
 	// Add to print queue
 	if (do_print) {
@@ -1433,7 +1430,7 @@ void DEBUG::DB_Bull(const char *p_fun, int line, char *p_msg)
 
 	// Format string
 	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\"",
-		p_fun, line - 23, p_msg, Bull.p_str_list_bullState[Bull.bullState], Bull.p_str_bullMode[Bull.bullMode], MC_CON::str_list_id[motorControl]);
+		p_fun, line - 23, p_msg, Bull.p_str_list_bullState[Bull.bullState], Bull.p_str_bullMode[Bull.bullMode], MC_CON::str_list_id[motorControlNow]);
 
 	// Add to print queue
 	if (do_print) {
@@ -2235,15 +2232,15 @@ uint16_t PIXY::PixyGetBlocks()
 {
 	/*
 	I2C BLOCK FORMAT:
-		Bytes    16-bit words   Description
-		----------------------------------------------------------------
-		0, 1     0              sync (0xaa55)
-		2, 3     1              checksum (sum of all 16-bit words 2-6)
-		4, 5     2              signature number
-		6, 7     3              x center of object
-		8, 9     4              y center of object
-		10, 11   5              width of object
-		12, 13   6              height of object
+	Bytes    16-bit words   Description
+	----------------------------------------------------------------
+	0, 1     0              sync (0xaa55)
+	2, 3     1              checksum (sum of all 16-bit words 2-6)
+	4, 5     2              signature number
+	6, 7     3              x center of object
+	8, 9     4              y center of object
+	10, 11   5              width of object
+	12, 13   6              height of object
 	*/
 
 	// Local vars
@@ -2884,7 +2881,7 @@ void PID::PidStop(PIDMODE set_mode)
 	// Log/print event
 	Debug.DB_Pid(__FUNCTION__, __LINE__, "Stop PID");
 
-	if (motorControl == MC_CON::ID::PID)
+	if (motorControlNow == MC_CON::ID::PID)
 	{
 		// Stop movement
 		RunMotor('f', 0, MC_CALL::ID::PID);
@@ -2933,7 +2930,7 @@ void PID::PidCheckMotorControl()
 {
 
 	// Run pid
-	if ((motorControl == MC_CON::ID::PID || motorControl == MC_CON::ID::OPEN) &&
+	if ((motorControlNow == MC_CON::ID::PID || motorControlNow == MC_CON::ID::OPEN) &&
 		pidMode == HOLDING) {
 
 		// Run pid
@@ -2941,7 +2938,7 @@ void PID::PidCheckMotorControl()
 	}
 
 	// Put pid on hold
-	else if ((motorControl != MC_CON::ID::PID && motorControl != MC_CON::ID::OPEN) &&
+	else if ((motorControlNow != MC_CON::ID::PID && motorControlNow != MC_CON::ID::OPEN) &&
 		pidMode == AUTOMATIC) {
 
 		// Hold pid
@@ -3294,7 +3291,7 @@ void BULLDOZE::BullStop(BULLMODE set_mode)
 	RunMotor('f', 0, MC_CALL::ID::BULL);
 
 	// Give over control
-	if (motorControl == MC_CON::ID::BULL) {
+	if (motorControlNow == MC_CON::ID::BULL) {
 		SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::BULL);
 	}
 
@@ -3400,7 +3397,7 @@ void BULLDOZE::BullCheckMotorControl()
 {
 
 	// Resume bull
-	if ((motorControl == MC_CON::ID::BULL || motorControl == MC_CON::ID::PID || motorControl == MC_CON::ID::OPEN) &&
+	if ((motorControlNow == MC_CON::ID::BULL || motorControlNow == MC_CON::ID::PID || motorControlNow == MC_CON::ID::OPEN) &&
 		bullState == HOLDING) {
 
 		// Turn bull on
@@ -3408,7 +3405,7 @@ void BULLDOZE::BullCheckMotorControl()
 	}
 
 	// Put bull on hold
-	else if ((motorControl != MC_CON::ID::BULL && motorControl != MC_CON::ID::PID && motorControl != MC_CON::ID::OPEN) &&
+	else if ((motorControlNow != MC_CON::ID::BULL && motorControlNow != MC_CON::ID::PID && motorControlNow != MC_CON::ID::OPEN) &&
 		bullState == ON) {
 
 		// Turn bull off
@@ -3496,6 +3493,10 @@ bool MOVETO::RunMove()
 				// Failed to run motor
 				else {
 
+					// Log/print error
+					Debug.sprintf_safe(buffLrg, buff_lrg, "%s: FAILED TO RUN MOTOR", str_med_move);
+					Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+
 					// Reset control
 					if (!SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::MOVETO)) {
 
@@ -3513,9 +3514,14 @@ bool MOVETO::RunMove()
 			else {
 				// Set flags
 				do_AbortMove = true;
+
+				// Log/print error
+				Debug.sprintf_safe(buffLrg, buff_lrg, "%s: FAILED TO TAKE MOTOR CONTROL TO \"NONE\" AFTER ABORTING", str_med_move);
+				Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 			}
 
 		}
+
 	}
 
 	// Check if robot is ready to be stopped
@@ -3677,7 +3683,7 @@ bool MOVETO::SetMoveTarg()
 	isTargSet = true;
 
 	// Log/print
-	Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: Set Move Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
+	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Set Move Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
 		str_med_move, pos_abs, startPosCum, targPosAbs, targDist, moveDir);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -3918,8 +3924,8 @@ void REWARD::ProcRewCmd(byte cmd_type, float cmd_goal, int cmd_zone_delay)
 	}
 
 	// Log/print
-	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: cmd_type=%d, cmd_goal=%0.2f, cmd_zone_delay=%d",
-		cmd_type, cmd_goal, cmd_zone_delay);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: cmd_type=%d cmd_goal=%0.2f cmd_zone_delay=%d",
+		str_med_rew, cmd_type, cmd_goal, cmd_zone_delay);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 }
 
@@ -4269,7 +4275,7 @@ bool REWARD::CheckZoneBounds()
 	}
 
 	return isZoneTriggered;
-	}
+}
 
 void REWARD::ExtendFeedArm(byte ext_steps)
 {
@@ -4277,12 +4283,12 @@ void REWARD::ExtendFeedArm(byte ext_steps)
 	// Notes
 	/*
 	Step mode:
-		MS1	MS2	MS3	Microstep Resolution	Excitation Mode
-		L	L	L	Full Step	2 Phase
-		H	L	L	Half Step	1 - 2 Phase
-		L	H	L	Quarter Step	W1 - 2 Phase
-		H	H	L	Eigth Step	2W1 - 2 Phase
-		H	H	H	Sixteenth Step	4W1 - 2 Phase
+	MS1	MS2	MS3	Microstep Resolution	Excitation Mode
+	L	L	L	Full Step	2 Phase
+	H	L	L	Half Step	1 - 2 Phase
+	L	H	L	Quarter Step	W1 - 2 Phase
+	H	H	L	Eigth Step	2W1 - 2 Phase
+	H	H	H	Sixteenth Step	4W1 - 2 Phase
 	*/
 
 	// Local vars
@@ -4294,7 +4300,7 @@ void REWARD::ExtendFeedArm(byte ext_steps)
 		// Log/print warning
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "ABORTED: Arm Already Extended");
 		return;
-}
+	}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4459,11 +4465,11 @@ void REWARD::CheckFeedArm()
 		// Make sure motor asleep if arm not extended
 		if (!isArmExtended && digitalRead(pin.ED_SLP) == HIGH) {
 			digitalWrite(pin.ED_SLP, LOW);
-	}
+		}
 
 		// Bail
 		return;
-}
+	}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -4904,7 +4910,7 @@ bool LOGGER::SetToCmdMode()
 	}
 
 	return pass;
-	}
+}
 
 void LOGGER::GetCommand()
 {
@@ -4988,7 +4994,7 @@ char LOGGER::SendCommand(char *p_msg, bool do_conf, uint32_t timeout)
 
 	// Return mode
 	return reply;
-	}
+}
 
 char LOGGER::GetReply(uint32_t timeout)
 {
@@ -5146,7 +5152,7 @@ char LOGGER::GetReply(uint32_t timeout)
 
 	// Return cmd 
 	return cmd_reply;
-	}
+}
 
 bool LOGGER::SetToWriteMode()
 {
@@ -5185,7 +5191,7 @@ bool LOGGER::SetToWriteMode()
 	}
 
 	return pass;
-	}
+}
 
 void LOGGER::QueueLog(char *p_msg, uint32_t t)
 {
@@ -5343,7 +5349,7 @@ bool LOGGER::WriteLog()
 	return false;
 
 #endif
-	}
+}
 
 bool LOGGER::WriteAll(uint32_t timeout)
 {
@@ -5804,8 +5810,8 @@ void LOGGER::TestLoad(int n_entry, char *p_log_file)
 
 	//EXAMPLE:
 	/*
-		Log.TestLoad(0, "LOG00035.CSV");
-		Log.TestLoad(2500);
+	Log.TestLoad(0, "LOG00035.CSV");
+	Log.TestLoad(2500);
 	*/
 
 	// Local vars
@@ -6378,7 +6384,7 @@ uint16_t GetPixy(bool is_hardware_test)
 {
 
 
-	}
+}
 
 // WAIT FOR BUFFER TO FILL
 byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch)
@@ -6849,7 +6855,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 	for (int i = 0; i < p_r2->lng; i++)
 	{
 		is_waiting_for_pack = is_waiting_for_pack || p_r2->do_rcvCheckArr[i];
-}
+	}
 	if (!is_waiting_for_pack) {
 		return false;
 	}
@@ -7275,7 +7281,7 @@ void ImportTeensy()
 
 		// Hold for 100 ms for Teensy to finish reset
 		delay(100);
-}
+	}
 	else {
 		Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED: Teensy Reset");
 	}
@@ -7323,11 +7329,11 @@ void AD_Config(float max_acc, float max_dec, float max_speed)
 	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
 	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
 
-												// Overcurent enable
+					// Overcurent enable
 	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
 
-												// Motor V compensation
+					// Motor V compensation
 												/*
 												VS_COMP_ENABLE, VS_COMP_DISABLE
 												*/
@@ -7338,7 +7344,7 @@ void AD_Config(float max_acc, float max_dec, float max_speed)
 	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
 	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
 
-												// Slew rate
+					// Slew rate
 												/*
 												Upping the edge speed increases torque
 												SR_180V_us, SR_290V_us, SR_530V_us
@@ -7409,7 +7415,7 @@ void AD_Config(float max_acc, float max_dec, float max_speed)
 	AD_R.setRunKVAL(30);					    // This controls the run current
 	AD_R.setHoldKVAL(25);				        // This controls the holding current keep it low
 
-												// NIMA 17 24V
+					// NIMA 17 24V
 	AD_F.setAccKVAL(40);				        // This controls the acceleration current
 	AD_F.setDecKVAL(40);				        // This controls the deceleration current
 	AD_F.setRunKVAL(30);					    // This controls the run current
@@ -7520,7 +7526,7 @@ void AD_CheckOC(bool force_check)
 		do_reset_disable = true;
 	}
 
-	}
+}
 
 // HARD STOP
 void HardStop(const char *p_fun, int line, bool do_block_hz)
@@ -7554,35 +7560,67 @@ void HardStop(const char *p_fun, int line, bool do_block_hz)
 	}
 }
 
-// IR TRIGGERED HARD STOP
-void IRprox_Halt()
+// CHECK IF IR TRIGGERED
+void Check_IRprox_Halt()
 {
+
+	// Local vars
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	static uint32_t t_check = 0;
+	bool is_lft_ir_trigg = false;
+	bool is_rt_ir_trigg = false;
+
+	// Exit if < 250 ms has not passed
+	if (t_check > millis()) {
+		return;
+	}
+
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
-	// Bail if Bull "ACTIVE" and "ON"
-	if (Bull.bullMode == BULLDOZE::BULLMODE::ACTIVE &&
-		Bull.bullState == BULLDOZE::BULLSTATE::ON) {
+	// Update next check time
+	t_check = millis() + 250;
 
-		// Bail
+	// BAIL IF ALREADY BLOCKING
+	if (fc.is_BlockingTill) {
 		return;
 	}
 
-	// Bail if MoveTo active and IRs no longer active
-	if (motorControl == MC_CON::ID::MOVETO &&
-		digitalRead(pin.INTERUPT_IRPROX_R) == HIGH &&
-		digitalRead(pin.INTERUPT_IRPROX_L) == HIGH) {
+	// Bail if Bull "ACTIVE" and "ON"
+	if (Bull.bullMode == BULLDOZE::BULLMODE::ACTIVE &&
+		Bull.bullState == BULLDOZE::BULLSTATE::ON) {
+		return;
+	}
 
-		// Log/print warning
-		Debug.DB_Warning(__FUNCTION__, __LINE__, "Ignoring IR Interupt Because MoveTo Active");
+	// Bail if MoveTo active
+	if (motorControlNow == MC_CON::ID::MOVETO) {
+		return;
+	}
 
-		// Bail
+	// Get pin stage
+	is_rt_ir_trigg = digitalRead(pin.IRPROX_R) == LOW;
+	is_lft_ir_trigg = digitalRead(pin.IRPROX_L) == LOW;
+
+	// Bail if neither IR triggered
+	if (!(is_rt_ir_trigg || is_lft_ir_trigg)) {
 		return;
 	}
 
 	// Run hard stop
 	HardStop(__FUNCTION__, __LINE__);
+
+	// Block motor
+	BlockMotorTill(dt_irProxHold);
+
+	// Update counters
+	cnt_irProxHaltR += is_rt_ir_trigg ? 1 : 0;
+	cnt_irProxHaltL += is_lft_ir_trigg ? 1 : 0;
+
+	// Log/print warning
+	Debug.sprintf_safe(buffLrg, buff_lrg, "HALTED FOR IR |%s%s TRIGGER: cnt(rt|lft)=|%lu|%lu|",
+		is_rt_ir_trigg ? "RIGHT|" : "", is_lft_ir_trigg ? "LEFT|" : "", cnt_irProxHaltR, cnt_irProxHaltL);
+	Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 
 }
 
@@ -7594,13 +7632,23 @@ bool RunMotor(char dir, double new_speed, MC_CALL::ID caller)
 #endif
 
 	// Local vars
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	double speed_rear = 0;
 	double speed_front = 0;
+	static MC_CALL::ID caller_last = MC_CALL::ID::OVERIDE;
 
 	// Bail if caller does not have control
-	if (motorControl != caller &&
+	if (motorControlNow != caller &&
 		caller != MC_CALL::ID::OVERIDE) {
 
+		// Log/print warning
+		if (caller != caller_last) {
+			Debug.sprintf_safe(buffLrg, buff_lrg, "Ignored Run Request: conroller=%s caller=%s",
+				MC_CON::str_list_id[motorControlNow], MC_CALL::str_list_id[caller]);
+			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+		}
+
+		caller_last = caller;
 		return false;
 	}
 
@@ -7681,7 +7729,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 	bool do_change = false;
 
 	// Store current conroller
-	MC_CON::ID set_from = motorControl;
+	MC_CON::ID set_from = motorControlNow;
 
 	// "OVERIDE" CAN DO ANYTHING
 	if (caller == MC_CALL::ID::OVERIDE) {
@@ -7695,7 +7743,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 	}
 
 	// SET FROM: "HALT"
-	else if (motorControl == MC_CON::ID::HALT) {
+	else if (motorControlNow == MC_CON::ID::HALT) {
 
 		// Only "HALT" and "QUIT" can unset "HALT"
 		if (caller == MC_CALL::ID::HALT ||
@@ -7720,7 +7768,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 		}
 
 		// SET FROM: "HOLD"
-		else if (motorControl == MC_CON::ID::HOLD) {
+		else if (motorControlNow == MC_CON::ID::HOLD) {
 
 			switch (caller)
 			{
@@ -7768,16 +7816,17 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 
 	// Change controller
 	if (do_change) {
-		motorControl = set_to;
+		motorControlLast = motorControlLast != motorControlNow ? motorControlNow : motorControlLast;
+		motorControlNow = set_to;
 	}
 
 	// Check if set control set success
-	pass = motorControl == set_to;
+	pass = motorControlNow == set_to;
 
 	// Format string
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Change %s: set_from=%s set_in=%s set_out=%s caller=%s",
 		pass ? "Succeeded" : "Failed", MC_CON::str_list_id[set_from],
-		MC_CON::str_list_id[motorControl], MC_CON::str_list_id[set_to], MC_CALL::str_list_id[caller]);
+		MC_CON::str_list_id[motorControlNow], MC_CON::str_list_id[set_to], MC_CALL::str_list_id[caller]);
 
 	// Log as warning if failed 
 	if (!pass) {
@@ -7788,7 +7837,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 	}
 
 	return pass;
-	}
+}
 
 // BLOCK MOTOR TILL TIME ELLAPESED
 void BlockMotorTill(int dt)
@@ -7804,13 +7853,13 @@ void BlockMotorTill(int dt)
 	fc.is_BlockingTill = true;
 
 	// Update time to hold till
-	t_rewBlockMove = millis() + dt;
+	t_blockMoter = millis() + dt;
 
 	// Remove all motor controll
 	if (!SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::BLOCKER)) {
 
 		// Log/print warning
-		Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL TO \"None\"");
+		Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL TO \"HOLD\"");
 
 		// Bail
 		return;
@@ -7826,6 +7875,7 @@ void CheckBlockTimElapsed()
 {
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
+	bool is_block_done = false;
 	bool is_passed_feeder = false;
 	bool is_mot_running = false;
 
@@ -7838,7 +7888,10 @@ void CheckBlockTimElapsed()
 	DB_FUN_STR();
 #endif
 
-	// Check that all 3 measures say rat has passed
+	// Flag block time ellapsed
+	is_block_done = millis() > t_blockMoter;
+
+	// Check if rat passed feeder 
 	is_passed_feeder =
 		fc.is_TrackingEnabled &&
 		kal.RatPos - (kal.RobPos + feedTrackPastDist) > 0 &&
@@ -7848,47 +7901,45 @@ void CheckBlockTimElapsed()
 	// Check if motor already running again
 	is_mot_running = runSpeedNow > 0;
 
-	// Check for time elapsed or rat moved at least 3cm past feeder
-	if (
-		millis() > t_rewBlockMove ||
-		is_passed_feeder ||
-		is_mot_running)
-	{
-		// Print blocking finished
+	// Bail if still blocking
+	if (!(is_block_done || is_passed_feeder || is_mot_running)) {
+		return;
+	}
+
+	// Bail if ir prox still triggered
+	if (digitalRead(pin.IRPROX_R) == LOW ||
+		digitalRead(pin.IRPROX_L) == LOW) {
+		return;
+	}
+
+	// Set flag to stop checking
+	fc.is_BlockingTill = false;
+
+	// Log/print
+	if (is_block_done) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "Finished Blocking Motor");
-
-		// Set flag to stop checking
-		fc.is_BlockingTill = false;
-
-		// Retract arm early if rat ahead
-		if (is_passed_feeder ||
-			is_mot_running) {
-
-			// Log/print
-			if (is_passed_feeder) {
-				Debug.DB_General(__FUNCTION__, __LINE__, "Unblocking Early: Rat Passed Feeder");
-			}
-			else if (is_mot_running) {
-				Debug.DB_Warning(__FUNCTION__, __LINE__, "Unblocking Early: Motor Started Early");
-			}
-
-			// Retract feeder arm
-			Reward.RetractFeedArm();
-		}
-
-		// Open up control if still set to "None"
-		if (motorControl == MC_CON::ID::HOLD) {
-
-			if (!SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::BLOCKER)) {
-
-				// Log/print error
-				Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL BACK TO \"Open\"");
-			}
-		}
-
+	}
+	else if (is_passed_feeder) {
+		Debug.DB_General(__FUNCTION__, __LINE__, "Unblocking Early: Rat Passed Feeder");
+	}
+	else if (is_mot_running) {
+		Debug.DB_Warning(__FUNCTION__, __LINE__, "Unblocking Early: Motor Started Early");
 	}
 
+	// Retract arm early if rat ahead
+	if (Reward.isArmExtended && (is_passed_feeder || is_mot_running)) {
+		Reward.RetractFeedArm();
 	}
+
+	// Unset control from "HOLD"
+	if (motorControlNow == MC_CON::ID::HOLD) {
+
+		if (!SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::BLOCKER)) {
+			Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL BACK TO \"OPEN\"");
+		}
+	}
+
+}
 
 // GET AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char *p_status_name)
@@ -8504,7 +8555,7 @@ void ProcButtonInput()
 		fc.do_MoveRobRev = false;
 	}
 
-	}
+}
 
 // OPEN/CLOSE REWARD SOLENOID
 void OpenCloseRewSolenoid()
@@ -8812,7 +8863,7 @@ float CheckBattery(bool force_check)
 
 	// Return battery voltage
 	return vccAvg;
-	}
+}
 
 // TURN LCD LIGHT ON/OFF
 void ChangeLCDlight(uint32_t duty)
@@ -9084,7 +9135,7 @@ void TestUpdate()
 
 	}
 
-	}
+}
 
 // DO PING TEST
 void PingTest()
@@ -9666,7 +9717,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		is_rat_blink = false;
 		return false;
 	}
-	}
+}
 
 #pragma endregion
 
@@ -9742,24 +9793,6 @@ void Interupt_Power()
 
 	// Restart Arduino
 	REQUEST_EXTERNAL_RESET;
-}
-
-// HALT RUN ON IR TRIGGER
-void Interupt_IRprox_Halt() {
-
-	// Local vars
-	static uint32_t t_debounce = 0;
-
-	// Exit if < 250 ms has not passed
-	if (t_debounce > millis()) {
-		return;
-	}
-
-	// Run stop in main loop
-	v_doIRhardStop = true;
-
-	// Update debounce
-	t_debounce = millis() + 250;
 }
 
 // DETECT IR SYNC EVENT
@@ -9964,7 +9997,6 @@ void setup() {
 	v_t_irSyncLast = 0;
 	v_dt_ir = 0;
 	v_cnt_ir = 0;
-	v_doIRhardStop = false;
 	v_isNewIR = false;
 	v_stepState = false;
 	v_doStepTimer = false;
@@ -10052,18 +10084,12 @@ void setup() {
 		t_sync = 1;
 		Debug.DB_Error(__FUNCTION__, __LINE__, "IR SENSOR DISABLED");
 		Debug.PrintAll(500);
-}
+	}
 
 	// Power off
 #if !DO_AUTO_POWER
 	attachInterrupt(digitalPinToInterrupt(pin.PWR_SWITCH), Interupt_Power, FALLING);
 #endif
-
-	// IR prox right
-	attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_R), Interupt_IRprox_Halt, FALLING);
-
-	// IR prox left
-	attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_L), Interupt_IRprox_Halt, FALLING);
 
 	// Log/print interupts setup
 	Debug.PrintLCD(true, "DONE SETUP", "Interrupts");
@@ -10255,11 +10281,7 @@ void loop() {
 	}
 
 	// CHECK FOR IR TRIGGERED HALT
-	if (v_doIRhardStop)
-	{
-		IRprox_Halt();
-		v_doIRhardStop = false;
-	}
+	Check_IRprox_Halt();
 
 	// CHECK FOR IR EVENT
 	IR_SyncCheck();

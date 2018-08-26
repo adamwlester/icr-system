@@ -114,12 +114,12 @@ D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Tra
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
-D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
-D.DB.Reward_Delay = '1.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
-D.DB.Cue_Condition = 'Half'; % ['All' 'Half' 'None']
+D.DB.Feeder_Condition = 'C2'; % ['C1' 'C2']
+D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'SW'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Start_Quadrant = 'SE'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
@@ -140,6 +140,8 @@ D.DB.t8_doCubeBatteryTest = false;
 
 % SIMULATED RAT TEST SETTINGS
 
+% Stop for free reward
+D.DB.SIM.doStopForFreeRew = true;
 % Starting velocity
 D.DB.SIM.VelStart = 20; % (cm/sec)
 % Max acc
@@ -8561,7 +8563,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.DB.SIM.TSLast = NaN;
             D.DB.SIM.SwayDir = -1;
             D.DB.SIM.SldVelLast = NaN;
-            D.DB.SIM.t_resumeRun = 0;
+            D.DB.SIM.T.resume = 0;
+            D.DB.SIM.C.rewSend = 0;
+            D.DB.SIM.F.doZoneCheck = false; 
+            D.DB.SIM.F.doFreeStop = false; 
             D.DB.isTestStarted = false;
             
             % Set streaming flag
@@ -11437,11 +11442,42 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             end
             
-            % Check for reward
-            if D.F.rewarding && D.DB.SIM.t_resumeRun == 0
+            % Stop for free reward
+            if D.DB.SIM.doStopForFreeRew
                 
-                % Get resume time
-                D.DB.SIM.t_resumeRun = Sec_DT(now) + D.DB.SIM.dtRewPause;
+                % Change free reward stop zone
+                if D.C.rew_send ~= D.DB.SIM.C.rewSend
+                    
+                    % Get new random zone if this is a free reward
+                    if get(D.UI.toggDoCue, 'Value') == 0
+                        D.I.zone_now = ceil(rand(1) * length(D.PAR.zoneLocs));
+                        D.DB.SIM.F.doZoneCheck = true;
+                    end
+                    D.DB.SIM.C.rewSend = D.C.rew_send;
+                end
+                
+                % Check if rat in bounds
+                if D.DB.SIM.F.doZoneCheck
+                    check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.PAR.rewZoneBnds(D.I.zone_now,:,D.I.rot));
+                    if any(check_inbound)
+                        
+                        % Set flags
+                        D.DB.SIM.F.doFreeStop = true;
+                        D.DB.SIM.F.doZoneCheck = false;
+                    end
+                end
+            end
+            
+            % Check for active reward
+            if (D.DB.SIM.F.doFreeStop || D.F.rewarding) && D.DB.SIM.T.resume == 0
+                
+                % Set resume time
+                if D.DB.SIM.F.doFreeStop
+                    D.DB.SIM.T.resume = Sec_DT(now) + D.DB.SIM.dtRewPause + D.PAR.rewDel;
+                    D.DB.SIM.F.doFreeStop = false;
+                else
+                    D.DB.SIM.T.resume = Sec_DT(now) + D.DB.SIM.dtRewPause;
+                end
                 
                 % Store slider value and set to zero
                 D.DB.SIM.SldVelLast = round(get(D.UI.sldSimVel, 'Value'));
@@ -11449,14 +11485,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Check if time to stop pausing
-            if Sec_DT(now) > D.DB.SIM.t_resumeRun && ...
-                    D.DB.SIM.t_resumeRun > 0
+            if Sec_DT(now) > D.DB.SIM.T.resume && ...
+                    D.DB.SIM.T.resume ~= 0
                 
                 % Set slider back to pervious value
                 set(D.UI.sldSimVel, 'Value', D.DB.SIM.SldVelLast)
                 
                 % Reset resume time
-                D.DB.SIM.t_resumeRun = 0;
+                D.DB.SIM.T.resume = 0;
             end
             
             % Local vars
@@ -15910,7 +15946,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Check_Setup_Defaults()
         
         % Local vars
-        [rew_del, cue_cond, task_cond] = SetVals();
+        [rew_del, cue_cond, ~] = SetVals();
         is_del_changed = false;
         is_cue_changed = false;
         is_task_changed = false;

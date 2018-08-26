@@ -161,6 +161,10 @@ struct PIN
 	// Testing
 	int TEST_SIGNAL = A8;
 
+	// IR proximity sensors
+	const int IRPROX_R = 42; // (green)
+	const int IRPROX_L = 43; // (blue)
+
 	/*
 	Note: pins bellow are all used for external interupts
 	and must all be members of the same hwSerial (PortA)
@@ -169,10 +173,6 @@ struct PIN
 	// Power button
 	const int PWR_SWITCH = 24; // (white)
 	const int PWR_SWITCH_GRN = 25; // (black)
-
-	// IR proximity sensors
-	const int INTERUPT_IRPROX_R = 42; // (green)
-	const int INTERUPT_IRPROX_L = 43; // (blue)
 
 	// IR detector
 	const int INTERUPT_IR_DETECT = 31; // (white)
@@ -186,7 +186,7 @@ pin;
 #pragma region ============== SETUP PINS ===============
 
 void SetupPins() {
-	
+
 	// SETUP OUTPUT PINS
 
 	// Power
@@ -295,8 +295,8 @@ void SetupPins() {
 	// Battery monitor
 	pinMode(pin.BAT_VCC, INPUT);
 	// IR proximity sensors
-	pinMode(pin.INTERUPT_IRPROX_R, INPUT);
-	pinMode(pin.INTERUPT_IRPROX_L, INPUT);
+	pinMode(pin.IRPROX_R, INPUT);
+	pinMode(pin.IRPROX_L, INPUT);
 	// IR detector
 	pinMode(pin.INTERUPT_IR_DETECT, INPUT);
 
