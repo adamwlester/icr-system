@@ -26,7 +26,7 @@ namespace ICR_Run
             5: Wall image IR sync timing
             6: IR sync timing
             7: Hardware test */
-        systemTest: 1, // 0
+        systemTest: 0, // 0
 
         /* Debug matlab
             [0]: Dont break on errors
@@ -40,7 +40,7 @@ namespace ICR_Run
         /*Autoload rat data
             true: Load rat data based on ICR_GUI hardcoded values
             false: Start normally */
-        do_autoloadUI: true, // false
+        do_autoloadUI: false, // false
 
         // Print all blocked vt recs
         do_printBlockedVT: false, // false
@@ -153,7 +153,8 @@ namespace ICR_Run
             'B', // bulldoze rat
             'I', // rat in/out
             'O'  // confirm task done
-             }
+             },
+            dt_minSentRcvd: 0
             );
 
         // CS to Matlab
@@ -1702,10 +1703,10 @@ namespace ICR_Run
                 char foot = ' ';
 
                 // Store parse start time
-                r2c.t_parseStr = DEBUG.DT();
+                r2c.t_parseStart = DEBUG.DT();
 
                 // Get header
-                if (FeederDueBuffReady(1, r2c.t_parseStr, "head"))
+                if (FeederDueBuffReady(1, r2c.t_parseStart, "head"))
                 {
                     sp_Xbee.Read(head_bytes, 0, 1);
                     bytes_read += 1;
@@ -1724,7 +1725,7 @@ namespace ICR_Run
                 if (r2c_head_found)
                 {
 
-                    if (FeederDueBuffReady(1, r2c.t_parseStr, "id"))
+                    if (FeederDueBuffReady(1, r2c.t_parseStart, "id"))
                     {
 
                         sp_Xbee.Read(id_bytes, 0, 1);
@@ -1747,7 +1748,7 @@ namespace ICR_Run
                     // Get data
                     for (int i = 0; i < 3; i++)
                     {
-                        if (FeederDueBuffReady(4, r2c.t_parseStr, String.Format("dat{0}", i + 1)))
+                        if (FeederDueBuffReady(4, r2c.t_parseStart, String.Format("dat{0}", i + 1)))
                         {
                             sp_Xbee.Read(dat_bytes, 0, 4);
                             U.b_0 = dat_bytes[0];
@@ -1760,7 +1761,7 @@ namespace ICR_Run
                     }
 
                     // Get packet number
-                    if (FeederDueBuffReady(2, r2c.t_parseStr, "pack"))
+                    if (FeederDueBuffReady(2, r2c.t_parseStart, "pack"))
                     {
 
                         // Read in data
@@ -1772,7 +1773,7 @@ namespace ICR_Run
                     }
 
                     // Get do confirm byte
-                    if (FeederDueBuffReady(1, r2c.t_parseStr, "flag_byte"))
+                    if (FeederDueBuffReady(1, r2c.t_parseStart, "flag_byte"))
                     {
                         sp_Xbee.Read(conf_bytes, 0, 1);
                         bytes_read += 1;
@@ -1785,7 +1786,7 @@ namespace ICR_Run
                     }
 
                     // Find footer
-                    if (FeederDueBuffReady(1, r2c.t_parseStr, "foot"))
+                    if (FeederDueBuffReady(1, r2c.t_parseStart, "foot"))
                     {
                         // Read in data
                         sp_Xbee.Read(foot_bytes, 0, 1);
@@ -1805,7 +1806,7 @@ namespace ICR_Run
 
                 // Get dt info
                 long dt_rcvd = r2c.DT_SentRcvd(DEBUG.DT());
-                long dt_parse = DEBUG.DT(t1: r2c.t_parseStr);
+                long dt_parse = DEBUG.DT(t1: r2c.t_parseStart);
 
                 // Format data string
                 string buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5}",
@@ -1817,7 +1818,7 @@ namespace ICR_Run
                 if (r2c_foot_found)
                 {
                     // Update message info
-                    var result = r2c.UpdateRcvd(id: id, dat: dat, pack: pack, t: r2c.t_parseStr, is_conf: is_conf, is_done: is_done, is_resend: is_resend);
+                    var result = r2c.UpdateRcvd(id: id, dat: dat, pack: pack, t: r2c.t_parseStart, is_conf: is_conf, is_done: is_done, is_resend: is_resend);
                     string str_prfx = result.Item1;
                     bool is_repeat = result.Item2;
                     int dropped = result.Item3;
@@ -2835,7 +2836,8 @@ namespace ICR_Run
                         DEBUG.DB_General_Thread(buff_dat, str_prfx: "[SEND-QUEUED:c2r]", indent: 5);
 
                     // Wait for flag to be reset
-                    while (c2m.DT_SentRcvd(DEBUG.DT()) < c2m.dt_minSentRcvd)
+                    while (c2m.DT_SentRcvd(DEBUG.DT()) < c2m.dt_minSentRcvd ||
+                        m2c.DT_SentRcvd(DEBUG.DT()) < m2c.dt_minSentRcvd)
                     {
                         Thread.Sleep(1);
                     }
@@ -4485,87 +4487,34 @@ namespace ICR_Run
     {
 
         // PRIVATE VARS
-        public string _objID;
-        public UInt16[] _packRange = new UInt16[2] { 0, 0 };
-        public char[] _idArr;
-        public double[][] _datMat;
-        public UInt16[] _packArr;
-        public UInt16[] _packConfArr;
-        public byte _head;
-        public byte _foot;
-        public long _dt_minSentRcvd;
-        public long _dt_resend;
-        public int _resendMax = 0;
-        public UInt16 _packInd = 0;
-        public UInt32 _packSentAll = 0;
-        public UInt32 _packRcvdAll = 0;
-        public int _cnt_dropped = 0;
-        public int _cnt_repeat = 0;
-        public long _t_new = 0;
-        public long _t_last = 0;
-        public long _t_parseStart = 0;
-        public long[] _t_sentRcvd;
-        public object _lock_isSentRcv = new object();
-        public object _lock_isConf = new object();
-        public object _lock_isDone = new object();
-        public bool[] _isSentRcv;
-        public bool[] _isConf;
-        public bool[] _isDone;
+        private string _objID;
+        private UInt16[] _packRange = new UInt16[2] { 0, 0 };
+        private char[] _idArr;
+        private double[][] _datMat;
+        private UInt16[] _packArr;
+        private UInt16[] _packConfArr;
+        private long[] _t_sentRcvd;
+        private object _lock_isSentRcv = new object();
+        private object _lock_isConf = new object();
+        private object _lock_isDone = new object();
+        private bool[] _isSentRcv;
+        private bool[] _isConf;
+        private bool[] _isDone;
 
         // PUBLIC VARS
-        public byte head
-        {
-            get { return _head; }
-        }
-        public byte foot
-        {
-            get { return _foot; }
-        }
-        public long dt_minSentRcvd
-        {
-            get { return _dt_minSentRcvd; }
-        }
-        public long dt_resend
-        {
-            get { return _dt_resend; }
-        }
-        public int resendMax
-        {
-            get { return _resendMax; }
-        }
-        public UInt16 packInd
-        {
-            get { return _packInd; }
-        }
-        public UInt32 packSentAll
-        {
-            get { return _packSentAll; }
-        }
-        public UInt32 packRcvdAll
-        {
-            get { return _packRcvdAll; }
-        }
-        public int cnt_dropped
-        {
-            get { return _cnt_dropped; }
-        }
-        public int cnt_repeat
-        {
-            get { return _cnt_repeat; }
-        }
-        public long t_new
-        {
-            get { return _t_new; }
-        }
-        public long t_last
-        {
-            get { return _t_last; }
-        }
-        public long t_parseStr
-        {
-            get { return _t_parseStart; }
-            set { _t_parseStart = value; }
-        }
+        public byte head = 0;
+        public byte foot = 0;
+        public long dt_minSentRcvd = 0;
+        public long dt_resend = 0;
+        public int resendMax = 0;
+        public UInt16 packInd = 0;
+        public UInt32 packSentAll = 0;
+        public UInt32 packRcvdAll = 0;
+        public int cnt_dropped = 0;
+        public int cnt_repeat = 0;
+        public long t_new = 0;
+        public long t_last = 0;
+        public long t_parseStart = 0;
 
         // CONSTRUCTOR
         public COM_TRACK(
@@ -4582,14 +4531,14 @@ namespace ICR_Run
             this._objID = objID;
             this._packRange[0] = packRange[0];
             this._packRange[1] = packRange[1];
-            this._packInd = packRange[0];
-            this._packInd--;
+            this.packInd = packRange[0];
+            this.packInd--;
             this._idArr = id;
-            this._head = head;
-            this._foot = foot;
-            this._dt_minSentRcvd = dt_minSentRcvd;
-            this._dt_resend = dt_resend;
-            this._resendMax = resendMax;
+            this.head = head;
+            this.foot = foot;
+            this.dt_minSentRcvd = dt_minSentRcvd;
+            this.dt_resend = dt_resend;
+            this.resendMax = resendMax;
             _datMat = new double[id.Length][];
             _packArr = new UInt16[id.Length];
             _packConfArr = new UInt16[id.Length];
@@ -4725,8 +4674,8 @@ namespace ICR_Run
             _datMat[id_ind][2] = dat[2];
 
             // Update timers
-            _t_last = _t_new;
-            _t_new = t;
+            t_last = t_new;
+            t_new = t;
             _t_sentRcvd[id_ind] = t;
 
             // Get last pack
@@ -4739,8 +4688,8 @@ namespace ICR_Run
             is_repeat = is_resend || pack == pack_last;
 
             // Incriment repeat
-            if (is_resend)
-                _cnt_repeat++;
+            if (is_repeat)
+                cnt_repeat++;
 
             // Update packet history
             if (!is_conf)
@@ -4750,12 +4699,12 @@ namespace ICR_Run
 
             // Update for new packets
             if ((!is_repeat || is_resend) && !is_conf)
-                _packSentAll++;
+                packSentAll++;
 
             // Format prefix string
             str_prfx =
                 String.Format("[{0}SENT{1}:{2}]",
-                is_resend ? "RE-" : "",
+                is_repeat ? "RPT-" : "",
                 is_conf ? "-CONF" : "",
                 _objID);
 
@@ -4787,8 +4736,8 @@ namespace ICR_Run
             _datMat[id_ind][2] = dat[2];
 
             // Update timers
-            _t_last = _t_new;
-            _t_new = t;
+            t_last = t_new;
+            t_new = t;
             _t_sentRcvd[id_ind] = t;
 
             // Get last pack
@@ -4802,7 +4751,7 @@ namespace ICR_Run
 
             // Incriment repeat
             if (is_repeat)
-                _cnt_repeat++;
+                cnt_repeat++;
 
             // Update packet history
             if (!is_conf)
@@ -4816,22 +4765,22 @@ namespace ICR_Run
 
                 // Get pack diff accounting for packet rollover
                 int pack_diff =
-                    Math.Abs(pack - _packInd) < (_packRange[1] - _packRange[0]) ?
-                    pack - _packInd :
+                    Math.Abs(pack - packInd) < (_packRange[1] - _packRange[0]) ?
+                    pack - packInd :
                     pack - (_packRange[0] - 1);
 
                 // Update dropped packets
-                dropped = (pack - _packInd) - 1;
+                dropped = (pack - packInd) - 1;
                 AddDropped(dropped);
 
                 // Update packets sent
-                _packSentAll += (uint)pack_diff;
+                packSentAll += (uint)pack_diff;
 
                 // Update packet ind 
-                _packInd = pack;
+                packInd = pack;
 
                 // Incriment packets recieved
-                _packRcvdAll++;
+                packRcvdAll++;
 
             }
 
@@ -4855,7 +4804,7 @@ namespace ICR_Run
         // Track dropped packets
         public void AddDropped(int cnt)
         {
-            _cnt_dropped += cnt;
+            cnt_dropped += cnt;
         }
 
         // Incriment packet
@@ -4863,20 +4812,20 @@ namespace ICR_Run
         {
 
             // Incriment packet
-            _packInd = (UInt16)((int)_packInd + inc);
+            packInd = (UInt16)((int)packInd + inc);
 
             // Reset to lowest range value if out of range
-            if (_packInd > _packRange[1])
+            if (packInd > _packRange[1])
             {
-                string str_print = String.Format("RESETTING {0} PACKET INDEX FROM {1} TO {2}", _objID, _packInd, _packRange[0]);
+                string str_print = String.Format("RESETTING {0} PACKET INDEX FROM {1} TO {2}", _objID, packInd, _packRange[0]);
                 DEBUG.DB_General_Thread(str_print);
 
                 // Set to lowest range value
-                _packInd = _packRange[0];
+                packInd = _packRange[0];
             }
 
             // Return number
-            return _packInd;
+            return packInd;
 
         }
 
@@ -4886,13 +4835,13 @@ namespace ICR_Run
 
             // Set t1 to greater of str_t_parse or new sent/rcvd if input geven otherwise set to last sent/rcvd 
             long t_1 = t2 > 0 ?
-                _t_parseStart > _t_new ? _t_parseStart : _t_new :
-                _t_last;
+                t_parseStart > t_new ? t_parseStart : t_new :
+                t_last;
 
             // Set t2 to input time if time given or greater of str_t_parse or newest sent/rcvd
             long t_2 = t2 > 0 ?
                 t2 :
-                _t_parseStart > _t_new ? _t_parseStart : _t_new;
+                t_parseStart > t_new ? t_parseStart : t_new;
 
             // Return t2-t1
             return t_2 - t_1;

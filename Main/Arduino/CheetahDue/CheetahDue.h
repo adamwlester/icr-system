@@ -124,8 +124,6 @@ int PQ_ReadInd = 0;
 
 // SERIAL COM GENERAL
 const uint16_t expectedSerialBufferSize = 1028;
-const int dt_sendSent = 5; // (ms) 
-const int dt_sendRcvd = 0; // (ms) 
 int cnt_bytesRead = 0;
 int cnt_bytesDiscarded = 0;
 int cnt_logBytesSent = 0;
@@ -273,11 +271,12 @@ struct A2_COM
 	VEC<int> cnt_repeatArr;
 	uint32_t cnt_repeat;
 	uint32_t t_sent; // (ms)
-	int dt_sent; // (ms)
+	int dt_sent; // (ms) mmo
+	int dt_minSentRcvd; // (ms) 
 	byte SQ_Queue[SQ_Capacity][SQ_MsgBytes];
 	int SQ_StoreInd;
 	int SQ_ReadInd;
-	A2_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange) :
+	A2_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange, int _dt_minSentRcvd = 0) :
 		hwSerial(_hwSerial),
 		comID(_comID),
 		lng(strlen(_id)),
@@ -300,13 +299,14 @@ struct A2_COM
 		cnt_repeat(0),
 		t_sent(0),
 		dt_sent(0),
+		dt_minSentRcvd(_dt_minSentRcvd),
 		SQ_Queue(),
 		SQ_StoreInd(0),
 		SQ_ReadInd(0)
 	{}
 };
-A2_COM<USARTClass> a2r(Serial1, COM::ID::a2r, '{', '}', _rob_id_list, _pack_range);
-A2_COM<UARTClass> a2c(Serial, COM::ID::a2c, '<', '>', _cs_id_list, _pack_range);
+A2_COM<USARTClass> a2r(Serial1, COM::ID::a2r, '{', '}', _rob_id_list, _pack_range, 5);
+A2_COM<UARTClass> a2c(Serial, COM::ID::a2c, '<', '>', _cs_id_list, _pack_range, 5);
 
 // FEEDERDUE INCOMING SERIAL
 template <typename HW>
@@ -331,7 +331,8 @@ struct A4_COM
 	bool is_new;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
-	A4_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange) :
+	int dt_minSentRcvd; // (ms) 
+	A4_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange, int _dt_minSentRcvd = 0) :
 		hwSerial(_hwSerial),
 		comID(_comID),
 		lng(strlen(_id)),
@@ -350,11 +351,12 @@ struct A4_COM
 		idNew('\0'),
 		is_new(false),
 		t_rcvd(0),
-		dt_rcvd(0)
+		dt_rcvd(0),
+		dt_minSentRcvd(_dt_minSentRcvd)
 	{}
 };
-A4_COM<USARTClass> r2a(Serial1, COM::ID::r2a, '{', '}', _rob_id_list, _pack_range);
-A4_COM<UARTClass> c2a(Serial, COM::ID::c2a, '<', '>', _cs_id_list, _pack_range);
+A4_COM<USARTClass> r2a(Serial1, COM::ID::r2a, '{', '}', _rob_id_list, _pack_range, 5);
+A4_COM<UARTClass> c2a(Serial, COM::ID::c2a, '<', '>', _cs_id_list, _pack_range, 5);
 
 #pragma endregion 
 

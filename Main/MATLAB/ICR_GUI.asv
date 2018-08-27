@@ -116,7 +116,7 @@ D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
 D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'SW'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Start_Quadrant = 'NE'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
@@ -3554,7 +3554,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pos = [lft, btm, wd, ht];
         D.UI.popBulldoze = uicontrol('Style','popupmenu', ...
             'Parent',D.UI.tabICR, ...
-            'Callback', {@Togg_Bulldoze}, ...
+            'Callback', {@Togg_Pop_Bulldoze}, ...
             'Units','Normalized', ...
             'Enable', 'off', ...
             'Position', pos, ...
@@ -3570,7 +3570,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.toggBulldoze = uicontrol('Style','togglebutton', ...
             'Parent',D.UI.tabICR, ...
             'String','Bulldoze', ...
-            'Callback', {@Togg_Bulldoze}, ...
+            'Callback', {@Togg_Pop_Bulldoze}, ...
             'Enable', 'off', ...
             'Units','Normalized', ...
             'Position', pos, ...
@@ -3585,7 +3585,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pos = [lft, pos(2), 0.03, pos(4)];
         D.UI.editBulldoze = uicontrol(...
             'Parent',D.UI.tabICR, ...
-            'Callback', {@Togg_Bulldoze}, ...
             'Units','Normalized',...
             'Position',pos,...
             'Style','edit',...
@@ -8197,7 +8196,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             val = find(ismember(D.UI.popBulldoze.String, [num2str(D.PAR.bullDel), ' sec']));
             Safe_Set(D.UI.popBulldoze, 'Value', val);
             Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-            Togg_Bulldoze();
+            Togg_Pop_Bulldoze();
         end
         
         % Cue setup
@@ -10796,7 +10795,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.PAR.bullLastVal = get(D.UI.toggBulldoze, 'Value');
             if D.PAR.bullLastVal == 1
                 Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-                Togg_Bulldoze();
+                Togg_Pop_Bulldoze();
             end
             
             % Log/print reset bounds crossed
@@ -11053,7 +11052,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Restart bulldozer
             if D.PAR.bullLastVal == 1
                 Safe_Set(D.UI.toggBulldoze, 'Value', 1);
-                Togg_Bulldoze();
+                Togg_Pop_Bulldoze();
             end
             
             % Update popmenu
@@ -17706,7 +17705,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Stop bulldoze if still active
             if (get(D.UI.toggBulldoze, 'Value') == 1)
                 Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-                Togg_Bulldoze();
+                Togg_Pop_Bulldoze();
             end
             
         end
@@ -17849,7 +17848,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Stop bulldoze if still active
         if (get(D.UI.toggBulldoze, 'Value') == 1)
             Safe_Set(D.UI.toggBulldoze, 'Value', 0);
-            Togg_Bulldoze();
+            Togg_Pop_Bulldoze();
         end
         
         % Stop recording
@@ -17936,22 +17935,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ----------------------------BULLDOZE RAT---------------------------------
-    function Togg_Bulldoze(~, ~, ~)
+    function Togg_Pop_Bulldoze(hObject, ~, ~)
+        
+        
+        % Handle inputs
+        if nargin < 1
+            hObject =  D.UI.toggBulldoze;
+        end
         
         if (get(D.UI.toggBulldoze, 'Value') == 1)
             
             % Get bulldoze delay
-            del_str = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
-            del_str = regexp(del_str, '\d*', 'match');
-            D.PAR.bullDel = str2double(del_str{:});
-            
-            % Get bulldoze speed
-            bull_spd = str2double(get(D.UI.editBulldoze, 'String'));
-            if bull_spd > 100 || isnan(bull_spd)
-                set(D.UI.editBulldoze, 'String', num2str(D.PAR.bullSpeed))
-            else
-                D.PAR.bullSpeed = bull_spd;
-            end
+            delStr = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
+            delStr = regexp(delStr, '\d*', 'match');
+            D.PAR.bullDel = str2double(delStr{:});
+            D.PAR.bullSpeed = str2double(get(D.UI.editBulldoze, 'String'));
             
             % Change backround text
             Safe_Set(D.UI.toggBulldoze, 'String', sprintf('Bulldoze (%ds)', D.PAR.bullDel));

@@ -166,7 +166,7 @@ int cal_nMeasPerSteps = 10;
 // FLOW/STATE FLAGS
 struct FC
 {
-	bool is_BlockingTill = false;
+	bool is_MotBlocking = false;
 	bool do_Quit = false;
 	bool is_QuitConfirmed = false;
 	bool is_IRHandshakeDone = false;
@@ -239,13 +239,9 @@ int memStart = 0;
 int memEnd = 0;
 
 // SERIAL COM GENERAL
-const int resendMax = 5;
 const uint16_t expectedSerialBufferSize = 1028;
 const int tx_sizeMaxSend = SERIAL_BUFFER_SIZE / 4;
 const int rx_sizeMaxSend = SERIAL_BUFFER_SIZE / 4;
-const int dt_resend = 100; // (ms)
-const int dt_sendSent = 5; // (ms) 
-const int dt_sendRcvd = 0; // (ms) 
 int cnt_bytesRead = 0;
 int cnt_bytesDiscarded = 0;
 
@@ -440,7 +436,7 @@ bit2volt = (3.3/1023) * (12.6/3)
 Set pot to 12.6V == 3V
 */
 const float vccCutoff = 11.6;
-const uint32_t dt_vccShutDown = 5*60; // (sec)
+const uint32_t dt_vccShutDown = 5 * 60; // (sec)
 const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;
@@ -485,7 +481,7 @@ volatile byte v_stepDir = 'e'; // ['e','r']
 
 #pragma region ============== COM SETUP ===============
 
-		// SERIAL QUEUE 
+// SERIAL QUEUE 
 const int SQ_Capacity = 10;
 const int SQ_MsgBytes = 18;
 
@@ -606,10 +602,13 @@ struct R2_COM
 	uint32_t cnt_repeat;
 	uint32_t t_sent; // (ms)
 	int dt_sent; // (ms)
+	int dt_minSentRcvd; // (ms) 
+	int resendMax;
+	int dt_resend; // (ms)
 	byte SQ_Queue[SQ_Capacity][SQ_MsgBytes];
 	int SQ_StoreInd;
 	int SQ_ReadInd;
-	R2_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange) :
+	R2_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange, int _dt_minSentRcvd = 0, int _resendMax = 0, int _dt_resend = 0) :
 		hwSerial(_hwSerial),
 		comID(_comID),
 		lng(strlen(_id)),
@@ -633,13 +632,16 @@ struct R2_COM
 		cnt_repeat(0),
 		t_sent(0),
 		dt_sent(0),
+		dt_minSentRcvd(_dt_minSentRcvd),
+		resendMax(_resendMax),
+		dt_resend(_dt_resend),
 		SQ_Queue(),
 		SQ_StoreInd(0),
 		SQ_ReadInd(0)
 	{}
 };
-R2_COM<USARTClass> r2c(Serial2, COM::ID::r2c, '<', '>', _cs_id_list, _pack_range);
-R2_COM<USARTClass> r2a(Serial3, COM::ID::r2a, '{', '}', _ard_id_list, _pack_range);
+R2_COM<USARTClass> r2c(Serial2, COM::ID::r2c, '<', '>', _cs_id_list, _pack_range, 5, 5, 250);
+R2_COM<USARTClass> r2a(Serial3, COM::ID::r2a, '{', '}', _ard_id_list, _pack_range, 5, 5, 100);
 R2_COM<UARTClass> r2t(Serial, COM::ID::r2t, '{', '}', _tnsy_id_list, _pack_range);
 
 // FEEDERDUE INCOMING SERIAL
@@ -665,7 +667,8 @@ struct R4_COM
 	bool is_new;
 	uint32_t t_rcvd; // (ms)
 	int dt_rcvd; // (ms)
-	R4_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange) :
+	int dt_minSentRcvd; // (ms) 
+	R4_COM(HW &_hwSerial, const COM::ID _comID, const char _head, const char _foot, const char *_id, const uint16_t *_packRange, int _dt_minSentRcvd = 0) :
 		hwSerial(_hwSerial),
 		comID(_comID),
 		lng(strlen(_id)),
@@ -684,11 +687,12 @@ struct R4_COM
 		idNew('\0'),
 		is_new(false),
 		t_rcvd(0),
-		dt_rcvd(0)
+		dt_rcvd(0),
+		dt_minSentRcvd(_dt_minSentRcvd)
 	{}
 };
-R4_COM<USARTClass> c2r(Serial2, COM::ID::c2r, '<', '>', _cs_id_list, _pack_range);
-R4_COM<USARTClass> a2r(Serial3, COM::ID::a2r, '{', '}', _ard_id_list, _pack_range);
+R4_COM<USARTClass> c2r(Serial2, COM::ID::c2r, '<', '>', _cs_id_list, _pack_range, 5);
+R4_COM<USARTClass> a2r(Serial3, COM::ID::a2r, '{', '}', _ard_id_list, _pack_range, 5);
 R4_COM<UARTClass> t2r(Serial, COM::ID::t2r, '{', '}', _tnsy_id_list, _pack_range);
 
 

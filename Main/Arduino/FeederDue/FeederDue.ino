@@ -754,10 +754,13 @@ bool ManualRun(char dir);
 bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller);
 
 // BLOCK MOTOR TILL TIME ELLAPESED
-void BlockMotorTill(int dt);
+void BlockMotor(int dt);
 
 // CHECK IF TIME ELLAPESED
 void CheckBlockTimElapsed();
+
+// UNBLOCK MOTOR
+void UnblockMotor();
 
 // CHECK AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char *p_status_name);
@@ -1124,7 +1127,7 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 
 	// Format prefix
 	Debug.sprintf_safe(buffMed, buff_med_1, "   [%sRCVD%s:%s]",
-		is_repeat ? "RE-" : "",
+		is_repeat ? "RPT-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		COM::str_list_id[p_r4->comID]);
 
@@ -1224,7 +1227,7 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
-		is_repeat ? "RE-" : "",
+		is_repeat ? "RPT-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		COM::str_list_id[p_r2->comID], p_msg_1, p_msg_2);
@@ -3162,16 +3165,14 @@ void BULLDOZE::UpdateBull()
 
 	// Bail if "OFF" or "HOLDING"
 	if (bullState == OFF ||
-		bullState == HOLDING)
-	{
+		bullState == HOLDING){
 		return;
 	}
 
 	// Bail if not ready
 	if (
 		!(fc.is_EKFReady &&
-			millis() > t_updateNext))
-	{
+			millis() > t_updateNext)){
 		return;
 	}
 
@@ -3196,7 +3197,7 @@ void BULLDOZE::UpdateBull()
 	// Check time
 	isTimeUp = millis() > t_bullNext ? true : false;
 
-	// Check if has not moved in time
+	// Check if rat has not moved in time
 	if (!isMoved) {
 
 		// Bulldoze him!
@@ -4009,7 +4010,7 @@ void REWARD::StartRew()
 
 	// Set motor hold time
 	if (!fc.is_ForageTask && rewMode != BUTTON) {
-		BlockMotorTill(dt_rewBlock);
+		BlockMotor(dt_rewBlock);
 	}
 
 	// Hard stop
@@ -6737,14 +6738,14 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	// Bail if buffer or time inadequate
 	if (tx_size > tx_sizeMaxSend ||
 		rx_size > rx_sizeMaxSend ||
-		millis() < p_r2->t_sent + dt_sendSent) {
+		millis() < p_r2->t_sent + p_r2->dt_minSentRcvd) {
 
 		// Indicate still packs to send and bail
 		return true;
 	}
 
 	// Add small delay if just recieved
-	else if (millis() < p_r4->t_rcvd + dt_sendRcvd) {
+	else if (millis() < p_r4->t_rcvd + p_r4->dt_minSentRcvd) {
 		delayMicroseconds(500);
 	}
 
@@ -6887,7 +6888,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		// Bail if no action requred
 		if (
 			!p_r2->do_rcvCheckArr[i] ||
-			dt_sent < dt_resend
+			dt_sent < p_r2->dt_resend
 			) {
 			continue;
 		}
@@ -6903,7 +6904,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		// Get done flag
 		is_done = GetSetByteBit(&p_r2->flagArr[i], 2, false);
 
-		if (p_r2->cnt_repeatArr[i] < resendMax) {
+		if (p_r2->cnt_repeatArr[i] < p_r2->resendMax) {
 
 			// Resend data with new pack number for all but done confirmation
 			pack = is_done ? p_r2->packArr[i] : 0;
@@ -7590,13 +7591,12 @@ void Check_IRprox_Halt()
 	t_check = millis() + 250;
 
 	// BAIL IF ALREADY BLOCKING
-	if (fc.is_BlockingTill) {
+	if (fc.is_MotBlocking) {
 		return;
 	}
 
-	// Bail if Bull "ACTIVE" and "ON"
-	if (Bull.bullMode == BULLDOZE::BULLMODE::ACTIVE &&
-		Bull.bullState == BULLDOZE::BULLSTATE::ON) {
+	// Bail if Bull "ON"
+	if (Bull.bullState == BULLDOZE::BULLSTATE::ON) {
 		return;
 	}
 
@@ -7618,7 +7618,7 @@ void Check_IRprox_Halt()
 	HardStop(__FUNCTION__, __LINE__);
 
 	// Block motor
-	BlockMotorTill(dt_irProxHold);
+	BlockMotor(dt_irProxHold);
 
 	// Update counters
 	cnt_irProxHaltR += is_rt_ir_trigg ? 1 : 0;
@@ -7847,7 +7847,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 }
 
 // BLOCK MOTOR TILL TIME ELLAPESED
-void BlockMotorTill(int dt)
+void BlockMotor(int dt)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -7857,7 +7857,7 @@ void BlockMotorTill(int dt)
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
 	// Set blocking and time
-	fc.is_BlockingTill = true;
+	fc.is_MotBlocking = true;
 
 	// Update time to hold till
 	t_blockMoter = millis() + dt;
@@ -7887,7 +7887,7 @@ void CheckBlockTimElapsed()
 	bool is_mot_running = false;
 
 	// Bail if not checking
-	if (!fc.is_BlockingTill) {
+	if (!fc.is_MotBlocking) {
 		return;
 	}
 
@@ -7919,9 +7919,6 @@ void CheckBlockTimElapsed()
 		return;
 	}
 
-	// Set flag to stop checking
-	fc.is_BlockingTill = false;
-
 	// Log/print
 	if (is_block_done) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "Finished Blocking Motor");
@@ -7933,16 +7930,42 @@ void CheckBlockTimElapsed()
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "Unblocking Early: Motor Started Early");
 	}
 
-	// Retract arm early if rat ahead
-	if (Reward.isArmExtended && (is_passed_feeder || is_mot_running)) {
+	// Unblock motor
+	UnblockMotor();
+
+}
+
+// UNBLOCK MOTOR
+void UnblockMotor()
+{
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Bail if not blocking
+	if (!fc.is_MotBlocking) {
+		return;
+	}
+
+	// Set flag to stop checking
+	fc.is_MotBlocking = false;
+
+	// Retract arm early if extended
+	if (Reward.do_ExtendArm || Reward.isArmExtended) {
 		Reward.RetractFeedArm();
 	}
 
 	// Unset control from "HOLD"
 	if (motorControlNow == MC_CON::ID::HOLD) {
 
-		if (!SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::BLOCKER)) {
-			Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL BACK TO \"OPEN\"");
+		// Set motor control to "OPEN"
+		if (fc.is_TrackingEnabled) {
+			SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::HALT);
+		}
+		// Set motor control to "HOLD"
+		else {
+			SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::HALT);
 		}
 	}
 
@@ -10786,11 +10809,11 @@ void loop() {
 			// Log/print
 			Debug.DB_General(__FUNCTION__, __LINE__, "HALT FINISHED");
 
-			// Open motor control
+			// Set motor control to "OPEN"
 			if (fc.is_TrackingEnabled) {
 				SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::HALT);
 			}
-			// Set motor control to none
+			// Set motor control to "HOLD"
 			else {
 				SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::HALT);
 			}
@@ -10859,6 +10882,9 @@ void loop() {
 
 				// Log/print event
 				Debug.DB_General(__FUNCTION__, __LINE__, "BULLDOZE ON");
+
+				// Unblock motor
+				UnblockMotor();
 
 				// Turn bulldoze on
 				Bull.BullOn();

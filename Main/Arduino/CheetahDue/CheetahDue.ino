@@ -343,10 +343,9 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s%s:%s] %s %s", 
-		is_repeat ? "RE-" : "", 
+	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s:%s] %s %s", 
+		is_repeat ? "RPT-" : "", 
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
-		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		"r2c", p_msg_1, p_msg_2);
 
 	// Log as warning if resent
@@ -423,10 +422,9 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
-		is_repeat ? "RE-" : "",
+	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s:%s] %s %s",
+		is_repeat ? "RPT-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
-		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
 		"a2r", p_msg_1, p_msg_2);
 
 	// Log as warning if resending
@@ -1035,6 +1033,7 @@ void GetSerial()
 	char foot = ' ';
 	bool do_conf = false;
 	bool is_conf = false;
+	bool is_resend = false;
 	bool is_repeat = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
@@ -1086,6 +1085,7 @@ void GetSerial()
 	flag_byte = U.b[0];
 	do_conf = GetSetByteBit(&flag_byte, 0, false);
 	is_conf = GetSetByteBit(&flag_byte, 1, false);
+	is_resend = GetSetByteBit(&flag_byte, 3, false);
 
 	// Get footer
 	foot = WaitBuffRead();
@@ -1099,8 +1099,8 @@ void GetSerial()
 	dt_sent = a2r.t_sent > 0 ? millis() - a2r.t_sent : 0;
 
 	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
 		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, r2a.dt_rcvd, dt_parse);
 
@@ -1139,7 +1139,7 @@ void GetSerial()
 			pack_last = r2a.packConfArr[id_ind];
 
 		// Flag resent pack
-		is_repeat = pack == pack_last;
+		is_repeat = is_resend || pack == pack_last;
 
 		// Incriment repeat count
 		if (is_repeat)
@@ -1440,8 +1440,8 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	a2r.t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 
 	// Log/print sent
 	Debug.DB_SendQueued(buff_lrg, a2r.t_queuedArr[id_ind]);
@@ -1485,14 +1485,14 @@ bool SendPacket()
 	// Bail if buffer or time inadequate
 	if (tx_size > 0 ||
 		rx_size > 0 ||
-		millis() < a2r.t_sent + dt_sendSent) {
+		millis() < a2r.t_sent + a2r.dt_minSentRcvd) {
 
 		// Indicate still packs to send
 		return true;
 	}
 
 	// Add small delay if just recieved
-	else if (millis() < r2a.t_rcvd + dt_sendRcvd) {
+	else if (millis() < r2a.t_rcvd + r2a.dt_minSentRcvd) {
 		delayMicroseconds(500);
 	}
 
@@ -1568,8 +1568,8 @@ bool SendPacket()
 		r2a.packConfArr[id_ind] = pack;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d|",
 		SQ_MsgBytes, tx_size, rx_size, a2r.dt_sent, dt_rcvd, dt_queue);
 
@@ -1694,9 +1694,9 @@ bool SendLog()
 		xbee_rx_size == 0 &&
 		log_tx_size == 0 &&
 		log_rx_size == 0 &&
-		millis() > a2c.dt_sent + dt_sendSent &&
-		millis() > a2r.t_sent + dt_sendSent &&
-		millis() > r2a.t_rcvd + dt_sendRcvd)) {
+		millis() > a2c.dt_sent + a2c.dt_minSentRcvd &&
+		millis() > a2r.t_sent + a2r.dt_minSentRcvd &&
+		millis() > r2a.t_rcvd + r2a.dt_minSentRcvd)) {
 
 		// Indicate still logs to send
 		return true;
