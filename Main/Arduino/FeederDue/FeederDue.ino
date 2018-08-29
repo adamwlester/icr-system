@@ -759,9 +759,6 @@ void BlockMotor(int dt);
 // CHECK IF TIME ELLAPESED
 void CheckBlockTimElapsed();
 
-// UNBLOCK MOTOR
-void UnblockMotor();
-
 // CHECK AUTODRIVER BOARD STATUS
 int GetAD_Status(uint16_t stat_reg, char *p_status_name);
 
@@ -1854,25 +1851,32 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 	UNION_SERIAL U;
 	byte bit_ind = 0;
 
-	U.i32 = int_in;
-
-	bool do_write = false;
-	for (int i = 3; i >= 0; i--)
-	{
-		do_write = do_write || U.b[i] > 0;
-		if (!do_write) {
-			continue;
-		}
-
-		for (int j = 7; j >= 0; j--) {
-			bit_str[bit_ind++] = ((U.b[i] >> j) & 0x01) == 1 ? '1' : '0';
-		}
-
-		if (i > 0) {
-			bit_str[bit_ind++] = ',';
-		}
+	// Check for zero
+	if (int_in == 0) {
+		Debug.sprintf_safe(100, bit_str, "00000000");
 	}
-	bit_str[bit_ind++] = '\0';
+
+	else {
+		U.i32 = int_in;
+
+		bool do_write = false;
+		for (int i = 3; i >= 0; i--)
+		{
+			do_write = do_write || U.b[i] > 0;
+			if (!do_write) {
+				continue;
+			}
+
+			for (int j = 7; j >= 0; j--) {
+				bit_str[bit_ind++] = ((U.b[i] >> j) & 0x01) == 1 ? '1' : '0';
+			}
+
+			if (i > 0) {
+				bit_str[bit_ind++] = ',';
+			}
+		}
+		bit_str[bit_ind++] = '\0';
+	}
 
 	return bit_str;
 }
@@ -5803,8 +5807,9 @@ void LOGGER::StreamLogs()
 	fc.do_SendVCC = true;
 
 	// Set back to write mode
-	if (SetToWriteMode())
+	if (SetToWriteMode()) {
 		fc.do_BlockLogWrite = false;
+	}
 
 }
 
@@ -7590,7 +7595,12 @@ void Check_IRprox_Halt()
 	// Update next check time
 	t_check = millis() + 250;
 
-	// BAIL IF ALREADY BLOCKING
+	// Bail if not tracking
+	if (!fc.is_TrackingEnabled) {
+		return;
+	}
+
+	// Bail if already blocking
 	if (fc.is_MotBlocking) {
 		return;
 	}
@@ -7930,19 +7940,6 @@ void CheckBlockTimElapsed()
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "Unblocking Early: Motor Started Early");
 	}
 
-	// Unblock motor
-	UnblockMotor();
-
-}
-
-// UNBLOCK MOTOR
-void UnblockMotor()
-{
-
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
-
 	// Bail if not blocking
 	if (!fc.is_MotBlocking) {
 		return;
@@ -7952,7 +7949,8 @@ void UnblockMotor()
 	fc.is_MotBlocking = false;
 
 	// Retract arm early if extended
-	if (Reward.do_ExtendArm || Reward.isArmExtended) {
+	if ((Reward.do_ExtendArm || Reward.isArmExtended) &&
+		(is_passed_feeder || is_mot_running)) {
 		Reward.RetractFeedArm();
 	}
 
@@ -9893,10 +9891,8 @@ void setup() {
 	uint32_t t_check_ser_usb = millis() + 500;
 	while (!SerialUSB && millis() < t_check_ser_usb);
 
-	// XBee 1a (to/from CS)
+	// XBee R2
 	r2c.hwSerial.begin(57600);
-
-	// XBee 1b (to/from CheetahDue)
 	r2a.hwSerial.begin(57600);
 
 	// SETUP PINS
@@ -10296,10 +10292,8 @@ void loop() {
 	// SEND CS DATA
 	SendPacket(&r2c);
 
-	// RESEND CHEETAHDUE DATA
+	// RESEND DATA
 	CheckResend(&r2a);
-
-	// RESEND CS DATA
 	CheckResend(&r2c);
 
 	// PRINT QUEUED DB
@@ -10882,9 +10876,6 @@ void loop() {
 
 				// Log/print event
 				Debug.DB_General(__FUNCTION__, __LINE__, "BULLDOZE ON");
-
-				// Unblock motor
-				UnblockMotor();
 
 				// Turn bulldoze on
 				Bull.BullOn();

@@ -1475,7 +1475,7 @@ namespace ICR_Run
                         (DEBUG.flag.do_printSentRobVT && (int)dat[0] == 1))
                     {
                         U.f = (float)dat[2];
-                        string str_print = String.Format("{0} {1} {2} {3} dt_send_mu={4}", buff_dat_1, buff_dat_2, vtHandler.GetSendDT((int)dat[0], "avg"));
+                        string str_print = String.Format("{0} {1} dt_send_mu={2}", buff_dat_1, buff_dat_2, vtHandler.GetSendDT((int)dat[0], "avg"));
                         DEBUG.DB_General_Thread(str_print, t: c2r.t_new, str_prfx: "[SENT-VT:c2r]", indent: 5);
                     }
                 }
@@ -3855,32 +3855,35 @@ namespace ICR_Run
         // FORMAT INT AS BINARY
         public static string FormatBinary(UInt32 int_in)
         {
-            string bit_str = "";
+            string bit_str = "00000000";
             UNION_HACK U = new UNION_HACK(0, '0', 0, 0, 0);
             U.i32 = int_in;
 
-            bool do_write = false;
-            for (int i = 3; i >= 0; i--)
+            if (int_in != 0)
             {
-                byte b = i == 0 ? U.b_0 :
-                    i == 1 ? U.b_1 :
-                    i == 2 ? U.b_2 :
-                    U.b_3;
-
-                do_write = do_write || b > 0;
-                if (!do_write)
+                bool do_write = false;
+                for (int i = 3; i >= 0; i--)
                 {
-                    continue;
-                }
+                    byte b = i == 0 ? U.b_0 :
+                        i == 1 ? U.b_1 :
+                        i == 2 ? U.b_2 :
+                        U.b_3;
 
-                for (int j = 7; j >= 0; j--)
-                {
-                    bit_str += (b & (byte)(1 << j)) != 0 ? "1" : "0";
-                }
+                    do_write = do_write || b > 0;
+                    if (!do_write)
+                    {
+                        continue;
+                    }
 
-                if (i > 0)
-                {
-                    bit_str += ",";
+                    for (int j = 7; j >= 0; j--)
+                    {
+                        bit_str += (b & (byte)(1 << j)) != 0 ? "1" : "0";
+                    }
+
+                    if (i > 0)
+                    {
+                        bit_str += ",";
+                    }
                 }
             }
 

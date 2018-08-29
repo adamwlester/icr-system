@@ -26,10 +26,10 @@ PIN MAP:
 11,LCD_MOSI,blue
 12,LCD_SCK,green
 13,LCD_LED,yellow
-14,TX_R24C,orange
-15,RX_R24C,purple
-16,TX_R24A,orange
-17,RX_R24A,purple
+14,TX_R24A,orange
+15,RX_R24A,purple
+16,TX_R24C,orange
+17,RX_R24C,purple
 18,TX_OL,blue
 19,RX_OL,green
 20,SLA_PIXY,white
@@ -95,10 +95,10 @@ struct PIN
 	const int AD_RST = 7; // (brown)
 
 	// XBees
-	const int XB_CTS_F = 26; // (blue)
-	const int XB_CTS_R = 28; // (blue)
-	const int XB_UNDEF_F = 27; // (yellow)
-	const int XB_UNDEF_R = 29; // (yellow)
+	const int XB_R2C_CTS = 26; // (blue)
+	const int XB_R2A_CTS = 28; // (blue)
+	const int XB_R2C_UNUSED = 27; // (yellow)
+	const int XB_R2A_UNUSED = 29; // (yellow)
 
 	// Teensy
 	const int TEENSY_UNUSED = 32; // (green)
@@ -288,8 +288,8 @@ void SetupPins() {
 	// Power
 	pinMode(pin.PWR_SWITCH, INPUT);
 	// XBees
-	pinMode(pin.XB_CTS_F, INPUT);
-	pinMode(pin.XB_CTS_R, INPUT);
+	pinMode(pin.XB_R2A_CTS, INPUT);
+	pinMode(pin.XB_R2C_CTS, INPUT);
 	// Teensy
 	pinMode(pin.TEENSY_RESET, INPUT);
 	// Battery monitor
