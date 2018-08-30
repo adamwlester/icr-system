@@ -95,10 +95,10 @@ struct PIN
 	const int AD_RST = 7; // (brown)
 
 	// XBees
-	const int XB_R2C_CTS = 26; // (blue)
-	const int XB_R2A_CTS = 28; // (blue)
-	const int XB_R2C_UNUSED = 27; // (yellow)
-	const int XB_R2A_UNUSED = 29; // (yellow)
+	const int XB_R2A_CTS = 26; // (blue)
+	const int XB_R2C_CTS = 28; // (blue)
+	const int XB_R2A_UNUSED = 27; // (yellow)
+	const int XB_R2C_UNUSED = 29; // (yellow)
 
 	// Teensy
 	const int TEENSY_UNUSED = 32; // (green)
@@ -288,8 +288,8 @@ void SetupPins() {
 	// Power
 	pinMode(pin.PWR_SWITCH, INPUT);
 	// XBees
-	pinMode(pin.XB_R2A_CTS, INPUT);
 	pinMode(pin.XB_R2C_CTS, INPUT);
+	pinMode(pin.XB_R2A_CTS, INPUT);
 	// Teensy
 	pinMode(pin.TEENSY_RESET, INPUT);
 	// Battery monitor

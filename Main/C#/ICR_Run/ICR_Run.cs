@@ -26,7 +26,7 @@ namespace ICR_Run
             5: Wall image IR sync timing
             6: IR sync timing
             7: Hardware test */
-        systemTest: 0, // 0
+        systemTest: 1, // 0
 
         /* Debug matlab
             [0]: Dont break on errors
@@ -40,7 +40,7 @@ namespace ICR_Run
         /*Autoload rat data
             true: Load rat data based on ICR_GUI hardcoded values
             false: Start normally */
-        do_autoloadUI: false, // false
+        do_autoloadUI: true, // false
 
         // Print all blocked vt recs
         do_printBlockedVT: false, // false
@@ -125,7 +125,7 @@ namespace ICR_Run
         private static string netcomAcqEntVT1 = "VT1"; // aquisition entity to stream
         private static string netcomAcqEntVT2 = "VT2"; // aquisition entity to stream
         private static string netcomServerIP = "192.168.3.100"; // host computer IP 9"127.0.0.1")
-        private static string csXbeePort = "COM5";
+        private static string csXbeePort = "COM22";
         private static string csCheetahDuePort = "COM3";
         static UInt16[] pack_range = { 1, UInt16.MaxValue - 1 };
 

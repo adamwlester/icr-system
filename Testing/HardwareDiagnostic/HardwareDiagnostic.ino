@@ -120,8 +120,8 @@ struct PINS
 	//int SWITCH_WHEEL_GRN_F = A4;
 
 	// IR detector test
-	int INTERUPT_IR_DETECT_Relay = 51;
-	int INTERUPT_IR_DETECT_PlsIn = 24;
+	int IR_DETECT_Relay = 51;
+	int IR_DETECT_PlsIn = 24;
 	int CheetahDueID_GRN = A8;
 	int CheetahDueID_IP = A9;
 }
@@ -332,8 +332,8 @@ void setup()
 		pinMode(pins.POT_VCC, OUTPUT);
 		digitalWrite(pins.POT_VCC, HIGH);
 		digitalWrite(pins.POT_GRN, LOW);
-		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_R), InteruptIRproxHalt, FALLING);
-		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IRPROX_L), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.IRPROX_R), InteruptIRproxHalt, FALLING);
+		attachInterrupt(digitalPinToInterrupt(pin.IRPROX_L), InteruptIRproxHalt, FALLING);
 	}
 
 	// Stepper Rotation Test
@@ -369,16 +369,16 @@ void setup()
 		{
 			is_FeederDue = true;
 			attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IR_DETECT), Interupt_IR_Detect, HIGH);
-			attachInterrupt(digitalPinToInterrupt(pins.INTERUPT_IR_DETECT_PlsIn), Interupt_Pulse_Detect, HIGH);
+			attachInterrupt(digitalPinToInterrupt(pins.IR_DETECT_PlsIn), Interupt_Pulse_Detect, HIGH);
 			SerialUSB.println("Running on FeederDue");
 		}
 		else
 		{
 			// Set all relays low on CheetahDue
-			pinMode(pins.INTERUPT_IR_DETECT_Relay, OUTPUT);
+			pinMode(pins.IR_DETECT_Relay, OUTPUT);
 			pinMode(11, OUTPUT);
 			pinMode(12, OUTPUT);
-			digitalWrite(pins.INTERUPT_IR_DETECT_Relay, LOW);
+			digitalWrite(pins.IR_DETECT_Relay, LOW);
 			digitalWrite(11, LOW);
 			digitalWrite(12, LOW);
 			SerialUSB.println("Running on CheetahDue");
@@ -986,7 +986,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur + t_IR_Del
 			)
 		{
-			digitalWrite(pins.INTERUPT_IR_DETECT_Relay, HIGH);
+			digitalWrite(pins.IR_DETECT_Relay, HIGH);
 			t_IR_Sent = millis();
 			cnt_IR_Sent++;
 			is_IR_On = true;
@@ -998,7 +998,7 @@ void IR_Send()
 			millis() > t_IR_Sent + t_IR_Dur
 			)
 		{
-			digitalWrite(pins.INTERUPT_IR_DETECT_Relay, LOW);
+			digitalWrite(pins.IR_DETECT_Relay, LOW);
 			is_IR_On = false;
 			SerialUSB.println("IR Off");
 		}
@@ -1091,7 +1091,7 @@ void SWITCH_DISH() {
 void CheckButtons()
 {
 	// RUN BUTTON 1 OPPERATIONS
-	if (digitalRead(pin.BTN[0]) == LOW)
+	if (digitalRead(pin.BTN_1) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[0] > millis()) return;
@@ -1114,7 +1114,7 @@ void CheckButtons()
 		SerialUSB.println("Button 1");
 	}
 	// RUN BUTTON 2 OPPERATIONS
-	else if (digitalRead(pin.BTN[1]) == LOW)
+	else if (digitalRead(pin.BTN_2) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[1] > millis()) return;
@@ -1137,7 +1137,7 @@ void CheckButtons()
 		SerialUSB.println("Button 2");
 	}
 	// RUN BUTTON 3 OPPERATIONS
-	else if (digitalRead(pin.BTN[2]) == LOW)
+	else if (digitalRead(pin.BTN_3) == LOW)
 	{
 		// Check debounce time
 		if (t_debounce[2] > millis()) return;
