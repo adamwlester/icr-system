@@ -116,7 +116,7 @@ D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
 D.DB.Cue_Condition = 'Half'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NE'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Start_Quadrant = 'SW'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
@@ -138,7 +138,7 @@ D.DB.t8_doCubeBatteryTest = false;
 % SIMULATED RAT TEST SETTINGS
 
 % Stop for free reward
-D.DB.SIM.doStopForFreeRew = false;
+D.DB.SIM.doStopForFreeRew = true;
 % Starting velocity
 D.DB.SIM.VelStart = 20; % (cm/sec)
 % Max acc
@@ -1803,6 +1803,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.rew = num2cell(zeros(1,3));
         % reward send
         D.C.rew_send = 0;
+        % reward crossings
+        D.C.rew_cross = 0;
         % missed rewards [consecutive, total]
         D.C.missed_rew = [0, 0];
         % bulldozing event count
@@ -7371,6 +7373,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.rewRstBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(10),deg2rad(30)];
         D.UI.rewRstBnds = wrapTo2Pi(D.UI.rewRstBnds);
         
+        % REWARD PASS BOUNDS
+        D.UI.rewPassBnds(1,1:2) = D.PAR.rewZoneBnds(end,end,1) - [deg2rad(30), deg2rad(10)];
+        D.UI.rewPassBnds(2,1:2) = D.PAR.rewZoneBnds(end,end,2) - [deg2rad(30), deg2rad(10)];
+        D.UI.rewPassBnds = wrapTo2Pi(D.UI.rewPassBnds);
+        
         % ROTATION BOUNDS
         
         % Calculate crossing points for 90 180 and 270 deg from rew
@@ -10671,6 +10678,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % CHECK FOR REWARD CONFIRMATION
         CheckRewConf();
         
+        % CHECK IF ALL ZONES PASSED
+        CheckRewPass();
+        
         % SEND REWARD INFO
         function SendReward()
             
@@ -10695,17 +10705,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Itterate count
             D.C.rew_send = D.C.rew_send+1;
             
-            % Set reward flags
+            % Set reward sent flag
             D.F.rew_sent = true;
+            
+            % Reset reward check flags
             D.F.rew_confirmed = false;
             
-            % Reset reward zone patches
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-                'ShowAll', D.UI.rotCol(D.I.rot,:));
-            
-            % Hide reward duration text
-            Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
-                'Visible', 'off');
+            % RESET REWARD ZONE GRAPHICS
+            ResetRewGraphics();
             
             % HANDLE CUED REWARD STUFF 
             
@@ -10803,164 +10810,143 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 return
             end
             
-            % Reset reward zone patches
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-                'ShowAll', D.UI.rotCol(D.I.rot,:));
+            % UPDATE FLAGS AND COUNTERS
             
-            % Hide reward duration text
-            Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
-                'Visible', 'off');
+            % Set reward confirmed flag
+            D.F.rew_confirmed = true;
             
-            % UPDATE MISSED
-            if c2m.('Z').dat2 == 0
-                
-                % Add to missed reward count
-                D.C.missed_rew(1) = D.C.missed_rew(1)+1;
-                
-                % Print missed reward
-                Log_Debug(sprintf('Detected Missed Reward: miss_cnt=%d|%d', ...
-                    D.C.rew_cross, D.C.missed_rew(1), D.C.missed_rew(2)));
-                
+            % Update reward count
+            if D.F.rotated
+                % Add to rotation condition count
+                D.C.rew{D.I.rot}(end) = D.C.rew{D.I.rot}(end) + 1;
+            else
+                % Add to standard count
+                D.C.rew{3}(end) = D.C.rew{3}(end) + 1;
             end
             
-            % UPDATE REWARDED
-            if c2m.('Z').dat2 == 1
-                
-                % Set reward confirmed flag
-                D.F.rew_confirmed = true;
-                
-                % Update reward count
-                if D.F.rotated
-                    % Add to rotation condition count
-                    D.C.rew{D.I.rot}(end) = D.C.rew{D.I.rot}(end) + 1;
-                else
-                    % Add to standard count
-                    D.C.rew{3}(end) = D.C.rew{3}(end) + 1;
-                end
-                
-                % Update cued reward count
-                if get(D.UI.toggDoCue, 'Value') == 1
-                    D.I.cued_rew = [D.I.cued_rew, sum([D.C.rew{:}])];
-                end
-                
-                % Reset missed rewards
-                D.C.missed_rew(2) = sum(D.C.missed_rew);
-                D.C.missed_rew(1) = 0;
-                
-                % UPDATE REWARD ZONE INFO
-                
-                % Store rewarded zone ind
-                D.I.zone_now = c2m.('Z').dat1;
-                
-                % Set active zone
-                D.I.zone_active(:) = false;
-                D.I.zone_active(D.I.zone_now) = true;
-                
-                % Reset next zone
-                D.I.zone_select = 0;
-                
-                % Post NLX event: reward info
-                Send_NLX_Cmd(...
-                    sprintf(D.NLX.rew_evt, -1*D.PAR.zoneLocs(D.I.zone_now), D.PAR.zoneRewDur(D.I.zone_now)));
-                
-                % Store reward zone with range [-20,20]
-                D.PAR.zone_hist(sum([D.C.rew{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
-                
-                % Get zone dist data
-                D.C.zone(D.I.rot,D.I.zone_now) = D.C.zone(D.I.rot,D.I.zone_now)+1;
-                x_zone = -1*D.PAR.zoneLocs;
-                y_zone = D.C.zone(D.I.rot,:) / sum(D.C.zone(D.I.rot,:));
-                y_zone = y_zone/max(y_zone);
-                
-                % Update zone all patch
-                x = x_zone;
-                y = y_zone;
-                D.UI.ptchRewZoneHistH(D.I.rot,:) = ...
-                    Plot_Zone_Hist(...
-                    x, y, 2, ...
-                    D.UI.rotCol(D.I.rot,:), ...
-                    0.25, ...
-                    D.UI.axZoneH(2), ...
-                    D.UI.ptchRewZoneHistH(D.I.rot,:));
-                
-                % Display count
-                Safe_Set(D.UI.axZoneH(1), 'XTickLabel', D.C.zone(D.I.rot,:))
-                
-                % Plot average zone pos
-                avg_trig = D.PAR.zoneLocs*D.C.zone(D.I.rot,:)' / sum(D.C.zone(D.I.rot,:));
-                [xbnd, ybnd] =  ...
-                    Get_Cart_Bnds(D.UI.rewZoneRad(D.I.rot) + deg2rad(avg_trig + D.PAR.trigDist));
-                x = xbnd;
-                y = ybnd;
-                if ~isgraphics(D.UI.linZoneAvgH)
-                    D.UI.linZoneAvgH = ...
-                        line(x, y, ...
-                        'Color', D.UI.rotCol(D.I.rot,:), ...
-                        'LineStyle', '-', ...
-                        'LineWidth', 1, ...
-                        'Parent',D.UI.axH(3));
-                    uistack(D.UI.linZoneAvgH, 'bottom');
-                else
-                    Safe_Set(D.UI.linZoneAvgH, ...
-                        'XData', x, ...
-                        'YData', y);
-                end
-                
-                % Darken rewarded zone patch
-                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
-                    'Select', D.UI.rotCol(D.I.rot,:));
-                
-                % Print rewarded zone text
-                Safe_Set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
-                    'Visible', 'on');
-                
-                % Log/print reward details
-                Log_Debug(sprintf('Rewarded: rew_cnt=%d zone=%d rat_vel=%0.2fcm/sec', ...
-                    sum([D.C.rew{:}]), D.PAR.zone_hist(sum([D.C.rew{:}])), D.P.Rat.vel));
-                
+            % Update cued reward count
+            if get(D.UI.toggDoCue, 'Value') == 1
+                D.I.cued_rew = [D.I.cued_rew, sum([D.C.rew{:}])];
+            end
+            
+            % Reset missed rewards
+            D.C.missed_rew(2) = sum(D.C.missed_rew);
+            D.C.missed_rew(1) = 0;
+            
+            % UPDATE REWARD ZONE INFO
+            
+            % Store rewarded zone ind
+            D.I.zone_now = c2m.('Z').dat1;
+            c2m.('Z').dat1 = 0;
+            
+            % Set active zone
+            D.I.zone_active(:) = false;
+            D.I.zone_active(D.I.zone_now) = true;
+            
+            % Reset next zone
+            D.I.zone_select = 0;
+            
+            % Post NLX event: reward info
+            Send_NLX_Cmd(...
+                sprintf(D.NLX.rew_evt, -1*D.PAR.zoneLocs(D.I.zone_now), D.PAR.zoneRewDur(D.I.zone_now)));
+            
+            % Store reward zone with range [-20,20]
+            D.PAR.zone_hist(sum([D.C.rew{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
+            
+            % Get zone dist data
+            D.C.zone(D.I.rot,D.I.zone_now) = D.C.zone(D.I.rot,D.I.zone_now)+1;
+            x_zone = -1*D.PAR.zoneLocs;
+            y_zone = D.C.zone(D.I.rot,:) / sum(D.C.zone(D.I.rot,:));
+            y_zone = y_zone/max(y_zone);
+            
+            % Update zone all patch
+            x = x_zone;
+            y = y_zone;
+            D.UI.ptchRewZoneHistH(D.I.rot,:) = ...
+                Plot_Zone_Hist(...
+                x, y, 2, ...
+                D.UI.rotCol(D.I.rot,:), ...
+                0.25, ...
+                D.UI.axZoneH(2), ...
+                D.UI.ptchRewZoneHistH(D.I.rot,:));
+            
+            % Display count
+            Safe_Set(D.UI.axZoneH(1), 'XTickLabel', D.C.zone(D.I.rot,:))
+            
+            % Plot average zone pos
+            avg_trig = D.PAR.zoneLocs*D.C.zone(D.I.rot,:)' / sum(D.C.zone(D.I.rot,:));
+            [xbnd, ybnd] =  ...
+                Get_Cart_Bnds(D.UI.rewZoneRad(D.I.rot) + deg2rad(avg_trig + D.PAR.trigDist));
+            x = xbnd;
+            y = ybnd;
+            if ~isgraphics(D.UI.linZoneAvgH)
+                D.UI.linZoneAvgH = ...
+                    line(x, y, ...
+                    'Color', D.UI.rotCol(D.I.rot,:), ...
+                    'LineStyle', '-', ...
+                    'LineWidth', 1, ...
+                    'Parent',D.UI.axH(3));
+                uistack(D.UI.linZoneAvgH, 'bottom');
+            else
+                Safe_Set(D.UI.linZoneAvgH, ...
+                    'XData', x, ...
+                    'YData', y);
+            end
+            
+            % Handle/update reward
+            RewardDone();
+            
+            % Darken rewarded zone patch
+            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,D.I.zone_now), ...
+                'Select', D.UI.rotCol(D.I.rot,:));
+            
+            % Print rewarded zone text
+            Safe_Set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
+                'Visible', 'on');
+            
+            % Log/print reward details
+            Log_Debug(sprintf('Rewarded: rew_cnt=%d zone=%d rat_vel=%0.2fcm/sec', ...
+                sum([D.C.rew{:}]), D.PAR.zone_hist(sum([D.C.rew{:}])), D.P.Rat.vel));
+            
+            % Update UI
+            Update_UI(0, 'limitrate');
+            
+        end
+        
+        % UPDATE REWARD
+        function UpdateReward
+        end
+        
+         % UPDATE MISSED REWARD
+        function UpdateMissed
+        end
+        
+        % CHECK IF ALL ZONES PASSED
+        function CheckRewPass()
+            
+            % Check flags
+            if ~D.F.rew_sent
+                return
+            end
+            
+            % Bail if no new pos data
+            if  all(isnan(D.P.Rat.rad))
+                return;
+            end
+            
+            % Bail if rat not in bounds
+            check_inbound = Check_Pol_Bnds(D.P.Rat.rad, D.P.Rat.roh, D.UI.rewPassBnds(D.I.rot,:));
+            if ~any(check_inbound)
+                return
             end
             
             % UPDATE FLAGS AND COUNTERS
             
-            % Reset flags
-            c2m.('Z').dat1 = 0;
+            % Reset reward sent flag
             D.F.rew_sent = false;
             
-            % Compute time info
-            rew_ellapsed = Sec_DT(now) - D.T.rew_last;
-            D.T.rew_last = Sec_DT(now);
-            
-            % Get total rewards and misses
-            rew_tot = sum([D.C.rew{:}]);
-            miss_tot = sum(D.C.missed_rew);
-            
-            % Format list
-            D.UI.rewInfoList = [...
-                D.UI.rewInfoList; ...
-                {sprintf('%d: T:%0.2f Z:%d M:%d', ...
-                rew_tot+miss_tot, ...
-                rew_ellapsed, ...
-                -1*D.PAR.zoneLocs(D.I.zone_now), ...
-                miss_tot) ...
-                }];
-            
-            % Compute reward percent
-            rew_percent = ...
-                round((rew_tot/(miss_tot+rew_tot))*100);
-            
-            % Update list
-            infstr = [...
-                sprintf('%s(%d%%)', D.UI.popRewInfo.UserData, rew_percent); ...
-                D.UI.rewInfoList];
-            
-            % Restart bulldozer
-            if D.PAR.bullLastVal == 1
-                Safe_Set(D.UI.toggBulldoze, 'Value', 1);
-                Togg_Bulldoze();
-            end
-            
-            % Update popmenu
-            Safe_Set(D.UI.popRewInfo, 'String', infstr);
+            % Itterate count
+            D.C.rew_cross = D.C.rew_cross+1;
             
             % HANDLE CUED REWARD STUFF
             
@@ -10989,12 +10975,89 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
             end
             
-            % Show reward send patch
+            % HANDLE MISSED REWARDS
+            
+            % Check for missed rewards
+            if ~D.F.rew_confirmed
+                
+                % Add to missed reward count
+                D.C.missed_rew(1) = D.C.missed_rew(1)+1;
+                
+                % Print missed reward
+                Log_Debug(sprintf('Detected Missed Reward: cross_cnt=%d miss_cnt=%d|%d', ...
+                    D.C.rew_cross, D.C.missed_rew(1), D.C.missed_rew(2)));
+                
+                % Handle/update reward 
+                RewardDone();
+                
+            end
+            
+            % SHOW REWARD SEND PATCH
             Patch_State(D.UI.ptchRewSendH(D.I.rot), ...
                 'Select', D.UI.rotCol(D.I.rot,:));
             
+            % Log/print reset bounds crossed
+            Log_Debug(sprintf('Crossed Reward Bounds: cross_cnt=%d', D.C.rew_cross));
+            
             % Update UI
             Update_UI(0, 'limitrate');
+            
+        end
+         
+        % RESET REWARD GRAPHICS
+        function ResetRewGraphics()
+            
+            % Reset reward zone patches
+            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
+                'ShowAll', D.UI.rotCol(D.I.rot,:));
+            
+            % Hide reward duration text
+            Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
+                'Visible', 'off');
+            
+        end
+
+        % HANDLE REWARD EVENT
+        function RewardDone()
+            
+            % Reset reward graphics
+            ResetRewGraphics();
+            
+            % Compute time info
+            rew_ellapsed = Sec_DT(now) - D.T.rew_last;
+            D.T.rew_last = Sec_DT(now);
+            
+            % Get total rewards and misses
+            rew_tot = sum([D.C.rew{:}]);
+            miss_tot = sum(D.C.missed_rew);
+            
+            % Format list
+            D.UI.rewInfoList = [...
+                D.UI.rewInfoList; ...
+                {sprintf('%d: T:%0.2f Z:%d M:%d', ...
+                rew_tot+miss_tot, ...
+                rew_ellapsed, ...
+                -1*D.PAR.zoneLocs(D.I.zone_now), ...
+                miss_tot) ...
+                }];
+            
+            % Compute reward percent
+            rew_percent = ...
+                    round((rew_tot/(miss_tot+rew_tot))*100);
+            
+            % Update list
+            infstr = [...
+                sprintf('%s(%d%%)', D.UI.popRewInfo.UserData, rew_percent); ...
+                D.UI.rewInfoList];
+            
+            % Restart bulldozer
+            if D.PAR.bullLastVal == 1
+                Safe_Set(D.UI.toggBulldoze, 'Value', 1);
+                Togg_Bulldoze();
+            end
+            
+            % Update popmenu
+            Safe_Set(D.UI.popRewInfo, 'String', infstr);
             
         end
         

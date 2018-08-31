@@ -26,7 +26,7 @@ namespace ICR_Run
             5: Wall image IR sync timing
             6: IR sync timing
             7: Hardware test */
-        systemTest: 1, // 0
+        systemTest: 0, // 0
 
         /* Debug matlab
             [0]: Dont break on errors
@@ -40,7 +40,7 @@ namespace ICR_Run
         /*Autoload rat data
             true: Load rat data based on ICR_GUI hardcoded values
             false: Start normally */
-        do_autoloadUI: true, // false
+        do_autoloadUI: false, // false
 
         // Print all blocked vt recs
         do_printBlockedVT: false, // false
@@ -1318,7 +1318,7 @@ namespace ICR_Run
 
             // Format data string
             buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5} do_check_done={6}",
-                id, dat[0], dat[1], dat[2], pack, DEBUG.FormatBinary(flag_byte), do_check_done);
+                id, dat[0], dat[1], dat[2], pack, flag_byte, do_check_done);
 
             // Log/print packet queued
             if (id != 'P')
@@ -1347,7 +1347,7 @@ namespace ICR_Run
 
                 // Format data string with updated packet
                 buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5} do_check_done={6}",
-                    id, dat[0], dat[1], dat[2], pack, DEBUG.FormatBinary(flag_byte), do_check_done);
+                    id, dat[0], dat[1], dat[2], pack, flag_byte, do_check_done);
 
                 // Wait for next safe send time
                 while (do_loop)
@@ -1810,7 +1810,7 @@ namespace ICR_Run
 
                 // Format data string
                 string buff_dat_1 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} flag_byte={5}",
-                        id, dat[0], dat[1], dat[2], pack, DEBUG.FormatBinary(flag_byte));
+                        id, dat[0], dat[1], dat[2], pack, flag_byte);
                 string buff_dat_2 = String.Format("b_read={0} rx={1} tx={2} dt(snd|rcv|prs)=|{3}|{4}|{5}|",
                     bytes_read, sp_Xbee.BytesToRead, sp_Xbee.BytesToWrite, c2r.DT_SentRcvd(), dt_rcvd, dt_parse);
 
@@ -1833,12 +1833,12 @@ namespace ICR_Run
 
                     // Check if data should be relayed to Matlab
                     if (c2m.ID_Ind(id) != -1)
-                        SendMatCom_Thread(id: id, dat1: dat[0]);
+                        SendMatCom_Thread(id: id, dat1: dat[0], dat2: dat[1], dat3: dat[2]);
 
                     // Log/print missed packets
                     if (dropped > 0)
                     {
-                        DEBUG.DB_Warning_Thread(String.Format("Missed r2r Packs: (cns|tot)=|{0}|{1}| {2} {3}",
+                        DEBUG.DB_Warning_Thread(String.Format("Missed r2c Packs: (cns|tot)=|{0}|{1}| {2} {3}",
                         dropped, r2c.cnt_dropped, buff_dat_1, buff_dat_2));
                     }
 

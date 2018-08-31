@@ -719,7 +719,7 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 		}
 
 		if (i>0) {
-			bit_str[bit_ind++] = ',';
+			bit_str[bit_ind++] = ' ';
 		}
 	}
 	bit_str[bit_ind++] = '\0';
@@ -1099,8 +1099,8 @@ void GetSerial()
 	dt_sent = a2r.t_sent > 0 ? millis() - a2r.t_sent : 0;
 
 	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
-		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
 		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, r2a.dt_rcvd, dt_parse);
 
@@ -1440,8 +1440,8 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	a2r.t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
-		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 
 	// Log/print sent
 	Debug.DB_SendQueued(buff_lrg, a2r.t_queuedArr[id_ind]);
@@ -1568,8 +1568,8 @@ bool SendPacket()
 		r2a.packConfArr[id_ind] = pack;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
-		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d|",
 		SQ_MsgBytes, tx_size, rx_size, a2r.dt_sent, dt_rcvd, dt_queue);
 
@@ -1812,7 +1812,7 @@ void EndRew()
 void HardwareTest(int test_num)
 {
 	// Local vars
-	int dt_on = 500;
+	int dt_on = 50;
 
 	switch (test_num)
 	{

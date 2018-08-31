@@ -489,7 +489,7 @@ public:
 	bool isZoneTriggered = false;
 	bool isAllZonePassed = false;
 	bool is_ekfNew = false;
-	int zoneInd = 255;
+	int zoneInd = 0;
 	int zoneRewarded = 0;
 	int occRewarded = 0;
 	int lapN = 0;
@@ -808,7 +808,7 @@ void TestUpdate();
 void PingTest();
 
 // DO HARDWARE TEST
-void HardwareTest();
+void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test);
 
 // GET ID INDEX
 template <typename R24> int ID_Ind(char id, R24 *p_r24);
@@ -3169,14 +3169,14 @@ void BULLDOZE::UpdateBull()
 
 	// Bail if "OFF" or "HOLDING"
 	if (bullState == OFF ||
-		bullState == HOLDING){
+		bullState == HOLDING) {
 		return;
 	}
 
 	// Bail if not ready
 	if (
 		!(fc.is_EKFReady &&
-			millis() > t_updateNext)){
+			millis() > t_updateNext)) {
 		return;
 	}
 
@@ -3987,6 +3987,9 @@ bool REWARD::RunReward()
 			str_med_rew, kal.RatPos, zoneBoundCumMin[zoneMax]);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
+		// Send missed reward msg
+		QueuePacket(&r2c, 'Z', cnt_rew, 0, zoneInd + 1, 0, true);
+
 		// Decriment reward count
 		cnt_rew--;
 
@@ -4133,7 +4136,7 @@ bool REWARD::CheckEnd()
 	if (rewMode == REWARD::REWMODE::FREE ||
 		rewMode == REWARD::REWMODE::CUE) {
 
-		QueuePacket(&r2c, 'Z', zoneInd + 1, cnt_rew, 0, 0, true);
+		QueuePacket(&r2c, 'Z', cnt_rew, 1, zoneInd + 1, 0, true);
 	}
 
 	// Return end reward status
@@ -6268,8 +6271,8 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	dt_sent = p_r2->t_sent > 0 ? millis() - p_r2->t_sent : 0;
 
 	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
-		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, " b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
 		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, p_r4->dt_rcvd, dt_parse);
 
@@ -6671,8 +6674,8 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 	p_r2->t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
-		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
 
 	// Log/print queued packet info
 	Debug.DB_SendQueued(p_r2, buff_lrg, p_r2->t_queuedArr[id_ind]);
@@ -6839,10 +6842,10 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	p_r2->t_sentArr[id_ind] = p_r2->t_sent;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
-		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
-	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d| ez_on=%d ez_act=%d",
-		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue, digitalRead(pin.ED_SLP), v_doStepTimer);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
+		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d| ez(on|act)=|%d|%d| sol_act(etoh|food)=|%d|%d| vcc_rel=%d",
+		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue, digitalRead(pin.ED_SLP), v_doStepTimer, digitalRead(pin.REL_ETOH) == HIGH, digitalRead(pin.REL_FOOD) == HIGH, digitalRead(pin.REL_VCC) == HIGH);
 
 	// Log/print sent
 	Debug.DB_Sent(p_r2, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
@@ -6903,8 +6906,8 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		uint16_t rx_size = p_r2->hwSerial.available();
 
 		// Get dat string
-		Debug.sprintf_safe(buffLrg, buff_lrg_2, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s dt_sent=%dms tx=%d rx=%d",
-			p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], Debug.FormatBinary(p_r2->flagArr[i]), dt_sent, tx_size, rx_size);
+		Debug.sprintf_safe(buffLrg, buff_lrg_2, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d dt_sent=%dms tx=%d rx=%d",
+			p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], p_r2->flagArr[i], dt_sent, tx_size, rx_size);
 
 		// Get done flag
 		is_done = GetSetByteBit(&p_r2->flagArr[i], 2, false);
@@ -7339,29 +7342,29 @@ void AD_Config(float max_acc, float max_dec, float max_speed)
 	PWM_DIV_X, where X can be any value 1-7.
 	PWM_MUL_X, where X can be 0_625 (for 0.625), 0_75 (for 0.75), 0_875, 1, 1_25, 1_5, 1_75, or 2.
 	*/
-	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq
-	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2);		// 31.25kHz PWM freq		
+	AD_R.setPWMFreq(PWM_DIV_2, PWM_MUL_2); // 31.25kHz PWM freq
+	AD_F.setPWMFreq(PWM_DIV_2, PWM_MUL_2); // 31.25kHz PWM freq		
 
-					// Overcurent enable
-	AD_R.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
-	AD_F.setOCShutdown(OC_SD_ENABLE);			// shutdown on OC
+	// Overcurent enable
+	AD_R.setOCShutdown(OC_SD_ENABLE); // shutdown on OC
+	AD_F.setOCShutdown(OC_SD_ENABLE); // shutdown on OC
 
-					// Motor V compensation
-												/*
-												VS_COMP_ENABLE, VS_COMP_DISABLE
-												*/
+	// Motor V compensation
+	/*
+	VS_COMP_ENABLE, VS_COMP_DISABLE
+	*/
 	AD_R.setVoltageComp(VS_COMP_ENABLE);
 	AD_F.setVoltageComp(VS_COMP_ENABLE);
 
 	// Switch pin mode
-	AD_R.setSwitchMode(SW_USER);				// Switch is not hard stop
-	AD_F.setSwitchMode(SW_USER);				// Switch is not hard stop
+	AD_R.setSwitchMode(SW_USER); // Switch is not hard stop
+	AD_F.setSwitchMode(SW_USER); // Switch is not hard stop
 
-					// Slew rate
-												/*
-												Upping the edge speed increases torque
-												SR_180V_us, SR_290V_us, SR_530V_us
-												*/
+	// Slew rate
+	/*
+	Upping the edge speed increases torque
+	SR_180V_us, SR_290V_us, SR_530V_us
+	*/
 	AD_R.setSlewRate(SR_530V_us);
 	AD_F.setSlewRate(SR_530V_us);
 
@@ -7423,16 +7426,16 @@ void AD_Config(float max_acc, float max_dec, float max_speed)
 	*/
 
 	// NIMA 23 24V MIN KVALS
-	AD_R.setAccKVAL(40);				        // This controls the acceleration current
-	AD_R.setDecKVAL(40);				        // This controls the deceleration current
-	AD_R.setRunKVAL(30);					    // This controls the run current
-	AD_R.setHoldKVAL(25);				        // This controls the holding current keep it low
+	AD_R.setAccKVAL(40); // This controls the acceleration current
+	AD_R.setDecKVAL(40); // This controls the deceleration current
+	AD_R.setRunKVAL(30); // This controls the run current
+	AD_R.setHoldKVAL(25); // This controls the holding current keep it low
 
-					// NIMA 17 24V
-	AD_F.setAccKVAL(40);				        // This controls the acceleration current
-	AD_F.setDecKVAL(40);				        // This controls the deceleration current
-	AD_F.setRunKVAL(30);					    // This controls the run current
-	AD_F.setHoldKVAL(25);				        // This controls the holding current keep it low
+	// NIMA 17 24V
+	AD_F.setAccKVAL(40); // This controls the acceleration current
+	AD_F.setDecKVAL(40); // This controls the deceleration current
+	AD_F.setRunKVAL(30); // This controls the run current
+	AD_F.setHoldKVAL(25); // This controls the holding current keep it low
 
 }
 
@@ -9192,8 +9195,8 @@ void PingTest()
 	// ------------------------ LOCAL VARS ------------------------
 
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
-	static char buff_lrg_3[buffLrg] = { 0 }; buff_lrg_3[0] = '\0';
+	static char buff_lrg_7[buffLrg] = { 0 }; buff_lrg_7[0] = '\0';
+	static char buff_lrg_8[buffLrg] = { 0 }; buff_lrg_8[0] = '\0';
 	VEC<uint16_t> cnt_ping(2, __LINE__);
 	bool _do_send_ping[2] = { true, true };
 	VEC<bool> do_send_ping(2, __LINE__, _do_send_ping);
@@ -9232,7 +9235,7 @@ void PingTest()
 		(cnt_ping[0] <= n_testPings || cnt_ping[1] <= n_testPings)
 		) {
 
-		// Ping CS and CheetahDue
+		// Swap target
 		p_r2 = r2i == 0 ? &r2c : &r2a;
 		p_r4 = r2i == 0 ? &c2r : &a2r;
 
@@ -9289,7 +9292,7 @@ void PingTest()
 
 	}
 
-	// Compute r2c ping average
+	// Compute ping average
 	for (int i = 0; i < 2; i++) {
 
 		// Reset sum
@@ -9304,10 +9307,10 @@ void PingTest()
 
 			// Add to string
 			if (i == 0) {
-				Debug.strcat_safe(buffLrg, strlen(buff_lrg_2), buff_lrg_2, strlen(buff_lrg), buff_lrg);
+				Debug.strcat_safe(buffLrg, strlen(buff_lrg_7), buff_lrg_7, strlen(buff_lrg), buff_lrg);
 			}
 			else {
-				Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_lrg), buff_lrg);
+				Debug.strcat_safe(buffLrg, strlen(buff_lrg_8), buff_lrg_8, strlen(buff_lrg), buff_lrg);
 			}
 
 		}
@@ -9324,15 +9327,15 @@ void PingTest()
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED PING TEST");
 
 	// Log/print ping time
-	Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_2);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_7);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-	Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_3);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_8);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 }
 
 // DO HARDWARE TEST
-void HardwareTest()
+void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -9346,6 +9349,8 @@ void HardwareTest()
 	static char buff_lrg_4[buffLrg] = { 0 }; buff_lrg_4[0] = '\0';
 	static char buff_lrg_5[buffLrg] = { 0 }; buff_lrg_5[0] = '\0';
 	static char buff_lrg_6[buffLrg] = { 0 }; buff_lrg_6[0] = '\0';
+	static char buff_lrg_7[buffLrg] = { 0 }; buff_lrg_7[0] = '\0';
+	static char buff_lrg_8[buffLrg] = { 0 }; buff_lrg_8[0] = '\0';
 	const int dt_timeout = 10000;
 	uint32_t t_test_start = 0;
 
@@ -9393,10 +9398,33 @@ void HardwareTest()
 	double pixy_pos_avg = 0;
 	bool is_pixy_test_done = false;
 
+	// Ping test
+	VEC<uint16_t> cnt_ping(2, __LINE__);
+	bool _do_send_ping[2] = { true, true };
+	VEC<bool> do_send_ping(2, __LINE__, _do_send_ping);
+	VEC<uint32_t> dt_ping_mat_cs(50, __LINE__);
+	VEC<uint32_t> dt_ping_mat_ard(50, __LINE__);
+	uint32_t dt_ping_sum = 0;
+	byte r2i = 0;
+	R2_COM<USARTClass> *p_r2;
+	R4_COM<USARTClass> *p_r4;
+	bool is_ping_test_done = false;
+
 	// ------------------------ SETUP TEST ------------------------
 
 	// Log/print
 	Debug.DB_General(__FUNCTION__, __LINE__, "RUNNING HARDWARE TEST...");
+
+	// Set other test flags
+	if (!do_stress_test) {
+		is_stress_test_done = true;
+	}
+	if (!do_pixy_test) {
+		is_pixy_test_done = true;
+	}
+	if (!do_ping_test) {
+		is_ping_test_done = true;
+	}
 
 	// Make sure all data sent
 	do {
@@ -9410,10 +9438,9 @@ void HardwareTest()
 	CheckBattery(true);
 	vcc_baseline = vccNow;
 
-	// Print remaining queue
-	Debug.PrintAll(1000);
-	// Store remaining logs
-	Log.WriteAll(1000);
+	// Log/print all
+	Debug.PrintAll(2500);
+	Log.WriteAll(2500);
 
 	// Store start time
 	t_test_start = millis();
@@ -9421,13 +9448,12 @@ void HardwareTest()
 	// Run Test
 	while (
 		(!is_stress_test_done ||
-			!is_pixy_test_done
+			!is_pixy_test_done ||
+			!is_ping_test_done
 			) &&
 		millis() < t_test_start + dt_timeout * 2) {
 
 		// ----------------------- STRESS TEST ------------------------
-
-		// Do stress test
 		if (!is_stress_test_done) {
 
 			// Block printing and logging
@@ -9575,8 +9601,6 @@ void HardwareTest()
 
 
 		// ------------------------ PIXY TEST -------------------------
-
-		// Test Pixy
 		if (!is_pixy_test_done) {
 
 			// Get new sample
@@ -9622,32 +9646,155 @@ void HardwareTest()
 
 		}
 
+
+		// ----------------------- PING TEST ------------------------
+		if (!is_ping_test_done) {
+
+			// Swap target
+			p_r2 = r2i == 0 ? &r2c : &r2a;
+			p_r4 = r2i == 0 ? &c2r : &a2r;
+
+			// Check for reply
+			GetSerial(p_r4);
+
+			// Check resend
+			CheckResend(&r2a);
+			CheckResend(&r2c);
+
+			// Store round trip time
+			if (p_r4->dat[0] == cnt_ping[r2i]) {
+
+				// Store dt send
+				if (r2i == 0) {
+					dt_ping_mat_cs[cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
+				}
+				else {
+					dt_ping_mat_ard[cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
+				}
+
+				// Incriment count
+				cnt_ping[r2i]++;
+
+				// Set flag to send next
+				do_send_ping[r2i] = cnt_ping[r2i] <= n_testPings;
+
+				// Flip destination
+				r2i = r2i == 0 ? 1 : 0;
+
+				// Log/print all
+				Debug.PrintAll(1000);
+				Log.WriteAll(1000);
+
+				// Next loop
+				continue;
+			}
+
+			// Send next p_r2 ping
+			if (do_send_ping[r2i]) {
+
+				// Send pack
+				float dat1 = cnt_ping[r2i];
+				float dat2 = cnt_ping[0] > 0 ? dt_ping_mat_cs[cnt_ping[0] - 1] : 0;
+				float dat3 = cnt_ping[1] > 0 ? dt_ping_mat_ard[cnt_ping[1] - 1] : 0;
+				QueuePacket(p_r2, 'n', dat1, dat2, dat3, 0, true);
+
+				// Send now
+				SendPacket(p_r2);
+
+				// Reset flag
+				do_send_ping[r2i] = false;
+			}
+
+			// Send any packets
+			SendPacket(&r2c);
+			SendPacket(&r2a);
+
+			// Check if done
+			if (!(cnt_ping[0] <= n_testPings || cnt_ping[1] <= n_testPings)) {
+				is_ping_test_done = true;
+			}
+
+		}
+
 		// Log/print all
 		Debug.Print();
 		Log.WriteLog();
 	}
 
-	// ----------------------- FINISH TEST ------------------------
+	// ----------------------- FINISH PING TEST ------------------------
+
+	if (do_ping_test) {
+
+		// Compute ping average times
+		for (int i = 0; i < 2; i++) {
+
+			// Reset sum
+			dt_ping_sum = 0;
+
+			// Loop pings
+			for (int j = 0; j < n_testPings; j++) {
+
+				uint32_t dt = i == 0 ? dt_ping_mat_cs[j] : dt_ping_mat_ard[j];
+				dt_ping_sum += dt;
+				Debug.sprintf_safe(buffLrg, buff_lrg, "%d|", dt);
+
+				// Add to string
+				if (i == 0) {
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_7), buff_lrg_7, strlen(buff_lrg), buff_lrg);
+				}
+				else {
+					Debug.strcat_safe(buffLrg, strlen(buff_lrg_8), buff_lrg_8, strlen(buff_lrg), buff_lrg);
+				}
+
+			}
+
+			// Compute average
+			dt_pingRoundTrip[i] = (float)dt_ping_sum / (n_testPings);
+		}
+
+		// Log/print ping time
+		Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_7);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_8);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+	}
+
+	// Send final ping times 
+	QueuePacket(&r2c, 'n', n_testPings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
+	SendPacket(&r2c);
+
+	// ----------------------- FINISH OTHER TEST ------------------------
+
+	// Log/print stress test summary
+	if (do_stress_test) {
+
+		// Log/print vcc
+		Debug.sprintf_safe(buffLrg, buff_lrg, "VCC: baseline=%0.2f avg=%0.2f all=|%s",
+			vcc_baseline, vcc_avg, buff_lrg_5);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+		// Log/print LCD and Print and log times
+		Debug.sprintf_safe(buffLrg, buff_lrg, "LCD PRINT TIME (ms): avg=%0.2f all=|%s", lcd_avg, buff_lrg_2);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "CONSOLE PRINT TIME (ms): avg=%0.2f all=|%s", print_avg, buff_lrg_3);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "LOG WRITE TIME (ms): avg=%0.2f all=|%s", log_avg, buff_lrg_4);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+	}
+
+	// Log/print pixy test summary
+	if (do_pixy_test) {
+
+		// Log/print pixy pos
+		Debug.sprintf_safe(buffLrg, buff_lrg, "PIXY POS (cm): avg=%0.2f all=|%s", pixy_pos_avg, buff_lrg_6);
+		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+	}
 
 	// Log/print
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED HARDWARE TEST");
-
-	// Log/print vcc
-	Debug.sprintf_safe(buffLrg, buff_lrg, "VCC: baseline=%0.2f avg=%0.2f all=|%s",
-		vcc_baseline, vcc_avg, buff_lrg_5);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-	// Log/print LCD and Print and log times
-	Debug.sprintf_safe(buffLrg, buff_lrg, "LCD PRINT TIME (ms): avg=%0.2f all=|%s", lcd_avg, buff_lrg_2);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-	Debug.sprintf_safe(buffLrg, buff_lrg, "CONSOLE PRINT TIME (ms): avg=%0.2f all=|%s", print_avg, buff_lrg_3);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-	Debug.sprintf_safe(buffLrg, buff_lrg, "LOG WRITE TIME (ms): avg=%0.2f all=|%s", log_avg, buff_lrg_4);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-	// Log/print pixy pos
-	Debug.sprintf_safe(buffLrg, buff_lrg, "PIXY POS (cm): avg=%0.2f all=|%s", pixy_pos_avg, buff_lrg_6);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 }
 
@@ -9762,7 +9909,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		is_rat_blink = false;
 		return false;
 	}
-}
+	}
 
 #pragma endregion
 
@@ -10417,7 +10564,7 @@ void loop() {
 		cmd.testCond = (byte)c2r.dat[0];
 		cmd.testRun = (byte)c2r.dat[1];
 		cmd.testDat = c2r.dat[2];
-
+	
 		// TEST SETUP
 		if (cmd.testRun == 0) {
 
@@ -10451,11 +10598,13 @@ void loop() {
 			// Robot hardware test
 			if (cmd.testCond == 7) {
 				// Run hardware test
-				HardwareTest();
+				HardwareTest(true, true, true);
 			}
 
-			// Run ping test
-			PingTest();
+			// Run ping test alone
+			else {
+				HardwareTest(false, false, true);
+			}
 
 			// Pass test info info to ard
 			QueuePacket(&r2a, 't', c2r.dat[0], c2r.dat[1], c2r.dat[2], 0, true);
@@ -10467,8 +10616,7 @@ void loop() {
 		}
 
 		// VT CALIBRATION TEST UPDATE
-		else if (cmd.testCond == 3)
-		{
+		else if (cmd.testCond == 3){
 
 			// RUNNING
 			if (cmd.testRun == 1) {
@@ -10516,9 +10664,7 @@ void loop() {
 		}
 
 		// HALT ERROR TEST UPDATE
-		else if (cmd.testCond == 4 &&
-			cmd.testRun == 1)
-		{
+		else if (cmd.testCond == 4){
 
 			// Store new speed
 			double new_speed = double(cmd.testDat);
@@ -10536,6 +10682,13 @@ void loop() {
 				HardStop(__FUNCTION__, __LINE__, true);
 			}
 		}
+
+		// HARDWARE TEST UPDATE
+		else if (cmd.testCond == 7){
+			// Send test info to CheetaDue
+			QueuePacket(&r2a, 't', c2r.dat[0], c2r.dat[1], c2r.dat[2], 0, true);
+		}
+
 
 	}
 
