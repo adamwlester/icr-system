@@ -3674,12 +3674,13 @@ LOAD c:/users/lester/appdata/local/arduino15/packages/arduino/tools/arm-none-eab
  .rodata._ZZN8BULLDOZE8BullHoldEvE12__FUNCTION__
                 0x0009b6b2        0x9 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
  .rodata.str1.1
-                0x0009b6bb     0x2ae3 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
-                               0x2bb3 (size before relaxing)
+                0x0009b6bb     0x2adc C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
+                               0x2bac (size before relaxing)
  .rodata._ZZN6REWARD12CheckFeedArmEvE12__FUNCTION__
-                0x0009e19e        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
+                0x0009e197        0xd C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
  .rodata._ZZ4loopE12__FUNCTION__
-                0x0009e1ab        0x5 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
+                0x0009e1a4        0x5 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\FeederDue.cpp.o
+ *fill*         0x0009e1a9        0x7 
  .rodata._ZTV7TwoWire
                 0x0009e1b0       0x20 C:\Users\lester\AppData\Local\Temp\VMBuilds\FeederDue\arduino_due_x\Release\Wire\Wire.cpp.o
                 0x0009e1b0                vtable for TwoWire

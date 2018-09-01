@@ -3983,7 +3983,7 @@ bool REWARD::RunReward()
 		!isZoneTriggered) {
 
 		// Print reward missed
-		Debug.sprintf_safe(buffLrg, buff_lrg, "REWARD MISSED: %s: rat=%0.2fcm bound_max=%0.2fcm",
+		Debug.sprintf_safe(buffLrg, buff_lrg, "MISSED: %s: rat=%0.2fcm bound_max=%0.2fcm",
 			str_med_rew, kal.RatPos, zoneBoundCumMin[zoneMax]);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
