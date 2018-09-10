@@ -26,7 +26,7 @@ namespace ICR_Run
             5: Wall image IR sync timing
             6: IR sync timing
             7: Hardware test */
-        systemTest: 1, // 0
+        systemTest: 0, // 0
 
         /* Debug matlab
             [0]: Dont break on errors
@@ -40,7 +40,7 @@ namespace ICR_Run
         /*Autoload rat data
             true: Load rat data based on ICR_GUI hardcoded values
             false: Start normally */
-        do_autoloadUI: true, // false
+        do_autoloadUI: false, // false
 
         // Print all blocked vt recs
         do_printBlockedVT: false, // false
@@ -55,7 +55,10 @@ namespace ICR_Run
         do_printRobLog: false, // false
 
         // Print CheetahDue logs
-        do_printDueLog: false // false
+        do_printDueLog: false, // false
+
+        // Print com flags
+        do_printComFlags: false // false
 
         );
 
@@ -1330,7 +1333,7 @@ namespace ICR_Run
             byte[] msgByteArr = new byte[msg_size];
 
             // Format queued data
-            buff_dat_0 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} is_conf={6} do_check_done={7} is_resend={8}", 
+            buff_dat_0 = String.Format("'{0}': dat=|{1:0.00}|{2:0.00}|{3:0.00}| pack={4} do_conf={5} is_conf={6} do_check_done={7} is_resend={8}",
                 id, dat[0], dat[1], dat[2], pack, do_conf, is_conf, do_check_done, is_resend);
 
             // Log packet queued
@@ -3424,6 +3427,8 @@ namespace ICR_Run
             public bool do_printRobLog;
             // Print cheetahdue log
             public bool do_printDueLog;
+            // Print com flags
+            public bool do_printComFlags;
             // Flag if doing any debugging
             public bool is_debugRun;
 
@@ -3437,7 +3442,8 @@ namespace ICR_Run
                 bool do_printSentRatVT,
                 bool do_printSentRobVT,
                 bool do_printRobLog,
-                bool do_printDueLog
+                bool do_printDueLog,
+                bool do_printComFlags
                 )
             {
                 this.systemTest = systemTest;
@@ -3449,6 +3455,7 @@ namespace ICR_Run
                 this.do_printSentRobVT = do_printSentRobVT;
                 this.do_printRobLog = do_printRobLog;
                 this.do_printDueLog = do_printDueLog;
+                this.do_printComFlags = do_printComFlags;
                 this.is_debugRun = systemTest > 0 || breakDebug > 0 || do_autoloadUI;
             }
         }
@@ -4604,6 +4611,9 @@ namespace ICR_Run
             // Local vars
             int id_ind = id != ' ' ? ID_Ind(id) : ID_Pack_Ind(pack);
 
+            // Handle print flag
+            do_print = do_print && DEBUG.flag.do_printComFlags;
+
             // Set sent/received check flag
             if (set_is_sent_rcvd)
             {
@@ -4679,6 +4689,9 @@ namespace ICR_Run
         {
             // Local vars
             int id_ind = ID_Ind(id);
+
+            // Handle print flag
+            do_print = do_print && DEBUG.flag.do_printComFlags;
 
             // Reset all flags
             lock (_lock_isSentRcv)
