@@ -203,7 +203,7 @@ struct FC
 	bool is_ErrLoop = false;
 }
 // Initialize
-fc;
+FC;
 
 // DEBUGGING BUFFER PARAMETERS
 const uint16_t buffMed = 50;
@@ -403,6 +403,7 @@ float moveToSpeedMin = 15; // (cm/sec)
 float moveToDecelDist = 40; // cm
 
 // REWARD
+const int rewZoneWdith = 5; // (deg)
 double feedTrackPastDist = 0; // (cm) 
 const double feedHeadPastDist = 10; // (cm)
 const int dt_rewBlock = 15000; // (ms)

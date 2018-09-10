@@ -43,15 +43,15 @@ public:
 	// CHECK EVERY LOOP
 	void CheckLoop();
 	// LOG/PRING MAIN EVENT
-	void DB_General(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
+	void DB_General(const char *p_fun, int line, char *p_msg, uint32_t ts = millis());
 	// LOG/PRINT WARNINGS
-	void DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
+	void DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t ts = millis());
 	// LOG/PRINT ERRORS
-	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
+	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t ts = millis());
 	// LOG/PRINT RCVD PACKET
 	void DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// LOG/PRINT QUEUED SEND PACKET
-	void DB_SendQueued(char *p_msg, uint32_t t);
+	void DB_SendQueued(char *p_msg, uint32_t ts);
 	// LOG/PRINT SENT PACKET
 	void DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// PRINT LOG SEND
@@ -59,7 +59,7 @@ public:
 	// TEST PIN MAPPING
 	void DB_PinMap();
 	// STORE STRING FOR PRINTING
-	void Queue(char *p_msg, uint32_t t);
+	void Queue(char *p_msg, uint32_t ts = millis(), char *p_type = "NOTICE", const char *p_fun = "", int line = 0);
 	// PRINT DB INFO
 	bool Print();
 	// PRINT EVERYTHING IN QUEUE
@@ -72,6 +72,8 @@ public:
 	int GetLogQueueAvailable();
 	// FORMAT INT AS BINARY
 	char* FormatBinary(unsigned int int_in);
+	// FORMAT TIME STAMP STRING
+	char* FormatTimestamp(uint32_t ts);
 	// SAFE VERSION OF SPRINTF
 	void sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...);
 	// SAFE VERSION OF STRCAT
@@ -107,7 +109,7 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 bool SendPacket();
 
 // STORE LOG STRING
-void QueueLog(char *p_msg, uint32_t t);
+void QueueLog(char *p_msg, uint32_t ts = millis(), char *p_type = "NOTICE", const char *p_fun = "", int line = 0);
 
 // SEND LOG DATA OVER SERIAL
 bool SendLog();
@@ -186,7 +188,7 @@ void DEBUG::CheckLoop()
 
 	// Check for VEC errors
 #if DO_VEC_DEBUG
-	// Log/print each error
+	// Log each error
 	if (VEC_CNT_ERR > 0) {
 		for (int i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
 			Debug.DB_Error(__FUNCTION__, __LINE__, VEC_STR_LIST_ERR[i]);
@@ -220,15 +222,17 @@ void DEBUG::CheckLoop()
 
 }
 
-
-void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
+void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
 	// Local vars
-	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
-	// Get print status
+	// Get print and log flags
 	do_print = flag.print_general;
 	do_log = flag.log_general;
 
@@ -237,31 +241,29 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 		return;
 	}
 
-	// Add funciton and line number
-	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s", p_fun, line - 23, p_msg);
-
+	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, t);
+		Queue(p_msg, ts, "NOTICE", p_fun, line - 11);
 	}
 
+	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_max, t);
+		QueueLog(p_msg, ts, "NOTICE", p_fun, line - 11);
 	}
 
 }
 
-void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
+void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Local vars
-	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
-	// Get print status
+	// Get print and log flags
 	do_print = flag.print_errors;
 	do_log = flag.log_errors;
 
@@ -270,17 +272,14 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 		return;
 	}
 
-	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "**WARNING**", p_fun, line - 23, p_msg);
-
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, t);
+		Queue(p_msg, ts, "**WARNING**", p_fun, line - 11);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_max, t);
+		QueueLog(p_msg, ts, "**WARNING**", p_fun, line - 11);
 	}
 
 	// Store warning info
@@ -288,14 +287,17 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 
 }
 
-void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
+void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
 	// Local vars
-	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
-	// Get print status
+	// Get print and log flags
 	do_print = flag.print_errors;
 	do_log = flag.log_errors;
 
@@ -304,21 +306,19 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 		return;
 	}
 
-	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "!!ERROR!!", p_fun, line - 23, p_msg);
-
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, t);
+		Queue(p_msg, ts, "!!ERROR!!", p_fun, line - 11);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_max, t);
+		QueueLog(p_msg, ts, "!!ERROR!!", p_fun, line - 11);
 	}
 
 	// Store error info
 	err_line[cnt_err < 100 ? cnt_err++ : 99] = cnt_logsStored;
+
 }
 
 void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
@@ -343,8 +343,8 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 	}
 
 	// Format message
-	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s:%s] %s %s", 
-		is_repeat ? "RPT-" : "", 
+	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s:%s] %s %s",
+		is_repeat ? "RPT-" : "",
 		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
 		"r2c", p_msg_1, p_msg_2);
 
@@ -356,17 +356,17 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_max, r2a.t_rcvd);
+		Debug.Queue(buff_max, r2a.t_rcvd, "COM");
 	}
 
 	// Add to log queue
 	if (do_log) {
-		QueueLog(buff_max, r2a.t_rcvd);
+		QueueLog(buff_max, r2a.t_rcvd, "COM");
 	}
 
 }
 
-void DEBUG::DB_SendQueued(char *p_msg, uint32_t t)
+void DEBUG::DB_SendQueued(char *p_msg, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -390,11 +390,11 @@ void DEBUG::DB_SendQueued(char *p_msg, uint32_t t)
 	Debug.sprintf_safe(buffMax, buff_max, "   [SEND-QUEUED:%s] %s", "a2r", p_msg);
 
 	if (do_print) {
-		Debug.Queue(buff_max, t);
+		Debug.Queue(buff_max, ts, "COM");
 	}
 
 	if (do_log) {
-		QueueLog(buff_max, t);
+		QueueLog(buff_max, ts, "COM");
 	}
 
 }
@@ -435,11 +435,11 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 
 	// Store
 	if (do_print) {
-		Debug.Queue(buff_max, a2r.t_sent);
+		Debug.Queue(buff_max, a2r.t_sent, "COM");
 	}
 
 	if (do_log) {
-		QueueLog(buff_max, a2r.t_sent);
+		QueueLog(buff_max, a2r.t_sent, "COM");
 	}
 
 }
@@ -499,18 +499,19 @@ void DEBUG::DB_PinMap()
 
 }
 
-void DEBUG::Queue(char *p_msg, uint32_t t)
+void DEBUG::Queue(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int line)
 {
 	// Local vars
-	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_med_1[buffMed] = { 0 }; buff_med_1[0] = '\0';
 	static char buff_med_2[buffMed] = { 0 }; buff_med_2[0] = '\0';
+	static char buff_med_3[buffMed] = { 0 }; buff_med_3[0] = '\0';
+	static char buff_med_4[buffMed] = { 0 }; buff_med_4[0] = '\0';
+	static char buff_med_5[buffMed] = { 0 }; buff_med_5[0] = '\0';
 	static char buff_med_save[buffMed] = { 0 };
 	static uint16_t overflow_cnt = 0;
 	uint32_t t_m = 0;
-	float t_s = 0;
 
-	// Update printQueue ind
+	// Update queue ind
 	PQ_StoreInd++;
 
 	// Check if ind should roll over 
@@ -535,20 +536,27 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 	}
 
 	// Get sync correction
-	t_m = t - t_sync;
-
-	// Convert to seconds
-	t_s = (float)(t_m) / 1000.0f;
+	t_m = ts - t_sync;
 
 	// Make time string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
+	Debug.sprintf_safe(buffMed, buff_med_1, "[%s][%d]", FormatTimestamp(t_m), cnt_loopShort);
 
 	// Add space after time
-	Debug.sprintf_safe(buffMed, buff_med_1, "%%%ds", 20 - strlen(buff_lrg));
-	Debug.sprintf_safe(buffMed, buff_med_2, buff_med_1, '_');
+	Debug.sprintf_safe(buffMed, buff_med_2, "%%%ds", 20 - strlen(buff_med_1));
+	Debug.sprintf_safe(buffMed, buff_med_3, buff_med_2, '_');
+
+	// Add type
+	if (strcmp(p_type, "!!ERROR!!") == 0 || strcmp(p_type, "**WARNING**") == 0) {
+		Debug.sprintf_safe(buffMed, buff_med_4, "%s ", p_type);
+	}
+
+	// Add function and line number
+	if (strcmp(p_fun, "") != 0) {
+		Debug.sprintf_safe(buffMed, buff_med_5, "[%s:%d] ", p_fun, line);
+	}
 
 	// Put it all together
-	Debug.sprintf_safe(buffMax, PQ_Queue[PQ_StoreInd], "%s%s%s%s\n", buff_lrg, buff_med_2, buff_med_save, p_msg);
+	Debug.sprintf_safe(buffMax, PQ_Queue[PQ_StoreInd], "%s%s%s%s%s%s\n", buff_med_1, buff_med_3, buff_med_save, buff_med_4, buff_med_5, p_msg);
 
 	// Reset overlow stuff
 	overflow_cnt = 0;
@@ -718,7 +726,7 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 			bit_str[bit_ind++] = ((U.b[i] >> j) & 0x01) == 1 ? '1' : '0';
 		}
 
-		if (i>0) {
+		if (i > 0) {
 			bit_str[bit_ind++] = ' ';
 		}
 	}
@@ -727,6 +735,36 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 	//SerialUSB.print('\n');
 
 	return bit_str;
+}
+
+char* DEBUG::FormatTimestamp(uint32_t ts)
+{
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Local vars
+	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
+	int ts_m = 0;
+	int s = 0;
+	int ts_s = 0;
+	int ts_ms = 0;
+
+	// Get minutes
+	ts_m = (ts - (ts % (60 * 1000))) / (60 * 1000);
+
+	// Get seconds
+	s = ts - (ts_m * 60 * 1000);
+	ts_s = (s - (s % 1000)) / 1000;
+
+	// Get milliseconds
+	ts_ms = ts - (ts_m * 60 * 1000) - (ts_s * 1000);
+
+	// Format string
+	Debug.sprintf_safe(buffMed, buff_med, "%02u:%02u::%03u", ts_m, ts_s, ts_ms);
+	return buff_med;
+
 }
 
 void DEBUG::sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...) {
@@ -837,14 +875,14 @@ void DEBUG::RunErrorHold(char *p_msg_print, uint32_t dt_shutdown_sec)
 	bool do_led_on = true;
 	int dt_cycle = 100;
 
-	// Log/print error message
+	// Log error message
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD FOR %d sec: %s", dt_shutdown_sec / 1000, p_msg_print);
 	DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Loop till shutdown
 	while (true)
 	{
-		// Log/print anything in queue
+		// Log anything in queue
 		SendLog();
 		Debug.Print();
 
@@ -891,7 +929,7 @@ bool CheckForHandshake()
 	uint32_t ir_start = 0;
 
 	// Bail if session started
-	if (fc.is_SesStarted) {
+	if (FC.is_SesStarted) {
 		return true;
 	}
 
@@ -901,7 +939,7 @@ bool CheckForHandshake()
 	}
 
 	// Check for CS handshake
-	if (!fc.is_CSHandshakeDone) {
+	if (!FC.is_CSHandshakeDone) {
 
 		// Check if IR should be pulsed 
 		if (digitalRead(pin.SWITCH_BLINK) == LOW || is_irOn)
@@ -953,7 +991,7 @@ bool CheckForHandshake()
 		}
 
 		// Set flag
-		fc.is_CSHandshakeDone = true;
+		FC.is_CSHandshakeDone = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "CS Handshake Confirmed");
 
 		// Set abort time
@@ -962,16 +1000,16 @@ bool CheckForHandshake()
 	}
 
 	// Check for handshake confirmation from FeederDue
-	if (!fc.is_FeederDueHandshakeDone && r2a.idNew == 'h' && r2a.is_new)
+	if (!FC.is_FeederDueHandshakeDone && r2a.idNew == 'h' && r2a.is_new)
 	{
 		// Set flag
-		fc.is_FeederDueHandshakeDone = true;
+		FC.is_FeederDueHandshakeDone = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "FeederDue Handshake Confirmed");
 
 	}
 
 	// Check if handshake complete
-	if (fc.is_CSHandshakeDone && fc.is_FeederDueHandshakeDone) {
+	if (FC.is_CSHandshakeDone && FC.is_FeederDueHandshakeDone) {
 
 		// Log sync time
 		Debug.sprintf_safe(buffLrg, buff_lrg, "SET SYNC TIME: %dms", t_sync);
@@ -986,7 +1024,7 @@ bool CheckForHandshake()
 		}
 
 		// Set flag
-		fc.is_SesStarted = true;
+		FC.is_SesStarted = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "HANDSHAKE COMPLETE");
 	}
 
@@ -996,8 +1034,8 @@ bool CheckForHandshake()
 		// Format message
 		Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE TIMEDOUT AFTER %d ms: |%s%s",
 			dt_timeoutHandshake,
-			!fc.is_CSHandshakeDone ? "NO CS HANDSHAKE|" : "",
-			!fc.is_FeederDueHandshakeDone ? "NO FEEDERDUE HANDSHAKE|" : "");
+			!FC.is_CSHandshakeDone ? "NO CS HANDSHAKE|" : "",
+			!FC.is_FeederDueHandshakeDone ? "NO FEEDERDUE HANDSHAKE|" : "");
 
 		// Run error hold and restart
 		Debug.RunErrorHold(buff_lrg, 15);
@@ -1035,6 +1073,9 @@ void GetSerial()
 	bool is_conf = false;
 	bool is_resend = false;
 	bool is_repeat = false;
+	bool is_missed = false;
+	bool is_dropped = false;
+	int n_missed = 0;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
 	int id_ind = ' ';
@@ -1098,22 +1139,14 @@ void GetSerial()
 	dt_parse = millis() - t_start;
 	dt_sent = a2r.t_sent > 0 ? millis() - a2r.t_sent : 0;
 
-	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
-	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
-		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, r2a.dt_rcvd, dt_parse);
-
 	// Check for missing footer
 	if (foot != r2a.foot) {
 
 		// Increment dropped count
 		r2a.cnt_dropped++;
 
-		// Log/print dropped packet info
-		Debug.sprintf_safe(buffLrg, buff_lrg, "Dropped r2a Packs: cnt=%lu %s %s",
-			r2a.cnt_dropped, buff_lrg_2, buff_lrg_3);
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+		// Set flag
+		is_dropped = true;
 
 	}
 	else
@@ -1166,17 +1199,12 @@ void GetSerial()
 				pack - (r2a.packRange[0] - 1);
 
 			// Update dropped packets
-			int dropped = (pack - r2a.packInd) - 1;
-			r2a.cnt_dropped += dropped > 0 ? dropped : 0;
+			n_missed = (pack - r2a.packInd) - 1;
+			r2a.cnt_dropped += n_missed > 0 ? n_missed : 0;
 
-			// Log/print dropped packets
-			if (dropped > 0)
-			{
-
-				// Log/print dropped packet info
-				Debug.sprintf_safe(buffLrg, buff_lrg, "Missed r2a Packs: (cns|tot)=|%d|%lu| p_last=%d %s %s",
-					dropped, r2a.cnt_dropped, r2a.packInd, buff_lrg_2, buff_lrg_3);
-				Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+			// flag missed packets
+			if (n_missed > 0) {
+				is_missed = true;
 			}
 
 			// Update packets sent
@@ -1194,20 +1222,41 @@ void GetSerial()
 
 		}
 
-		// Log/print recieved
-		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
-
 	}
 
-	// Check if data was discarded
+	// Store data strings
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
+		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, r2a.dt_rcvd, dt_parse);
+
+	// Log recieved
+	if (!is_dropped) {
+		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
+	}
+	// Log dropped packs warning
+	else {
+		Debug.sprintf_safe(buffLrg, buff_lrg, "Dropped r2a Packs: cnt=%lu %s %s",
+			r2a.cnt_dropped, buff_lrg_2, buff_lrg_3);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+	}
+
+	// Log missed packs warning
+	if (is_missed) {
+		Debug.sprintf_safe(buffLrg, buff_lrg, "Missed r2a Packs: (cns|tot)=|%d|%lu| p_last=%d %s %s",
+			n_missed, r2a.cnt_dropped, r2a.packInd, buff_lrg_2, buff_lrg_3);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+	}
+
+	// Log discarded bytes warning
 	if (cnt_bytesDiscarded > 0) {
 
-		// Log/print discarded data
+		// Log discarded data
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Dumped Bytes: %s %s", buff_lrg_2, buff_lrg_3);
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 	}
 
-	// Check if parsing took unusually long
+	// Log parse hanging warning
 	if (dt_parse > 30) {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Parser Hanging: %s %s", buff_lrg_2, buff_lrg_3);
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
@@ -1321,7 +1370,7 @@ byte WaitBuffRead(char mtch)
 		Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED FOR UNKNOWN REASON: %s", buff_lrg_2);
 	}
 
-	// Log/print error
+	// Log error
 	Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Set buff_lrg to '\0' ((byte)-1) if !pass
@@ -1339,19 +1388,21 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	int id_ind = 0;
 	float _dat[3] = { dat1 , dat2 , dat3 };
 	VEC<float> dat(3, __LINE__, _dat);
 	byte flag_byte = 0;
-
+	int id_ind = 0;
+	uint16_t tx_size = 0;
+	uint16_t rx_size = 0;
+	
 	// Set flag_byte
 	GetSetByteBit(&flag_byte, 0, do_conf);
 	GetSetByteBit(&flag_byte, 1, is_conf);
 	GetSetByteBit(&flag_byte, 2, is_done);
 
 	// Get buffers
-	uint16_t tx_size = SERIAL_BUFFER_SIZE - 1 - a2r.hwSerial.availableForWrite();
-	uint16_t rx_size = a2r.hwSerial.available();
+	tx_size = SERIAL_BUFFER_SIZE - 1 - a2r.hwSerial.availableForWrite();
+	rx_size = a2r.hwSerial.available();
 
 	// Update a2r.QUEUE ind
 	a2r.SQ_StoreInd++;
@@ -1376,7 +1427,7 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 		Debug.sprintf_safe(buffLrg, buff_lrg, "[*%s_Q-DROP*]: queue_s=%d queue_r=%d queue_state=|%s|",
 			"a2r", a2r.SQ_StoreInd, a2r.SQ_ReadInd, queue_state);
 
-		// Log/print error
+		// Log error
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 		// Set queue back 
@@ -1405,9 +1456,6 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 
 		// Copy packet number
 		pack = a2r.packInd;
-
-		// Update sent packet count
-		a2r.packSentAll++;
 	}
 
 	// Create byte packet
@@ -1440,10 +1488,10 @@ void QueuePacket(char id, float dat1, float dat2, float dat3, uint16_t pack, boo
 	a2r.t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 
-	// Log/print sent
+	// Log sent
 	Debug.DB_SendQueued(buff_lrg, a2r.t_queuedArr[id_ind]);
 
 }
@@ -1468,8 +1516,9 @@ bool SendPacket()
 	bool is_repeat = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
-	uint16_t tx_size;
-	uint16_t rx_size;
+	uint16_t pack_last = 0;
+	uint16_t tx_size = 0;
+	uint16_t rx_size = 0;
 	int id_ind = 0;
 
 	// Bail if nothing in queue
@@ -1548,18 +1597,16 @@ bool SendPacket()
 	id_ind = ID_Ind<A2_COM<USARTClass>>(id, &a2r);
 
 	// Get last pack
-	uint16_t pack_last;
-	if (!is_conf)
-		pack_last = r2a.packArr[id_ind];
-	else
-		pack_last = r2a.packConfArr[id_ind];
+	pack_last = is_conf ? r2a.packConfArr[id_ind] : r2a.packArr[id_ind];
 
 	// Flag resent pack
 	is_repeat = pack == pack_last;
 
 	// Incriment repeat count
-	if (is_repeat)
-		r2a.cnt_repeat++;
+	r2a.cnt_repeat += is_repeat ? 1: 0;
+
+	// Incriment sent packet count
+	a2r.packSentAll += !is_repeat && !is_conf ? 1 : 0;
 
 	// Update packet history
 	if (!is_conf)
@@ -1568,12 +1615,12 @@ bool SendPacket()
 		r2a.packConfArr[id_ind] = pack;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d|",
 		SQ_MsgBytes, tx_size, rx_size, a2r.dt_sent, dt_rcvd, dt_queue);
 
-	// Log/print sent
+	// Log sent
 	Debug.DB_Sent(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 
 	// Return success
@@ -1582,22 +1629,19 @@ bool SendPacket()
 }
 
 // STORE LOG STRING
-void QueueLog(char *p_msg, uint32_t t)
+void QueueLog(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int line)
 {
-	/*
-	STORE LOG DATA FOR CS
-	FORMAT: head,chksum,"[log_cnt],loop,ts_ms,message",foot
-	*/
 
 	// Local vars
+	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
+	static char buff_med_1[buffMed] = { 0 }; buff_med_1[0] = '\0';
 	static char buff_med_save[buffMed] = { 0 };
 	static uint16_t overflow_cnt = 0;
 	uint32_t t_m = 0;
 	byte chksum = 0;
 
-	// Update L_Q.QUEUE ind
+	// Update queue ind
 	LQ_StoreInd++;
 
 	// Check if ind should roll over 
@@ -1605,7 +1649,7 @@ void QueueLog(char *p_msg, uint32_t t)
 		LQ_StoreInd = 0;
 	}
 
-	// Check if queue overflowed
+	// Handle overflow
 	if (LQ_Queue[LQ_StoreInd][0] != '\0') {
 
 		// Add to count 
@@ -1619,38 +1663,47 @@ void QueueLog(char *p_msg, uint32_t t)
 
 		// Bail
 		return;
-
 	}
 
-	// Itterate count
+	// Incriment count
 	cnt_logsStored++;
 
 	// Get sync correction
-	t_m = t - t_sync;
+	t_m = ts - t_sync;
 
-	// Put it all together
-	Debug.sprintf_safe(buffLrg, buff_lrg, "[%d],%lu,%d,%s%s", cnt_logsStored, t_m, cnt_loopShort, buff_med_save, p_msg);
+	// Add function and line number
+	if (strcmp(p_fun, "") != 0) {
+		Debug.sprintf_safe(buffMed, buff_med_1, "[%s:%d] ", p_fun, line);
+	}
+
+	// Store log
+	Debug.sprintf_safe(buffMax, buff_max, "%d,%lu,=\"%s\",%d,%s,%s%s%s",
+		cnt_logsStored, t_m, Debug.FormatTimestamp(t_m), cnt_loopShort, p_type, buff_med_save, buff_med_1, p_msg);
 
 	// Get message size
-	chksum = strlen(buff_lrg);
+	chksum = strlen(buff_max);
 
 	// Add header, chksum and footer
 	int b_ind = 0;
 	// head
-	buff_lrg_2[b_ind++] = a2c.head;
+	buff_lrg[b_ind++] = a2c.head;
 	// checksum
-	buff_lrg_2[b_ind++] = chksum;
+	buff_lrg[b_ind++] = chksum;
 	// p_msg
 	for (int i = 0; i < chksum; i++) {
-		buff_lrg_2[b_ind++] = buff_lrg[i];
+		buff_lrg[b_ind++] = buff_max[i];
 	}
 	// foot
-	buff_lrg_2[b_ind++] = a2c.foot;
+	buff_lrg[b_ind++] = a2c.foot;
 	// null
-	buff_lrg_2[b_ind] = '\0';
+	buff_lrg[b_ind] = '\0';
 
 	// Store log
-	Debug.sprintf_safe(buffMax, LQ_Queue[LQ_StoreInd], "%s", buff_lrg_2);
+	Debug.sprintf_safe(buffMax, LQ_Queue[LQ_StoreInd], "%s", buff_lrg);
+
+	// Reset overlow stuff
+	overflow_cnt = 0;
+	buff_med_save[0] = '\0';
 
 	// Reset overlow stuff
 	overflow_cnt = 0;
@@ -1675,9 +1728,9 @@ bool SendLog()
 	int log_rx_size;
 
 	// Bail if serial not established or no logs to store
-	if (!fc.is_SesStarted ||
+	if (!FC.is_SesStarted ||
 		LQ_ReadInd == LQ_StoreInd &&
-		LQ_Queue[LQ_StoreInd][0] == '\0') 
+		LQ_Queue[LQ_StoreInd][0] == '\0')
 	{
 
 		return false;
@@ -1778,7 +1831,7 @@ void StartRew()
 	Debug.DB_General(__FUNCTION__, __LINE__, "PID STOPPED");
 
 	// Set flag
-	fc.is_Rewarding = true;
+	FC.is_Rewarding = true;
 
 	// Print
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUNNING: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
@@ -1797,7 +1850,7 @@ void EndRew()
 		// Set reward off pins
 		SetPort(word_rewEnd, word_rewStr);
 
-		fc.is_Rewarding = false;
+		FC.is_Rewarding = false;
 		Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: Reward: cnt_rew=%d dt_rew=%dms", cnt_rew, rewDur);
 		Debug.DB_General(__FUNCTION__, __LINE__, "REWARD OFF");
 
@@ -2016,7 +2069,7 @@ bool SetIR(int dt_pulse, int dt_on, SETIRSTATE force_state, bool do_ttl)
 	bool is_changed = false;
 
 	// Bail if blocking
-	if (fc.do_BlockIRPulse) {
+	if (FC.do_BlockIRPulse) {
 		return false;
 	}
 
@@ -2403,7 +2456,7 @@ void setup()
 		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
 	}
 
-	// Log/print compile time
+	// Log compile time
 	Debug.sprintf_safe(buffLrg, buff_lrg, "BUILD DATE: %s %s", __DATE__, __TIME__);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -2523,21 +2576,21 @@ void loop()
 	}
 
 	// CHECK FOR REWARD END
-	if (fc.is_Rewarding) {
+	if (FC.is_Rewarding) {
 		EndRew();
 	}
 	// PULSE IR
 	IR_SyncPulse();
 
 	// CHECK FOR QUIT
-	if (fc.do_Quit) {
+	if (FC.do_Quit) {
 		QuitSession();
 	}
 
 #pragma endregion
 
 #pragma region //--- PROCESS NEW MESSAGES ---
-	
+
 	// CONTINUE LOOP IF NO NEW MESSAGE
 	if (!r2a.is_new) {
 		return;
@@ -2560,17 +2613,17 @@ void loop()
 				SetIR(0, 0, FORCE_OFF);
 
 				// Set to block IR pulse
-				fc.do_BlockIRPulse = true;
+				FC.do_BlockIRPulse = true;
 			}
 
 			// Test finished
 			if (r2a.dat[1] == 2)
 			{
 				// Unblock IR
-				fc.do_BlockIRPulse = false;
+				FC.do_BlockIRPulse = false;
 
 				// Unset flag
-				fc.do_BlockIRPulse = false;
+				FC.do_BlockIRPulse = false;
 			}
 
 		}
@@ -2591,14 +2644,14 @@ void loop()
 				SetIR(0, 0, FORCE_OFF);
 
 				// Set to block IR pulse
-				fc.do_BlockIRPulse = true;
+				FC.do_BlockIRPulse = true;
 			}
 
 			// Pulse IR
 			if (r2a.dat[1] == 1)
 			{
 				// Unblock IR
-				fc.do_BlockIRPulse = false;
+				FC.do_BlockIRPulse = false;
 
 				// Turn on IR
 				SetIR(0, 0, FORCE_ON);
@@ -2608,7 +2661,7 @@ void loop()
 				SetIR(0, 0, FORCE_OFF);
 
 				// Turn block back on
-				fc.do_BlockIRPulse = true;
+				FC.do_BlockIRPulse = true;
 
 			}
 
@@ -2616,10 +2669,10 @@ void loop()
 			if (r2a.dat[1] == 2)
 			{
 				// Unblock IR
-				fc.do_BlockIRPulse = false;
+				FC.do_BlockIRPulse = false;
 
 				// Unset flag
-				fc.do_BlockIRPulse = false;
+				FC.do_BlockIRPulse = false;
 			}
 
 		}
@@ -2634,7 +2687,7 @@ void loop()
 				Debug.DB_General(__FUNCTION__, __LINE__, "DO TEST: HARDWARE");
 
 				// Set to block IR pulse
-				fc.do_BlockIRPulse = true;
+				FC.do_BlockIRPulse = true;
 			}
 
 			// Run
@@ -2647,7 +2700,7 @@ void loop()
 			if (r2a.dat[1] == 2)
 			{
 				// Unblock IR
-				fc.do_BlockIRPulse = false;
+				FC.do_BlockIRPulse = false;
 			}
 
 
@@ -2670,8 +2723,8 @@ void loop()
 		// No noise
 		if (r2a.dat[0] == 0)
 		{
-			fc.do_WhiteNoise = false;
-			fc.do_RewTone = false;
+			FC.do_WhiteNoise = false;
+			FC.do_RewTone = false;
 			Debug.DB_General(__FUNCTION__, __LINE__, "NO SOUND");
 		}
 
@@ -2680,8 +2733,8 @@ void loop()
 		{
 
 			// Set flags
-			fc.do_WhiteNoise = true;
-			fc.do_RewTone = false;
+			FC.do_WhiteNoise = true;
+			FC.do_RewTone = false;
 			Debug.DB_General(__FUNCTION__, __LINE__, "DONT DO TONE");
 
 		}
@@ -2691,14 +2744,14 @@ void loop()
 		{
 
 			// Set flags
-			fc.do_WhiteNoise = true;
-			fc.do_RewTone = true;
+			FC.do_WhiteNoise = true;
+			FC.do_RewTone = true;
 			Debug.DB_General(__FUNCTION__, __LINE__, "DO TONE");
 
 		}
 
 		// Create white, tone and reward word
-		if (fc.do_WhiteNoise && fc.do_RewTone) {
+		if (FC.do_WhiteNoise && FC.do_RewTone) {
 
 			// Create word
 			int SAM_on_pins[3] = { pin.SAM_REL_TONE, pin.SAM_TTL_TONE, pin.SAM_TTL_REW_ON };
@@ -2737,7 +2790,7 @@ void loop()
 		}
 
 		// Turn on white noise
-		if (fc.do_WhiteNoise) {
+		if (FC.do_WhiteNoise) {
 
 			// Set relay back to low first
 			digitalWrite(pin.REL_WHITE, LOW);
@@ -2752,7 +2805,7 @@ void loop()
 
 			// Set port
 			SetPort(word_white, 0x0);
-			
+
 		}
 
 	}
@@ -2796,11 +2849,11 @@ void loop()
 	// (q) DO QUIT
 	if (r2a.idNew == 'q') {
 
-		// Log/print suammry
+		// Log suammry
 		Debug.DoSummary();
 
 		// Set flags
-		fc.do_Quit = true;
+		FC.do_Quit = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "QUITING...");
 	}
 

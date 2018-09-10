@@ -95,15 +95,15 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0495'; %'r9999';
+D.DB.ratLab = 'r9999'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.Run_Cheetah = true;
-D.DB.Run_SS3D = false;
-D.DB.Rec_Raw = false;
+D.DB.F.Run_Cheetah = true;
+D.DB.F.Run_SS3D = false;
+D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
@@ -112,33 +112,34 @@ D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
 D.DB.Feeder_Condition = 'C2'; % ['C1' 'C2']
-D.DB.Reward_Delay = '1.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
-D.DB.Cue_Condition = 'Half'; % ['All' 'Half' 'None']
+D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
-D.DB.Rotation_Direction = 'CW'; % ['CCW' 'CW']
-D.DB.Start_Quadrant = 'NE'; % ['NE' 'SE' 'SW' 'NW'];
+D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
+D.DB.Start_Quadrant = 'NW'; % ['NE' 'SE' 'SW' 'NW'];
 D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 
 % HARDCODED FLAGS
-D.DB.doForagePathCompute = false;
-D.DB.doAutoSetTT = false;
-D.DB.autoSetTTturns = 4;
+D.DB.F.printLogStrore = false;
+D.DB.F.foragePathCompute = false;
+D.DB.F.autoSetTT = false;
+D.DB.nTurnsAutoSetTT = 4;
 
 % SYSTEM SET FLAGS
-D.DB.isTestRun = true;
-D.DB.t1_doSimRatTest = false;
-D.DB.t2_doPidCalibrationTest = false;
-D.DB.t3_doVTCalibrationTest = false;
-D.DB.t4_doHaltErrorTest = false;
-D.DB.t5_doWallIRTimingTest = false;
-D.DB.t6_doIRSyncTest = false;
-D.DB.t7_doHardwareTest = false;
-D.DB.t8_doCubeBatteryTest = false;
+D.DB.F.testRun = true;
+D.DB.F.t1SimRatTest = false;
+D.DB.F.t2PidCalibrationTest = false;
+D.DB.F.t3VTCalibrationTest = false;
+D.DB.F.t4HaltErrorTest = false;
+D.DB.F.t5WallIRTimingTest = false;
+D.DB.F.t6IRSyncTest = false;
+D.DB.F.t7HardwareTest = false;
+D.DB.F.t8CubeBatteryTest = false;
 
 % SIMULATED RAT TEST SETTINGS
 
 % Stop for free reward
-D.DB.SIM.doStopForFreeRew = true;
+D.DB.SIM.F.stopForFreeRew = true;
 % Starting velocity
 D.DB.SIM.VelStart = 20; % (cm/sec)
 % Max acc
@@ -218,9 +219,9 @@ end
 
 % Console and log vars
 D.DB.consoleStr = [repmat(' ',1000,150),repmat('\r',1000,1)];
-D.DB.logStr = cell(1000,1);
-D.DB.cnt_console = 0;
+D.DB.logStr = [{sprintf('LOG, TS (ms), TS (string), TYPE, MESSAGE\r')}; cell(1000,1)];
 D.DB.cnt_logs = 0;
+D.DB.cnt_console = 0;
 D.DB.cnt_warn = 0;
 D.DB.cnt_err = 0;
 D.DB.warn_line = nan(100,1);
@@ -233,47 +234,47 @@ end
 
 % Simulated rat test
 if any(SYSTEST == 1)
-    D.DB.t1_doSimRatTest = true;
+    D.DB.F.t1SimRatTest = true;
 end
 
 % PID calibration
 if any(SYSTEST == 2)
-    D.DB.t2_doPidCalibrationTest = true;
+    D.DB.F.t2PidCalibrationTest = true;
 end
 
 % VT calibration
 if any(SYSTEST == 3)
-    D.DB.t3_doVTCalibrationTest = true;
+    D.DB.F.t3VTCalibrationTest = true;
 end
 
 % Halt error test
 if any(SYSTEST == 4)
-    D.DB.t4_doHaltErrorTest = true;
+    D.DB.F.t4HaltErrorTest = true;
 end
 
 % Wall image IR sync timing
 if any(SYSTEST == 5)
-    D.DB.t5_doWallIRTimingTest = true;
+    D.DB.F.t5WallIRTimingTest = true;
 end
 
 % IR sync timing
 if any(SYSTEST == 6)
-    D.DB.t6_doIRSyncTest = true;
+    D.DB.F.t6IRSyncTest = true;
 end
 
 % Robot hardware test
 if any(SYSTEST == 7)
-    D.DB.t7_doHardwareTest = true;
+    D.DB.F.t7HardwareTest = true;
 end
 
 % Cube battery test
 if any(SYSTEST == 8)
-    D.DB.t8_doCubeBatteryTest = true;
+    D.DB.F.t8CubeBatteryTest = true;
 end
 
 % No test
 if all(SYSTEST == 0)
-    D.DB.isTestRun = DOAUTOLOAD;
+    D.DB.F.testRun = DOAUTOLOAD;
 end
 
 % Log print debug conditions
@@ -1071,7 +1072,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                                 % GET/PROCESS NLX VT
                                 VT_Get('Rob');
                                 VT_Proc('Rob');
-                                if ~D.DB.t1_doSimRatTest
+                                if ~D.DB.F.t1SimRatTest
                                     VT_Get('Rat');
                                     VT_Proc('Rat');
                                 end
@@ -1546,7 +1547,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 exist(D.DIR.logTempDir, 'dir')
             
             % Track logs
-            cnt_stored = D.DB.cnt_logs;
             cnt_saved = 0;
             
             % Open log file
@@ -1555,12 +1555,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Write to file
             if fid ~= -1
-                for z_l = 1:cnt_stored
+                for z_l = 1:D.DB.cnt_logs+1
                     
                     % Attempt to store log
                     try
                         % Print log being stored
-                        %fprintf('Writing Log %d/%d: "%s"', z_l, cnt_stored, D.DB.logStr{z_l})
+                        if D.DB.F.printLogStrore
+                            fprintf('Writing Log %d/%d: "%s"', z_l, D.DB.cnt_logs, D.DB.logStr{z_l})
+                        end
                         
                         % Store log
                         fprintf(fid, D.DB.logStr{z_l});
@@ -1570,7 +1572,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         
                         % Create error string
                         err_msg = sprintf('!!ERROR!! [EXIT] Error Writing Log %d/%d to "%s"', ...
-                            z_l, cnt_stored, D.DIR.logTempDir);
+                            z_l, D.DB.cnt_logs, D.DIR.logTempDir);
                         
                         % Print and log store failure
                         fprintf(fid, err_msg);
@@ -1583,7 +1585,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Close file and print status
                 fclose(fid);
                 Log_Debug(sprintf('FINISHED: Save ICR_GUI Log: %d/%d to "%s"', ...
-                    cnt_saved, cnt_stored, D.DIR.logTempDir));
+                    cnt_saved, D.DB.cnt_logs, D.DIR.logTempDir));
                 
             else
                 % Print failure
@@ -6606,7 +6608,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Sld_SwtchImg(D.UI.sldSwtchImg(3));
         
         %% ====================== AUTO SET TT DEPTH =======================
-        if (D.DB.doAutoSetTT)
+        if (D.DB.F.autoSetTT)
             
             % Switch tab
             Tab_GrpChange(D.UI.tabTT);
@@ -6617,7 +6619,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Togg_MainActionTT(D.UI.toggDoTrackTT);
             
             % Number of turns
-            turns = D.DB.autoSetTTturns;
+            turns = D.DB.nTurnsAutoSetTT;
             
             % Get number of full turns
             turn_ind = ...
@@ -8227,7 +8229,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'YLim', [0,D.PAR.frgBins]);
         
         % Load path file if exists and not flaged to recompute
-        if ~D.DB.doForagePathCompute && ...
+        if ~D.DB.F.foragePathCompute && ...
                 exist(D.DIR.frgPath, 'file')
             load(D.DIR.frgPath);
             
@@ -8512,7 +8514,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         was_ran = false;
         
         % Bail
-        if ~D.DB.isTestRun
+        if ~D.DB.F.testRun
             return
         end
         
@@ -8539,7 +8541,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% SETUP SPECIFIC TEST
         
         % SIMULATED RAT TEST
-        if D.DB.t1_doSimRatTest
+        if D.DB.F.t1SimRatTest
             
             % Initialize variables
             D.DB.SIM.XY = [NaN,NaN];
@@ -8615,7 +8617,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % PID CALIBRATION
-        if D.DB.t2_doPidCalibrationTest
+        if D.DB.F.t2PidCalibrationTest
             
             % Set flag to start pid
             D.DB.isTestStarted = false;
@@ -8628,7 +8630,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % VT CALIBRATION
-        if D.DB.t3_doVTCalibrationTest
+        if D.DB.F.t3VTCalibrationTest
             
             % Initialize variables
             D.DB.isTestStarted = false;
@@ -8647,7 +8649,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % HALT ERROR TEST
-        if D.DB.t4_doHaltErrorTest
+        if D.DB.F.t4HaltErrorTest
             
             % Initialize variables
             D.DB.HALT.Cnt = D.DB.HALT.StepTrials;
@@ -8667,7 +8669,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % WALL IMAGE IR TIMING TEST
-        if D.DB.t5_doWallIRTimingTest
+        if D.DB.F.t5WallIRTimingTest
             
             % Notes:
             %   Connect LED to DigitalLynx port 2 pin 0
@@ -8710,7 +8712,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % SYNC IR TIMING TEST
-        if D.DB.t6_doIRSyncTest
+        if D.DB.F.t6IRSyncTest
             
             % Notes:
             %   Connect robot Reward LED red and ground to DigitalLynx port 2 pin 0
@@ -8743,7 +8745,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % CUBE VCC TEST
-        if D.DB.t8_doCubeBatteryTest
+        if D.DB.F.t8CubeBatteryTest
             
             % Initialize variables
             D.DB.isTestStarted = false;
@@ -8854,9 +8856,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Pop_Rat();
             
             % Set NLX buttons
-            Safe_Set(D.UI.toggNlx(1), 'Value', D.DB.Run_Cheetah);
-            Safe_Set(D.UI.toggNlx(2), 'Value', D.DB.Run_SS3D);
-            Safe_Set(D.UI.toggNlx(3), 'Value', D.DB.Rec_Raw);
+            Safe_Set(D.UI.toggNlx(1), 'Value', D.DB.F.Run_Cheetah);
+            Safe_Set(D.UI.toggNlx(2), 'Value', D.DB.F.Run_SS3D);
+            Safe_Set(D.UI.toggNlx(3), 'Value', D.DB.F.Rec_Raw);
             Togg_NLX();
             
             % TRIGGER SETUP DONE
@@ -11314,47 +11316,47 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % RUN LOCAL TEST FUNCTION
         
         % Bail if not test run
-        if ~D.DB.isTestRun
+        if ~D.DB.F.testRun
             return
         end
         
         % Run simulated rat test
-        if D.DB.t1_doSimRatTest
+        if D.DB.F.t1SimRatTest
             SimRatTest();
         end
         
         % Run pid calibration test
-        if D.DB.t2_doPidCalibrationTest
+        if D.DB.F.t2PidCalibrationTest
             PidCalibrationTest();
         end
         
         % Run pid calibration test
-        if D.DB.t3_doVTCalibrationTest
+        if D.DB.F.t3VTCalibrationTest
             VTCalibrationTest();
         end
         
         % Run halt error test
-        if D.DB.t4_doHaltErrorTest
+        if D.DB.F.t4HaltErrorTest
             HaltErrorTest();
         end
         
         % Wall image IR timing test
-        if D.DB.t5_doWallIRTimingTest
+        if D.DB.F.t5WallIRTimingTest
             WallIRTimingTest()
         end
         
         % Sync IR timing test
-        if D.DB.t6_doIRSyncTest
+        if D.DB.F.t6IRSyncTest
             SyncIRTimingTest()
         end
         
         % Hardware test
-        if D.DB.t7_doHardwareTest
+        if D.DB.F.t7HardwareTest
             HardwareTest()
         end
         
         % Cube Battery test
-        if D.DB.t8_doCubeBatteryTest
+        if D.DB.F.t8CubeBatteryTest
             CubeBatteryTest()
         end
         
@@ -11382,7 +11384,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Stop for free reward
-            if D.DB.SIM.doStopForFreeRew
+            if D.DB.SIM.F.stopForFreeRew
                 
                 % Change free reward stop zone
                 if D.C.rew_send ~= D.DB.SIM.C.rewSend
@@ -12012,8 +12014,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 end
                 
                 % Unset test flag
-                D.DB.t3_doVTCalibrationTest = false;
-                D.DB.isTestRun = false;
+                D.DB.F.t3VTCalibrationTest = false;
+                D.DB.F.testRun = false;
                 
             end
             
@@ -12058,7 +12060,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     else
                         % End test
                         D.DB.HALT.NowVel = 0;
-                        D.DB.t4_doHaltErrorTest = false;
+                        D.DB.F.t4HaltErrorTest = false;
                         
                         % Save data to csv file
                         fi_out = fullfile(D.DIR.ioTestOut,'halt_error.csv');
@@ -12465,7 +12467,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Send_CS_Com('T', SYSTEST(1), 2, 0);
                 
                 % Unset flag
-                D.DB.t5_doWallIRTimingTest = false;
+                D.DB.F.t5WallIRTimingTest = false;
                 
                 % Bail
                 return
@@ -12647,7 +12649,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Handle response
             switch choice
                 case 'No'
-                    D.DB.t7_doHardwareTest = false;
+                    D.DB.F.t7HardwareTest = false;
                     return
             end
             
@@ -12695,7 +12697,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             Send_CS_Com('T', SYSTEST(1), 2);
             
             % Unset flag
-            D.DB.t7_doHardwareTest = false;
+            D.DB.F.t7HardwareTest = false;
             
         end
         
@@ -12801,7 +12803,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 close(D.DB.CVCC.fg);
                 
                 % Unset flag
-                D.DB.t8_doCubeBatteryTest = false;
+                D.DB.F.t8CubeBatteryTest = false;
                 
             end
             
@@ -15243,7 +15245,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         Log_Debug(sprintf('   [SENT] m2c: id=''%s'' dat1=%2.2f dat2=%2.2f dat3=%2.2f pack=%d', ...
-            id, dat1 ,dat2, dat3, m2c_pack(5)), now, false, false);
+            id, dat1 ,dat2, dat3, m2c_pack(5)), now, 'COM');
         
     end
 
@@ -15335,7 +15337,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         %Print new data
         Log_Debug(sprintf('   [RCVD] c2m: id=''%s'' dat1=%0.2f dat2=%0.2f dat3=%0.2f pack=%0.0f', ...
-            c2m.(id).id, c2m.(id).dat1, c2m.(id).dat2, c2m.(id).dat3, c2m.(id).pack), now, false, false);
+            c2m.(id).id, c2m.(id).dat1, c2m.(id).dat2, c2m.(id).dat3, c2m.(id).pack), now, 'COM');
         
         % Update UI
         if FC.DoUpdateNow; Update_UI(0, 'force'); end
@@ -15362,7 +15364,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         Log_Debug(sprintf('   [SENT] m2ac: dat=|%d|%d|%d|', ...
-            D.AC.data(1),D.AC.data(2),D.AC.data(3)));
+            D.AC.data(1),D.AC.data(2),D.AC.data(3)), now, 'COM');
     end
 
 % ------------------------SEND COMMAND TO NLX------------------------------
@@ -15409,7 +15411,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Log/print
         if pass == 1
-            Log_Debug(sprintf('   [SENT] m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg));
+            Log_Debug(sprintf('   [SENT] m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg), now, 'COM');
         else
             Debug_Warning(sprintf('FAILED: m2nlx: dt=%d arg_out="%s" msg="%s"', send_dt, arg_out, msg));
         end
@@ -15430,11 +15432,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             t_now = now;
         end
         
-        % Add error type
-        err_str = ['**WARNING** ', msg];
-        
         % Log/print error
-        Log_Debug(err_str, t_now);
+        Log_Debug(msg, t_now, '**WARNING**');
         
         % Add to counter
         D.DB.cnt_warn = D.DB.cnt_warn+1;
@@ -15450,11 +15449,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             t_now = now;
         end
         
-        % Add error type
-        err_str = ['!!ERROR!! ', msg];
-        
         % Log/print error
-        Log_Debug(err_str, t_now, true);
+        Log_Debug(msg, t_now, '!!ERROR!!');
         
         % Add to counter
         D.DB.cnt_err = D.DB.cnt_err+1;
@@ -15463,21 +15459,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % -----------------------------PRINT AND LOG-------------------------------
-    function Log_Debug(msg, t_now, is_err, do_fun_print)
+    function Log_Debug(msg, t_now, type)
         
         % Handle inputs
-        if nargin < 4
-            do_fun_print = true;
-        end
         if nargin < 3
-            is_err = false;
+            type = 'NOTICE';
         end
         if nargin < 2
             t_now = now;
         end
         
         % Update log and get print formated message
-        print_msg = Update_Log(msg, t_now, do_fun_print);
+        print_msg = Update_Log(msg, t_now, type);
         
         % Bail if following conditions not met
         if ~exist('D','var'); return; end
@@ -15504,7 +15497,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String', D.DB.consoleStr);
         
         % Set to red bold for error
-        if is_err
+        if strcmp(type, '!!ERROR!!')
             Safe_Set(D.UI.listConsole, ...
                 'ForegroundColor', D.UI.warningCol, ...
                 'FontWeight','Bold');
@@ -15520,11 +15513,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ---------------------------UPDATE LOG------------------------------
-    function[print_msg] = Update_Log(msg, t_now, do_fun_print)
+    function[print_msg] = Update_Log(msg, t_now, type)
         
         % Handle inputs
         if nargin < 3
-            do_fun_print = true;
+            type = 'NOTICE';
         end
         if nargin < 2
             t_now = now;
@@ -15575,7 +15568,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         line = stack(s_ind).line;
         
         % Format string with function and line number
-        if do_fun_print
+        if ~strcmp(type, 'COM')
             msg_frm_1 = sprintf('[%s:%d] %s', fun, line, msg);
         else
             msg_frm_1 = msg;
@@ -15588,8 +15581,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         t_m = round(t_s*1000);
         
+        % Format time string
+        t_d = t_s/(24*60*60);
+        t_str = datestr(t_d, 'MM:SS:FFF');
+        
         % Store print version 
-        print_msg = sprintf('\r%0.2f %s', t_s, msg_frm_1);
+        print_msg = sprintf('\r%s %s', t_str, msg_frm_1);
         
         % Display in Matlab window
         disp(print_msg); %#ok<DSPS>
@@ -15607,10 +15604,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         msg_frm_2 = regexprep(msg_frm_1, '\\', '/');
         
         % Add to strings
-        log_msg = sprintf('[%d],%d,%s\r', D.DB.cnt_logs, t_m, msg_frm_2);
+        log_msg = sprintf('%d,%d,="%s",%s,%s\r', D.DB.cnt_logs, t_m, t_str, type, msg_frm_2);
         
         % Store log str
-        D.DB.logStr{D.DB.cnt_logs} = log_msg;
+        D.DB.logStr{D.DB.cnt_logs+1} = log_msg;
         
     end
 

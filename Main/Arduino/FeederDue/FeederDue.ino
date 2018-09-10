@@ -112,15 +112,15 @@ public:
 	// CHECK EVERY LOOP
 	void CheckLoop();
 	// LOG/PRINT MAIN EVENT
-	void DB_General(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
+	void DB_General(const char *p_fun, int line, char *p_msg, uint32_t ts = millis());
 	// LOG/PRINT WARNINGS
-	void DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
+	void DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t ts = millis());
 	// LOG/PRINT ERRORS
-	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t = millis());
+	void DB_Error(const char *p_fun, int line, char *p_msg, uint32_t ts = millis());
 	// LOG/PRINT RCVD PACKET
 	void DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// LOG/PRINT QUEUED SEND PACKET
-	void DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t);
+	void DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t ts);
 	// LOG/PRINT SENT PACKET
 	void DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte);
 	// PRINT LOG WRITE
@@ -140,7 +140,7 @@ public:
 	// LOG/PRINT OPENLOG ACTIVITY
 	void DB_OpenLog(char *p_msg, bool start_entry = false);
 	// STORE STRING FOR PRINTING
-	void Queue(char *p_msg, uint32_t t);
+	void Queue(char *p_msg, uint32_t ts = millis(), char *p_type = "NOTICE", const char *p_fun = "", int line = 0);
 	// PRINT DEBUG STRINGS TO CONSOLE
 	bool Print();
 	// PRINT EVERYTHING IN QUEUE
@@ -153,6 +153,8 @@ public:
 	char* FormatSpecialChars(char chr, bool do_show_byte = false);
 	// FORMAT INT AS BINARY
 	char* FormatBinary(unsigned int int_in);
+	// FORMAT TIME STAMP STRING
+	char* FormatTimestamp(uint32_t ts);
 	// GET CURRENT NUMBER OF ENTRIES IN PRINT QUEUE
 	int GetPrintQueueAvailable();
 	// SAFE VERSION OF SPRINTF
@@ -251,7 +253,7 @@ public:
 	void UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec = true);
 	double GetPos();
 	double GetVel();
-	void SwapPos(double set_pos, uint32_t t);
+	void SwapPos(double set_pos, uint32_t ts);
 	void PosReset(bool do_lap_reset = false);
 };
 #pragma endregion
@@ -327,9 +329,9 @@ public:
 	void PidHold();
 	void PidReset();
 	void PidCheckMotorControl();
-	void PidCheckEKF(uint32_t t);
+	void PidCheckEKF(uint32_t ts);
 	void PidResetEKF();
-	void PidSetUpdateTime(uint32_t t);
+	void PidSetUpdateTime(uint32_t ts);
 	double PidCalibration();
 };
 #pragma endregion
@@ -390,10 +392,8 @@ class MOVETO
 public:
 
 	// VARIABLES
-	int targSetTimeout = 30000;
-	int moveTimeout = 10000;
-	uint32_t t_tryTargSetTill = 0;
-	uint32_t t_tryMoveTill = 0;
+	int dt_moveTimeout = 10000;
+	uint32_t t_moveTimeout = 0;
 	byte cnt_move = 0;
 	char str_med_move[buffMed] = { 0 };
 	bool do_AbortMove = false;
@@ -585,7 +585,7 @@ public:
 	char SendCommand(char *p_msg, bool do_conf = true, uint32_t timeout = 5000);
 	char GetReply(uint32_t timeout);
 	bool SetToWriteMode();
-	void QueueLog(char *p_msg, uint32_t t = millis());
+	void QueueLog(char *p_msg, uint32_t ts = millis(), char *p_type = "NOTICE", const char *p_fun = "", int line = 0);
 	bool WriteLog();
 	bool WriteAll(uint32_t timeout);
 	void StreamLogs();
@@ -872,7 +872,7 @@ void DEBUG::CheckLoop()
 
 	// Check for VEC errors
 #if DO_VEC_DEBUG
-	// Log/print each error
+	// Log each error
 	if (VEC_CNT_ERR > 0) {
 		for (int i = 0; i < min(VEC_CNT_ERR, VEC_MAX_ERR); i++) {
 			Debug.DB_Error(__FUNCTION__, __LINE__, VEC_STR_LIST_ERR[i]);
@@ -905,7 +905,7 @@ void DEBUG::CheckLoop()
 	cnt_strcatErr = 0;
 
 	// Bail till ses started
-	if (!fc.is_SesStarted) {
+	if (!FC.is_SesStarted) {
 		return;
 	}
 
@@ -946,8 +946,8 @@ void DEBUG::CheckLoop()
 	do_ard_buff_db = flag.do_loopCheckSerialOverflow && (a_rx >= SERIAL_BUFFER_SIZE / 4 || a_tx >= SERIAL_BUFFER_SIZE / 4);
 
 	// Check for loop error
-	do_loop_error_db = flag.do_loopCheckError && fc.is_ErrLoop;
-	fc.is_ErrLoop = false;
+	do_loop_error_db = flag.do_loopCheckError && FC.is_ErrLoop;
+	FC.is_ErrLoop = false;
 
 	if (
 		do_dt_db ||
@@ -964,7 +964,7 @@ void DEBUG::CheckLoop()
 			do_ard_buff_db ? "ARD Buffer Flooding|" : "",
 			do_loop_error_db ? "Error Flagged|" : "");
 
-		// Log/print message
+		// Log message
 		Debug.sprintf_safe(buffLrg, buff_lrg, "%s cnt_loop:%d|%d dt_loop=%d|%d c_rx=%d|%d c_tx=%d|%d a_rx=%d|%d a_tx=%d|%d",
 			buff_lrg_2, cnt_loopShort, cnt_loopTot, dt_loop, dt_loop_last, c_rx, c_rx_last, c_tx, c_tx_last, a_rx, a_rx_last, a_tx, a_tx_last);
 		DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -979,14 +979,13 @@ void DEBUG::CheckLoop()
 	a_tx_last = a_tx;
 }
 
-void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
+void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Local vars
-	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -999,29 +998,25 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t t)
 		return;
 	}
 
-	// Add funciton and line number
-	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s", p_fun, line - 23, p_msg);
-
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, t);
+		Queue(p_msg, ts, "NOTICE", p_fun, line - 11);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, t);
+		Log.QueueLog(p_msg, ts, "NOTICE", p_fun, line - 11);
 	}
 
 }
 
-void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
+void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Local vars
-	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1030,24 +1025,21 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 	do_log = flag.log_errors;
 
 	// Set error flag
-	fc.is_ErrLoop = true;
+	FC.is_ErrLoop = true;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
 		return;
 	}
 
-	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "**WARNING**", p_fun, line - 23, p_msg);
-
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, t);
+		Queue(p_msg, ts, "**WARNING**", p_fun, line - 11);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, t);
+		Log.QueueLog(p_msg, ts, "**WARNING**", p_fun, line - 11);
 	}
 
 	// Store warning info
@@ -1055,14 +1047,13 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t t)
 
 }
 
-void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
+void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 	// Local vars
-	char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1071,24 +1062,21 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t t)
 	do_log = flag.log_errors;
 
 	// Set error flag
-	fc.is_ErrLoop = true;
+	FC.is_ErrLoop = true;
 
 	// Bail if neither set
 	if (!do_print && !do_log) {
 		return;
 	}
 
-	// Add error type, function and line number
-	Debug.sprintf_safe(buffMax, buff_max, "%s [%s:%d] %s", "!!ERROR!!", p_fun, line - 23, p_msg);
-
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, t);
+		Queue(p_msg, ts, "!!ERROR!!", p_fun, line - 11);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, t);
+		Log.QueueLog(p_msg, ts, "!!ERROR!!", p_fun, line - 11);
 	}
 
 	// Store error info
@@ -1130,7 +1118,7 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 
 	// Format message
 	if (p_r4->idNew != 'P') {
-		Debug.sprintf_safe(buffMax, buff_max, "   %s %s %s",
+		Debug.sprintf_safe(buffMax, buff_max, "%s %s %s",
 			buff_med_1, p_msg_1, p_msg_2);
 	}
 	// Add samp dt for pos data
@@ -1138,7 +1126,7 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 		U.f = p_r4->dat[2];
 		Debug.sprintf_safe(buffMed, buff_med_2, "ts_int=%d dt_samp=%d",
 			U.i32, millis() - Pos[cmd.vtEnt].t_update);
-		Debug.sprintf_safe(buffMax, buff_max, "   %s %s %s %s",
+		Debug.sprintf_safe(buffMax, buff_max, " %s %s %s %s",
 			buff_med_1, buff_med_2, p_msg_1, p_msg_2);
 	}
 
@@ -1150,17 +1138,17 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_max, p_r4->t_rcvd);
+		Queue(buff_max, p_r4->t_rcvd, "COM");
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, p_r4->t_rcvd);
+		Log.QueueLog(buff_max, p_r4->t_rcvd, "COM");
 	}
 
 }
 
-void DEBUG::DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t)
+void DEBUG::DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1189,11 +1177,11 @@ void DEBUG::DB_SendQueued(R2_COM<USARTClass> *p_r2, char *p_msg, uint32_t t)
 	Debug.sprintf_safe(buffMax, buff_max, "   [SEND-QUEUED:%s] %s", COM::str_list_id[p_r2->comID], p_msg);
 
 	if (do_print) {
-		Debug.Queue(buff_max, t);
+		Debug.Queue(buff_max, ts, "COM");
 	}
 
 	if (do_log) {
-		Log.QueueLog(buff_max, t);
+		Log.QueueLog(buff_max, ts, "COM");
 	}
 
 }
@@ -1237,11 +1225,11 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 
 	// Store
 	if (do_print) {
-		Debug.Queue(buff_max, p_r2->t_sent);
+		Debug.Queue(buff_max, p_r2->t_sent, "COM");
 	}
 
 	if (do_log) {
-		Log.QueueLog(buff_max, p_r2->t_sent);
+		Log.QueueLog(buff_max, p_r2->t_sent, "COM");
 	}
 
 }
@@ -1281,7 +1269,6 @@ void DEBUG::DB_MotorControl(const char *p_fun, int line, char *p_msg)
 #endif
 
 	// Local vars
-	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1294,17 +1281,14 @@ void DEBUG::DB_MotorControl(const char *p_fun, int line, char *p_msg)
 		return;
 	}
 
-	// Add funciton and line number
-	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s", p_fun, line - 23, p_msg);
-
 	// Add to print queue
 	if (do_print) {
-		Queue(buff_max, millis());
+		Queue(p_msg, millis(), "NOTICE", p_fun, line - 11);
 	}
 
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, millis());
+		Log.QueueLog(p_msg, millis(), "NOTICE", p_fun, line - 11);
 	}
 
 }
@@ -1348,7 +1332,6 @@ void DEBUG::DB_RunSpeed(const char *p_fun, int line, MC_CALL::ID caller, double 
 void DEBUG::DB_Pixy(const char *p_fun, int line, char *p_msg)
 {
 	// Local vars
-	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
@@ -1370,23 +1353,20 @@ void DEBUG::DB_Pixy(const char *p_fun, int line, char *p_msg)
 	Debug.sprintf_safe(buffLrg, buff_lrg, "block_type=%s word_new=%X word_last=%X checksum=%d blocks=%d",
 		Pixy.p_str_list_blockType[Pixy.blockType], Pixy.wordNew, Pixy.wordLast, Pixy.checksum, Pixy.cnt_blocks);
 
-	// Format string
-	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: %s", p_fun, line - 23, p_msg, buff_lrg);
-
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_max, millis());
+		Debug.Queue(buff_lrg, millis(), "NOTICE", p_fun, line - 11);
 	}
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, millis());
+		Log.QueueLog(buff_lrg, millis(), "NOTICE", p_fun, line - 11);
 	}
 }
 
 void DEBUG::DB_Pid(const char *p_fun, int line, char *p_msg)
 {
 	// Local vars
-	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1400,16 +1380,16 @@ void DEBUG::DB_Pid(const char *p_fun, int line, char *p_msg)
 	}
 
 	// Format string
-	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: mode=\"%s\" mot_ctrl=\"%s\"",
-		p_fun, line - 23, p_msg, Pid.p_str_list_pidMode[Pid.pidMode], MC_CON::str_list_id[motorControlNow]);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: mode=\"%s\" mot_ctrl=\"%s\"",
+		p_msg, Pid.p_str_list_pidMode[Pid.pidMode], MC_CON::str_list_id[motorControlNow]);
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_max, millis());
+		Debug.Queue(buff_lrg, millis(), "NOTICE", p_fun, line - 11);
 	}
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, millis());
+		Log.QueueLog(buff_lrg, millis(), "NOTICE", p_fun, line - 11);
 	}
 }
 
@@ -1420,7 +1400,7 @@ void DEBUG::DB_Bull(const char *p_fun, int line, char *p_msg)
 #endif
 
 	// Local vars
-	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
+	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
 
@@ -1434,16 +1414,16 @@ void DEBUG::DB_Bull(const char *p_fun, int line, char *p_msg)
 	}
 
 	// Format string
-	Debug.sprintf_safe(buffMax, buff_max, "[%s:%d] %s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\"",
-		p_fun, line - 23, p_msg, Bull.p_str_list_bullState[Bull.bullState], Bull.p_str_bullMode[Bull.bullMode], MC_CON::str_list_id[motorControlNow]);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: state=\"%s\" mode=\"%s\" mot_ctrl=\"%s\"",
+		p_msg, Bull.p_str_list_bullState[Bull.bullState], Bull.p_str_bullMode[Bull.bullMode], MC_CON::str_list_id[motorControlNow]);
 
 	// Add to print queue
 	if (do_print) {
-		Debug.Queue(buff_max, millis());
+		Debug.Queue(buff_lrg, millis(), "NOTICE", p_fun, line - 11);
 	}
 	// Add to log queue
 	if (do_log) {
-		Log.QueueLog(buff_max, millis());
+		Log.QueueLog(buff_lrg, millis(), "NOTICE", p_fun, line - 11);
 	}
 }
 
@@ -1574,7 +1554,7 @@ void DEBUG::DB_OpenLog(char *p_msg, bool start_entry)
 	}
 }
 
-void DEBUG::Queue(char *p_msg, uint32_t t)
+void DEBUG::Queue(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int line)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -1583,16 +1563,17 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 #if DO_PRINT_DEBUG
 
 	// Local vars
-	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_med_1[buffMed] = { 0 }; buff_med_1[0] = '\0';
 	static char buff_med_2[buffMed] = { 0 }; buff_med_2[0] = '\0';
+	static char buff_med_3[buffMed] = { 0 }; buff_med_3[0] = '\0';
+	static char buff_med_4[buffMed] = { 0 }; buff_med_4[0] = '\0';
+	static char buff_med_5[buffMed] = { 0 }; buff_med_5[0] = '\0';
 	static char buff_med_save[buffMed] = { 0 };
 	static uint16_t overflow_cnt = 0;
 	uint32_t t_m = 0;
-	float t_s = 0;
 
 	// Bail if queue store blocked
-	if (fc.do_BlockPrintQueue) {
+	if (FC.do_BlockPrintQueue) {
 		return;
 	}
 
@@ -1621,20 +1602,27 @@ void DEBUG::Queue(char *p_msg, uint32_t t)
 	}
 
 	// Get sync correction
-	t_m = t - t_sync;
-
-	// Convert to seconds
-	t_s = (float)(t_m) / 1000.0f;
+	t_m = ts - t_sync;
 
 	// Make time string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "[%0.3f][%d]", t_s, cnt_loopShort);
+	Debug.sprintf_safe(buffMed, buff_med_1, "[%s][%d]", FormatTimestamp(t_m), cnt_loopShort);
 
 	// Add space after time
-	Debug.sprintf_safe(buffMed, buff_med_1, "%%%ds", 20 - strlen(buff_lrg));
-	Debug.sprintf_safe(buffMed, buff_med_2, buff_med_1, '_');
+	Debug.sprintf_safe(buffMed, buff_med_2, "%%%ds", 20 - strlen(buff_med_1));
+	Debug.sprintf_safe(buffMed, buff_med_3, buff_med_2, '_');
+
+	// Add type
+	if (strcmp(p_type, "!!ERROR!!") == 0 || strcmp(p_type, "**WARNING**") == 0) {
+		Debug.sprintf_safe(buffMed, buff_med_4, "%s ", p_type);
+	}
+
+	// Add function and line number
+	if (strcmp(p_fun, "") != 0) {
+		Debug.sprintf_safe(buffMed, buff_med_5, "[%s:%d] ", p_fun, line);
+	}
 
 	// Put it all together
-	Debug.sprintf_safe(buffMax, PQ_Queue[PQ_StoreInd], "%s%s%s%s\n", buff_lrg, buff_med_2, buff_med_save, p_msg);
+	Debug.sprintf_safe(buffMax, PQ_Queue[PQ_StoreInd], "%s%s%s%s%s%s\n", buff_med_1, buff_med_3, buff_med_save, buff_med_4, buff_med_5, p_msg);
 
 	// Reset overlow stuff
 	overflow_cnt = 0;
@@ -1732,9 +1720,9 @@ void DEBUG::PrintLCD(bool do_block, char *p_msg_1, char *p_msg_2, char f_siz)
 
 	// Check if printing blocked
 	if (do_block) {
-		fc.do_BlockWriteLCD = false;
+		FC.do_BlockWriteLCD = false;
 	}
-	else if (fc.do_BlockWriteLCD) {
+	else if (FC.do_BlockWriteLCD) {
 		return;
 	}
 
@@ -1756,7 +1744,7 @@ void DEBUG::PrintLCD(bool do_block, char *p_msg_1, char *p_msg_2, char f_siz)
 
 	// Prevent overwrite till cleared
 	if (do_block) {
-		fc.do_BlockWriteLCD = true;
+		FC.do_BlockWriteLCD = true;
 	}
 }
 
@@ -1770,7 +1758,7 @@ void DEBUG::ClearLCD()
 	LCD.clrScr();
 
 	// Stop blocking LCD log
-	fc.do_BlockWriteLCD = false;
+	FC.do_BlockWriteLCD = false;
 }
 
 char* DEBUG::FormatSpecialChars(char chr, bool do_show_byte)
@@ -1879,6 +1867,36 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 	}
 
 	return bit_str;
+}
+
+char* DEBUG::FormatTimestamp(uint32_t ts)
+{
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
+
+	// Local vars
+	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
+	int ts_m = 0;
+	int s = 0;
+	int ts_s = 0;
+	int ts_ms = 0;
+
+	// Get minutes
+	ts_m = (ts - (ts % (60 * 1000))) / (60 * 1000);
+
+	// Get seconds
+	s = ts - (ts_m * 60 * 1000);
+	ts_s = (s - (s % 1000)) / 1000;
+
+	// Get milliseconds
+	ts_ms = ts - (ts_m * 60 * 1000) - (ts_s * 1000);
+
+	// Format string
+	Debug.sprintf_safe(buffMed, buff_med, "%02u:%02u:%03u", ts_m, ts_s, ts_ms);
+	return buff_med;
+
 }
 
 int DEBUG::GetPrintQueueAvailable() {
@@ -2015,7 +2033,7 @@ void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdow
 	// Compute shutdown time
 	t_shutdown = dt_shutdown_sec > 0 ? millis() + (dt_shutdown_sec * 1000) : 0;
 
-	// Log/print error message
+	// Log error message
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD FOR %d sec: %s", dt_shutdown_sec, p_msg_print);
 	DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -2032,7 +2050,7 @@ void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdow
 	// Loop till shutdown
 	while (true)
 	{
-		// Log/print anything in queue
+		// Log anything in queue
 		Log.WriteLog();
 		Print();
 
@@ -2095,13 +2113,13 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	}
 
 	// Bail if task done
-	if (fc.is_TaskDone) {
+	if (FC.is_TaskDone) {
 		return pixy_cum;
 	}
 
 	// Bail if rat not on track or doing simulation test
 	if (!is_hardware_test &&
-		(!fc.is_RatOnTrack || Debug.flag.do_simRatTest)) {
+		(!FC.is_RatOnTrack || Debug.flag.do_simRatTest)) {
 		return pixy_cum;
 	}
 
@@ -2127,7 +2145,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 			do_power_reset = false;
 			do_pixy_reset = true;
 
-			// Log/print error
+			// Log error
 			Debug.sprintf_safe(buffLrg, buff_lrg, "POWERING ON 5V PIXY POWER SUPPLY: dt_power_off=%d", millis() - t_power_reset);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -2150,7 +2168,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 			// Reset flag
 			do_pixy_reset = false;
 
-			// Log/print error
+			// Log error
 			Debug.sprintf_safe(buffLrg, buff_lrg, "RESETTING PIXY COM: dt_power_off=%d", millis() - t_power_reset);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -2170,7 +2188,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		// Incriment count
 		cnt_pixyReset++;
 
-		// Log/print error
+		// Log error
 		Debug.sprintf_safe(buffLrg, buff_lrg, "PixyCom.GetBlocks() RETURNED ERROR: pixy_com_cnt=%d", cnt_pixyReset);
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -2228,7 +2246,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	// Update pixy pos and vel
 	Pos[2].UpdatePos(pixy_abs, t_pixy_ts);
 
-	// Log/print first sample
+	// Log first sample
 	if (!Pos[2].is_streamStarted) {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT PIXY RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
 			Pos[2].posAbs, Pos[2].posCum, Pos[2].nLaps);
@@ -2301,7 +2319,7 @@ uint16_t PIXY::PixyGetBlocks()
 			// Flag skip start
 			skipStart = true;
 
-			// Log/print
+			// Log
 			Debug.DB_Pixy(__FUNCTION__, __LINE__, "Reached Frame End");
 
 			// Bail
@@ -2312,7 +2330,7 @@ uint16_t PIXY::PixyGetBlocks()
 		// Pixy has not found any obects (i.e., returned zero)
 		else if (checksum == 0) {
 
-			// Log/print
+			// Log
 			Debug.DB_Pixy(__FUNCTION__, __LINE__, "No New Data");
 
 			// Bail
@@ -2340,14 +2358,14 @@ uint16_t PIXY::PixyGetBlocks()
 			// Incriment block count
 			cnt_blocks++;
 
-			// Log/print
+			// Log
 			Debug.DB_Pixy(__FUNCTION__, __LINE__, "Block Recieved");
 		}
 
 		// Checksum error
 		else {
 
-			// Log/print error
+			// Log error
 			Debug.sprintf_safe(buffLrg, buff_lrg, "CHECKSUM MISSMATCH: checksum=%d read_sum=%d", checksum, block.sum());
 			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -2409,7 +2427,7 @@ bool PIXY::PixyCheckStart()
 			// Set pass flag
 			pass = true;
 
-			// Log/print
+			// Log
 			Debug.DB_Pixy(__FUNCTION__, __LINE__, "Recieved Start");
 
 			// Bail
@@ -2430,7 +2448,7 @@ bool PIXY::PixyCheckStart()
 			// Correct out of sync
 			PixyGetByte();
 
-			// Log/print warning
+			// Log warning
 			Debug.DB_Warning(__FUNCTION__, __LINE__, "PIXY COM OUT OF SYNC");
 
 			// Bail
@@ -2646,21 +2664,21 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 
 	// Check for errors
 	bool is_error =
-		(fc.is_RatOnTrack || this->objID == RobVT) &&
+		(FC.is_RatOnTrack || this->objID == RobVT) &&
 		(dt_sec == 0 ||
 			vel_diff > 300);
 
-	// Log/print error
+	// Log error
 	if (is_error) {
 
 		// Add to count
 		this->cnt_err++;
 
-		// Log/print first and every 10 errors
+		// Log first and every 10 errors
 		if (this->cnt_err == 1 ||
 			this->cnt_err % 10 == 0) {
 
-			// Log/print warning
+			// Log warning
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Bad Values |%s%s: obj=\"%s\" cnt_err=%d pos_new=%0.2f pos_last=%0.2f dist_sum=%0.2f ts_new=%lu ts_last=%lu dt_sec=%0.2f vel_new=%0.2f vel_last=%0.2f",
 				vel_diff > 300 ? "Vel|" : "", dt_sec == 0 ? "DT|" : "", p_str_list_objID[this->objID], this->cnt_err, pos_new, this->posArr[this->nSamp - 2], dist_sum, this->t_tsArr[this->nSamp - 1], this->t_tsArr[this->nSamp - 2], dt_sec, vel, this->velLast);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
@@ -2691,7 +2709,7 @@ double POSTRACK::GetVel()
 	return this->velNow;
 }
 
-void POSTRACK::SwapPos(double set_pos, uint32_t t)
+void POSTRACK::SwapPos(double set_pos, uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -2699,6 +2717,7 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 
 	// Local vars
 	double update_pos = 0;
+	uint32_t vt_ts = 0;
 
 	// Make sure pos val range [0, 140*PI]
 	if (set_pos < 0) {
@@ -2712,10 +2731,10 @@ void POSTRACK::SwapPos(double set_pos, uint32_t t)
 	}
 
 	// Compute ts
-	uint32_t ts = this->t_tsNow + (t - this->t_update);
+	vt_ts = this->t_tsNow + (ts - this->t_update);
 
 	// Update pos
-	UpdatePos(update_pos, ts, false);
+	UpdatePos(update_pos, vt_ts, false);
 
 }
 
@@ -2759,7 +2778,7 @@ double PID::PidUpdate()
 {
 
 	// Wait till ekf ready
-	if (!fc.is_EKFReady) {
+	if (!FC.is_EKFReady) {
 		return -1;
 	}
 
@@ -2800,7 +2819,7 @@ double PID::PidUpdate()
 	DB_FUN_STR();
 #endif
 
-	// Log/print first run
+	// Log first run
 	if (isFirstRun) {
 		Debug.DB_Pid(__FUNCTION__, __LINE__, "First PID Run");
 		isFirstRun = false;
@@ -2872,12 +2891,12 @@ void PID::PidRun()
 		// Tell ard pid is running
 		QueuePacket(&r2a, 'p', 1);
 
-		// Log/print event
+		// Log event
 		Debug.DB_Pid(__FUNCTION__, __LINE__, "Run PID");
 
 	}
 
-	// Log/print error
+	// Log error
 	else {
 		Debug.DB_Error(__FUNCTION__, __LINE__, "PID FAILED TO TAKE MOTOR CONTROL");
 	}
@@ -2890,7 +2909,7 @@ void PID::PidStop(PIDMODE set_mode)
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Pid(__FUNCTION__, __LINE__, "Stop PID");
 
 	if (motorControlNow == MC_CON::ID::PID)
@@ -2920,7 +2939,7 @@ void PID::PidHold()
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Pid(__FUNCTION__, __LINE__, "Hold PID");
 
 	// Call stop and set mode to "HOLDING"
@@ -2958,10 +2977,10 @@ void PID::PidCheckMotorControl()
 	}
 }
 
-void PID::PidCheckEKF(uint32_t t)
+void PID::PidCheckEKF(uint32_t ts)
 {
 	// Bail if not checking
-	if (fc.is_EKFReady) {
+	if (FC.is_EKFReady) {
 		return;
 	}
 
@@ -2969,14 +2988,14 @@ void PID::PidCheckEKF(uint32_t t)
 	DB_FUN_STR();
 #endif
 
-	if ((t - t_ekfReady) > dt_ekfSettle &&
+	if ((ts - t_ekfReady) > dt_ekfSettle &&
 		kal.cnt_ekf > 100)
 	{
-		// Log/print event 
+		// Log event 
 		Debug.DB_Pid(__FUNCTION__, __LINE__, "EKF Ready for PID");
 
 		// Set flag
-		fc.is_EKFReady = true;
+		FC.is_EKFReady = true;
 	}
 }
 
@@ -2986,15 +3005,15 @@ void PID::PidResetEKF()
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Pid(__FUNCTION__, __LINE__, "Reset EKF");
 
 	// Set flag and time
-	fc.is_EKFReady = false;
+	FC.is_EKFReady = false;
 	t_ekfReady = millis();
 }
 
-void PID::PidSetUpdateTime(uint32_t t)
+void PID::PidSetUpdateTime(uint32_t ts)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -3003,9 +3022,9 @@ void PID::PidSetUpdateTime(uint32_t t)
 	is_ekfNew = true;
 	if (isPidUpdated)
 	{
-		dt_update = (double)(t - t_updateLast) / 1000;
+		dt_update = (double)(ts - t_updateLast) / 1000;
 		isPidUpdated = false;
-		t_updateLast = t;
+		t_updateLast = ts;
 	}
 }
 
@@ -3039,7 +3058,7 @@ double PID::PidCalibration()
 		cal_PcArr[3] > 0
 		) {
 
-		// Log/print
+		// Log
 		Debug.DB_General(__FUNCTION__, __LINE__, "Finished PID Calibration");
 
 		// Compute overal average
@@ -3093,7 +3112,7 @@ double PID::PidCalibration()
 			return -1;
 		}
 
-		// Log/print
+		// Log
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Set Speed to %0.2fcm/sec", cal_speedSteps[cal_stepNow]);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	}
@@ -3175,7 +3194,7 @@ void BULLDOZE::UpdateBull()
 
 	// Bail if not ready
 	if (
-		!(fc.is_EKFReady &&
+		!(FC.is_EKFReady &&
 			millis() > t_updateNext)) {
 		return;
 	}
@@ -3242,7 +3261,7 @@ void BULLDOZE::BullReinitialize(float bull_delay, float bull_speed)
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
-	// Log/print event
+	// Log event
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Reinitialize Bull with bull_delay=%0.2f spd=%0.2f", bull_delay, bull_speed);
 	Debug.DB_Bull(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -3265,13 +3284,13 @@ void BULLDOZE::BullRun()
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Running Bull: Rat has moved %0.2fcm in %lums",
 		distMoved, t_bullNext - bullDelay);
 
-	// Log/print event
+	// Log event
 	Debug.DB_Bull(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Take motor control
 	if (!SetMotorControl(MC_CON::ID::BULL, MC_CALL::ID::BULL)) {
 
-		// Log/print error
+		// Log error
 		Debug.DB_Error(__FUNCTION__, __LINE__, "BULL FAILED TO TAKE MOTOR CONTROL");
 
 		// Bail
@@ -3294,7 +3313,7 @@ void BULLDOZE::BullStop(BULLMODE set_mode)
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Bull(__FUNCTION__, __LINE__, "Stop Bull");
 
 	// Stop movement
@@ -3321,7 +3340,7 @@ void BULLDOZE::BullOn()
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Bull(__FUNCTION__, __LINE__, "Turn On Bull");
 
 	// Set state to "ON"
@@ -3337,7 +3356,7 @@ void BULLDOZE::BullOff()
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Bull(__FUNCTION__, __LINE__, "Turn Off Bull");
 
 	// Set state to "OFF"
@@ -3357,7 +3376,7 @@ void BULLDOZE::BullHold()
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Bull(__FUNCTION__, __LINE__, "Hold Bull");
 
 	// Set state to "HOLDING"
@@ -3377,7 +3396,7 @@ void BULLDOZE::BullResume()
 	DB_FUN_STR();
 #endif
 
-	// Log/print event
+	// Log event
 	Debug.DB_Bull(__FUNCTION__, __LINE__, "Resume and Reset");
 
 	// Set state back to "ON"
@@ -3459,7 +3478,10 @@ void MOVETO::ProcMoveCmd(byte cmd_cnt, float cmd_targ)
 		Debug.sprintf_safe(buffMed, str_med_move, "MOVE [%s]", p_str_list_moveEv[moveEv]);
 	}
 
-	// Log/print setup
+	// Set abort timeout
+	t_moveTimeout = millis() + dt_moveTimeout;
+
+	// Log setup
 	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: targ=%0.2fcm", str_med_move, targPosAbs);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -3471,10 +3493,33 @@ bool MOVETO::RunMove()
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	bool move_done = false;
+	int dt_ekf = 0;
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
+
+	// Store last ekf update
+	dt_ekf = millis() - kal.t_last;
+
+	// Check if time out reached
+	if (millis() > t_moveTimeout) {
+
+		// Check if EKF not updating
+		if (dt_ekf >= dt_moveTimeout / 2) {
+
+			// Log error
+			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: ABORTING: EKF Hanging: dt_ekf=%dms", str_med_move, dt_ekf);
+			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+		}
+
+		// Log error
+		Debug.sprintf_safe(buffLrg, buff_lrg, "%s: TIMEDOUT AFTER %dms: dt_ekf=%dms", str_med_move, dt_moveTimeout, dt_ekf);
+		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+
+		// Set abort flag
+		do_AbortMove = true;
+	}
 
 	// Compute move target
 	if (!isTargSet && !do_AbortMove) {
@@ -3503,14 +3548,14 @@ bool MOVETO::RunMove()
 				// Failed to run motor
 				else {
 
-					// Log/print error
+					// Log error
 					Debug.sprintf_safe(buffLrg, buff_lrg, "%s: FAILED TO RUN MOTOR", str_med_move);
 					Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 					// Reset control
 					if (!SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::MOVETO)) {
 
-						// Log/print error
+						// Log error
 						Debug.sprintf_safe(buffLrg, buff_lrg, "%s: FAILED TO SET MOTOR CONTROL TO \"NONE\" AFTER ABORTING", str_med_move);
 						Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 					}
@@ -3525,7 +3570,7 @@ bool MOVETO::RunMove()
 				// Set flags
 				do_AbortMove = true;
 
-				// Log/print error
+				// Log error
 				Debug.sprintf_safe(buffLrg, buff_lrg, "%s: FAILED TO TAKE MOTOR CONTROL TO \"NONE\" AFTER ABORTING", str_med_move);
 				Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 			}
@@ -3535,7 +3580,7 @@ bool MOVETO::RunMove()
 	}
 
 	// Check if robot is ready to be stopped
-	else if (!isTargReached && !do_AbortMove && !fc.do_Halt) {
+	else if (!isTargReached && !do_AbortMove && !FC.do_Halt) {
 
 		// Do deceleration
 		double new_speed = DecelToTarg(moveToDecelDist, moveToSpeedMin);
@@ -3562,21 +3607,21 @@ bool MOVETO::RunMove()
 		// Reset control to "HOLD"
 		SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::MOVETO);
 
-		// Log/print warning
-		if (fc.do_Halt) {
+		// Log warning
+		if (FC.do_Halt) {
 			// Print abort message
 			Debug.sprintf_safe(buffLrg, buff_lrg, "ABORTED: %s: Robot Halted", str_med_move);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 		}
 
-		// Log/print failure
+		// Log failure
 		else if (do_AbortMove) {
-			Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED: %s: targ_set=%d ekf_ready=%d move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
-				str_med_move, isTargSet, fc.is_EKFReady, isMoveStarted, targDist, GetMoveError(), moveDir);
+			Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED: %s: targ_set=%d ekf_ready=%d dt_ekf=%dms move_started=%d targ_dist=%0.2fcm dist_error=%0.2fcm move_dir=\'%c\'",
+				str_med_move, isTargSet, FC.is_EKFReady, dt_ekf, isMoveStarted, targDist, GetMoveError(), moveDir);
 			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 		}
 
-		// Log/print final move status
+		// Log final move status
 		else if (isTargReached) {
 
 			// Print success message
@@ -3587,7 +3632,7 @@ bool MOVETO::RunMove()
 			// Send confirmation for first and last move
 			if (moveEv == FIRST || moveEv == LAST) {
 
-				// Log/print
+				// Log
 				Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Sending 'M' Done Confirmation", str_med_move);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -3630,34 +3675,8 @@ bool MOVETO::SetMoveTarg()
 	int lap_cm = 0;
 	int pos = 0;
 
-	// Get abort timeout
-	if (t_tryTargSetTill == 0) {
-		t_tryTargSetTill = millis() + targSetTimeout;
-	}
-
-	// Check if time out reached
-	if (millis() > t_tryTargSetTill) {
-		do_AbortMove = true;
-
-		// Check if EKF not updating
-		int dt_ekf = millis() - kal.t_last;
-		if (dt_ekf >= t_tryTargSetTill / 2) {
-
-			// Log/print error
-			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: ABORT: EKF Hanging: dt=%dms", str_med_move, dt_ekf);
-			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
-		}
-
-		// Log/print error
-		Debug.sprintf_safe(buffLrg, buff_lrg, "%s: TIMEDOUT AFTER %dms", str_med_move, targSetTimeout);
-		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
-
-		// Return failure
-		return isTargSet;
-	}
-
 	// Bail if ekf pos data not ready
-	if (!fc.is_EKFReady) {
+	if (!FC.is_EKFReady) {
 		return isTargSet;
 	}
 
@@ -3692,7 +3711,7 @@ bool MOVETO::SetMoveTarg()
 	// Set flag true
 	isTargSet = true;
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Set Move Target: start_cum=%0.2fcm start_abs=%0.2fcm targ=%0.2fcm dist_move=%0.2fcm move_dir=\'%c\'",
 		str_med_move, pos_abs, startPosCum, targPosAbs, targDist, moveDir);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -3707,6 +3726,7 @@ double MOVETO::DecelToTarg(double dist_decel, double speed_min)
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	double new_speed = 0;
+	int dt_ekf = 0;
 
 	// Run if targ not reached
 	if (isTargReached) {
@@ -3716,34 +3736,6 @@ double MOVETO::DecelToTarg(double dist_decel, double speed_min)
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
-
-	// Get abort timeout
-	if (t_tryMoveTill == 0) {
-		t_tryMoveTill = millis() + moveTimeout;
-	}
-
-	// Check if time out reached
-	if (millis() > t_tryMoveTill) {
-
-		// Check if EKF not updating
-		int dt_ekf = millis() - kal.t_last;
-		if (dt_ekf >= moveTimeout / 2) {
-
-			// Log/print error
-			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: ABORT: EKF HANGING: dt=%dms", str_med_move, dt_ekf);
-			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
-		}
-
-		// Log/print error
-		Debug.sprintf_safe(buffLrg, buff_lrg, "%s: ABORT: TIMEDOUT AFTER %dms", str_med_move, moveTimeout);
-		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
-
-		// Set abort flag
-		do_AbortMove = true;
-
-		// Stop run
-		return 0;
-	}
 
 	// Compute remaining distance
 	distLeft = targDist - abs(kal.RobPos - startPosCum);
@@ -3765,7 +3757,7 @@ double MOVETO::DecelToTarg(double dist_decel, double speed_min)
 		if (baseSpeed == 0 && kal.RobVel != 0) {
 			baseSpeed = abs(kal.RobVel);
 
-			// Log/print decel distance
+			// Log decel distance
 			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Reached %0.2fcm From Target", str_med_move, distLeft);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 		}
@@ -3784,7 +3776,7 @@ double MOVETO::DecelToTarg(double dist_decel, double speed_min)
 	// Target reached
 	if (distLeft < 1)
 	{
-		// Log/print
+		// Log
 		Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: start_cum=%0.2fcm now_cum=%0.2f targ=%0.2fcm dist_move=%0.2fcm dist_left=%0.2fcm",
 			str_med_move, startPosCum, kal.RobPos, targPosAbs, targDist, distLeft);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -3830,8 +3822,7 @@ void MOVETO::MoveToReset()
 	isMoveStarted = false;
 	isTargReached = false;
 	do_AbortMove = false;
-	t_tryTargSetTill = 0;
-	t_tryMoveTill = 0;
+	t_moveTimeout = 0;
 	lastSpeed = 0;
 }
 
@@ -3933,7 +3924,7 @@ void REWARD::ProcRewCmd(byte cmd_type, float cmd_goal, int cmd_zone_delay)
 		rewDelay = cmd_delay * 1000;
 	}
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "SETUP: %s: cmd_type=%d cmd_goal=%0.2f cmd_zone_delay=%d",
 		str_med_rew, cmd_type, cmd_goal, cmd_zone_delay);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -3965,7 +3956,7 @@ bool REWARD::RunReward()
 			StartRew();
 
 			// Reset flag
-			fc.do_RunRew = false;
+			FC.do_RunRew = false;
 
 			// Print message
 			Debug.sprintf_safe(buffLrg, buff_lrg, "%s: REWARDED ZONE: occ=%dms zone=%d from=%0.2fcm to=%0.2fcm",
@@ -4016,7 +4007,7 @@ void REWARD::StartRew()
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
 	// Set motor hold time
-	if (!fc.is_ForageTask && rewMode != BUTTON) {
+	if (!FC.is_ForageTask && rewMode != BUTTON) {
 		BlockMotor(dt_rewBlock);
 	}
 
@@ -4024,7 +4015,7 @@ void REWARD::StartRew()
 	HardStop(__FUNCTION__, __LINE__);
 
 	// Send ard packet imediately
-	if (fc.is_SesStarted) {
+	if (FC.is_SesStarted) {
 		QueuePacket(&r2a, 'r', rewDuration, cnt_rew);
 		SendPacket(&r2a);
 	}
@@ -4042,13 +4033,13 @@ void REWARD::StartRew()
 	t_closeSol = t_rewStr + (int)((float)rewDuration*solOpenScale);
 
 	// Extend feeder arm
-	if (!fc.is_ForageTask) {
+	if (!FC.is_ForageTask) {
 		ExtendFeedArm(ezRewExtStps);
 	}
 
 	// Compute retract arm time
 	if (rewMode != BUTTON &&
-		!fc.is_ForageTask) {
+		!FC.is_ForageTask) {
 
 		// Compute time and set flag
 		t_retractArm = t_rewStr + dt_rewBlock;
@@ -4058,7 +4049,7 @@ void REWARD::StartRew()
 		do_TimedRetract = false;
 	}
 
-	// Log/print 
+	// Log 
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUNNING: %s: dt_sol=%dms dt_rew=%dms dt_retract=%d...",
 		str_med_rew, t_closeSol - t_rewStr, rewDuration, do_TimedRetract ? t_retractArm - t_rewStr : 0);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, t_rewStr);
@@ -4101,7 +4092,7 @@ bool REWARD::CheckEnd()
 		// Store actual time
 		t_closeSol = millis();
 
-		// Log/print
+		// Log
 		Debug.sprintf_safe(buffLrg, buff_lrg, "%s: CLOSED SOLONOID: dt_sol=%dms",
 			str_med_rew, t_closeSol - t_rewStr);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, t_rewEnd);
@@ -4119,7 +4110,7 @@ bool REWARD::CheckEnd()
 	// Store actual time
 	t_rewEnd = millis();
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "FINISHED: %s: dt_sol=%dms dt_rew=%dms dt_retract=%d",
 		str_med_rew, t_closeSol - t_rewStr, t_rewEnd - t_rewStr, do_TimedRetract ? t_retractArm - t_rewStr : 0);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, t_rewEnd);
@@ -4168,7 +4159,7 @@ void REWARD::SetZoneDur(int zone_ind)
 	// Set duration
 	rewDuration = zoneRewDurs[zoneInd];
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: Set Reward Duration: zone_ind=%d duration=%d",
 		str_med_rew, zoneInd, rewDuration);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -4204,10 +4195,17 @@ void REWARD::SetZoneBounds(float cmd_goal)
 	// Compute bounds for each zone
 	for (int i = zoneMin; i <= zoneMax; i++)
 	{
-		// Compute 5 deg bounds
+		// Get zone width with overlap for center bins
+		int zone_bnd_start = zoneMin == zoneMax || i == zoneMin ?
+			rewZoneWdith / 2 : rewZoneWdith;
+		int zone_bnd_end = zoneMin == zoneMax || i == zoneMax ?
+			rewZoneWdith / 2 : rewZoneWdith;
+
+		// Compute zone bounds
 		dist_center_cm = -1 * zoneLocs[i] * ((140 * PI) / 360);
-		dist_start_cm = dist_center_cm - (2.5 * ((140 * PI) / 360));
-		dist_end_cm = dist_center_cm + (2.5 * ((140 * PI) / 360));
+		dist_start_cm = dist_center_cm - (zone_bnd_start * ((140 * PI) / 360));
+		dist_end_cm = dist_center_cm + (zone_bnd_end * ((140 * PI) / 360));
+
 		// Store in array
 		zoneBoundCumMin[i] = goalPosCum + dist_start_cm;
 		zoneBoundCumMax[i] = goalPosCum + dist_end_cm;
@@ -4310,7 +4308,7 @@ void REWARD::ExtendFeedArm(byte ext_steps)
 	// Bail if arm already extended
 	if (isArmExtended) {
 
-		// Log/print warning
+		// Log warning
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "ABORTED: Arm Already Extended");
 		return;
 	}
@@ -4319,7 +4317,7 @@ void REWARD::ExtendFeedArm(byte ext_steps)
 	DB_FUN_STR();
 #endif
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Set Extend Feed Arm: steps=%d", ext_steps);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -4375,7 +4373,7 @@ void REWARD::RetractFeedArm()
 	H	H	H	Sixteenth Step	4W1 - 2 Phase
 	*/
 
-	// Log/print
+	// Log
 	Debug.DB_General(__FUNCTION__, __LINE__, "Set Retract Feed Arm");
 
 	// Block handler
@@ -4494,7 +4492,7 @@ void REWARD::CheckFeedArm()
 		// Check if its time to retract arm
 		if (millis() > t_retractArm) {
 
-			// Log/print
+			// Log
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Time to Retract Feeder Arm: dt_rew=%d",
 				millis() - t_rewStr);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -4594,7 +4592,7 @@ void REWARD::CheckFeedArm()
 			digitalWrite(pin.ED_SLP, LOW);
 		}
 
-		// Log/print status
+		// Log status
 		if (!is_timedout) {
 
 			// Print success
@@ -4631,7 +4629,7 @@ void REWARD::RewardReset(bool was_rewarded)
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
 
-	// Log/print event
+	// Log event
 	Debug.DB_General(__FUNCTION__, __LINE__, "Reseting Reward");
 
 	// Log zone info
@@ -4643,7 +4641,7 @@ void REWARD::RewardReset(bool was_rewarded)
 			Debug.sprintf_safe(buffMed, buff_med, " z%d=%dms", i + 1, zoneOccTim[i]);
 			Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_med), buff_med);
 		}
-		// Log/print
+		// Log
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 		// Format zone cnt message
@@ -4652,7 +4650,7 @@ void REWARD::RewardReset(bool was_rewarded)
 			Debug.sprintf_safe(buffMed, buff_med, " z%d=%d", i + 1, zoneOccCnt[i]);
 			Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_med), buff_med);
 		}
-		// Log/print
+		// Log
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 	}
@@ -4912,12 +4910,12 @@ bool LOGGER::SetToCmdMode()
 		Debug.sprintf_safe(buffLrg, buff_lrg, "OpenLog Set to Cmd Mode: mode = %c", mode);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	}
-	// Log/print error
+	// Log error
 	else {
 		// Set flag
 		pass = false;
 
-		// Log/print
+		// Log
 		Debug.sprintf_safe(buffLrg, buff_lrg, "ABORTED: mode=%c", mode);
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 	}
@@ -5157,7 +5155,7 @@ char LOGGER::GetReply(uint32_t timeout)
 		Debug.DB_OpenLog(buff_lrg, true);
 	}
 
-	// Log/print error
+	// Log error
 	if (!pass) {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Timedout: dt=%d bytes=%d", timeout, arr_ind + 1);
 		Debug.DB_OpenLog(buff_lrg, true);
@@ -5196,7 +5194,7 @@ bool LOGGER::SetToWriteMode()
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	}
 
-	// Log/print error
+	// Log error
 	else {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "FAILED: OpenLog Set to Write Mode: file_name=%s mode = %c",
 			buff_med_logFile, mode);
@@ -5206,26 +5204,22 @@ bool LOGGER::SetToWriteMode()
 	return pass;
 }
 
-void LOGGER::QueueLog(char *p_msg, uint32_t t)
+void LOGGER::QueueLog(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int line)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
 
 #if DO_LOG
-	/*
-	STORE LOG DATA FOR CS
-	FORMAT: "[log_cnt],ts_ms,message,\r\n"
-	*/
 
 	// Local vars
-	static char buff_lrg_1[buffLrg] = { 0 }; buff_lrg_1[0] = '\0';
+	static char buff_med_1[buffMed] = { 0 }; buff_med_1[0] = '\0';
 	static char buff_med_save[buffMed] = { 0 };
 	static uint16_t overflow_cnt = 0;
 	uint32_t t_m = 0;
 
 	// Bail if queue store blocked
-	if (fc.do_BlockLogQueue) {
+	if (FC.do_BlockLogQueue) {
 		return;
 	}
 
@@ -5257,10 +5251,16 @@ void LOGGER::QueueLog(char *p_msg, uint32_t t)
 	cnt_logsStored++;
 
 	// Get sync correction
-	t_m = t - t_sync;
+	t_m = ts - t_sync;
+
+	// Add function and line number
+	if (strcmp(p_fun, "") != 0) {
+		Debug.sprintf_safe(buffMed, buff_med_1, "[%s:%d] ", p_fun, line);
+	}
 
 	// Store log
-	Debug.sprintf_safe(buffMax, LQ_Queue[LQ_StoreInd], "[%d],%lu,%d,%s%s\r\n", cnt_logsStored, t_m, cnt_loopShort, buff_med_save, p_msg);
+	Debug.sprintf_safe(buffMax, LQ_Queue[LQ_StoreInd], "[%d],%lu,=\"%s\",%d,%s,%s%s%s\r\n", 
+		cnt_logsStored, t_m, Debug.FormatTimestamp(t_m), cnt_loopShort, p_type, buff_med_save, buff_med_1, p_msg);
 
 	// Reset overlow stuff
 	overflow_cnt = 0;
@@ -5300,7 +5300,7 @@ bool LOGGER::WriteLog()
 	}
 
 	// Bail if writing blocked
-	if (fc.do_BlockLogWrite) {
+	if (FC.do_BlockLogWrite) {
 
 		return is_logs;
 	}
@@ -5375,7 +5375,7 @@ bool LOGGER::WriteAll(uint32_t timeout)
 	bool is_timedout = false;
 
 	// Bail if writing blocked
-	if (fc.do_BlockLogWrite) {
+	if (FC.do_BlockLogWrite) {
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "WriteLog Is Blocked");
 		return false;
 	}
@@ -5453,8 +5453,8 @@ void LOGGER::StreamLogs()
 	delay(100);
 
 	// Stop storing and writing logs
-	fc.do_BlockLogQueue = true;
-	fc.do_BlockLogWrite = true;
+	FC.do_BlockLogQueue = true;
+	FC.do_BlockLogWrite = true;
 
 	// Write footer
 	hwSerial.write(str_sml_foot.data(), 3);
@@ -5676,7 +5676,7 @@ void LOGGER::StreamLogs()
 	}
 
 	// Unblock log store
-	fc.do_BlockLogQueue = false;
+	FC.do_BlockLogQueue = false;
 	delay(50);
 
 	// Tracknig summary info
@@ -5806,12 +5806,12 @@ void LOGGER::StreamLogs()
 #endif
 
 	// Reset flag
-	fc.do_LogSend = false;
-	fc.do_SendVCC = true;
+	FC.do_LogSend = false;
+	FC.do_SendVCC = true;
 
 	// Set back to write mode
 	if (SetToWriteMode()) {
-		fc.do_BlockLogWrite = false;
+		FC.do_BlockLogWrite = false;
 	}
 
 }
@@ -5835,7 +5835,7 @@ void LOGGER::TestLoad(int n_entry, char *p_log_file)
 
 	// Prevent any new info from logging
 	WriteAll(5000);
-	fc.do_BlockLogQueue = true;
+	FC.do_BlockLogQueue = true;
 
 	// Load existing log file
 	if (p_log_file != '\0') {
@@ -5998,7 +5998,7 @@ bool CheckForHandshake()
 	static uint16_t dt_blink_off = 490;
 	int dt_ir = 0;
 
-	if (fc.is_SesStarted) {
+	if (FC.is_SesStarted) {
 		return true;
 	}
 
@@ -6007,7 +6007,7 @@ bool CheckForHandshake()
 #endif
 
 	// CHECK FOR IR HANDSHAKE
-	if (!fc.is_IRHandshakeDone) {
+	if (!FC.is_IRHandshakeDone) {
 
 		// Pulse tracker led
 		if (!is_on && millis() >= t_pulse_last + dt_blink_on + dt_blink_off) {
@@ -6035,11 +6035,11 @@ bool CheckForHandshake()
 				// Set sync time
 				t_sync = v_t_irSyncLast;
 
-				// Log/print pulse time
+				// Log pulse time
 				Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE IR SYNC PULSE DETECTED: ACTUAL DT=%dms EXPECTED DT=75ms", dt_ir);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
-				// Log/print sync time
+				// Log sync time
 				Debug.sprintf_safe(buffLrg, buff_lrg, "SET SYNC TIME: %dms", t_sync);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -6047,7 +6047,7 @@ bool CheckForHandshake()
 				analogWrite(pin.LED_TRACKER, trackLEDduty[1]);
 
 				// Set flag
-				fc.is_IRHandshakeDone = true;
+				FC.is_IRHandshakeDone = true;
 				Debug.DB_General(__FUNCTION__, __LINE__, "IR Handshake Confirmed");
 
 				// Send handshake to CS
@@ -6064,12 +6064,12 @@ bool CheckForHandshake()
 	}
 
 	// Check for handshake confirmation from CS
-	else if (!fc.is_CSHandshakeDone) {
+	else if (!FC.is_CSHandshakeDone) {
 
 		if (!r2c.do_rcvCheckArr[ID_Ind<R2_COM<USARTClass>>('h', &r2c)]) {
 
 			// Set flag
-			fc.is_CSHandshakeDone = true;
+			FC.is_CSHandshakeDone = true;
 			Debug.DB_General(__FUNCTION__, __LINE__, "CS Handshake Confirmed");
 
 			// Send handshake to CheetahDue
@@ -6080,26 +6080,22 @@ bool CheckForHandshake()
 	}
 
 	// Check for handshake confirmation from CheetahDue
-	else if (!fc.is_CheetahDueHandshakeDone) {
+	else if (!FC.is_CheetahDueHandshakeDone) {
 
 		if (!r2a.do_rcvCheckArr[ID_Ind<R2_COM<USARTClass>>('h', &r2a)]) {
 
 			// Set flag
-			fc.is_CheetahDueHandshakeDone = true;
+			FC.is_CheetahDueHandshakeDone = true;
 			Debug.DB_General(__FUNCTION__, __LINE__, "CheetaDue Handshake Confirmed");
 		}
 
 	}
 
 	// Check if handshake complete
-	if (fc.is_CSHandshakeDone && fc.is_IRHandshakeDone && fc.is_CheetahDueHandshakeDone) {
+	if (FC.is_CSHandshakeDone && FC.is_IRHandshakeDone && FC.is_CheetahDueHandshakeDone) {
 
 		// Reset LCD
-		if (!fc.is_ManualSes &&
-			fc.is_LitLCD) {
-
-			fc.do_ChangeLCDstate = true;
-		}
+		FC.do_ChangeLCDstate = FC.is_LitLCD;
 		Debug.ClearLCD();
 
 		// Reset solonoids
@@ -6126,7 +6122,7 @@ bool CheckForHandshake()
 		SendPacket(&r2c);
 
 		// Set flag
-		fc.is_SesStarted = true;
+		FC.is_SesStarted = true;
 		Debug.DB_General(__FUNCTION__, __LINE__, "HANDSHAKE COMPLETE");
 
 		// Indicate completion
@@ -6143,9 +6139,9 @@ bool CheckForHandshake()
 		// Format message
 		Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE TIMEDOUT AFTER %d ms: |%s%s%s",
 			dt_timeoutHandshake,
-			!fc.is_IRHandshakeDone ? "NO IR HANDSHAKE|" : "",
-			!fc.is_CSHandshakeDone ? "NO CS CONFERMATION|" : "",
-			!fc.is_CheetahDueHandshakeDone ? "NO CHEEDAHDUE CONFERMATION|" : "");
+			!FC.is_IRHandshakeDone ? "NO IR HANDSHAKE|" : "",
+			!FC.is_CSHandshakeDone ? "NO CS CONFERMATION|" : "",
+			!FC.is_CheetahDueHandshakeDone ? "NO CHEEDAHDUE CONFERMATION|" : "");
 
 		// Run error hold and restart
 		Debug.RunErrorHold(buff_lrg, "HANDSHAKE", 15);
@@ -6188,6 +6184,9 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	bool is_conf = false;
 	bool is_resend = false;
 	bool is_repeat = false;
+	bool is_missed = false;
+	bool is_dropped = false;
+	int n_missed = 0;
 	byte flag_byte = 0;
 	R2_COM<USARTClass> *p_r2;
 	R2_COM<USARTClass> *p_r2o;
@@ -6270,22 +6269,14 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	dt_parse = millis() - t_start;
 	dt_sent = p_r2->t_sent > 0 ? millis() - p_r2->t_sent : 0;
 
-	// Store data strings
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
-	Debug.sprintf_safe(buffLrg, buff_lrg_3, " b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
-		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, p_r4->dt_rcvd, dt_parse);
-
 	// Check for dropped packet
 	if (foot != p_r4->foot) {
 
 		// Incriment dropped count
 		p_r4->cnt_dropped++;
 
-		// Log/print dropped packet info
-		Debug.sprintf_safe(buffLrg, buff_lrg, "Dropped %s Packs: cnt=%lu %s %s",
-			COM::str_list_id[p_r4->comID], p_r4->cnt_dropped, buff_lrg_2, buff_lrg_3);
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+		// Set flag
+		is_dropped = true;
 	}
 
 	// Footer found so process packet
@@ -6301,8 +6292,8 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 		r2_ind = ID_Ind<R2_COM<USARTClass>>(id, p_r2);
 
 		// Set coms started flag
-		if (p_r4->comID == COM::ID::c2r && !fc.is_ComsStarted) {
-			fc.is_ComsStarted = true;
+		if (p_r4->comID == COM::ID::c2r && !FC.is_ComsStarted) {
+			FC.is_ComsStarted = true;
 		}
 
 		// Reset check
@@ -6348,16 +6339,12 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 				pack - (p_r4->packRange[0] - 1);
 
 			// Update dropped packets
-			int dropped = pack_diff - 1;
-			p_r4->cnt_dropped += dropped > 0 ? dropped : 0;
+			n_missed = pack_diff - 1;
+			p_r4->cnt_dropped += n_missed > 0 ? n_missed : 0;
 
-			// Log/print dropped packets
-			if (dropped > 0)
-			{
-				// Log/print dropped packet info
-				Debug.sprintf_safe(buffLrg, buff_lrg, "Missed %s Packs: (cns|tot)=|%d|%lu| p_last=%d %s %s",
-					COM::str_list_id[p_r4->comID], dropped, p_r4->cnt_dropped, p_r4->packInd, buff_lrg_2, buff_lrg_3);
-				Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+			// flag missed packets
+			if (n_missed > 0) {
+				is_missed = true;
 			}
 
 			// Update packets sent
@@ -6375,18 +6362,39 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 
 		}
 
-		// Log/print recieved
-		Debug.DB_Rcvd(p_r4, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
-
 	}
 
-	// Check if data was discarded
+	// Format data strings
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
+	Debug.sprintf_safe(buffLrg, buff_lrg_3, " b_read=%d b_dump=%d rx=%d tx=%d dt(snd|rcv|prs)=|%d|%d|%d|",
+		cnt_bytesRead, cnt_bytesDiscarded, rx_size, tx_size, dt_sent, p_r4->dt_rcvd, dt_parse);
+
+	// Log recieved
+	if (!is_dropped) {
+		Debug.DB_Rcvd(p_r4, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
+	}
+	// Log dropped packs warning
+	else {
+		Debug.sprintf_safe(buffLrg, buff_lrg, "Dropped %s Packs: cnt=%lu %s %s",
+			COM::str_list_id[p_r4->comID], p_r4->cnt_dropped, buff_lrg_2, buff_lrg_3);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+	}
+
+	// Log missed packs warning
+	if (is_missed) {
+		Debug.sprintf_safe(buffLrg, buff_lrg, "Missed %s Packs: (cns|tot)=|%d|%lu| p_last=%d %s %s",
+			COM::str_list_id[p_r4->comID], n_missed, p_r4->cnt_dropped, p_r4->packInd, buff_lrg_2, buff_lrg_3);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+	}
+
+	// Log discarded bytes warning
 	if (cnt_bytesDiscarded > 0) {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Dumped Bytes: %s %s", buff_lrg_2, buff_lrg_3);
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 	}
 
-	// Check if parsing took unusually long
+	// Log parse hanging warning
 	if (dt_parse > 30) {
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Parser Hanging: %s %s", buff_lrg_2, buff_lrg_3);
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
@@ -6538,7 +6546,7 @@ byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch)
 	// Compbine strings
 	Debug.strcat_safe(buffLrg, strlen(buff_lrg), buff_lrg, strlen(buff_lrg_2), buff_lrg_2);
 
-	// Log/print error
+	// Log error
 	Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Return 0
@@ -6566,6 +6574,8 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 	VEC<float> dat(3, __LINE__, _dat);
 	byte flag_byte = 0;
 	int id_ind = 0;
+	uint16_t tx_size = 0;
+	uint16_t rx_size = 0;
 	R4_COM<USARTClass> *p_r4;
 
 	// Set pointer to R4_COM struct
@@ -6583,8 +6593,8 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 	GetSetByteBit(&flag_byte, 3, is_resend);
 
 	// Get buffers
-	uint16_t tx_size = SERIAL_BUFFER_SIZE - 1 - p_r2->hwSerial.availableForWrite();
-	uint16_t rx_size = p_r2->hwSerial.available();
+	tx_size = SERIAL_BUFFER_SIZE - 1 - p_r2->hwSerial.availableForWrite();
+	rx_size = p_r2->hwSerial.available();
 
 	// Update sendQueue ind
 	p_r2->SQ_StoreInd++;
@@ -6608,7 +6618,7 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 		Debug.sprintf_safe(buffLrg, buff_lrg, "[*%s_Q-DROP*]: queue_s=%d queue_r=%d queue_state=|%s|",
 			COM::str_list_id[p_r2->comID], p_r2->SQ_StoreInd, p_r2->SQ_ReadInd, buff_lrg);
 
-		// Log/print error
+		// Log error
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 		// Set queue back 
@@ -6638,9 +6648,6 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 
 		// Copy packet number
 		pack = p_r2->packInd;
-
-		// Update sent packet count
-		p_r2->packSentAll++;
 
 	}
 
@@ -6674,10 +6681,10 @@ void QueuePacket(R2_COM<USARTClass> *p_r2, char id, float dat1, float dat2, floa
 	p_r2->t_queuedArr[id_ind] = millis();
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 
-	// Log/print queued packet info
+	// Log queued packet info
 	Debug.DB_SendQueued(p_r2, buff_lrg, p_r2->t_queuedArr[id_ind]);
 
 	return;
@@ -6708,8 +6715,9 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	bool is_repeat = false;
 	byte flag_byte = 0;
 	uint16_t pack = 0;
-	uint16_t tx_size;
-	uint16_t rx_size;
+	uint16_t pack_last = 0;
+	uint16_t tx_size = 0;
+	uint16_t rx_size = 0;
 	int id_ind = 0;
 	R4_COM<USARTClass> *p_r4;
 	R4_COM<USARTClass> *p_r4o;
@@ -6815,18 +6823,16 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	}
 
 	// Get last pack
-	uint16_t pack_last;
-	if (!is_conf)
-		pack_last = p_r2->packArr[id_ind];
-	else
-		pack_last = p_r2->packConfArr[id_ind];
+	pack_last = is_conf ? p_r2->packConfArr[id_ind] : p_r2->packArr[id_ind];
 
 	// Flag resent pack
 	is_repeat = is_resend || pack == pack_last;
 
 	// Incriment repeat count
-	if (is_repeat)
-		p_r2->cnt_repeat++;
+	p_r2->cnt_repeat += is_repeat ? 1 : 0;
+
+	// Incriment sent packet count
+	p_r2->packSentAll += !is_repeat && !is_conf ? 1 : 0;
 
 	// Update packet history
 	if (!is_conf)
@@ -6842,12 +6848,12 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	p_r2->t_sentArr[id_ind] = p_r2->t_sent;
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d",
-		id, dat[0], dat[1], dat[2], pack, flag_byte);
+	Debug.sprintf_safe(buffLrg, buff_lrg_2, "\'%c\': dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s",
+		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d| ez(on|act)=|%d|%d| sol_act(etoh|food)=|%d|%d| vcc_rel=%d",
 		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue, digitalRead(pin.ED_SLP), v_doStepTimer, digitalRead(pin.REL_ETOH) == HIGH, digitalRead(pin.REL_FOOD) == HIGH, digitalRead(pin.REL_VCC) == HIGH);
 
-	// Log/print sent
+	// Log sent
 	Debug.DB_Sent(p_r2, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 
 	// Return success
@@ -6863,7 +6869,6 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
 	bool is_waiting_for_pack = false;
 	uint16_t pack_last = 0;
-	uint16_t pack = 0;
 	bool is_done = false;
 	int dt_sent = 0;
 
@@ -6906,19 +6911,16 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		uint16_t rx_size = p_r2->hwSerial.available();
 
 		// Get dat string
-		Debug.sprintf_safe(buffLrg, buff_lrg_2, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%d dt_sent=%dms tx=%d rx=%d",
-			p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], p_r2->flagArr[i], dt_sent, tx_size, rx_size);
+		Debug.sprintf_safe(buffLrg, buff_lrg_2, "id=\'%c\' dat=|%0.2f|%0.2f|%0.2f| pack=%d flag_byte=%s dt_sent=%dms tx=%d rx=%d",
+			p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], Debug.FormatBinary(p_r2->flagArr[i]), dt_sent, tx_size, rx_size);
 
 		// Get done flag
 		is_done = GetSetByteBit(&p_r2->flagArr[i], 2, false);
 
 		if (p_r2->cnt_repeatArr[i] < p_r2->resendMax) {
 
-			// Resend data with new pack number for all but done confirmation
-			pack = is_done ? p_r2->packArr[i] : 0;
-
-			// Queue packet
-			QueuePacket(p_r2, p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], pack, true, false, is_done, true);
+			// Resend with same packet number
+			QueuePacket(p_r2, p_r2->id[i], p_r2->dat1[i], p_r2->dat2[i], p_r2->dat3[i], p_r2->packArr[i], true, false, is_done, true);
 
 			// Update count
 			p_r2->cnt_repeatArr[i]++;
@@ -6933,7 +6935,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		// Coms failed
 		else {
 
-			// Log/print error
+			// Log error
 			Debug.sprintf_safe(buffLrg, buff_lrg, "ABORTED: Resending %s Packet: cnt=%d %s",
 				COM::str_list_id[p_r2->comID], p_r2->cnt_repeatArr[i], buff_lrg_2);
 			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
@@ -6988,7 +6990,7 @@ void SendTeensy(const char *p_fun, int line, int mem, char id, char *p_msg)
 	static byte msg_bytes = sizeof(Utnsy.b);
 
 	// Bail if not ready
-	if (!fc.is_TeensyReady) {
+	if (!FC.is_TeensyReady) {
 		return;
 	}
 
@@ -7151,7 +7153,7 @@ void ImportTeensy()
 	bool is_timeout = false;
 	VEC<bool> is_reset(2, __LINE__);
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Running: Import Teensy Logs...");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	Debug.PrintAll(1000);
@@ -7469,7 +7471,7 @@ void AD_Reset(float max_acc, float max_dec, float max_speed)
 		HardStop(__FUNCTION__, __LINE__);
 	}
 
-	// Log/print autodriver settings
+	// Log autodriver settings
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Reset AD Boards: max_acc=%0.2f max_dec=%0.2f max_speed=%0.2f",
 		max_acc, max_dec, max_speed);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -7512,7 +7514,7 @@ void AD_CheckOC(bool force_check)
 		// Track events
 		cnt_errAD++;
 
-		// Log/print
+		// Log
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Overcurrent Detected in |%s%s Driver: Resetting AD: cnt=%d now_ocd_R|F=%d|%d last_ocd_R|F=%d|%d",
 			ocd_r == 0 ? "REAR|" : "", ocd_f == 0 ? "FRONT|" : "", cnt_errAD, ocd_r, ocd_f, ocd_last_r, ocd_last_f);
 		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
@@ -7534,7 +7536,7 @@ void AD_CheckOC(bool force_check)
 	// Disable resetting after 5 errors
 	if (cnt_errAD >= 5 && !do_reset_disable) {
 
-		// Log/print
+		// Log
 		Debug.sprintf_safe(buffLrg, buff_lrg, "DISABLED AD RESET AFTER %d ERRORS", cnt_errAD);
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -7554,7 +7556,7 @@ void HardStop(const char *p_fun, int line, bool do_block_hz)
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
-	// Log/print event
+	// Log event
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Hard Stop [%s:%d]", p_fun, line - 23);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -7569,8 +7571,7 @@ void HardStop(const char *p_fun, int line, bool do_block_hz)
 	Pid.PidReset();
 
 	// Set to high impedance so robot can be moved
-	if (fc.is_ManualSes && !do_block_hz) {
-
+	if (FC.is_ManualSes && !do_block_hz) {
 		AD_R.hardHiZ();
 		AD_F.hardHiZ();
 	}
@@ -7598,13 +7599,13 @@ void Check_IRprox_Halt()
 	// Update next check time
 	t_check = millis() + 250;
 
-	// Bail if not tracking
-	if (!fc.is_TrackingEnabled) {
+	// Bail if manual ses
+	if (FC.is_ManualSes) {
 		return;
 	}
 
 	// Bail if already blocking
-	if (fc.is_MotBlocking) {
+	if (FC.is_MotBlocking) {
 		return;
 	}
 
@@ -7637,7 +7638,7 @@ void Check_IRprox_Halt()
 	cnt_irProxHaltR += is_rt_ir_trigg ? 1 : 0;
 	cnt_irProxHaltL += is_lft_ir_trigg ? 1 : 0;
 
-	// Log/print warning
+	// Log warning
 	Debug.sprintf_safe(buffLrg, buff_lrg, "HALTED FOR IR |%s%s TRIGGER: cnt(rt|lft)=|%lu|%lu|",
 		is_rt_ir_trigg ? "RIGHT|" : "", is_lft_ir_trigg ? "LEFT|" : "", cnt_irProxHaltR, cnt_irProxHaltL);
 	Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
@@ -7661,7 +7662,7 @@ bool RunMotor(char dir, double new_speed, MC_CALL::ID caller)
 	if (motorControlNow != caller &&
 		caller != MC_CALL::ID::OVERIDE) {
 
-		// Log/print warning
+		// Log warning
 		if (caller != caller_last) {
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Ignored Run Request: conroller=%s caller=%s",
 				MC_CON::str_list_id[motorControlNow], MC_CALL::str_list_id[caller]);
@@ -7672,7 +7673,7 @@ bool RunMotor(char dir, double new_speed, MC_CALL::ID caller)
 		return false;
 	}
 
-	// Log/print speed change
+	// Log speed change
 	Debug.DB_RunSpeed(__FUNCTION__, __LINE__, caller, runSpeedNow, new_speed);
 
 	// Scale vel for each motor
@@ -7804,7 +7805,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 			case MC_CALL::ID::MOVETO:
 
 				// Can unset "HOLD" if rat not on track
-				if (!fc.is_RatOnTrack || fc.is_TaskDone) {
+				if (!FC.is_RatOnTrack || FC.is_TaskDone) {
 					do_change = true;
 				}
 				break;
@@ -7813,7 +7814,7 @@ bool SetMotorControl(MC_CON::ID set_to, MC_CALL::ID caller)
 			case MC_CALL::ID::BLOCKER:
 
 				// Can unset "HOLD" if tracking setup
-				if (fc.is_TrackingEnabled) {
+				if (FC.is_TrackingEnabled) {
 					do_change = true;
 				}
 				break;
@@ -7870,7 +7871,7 @@ void BlockMotor(int dt)
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 
 	// Set blocking and time
-	fc.is_MotBlocking = true;
+	FC.is_MotBlocking = true;
 
 	// Update time to hold till
 	t_blockMoter = millis() + dt;
@@ -7878,7 +7879,7 @@ void BlockMotor(int dt)
 	// Remove all motor controll
 	if (!SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::BLOCKER)) {
 
-		// Log/print warning
+		// Log warning
 		Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL TO \"HOLD\"");
 
 		// Bail
@@ -7900,7 +7901,7 @@ void CheckBlockTimElapsed()
 	bool is_mot_running = false;
 
 	// Bail if not checking
-	if (!fc.is_MotBlocking) {
+	if (!FC.is_MotBlocking) {
 		return;
 	}
 
@@ -7913,7 +7914,7 @@ void CheckBlockTimElapsed()
 
 	// Check if rat passed feeder 
 	is_passed_feeder =
-		fc.is_TrackingEnabled &&
+		FC.is_TrackingEnabled &&
 		kal.RatPos - (kal.RobPos + feedTrackPastDist) > 0 &&
 		Pos[0].posCum - (kal.RobPos + feedTrackPastDist) > 0 &&
 		Pos[2].posCum - (kal.RobPos + feedTrackPastDist) > 0;
@@ -7932,7 +7933,7 @@ void CheckBlockTimElapsed()
 		return;
 	}
 
-	// Log/print
+	// Log
 	if (is_block_done) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "Finished Blocking Motor");
 	}
@@ -7944,12 +7945,12 @@ void CheckBlockTimElapsed()
 	}
 
 	// Bail if not blocking
-	if (!fc.is_MotBlocking) {
+	if (!FC.is_MotBlocking) {
 		return;
 	}
 
 	// Set flag to stop checking
-	fc.is_MotBlocking = false;
+	FC.is_MotBlocking = false;
 
 	// Retract arm early if extended
 	if ((Reward.do_ExtendArm || Reward.isArmExtended) &&
@@ -7961,7 +7962,7 @@ void CheckBlockTimElapsed()
 	if (motorControlNow == MC_CON::ID::HOLD) {
 
 		// Set motor control to "OPEN"
-		if (fc.is_TrackingEnabled) {
+		if (FC.is_TrackingEnabled) {
 			SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::HALT);
 		}
 		// Set motor control to "HOLD"
@@ -8020,12 +8021,12 @@ void InitializeTracking()
 	double cm_dist = 0;
 
 	// Bail if finished or task done
-	if (fc.is_TrackingEnabled || fc.is_TaskDone) {
+	if (FC.is_TrackingEnabled || FC.is_TaskDone) {
 		return;
 	}
 
 	// Wait for new data
-	if (!fc.is_RatOnTrack ||
+	if (!FC.is_RatOnTrack ||
 		!Pos[0].isNew ||
 		!Pos[2].isNew ||
 		!Pos[1].isNew) {
@@ -8043,7 +8044,7 @@ void InitializeTracking()
 	cm_diff = Pos[0].posCum - Pos[1].posCum;
 	cm_dist = min((140 * PI) - abs(cm_diff), abs(cm_diff));
 
-	// Log/print rat and robot starting pos
+	// Log rat and robot starting pos
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Starting Positions: pos(abs|rel|laps) rat_vt=%0.2f|%0.2f|%d rat_pixy=%0.2f|%0.2f|%d rob_vt=%0.2f|%0.2f|%d rat_dist=%0.2f",
 		Pos[0].posCum, Pos[0].posAbs, Pos[0].nLaps, Pos[2].posCum, Pos[2].posAbs, Pos[2].nLaps, Pos[1].posCum, Pos[1].posAbs, Pos[1].nLaps, cm_diff);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -8052,7 +8053,7 @@ void InitializeTracking()
 	if (cm_diff < 0 ||
 		cm_dist >((140 * PI) / 4))
 	{
-		// Log/print error
+		// Log error
 		Debug.DB_Error(__FUNCTION__, __LINE__, "RESETTING POSITION DATA DUE TO BAD VALUES");
 
 		// Will have to run again with new samples
@@ -8065,19 +8066,19 @@ void InitializeTracking()
 	}
 
 	// Set flag
-	fc.is_TrackingEnabled = true;
+	FC.is_TrackingEnabled = true;
 
 	// Reset ekf
 	Pid.PidResetEKF();
 
 	// Don't start pid for manual or forage sessions
-	if (!fc.is_ManualSes &&
-		!fc.is_ForageTask)
+	if (!FC.is_ManualSes &&
+		!FC.is_ForageTask)
 	{
 		// Open up motor control
 		if (!SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::SETUP_TRACKING)) {
 
-			// Log/print error
+			// Log error
 			Debug.DB_Error(__FUNCTION__, __LINE__, "FAILED TO SET MOTOR CONTROL TO \"Open\"");
 		}
 
@@ -8087,7 +8088,7 @@ void InitializeTracking()
 	}
 
 	// Initialize bulldoze
-	if (fc.do_Bulldoze)
+	if (FC.do_Bulldoze)
 	{
 		// Run from initial blocked mode
 		Bull.BullOn();
@@ -8123,7 +8124,7 @@ void CheckSampDT()
 	}
 
 	// Bail if rat not on track or task done
-	if (!fc.is_RatOnTrack || fc.is_TaskDone) {
+	if (!FC.is_RatOnTrack || FC.is_TaskDone) {
 		return;
 	}
 
@@ -8164,7 +8165,7 @@ void CheckSampDT()
 		// Incriment count
 		Pos[0].cnt_swap++;
 
-		// Log/print if > 1 sec sinse last swap
+		// Log if > 1 sec sinse last swap
 		if (millis() - t_swap_vt > 1000) {
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Swapped VT for Pixy");
 		}
@@ -8180,7 +8181,7 @@ void CheckSampDT()
 		// Incriment count
 		Pos[2].cnt_swap++;
 
-		// Log/print if > 1 sec sinse last swap
+		// Log if > 1 sec sinse last swap
 		if (millis() - t_swap_pixy > 1000) {
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Swapped Pixy for VT");
 		}
@@ -8190,7 +8191,7 @@ void CheckSampDT()
 		t_swap_pixy = millis();
 	}
 
-	// Log/print warning 
+	// Log warning 
 	if (buff_lrg[0] != '\0') {
 		Debug.sprintf_safe(buffLrg, buff_lrg_2, "%s: cnt=|vt=%d|px=%d| dt=|vt=%d|px=%d| pos=|vt=%0.2f|px=%0.2f|",
 			buff_lrg, Pos[0].cnt_swap, Pos[2].cnt_swap, dt_vt, dt_pixy, Pos[0].posAbs, Pos[2].posAbs);
@@ -8231,7 +8232,7 @@ void UpdateEKF()
 	Pid.PidSetUpdateTime(millis());
 
 	// Set flag for reward
-	if (fc.is_TrackingEnabled) {
+	if (FC.is_TrackingEnabled) {
 		Reward.is_ekfNew = true;
 	}
 
@@ -8289,11 +8290,11 @@ void UpdateEKF()
 		// Add to count
 		cnt_errEKF++;
 
-		// Log/print first and every 10 errors
+		// Log first and every 10 errors
 		if (cnt_errEKF == 1 ||
 			cnt_errEKF % 10 == 0) {
 
-			// Log/print warning
+			// Log warning
 			Debug.sprintf_safe(buffLrg, buff_lrg, "EKF Hanging: cnt_err=%d dt_update=%d", cnt_errEKF, millis() - kal.t_last);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
 		}
@@ -8323,7 +8324,7 @@ void IR_SyncCheck()
 
 	// Only run after sync setup
 	if (t_sync != 0 &&
-		!fc.do_BlockDetectIR) {
+		!FC.do_BlockDetectIR) {
 
 		// Log event if streaming started
 		Debug.sprintf_safe(buffLrg, buff_lrg, "IR Sync Event: dt=%dms", v_dt_ir);
@@ -8401,7 +8402,7 @@ bool GetButtonInput()
 				return false;
 			}
 
-			// Log/print
+			// Log
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Pressed button %d", i);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -8435,7 +8436,7 @@ bool GetButtonInput()
 			// Set flag for either condition
 			if (is_short_hold || is_long_hold) {
 
-				// Log/print
+				// Log
 				Debug.sprintf_safe(buffLrg, buff_lrg, "Triggered button %d", i);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -8467,7 +8468,7 @@ bool GetButtonInput()
 			if (is_running[i] ||
 				millis() > t_long_hold[i]) {
 
-				// Log/print
+				// Log
 				Debug.sprintf_safe(buffLrg, buff_lrg, "Reset button %d", i);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -8493,8 +8494,8 @@ bool GetButtonInput()
 
 		// Reward or retract feeder arm
 		if (!Reward.isArmExtended) {
-			fc.do_BtnRew = true;
-			Debug.DB_General(__FUNCTION__, __LINE__, "Button 1 \"fc.doBtnRew\" Triggered");
+			FC.do_BtnRew = true;
+			Debug.DB_General(__FUNCTION__, __LINE__, "Button 1 \"FC.doBtnRew\" Triggered");
 		}
 		else {
 			Reward.RetractFeedArm();
@@ -8502,32 +8503,32 @@ bool GetButtonInput()
 		}
 	}
 	else if (do_flag_fun_lhold[0]) {
-		fc.do_MoveRobFwd = true;
-		Debug.DB_General(__FUNCTION__, __LINE__, "Button 1 \"fc.doMoveRobFwd\" Triggered");
+		FC.do_MoveRobFwd = true;
+		Debug.DB_General(__FUNCTION__, __LINE__, "Button 1 \"FC.doMoveRobFwd\" Triggered");
 	}
 
 	// Set button 2 function flag
 	else if (do_flag_fun_shold[1]) {
-		fc.do_RewSolStateChange = true;
-		Debug.DB_General(__FUNCTION__, __LINE__, "Button 2 \"fc.doRewSolStateChange\" Triggered");
+		FC.do_RewSolStateChange = true;
+		Debug.DB_General(__FUNCTION__, __LINE__, "Button 2 \"FC.doRewSolStateChange\" Triggered");
 	}
 	else if (do_flag_fun_lhold[1]) {
-		fc.do_MoveRobRev = true;
-		Debug.DB_General(__FUNCTION__, __LINE__, "Button 2 \"fc.doMoveRobRev\" Triggered");
+		FC.do_MoveRobRev = true;
+		Debug.DB_General(__FUNCTION__, __LINE__, "Button 2 \"FC.doMoveRobRev\" Triggered");
 	}
 
 	// Set button 3 function flag
 	else if (do_flag_fun_shold[2]) {
-		fc.do_EtOHSolStateChange = true;
-		Debug.DB_General(__FUNCTION__, __LINE__, "Button 3 \"fc.doEtOHSolStateChange\" Triggered");
+		FC.do_EtOHSolStateChange = true;
+		Debug.DB_General(__FUNCTION__, __LINE__, "Button 3 \"FC.doEtOHSolStateChange\" Triggered");
 	}
 	else if (do_flag_fun_lhold[2]) {
-		fc.do_ChangeLCDstate = true;
-		Debug.DB_General(__FUNCTION__, __LINE__, "Button 3 \"fc.doChangeLCDstate\" Triggered");
+		FC.do_ChangeLCDstate = true;
+		Debug.DB_General(__FUNCTION__, __LINE__, "Button 3 \"FC.doChangeLCDstate\" Triggered");
 	}
 
 	// Turn on LCD if any fucntion flagged durring manual mode
-	if (fc.is_ManualSes && !fc.do_ChangeLCDstate) {
+	if (FC.is_ManualSes && !FC.do_ChangeLCDstate) {
 		// Turn on LCD LED
 		ChangeLCDlight(8);
 	}
@@ -8545,7 +8546,7 @@ void ProcButtonInput()
 #endif
 
 	// REWARD
-	if (fc.do_BtnRew) {
+	if (FC.do_BtnRew) {
 		// Bail if already rewarding
 		if (Reward.isRewarding) {
 			Debug.DB_Warning(__FUNCTION__, __LINE__, "ABORTED: TRIGGERED DURING ONGOING REWARD");
@@ -8555,35 +8556,35 @@ void ProcButtonInput()
 			Reward.ProcRewCmd(0);
 			Reward.StartRew();
 		}
-		fc.do_BtnRew = false;
+		FC.do_BtnRew = false;
 	}
 
 	// OPEN/CLOSE REW SOL
-	if (fc.do_RewSolStateChange) {
+	if (FC.do_RewSolStateChange) {
 		OpenCloseRewSolenoid();
-		fc.do_RewSolStateChange = false;
+		FC.do_RewSolStateChange = false;
 	}
 
 	// OPEN/CLOSE ETOH SOL
-	if (fc.do_EtOHSolStateChange) {
+	if (FC.do_EtOHSolStateChange) {
 		OpenCloseEtOHSolenoid();
-		fc.do_EtOHSolStateChange = false;
+		FC.do_EtOHSolStateChange = false;
 	}
 
 	// TURN LCD LED ON/OFF
-	if (fc.do_ChangeLCDstate) {
+	if (FC.do_ChangeLCDstate) {
 		ChangeLCDlight();
-		fc.do_ChangeLCDstate = false;
+		FC.do_ChangeLCDstate = false;
 	}
 
 	// MOVE ROBOT
-	if (fc.do_MoveRobFwd) {
+	if (FC.do_MoveRobFwd) {
 		ManualRun('f');
-		fc.do_MoveRobFwd = false;
+		FC.do_MoveRobFwd = false;
 	}
-	else if (fc.do_MoveRobRev) {
+	else if (FC.do_MoveRobRev) {
 		ManualRun('r');
-		fc.do_MoveRobRev = false;
+		FC.do_MoveRobRev = false;
 	}
 
 }
@@ -8642,11 +8643,11 @@ void OpenCloseEtOHSolenoid()
 	// Store time and make sure periodic drip does not run
 	if (is_sol_open) {
 		t_solOpen = millis();
-		fc.do_EtOHRun = false;
+		FC.do_EtOHRun = false;
 	}
 	else {
 		t_solClose = millis();
-		fc.do_EtOHRun = true;
+		FC.do_EtOHRun = true;
 	}
 
 	// Print etoh and rew sol state to LCD
@@ -8669,13 +8670,13 @@ void CheckEtOH()
 	bool do_close = false;
 
 	// Bail if etoh should not be run
-	if (!fc.do_EtOHRun) {
+	if (!FC.do_EtOHRun) {
 		return;
 	}
 
 	// Check if should be opened
 	do_open = !is_sol_open &&
-		millis() > (t_solOpen + dt_delEtOH[fc.is_SesStarted ? 0 : 1]);
+		millis() > (t_solOpen + dt_delEtOH[FC.is_SesStarted ? 0 : 1]);
 
 	// Open only if motor not running
 	if (do_open) {
@@ -8688,7 +8689,7 @@ void CheckEtOH()
 
 	// Close if open and dt close has ellapsed
 	do_close = is_sol_open &&
-		millis() > (t_solOpen + dt_durEtOH[fc.is_SesStarted ? 0 : 1]);
+		millis() > (t_solOpen + dt_durEtOH[FC.is_SesStarted ? 0 : 1]);
 
 	// Bail if nothing to do
 	if (!do_open && !do_close) {
@@ -8852,7 +8853,7 @@ float CheckBattery(bool force_check)
 
 	// Send if min dt ellapsed
 	if (
-		fc.do_SendVCC &&
+		FC.do_SendVCC &&
 		millis() > t_vcc_send + dt_vccSend) {
 
 		// Send vcc
@@ -8862,10 +8863,10 @@ float CheckBattery(bool force_check)
 		t_vcc_send = millis();
 	}
 
-	// Log/print voltage 
+	// Log voltage 
 	if (millis() > t_vcc_print + dt_vccPrint) {
 
-		// Log/print voltage
+		// Log voltage
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Battery VCC: vcc=%0.2fV dt_chk=%d",
 			vccAvg, millis() - t_vcc_update);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -8915,16 +8916,16 @@ void ChangeLCDlight(uint32_t duty)
 
 	// Check if new duty given
 	if (duty == 256) {
-		fc.is_LitLCD = !fc.is_LitLCD;
-		duty = fc.is_LitLCD ? 8 : 0;
+		FC.is_LitLCD = !FC.is_LitLCD;
+		duty = FC.is_LitLCD ? 8 : 0;
 	}
 	else {
-		fc.is_LitLCD = duty > 0;
+		FC.is_LitLCD = duty > 0;
 	}
 
-	// Log/print
+	// Log
 	Debug.sprintf_safe(buffLrg, buff_lrg, "Set LCD Light: is_lit=%d duty=%d",
-		fc.is_LitLCD, duty);
+		FC.is_LitLCD, duty);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 	// Set LCD duty
@@ -8949,10 +8950,10 @@ void QuitSession()
 	}
 
 	// Tell CS quit is done
-	if (!fc.is_QuitConfirmed) {
+	if (!FC.is_QuitConfirmed) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "Sending 'Q' Done Confirmation");
 		QueuePacket(&r2c, 'Q', 0, 0, 0, c2r.packArr[ID_Ind<R4_COM<USARTClass>>('Q', &c2r)], true, false, true);
-		fc.is_QuitConfirmed = true;
+		FC.is_QuitConfirmed = true;
 		return;
 	}
 
@@ -8976,7 +8977,7 @@ void QuitSession()
 void RestartArduino()
 {
 
-	// Log/print quiting
+	// Log quiting
 	Debug.DB_General(__FUNCTION__, __LINE__, "QUITING...");
 
 	// Stop all movement
@@ -8984,7 +8985,7 @@ void RestartArduino()
 	Pid.PidStop();
 	Bull.BullOff();
 
-	// Log/print anything left in queue
+	// Log anything left in queue
 	Log.WriteAll(1000);
 	Debug.PrintAll(1000);
 
@@ -9065,8 +9066,8 @@ void TestUpdate()
 
 		// Block motor
 		if (Move.cnt_move == 1 &&
-			!fc.do_RunMove &&
-			!fc.is_TaskDone &&
+			!FC.do_RunMove &&
+			!FC.is_TaskDone &&
 			!is_halted) {
 
 			// Halt robot
@@ -9076,7 +9077,7 @@ void TestUpdate()
 		}
 
 		// Unblock motor
-		if (fc.is_TaskDone && is_halted) {
+		if (FC.is_TaskDone && is_halted) {
 
 			// Unhalt robot
 			SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::OVERIDE);
@@ -9084,7 +9085,7 @@ void TestUpdate()
 		}
 
 		// Make sure LCD light on 
-		if (!fc.is_LitLCD) {
+		if (!FC.is_LitLCD) {
 			ChangeLCDlight(8);
 		}
 
@@ -9211,7 +9212,7 @@ void PingTest()
 
 	// ------------------------ SETUP TEST ------------------------
 
-	// Log/print
+	// Log
 	Debug.DB_General(__FUNCTION__, __LINE__, "RUNNING PING TEST...");
 
 	// Make sure all data sent
@@ -9222,7 +9223,7 @@ void PingTest()
 		GetSerial(&a2r);
 	} while (SendPacket(&r2a));
 
-	// Log/print all
+	// Log all
 	Debug.PrintAll(2500);
 	Log.WriteAll(2500);
 
@@ -9262,7 +9263,7 @@ void PingTest()
 			// Flip destination
 			r2i = r2i == 0 ? 1 : 0;
 
-			// Log/print all
+			// Log all
 			Debug.PrintAll(1000);
 			Log.WriteAll(1000);
 
@@ -9323,10 +9324,10 @@ void PingTest()
 	QueuePacket(&r2c, 'n', n_testPings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
 	SendPacket(&r2c);
 
-	// Log/print
+	// Log
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED PING TEST");
 
-	// Log/print ping time
+	// Log ping time
 	Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_7);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_8);
@@ -9412,7 +9413,7 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 
 	// ------------------------ SETUP TEST ------------------------
 
-	// Log/print
+	// Log
 	Debug.DB_General(__FUNCTION__, __LINE__, "RUNNING HARDWARE TEST...");
 
 	// Set other test flags
@@ -9438,7 +9439,7 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 	CheckBattery(true);
 	vcc_baseline = vccNow;
 
-	// Log/print all
+	// Log all
 	Debug.PrintAll(2500);
 	Log.WriteAll(2500);
 
@@ -9457,8 +9458,8 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 		if (!is_stress_test_done) {
 
 			// Block printing and logging
-			fc.do_BlockLogQueue = true;
-			fc.do_BlockPrintQueue = true;
+			FC.do_BlockLogQueue = true;
+			FC.do_BlockPrintQueue = true;
 
 			// Extend retract feed arm
 			if (!Reward.do_ExtendArm &&
@@ -9498,20 +9499,20 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 				lcd_arr[cnt_stress] = micros() - t_lcd_start;
 
 				// Print to console
-				fc.do_BlockPrintQueue = false;
+				FC.do_BlockPrintQueue = false;
 				t_print_start = micros();
 				Debug.sprintf_safe(buffLrg, buff_lrg, "Stress Test %d: Speed=%0.2f VCC=%0.2f", cnt_stress + 1, run_speed[cnt_stress], vccNow);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-				fc.do_BlockPrintQueue = true;
+				FC.do_BlockPrintQueue = true;
 				Debug.PrintAll(500);
 				print_arr[cnt_stress] = micros() - t_print_start;
 
 				// Store log
-				fc.do_BlockLogQueue = false;
+				FC.do_BlockLogQueue = false;
 				t_log_start = micros();
 				Debug.sprintf_safe(buffLrg, buff_lrg, "Stress Test %d: Speed=%0.2f VCC=%0.2f", cnt_stress + 1, run_speed[cnt_stress], vccNow);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-				fc.do_BlockLogQueue = true;
+				FC.do_BlockLogQueue = true;
 				Log.WriteAll(1000);
 				log_arr[cnt_stress] = micros() - t_log_start;
 
@@ -9592,8 +9593,8 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 			}
 
 			// Unblock printing and logging
-			fc.do_BlockLogQueue = false;
-			fc.do_BlockPrintQueue = false;
+			FC.do_BlockLogQueue = false;
+			FC.do_BlockPrintQueue = false;
 
 			// Check motor status
 			AD_CheckOC();
@@ -9681,7 +9682,7 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 				// Flip destination
 				r2i = r2i == 0 ? 1 : 0;
 
-				// Log/print all
+				// Log all
 				Debug.PrintAll(1000);
 				Log.WriteAll(1000);
 
@@ -9716,7 +9717,7 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 
 		}
 
-		// Log/print all
+		// Log all
 		Debug.Print();
 		Log.WriteLog();
 	}
@@ -9752,7 +9753,7 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 			dt_pingRoundTrip[i] = (float)dt_ping_sum / (n_testPings);
 		}
 
-		// Log/print ping time
+		// Log ping time
 		Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_7);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 		Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_8);
@@ -9766,15 +9767,15 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 
 	// ----------------------- FINISH OTHER TEST ------------------------
 
-	// Log/print stress test summary
+	// Log stress test summary
 	if (do_stress_test) {
 
-		// Log/print vcc
+		// Log vcc
 		Debug.sprintf_safe(buffLrg, buff_lrg, "VCC: baseline=%0.2f avg=%0.2f all=|%s",
 			vcc_baseline, vcc_avg, buff_lrg_5);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
-		// Log/print LCD and Print and log times
+		// Log LCD and Print and log times
 		Debug.sprintf_safe(buffLrg, buff_lrg, "LCD PRINT TIME (ms): avg=%0.2f all=|%s", lcd_avg, buff_lrg_2);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 		Debug.sprintf_safe(buffLrg, buff_lrg, "CONSOLE PRINT TIME (ms): avg=%0.2f all=|%s", print_avg, buff_lrg_3);
@@ -9784,16 +9785,16 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 
 	}
 
-	// Log/print pixy test summary
+	// Log pixy test summary
 	if (do_pixy_test) {
 
-		// Log/print pixy pos
+		// Log pixy pos
 		Debug.sprintf_safe(buffLrg, buff_lrg, "PIXY POS (cm): avg=%0.2f all=|%s", pixy_pos_avg, buff_lrg_6);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 	}
 
-	// Log/print
+	// Log
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED HARDWARE TEST");
 
 }
@@ -9909,7 +9910,7 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 		is_rat_blink = false;
 		return false;
 	}
-	}
+}
 
 #pragma endregion
 
@@ -10107,7 +10108,7 @@ void setup() {
 
 	// LOG/PRINT SETUP RUNNING
 
-	// Log/print run mode
+	// Log run mode
 	if (DO_DEBUG) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = DEBUG");
 	}
@@ -10115,7 +10116,7 @@ void setup() {
 		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
 	}
 
-	// Log/print compile time
+	// Log compile time
 	Debug.sprintf_safe(buffLrg, buff_lrg, "BUILD DATE: %s %s", __DATE__, __TIME__);
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -10148,10 +10149,9 @@ void setup() {
 	Debug.PrintLCD(true, "DONE SETUP", "AutoDriver");
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED: AutoDriver Setup...");
 	Debug.PrintAll(500);
-
-	// Make sure motor is stopped and in high impedance
-	AD_R.hardHiZ();
-	AD_F.hardHiZ();
+	// Set to high impedance so robot can be moved
+	AD_R.softHiZ();
+	AD_F.softHiZ();
 
 	// SETUP BIG EASY DRIVER
 
@@ -10223,7 +10223,7 @@ void setup() {
 	// Setup OpenLog
 	if (Log.Setup())
 	{
-		// Log/print setup finished
+		// Log setup finished
 		Debug.PrintLCD(true, "DONE SETUP", "OpenLog");
 		Debug.DB_General(__FUNCTION__, __LINE__, "SUCCEEDED: OpenLog Setup");
 		Debug.PrintAll(500);
@@ -10283,7 +10283,7 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(pin.PWR_SWITCH), Interupt_Power, FALLING);
 #endif
 
-	// Log/print interupts setup
+	// Log interupts setup
 	Debug.PrintLCD(true, "DONE SETUP", "Interrupts");
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED: Interrupts Setup...");
 	Debug.PrintAll(500);
@@ -10325,7 +10325,7 @@ void setup() {
 		}
 	}
 
-	// Log/print success
+	// Log success
 	if (!Reward.do_ExtendArm && !Reward.do_RetractArm) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED: Reset Feeder Arm");
 		Debug.PrintAll(500);
@@ -10356,7 +10356,7 @@ void setup() {
 	delay(10);
 
 	// Set flag to begin sending Teensy logs
-	fc.is_TeensyReady = true;
+	FC.is_TeensyReady = true;
 
 	// Send log number to Teensy as optional argument
 	Debug.sprintf_safe(buffLrg, buff_lrg, "%05u", Log.logNum);
@@ -10365,9 +10365,6 @@ void setup() {
 	// Log everything in queue
 	Log.WriteAll(5000);
 #endif
-
-	// SET DEFAULTS
-	fc.is_ManualSes = true;
 
 	// PRINT SERIAL RING BUFFER SIZE
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RING BUFFER SIZE: %dB", SERIAL_BUFFER_SIZE);
@@ -10450,12 +10447,12 @@ void loop() {
 	Log.WriteLog();
 
 	// SEND SERIAL DATA
-	if (fc.do_LogSend) {
+	if (FC.do_LogSend) {
 		// Send log
 		Log.StreamLogs();
 
 		// Print
-		if (!fc.do_LogSend) {
+		if (!FC.do_LogSend) {
 			Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED SENDING LOGS");
 		}
 	}
@@ -10477,11 +10474,11 @@ void loop() {
 	IR_SyncCheck();
 
 	// RUN REWARD
-	if (fc.do_RunRew) {
+	if (FC.do_RunRew) {
 		if (Reward.RunReward()) {
 
 			// Reset flag
-			fc.do_RunRew = false;
+			FC.do_RunRew = false;
 		}
 	}
 
@@ -10492,9 +10489,9 @@ void loop() {
 	Reward.CheckFeedArm();
 
 	// RUN MOVE
-	if (fc.do_RunMove) {
+	if (FC.do_RunMove) {
 		if (Move.RunMove()) {
-			fc.do_RunMove = false;
+			FC.do_RunMove = false;
 		}
 	}
 
@@ -10514,7 +10511,7 @@ void loop() {
 	StatusBlink();
 
 	// Check if time to quit
-	if (fc.do_Quit) {
+	if (FC.do_Quit) {
 		QuitSession();
 	}
 
@@ -10564,7 +10561,7 @@ void loop() {
 		cmd.testCond = (byte)c2r.dat[0];
 		cmd.testRun = (byte)c2r.dat[1];
 		cmd.testDat = c2r.dat[2];
-	
+
 		// TEST SETUP
 		if (cmd.testRun == 0) {
 
@@ -10616,7 +10613,7 @@ void loop() {
 		}
 
 		// VT CALIBRATION TEST UPDATE
-		else if (cmd.testCond == 3){
+		else if (cmd.testCond == 3) {
 
 			// RUNNING
 			if (cmd.testRun == 1) {
@@ -10664,7 +10661,7 @@ void loop() {
 		}
 
 		// HALT ERROR TEST UPDATE
-		else if (cmd.testCond == 4){
+		else if (cmd.testCond == 4) {
 
 			// Store new speed
 			double new_speed = double(cmd.testDat);
@@ -10684,7 +10681,7 @@ void loop() {
 		}
 
 		// HARDWARE TEST UPDATE
-		else if (cmd.testCond == 7){
+		else if (cmd.testCond == 7) {
 			// Send test info to CheetaDue
 			QueuePacket(&r2a, 't', c2r.dat[0], c2r.dat[1], c2r.dat[2], 0, true);
 		}
@@ -10716,15 +10713,22 @@ void loop() {
 		if (cmd.sesMsg == 1) {
 
 			// Reset flags
-			fc.is_ManualSes = false;
-			fc.is_ForageTask = false;
+			FC.is_ManualSes = false;
+			FC.is_ForageTask = false;
 
 			// Handle Manual session
 			if (cmd.sesCond == 1) {
 				Debug.DB_General(__FUNCTION__, __LINE__, "DO MANUAL SESSION");
 
+				// Turn on LCD light
+				FC.do_ChangeLCDstate = !FC.is_LitLCD;
+
+				// Set to high impedance so robot can be moved
+				AD_R.softHiZ();
+				AD_F.softHiZ();
+
 				// Set flag
-				fc.is_ManualSes = true;
+				FC.is_ManualSes = true;
 			}
 
 			// Handle Behavior session
@@ -10785,7 +10789,7 @@ void loop() {
 				Reward.solOpenScale = solOpenScaleArr[1];
 
 				// Set flag
-				fc.is_ForageTask = true;
+				FC.is_ForageTask = true;
 			}
 
 			// Update autodriver settings
@@ -10826,11 +10830,11 @@ void loop() {
 			// Update tracker feeder pass distance
 			feedTrackPastDist = feedDist + feedHeadPastDist + cmd.sesSetpointHeadDist;
 
-			// Log/print set setpoint
+			// Log set setpoint
 			Debug.sprintf_safe(buffLrg, buff_lrg, "PID SETPOINT %0.2fcm", Pid.setPoint);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
-			// Log/print feed pass distance
+			// Log feed pass distance
 			Debug.sprintf_safe(buffLrg, buff_lrg, "DISH PASS DISTANCE %0.2fcm", feedTrackPastDist);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
@@ -10843,14 +10847,14 @@ void loop() {
 
 	if (c2r.idNew == 'Q') {
 
-		// Log/print event
+		// Log event
 		Debug.DB_General(__FUNCTION__, __LINE__, "DO QUIT");
 
 		// Set flags and time
-		fc.do_Quit = true;
+		FC.do_Quit = true;
 
 		// Block IR sensor in case CheetahDue resets early
-		fc.do_BlockDetectIR = true;
+		FC.do_BlockDetectIR = true;
 
 		// Tell CheetahDue to quit 
 		QueuePacket(&r2a, 'q', 0, 0, 0, 0, true);
@@ -10858,7 +10862,7 @@ void loop() {
 		// Block all motor control
 		if (!SetMotorControl(MC_CON::ID::HALT, MC_CALL::ID::QUIT)) {
 
-			// Log/print error
+			// Log error
 			Debug.DB_Error(__FUNCTION__, __LINE__, "\"Quit\" FAILED TO SET MOTOR CONTROL TO \"Halt\"");
 		}
 
@@ -10878,7 +10882,7 @@ void loop() {
 		Move.ProcMoveCmd(cmd.cnt_move, cmd.moveTarg);
 
 		// Set flags
-		fc.do_RunMove = true;
+		FC.do_RunMove = true;
 
 	}
 
@@ -10900,15 +10904,15 @@ void loop() {
 		}
 
 		// Abort ongoing reward reward
-		if (cmd.rewType == 1 && fc.do_RunRew) {
+		if (cmd.rewType == 1 && FC.do_RunRew) {
 
-			// Log/print aborting last reward
+			// Log aborting last reward
 			Debug.DB_Warning(__FUNCTION__, __LINE__, "ABORTING PREVIOUS REWARD");
 
 			// Decriment count and reset
 			Reward.cnt_rew--;
 			Reward.RewardReset();
-			fc.do_RunRew = false;
+			FC.do_RunRew = false;
 		}
 
 		// Process reward command
@@ -10926,7 +10930,7 @@ void loop() {
 			Reward.rewMode == REWARD::REWMODE::FREE) {
 
 			// Set flag
-			fc.do_RunRew = true;
+			FC.do_RunRew = true;
 		}
 
 	}
@@ -10937,11 +10941,11 @@ void loop() {
 	if (c2r.idNew == 'H') {
 
 		// Store message data
-		fc.do_Halt = c2r.dat[0] != 0 ? true : false;
+		FC.do_Halt = c2r.dat[0] != 0 ? true : false;
 
-		if (fc.do_Halt) {
+		if (FC.do_Halt) {
 
-			// Log/print
+			// Log
 			Debug.DB_General(__FUNCTION__, __LINE__, "HALT STARTED");
 
 			// Stop pid and set to manual
@@ -10953,11 +10957,11 @@ void loop() {
 		}
 		else {
 
-			// Log/print
+			// Log
 			Debug.DB_General(__FUNCTION__, __LINE__, "HALT FINISHED");
 
 			// Set motor control to "OPEN"
-			if (fc.is_TrackingEnabled) {
+			if (FC.is_TrackingEnabled) {
 				SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::HALT);
 			}
 			// Set motor control to "HOLD"
@@ -10988,14 +10992,14 @@ void loop() {
 		if (cmd.bullSpeed > 0) {
 
 			// Mode changed
-			if (!fc.do_Bulldoze) {
+			if (!FC.do_Bulldoze) {
 
-				// Log/print event
+				// Log event
 				Debug.DB_General(__FUNCTION__, __LINE__, "SET BULLDOZE ON");
 
 				// Set flags
 				is_mode_changed = true;
-				fc.do_Bulldoze = true;
+				FC.do_Bulldoze = true;
 
 			}
 			// Only settings changed
@@ -11005,14 +11009,14 @@ void loop() {
 		}
 		else {
 			// Mode changed
-			if (fc.do_Bulldoze)
+			if (FC.do_Bulldoze)
 			{
-				// Log/print event
+				// Log event
 				Debug.DB_General(__FUNCTION__, __LINE__, "SET BULLDOZE OFF");
 
 				// Set flags
 				is_mode_changed = true;
-				fc.do_Bulldoze = false;
+				FC.do_Bulldoze = false;
 
 			}
 			// Only settings changed
@@ -11022,12 +11026,12 @@ void loop() {
 		}
 
 		// Don't exicute until rat is in and mode is changed
-		if (fc.is_TrackingEnabled &&
+		if (FC.is_TrackingEnabled &&
 			is_mode_changed) {
 
-			if (fc.do_Bulldoze) {
+			if (FC.do_Bulldoze) {
 
-				// Log/print event
+				// Log event
 				Debug.DB_General(__FUNCTION__, __LINE__, "BULLDOZE ON");
 
 				// Turn bulldoze on
@@ -11035,7 +11039,7 @@ void loop() {
 			}
 			else {
 
-				// Log/print event
+				// Log event
 				Debug.DB_General(__FUNCTION__, __LINE__, "BULLDOZE OFF");
 
 				// Turn bulldoze off
@@ -11051,11 +11055,11 @@ void loop() {
 	if (c2r.idNew == 'I')
 	{
 		// Store message data
-		fc.is_RatOnTrack = c2r.dat[0] == 1 ? true : false;
+		FC.is_RatOnTrack = c2r.dat[0] == 1 ? true : false;
 
-		if (fc.is_RatOnTrack) {
+		if (FC.is_RatOnTrack) {
 
-			// Log/print
+			// Log
 			Debug.DB_General(__FUNCTION__, __LINE__, "RAT ON TRACK");
 
 			// Reset rat pos data
@@ -11064,7 +11068,7 @@ void loop() {
 		}
 		else
 		{
-			// Log/print
+			// Log
 			Debug.DB_General(__FUNCTION__, __LINE__, "RAT ON FORAGE PLATFORM");
 		}
 
@@ -11076,22 +11080,22 @@ void loop() {
 	if (c2r.idNew == 'O')
 	{
 		// Store message data
-		fc.is_TaskDone = c2r.dat[0] > 0 ? true : false;
+		FC.is_TaskDone = c2r.dat[0] > 0 ? true : false;
 
-		if (fc.is_TaskDone) {
+		if (FC.is_TaskDone) {
 
-			// Log/print event
+			// Log event
 			Debug.DB_General(__FUNCTION__, __LINE__, "TASK DONE");
 
 			// Turn off bulldoze
 			Bull.BullOff();
-			fc.do_Bulldoze = false;
+			FC.do_Bulldoze = false;
 
 			// Turn off pid
 			Pid.PidStop();
 
 			// Set to stop tracking
-			fc.is_TrackingEnabled = false;
+			FC.is_TrackingEnabled = false;
 		}
 	}
 
@@ -11113,16 +11117,16 @@ void loop() {
 			Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
 			// Set rat vt and pixy to setpoint if rat not in or task done
-			if (!fc.is_RatOnTrack || fc.is_TaskDone) {
+			if (!FC.is_RatOnTrack || FC.is_TaskDone) {
 
 				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
 				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
 			}
 
-			// Log/print first sample
+			// Log first sample
 			if (!Pos[1].is_streamStarted) {
 
-				// Log/print
+				// Log
 				Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
 					Pos[1].posAbs, Pos[1].posCum, Pos[1].nLaps);
 				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -11135,7 +11139,7 @@ void loop() {
 				QueuePacket(&r2c, 'K', 1, 0, 0, 0, true);
 
 				// Set flag to begin sending vcc
-				fc.do_SendVCC = true;
+				FC.do_SendVCC = true;
 
 			}
 		}
@@ -11144,7 +11148,7 @@ void loop() {
 		else if (cmd.vtEnt == 0) {
 
 			// Update only after rat in before task done
-			if (fc.is_RatOnTrack && !fc.is_TaskDone) {
+			if (FC.is_RatOnTrack && !FC.is_TaskDone) {
 
 				// Update rat VT
 				Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
@@ -11154,10 +11158,10 @@ void loop() {
 					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
 				}
 
-				// Log/print first sample
+				// Log first sample
 				if (!Pos[0].is_streamStarted) {
 
-					// Log/print
+					// Log
 					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
 						Pos[0].posAbs, Pos[0].posCum, Pos[0].nLaps);
 					Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -11177,12 +11181,12 @@ void loop() {
 	if (c2r.idNew == 'L') {
 
 		// Flag to begin sending
-		fc.do_LogSend = c2r.dat[0] == 1 ? true : false;
+		FC.do_LogSend = c2r.dat[0] == 1 ? true : false;
 
 		// Check for 2 way confirmation before sending log
-		if (!fc.do_LogSend) {
+		if (!FC.do_LogSend) {
 
-			// Log/print
+			// Log
 			Debug.sprintf_safe(buffLrg, buff_lrg, "SENDING LOG: logs_stored=~%d b_stored=~%d",
 				Log.cnt_logsStored, Log.cnt_logBytesStored);
 			Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
@@ -11191,13 +11195,13 @@ void loop() {
 			QueuePacket(&r2c, 'U', Log.cnt_logBytesStored, 0, 0, 0, true);
 
 			// Block sending vcc updates
-			fc.do_SendVCC = false;
+			FC.do_SendVCC = false;
 		}
 
 		// Begin sending log
 		else {
 
-			// Log/print
+			// Log
 			Debug.DB_General(__FUNCTION__, __LINE__, "DO SEND LOG");
 
 			// Set send time

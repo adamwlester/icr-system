@@ -93,7 +93,7 @@ struct FC
 	bool do_BlockIRPulse = false;
 }
 // Initialize
-fc;
+FC;
 
 // DEBUGGING BUFFER PARAMETERS
 const uint16_t buffMed = 50;
