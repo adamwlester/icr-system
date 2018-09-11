@@ -119,6 +119,7 @@ namespace ICR_Run
         private static long TIMEOUT_15 = 15000; // (ms) 
         private static long TIMEOUT_30 = 30000; // (ms)
         private static long TIMEOUT_60 = 60000; // (ms)
+        private static long TIMEOUT_120 = 120000; // (ms)
         private static long TIMEOUT_FeederDueLogRead = 5000; // (ms)
         private static long TIMEOUT_FeederDueLogImport = 120000; // (ms)
 
@@ -165,8 +166,9 @@ namespace ICR_Run
             objID: "c2m",
             packRange: pack_range,
             id:
-            new char[8] {
+            new char[9] {
             'h', // setup handshake
+            'N', // netcom setup confirmation
             'J', // battery voltage
             'Z', // reward zone
             'K', // feederdue status
@@ -209,7 +211,7 @@ namespace ICR_Run
             foot: (byte)'>',
             dt_minSentRcvd: 5,
             dt_resend: 500,
-            resendMax: 5
+            resendMax: 20
         );
 
         // FeederDue to CS
@@ -401,11 +403,7 @@ namespace ICR_Run
             status = WaitForMatCom(id: 'h', dat1: 0, chk_rcv: true, do_abort: true, timeout: TIMEOUT_15);
             DEBUG.DB_Status(msg: DEBUG.msg, status: status);
             if (status.ToString() != "SUCCEEDED")
-            {
-                // Unset coms active flag
-                FC.is_MatComActive = false;
                 return false;
-            }
 
             // HANDLE NON-ICR SESSION
 
@@ -499,6 +497,10 @@ namespace ICR_Run
                 status = WaitForFeederDueCom(id: 'h', dat1: 2, chk_rcv: true, do_abort: true, timeout: TIMEOUT_5);
                 DEBUG.DB_Status(msg: DEBUG.msg, status: status);
 
+                // Get feederdue log number
+                double log_num = r2c.ID_Dat('h', 1);
+                DEBUG.DB_General(String.Format("FEEDERDUE LOGGING TO \"LOG{0:00000}.CSV\"", log_num));
+
             }
 
             // Get final handshake status
@@ -522,14 +524,17 @@ namespace ICR_Run
 
             // Wait for testing setup to finish
             DEBUG.DB_Status(msg: DEBUG.msg = "FeederDue Test Setup Done", status: DEBUG.STATUS.AWAITING);
-            status = WaitForFeederDueCom(id: 'T', chk_send: true, chk_conf: true, chk_done: true, timeout: TIMEOUT_30);
+            status = WaitForFeederDueCom(id: 'T', chk_send: true, chk_conf: true, chk_done: true, timeout: DEBUG.flag.n_testPings <= 50 ? TIMEOUT_30 : TIMEOUT_120);
             DEBUG.DB_Status(msg: DEBUG.msg, status: status);
             if (status.ToString() == "SUCCEEDED")
             {
+
                 // Log average ping time
-                double dt_ping_r2c = r2c.ID_Dat('n', 1);
-                double dt_ping_r2a = r2c.ID_Dat('n', 2);
-                DEBUG.DB_General(String.Format("PING SUMMARY: n_pings={0} r2c={1:0.00}ms r2a={2:0.00}ms", DEBUG.flag.n_testPings, dt_ping_r2c, dt_ping_r2a));
+                double dt_ping_r2c = r2c.ID_Dat('n', 0);
+                double dt_ping_r2a = r2c.ID_Dat('n', 1);
+                double cnt_resend = r2c.ID_Dat('n', 2);
+                DEBUG.DB_General(String.Format("PING SUMMARY: n_pings={0} r2c={1:0.00}ms r2a={2:0.00}ms resend={3}", 
+                    DEBUG.flag.n_testPings, dt_ping_r2c, dt_ping_r2a, cnt_resend));
             }
             else
                 return false;
@@ -545,7 +550,10 @@ namespace ICR_Run
             DEBUG.DB_Status(msg: DEBUG.msg = "ICR_GUI NLX Connect Confirmation", status: DEBUG.STATUS.AWAITING);
             status = WaitForMatCom(id: 'N', dat1: 1, chk_rcv: true, do_abort: true, timeout: TIMEOUT_60);
             DEBUG.DB_Status(msg: DEBUG.msg, status: status);
-            if (status.ToString() != "SUCCEEDED")
+            if (status.ToString() == "SUCCEEDED")
+                // Send NLX setup confirmation 
+                SendMatCom_Thread(id: 'N', dat1: 1);
+            else
                 return false;
 
             // SETUP NETCOM
@@ -1044,9 +1052,6 @@ namespace ICR_Run
             // Pause for any remaining CheetahDue data
             Thread.Sleep(100);
 
-            // Set flags to end cheetahdue serial coms
-            FC.is_CheetahDueComActive = false;
-
             // SAVE CHEETAH DUE LOG FILE
             DEBUG.DB_Status(msg: DEBUG.msg = "Save CheetahDue Log", status: DEBUG.STATUS.RUNNING);
             if (!FC.do_SessionICR || !sp_Xbee.IsOpen)
@@ -1071,6 +1076,9 @@ namespace ICR_Run
 
             }
 
+            // Set flags to end cheetahdue serial coms
+            FC.is_CheetahDueComActive = false;
+
             // Set exit flag to exit all threads
             DEBUG.DB_Status(msg: DEBUG.msg = "SET EXIT FLAG", status: DEBUG.STATUS.RUNNING);
             FC.do_Exit = true;
@@ -1081,11 +1089,11 @@ namespace ICR_Run
 
             // CLOSE DOWN BACKROUND WORKERS
 
-            //bw_RunGUI.CancelAsync();
+            // Close bw_RunGUI
             DEBUG.DB_Status(msg: DEBUG.msg = "Dispose RunGUI Worker", status: DEBUG.STATUS.RUNNING);
             bw_RunGUI.Dispose();
             DEBUG.DB_Status(msg: DEBUG.msg, status: DEBUG.STATUS.FINISHED);
-            //bw_MatCOM.CancelAsync();
+            // Close bw_MatCOM
             DEBUG.DB_Status(msg: DEBUG.msg = "Dispose MatCOM Worker", status: DEBUG.STATUS.RUNNING);
             bw_MatCOM.Dispose();
             DEBUG.DB_Status(msg: DEBUG.msg, status: DEBUG.STATUS.FINISHED);
@@ -1254,7 +1262,11 @@ namespace ICR_Run
 
                     // Resend with same packet number
                     SendFeederDueCom(id: id, dat: dat, pack: pack, do_conf: do_conf, is_conf: is_conf, do_check_done: do_check_done, is_resend: true);
-                    t_resend = DEBUG.DT() + c2r.dt_resend;
+                    t_resend =
+                        send_count > 5 ? DEBUG.DT() + c2r.dt_resend * 2 :
+                        send_count > 10 ? DEBUG.DT() + c2r.dt_resend * 3 :
+                        send_count > 15 ? DEBUG.DT() + c2r.dt_resend * 4 :
+                        DEBUG.DT() + c2r.dt_resend;
                     send_count++;
                 }
 
@@ -1267,7 +1279,6 @@ namespace ICR_Run
 
                     // Set error flags
                     FC.SetAbort(set_abort_mat: true);
-                    FC.is_FeederDueComActive = false;
 
                     // Bail
                     return;
@@ -2447,9 +2458,6 @@ namespace ICR_Run
             // Local vars
             string status = " ";
 
-            // Set flag that GUI has closed
-            FC.is_GUIclosed = true;
-
             // See if valid handeler returned
             try
             {
@@ -2483,6 +2491,7 @@ namespace ICR_Run
             }
 
             DEBUG.DB_General_Thread("EXITING: RunGUI Worker");
+            FC.is_GUIclosed = true;
         }
 
         // DOWORK FOR bw_MatCOM WORKER
@@ -2747,14 +2756,12 @@ namespace ICR_Run
                     // Check if this is a premature close
                     if (!FC.is_GUIquit)
                     {
-                        // Will print once
-                        if (!FC.is_GUIclosed)
+                        // Check for force close
+                        if (dat[0] == 1)
                             DEBUG.DB_Warning_Thread("ICR_GUI FORCED CLOSE");
                         // Start exiting early
                         FC.SetAbort(set_abort_mat: true);
                     }
-                    // Set flag that GUI has closed
-                    FC.is_GUIclosed = true;
                 }
 
                 // Check if mesage should be relayed to rob
@@ -3733,8 +3740,9 @@ namespace ICR_Run
                 str_prfx = String.Format("[{0}:{1}]", fun, line);
 
             // Add additional indent
+            str_prfx_pad = str_prfx;
             if (indent > 0)
-                str_prfx_pad = str_prfx.PadLeft(indent + str_prfx.Length, ' ');
+                str_prfx_pad = str_prfx_pad.PadLeft(indent + str_prfx_pad.Length, ' ');
 
             // Indent functions > 2 levels from Main()
             if (
@@ -4022,7 +4030,7 @@ namespace ICR_Run
         private static bool _is_NlxDataSaved = false;
         private static bool _is_GUIquit = false;
         private static bool _is_GUIclosed = false;
-        private static bool _do_AbortMat = false;
+        private static bool _do_SendAbortMat = false;
         private static bool _do_SoftAbortMat = false;
         private static bool _is_SoftAbortMat = false;
         private static bool _do_HardAbortMat = false;
@@ -4035,137 +4043,137 @@ namespace ICR_Run
         // PUBLIC VARS
         public static bool do_SessionICR
         {
-            set { DebugFlagChange(ref _do_SessionICR, "doSessionICR", value); }
+            set { DebugFlagChange(ref _do_SessionICR, "do_SessionICR", value); }
             get { return _do_SessionICR; }
         }
         public static bool do_SessionTurnTT
         {
-            set { DebugFlagChange(ref _do_SessionTurnTT, "doSessionTurnTT", value); }
+            set { DebugFlagChange(ref _do_SessionTurnTT, "do_SessionTurnTT", value); }
             get { return _do_SessionTurnTT; }
         }
         public static bool do_SessionUpdateTable
         {
-            set { DebugFlagChange(ref _do_SessionUpdateTable, "doSessionUpdateTable", value); }
+            set { DebugFlagChange(ref _do_SessionUpdateTable, "do_SessionUpdateTable", value); }
             get { return _do_SessionUpdateTable; }
         }
         public static bool is_NlxConnected
         {
-            set { DebugFlagChange(ref _is_NlxConnected, "isNlxConnected", value); }
+            set { DebugFlagChange(ref _is_NlxConnected, "is_NlxConnected", value); }
             get { return _is_NlxConnected; }
         }
         public static bool is_RatStreaming
         {
-            set { DebugFlagChange(ref _is_RatStreaming, "isRatStreaming", value); }
+            set { DebugFlagChange(ref _is_RatStreaming, "is_RatStreaming", value); }
             get { return _is_RatStreaming; }
         }
         public static bool is_RobStreaming
         {
-            set { DebugFlagChange(ref _is_RobStreaming, "isRobStreaming", value); }
+            set { DebugFlagChange(ref _is_RobStreaming, "is_RobStreaming", value); }
             get { return _is_RobStreaming; }
         }
         public static bool is_MatComActive
         {
-            set { DebugFlagChange(ref _is_MatComActive, "isMatComActive", value); }
+            set { DebugFlagChange(ref _is_MatComActive, "is_MatComActive", value); }
             get { return _is_MatComActive; }
         }
         public static bool is_FeederDueComActive
         {
-            set { DebugFlagChange(ref _is_FeederDueComActive, "isFeederDueComActive", value); }
+            set { DebugFlagChange(ref _is_FeederDueComActive, "is_FeederDueComActive", value); }
             get { return _is_FeederDueComActive; }
         }
         public static bool is_CheetahDueComActive
         {
-            set { DebugFlagChange(ref _is_CheetahDueComActive, "isCheetahDueComActive", value); }
+            set { DebugFlagChange(ref _is_CheetahDueComActive, "is_CheetahDueComActive", value); }
             get { return _is_CheetahDueComActive; }
         }
         public static bool is_MovedToStart
         {
-            set { DebugFlagChange(ref _is_MovedToStart, "isMovedToStart", value); }
+            set { DebugFlagChange(ref _is_MovedToStart, "is_MovedToStart", value); }
             get { return _is_MovedToStart; }
         }
         public static bool is_RatInArena
         {
-            set { DebugFlagChange(ref _is_RatInArena, "isRatInArena", value); }
+            set { DebugFlagChange(ref _is_RatInArena, "is_RatInArena", value); }
             get { return _is_RatInArena; }
         }
         public static bool is_RatOnTrack
         {
-            set { DebugFlagChange(ref _is_RatOnTrack, "isRatOnTrack", value); }
+            set { DebugFlagChange(ref _is_RatOnTrack, "is_RatOnTrack", value); }
             get { return _is_RatOnTrack; }
         }
         public static bool is_TaskDone
         {
-            set { DebugFlagChange(ref _is_TaskDone, "isTaskDone", value); }
+            set { DebugFlagChange(ref _is_TaskDone, "is_TaskDone", value); }
             get { return _is_TaskDone; }
         }
         public static bool is_MatDataSaved
         {
-            set { DebugFlagChange(ref _is_MatDataSaved, "isMatDataSaved", value); }
+            set { DebugFlagChange(ref _is_MatDataSaved, "is_MatDataSaved", value); }
             get { return _is_MatDataSaved; }
         }
         public static bool is_NlxDataSaved
         {
-            set { DebugFlagChange(ref _is_NlxDataSaved, "isNlxDataSaved", value); }
+            set { DebugFlagChange(ref _is_NlxDataSaved, "is_NlxDataSaved", value); }
             get { return _is_NlxDataSaved; }
         }
         public static bool is_NlxDirCreated
         {
-            set { DebugFlagChange(ref _is_NlxDirCreated, "isNlxDirCreated", value); }
+            set { DebugFlagChange(ref _is_NlxDirCreated, "is_NlxDirCreated", value); }
             get { return _is_NlxDirCreated; }
         }
         public static bool is_GUIquit
         {
-            set { DebugFlagChange(ref _is_GUIquit, "isGUIquit", value); }
+            set { DebugFlagChange(ref _is_GUIquit, "is_GUIquit", value); }
             get { return _is_GUIquit; }
         }
         public static bool is_GUIclosed
         {
-            set { DebugFlagChange(ref _is_GUIclosed, "isGUIclosed", value); }
+            set { DebugFlagChange(ref _is_GUIclosed, "is_GUIclosed", value); }
             get { return _is_GUIclosed; }
         }
         public static bool do_SendAbortMat
         {
-            set { DebugFlagChange(ref _do_AbortMat, "doAbortMat", value); }
-            get { return _do_AbortMat; }
+            set { DebugFlagChange(ref _do_SendAbortMat, "do_SendAbortMat", value); }
+            get { return _do_SendAbortMat; }
         }
         public static bool do_SoftAbortMat
         {
-            set { DebugFlagChange(ref _do_SoftAbortMat, "doSoftAbortMat", value); }
+            set { DebugFlagChange(ref _do_SoftAbortMat, "do_SoftAbortMat", value); }
             get { return _do_SoftAbortMat; }
         }
         public static bool is_SoftAbortMat
         {
-            set { DebugFlagChange(ref _is_SoftAbortMat, "isSoftAbortMat", value); }
+            set { DebugFlagChange(ref _is_SoftAbortMat, "is_SoftAbortMat", value); }
             get { return _is_SoftAbortMat; }
         }
         public static bool do_HardAbortMat
         {
-            set { DebugFlagChange(ref _do_HardAbortMat, "doHardAbortMat", value); }
+            set { DebugFlagChange(ref _do_HardAbortMat, "do_HardAbortMat", value); }
             get { return _do_HardAbortMat; }
         }
         public static bool is_HardAbortMat
         {
-            set { DebugFlagChange(ref _is_HardAbortMat, "isHardAbortMat", value); }
+            set { DebugFlagChange(ref _is_HardAbortMat, "is_HardAbortMat", value); }
             get { return _is_HardAbortMat; }
         }
         public static bool is_MatFailed
         {
-            set { DebugFlagChange(ref _is_MatFailed, "isMatFailed", value); }
+            set { DebugFlagChange(ref _is_MatFailed, "is_MatFailed", value); }
             get { return _is_MatFailed; }
         }
         public static bool do_AbortCS
         {
-            set { DebugFlagChange(ref _do_AbortCS, "doAbortCS", value); }
+            set { DebugFlagChange(ref _do_AbortCS, "do_AbortCS", value); }
             get { return _do_AbortCS; }
         }
         public static bool is_RunErrors
         {
-            set { DebugFlagChange(ref _is_RunErrors, "isRunErrors", value); }
+            set { DebugFlagChange(ref _is_RunErrors, "is_RunErrors", value); }
             get { return _is_RunErrors; }
         }
         public static bool do_Exit
         {
-            set { DebugFlagChange(ref _do_Exit, "doExit", value); }
+            set { DebugFlagChange(ref _do_Exit, "do_Exit", value); }
             get { return _do_Exit; }
         }
 
@@ -4226,7 +4234,7 @@ namespace ICR_Run
 
             // Log flag change
             DEBUG.DB_General_Thread(String.Format("Set \"{0}\" to {1}",
-                   var_name, value));
+                   var_name, value), indent: 15);
 
             // Change local value
             flag_loc = value;
@@ -4238,9 +4246,9 @@ namespace ICR_Run
             bool do_cont = is_MatComActive && !is_MatFailed && !do_Exit;
             if (!do_cont)
             {
-                string str_flag = String.Format("\"isMatComActive\"={0} \"isMatFailed\"={1} \"doExit\"={2}",
+                string str_flag = String.Format("RETURNING DISCONTINUE FLAG: \"is_MatComActive\"={0} \"is_MatFailed\"={1} \"do_Exit\"={2}",
                     is_MatComActive, is_MatFailed, do_Exit);
-                DEBUG.DB_General_Thread("RETURNED DISCONTINUE FLAG: " + str_flag);
+                DEBUG.DB_General_Thread(str_flag, indent: 15);
             }
             return do_cont;
         }
@@ -4251,9 +4259,9 @@ namespace ICR_Run
             bool do_cont = is_FeederDueComActive && !do_Exit;
             if (!do_cont)
             {
-                string str_flag = String.Format("\"isFeederDueComActive\"={0} \"doExit\"={1}",
+                string str_flag = String.Format("RETURNING DISCONTINUE FLAG: \"is_FeederDueComActive\"={0} \"do_Exit\"={1}",
                     is_FeederDueComActive, do_Exit);
-                DEBUG.DB_General_Thread("RETURNED DISCONTINUE FLAG: " + str_flag);
+                DEBUG.DB_General_Thread(str_flag, indent: 15);
             }
             return do_cont;
         }
@@ -4264,9 +4272,9 @@ namespace ICR_Run
             bool do_cont = is_CheetahDueComActive && !do_Exit;
             if (!do_cont)
             {
-                string str_flag = String.Format("isCheetahDueComActive={0} doExit={1}",
+                string str_flag = String.Format("RETURNING DISCONTINUE FLAG: \"is_CheetahDueComActive\"={0} \"do_Exit\"={1}",
                     is_CheetahDueComActive, do_Exit);
-                DEBUG.DB_General_Thread("RETURNED DISCONTINUE FLAG: " + str_flag);
+                DEBUG.DB_General_Thread(str_flag, indent: 15);
             }
             return do_cont;
         }

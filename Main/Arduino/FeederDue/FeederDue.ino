@@ -804,9 +804,6 @@ void RestartArduino();
 // UPDATE TESTS
 void TestUpdate();
 
-// DO PING TEST
-void PingTest();
-
 // DO HARDWARE TEST
 void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test);
 
@@ -4852,7 +4849,7 @@ int LOGGER::OpenNewLog()
 	hwSerial.write(str_sml_head.data(), 3);
 
 	// Write first log entry
-	Debug.sprintf_safe(buffLrg, buff_lrg, "Begin Logging to \"%s\"", buff_med_logFile);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "BEGIN LOGGING TO \"%s\"", buff_med_logFile);
 	QueueLog(buff_lrg);
 
 	// Set flag
@@ -5807,7 +5804,6 @@ void LOGGER::StreamLogs()
 
 	// Reset flag
 	FC.do_LogSend = false;
-	FC.do_SendVCC = true;
 
 	// Set back to write mode
 	if (SetToWriteMode()) {
@@ -6117,8 +6113,8 @@ bool CheckForHandshake()
 			(float)freeMemory() / 1000);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
-		// Send final handshake confirmation to CS
-		QueuePacket(&r2c, 'h', 2, 0, 0, 0, true);
+		// Send final handshake confirmation to CS with log number
+		QueuePacket(&r2c, 'h', 2, (float)Log.logNum, 0, 0, true);
 		SendPacket(&r2c);
 
 		// Set flag
@@ -9186,155 +9182,6 @@ void TestUpdate()
 
 }
 
-// DO PING TEST
-void PingTest()
-{
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
-
-	// ------------------------ LOCAL VARS ------------------------
-
-	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static char buff_lrg_7[buffLrg] = { 0 }; buff_lrg_7[0] = '\0';
-	static char buff_lrg_8[buffLrg] = { 0 }; buff_lrg_8[0] = '\0';
-	VEC<uint16_t> cnt_ping(2, __LINE__);
-	bool _do_send_ping[2] = { true, true };
-	VEC<bool> do_send_ping(2, __LINE__, _do_send_ping);
-	const int dt_timeout = 10000;
-	uint32_t t_test_start = 0;
-	VEC<uint32_t> dt_ping_mat_cs(50, __LINE__);
-	VEC<uint32_t> dt_ping_mat_ard(50, __LINE__);
-	uint32_t dt_ping_sum = 0;
-	byte r2i = 0;
-	R2_COM<USARTClass> *p_r2;
-	R4_COM<USARTClass> *p_r4;
-
-	// ------------------------ SETUP TEST ------------------------
-
-	// Log
-	Debug.DB_General(__FUNCTION__, __LINE__, "RUNNING PING TEST...");
-
-	// Make sure all data sent
-	do {
-		GetSerial(&c2r);
-	} while (SendPacket(&r2c));
-	do {
-		GetSerial(&a2r);
-	} while (SendPacket(&r2a));
-
-	// Log all
-	Debug.PrintAll(2500);
-	Log.WriteAll(2500);
-
-	// Store start time
-	t_test_start = millis();
-
-	// Run Test
-	while (
-		millis() < t_test_start + dt_timeout * 2 &&
-		(cnt_ping[0] <= n_testPings || cnt_ping[1] <= n_testPings)
-		) {
-
-		// Swap target
-		p_r2 = r2i == 0 ? &r2c : &r2a;
-		p_r4 = r2i == 0 ? &c2r : &a2r;
-
-		// Check for reply
-		GetSerial(p_r4);
-
-		// Store round trip time
-		if (p_r4->dat[0] == cnt_ping[r2i]) {
-
-			// Store dt send
-			if (r2i == 0) {
-				dt_ping_mat_cs[cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
-			}
-			else {
-				dt_ping_mat_ard[cnt_ping[r2i]] = p_r4->t_rcvd - p_r2->t_sent;
-			}
-
-			// Incriment count
-			cnt_ping[r2i]++;
-
-			// Set flag to send next
-			do_send_ping[r2i] = cnt_ping[r2i] <= n_testPings;
-
-			// Flip destination
-			r2i = r2i == 0 ? 1 : 0;
-
-			// Log all
-			Debug.PrintAll(1000);
-			Log.WriteAll(1000);
-
-			// Next loop
-			continue;
-		}
-
-		// Send next p_r2 ping
-		if (do_send_ping[r2i]) {
-
-			// Send pack
-			float dat1 = cnt_ping[r2i];
-			float dat2 = cnt_ping[0] > 0 ? dt_ping_mat_cs[cnt_ping[0] - 1] : 0;
-			float dat3 = cnt_ping[1] > 0 ? dt_ping_mat_ard[cnt_ping[1] - 1] : 0;
-			QueuePacket(p_r2, 'n', dat1, dat2, dat3, 0, true);
-
-			// Send now
-			SendPacket(p_r2);
-
-			// Reset flag
-			do_send_ping[r2i] = false;
-		}
-
-		// Send any packets
-		SendPacket(&r2c);
-		SendPacket(&r2a);
-
-	}
-
-	// Compute ping average
-	for (int i = 0; i < 2; i++) {
-
-		// Reset sum
-		dt_ping_sum = 0;
-
-		// Loop pings
-		for (int j = 0; j < n_testPings; j++) {
-
-			uint32_t dt = i == 0 ? dt_ping_mat_cs[j] : dt_ping_mat_ard[j];
-			dt_ping_sum += dt;
-			Debug.sprintf_safe(buffLrg, buff_lrg, "%d|", dt);
-
-			// Add to string
-			if (i == 0) {
-				Debug.strcat_safe(buffLrg, strlen(buff_lrg_7), buff_lrg_7, strlen(buff_lrg), buff_lrg);
-			}
-			else {
-				Debug.strcat_safe(buffLrg, strlen(buff_lrg_8), buff_lrg_8, strlen(buff_lrg), buff_lrg);
-			}
-
-		}
-
-		// Compute average
-		dt_pingRoundTrip[i] = (float)dt_ping_sum / (n_testPings);
-	}
-
-	// Send final ping times after test setup
-	QueuePacket(&r2c, 'n', n_testPings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
-	SendPacket(&r2c);
-
-	// Log
-	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED PING TEST");
-
-	// Log ping time
-	Debug.sprintf_safe(buffLrg, buff_lrg, "R2C PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[0], buff_lrg_7);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-	Debug.sprintf_safe(buffLrg, buff_lrg, "R2A PING ROUND TRIP TIME (ms): avg=%0.2f all=|%s", dt_pingRoundTrip[1], buff_lrg_8);
-	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-}
-
 // DO HARDWARE TEST
 void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 {
@@ -9352,7 +9199,7 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 	static char buff_lrg_6[buffLrg] = { 0 }; buff_lrg_6[0] = '\0';
 	static char buff_lrg_7[buffLrg] = { 0 }; buff_lrg_7[0] = '\0';
 	static char buff_lrg_8[buffLrg] = { 0 }; buff_lrg_8[0] = '\0';
-	const int dt_timeout = 10000;
+	const int dt_timeout = 120000;
 	uint32_t t_test_start = 0;
 
 	// Stress test
@@ -9761,8 +9608,8 @@ void HardwareTest(bool do_stress_test, bool do_pixy_test, bool do_ping_test)
 
 	}
 
-	// Send final ping times 
-	QueuePacket(&r2c, 'n', n_testPings + 1, dt_pingRoundTrip[0], dt_pingRoundTrip[1], 0, true);
+	// Send final ping times with resend count
+	QueuePacket(&r2c, 'n', dt_pingRoundTrip[0], dt_pingRoundTrip[1], (float)(r2c.cnt_repeat + r2a.cnt_repeat), 0, true);
 	SendPacket(&r2c);
 
 	// ----------------------- FINISH OTHER TEST ------------------------

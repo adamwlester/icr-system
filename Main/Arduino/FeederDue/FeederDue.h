@@ -441,7 +441,7 @@ const uint32_t dt_vccShutDown = 5 * 60; // (sec)
 const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;
-const int dt_vccSend = 30000;
+const int dt_vccSend = 30000; 
 const int dt_vccPrint = 30000;
 VEC<float> vccArr(vccMaxSamp, __LINE__);
 float vccNow = 0;
