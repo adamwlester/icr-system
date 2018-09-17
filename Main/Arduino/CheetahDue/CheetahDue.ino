@@ -332,6 +332,8 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
+	bool is_resend = false;
+	bool is_conf = false;
 
 	// Get print status
 	do_print = Debug.flag.print_r2a;
@@ -342,17 +344,15 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 		return;
 	}
 
+	// Parse flag
+	is_conf = GetSetByteBit(&flag_byte, 1, false);
+	is_resend = GetSetByteBit(&flag_byte, 3, false);
+
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sRCVD%s:%s] %s %s",
-		is_repeat ? "RPT-" : "",
-		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
+		is_resend ? "RSND-" : is_repeat ? "RPT-" : "",
+		is_conf ? "-CONF" : "",
 		"r2c", p_msg_1, p_msg_2);
-
-	// Log as warning if resent
-	if (is_repeat) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, r2a.t_rcvd);
-		return;
-	}
 
 	// Add to print queue
 	if (do_print) {
@@ -409,6 +409,7 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
+	bool is_conf = false;
 
 	// Get print status
 	do_print = Debug.flag.print_a2r;
@@ -421,17 +422,14 @@ void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 		return;
 	}
 
+	// Parse flag
+	is_conf = GetSetByteBit(&flag_byte, 1, false);
+
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s:%s] %s %s",
 		is_repeat ? "RPT-" : "",
-		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
+		is_conf ? "-CONF" : "",
 		"a2r", p_msg_1, p_msg_2);
-
-	// Log as warning if resending
-	if (is_repeat) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, a2r.t_sent);
-		return;
-	}
 
 	// Store
 	if (do_print) {
@@ -1059,6 +1057,7 @@ void GetSerial()
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
 	static char buff_lrg_3[buffLrg] = { 0 }; buff_lrg_3[0] = '\0';
+	static char buff_lrg_4[buffLrg] = { 0 }; buff_lrg_4[0] = '\0';
 	uint32_t t_start = millis();
 	int dt_parse = 0;
 	int dt_sent = 0;
@@ -1172,11 +1171,10 @@ void GetSerial()
 			pack_last = r2a.packConfArr[id_ind];
 
 		// Flag resent pack
-		is_repeat = is_resend || pack == pack_last;
+		is_repeat = pack == pack_last;
 
 		// Incriment repeat count
-		if (is_repeat)
-			r2a.cnt_repeat++;
+		r2a.cnt_repeat  += is_repeat || is_resend ? 1 : 0;
 
 		// Update packet history
 		if (!is_conf)
@@ -1232,6 +1230,15 @@ void GetSerial()
 
 	// Log recieved
 	if (!is_dropped) {
+
+		// Log as warning if re-revieving packet
+		if (is_repeat || is_resend) {
+			Debug.sprintf_safe(buffLrg, buff_lrg_4, "Recieved %s r2a Packet: %s %s",
+				is_repeat ? "Duplicate" : is_resend ? "Resent" : "", buff_lrg_2, buff_lrg_3);
+			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg_4, r2a.t_rcvd);
+		}
+
+		// Log recieved
 		Debug.DB_Rcvd(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 	}
 	// Log dropped packs warning
@@ -1507,6 +1514,7 @@ bool SendPacket()
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
 	static char buff_lrg_3[buffLrg] = { 0 }; buff_lrg_3[0] = '\0';
+	static char buff_lrg_4[buffLrg] = { 0 }; buff_lrg_4[0] = '\0';
 	int dt_rcvd = 0;
 	int dt_queue = 0;
 	char id = '\0';
@@ -1606,7 +1614,7 @@ bool SendPacket()
 	r2a.cnt_repeat += is_repeat ? 1: 0;
 
 	// Incriment sent packet count
-	a2r.packSentAll += !is_repeat && !is_conf ? 1 : 0;
+	a2r.packSentAll++;
 
 	// Update packet history
 	if (!is_conf)
@@ -1619,6 +1627,12 @@ bool SendPacket()
 		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d|",
 		SQ_MsgBytes, tx_size, rx_size, a2r.dt_sent, dt_rcvd, dt_queue);
+
+	// Log warning
+	if (is_repeat) {
+		Debug.sprintf_safe(buffLrg, buff_lrg_4, "Sent Duplicate a2r Packet: %s %s", buff_lrg_2, buff_lrg_3);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg_4, a2r.t_sent);
+	}
 
 	// Log sent
 	Debug.DB_Sent(buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);

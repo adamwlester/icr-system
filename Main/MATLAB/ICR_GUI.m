@@ -977,9 +977,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     else; Log_Debug('SKIPPED: "Cheetah_Configure()"'); end
                     
                     % Wait for NLX connected confirmation
+                    if ~ISMATSOLO
                     Log_Debug('RUNNING: Wait for NLX setup confirmation...');
                     while true; [abort, pass] = Check_Flag(FC.DoExit, c2m.('N').dat1 >= 1);
                         if abort || pass; break; end
+                    end
+                    else; Log_Debug('SKIPPED: Wait for NLX setup confirmation'); 
                     end
                     
                     % Send NLX configured confirmation
@@ -1574,6 +1577,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Attempt to store log
                     try
+                        
+                        % Check if entry empty
+                        if isempty(D.DB.logStr{z_l})
+                            D.DB.logStr{z_l} = sprintf('**WARNING** This Log[%d] Was Empty', z_l);
+                        end
+                        
                         % Print log being stored
                         if D.DB.F.printLogStrore
                             fprintf('Writing Log[%d/%d]: log="%s"', z_l, D.DB.cnt_logs, D.DB.logStr{z_l})
@@ -10722,10 +10731,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.F.rew_confirmed = false;
             
             % Reset reward zone objects
-            Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
-                'ShowAll', D.UI.rotCol(D.I.rot,:));
-            Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
-                'Visible', 'off');
+            if D.I.zone_now == 0
+                Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...
+                    'ShowAll', D.UI.rotCol(D.I.rot,:));
+                Safe_Set(D.UI.txtFdDurH(D.I.rot,:), ...
+                    'Visible', 'off');
+            end
             
             % HANDLE CUED REWARD STUFF
             
@@ -10746,7 +10757,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 Safe_Set(D.UI.txtFdDurH(D.I.rot,D.I.zone_now), ...
                     'Visible', 'on');
                 
-            else
+            elseif get(D.UI.toggDoCue, 'Value') == 0
                 
                 % Darken all zone patches
                 Patch_State(D.UI.ptchRewZoneBndsH(D.I.rot,:), ...

@@ -1093,6 +1093,8 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 	static char buff_med_2[buffMed] = { 0 }; buff_med_2[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
+	bool is_resend = false;
+	bool is_conf = false;
 
 	// Get print and log flags
 	do_print =
@@ -1107,10 +1109,14 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 		return;
 	}
 
+	// Parse flag
+	is_conf = GetSetByteBit(&flag_byte, 1, false);
+	is_resend = GetSetByteBit(&flag_byte, 3, false);
+
 	// Format prefix
 	Debug.sprintf_safe(buffMed, buff_med_1, "   [%sRCVD%s:%s]",
-		is_repeat ? "RPT-" : "",
-		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
+		is_resend ? "RSND-" : is_repeat ? "RPT-" : "",
+		is_conf ? "-CONF" : "",
 		COM::str_list_id[p_r4->comID]);
 
 	// Format message
@@ -1125,12 +1131,6 @@ void DEBUG::DB_Rcvd(R4_COM<USARTClass> *p_r4, char *p_msg_1, char *p_msg_2, bool
 			U.i32, millis() - Pos[cmd.vtEnt].t_update);
 		Debug.sprintf_safe(buffMax, buff_max, " %s %s %s %s",
 			buff_med_1, buff_med_2, p_msg_1, p_msg_2);
-	}
-
-	// Log as warning if resent
-	if (is_repeat) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, p_r4->t_rcvd);
-		return;
 	}
 
 	// Add to print queue
@@ -1193,6 +1193,9 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
 	bool do_print = false;
 	bool do_log = false;
+	bool is_conf = false;
+	bool is_done = false;
+	bool is_resend = false;
 
 	// Get print and log flags
 	do_print =
@@ -1207,18 +1210,17 @@ void DEBUG::DB_Sent(R2_COM<USARTClass> *p_r2, char *p_msg_1, char *p_msg_2, bool
 		return;
 	}
 
+	// Parse flag
+	is_conf = GetSetByteBit(&flag_byte, 1, false);
+	is_done = GetSetByteBit(&flag_byte, 2, false);
+	is_resend = GetSetByteBit(&flag_byte, 3, false);
+
 	// Format message
 	Debug.sprintf_safe(buffMax, buff_max, "   [%sSENT%s%s:%s] %s %s",
-		is_repeat ? "RPT-" : "",
-		GetSetByteBit(&flag_byte, 1, false) ? "-CONF" : "",
-		GetSetByteBit(&flag_byte, 2, false) ? "-DONE" : "",
+		is_resend ? "RSND-" : is_repeat ? "RPT-" : "",
+		is_conf ? "-CONF" : "",
+		is_done ? "-DONE" : "",
 		COM::str_list_id[p_r2->comID], p_msg_1, p_msg_2);
-
-	// Log as warning if resending
-	if (is_repeat) {
-		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_max, p_r2->t_sent);
-		return;
-	}
 
 	// Store
 	if (do_print) {
@@ -1549,7 +1551,7 @@ void DEBUG::DB_OpenLog(char *p_msg, bool start_entry)
 	else {
 		SerialUSB.print(p_msg);
 	}
-}
+	}
 
 void DEBUG::Queue(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int line)
 {
@@ -1743,7 +1745,7 @@ void DEBUG::PrintLCD(bool do_block, char *p_msg_1, char *p_msg_2, char f_siz)
 	if (do_block) {
 		FC.do_BlockWriteLCD = true;
 	}
-}
+	}
 
 void DEBUG::ClearLCD()
 {
@@ -1970,7 +1972,7 @@ void DEBUG::sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...) {
 		strcat(p_buff, str_prfx_med);
 
 
-	}
+}
 
 	// Copy/concat buff to p_buff
 	strcat(p_buff, buff);
@@ -2993,7 +2995,7 @@ void PID::PidCheckEKF(uint32_t ts)
 
 		// Set flag
 		FC.is_EKFReady = true;
-	}
+}
 }
 
 void PID::PidResetEKF()
@@ -3022,7 +3024,7 @@ void PID::PidSetUpdateTime(uint32_t ts)
 		dt_update = (double)(ts - t_updateLast) / 1000;
 		isPidUpdated = false;
 		t_updateLast = ts;
-	}
+}
 }
 
 double PID::PidCalibration()
@@ -4130,7 +4132,7 @@ bool REWARD::CheckEnd()
 	// Return end reward status
 	return true;
 
-}
+	}
 
 void REWARD::SetZoneDur(int zone_ind)
 {
@@ -5256,7 +5258,7 @@ void LOGGER::QueueLog(char *p_msg, uint32_t ts, char *p_type, const char *p_fun,
 	}
 
 	// Store log
-	Debug.sprintf_safe(buffMax, LQ_Queue[LQ_StoreInd], "[%d],%lu,=\"%s\",%d,%s,%s%s%s\r\n", 
+	Debug.sprintf_safe(buffMax, LQ_Queue[LQ_StoreInd], "[%d],%lu,=\"%s\",%d,%s,%s%s%s\r\n",
 		cnt_logsStored, t_m, Debug.FormatTimestamp(t_m), cnt_loopShort, p_type, buff_med_save, buff_med_1, p_msg);
 
 	// Reset overlow stuff
@@ -5730,7 +5732,7 @@ void LOGGER::StreamLogs()
 	for (int i = 0; i < Debug.cnt_warn; i++) {
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", Debug.warn_line[i]);
 		Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_med), buff_med);
-	}
+}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL WARNINGS: %d %s", Debug.cnt_warn, Debug.cnt_warn > 0 ? buff_lrg_3 : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	// Send
@@ -6163,6 +6165,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
 	static char buff_lrg_3[buffLrg] = { 0 }; buff_lrg_3[0] = '\0';
+	static char buff_lrg_4[buffLrg] = { 0 }; buff_lrg_4[0] = '\0';
 	uint32_t t_start = millis();
 	int dt_parse = 0;
 	int dt_sent = 0;
@@ -6221,7 +6224,7 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 	if (b == 0) {
 
 		return;
-	}
+}
 
 	// Store header
 	head = b;
@@ -6307,12 +6310,11 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 		else
 			pack_last = p_r4->packConfArr[r4_ind];
 
-		// Flag resent pack
-		is_repeat = is_resend || pack == pack_last;
+		// Flag repeat pack
+		is_repeat = pack == pack_last;
 
 		// Incriment repeat count
-		if (is_repeat)
-			p_r4->cnt_repeat++;
+		p_r4->cnt_repeat += is_repeat || is_resend ? 1 : 0;
 
 		// Update packet history
 		if (!is_conf)
@@ -6368,6 +6370,15 @@ void GetSerial(R4_COM<USARTClass> *p_r4)
 
 	// Log recieved
 	if (!is_dropped) {
+
+		// Log as warning if re-revieving packet
+		if (is_repeat || is_resend) {
+			Debug.sprintf_safe(buffLrg, buff_lrg_4, "Recieved %s %s Packet: %s %s",
+				is_repeat ? "Duplicate" : is_resend ? "Resent" : "", COM::str_list_id[p_r4->comID], buff_lrg_2, buff_lrg_3);
+			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg_4, p_r4->t_rcvd);
+		}
+
+		// Log recieved
 		Debug.DB_Rcvd(p_r4, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
 	}
 	// Log dropped packs warning
@@ -6701,6 +6712,7 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
 	static char buff_lrg_3[buffLrg] = { 0 }; buff_lrg_3[0] = '\0';
+	static char buff_lrg_4[buffLrg] = { 0 }; buff_lrg_4[0] = '\0';
 	int dt_rcvd = 0;
 	int dt_queue = 0;
 	char id = '\0';
@@ -6822,13 +6834,13 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	pack_last = is_conf ? p_r2->packConfArr[id_ind] : p_r2->packArr[id_ind];
 
 	// Flag resent pack
-	is_repeat = is_resend || pack == pack_last;
+	is_repeat = pack == pack_last;
 
 	// Incriment repeat count
-	p_r2->cnt_repeat += is_repeat ? 1 : 0;
+	p_r2->cnt_repeat += is_repeat || is_resend ? 1 : 0;
 
-	// Incriment sent packet count
-	p_r2->packSentAll += !is_repeat && !is_conf ? 1 : 0;
+	// Incriment total sent packet count
+	p_r2->packSentAll++;
 
 	// Update packet history
 	if (!is_conf)
@@ -6848,6 +6860,12 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 		id, dat[0], dat[1], dat[2], pack, Debug.FormatBinary(flag_byte));
 	Debug.sprintf_safe(buffLrg, buff_lrg_3, "b_sent=%d tx=%d rx=%d dt(snd|rcv|q)=|%d|%d|%d| ez(on|act)=|%d|%d| sol_act(etoh|food)=|%d|%d| vcc_rel=%d",
 		SQ_MsgBytes, tx_size, rx_size, p_r2->dt_sent, dt_rcvd, dt_queue, digitalRead(pin.ED_SLP), v_doStepTimer, digitalRead(pin.REL_ETOH) == HIGH, digitalRead(pin.REL_FOOD) == HIGH, digitalRead(pin.REL_VCC) == HIGH);
+
+	// Log as warning if resending duplicate packet
+	if (is_repeat && !is_resend) {
+		Debug.sprintf_safe(buffLrg, buff_lrg_4, "Sent Duplicate %s Packet: %s %s", COM::str_list_id[p_r2->comID], buff_lrg_2, buff_lrg_3);
+		Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg_4, p_r4->t_rcvd);
+	}
 
 	// Log sent
 	Debug.DB_Sent(p_r2, buff_lrg_2, buff_lrg_3, is_repeat, flag_byte);
@@ -9899,11 +9917,11 @@ void setup() {
 	// DISABLE VOLTAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V2_ENBLE, LOW);
+	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 	// Keep Teensy powered
 #if !DO_TEENSY_DEBUG
 	digitalWrite(pin.REG_5V1_ENBLE, LOW);
 #endif
-	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
 	// HANDLE ANY PREVIOUS POWER OFF BUTTON PRESS
 
@@ -9950,8 +9968,11 @@ void setup() {
 	// ENABLE VOLTGAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
+	// Power Teensy
+#if DO_TEENSY_DEBUG
+	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
+#endif
 
 	// LOG/PRINT SETUP RUNNING
 

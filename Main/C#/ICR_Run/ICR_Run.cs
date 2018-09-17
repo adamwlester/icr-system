@@ -71,9 +71,6 @@ namespace ICR_Run
         static readonly object lock_matCom = new object();
         static readonly object lock_sendPack = new object();
 
-        // Initialize vt blocking object
-        private static VT_HANDLER vtHandler = new VT_HANDLER();
-
         // Initialize callback object
         private static MNetCom.MNC_VTCallback deligate_netComCallback;
 
@@ -122,6 +119,12 @@ namespace ICR_Run
         private static long TIMEOUT_120 = 120000; // (ms)
         private static long TIMEOUT_FeederDueLogRead = 5000; // (ms)
         private static long TIMEOUT_FeederDueLogImport = 120000; // (ms)
+
+        // Initialize vt handler object
+        private static VT_HANDLER vt = new VT_HANDLER(
+            dt_block: 60,
+            feedDist: 66 * ((2 * Math.PI) / (140 * Math.PI))
+            );
 
         // Define Com vars
         private static MNetComClient netcomClient = new MNetComClient();
@@ -254,16 +257,6 @@ namespace ICR_Run
             head: (byte)'<',
             foot: (byte)'>'
         );
-
-        // Position variables
-        private static double vt_R;
-        private static double vt_XC;
-        private static double vt_YC;
-        private static double feedDist = 66 * ((2 * Math.PI) / (140 * Math.PI));
-        private static UInt64 vtStr = 0;
-        private static double[,] vtRad = new double[2, 2];
-        private static double[] vtCM = new double[2];
-        private static UInt32[,] vtTS = new UInt32[2, 2];
 
         #endregion
 
@@ -533,7 +526,7 @@ namespace ICR_Run
                 double dt_ping_r2c = r2c.ID_Dat('n', 0);
                 double dt_ping_r2a = r2c.ID_Dat('n', 1);
                 double cnt_resend = r2c.ID_Dat('n', 2);
-                DEBUG.DB_General(String.Format("PING SUMMARY: n_pings={0} r2c={1:0.00}ms r2a={2:0.00}ms resend={3}", 
+                DEBUG.DB_General(String.Format("PING SUMMARY: n_pings={0} r2c={1:0.00}ms r2a={2:0.00}ms resend={3}",
                     DEBUG.flag.n_testPings, dt_ping_r2c, dt_ping_r2a, cnt_resend));
             }
             else
@@ -771,7 +764,7 @@ namespace ICR_Run
             if (FC.is_MovedToStart)
             {
                 // Calculate move to position
-                double move_to = CalcMove(4.7124 - feedDist);
+                double move_to = CalcMove(4.7124 - vt.feedDist);
 
                 // Send move command on seperate thread and wait for done reply
                 RepeatSendFeederDueCom_Thread(id: 'M', dat1: 0, dat2: move_to, do_check_done: true);
@@ -1354,7 +1347,7 @@ namespace ICR_Run
             lock (lock_sendPack)
             {
                 // Block vt sending
-                vtHandler.Block(id);
+                vt.Block(id);
 
                 // Get new packet number
                 pack = pack == 0 ? c2r.PackIncriment(1) : pack;
@@ -1409,7 +1402,7 @@ namespace ICR_Run
                     // Bail for pos data if recently updated
                     if (id == 'P')
                     {
-                        if (vtHandler.GetSendDT((int)dat[0], "now") < 150)
+                        if (vt.GetSendDT((int)dat[0], "now") < 150)
                         {
                             // Decriment packet back
                             pack = c2r.PackIncriment(-1);
@@ -1471,7 +1464,7 @@ namespace ICR_Run
                 {
                     // Log send info
                     string str_print = String.Format("{0} {1}", buff_dat_1, buff_dat_2);
-                    if (!is_repeat)
+                    if (!is_repeat && !is_resend)
                         DEBUG.DB_General_Thread(str_print, ts: c2r.t_new, msg_type: "COM", str_prfx: str_prfx, indent: 5);
                     else
                         DEBUG.DB_Warning_Thread(str_print, ts: c2r.t_new, str_prfx: str_prfx);
@@ -1482,14 +1475,14 @@ namespace ICR_Run
                 else
                 {
                     // Track send rate
-                    vtHandler.StoreSendTime((int)dat[0], DEBUG.DT());
+                    vt.StoreSendTime((int)dat[0], DEBUG.DT());
 
                     // Log
                     if ((DEBUG.flag.do_printSentRatVT && (int)dat[0] == 0) ||
                         (DEBUG.flag.do_printSentRobVT && (int)dat[0] == 1))
                     {
                         U.f = (float)dat[2];
-                        string str_print = String.Format("{0} {1} dt_send_mu={2}", buff_dat_1, buff_dat_2, vtHandler.GetSendDT((int)dat[0], "avg"));
+                        string str_print = String.Format("{0} {1} dt_send_mu={2}", buff_dat_1, buff_dat_2, vt.GetSendDT((int)dat[0], "avg"));
                         DEBUG.DB_General_Thread(str_print, ts: c2r.t_new, msg_type: "COM", str_prfx: "[SENT-VT:c2r]", indent: 5);
                     }
                 }
@@ -1498,7 +1491,7 @@ namespace ICR_Run
                 c2r.SetComFlags(id: id, set_is_sent_rcvd: true, do_print: id != 'P');
 
                 // Unlock vt sending
-                vtHandler.Unblock(id);
+                vt.Unblock(id);
 
             }
 
@@ -1858,7 +1851,7 @@ namespace ICR_Run
 
                     // Log rcvd details
                     string str_print = String.Format("{0} {1}", buff_dat_1, buff_dat_2);
-                    if (!is_repeat)
+                    if (!is_repeat && !is_resend)
                         DEBUG.DB_General_Thread(str_print, ts: r2c.t_new, msg_type: "COM", str_prfx: str_prfx, indent: 5);
                     else
                         DEBUG.DB_Warning_Thread(str_print, ts: r2c.t_new, str_prfx: str_prfx);
@@ -2614,7 +2607,7 @@ namespace ICR_Run
             {
                 // Store matlab position data
                 UNION_HACK U = new UNION_HACK(0, '0', 0, 0, 0);
-                UInt64 ts = (UInt64)(dat[0]) + vtStr;
+                UInt64 ts = (UInt64)(dat[0]) + vt.streamStart;
                 double x = dat[1];
                 double y = dat[2];
 
@@ -2623,8 +2616,8 @@ namespace ICR_Run
 
                 // Convert pos data to double
                 double dat1 = 0;
-                double dat2 = vtCM[0];
-                U.i32 = vtTS[0, 1];
+                double dat2 = vt.cm[0];
+                U.i32 = vt.ts[0, 1];
                 double dat3 = (double)U.f;
 
                 // Send data
@@ -2651,12 +2644,12 @@ namespace ICR_Run
                 {
 
                     // Store vt pixel parameters
-                    vt_R = m2c.ID_Dat('i', 0);
-                    vt_XC = m2c.ID_Dat('i', 1);
-                    vt_YC = m2c.ID_Dat('i', 2);
+                    vt.R = m2c.ID_Dat('i', 0);
+                    vt.XC = m2c.ID_Dat('i', 1);
+                    vt.YC = m2c.ID_Dat('i', 2);
 
                     // Print values
-                    DEBUG.DB_General(String.Format("RECIEVED VT FOV INFO: vt_R={0:0.00} vt_XC={1:0.00} vt_YC={2:0.00}", vt_R, vt_XC, vt_YC));
+                    DEBUG.DB_General(String.Format("RECIEVED VT FOV INFO: R={0:0.00} XC={1:0.00} YC={2:0.00}", vt.R, vt.XC, vt.YC));
 
                 }
 
@@ -3124,7 +3117,7 @@ namespace ICR_Run
             bool skip = false;
 
             // Skip if being blocked or sent in last 30 ms
-            skip = vtHandler.CheckBlock(ent) || vtHandler.GetSendDT(ent, "now") < 30;
+            skip = vt.CheckBlock(ent) || vt.GetSendDT(ent, "now") < 30;
 
             // Send pos data
             if (!skip)
@@ -3135,18 +3128,18 @@ namespace ICR_Run
                 {
                     // Convert pos data to double
                     double dat1 = ent;
-                    double dat2 = vtCM[ent];
-                    U.i32 = vtTS[ent, 1];
+                    double dat2 = vt.cm[ent];
+                    U.i32 = vt.ts[ent, 1];
                     double dat3 = (double)U.f;
 
                     // Send vt data to feederdue
                     RepeatSendFeederDueCom_Thread(send_max: 1, id: 'P', dat1: dat1, dat2: dat2, dat3: dat3, do_conf: false);
 
                     // Log first record received
-                    if (!vtHandler.is_streamStarted[ent])
+                    if (!vt.is_streamStarted[ent])
                     {
                         DEBUG.DB_General_Thread(String.Format("FIRST {0} VT RECORD", ent == 0 ? "RAT" : "ROBOT"));
-                        vtHandler.is_streamStarted[ent] = true;
+                        vt.is_streamStarted[ent] = true;
                     }
                 }
 
@@ -3155,7 +3148,7 @@ namespace ICR_Run
             else if (DEBUG.flag.do_printSkippedVT)
             {
                 DEBUG.DB_Warning_Thread(String.Format("VT Skpped: ent={0} cnt={1} dt_snd={2}|{3}|{4}",
-                    ent, vtHandler.cnt_block[ent], vtHandler.GetSendDT(ent), vtHandler.GetSendDT(ent, "avg"), vtHandler.GetSendDT(ent, "now")));
+                    ent, vt.cnt_block[ent], vt.GetSendDT(ent), vt.GetSendDT(ent, "avg"), vt.GetSendDT(ent, "now")));
             }
         }
 
@@ -3168,29 +3161,29 @@ namespace ICR_Run
         {
 
             // Get first vtTS once
-            if (vtStr == 0)
+            if (vt.streamStart == 0)
             {
                 // Save first ts and bail
-                vtStr = ts;
+                vt.streamStart = ts;
                 return false;
             }
 
             // Convert ts from us to ms and subtract firts record ts
-            UInt64 ts_last = vtTS[ent, 1];
-            UInt32 ts_now = (UInt32)Math.Round((double)((ts - vtStr) / 1000));
+            UInt64 ts_last = vt.ts[ent, 1];
+            UInt32 ts_now = (UInt32)Math.Round((double)((ts - vt.streamStart) / 1000));
 
             // Rescale y as VT data is compressed in y axis
             y = y * 1.0976;
 
             // Normalize 
-            x = (x - vt_XC) / vt_R;
-            y = (y - vt_YC) / vt_R;
+            x = (x - vt.XC) / vt.R;
+            y = (y - vt.YC) / vt.R;
 
             // Flip y 
             y = y * -1;
 
             // Compute radians
-            double rad_last = vtRad[ent, 1];
+            double rad_last = vt.rad[ent, 1];
             double rad_now = Math.Atan2(y, x);
             double roh = Math.Sqrt(Math.Abs(x) * Math.Abs(x) + Math.Abs(y) * Math.Abs(y));
 
@@ -3207,8 +3200,8 @@ namespace ICR_Run
                 ((140 * Math.PI) / (2 * Math.PI)) /
                 dt;
             // Convert back to pixels with lower left = 0
-            x = Math.Round(x * vt_R) + vt_R;
-            y = Math.Round(y * vt_R) + vt_R;
+            x = Math.Round(x * vt.R) + vt.R;
+            y = Math.Round(y * vt.R) + vt.R;
 
             // Check for negative dt
             if (dt < 0)
@@ -3218,8 +3211,8 @@ namespace ICR_Run
             }
 
             // Convert cart to cm
-            x = x * (140 / (vt_R * 2));
-            y = y * (140 / (vt_R * 2));
+            x = x * (140 / (vt.R * 2));
+            y = y * (140 / (vt.R * 2));
 
             // Convert rad to cm
             double radFlip = Math.Abs(rad_now - (2 * Math.PI)); // flip
@@ -3227,12 +3220,12 @@ namespace ICR_Run
 
             // Update vars
             // Save old vals
-            vtTS[ent, 0] = vtTS[ent, 1];
-            vtRad[ent, 0] = rad_last;
+            vt.ts[ent, 0] = vt.ts[ent, 1];
+            vt.rad[ent, 0] = rad_last;
             // New vals
-            vtTS[ent, 1] = ts_now;
-            vtRad[ent, 1] = rad_now;
-            vtCM[ent] = cm;
+            vt.ts[ent, 1] = ts_now;
+            vt.rad[ent, 1] = rad_now;
+            vt.cm[ent] = cm;
 
             // Determine if data should be used
             if (roh < 0.7857 || roh > 1.1 || vel > 300)
@@ -4744,10 +4737,10 @@ namespace ICR_Run
                 pack_last = _packConfArr[id_ind];
 
             // Flag repeat pack
-            is_repeat = is_resend || pack == pack_last;
+            is_repeat = pack == pack_last;
 
             // Incriment repeat
-            cnt_repeat += is_repeat ? 1 : 0;
+            cnt_repeat += is_repeat || is_resend ? 1 : 0;
 
             // Update packet history
             if (!is_conf)
@@ -4755,13 +4748,13 @@ namespace ICR_Run
             else
                 _packConfArr[id_ind] = pack;
 
-            // Update for new packets
-            packSentAll += !is_repeat && !is_conf ? 1 : (UInt32)0;
+            // Incriment total sent packet count
+            packSentAll++;
 
             // Format prefix string
             str_prfx =
                 String.Format("[{0}SENT{1}:{2}]",
-                is_repeat ? "RPT-" : "",
+                is_resend ? "RSND-" : is_repeat ? "RPT-" : "",
                 is_conf ? "-CONF" : "",
                 _objID);
 
@@ -4801,10 +4794,10 @@ namespace ICR_Run
             pack_last = is_conf ? _packConfArr[id_ind] : _packArr[id_ind];
 
             // Flag resent pack
-            is_repeat = is_resend || pack == pack_last;
+            is_repeat = pack == pack_last;
 
             // Incriment repeat
-            cnt_repeat += is_repeat ? 1 : 0;
+            cnt_repeat += is_repeat || is_resend ? 1 : 0;
 
             // Update packet history
             if (!is_conf)
@@ -4840,7 +4833,7 @@ namespace ICR_Run
             // Format prefix string
             str_prfx =
                String.Format("[{0}RCVD{1}{2}:{3}]",
-               is_repeat ? "RE-" : "",
+               is_resend ? "RSND-" : is_repeat ? "RPT-" : "",
                is_conf ? "-CONF" : "",
                is_done ? "-DONE" : "",
                _objID);
@@ -4975,9 +4968,17 @@ namespace ICR_Run
         // PRIVATE VARS
         private static int _cntThread = 0;
         private static long _t_blockTim = 0;
-        private static long _blockFor = 60; // (ms) 
+        private long _dt_block = 0; // (ms) 
 
         // PUBLIC VARS
+        public double feedDist = 0; // (rad)
+        public double R;
+        public double XC;
+        public double YC;
+        public UInt64 streamStart = 0;
+        public double[,] rad = new double[2, 2];
+        public double[] cm = new double[2];
+        public UInt32[,] ts = new UInt32[2, 2];
         public bool[] is_streamStarted = new bool[2] { false, false };
         public long[] t_sent = new long[2] { 0, 0 };
         public long[] t_sent_last = new long[2] { 0, 0 };
@@ -4985,13 +4986,23 @@ namespace ICR_Run
         public int[] cnt_sent = new int[2] { 0, 0 };
         public int[] cnt_block = new int[2] { 0, 0 };
 
+        // CONSTRUCTOR
+        public VT_HANDLER(
+        long dt_block,
+        double feedDist
+        )
+        {
+            this._dt_block = dt_block;
+            this.feedDist = feedDist;
+        }
+
         // Block sending vt data
         public void Block(char id)
         {
             if (id != 'P')
             {
                 _cntThread++;
-                _t_blockTim = DEBUG.DT() + _blockFor;
+                _t_blockTim = DEBUG.DT() + _dt_block;
             }
         }
 
