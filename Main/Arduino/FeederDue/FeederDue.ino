@@ -4791,8 +4791,8 @@ int LOGGER::OpenNewLog()
 	}
 
 
-	// Check if more than 50 logs saved
-	if (logNum > 50)
+	// Check if more than 250 logs saved
+	if (logNum > 250)
 	{
 		// Step out of directory
 		if (SendCommand("cd ..\r") == '!') {
