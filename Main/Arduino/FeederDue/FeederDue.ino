@@ -2138,7 +2138,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 		if (millis() > t_power_reset + 25) {
 
 			// Turn 5V power back on
-			digitalWrite(pin.REG_5V2_ENBLE, HIGH);
+			digitalWrite(pin.REG_5V1_ENBLE, HIGH);
 
 			// Set flags
 			do_power_reset = false;
@@ -2193,7 +2193,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 
 		// Turn off 5V power
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "POWERING OFF 5V PIXY POWER SUPPLY");
-		digitalWrite(pin.REG_5V2_ENBLE, LOW);
+		digitalWrite(pin.REG_5V1_ENBLE, LOW);
 
 		// Set flag and store time
 		do_power_reset = true;
@@ -9847,7 +9847,6 @@ void Interupt_Power()
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V2_ENBLE, LOW);
 	digitalWrite(pin.REG_5V1_ENBLE, LOW);
-	digitalWrite(pin.REG_5V2_ENBLE, LOW);
 
 	// Restart Arduino
 	REQUEST_EXTERNAL_RESET;
@@ -9917,8 +9916,7 @@ void setup() {
 	// DISABLE VOLTAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V2_ENBLE, LOW);
-	digitalWrite(pin.REG_5V2_ENBLE, LOW);
-	// Keep Teensy powered
+	// Keep Teensy (5V) powered
 #if !DO_TEENSY_DEBUG
 	digitalWrite(pin.REG_5V1_ENBLE, LOW);
 #endif
@@ -9968,7 +9966,7 @@ void setup() {
 	// ENABLE VOLTGAGE REGULATORS
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
+	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
 	// Power Teensy
 #if DO_TEENSY_DEBUG
 	digitalWrite(pin.REG_5V1_ENBLE, HIGH);

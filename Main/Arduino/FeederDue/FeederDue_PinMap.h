@@ -126,8 +126,8 @@ struct PIN
 	// Voltage Regulators
 	const int REG_24V_ENBLE = A4; // (red)
 	const int REG_12V2_ENBLE = 50; // (yellow) 
-	const int REG_5V1_ENBLE = 48; // (green) 
-	const int REG_5V2_ENBLE = 46; // (blue)
+	const int REG_5V1_ENBLE = 48; // (green)
+	const int REG_ENBLE_UNUSED = 46; // (blue) 
 
 	// BigEasyDriver
 	const int ED_RST = 47; // (green)
@@ -197,7 +197,6 @@ void SetupPins() {
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
 	pinMode(pin.REG_12V2_ENBLE, OUTPUT);
 	pinMode(pin.REG_5V1_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V2_ENBLE, OUTPUT);
 	// Autodriver
 	pinMode(pin.AD_CSP_R, OUTPUT);
 	pinMode(pin.AD_CSP_F, OUTPUT);
@@ -244,7 +243,6 @@ void SetupPins() {
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 	// Autodriver
 	digitalWrite(pin.AD_CSP_R, LOW);
 	digitalWrite(pin.AD_CSP_F, LOW);
