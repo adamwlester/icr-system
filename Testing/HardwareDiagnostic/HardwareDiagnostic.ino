@@ -289,7 +289,6 @@ void setup()
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
 
 	// INITIALIZE LCD
 	LCD.InitLCD();

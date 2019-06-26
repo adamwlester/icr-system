@@ -45,9 +45,12 @@
 	To ground = 2.2k Ohm
 	To vcc = 8.2k Ohm
 
-* OpenLog config.txt settings:
+* OpenLog 
+config.txt settings:
 	57600,26,3,2,0,0,0
 	baud,escape,esc#,mode,verb,echo,ignoreRX
+Reset
+	Short 
 
 * VARIABLE INFO
 	"flag_byte" = [0, 0, 0, 0, is_resend, is_done, is_conf, do_conf]
@@ -10131,9 +10134,9 @@ void setup() {
 	// Enable ir detector interupt
 	if (is_ir_off) {
 		// IR detector
-		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IR_DETECT), Interupt_IR_Detect, FALLING);
-		Debug.DB_General(__FUNCTION__, __LINE__, "IR SENSOR ENABLED");
+		Debug.DB_General(__FUNCTION__, __LINE__, "ENABLING IR SENSOR INTERUPT");
 		Debug.PrintAll(500);
+		attachInterrupt(digitalPinToInterrupt(pin.INTERUPT_IR_DETECT), Interupt_IR_Detect, FALLING);
 	}
 
 	// Do not enable if ir detector pin already low
@@ -10146,6 +10149,8 @@ void setup() {
 
 	// Power off
 #if !DO_AUTO_POWER
+	Debug.DB_General(__FUNCTION__, __LINE__, "ENABLING POWER SWITCH INTERUPT");
+	Debug.PrintAll(500);
 	attachInterrupt(digitalPinToInterrupt(pin.PWR_SWITCH), Interupt_Power, FALLING);
 #endif
 

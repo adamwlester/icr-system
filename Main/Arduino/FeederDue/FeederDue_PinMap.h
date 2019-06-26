@@ -38,10 +38,10 @@ PIN MAP:
 23,REL_ETOH,blue
 24,PWR_SWITCH,white
 25,PWR_SWITCH_GRN,black
-26,XB_CTS_F,blue
-27,XB_UNDEF_F,yellow
-28,XB_CTS_R,blue
-29,XB_UNDEF_R,yellow
+26,UNUSED,NA
+27,UNUSED,NA
+28,UNUSED,NA
+29,UNUSED,NA
 30,OL_RST,purple
 31,INTERUPT_IR_DETECT,white
 32,TEENSY_UNUSED,green
@@ -93,12 +93,6 @@ struct PIN
 	const int AD_CSP_R = 5; // (yellow)
 	const int AD_CSP_F = 6; // (red)
 	const int AD_RST = 7; // (brown)
-
-	// XBees
-	const int XB_R2A_CTS = 26; // (blue)
-	const int XB_R2C_CTS = 28; // (blue)
-	const int XB_R2A_UNUSED = 27; // (yellow)
-	const int XB_R2C_UNUSED = 29; // (yellow)
 
 	// Teensy
 	const int TEENSY_UNUSED = 32; // (green)
@@ -285,9 +279,6 @@ void SetupPins() {
 
 	// Power
 	pinMode(pin.PWR_SWITCH, INPUT);
-	// XBees
-	pinMode(pin.XB_R2C_CTS, INPUT);
-	pinMode(pin.XB_R2A_CTS, INPUT);
 	// Teensy
 	pinMode(pin.TEENSY_RESET, INPUT);
 	// Battery monitor

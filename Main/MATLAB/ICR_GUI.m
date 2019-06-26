@@ -95,18 +95,18 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0561'; %'r9999';
+D.DB.ratLab = 'r9999'; %'r9999';
 
 % Implant status
-D.DB.Implanted = false;
+D.DB.Implanted = true;
 
 % NLX parameters
-D.DB.F.Run_Cheetah = true;
+D.DB.F.Run_Cheetah = false;
 D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Type = 'TT_Turn' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
@@ -122,8 +122,8 @@ D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 % HARDCODED FLAGS
 D.DB.F.printLogStrore = false;
 D.DB.F.foragePathCompute = false;
-D.DB.F.autoSetTT = false;
-D.DB.nTurnsAutoSetTT = 4;
+D.DB.F.autoSetTT = true;
+D.DB.nTurnsAutoSetTT = 20;
 
 % SYSTEM SET FLAGS
 D.DB.F.testRun = true;
@@ -1871,6 +1871,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.F.spikesort_running = false;
         % cube connection status
         D.F.cube_connected = false;
+        % matlab netcom setup
+        D.F.mat_netcom_setup = false;
         % nlx streaming
         D.F.vt_rat_streaming = false;
         D.F.vt_rob_streaming  = false;
@@ -18403,8 +18405,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         depths_last = D.TT.ttLogNew.([D.TT.ttFldNow,'_D']);
         
         % Show last impedances
-        imp_str = cellstr(num2str(D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])'));
-        [D.UI.editImpTT.String] = deal(imp_str{:});
+        if ~all(isnan(D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])))
+            imp_str = cellstr(num2str(D.TT.ttLogNew.([D.TT.ttFldNow,'_I'])'));
+            [D.UI.editImpTT.String] = deal(imp_str{:});
+        end
         
         % Update pannel title
         Safe_Set(D.UI.panTrackTT, ...

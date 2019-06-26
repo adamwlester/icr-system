@@ -124,7 +124,7 @@ if exist(fullfile(ioDir, 'TT_IO_1.mat'), 'file')
 end
 
 % Copy sorted rat data
-TT_IO_1 = sortrows(T, 'RowNames'); %#ok<NASGU>
+TT_IO_1 = sortrows(T, 'RowNames');
 
 %% ========================= UPDATE TT_IO_2 ===============================
 
@@ -147,7 +147,7 @@ tt_var_values = ...
     {categorical({'<undefined>'}, turn_cats)}; ...
     {categorical({'<undefined>'}, reference_tt_cats)}; ...
     {false(1,10)}; ...
-    {nan(1,4)}; ...
+    {nan(1,5)}; ...
     {''}], ...
     length(tetrode_cats), 1);
 
@@ -204,7 +204,7 @@ end
 
 % Sort fields by rat
 [~, ind] = sort(fieldnames(TT_IO_2));
-TT_IO_2 = orderfields(TT_IO_2, ind); %#ok<NASGU>
+TT_IO_2 = orderfields(TT_IO_2, ind);
 
 %% ========================= UPDATE SS_IO_1 ===============================
 
