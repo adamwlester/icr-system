@@ -466,7 +466,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Interval between polling entities
         D.PAR.dtPoll = 0.01; % (sec)
         % Min delay before NetCom setup []
-        D.PAR.dtNlxConBehavior = 10; % (sec)
+        D.PAR.dtNlxConBehavior = 15; % (sec)
         D.PAR.dtNlxConEphys = 15; % (sec)
         % Min dt loop
         D.PAR.dtMinLoop = 10; % (ms)
@@ -977,7 +977,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     else; Log_Debug('SKIPPED: "Cheetah_Configure()"'); end
                     
                     % Wait for NLX connected confirmation
-                    if ~ISMATSOLO
+                    if ~ISMATSOLO && D.F.cheetah_running
                     Log_Debug('RUNNING: Wait for NLX setup confirmation...');
                     while true; [abort, pass] = Check_Flag(FC.DoExit, c2m.('N').dat1 >= 1);
                         if abort || pass; break; end
