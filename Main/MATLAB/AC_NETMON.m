@@ -52,7 +52,9 @@ s2 = sin(2*pi*t*2500)';
 s3 = sin(2*pi*t*5000)';
 s4 = sin(2*pi*t*10000)';
 reward_lft = (s1 + s2 + s3 + s4) / 4;
-reward_lft = reward_lft * 0.2;
+% Set gain/amplitude
+rew_gain = 0.3;
+reward_lft = reward_lft * rew_gain;
 
 % Sound object
 soundAllH = audioplayer([reward_lft,noise_rt], nsfs);

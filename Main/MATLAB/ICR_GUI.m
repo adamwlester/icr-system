@@ -2108,9 +2108,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.P.Rob.xLast = NaN;
         D.P.Rat.yLast = NaN;
         D.P.Rob.yLast = NaN;
-        % pos rad
+        % pos rad and roh
         D.P.Rat.rad = NaN;
         D.P.Rob.rad = NaN;
+        D.P.Rat.roh = NaN;
+        D.P.Rob.roh = NaN;
         % last valid rad and ts
         D.P.Rat.radLast = NaN;
         D.P.Rob.radLast = NaN;
@@ -6908,6 +6910,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Find current NLX recording subdirectory
         dirs = dir(D.DIR.nlxTempTop);
         dirs = dirs(3:end);
+        dirs = dirs([dirs.isdir]);
         fi_dat_num = ...
             cell2mat(cellfun(@(x) datenum(x, 'yyyy-mm-dd_HH-MM-SS'), {dirs.name}, 'uni', false));
         D.DIR.nlxRecSub = dirs(fi_dat_num == max(fi_dat_num)).name;
