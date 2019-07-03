@@ -8525,8 +8525,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reinitialize
         D.T.strqd_inbnd_t1 = 0;
         
-        % Disable button
+        % Disable start button
         set(D.UI.btnStart, 'Visible', 'off')
+        
+        % Enable task done button
+        Button_State(D.UI.toggTaskDone, 'Enable');
         
         % Log/print
         if inbndTim > 0
@@ -14083,9 +14086,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         Button_State(D.UI.toggHaltRob, 'Enable');
                     end
                     
-                    % Enable task done button
-                    Button_State(D.UI.toggTaskDone, 'Enable');
-                    
                     % Clear VT
                     Button_State(D.UI.btnClrVT, 'Enable');
                     
@@ -15134,6 +15134,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     function Update_UI(dt_min, arg_str)
         
         % Bail if vars not setup
+        if ~exist('D', 'var')
+            return
+        end
         if ~isstruct(D)
             return
         end
