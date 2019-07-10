@@ -327,7 +327,6 @@ const double _frontVelCoeff[velOrd] = {
 const VEC<double> frontVelCoeff(velOrd, __LINE__, _frontVelCoeff);
 
 // MOTOR CONTROL
-const int dt_irProxHold = 1000;
 double runSpeedNow = 0;
 char runDirNow = 'f';
 namespace MC_CALL
@@ -436,7 +435,7 @@ OLD NOTE: Updated when EtOH relay opened
 bit2volt = (3.3/1023) * (12.6/3)
 Set pot to 12.6V == 3V
 */
-const float vccCutoff = 11.6;
+const float vccCutoff = 11.0;
 const uint32_t dt_vccShutDown = 5 * 60; // (sec)
 const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;

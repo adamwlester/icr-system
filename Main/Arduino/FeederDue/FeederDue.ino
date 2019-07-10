@@ -4023,8 +4023,8 @@ void REWARD::StartRew()
 	}
 
 	// Turn on reward LED
-	analogWrite(pin.LED_REW_R, rewLEDduty[1]);
 	analogWrite(pin.LED_REW_C, rewLEDduty[1]);
+	analogWrite(pin.LED_REW_R, rewLEDduty[1]);
 
 	// Open solenoid
 	digitalWrite(pin.REL_FOOD, HIGH);
@@ -4106,8 +4106,8 @@ bool REWARD::CheckEnd()
 	}
 
 	// Turn off reward LED
-	analogWrite(pin.LED_REW_R, rewLEDduty[0]);
 	analogWrite(pin.LED_REW_C, rewLEDduty[0]);
+	analogWrite(pin.LED_REW_R, rewLEDduty[0]);
 
 	// Store actual time
 	t_rewEnd = millis();
@@ -7636,6 +7636,11 @@ void Check_IRprox_Halt()
 		return;
 	}
 
+	// Bail if already stopped
+	if (runSpeedNow == 0) {
+		return;
+	}
+
 	// Get pin stage
 	is_rt_ir_trigg = digitalRead(pin.IRPROX_R) == LOW;
 	is_lft_ir_trigg = digitalRead(pin.IRPROX_L) == LOW;
@@ -7647,9 +7652,6 @@ void Check_IRprox_Halt()
 
 	// Run hard stop
 	HardStop(__FUNCTION__, __LINE__);
-
-	// Block motor
-	BlockMotor(dt_irProxHold);
 
 	// Update counters
 	cnt_irProxHaltR += is_rt_ir_trigg ? 1 : 0;
@@ -7917,7 +7919,7 @@ void CheckBlockTimElapsed()
 	bool is_passed_feeder = false;
 	bool is_mot_running = false;
 
-	// Bail if not checking
+	// Bail if not blocking
 	if (!FC.is_MotBlocking) {
 		return;
 	}
@@ -7961,11 +7963,6 @@ void CheckBlockTimElapsed()
 		Debug.DB_Warning(__FUNCTION__, __LINE__, "Unblocking Early: Motor Started Early");
 	}
 
-	// Bail if not blocking
-	if (!FC.is_MotBlocking) {
-		return;
-	}
-
 	// Set flag to stop checking
 	FC.is_MotBlocking = false;
 
@@ -7980,11 +7977,11 @@ void CheckBlockTimElapsed()
 
 		// Set motor control to "OPEN"
 		if (FC.is_TrackingEnabled) {
-			SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::HALT);
+			SetMotorControl(MC_CON::ID::OPEN, MC_CALL::ID::BLOCKER);
 		}
 		// Set motor control to "HOLD"
 		else {
-			SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::HALT);
+			SetMotorControl(MC_CON::ID::HOLD, MC_CALL::ID::BLOCKER);
 		}
 	}
 
@@ -10650,8 +10647,8 @@ void loop() {
 				rewLEDduty[0] = rewLEDmin[1];
 
 				// Set to min
-				analogWrite(pin.LED_REW_R, rewLEDduty[0]);
 				analogWrite(pin.LED_REW_C, rewLEDduty[0]);
+				analogWrite(pin.LED_REW_R, rewLEDduty[0]);
 
 				// Change autodriver max acc
 				maxAcc = maxAccArr[1];

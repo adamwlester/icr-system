@@ -491,9 +491,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Max clusters
         D.PAR.maxClust = 10;
         % Warning battery voltage level
-        D.PAR.robVccWarning = 11.6; % (V)
+        D.PAR.robVccWarning = 11.0; % (V)
         % Replace battery voltage level
-        D.PAR.robVccReplace = 11.8; % (V)
+        D.PAR.robVccReplace = 11.5; % (V)
         % Warning battery voltage level
         D.PAR.cubeVccWarning = 30; % (%)
         % Cube battery type ["C": Small, "A": Medium]

@@ -108,8 +108,8 @@ struct PIN
 	const int LCD_LED = 13; // (yellow)
 
 	// LEDs
-	const int LED_REW_C = 2; // (white)
-	const int LED_REW_R = 3; // (yellow)
+	const int LED_REW_R = 2; // (white)
+	const int LED_REW_C = 3; // (yellow)
 	const int LED_TRACKER = 4; // (red)
 
 	// Relays
