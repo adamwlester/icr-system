@@ -404,7 +404,7 @@ float moveToDecelDist = 40; // cm
 // REWARD
 const int rewZoneWdith = 5; // (deg)
 double feedTrackPastDist = 0; // (cm) 
-const double feedHeadPastDist = 10; // (cm)
+const double feedHeadPastDist = 20; // (cm)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_blockMoter = 0; // (ms)
 const float _solOpenScaleArr[2] = { 1, 0.5 };
