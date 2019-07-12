@@ -978,11 +978,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     
                     % Wait for NLX connected confirmation
                     if ~ISMATSOLO && D.F.cheetah_running
-                        Log_Debug('RUNNING: Wait for NLX setup confirmation...');
-                        while true; [abort, pass] = Check_Flag(FC.DoExit, c2m.('N').dat1 >= 1);
-                            if abort || pass; break; end
-                        end
-                    else; Log_Debug('SKIPPED: Wait for NLX setup confirmation');
+                    Log_Debug('RUNNING: Wait for NLX setup confirmation...');
+                    while true; [abort, pass] = Check_Flag(FC.DoExit, c2m.('N').dat1 >= 1);
+                        if abort || pass; break; end
+                    end
+                    else; Log_Debug('SKIPPED: Wait for NLX setup confirmation'); 
                     end
                     
                     % Send NLX configured confirmation
@@ -7403,8 +7403,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.rewZoneBnds = wrapTo2Pi(D.PAR.rewZoneBnds);
         
         % REWARD RESET BOUNDS
-        D.UI.rewSendBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(25),deg2rad(40)];
-        D.UI.rewSendBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(25),deg2rad(40)];
+%         D.UI.rewSendBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(10),deg2rad(30)];
+%         D.UI.rewSendBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(10),deg2rad(30)];
+        D.UI.rewSendBnds(1,1:2) = D.PAR.rewZoneBnds(1,end,1) + [deg2rad(10),deg2rad(30)];
+        D.UI.rewSendBnds(2,1:2) = D.PAR.rewZoneBnds(1,end,2) + [deg2rad(10),deg2rad(30)];
         D.UI.rewSendBnds = wrapTo2Pi(D.UI.rewSendBnds);
         
         % ROTATION BOUNDS
@@ -8207,11 +8209,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.mixFdNow, 'Visible', 'on');
         uistack(reshape(D.UI.mixFdNow(1:2,:),1,[]),'bottom',1);
         
-        % Set initial state of reward reset/send
+        % Make sure reward reset is active
         if D.PAR.sesCond ~= 'Manual_Training' %#ok<*STCMP>
-            % Set reward reset/send patch to visible
+            % Set reset patch to visible
             Patch_State(D.UI.ptchRewSendH(D.I.rot), ...
                 'Select', D.UI.rotCol(D.I.rot,:));
+            
         end
         
         % Show reward zone plot and children
