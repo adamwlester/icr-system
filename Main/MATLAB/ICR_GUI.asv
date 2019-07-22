@@ -688,7 +688,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         UI_Setup();
         Log_Debug('FINISHED: "UI_Setup()"');
         
-        % Enable setup panel and load popup menu
+        % Enable setup panel and load popup
         Object_Group_State('Setup_Objects', 'Enable')
         
         % Run initial testing setup
@@ -1439,7 +1439,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     %% ---------WAIT FOR CS DATA SAVE----------
                     
                     % Bail if save not confirmed
-                    if c2m.('F').dat1 == 0 && ~ISMATSOLO
+                    if c2m.('F').dat1 == 0
                         continue
                     end
                     
@@ -3578,7 +3578,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontWeight','Bold', ...
             'FontSize', D.UI.fontSzTxtLrg(1));
         
-        % Bulldoze popup menu
+        % Bulldoze popup
         ht = D.UI.fontSzPopLrg(2);
         btm = btm - ht - 0.5*obj_gap;
         pos = [lft, btm, wd, ht];
@@ -3591,7 +3591,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor',D.UI.figBckCol, ...
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName',D.UI.popFont, ...
-            'FontSize',D.UI.fontSzPopLrg(1), ...
+            'FontSize',D.UI.fontSzPopMed(1), ...
             'FontWeight','Bold', ...
             'String',D.PAR.listBull);
         
@@ -3649,7 +3649,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontSize',D.UI.fontSzTxtMed(1), ...
             'Clipping','off');
         
-        % Reward duration popup menu
+        % Reward duration popup
         wd = pos(3)-2*pos_lft_dflt;
         lft = pos_lft_dflt*2;
         ht = D.UI.fontSzPopLrg(2);
@@ -3663,7 +3663,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'BackgroundColor',D.UI.figBckCol, ...
             'ForegroundColor', D.UI.enabledCol, ...
             'FontName',D.UI.popFont, ...
-            'FontSize',D.UI.fontSzPopLrg(1), ...
+            'FontSize',D.UI.fontSzBtnLrg(1), ...
             'FontWeight','Bold', ...
             'String',cellstr(num2str(D.PAR.zoneRewDur')), ...
             'Value', ceil(length(D.PAR.zoneLocs)/2));
@@ -6054,7 +6054,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String', sprintf('New Screw\r\nOrientation'),...
             'Visible', 'off');
         
-        % Create enter orientation popup menue object
+        % Create enter orientation popup-menue object
         pos = [dflt_lf(2), dflt_btm(2), dflt_wd+0.05, dflt_ht];
         D.UI.popOr = uicontrol(...
             'Style', 'popupmenu',...
@@ -6076,7 +6076,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.txtPanTT(2), ...
             'Position', pos,...
             'String', sprintf('Number of\r\nFull Turns'))
-        % Create number of rotations popup menu object
+        % Create number of rotations popup-menue object
         pos = [dflt_lf(2), dflt_btm(3), dflt_wd+0.05, dflt_ht];
         D.UI.popTrn = uicontrol(...
             'Style', 'popupmenu',...
@@ -6098,7 +6098,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.txtPanTT(3), ...
             'Position', pos,...
             'String', sprintf('TT Lowering\r\nDirection'))
-        % Create direction popup menu object
+        % Create direction popup-menue object
         pos = [dflt_lf(2), dflt_btm(4), dflt_wd+0.05, dflt_ht];
         D.UI.popDir = uicontrol(...
             'Style', 'popupmenu',...
@@ -6120,7 +6120,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.txtPanTT(4), ...
             'Position', pos,...
             'String', sprintf('TT\r\nReference'))
-        % Create ref popup menu object
+        % Create ref popup-menue object
         pos = [dflt_lf(2), dflt_btm(5), dflt_wd+0.05, dflt_ht];
         D.UI.popRefTT = uicontrol(...
             'Style', 'popupmenu',...
@@ -7273,7 +7273,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_1{D.PAR.ratIndSS, 'Session_Implant_Training'}(col_ind) + ...
             D.SS_IO_1{D.PAR.ratIndSS, 'Session_Rotation'};
         
-        % Initialize start quadrant
+        % Start quadrant
         D.PAR.ratStrQuad = categorical({'<undefined>'}, D.PAR.listStrQuad);
         
         % Get start quad for 'Track' task
@@ -7288,9 +7288,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     D.PAR.ratStrQuad(:) = 'SE';
                 end
                 
+                % Set start quad to stored quad
             else
                 
-                % Set start to stored start quad based on total sessions
                 D.PAR.ratStrQuad = ... % [NE,SE,SW,NW]
                     D.SS_IO_1.Start_Quadrant{D.PAR.ratIndSS}(D.PAR.sesNumAll);
             end
@@ -17936,21 +17936,28 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Get bulldoze delay
         del_str = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
         del_str = regexp(del_str, '\d*', 'match');
-        % Store bulldoze delay
-        D.PAR.bullDel = str2double(del_str{:});
+        bull_del = str2double(del_str{:});
         
         % Get bulldoze speed
         bull_spd = str2double(get(D.UI.editBulldoze, 'String'));
-        % Make sure speed is < 100 cm/sec
         if bull_spd > 100 || isnan(bull_spd)
-            bull_spd = D.PAR.bullSpeed;
-            set(D.UI.editBulldoze, 'String', num2str(bull_spd))
+            set(D.UI.editBulldoze, 'String', num2str(D.PAR.bullSpeed))
         end
-        % Store bulldoze speed
-        D.PAR.bullSpeed = bull_spd;
         
-        % Send bulldoze command
         if (get(D.UI.toggBulldoze, 'Value') == 1)
+            
+            % Store bulldoze delay
+            del_str = D.UI.popBulldoze.String{get(D.UI.popBulldoze, 'Value')};
+            del_str = regexp(del_str, '\d*', 'match');
+            D.PAR.bullDel = str2double(del_str{:});
+            
+            % Store bulldoze speed
+            bull_spd = str2double(get(D.UI.editBulldoze, 'String'));
+            if bull_spd > 100 || isnan(bull_spd)
+                set(D.UI.editBulldoze, 'String', num2str(D.PAR.bullSpeed))
+            else
+                D.PAR.bullSpeed = bull_spd;
+            end
             
             % Tell CS to bulldoze
             Send_CS_Com('B', D.PAR.bullDel, D.PAR.bullSpeed);
