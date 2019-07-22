@@ -36,7 +36,7 @@
 //========== EXT DEFS OTHER ============
 
 // POWER SETTING
-#define DO_AUTO_POWER 0 // 0
+#define DO_AUTO_POWER 1 // 0
 
 // TINY EKF
 #define N 4     // States
@@ -414,8 +414,8 @@ const VEC<float> solOpenScaleArr(2, __LINE__, _solOpenScaleArr);
 const byte ezDirExtState = 1; // 1
 const byte ezDirRetState = 0; // 0
 const byte ezResetExtStps = 100; // max [255] 100
-const byte ezRewExtStps = 255; // max [255] 250
-const byte ezRestStps = 25; // max [255] 50
+const byte ezRewExtStps = 200; // max [255] 255
+const byte ezRestStps = 15; // max [255] 25
 const double ezStepPeriod = 1000; // (us)
 
 // SOLONOIDS

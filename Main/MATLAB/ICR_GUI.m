@@ -3624,7 +3624,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'FontName','Monospaced', ...
             'Max', 1, ...
             'Enable','off',...
-            'Visible', 'on', ...
+            'Visible', 'off', ...
             'String',num2str(D.PAR.bullSpeed));
         
         % Set to pan bottom
@@ -17948,21 +17948,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.PAR.bullSpeed = bull_spd;
             end
             
-            % Change backround text
-            Safe_Set(D.UI.toggBulldoze, 'String', sprintf('Bulldoze (%ds)', D.PAR.bullDel));
-            
             % Tell CS to bulldoze
             Send_CS_Com('B', D.PAR.bullDel, D.PAR.bullSpeed);
             
         else
             
-            % Unset bulldoze button
-            Safe_Set(D.UI.toggBulldoze, 'String', 'Ceasefire');
-            
             % Tell CS to stop bulldozing
             Send_CS_Com('B', 0, 0);
             
         end
+        
+        % Change backround text
+        Safe_Set(D.UI.toggBulldoze, 'String', sprintf('Bulldoze (%d c/s)', D.PAR.bullSpeed));
         
         % Update button
         Button_State(D.UI.toggBulldoze, 'Update');
