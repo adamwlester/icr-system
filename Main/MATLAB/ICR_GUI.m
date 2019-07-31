@@ -473,7 +473,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Min time in start quad
         D.PAR.strQdDel = 0.5; % (sec)
         % PID setPoint
-        D.PAR.setPointHead = 70;
+        D.PAR.setPointHead = 65;
         D.PAR.setPointHeadDistBackpack = -5;
         D.PAR.setPointHeadDistImplant = 0;
         D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistBackpack;

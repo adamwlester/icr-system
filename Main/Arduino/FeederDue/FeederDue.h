@@ -392,7 +392,7 @@ struct KAL
 kal;
 
 // PID
-const float setPointHead = 70;
+const float setPointHead = 65;
 const float feedDist = 72;
 const float guardDist = 4.5;
 
@@ -404,7 +404,7 @@ float moveToDecelDist = 40; // cm
 // REWARD
 const int rewZoneWdith = 5; // (deg)
 double feedTrackPastDist = 0; // (cm) 
-const double feedHeadPastDist = 20; // (cm)
+const double feedHeadPastDist = 15; // (cm)
 const int dt_rewBlock = 15000; // (ms)
 uint32_t t_blockMoter = 0; // (ms)
 const float _solOpenScaleArr[2] = { 1, 0.5 };
