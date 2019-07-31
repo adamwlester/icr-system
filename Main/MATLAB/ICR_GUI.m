@@ -473,7 +473,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Min time in start quad
         D.PAR.strQdDel = 0.5; % (sec)
         % PID setPoint
-        D.PAR.setPointHead = 65;
+        D.PAR.setPointHead = 60;
         D.PAR.setPointHeadDistBackpack = -5;
         D.PAR.setPointHeadDistImplant = 0;
         D.PAR.setPointCM = D.PAR.setPointHead + D.PAR.setPointHeadDistBackpack;
@@ -8045,7 +8045,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             repmat({dd},1,ceil(500/length(dd))), 'uni', false));
         
         % Set every other value to center (0 deg)
-        %D.I.cue_zone_arr(1) = find(D.PAR.zoneLocs==0);
         D.I.cue_zone_arr(1:2:end) = find(D.PAR.zoneLocs==0);
         
         %% CREATE ADITIONAL UI OBJECTS
