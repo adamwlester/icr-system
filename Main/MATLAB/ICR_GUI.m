@@ -8044,8 +8044,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.I.cue_zone_arr = cell2mat(cellfun(@(x) x(randperm(length(x))), ...
             repmat({dd},1,ceil(500/length(dd))), 'uni', false));
         
-        % Set every other value to center (0 deg)
-        D.I.cue_zone_arr(1:2:end) = find(D.PAR.zoneLocs==0);
+        % Modify cued zone list
+        if D.PAR.sesCue == 'All'
+            
+            % Set every other value to center (0 deg)
+            D.I.cue_zone_arr(1:2:end) = find(D.PAR.zoneLocs==0);
+            
+        elseif D.PAR.sesCue == 'Half'
+            
+            % Set all values to center (0 deg)
+            D.I.cue_zone_arr(1:end) = find(D.PAR.zoneLocs==0);
+            
+        end
         
         %% CREATE ADITIONAL UI OBJECTS
         
