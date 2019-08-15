@@ -4844,7 +4844,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'Position', D.UI.food_pan_pos)
         
         % Start and default position info
-        botm = sum(D.UI.food_pan_pos([2,4])) - D.UI.fontSzTxtMed(2)*3.5;
+        botm = sum(D.UI.food_pan_pos([2,4])) - D.UI.fontSzTxtMed(2)*3;
         lft = D.UI.food_pan_pos(1) + obj_gap;
         wd =  (D.UI.food_pan_pos(3) - obj_gap*2)/4 - obj_gap;
         ht = D.UI.fontSzTxtMed(2)*2;
@@ -4858,9 +4858,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String', str, ...
             'Visible', 'on');
         
+        % Set edit buttons to last values
+        D.UI.editFeedPellets.String = num2str(D.SS_IO_3.(D.PAR.ratLab).Fed_Pellets(end));
+        D.UI.editFeedMash.String = num2str(D.SS_IO_3.(D.PAR.ratLab).Fed_Mash(end));
+        D.UI.editFeedEnsure.String = num2str(D.SS_IO_3.(D.PAR.ratLab).Fed_Ensure(end));
+        D.UI.editFeedSTAT.String = num2str(D.SS_IO_3.(D.PAR.ratLab).Fed_STAT(end));
+        
         % Pellets edit
         D.UI.editFeedPellets = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedPellets.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.5, wd];
+        D.UI.editFeedPellets.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
         Safe_Set(D.UI.editFeedPellets, ...
             'Enable','on',...
             'String', '0', ...
@@ -4869,7 +4875,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Mash text
         lft = lft + wd + obj_gap;
         D.UI.txtFeedMash(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedMash(1).Position = [lft, botm, wd, ht];
+        D.UI.txtFeedMash(1).Position(1:3) = [lft, botm, wd];
         str = sprintf('Mash(TB)\n%0.2f', D.SS_IO_3.(D.PAR.ratLab).Fed_Mash(end));
         Safe_Set(D.UI.txtFeedMash(1), ...
             'FontSize', 7, ...
@@ -4878,7 +4884,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Mash edit
         D.UI.editFeedMash = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedMash.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.5, wd];
+        D.UI.editFeedMash.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
         Safe_Set(D.UI.editFeedMash, ...
             'Enable','on',...
             'String', '0', ...
@@ -4887,7 +4893,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Ensure text
         lft = lft + wd + obj_gap;
         D.UI.txtFeedEnsure(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedEnsure(1).Position = [lft, botm, wd, ht];
+        D.UI.txtFeedEnsure(1).Position(1:3) = [lft, botm, wd];
         str = sprintf('Ensure(TB)\n%0.2f', D.SS_IO_3.(D.PAR.ratLab).Fed_Ensure(end));
         Safe_Set(D.UI.txtFeedEnsure(1), ...
             'FontSize', 7, ...
@@ -4896,7 +4902,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Ensure edit
         D.UI.editFeedEnsure = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedEnsure.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.5, wd];
+        D.UI.editFeedEnsure.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
         Safe_Set(D.UI.editFeedEnsure, ...
             'Enable','on',...
             'String', '0', ...
@@ -4905,8 +4911,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % STAT text
         lft = lft + wd + obj_gap;
         D.UI.txtFeedSTAT(1) = copyobj(D.UI.txtTemplate, D.UI.tabTBL);
-        D.UI.txtFeedSTAT(1).Position = [lft, botm, wd, ht];
-        str = sprintf('STAT(TB)\n%0.2f', D.SS_IO_3.(D.PAR.ratLab).Fed_STAT(end));
+        D.UI.txtFeedSTAT(1).Position(1:3) = [lft, botm, wd];
+        str = sprintf('STAT(TB)\n%0.2f', D.SS_IO_3.(D.PAR.ratLab).Fed_Ensure(end));
         Safe_Set(D.UI.txtFeedSTAT(1), ...
             'FontSize', 7, ...
             'String', str, ...
@@ -4914,14 +4920,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % STAT edit
         D.UI.editFeedSTAT = copyobj(D.UI.editTemplate, D.UI.tabTBL);
-        D.UI.editFeedSTAT.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.5, wd];
+        D.UI.editFeedSTAT.Position(1:3) = [lft, botm - D.UI.editTemplate.Position(4)*0.8, wd];
         Safe_Set(D.UI.editFeedSTAT, ...
             'Enable','on',...
             'String', '0', ...
             'Visible', 'on');
         
         % Save feed button
-        botm = D.UI.food_pan_pos(2) + 0.005;
+        botm = D.UI.food_pan_pos(2) + 0.01;
         D.UI.toggUpdateFed = copyobj(D.UI.toggUpdateWeight, D.UI.tabTBL);
         D.UI.toggUpdateFed.Position(2) = botm;
         Safe_Set(D.UI.toggUpdateFed, ...

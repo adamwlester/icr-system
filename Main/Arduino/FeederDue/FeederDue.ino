@@ -7600,21 +7600,12 @@ void Check_IRprox_Halt()
 
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static uint32_t t_check = 0;
 	bool is_lft_ir_trigg = false;
 	bool is_rt_ir_trigg = false;
-
-	// Exit if < 250 ms has not passed
-	if (t_check > millis()) {
-		return;
-	}
 
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
 #endif
-
-	// Update next check time
-	t_check = millis() + 250;
 
 	// Bail if manual ses
 	if (FC.is_ManualSes) {
