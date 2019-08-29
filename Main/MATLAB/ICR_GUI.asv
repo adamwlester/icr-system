@@ -8251,9 +8251,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Set strings
             Safe_Set(D.UI.toggICR(1), ...
-                'String', D.UI.btnICRstr{1});
+                'String', D.UI.btnICRstr{1}, ...
+                'BackgroundColor', D.UI.rotCol(D.I.rot,:));
             Safe_Set(D.UI.toggICR(2), ...
-                'String', D.UI.btnICRstr{2});
+                'String', D.UI.btnICRstr{2}, ...
+                'BackgroundColor', D.UI.rotCol(find([1, 2] ~=  D.I.rot),:));
             
             % Set rot bound patch HitTest
             Safe_Set(D.UI.ptchRtBnds, 'HitTest', 'on')
@@ -10667,8 +10669,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'ShowAll', D.UI.rotCol(D.I.rot,:));
         
         % Change button settings
-        Button_State(D.UI.toggICR(D.I.rot), 'Disable', D.UI.rotCol(D.I.rot,:));
-        Button_State(D.UI.toggICR(rotLast), 'Enable', D.UI.rotCol(rotLast,:));
+        % TEMP
+        Safe_Set(D.UI.toggICR(D.I.rot), 'Enable', 'on');
+        Safe_Set(D.UI.toggICR(rot0ast), 'Enable', 'off');
+%         Button_State(D.UI.toggICR(D.I.rot), 'Disable', D.UI.rotCol(D.I.rot,:));
+%         Button_State(D.UI.toggICR(rot0ast), 'Enable', D.UI.rotCol(rotLast,:));
         
         % Change wall image
         Safe_Set(D.UI.wallImgH(D.I.img_ind(rotLast)), 'Visible', 'off');
@@ -14115,8 +14120,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                         if D.PAR.sesCond == 'Rotation'
                             
                             % Make second button active
-                            Button_State(D.UI.toggICR(1), 'Disable', D.UI.rotCol(1,:));
-                            Button_State(D.UI.toggICR(2), 'Enable', D.UI.rotCol(2,:));
+                            % TEMP
+                            Safe_Set(D.UI.toggICR(1), 'Enable', 'off');
+                            Safe_Set(D.UI.toggICR(2), 'Enable', 'on');
+%                             Button_State(D.UI.toggICR(1), 'Disable', D.UI.rotCol(1,:));
+%                             Button_State(D.UI.toggICR(2), 'Enable', D.UI.rotCol(2,:));
                             
                         end
                         
@@ -17251,7 +17259,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'LineWidth', 3);
             
             % Update button to active color
-            Button_State(D.UI.toggICR(rotNext), 'Update');
+            % TEMP
+            %Button_State(D.UI.toggICR(rotNext), 'Update');
             
         else
             
@@ -17265,7 +17274,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'HitTest', 'off');
             
             % Update button color back to default
-            Button_State(D.UI.toggICR(rotNext), 'Update', D.UI.rotCol(rotNext,:));
+            % TEMP
+            %Button_State(D.UI.toggICR(rotNext), 'Update', D.UI.rotCol(rotNext,:));
             
         end
         
@@ -17643,7 +17653,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Reset button
         Safe_Set(D.UI.toggICR(rot_ind), 'Value', 0)
-        Button_State(D.UI.toggICR(rot_ind), 'Disable', D.UI.rotCol(rot_ind,:));
+        % TEMP
+        %Button_State(D.UI.toggICR(rot_ind), 'Disable', D.UI.rotCol(rot_ind,:));
+        Safe_Set(D.UI.toggICR(rot_ind), 'Enable', 'off');
         
         % Update UI
         if FC.DoUpdateNow; Update_UI(0, 'force'); end

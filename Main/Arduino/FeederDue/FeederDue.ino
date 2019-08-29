@@ -165,7 +165,7 @@ public:
 	// SAFE VERSION OF STRCAT
 	void strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, uint16_t buff_lng_2, char *p_buff_2);
 	// RUN ERROR HOLD WITH OPTIONAL SHUTDOWN
-	void RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdown_sec = 0);
+	void RunErrorHold(char *p_msg_print, char *p_msg_lcd);
 
 };
 #pragma endregion
@@ -821,9 +821,6 @@ bool StatusBlink(bool do_set = false, byte n_blinks = 0, uint16_t dt_led = 0, bo
 
 // TIMER INTERUPT/HANDLER
 void Interupt_TimerHandler();
-
-// POWER OFF
-void Interupt_Power();
 
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect();
@@ -2017,7 +2014,7 @@ void DEBUG::strcat_safe(uint16_t buff_cap, uint16_t buff_lng_1, char *p_buff_1, 
 
 }
 
-void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdown_sec)
+void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -2025,19 +2022,20 @@ void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdow
 
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
-	static uint32_t t_shutdown = 0;
 	byte _duty[2] = { 255, 0 };
 	VEC<byte> duty(2, __LINE__, _duty);
 	bool do_led_on = true;
 	int dt_cycle = 100;
 	float t_s = 0;
 
-	// Compute shutdown time
-	t_shutdown = dt_shutdown_sec > 0 ? millis() + (dt_shutdown_sec * 1000) : 0;
-
 	// Log error message
-	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD FOR %d sec: %s", dt_shutdown_sec, p_msg_print);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD: %s", p_msg_print);
 	DB_Error(__FUNCTION__, __LINE__, buff_lrg);
+
+	// Disable regulators
+	digitalWrite(pin.REG_24V_ENBLE, LOW);
+	digitalWrite(pin.REG_12V2_ENBLE, LOW);
+	digitalWrite(pin.REG_5V1_ENBLE, LOW);
 
 	// Turn on LCD LED
 	ChangeLCDlight(128);
@@ -2063,16 +2061,6 @@ void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd, uint32_t dt_shutdow
 
 		// Pause
 		delay(dt_cycle);
-
-		// Check if should shutdown
-		if (t_shutdown > 0 && millis() > t_shutdown) {
-
-			// Set kill switch high
-			digitalWrite(pin.PWR_OFF, HIGH);
-
-			// Restart
-			RestartArduino();
-		}
 
 	}
 }
@@ -6145,7 +6133,7 @@ bool CheckForHandshake()
 			!FC.is_CheetahDueHandshakeDone ? "NO CHEEDAHDUE CONFERMATION|" : "");
 
 		// Run error hold and restart
-		Debug.RunErrorHold(buff_lrg, "HANDSHAKE", 15);
+		Debug.RunErrorHold(buff_lrg, "HANDSHAKE");
 	}
 
 	// Handshake not complete
@@ -8898,7 +8886,7 @@ float CheckBattery(bool force_check)
 
 			// Run error hold then shutdown after 5 min
 			Debug.sprintf_safe(buffMed, buff_med, "VCC LOW %0.2fV", vccAvg);
-			Debug.RunErrorHold(buff_lrg, buff_med, dt_vccShutDown);
+			Debug.RunErrorHold(buff_lrg, buff_med);
 		}
 	}
 
@@ -9827,21 +9815,6 @@ void Interupt_TimerHandler()
 	digitalWrite(pin.ED_STP, v_stepState);
 }
 
-// POWER OFF
-void Interupt_Power()
-{
-
-	// Turn off power
-	digitalWrite(pin.PWR_OFF, HIGH);
-
-	// Disable regulators
-	digitalWrite(pin.REG_24V_ENBLE, LOW);
-	digitalWrite(pin.REG_12V2_ENBLE, LOW);
-	digitalWrite(pin.REG_5V1_ENBLE, LOW);
-
-	// Restart Arduino
-	REQUEST_EXTERNAL_RESET;
-}
 
 // DETECT IR SYNC EVENT
 void Interupt_IR_Detect()
@@ -9912,49 +9885,8 @@ void setup() {
 	digitalWrite(pin.REG_5V1_ENBLE, LOW);
 #endif
 
-	// HANDLE ANY PREVIOUS POWER OFF BUTTON PRESS
-
-	// Wait for power on flag
-	bool do_wait_pwr = !DO_DEBUG && !DO_AUTO_POWER;
-
-	// Wait for button release 
-	while (do_wait_pwr && digitalRead(pin.PWR_SWITCH) == LOW) {
-		delay(10);
-	}
-
-	// Set off switch back to high
-	digitalWrite(pin.PWR_OFF, HIGH);
-
-	// WAIT FOR POWER ON BUTTON PRESS
-
-	// Wait for button press
-	if (do_wait_pwr) {
-		while (digitalRead(pin.PWR_SWITCH) == HIGH);
-	}
-	// Otherwise pause before powering on
-	else {
-		delay(1000);
-	}
-
-	// TURN ON POWER
-
-	// Set power off pin low
-	delay(100);
-	digitalWrite(pin.PWR_OFF, LOW);
-	delayMicroseconds(100);
-
-	// Pulse power on switch high
-	digitalWrite(pin.PWR_ON, HIGH);
-	delayMicroseconds(100);
-	digitalWrite(pin.PWR_ON, LOW);
-	delayMicroseconds(100);
-
-	// Wait for button release
-	while (do_wait_pwr && digitalRead(pin.PWR_SWITCH) == LOW) {
-		delay(10);
-	}
-
 	// ENABLE VOLTGAGE REGULATORS
+	delay(1000);
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
@@ -10064,9 +9996,9 @@ void setup() {
 	while (CheckBattery(true) == 0 && millis() < t_check_vcc);
 
 	// EXIT WITH ERROR IF POWER OFF
-	if (CheckBattery(true) == 0) {
+	if (CheckBattery(true) <= vccCutoff) {
 		// Run error hold
-		Debug.RunErrorHold("FAILED BATTERY CHECK", "POWER OFF");
+		Debug.RunErrorHold("FAILED BATTERY CHECK", "VCC LOW");
 	}
 	Debug.PrintLCD(true, "DONE SETUP", "Battery Check");
 	Debug.DB_General(__FUNCTION__, __LINE__, "FINISHED: Battery Check...");
@@ -10134,13 +10066,6 @@ void setup() {
 		Debug.DB_Error(__FUNCTION__, __LINE__, "IR SENSOR DISABLED");
 		Debug.PrintAll(500);
 	}
-
-	// Power off
-#if !DO_AUTO_POWER
-	Debug.DB_General(__FUNCTION__, __LINE__, "ENABLING POWER SWITCH INTERUPT");
-	Debug.PrintAll(500);
-	attachInterrupt(digitalPinToInterrupt(pin.PWR_SWITCH), Interupt_Power, FALLING);
-#endif
 
 	// Log interupts setup
 	Debug.PrintLCD(true, "DONE SETUP", "Interrupts");

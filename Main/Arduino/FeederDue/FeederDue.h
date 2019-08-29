@@ -35,9 +35,6 @@
 
 //========== EXT DEFS OTHER ============
 
-// POWER SETTING
-#define DO_AUTO_POWER 1 // 0
-
 // TINY EKF
 #define N 4     // States
 #define M 6     // Measurements
@@ -436,7 +433,6 @@ bit2volt = (3.3/1023) * (12.6/3)
 Set pot to 12.6V == 3V
 */
 const float vccCutoff = 11.0;
-const uint32_t dt_vccShutDown = 5 * 60; // (sec)
 const float bit2volt = 0.0135; // 0.01334
 const int vccMaxSamp = 100;
 const int dt_vccUpdate = 5000;

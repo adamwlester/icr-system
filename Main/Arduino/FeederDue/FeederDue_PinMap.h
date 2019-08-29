@@ -36,8 +36,8 @@ PIN MAP:
 21,SCL_PIXY,green
 22,REL_FOOD,green
 23,REL_ETOH,blue
-24,PWR_SWITCH,white
-25,PWR_SWITCH_GRN,black
+24,UNUSED,NA
+25,UNUSED,NA
 26,UNUSED,NA
 27,UNUSED,NA
 28,UNUSED,NA
@@ -56,8 +56,8 @@ PIN MAP:
 41,SWITCH_DISH_GRN,black
 42,INTERUPT_IRPROX_R,green
 43,INTERUPT_IRPROX_L,blue
-44,PWR_OFF,gray
-45,PWR_ON,white
+44,UNUSED,NA
+45,UNUSED,NA
 46,REG_5V2_ENBLE,blue
 47,ED_RST,green
 48,REG_5V1_ENBLE,green
@@ -85,9 +85,6 @@ PIN MAP:
 
 struct PIN
 {
-	// Power button
-	const int PWR_OFF = 44; // (gray)
-	const int PWR_ON = 45; // (white)
 
 	// Autodriver
 	const int AD_CSP_R = 5; // (yellow)
@@ -161,12 +158,8 @@ struct PIN
 
 	/*
 	Note: pins bellow are all used for external interupts
-	and must all be members of the same hwSerial (PortA)
+	and must all be members of the same port (PortA)
 	*/
-
-	// Power button
-	const int PWR_SWITCH = 24; // (white)
-	const int PWR_SWITCH_GRN = 25; // (black)
 
 	// IR detector
 	const int INTERUPT_IR_DETECT = 31; // (white)
@@ -183,10 +176,6 @@ void SetupPins() {
 
 	// SETUP OUTPUT PINS
 
-	// Power
-	pinMode(pin.PWR_OFF, OUTPUT);
-	pinMode(pin.PWR_ON, OUTPUT);
-	pinMode(pin.PWR_SWITCH_GRN, OUTPUT);
 	// Voltage Regulators
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
 	pinMode(pin.REG_12V2_ENBLE, OUTPUT);
@@ -229,10 +218,6 @@ void SetupPins() {
 	// Test Pins
 	pinMode(pin.TEST_SIGNAL, OUTPUT);
 
-	// Power
-	digitalWrite(pin.PWR_OFF, LOW);
-	digitalWrite(pin.PWR_ON, LOW);
-	digitalWrite(pin.PWR_SWITCH_GRN, LOW);
 	// Voltage Regulators (start high)
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_24V_ENBLE, HIGH);
@@ -277,8 +262,6 @@ void SetupPins() {
 
 	// SET INPUT PINS
 
-	// Power
-	pinMode(pin.PWR_SWITCH, INPUT);
 	// Teensy
 	pinMode(pin.TEENSY_RESET, INPUT);
 	// Battery monitor
@@ -290,7 +273,6 @@ void SetupPins() {
 	pinMode(pin.INTERUPT_IR_DETECT, INPUT);
 
 	// Set power, button and switch internal pullup
-	pinMode(pin.PWR_SWITCH, INPUT_PULLUP);
 	pinMode(pin.BTN_1, INPUT_PULLUP);
 	pinMode(pin.BTN_2, INPUT_PULLUP);
 	pinMode(pin.BTN_3, INPUT_PULLUP);
