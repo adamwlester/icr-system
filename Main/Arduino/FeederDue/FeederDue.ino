@@ -4864,7 +4864,7 @@ int LOGGER::OpenNewLog()
 	return logNum;
 
 #else
-	sprintf(logFile, "LOGNULL");
+	Debug.sprintf_safe(buffMed, buff_med_logFile, "LOGNULL.CSV");
 	return -1;
 
 #endif
@@ -5681,7 +5681,7 @@ void LOGGER::StreamLogs()
 	FC.do_BlockLogQueue = false;
 	delay(50);
 
-	// Tracknig summary info
+	// Tracking summary info
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TRACKING SUMMARY: ERR=|ad=%d|ekf=%d|rat_vt=%d|rat_pixy=%d|rob_vt=%d| RECS=|rat_vt=%lu|rat_pixy=%lu|rob_vt=%lu| DT=|rat_vt=%0.0f|rat_pixy=%0.0f|rob_vt=%0.0f| SWAP=|rat_vt=%d|rat_pixy=%d|",
 		cnt_errAD, cnt_errEKF, Pos[0].cnt_err, Pos[2].cnt_err, Pos[1].cnt_swap,
 		Pos[0].cnt_rec, Pos[2].cnt_rec, Pos[1].cnt_rec,
@@ -5803,7 +5803,7 @@ void LOGGER::StreamLogs()
 #else
 
 	// End reached send ">>>"
-	r2c.hwSerial.write(msg_streamSuccess, 3);
+	r2c.hwSerial.write(str_sml_success.data(), 3);
 
 #endif
 

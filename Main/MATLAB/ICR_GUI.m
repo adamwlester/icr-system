@@ -17677,7 +17677,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         infstr = datestr(now, 'HH:MM:SS');
         Safe_Set(D.UI.editTimeInf(2), 'String', infstr)
         
-        % Hanle Track task
+        % Handle Track task
         if D.PAR.sesTask == 'Track'
             
             % Halt robot if not already halted
