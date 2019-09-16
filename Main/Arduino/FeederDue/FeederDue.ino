@@ -253,7 +253,7 @@ public:
 
 	// METHODS
 	POSTRACK(POSOBJ obj_id, int n_samp);
-	void UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec = true);
+	bool UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec = true);
 	double GetPos();
 	double GetVel();
 	void SwapPos(double set_pos, uint32_t ts);
@@ -2032,6 +2032,9 @@ void DEBUG::RunErrorHold(char *p_msg_print, char *p_msg_lcd)
 	Debug.sprintf_safe(buffLrg, buff_lrg, "RUN ERROR HOLD: %s", p_msg_print);
 	DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
+	// Hard stop
+	HardStop(__FUNCTION__, __LINE__);
+
 	// Disable regulators
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V2_ENBLE, LOW);
@@ -2529,7 +2532,7 @@ POSTRACK::POSTRACK(POSOBJ obj_id, int n_samp) :
 	}
 }
 
-void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
+bool POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -2581,7 +2584,7 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 		this->isNew = false;
 
 		// Bail 
-		return;
+		return false;
 	}
 	// Ready to use
 	else {
@@ -2672,8 +2675,17 @@ void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 			Debug.sprintf_safe(buffLrg, buff_lrg, "Bad Values |%s%s: obj=\"%s\" cnt_err=%d pos_new=%0.2f pos_last=%0.2f dist_sum=%0.2f ts_new=%lu ts_last=%lu dt_sec=%0.2f vel_new=%0.2f vel_last=%0.2f",
 				vel_diff > 300 ? "Vel|" : "", dt_sec == 0 ? "DT|" : "", p_str_list_objID[this->objID], this->cnt_err, pos_new, this->posArr[this->nSamp - 2], dist_sum, this->t_tsArr[this->nSamp - 1], this->t_tsArr[this->nSamp - 2], dt_sec, vel, this->velLast);
 			Debug.DB_Warning(__FUNCTION__, __LINE__, buff_lrg);
+
 		}
+
+		// Return error
+		return true;
+		
 	}
+
+	// Return no error
+	return false;
+
 }
 
 double POSTRACK::GetPos()
@@ -6504,13 +6516,16 @@ byte WaitBuffRead(R4_COM<USARTClass> *p_r4, char mtch)
 		// Incriment count
 		cnt_overflowRX++;
 
-		// Print only every 10th message after first 10
-		if (cnt_overflowRX < 10 || cnt_overflowRX % 10 == 0) {
+		// Print first 5 messages
+		if (cnt_overflowRX < 5) {
 			Debug.sprintf_safe(buffLrg, buff_lrg, "BUFFER OVERFLOWED: cnt=%d", cnt_overflowRX);
 		}
-		// Bail
+		// Run error hold after 5 overflow errors
 		else {
-			return 0;
+
+			// Run error hold
+			Debug.RunErrorHold("RUNNING ERROR HOLD", "BUFF OVERFLOW");
+
 		}
 	}
 
@@ -10894,65 +10909,78 @@ void loop() {
 		U.f = c2r.dat[2];
 		cmd.vtTS[cmd.vtEnt] = U.i32;
 
-		// Handle rob vt data
-		if (cmd.vtEnt == 1) {
+		// Update VT
+		bool is_error = Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
-			// Update VT
-			Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
+		// Reset all pos data
+		if (is_error) {
 
-			// Set rat vt and pixy to setpoint if rat not in or task done
-			if (!FC.is_RatOnTrack || FC.is_TaskDone) {
+			// Log error
+			Debug.DB_Error(__FUNCTION__, __LINE__, "RESETTING ALL POSITION DATA DUE TO BAD VALUES");
 
-				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
-				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
-			}
+			// Will have to run again with new samples
+			Pos[0].PosReset(true);
+			Pos[2].PosReset(true);
+			Pos[1].PosReset(true);
 
-			// Log first sample
-			if (!Pos[1].is_streamStarted) {
-
-				// Log
-				Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
-					Pos[1].posAbs, Pos[1].posCum, Pos[1].nLaps);
-				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-				// Set flag
-				Pos[1].is_streamStarted = true;
-
-				// Send robot streaming confirmation
-				Debug.DB_General(__FUNCTION__, __LINE__, "SENDING STREAMING CONFIRMATION");
-				QueuePacket(&r2c, 'K', 1, 0, 0, 0, true);
-
-				// Set flag to begin sending vcc
-				FC.do_SendVCC = true;
-
-			}
 		}
+		else {
 
-		// Handle rat vt data
-		else if (cmd.vtEnt == 0) {
+			// Handle rob vt data
+			if (cmd.vtEnt == 1) {
 
-			// Update only after rat in before task done
-			if (FC.is_RatOnTrack && !FC.is_TaskDone) {
+				// Set rat vt and pixy to setpoint if rat not in or task done
+				if (!FC.is_RatOnTrack || FC.is_TaskDone) {
 
-				// Update rat VT
-				Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
-
-				// Use rat vt for pixy if running simulated rat test
-				if (cmd.vtEnt == 0 && Debug.flag.do_simRatTest) {
-					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
+					Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
+					Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
 				}
 
 				// Log first sample
-				if (!Pos[0].is_streamStarted) {
+				if (!Pos[1].is_streamStarted) {
 
 					// Log
-					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
-						Pos[0].posAbs, Pos[0].posCum, Pos[0].nLaps);
+					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+						Pos[1].posAbs, Pos[1].posCum, Pos[1].nLaps);
 					Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 					// Set flag
-					Pos[0].is_streamStarted = true;
+					Pos[1].is_streamStarted = true;
+
+					// Send robot streaming confirmation
+					Debug.DB_General(__FUNCTION__, __LINE__, "SENDING STREAMING CONFIRMATION");
+					QueuePacket(&r2c, 'K', 1, 0, 0, 0, true);
+
+					// Set flag to begin sending vcc
+					FC.do_SendVCC = true;
+
 				}
+			}
+
+			// Handle rat vt data
+			else if (cmd.vtEnt == 0) {
+
+				// Update only after rat in before task done
+				if (FC.is_RatOnTrack && !FC.is_TaskDone) {
+
+					// Use rat vt for pixy if running simulated rat test
+					if (cmd.vtEnt == 0 && Debug.flag.do_simRatTest) {
+						Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
+					}
+
+					// Log first sample
+					if (!Pos[0].is_streamStarted) {
+
+						// Log
+						Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+							Pos[0].posAbs, Pos[0].posCum, Pos[0].nLaps);
+						Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+						// Set flag
+						Pos[0].is_streamStarted = true;
+					}
+				}
+
 			}
 
 		}
