@@ -101,7 +101,7 @@ D.DB.ratLab = 'r0000'; %'r9999';
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.F.Run_Cheetah = false;
+D.DB.F.Run_Cheetah = true;
 D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 

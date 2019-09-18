@@ -45,12 +45,12 @@
 	To ground = 2.2k Ohm
 	To vcc = 8.2k Ohm
 
-* OpenLog 
+* OpenLog
 config.txt settings:
 	57600,26,3,2,0,0,0
 	baud,escape,esc#,mode,verb,echo,ignoreRX
 Reset
-	Short 
+	Short
 
 * VARIABLE INFO
 	"flag_byte" = [0, 0, 0, 0, is_resend, is_done, is_conf, do_conf]
@@ -253,7 +253,7 @@ public:
 
 	// METHODS
 	POSTRACK(POSOBJ obj_id, int n_samp);
-	bool UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec = true);
+	void UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec = true);
 	double GetPos();
 	double GetVel();
 	void SwapPos(double set_pos, uint32_t ts);
@@ -1551,7 +1551,7 @@ void DEBUG::DB_OpenLog(char *p_msg, bool start_entry)
 	else {
 		SerialUSB.print(p_msg);
 	}
-	}
+}
 
 void DEBUG::Queue(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int line)
 {
@@ -1745,7 +1745,7 @@ void DEBUG::PrintLCD(bool do_block, char *p_msg_1, char *p_msg_2, char f_siz)
 	if (do_block) {
 		FC.do_BlockWriteLCD = true;
 	}
-	}
+}
 
 void DEBUG::ClearLCD()
 {
@@ -1972,7 +1972,7 @@ void DEBUG::sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...) {
 		strcat(p_buff, str_prfx_med);
 
 
-}
+	}
 
 	// Copy/concat buff to p_buff
 	strcat(p_buff, buff);
@@ -2532,7 +2532,7 @@ POSTRACK::POSTRACK(POSOBJ obj_id, int n_samp) :
 	}
 }
 
-bool POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
+void POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 {
 #if DO_TEENSY_DEBUG
 	DB_FUN_STR();
@@ -2584,7 +2584,7 @@ bool POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 		this->isNew = false;
 
 		// Bail 
-		return false;
+		return;
 	}
 	// Ready to use
 	else {
@@ -2678,13 +2678,7 @@ bool POSTRACK::UpdatePos(double pos_new, uint32_t ts_new, bool is_new_rec)
 
 		}
 
-		// Return error
-		return true;
-		
 	}
-
-	// Return no error
-	return false;
 
 }
 
@@ -6964,7 +6958,7 @@ bool CheckResend(R2_COM<USARTClass> *p_r2)
 		// Reset flag
 		p_r2->do_rcvCheckArr[i] = false;
 
-	}
+}
 
 	// Return
 	return is_waiting_for_pack;
@@ -7606,10 +7600,6 @@ void Check_IRprox_Halt()
 	bool is_lft_ir_trigg = false;
 	bool is_rt_ir_trigg = false;
 
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
-
 	// Bail if manual ses
 	if (FC.is_ManualSes) {
 		return;
@@ -7634,6 +7624,10 @@ void Check_IRprox_Halt()
 	if (runSpeedNow == 0) {
 		return;
 	}
+
+#if DO_TEENSY_DEBUG
+	DB_FUN_STR();
+#endif
 
 	// Get pin stage
 	is_rt_ir_trigg = digitalRead(pin.IRPROX_R) == LOW;
@@ -8338,7 +8332,7 @@ void IR_SyncCheck()
 		Debug.sprintf_safe(buffLrg, buff_lrg, "IR Sync Event: dt=%dms", v_dt_ir);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg, v_t_irSyncLast);
 
-	}
+}
 
 	// Reset flag
 	v_isNewIR = false;
@@ -8558,14 +8552,14 @@ void ProcButtonInput()
 		// Bail if already rewarding
 		if (Reward.isRewarding) {
 			Debug.DB_Warning(__FUNCTION__, __LINE__, "ABORTED: TRIGGERED DURING ONGOING REWARD");
-		}
+	}
 		else {
 			// Process button command
 			Reward.ProcRewCmd(0);
 			Reward.StartRew();
 		}
 		FC.do_BtnRew = false;
-	}
+}
 
 	// OPEN/CLOSE REW SOL
 	if (FC.do_RewSolStateChange) {
@@ -8725,7 +8719,7 @@ void CheckEtOH()
 		// Print to debug
 		Debug.sprintf_safe(buffLrg, buff_lrg, "Open EtOH: dt_close=%d", dt_close);
 		Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-	}
+}
 
 	// Check if sol should be closed
 	else if (do_close) {
@@ -9753,9 +9747,9 @@ bool StatusBlink(bool do_set, byte n_blinks, uint16_t dt_led, bool rat_in_blink)
 			t_blink_last = millis();
 			do_led_on = !do_led_on;
 			cnt_blink += !do_led_on ? 1 : 0;
-		}
-		return true;
 	}
+		return true;
+}
 
 	// Reset LEDs
 	else {
@@ -9915,7 +9909,7 @@ void setup() {
 	// Log run mode
 	if (DO_DEBUG) {
 		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = DEBUG");
-	}
+}
 	else {
 		Debug.DB_General(__FUNCTION__, __LINE__, "RUN MODE = RELEASE");
 	}
@@ -10910,77 +10904,61 @@ void loop() {
 		cmd.vtTS[cmd.vtEnt] = U.i32;
 
 		// Update VT
-		bool is_error = Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
+		Pos[cmd.vtEnt].UpdatePos(cmd.vtCM[cmd.vtEnt], cmd.vtTS[cmd.vtEnt]);
 
-		// Reset all pos data
-		if (is_error) {
+		// Handle rob vt data
+		if (cmd.vtEnt == 1) {
 
-			// Log error
-			Debug.DB_Error(__FUNCTION__, __LINE__, "RESETTING ALL POSITION DATA DUE TO BAD VALUES");
+			// Set rat vt and pixy to setpoint if rat not in or task done
+			if (!FC.is_RatOnTrack || FC.is_TaskDone) {
 
-			// Will have to run again with new samples
-			Pos[0].PosReset(true);
-			Pos[2].PosReset(true);
-			Pos[1].PosReset(true);
+				Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
+				Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
+			}
 
+			// Log first sample
+			if (!Pos[1].is_streamStarted) {
+
+				// Log
+				Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+					Pos[1].posAbs, Pos[1].posCum, Pos[1].nLaps);
+				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+
+				// Set flag
+				Pos[1].is_streamStarted = true;
+
+				// Send robot streaming confirmation
+				Debug.DB_General(__FUNCTION__, __LINE__, "SENDING STREAMING CONFIRMATION");
+				QueuePacket(&r2c, 'K', 1, 0, 0, 0, true);
+
+				// Set flag to begin sending vcc
+				FC.do_SendVCC = true;
+
+			}
 		}
-		else {
 
-			// Handle rob vt data
-			if (cmd.vtEnt == 1) {
+		// Handle rat vt data
+		else if (cmd.vtEnt == 0) {
 
-				// Set rat vt and pixy to setpoint if rat not in or task done
-				if (!FC.is_RatOnTrack || FC.is_TaskDone) {
+			// Update only after rat in before task done
+			if (FC.is_RatOnTrack && !FC.is_TaskDone) {
 
-					Pos[0].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
-					Pos[2].SwapPos(Pos[1].posAbs + Pid.setPoint, Pos[1].t_update);
+				// Use rat vt for pixy if running simulated rat test
+				if (cmd.vtEnt == 0 && Debug.flag.do_simRatTest) {
+					Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
 				}
 
 				// Log first sample
-				if (!Pos[1].is_streamStarted) {
+				if (!Pos[0].is_streamStarted) {
 
 					// Log
-					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST ROBOT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
-						Pos[1].posAbs, Pos[1].posCum, Pos[1].nLaps);
+					Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
+						Pos[0].posAbs, Pos[0].posCum, Pos[0].nLaps);
 					Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 
 					// Set flag
-					Pos[1].is_streamStarted = true;
-
-					// Send robot streaming confirmation
-					Debug.DB_General(__FUNCTION__, __LINE__, "SENDING STREAMING CONFIRMATION");
-					QueuePacket(&r2c, 'K', 1, 0, 0, 0, true);
-
-					// Set flag to begin sending vcc
-					FC.do_SendVCC = true;
-
+					Pos[0].is_streamStarted = true;
 				}
-			}
-
-			// Handle rat vt data
-			else if (cmd.vtEnt == 0) {
-
-				// Update only after rat in before task done
-				if (FC.is_RatOnTrack && !FC.is_TaskDone) {
-
-					// Use rat vt for pixy if running simulated rat test
-					if (cmd.vtEnt == 0 && Debug.flag.do_simRatTest) {
-						Pos[2].SwapPos(Pos[0].posAbs, Pos[0].t_update);
-					}
-
-					// Log first sample
-					if (!Pos[0].is_streamStarted) {
-
-						// Log
-						Debug.sprintf_safe(buffLrg, buff_lrg, "FIRST RAT VT RECORD: pos_abs=%0.2f pos_cum=%0.2f n_laps=%d",
-							Pos[0].posAbs, Pos[0].posCum, Pos[0].nLaps);
-						Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
-
-						// Set flag
-						Pos[0].is_streamStarted = true;
-					}
-				}
-
 			}
 
 		}

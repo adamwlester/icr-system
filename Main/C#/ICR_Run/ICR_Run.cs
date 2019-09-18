@@ -2100,7 +2100,7 @@ namespace ICR_Run
             if (!pass && do_print)
             {
                 // Format data string
-                buff_dat = String.Format(String.Format("a2c HANGING: rx={1} tx={2} dt_chk={3}",
+                buff_dat = String.Format(String.Format("a2c HANGING: rx={0} tx={1} dt_chk={2}",
                       sp_cheetahDue.BytesToRead, sp_cheetahDue.BytesToWrite, DEBUG.DT(ts1: t_start)));
 
                 // Timedout

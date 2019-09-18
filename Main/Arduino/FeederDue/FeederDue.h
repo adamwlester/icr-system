@@ -92,7 +92,7 @@ struct DB_FLAG
 	const bool log_runSpeed = DO_LOG && false; // false
 	const bool log_pixy = DO_LOG && false; // false
 
-					// Tracking data
+	// Tracking data
 	const bool log_pos = DO_LOG && false; // false
 	const bool log_pos_rat_vt = DO_LOG && false; // false
 	const bool log_pos_rat_pixy = DO_LOG && false; // false
@@ -105,7 +105,7 @@ struct DB_FLAG
 	const bool log_vel_rat_ekf = DO_LOG && false; // false
 	const bool log_vel_rob_ekf = DO_LOG && false; // false
 
-					// CHECK LOOP
+	// CHECK LOOP
 	const bool do_loopCheck = true;
 	const bool do_loopCheckDT = do_loopCheck && true;
 	const bool do_loopCheckSerialOverflow = do_loopCheck && true;
