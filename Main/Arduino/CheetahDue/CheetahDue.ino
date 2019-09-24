@@ -224,9 +224,6 @@ void DEBUG::CheckLoop()
 
 void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	bool do_print = false;
@@ -255,9 +252,6 @@ void DEBUG::DB_General(const char *p_fun, int line, char *p_msg, uint32_t ts)
 
 void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	bool do_print = false;
@@ -289,9 +283,6 @@ void DEBUG::DB_Warning(const char *p_fun, int line, char *p_msg, uint32_t ts)
 
 void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t ts)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	bool do_print = false;
@@ -323,9 +314,6 @@ void DEBUG::DB_Error(const char *p_fun, int line, char *p_msg, uint32_t ts)
 
 void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
@@ -368,9 +356,6 @@ void DEBUG::DB_Rcvd(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte
 
 void DEBUG::DB_SendQueued(char *p_msg, uint32_t ts)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
@@ -401,9 +386,6 @@ void DEBUG::DB_SendQueued(char *p_msg, uint32_t ts)
 
 void DEBUG::DB_Sent(char *p_msg_1, char *p_msg_2, bool is_repeat, byte flag_byte)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	static char buff_max[buffMax] = { 0 }; buff_max[0] = '\0';
@@ -737,10 +719,6 @@ char* DEBUG::FormatBinary(unsigned int int_in)
 
 char* DEBUG::FormatTimestamp(uint32_t ts)
 {
-
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	static char buff_med[buffMed] = { 0 }; buff_med[0] = '\0';
@@ -2133,9 +2111,6 @@ bool SetIR(int dt_pulse, int dt_on, SETIRSTATE force_state, bool do_ttl)
 // GET ID INDEX
 template <typename A24> int ID_Ind(char id, A24 *p_r24)
 {
-#if DO_TEENSY_DEBUG
-	DB_FUN_STR();
-#endif
 
 	// Local vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';

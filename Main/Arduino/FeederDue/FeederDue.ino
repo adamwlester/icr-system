@@ -843,7 +843,6 @@ void DEBUG::CheckLoop()
 	// Local static vars
 	static char buff_lrg[buffLrg] = { 0 }; buff_lrg[0] = '\0';
 	static char buff_lrg_2[buffLrg] = { 0 }; buff_lrg_2[0] = '\0';
-	static uint32_t t_loop_last = millis();
 	static int dt_loop = 0;
 	static int dt_loop_last = 0;
 	static int c_rx_last = 0;
@@ -866,6 +865,10 @@ void DEBUG::CheckLoop()
 
 	// Track total loops
 	cnt_loopTot++;
+
+	// Compute current loop dt
+	dt_loop = millis() - t_loopLast;
+	t_loopLast = millis();
 
 	// Check for VEC errors
 #if DO_VEC_DEBUG
@@ -920,20 +923,11 @@ void DEBUG::CheckLoop()
 		return;
 	}
 
-	// Bail if this is a test run
-	if (flag.do_systemTesting) {
-		return;
-	}
-
 	// Get total data left in buffers
 	c_rx = c2r.hwSerial.available();
 	c_tx = SERIAL_BUFFER_SIZE - 1 - c2r.hwSerial.availableForWrite();
 	a_rx = a2r.hwSerial.available();
 	a_tx = SERIAL_BUFFER_SIZE - 1 - a2r.hwSerial.availableForWrite();
-
-	// Compute current loop dt
-	dt_loop = millis() - t_loop_last;
-	t_loop_last = millis();
 
 	// Check long loop time
 	do_dt_db = flag.do_loopCheckDT && dt_loop > 60;
@@ -1615,9 +1609,15 @@ void DEBUG::Queue(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int
 		Debug.sprintf_safe(buffMed, buff_med_4, "%s ", p_type);
 	}
 
+	// TEMP
 	// Add function and line number
-	if (strcmp(p_fun, "") != 0) {
+	/*if (strcmp(p_fun, "") != 0) {
 		Debug.sprintf_safe(buffMed, buff_med_5, "[%s:%d] ", p_fun, line);
+	}*/
+	// Add function and line number & dt loop
+	int dt_loop = millis() - t_loopLast;
+	if (strcmp(p_fun, "") != 0) {
+		Debug.sprintf_safe(buffMed, buff_med_5, "[%s:%d:%d] ", p_fun, line, dt_loop);
 	}
 
 	// Put it all together
@@ -5249,9 +5249,15 @@ void LOGGER::QueueLog(char *p_msg, uint32_t ts, char *p_type, const char *p_fun,
 	// Get sync correction
 	t_m = ts - t_sync;
 
+	// TEMP
 	// Add function and line number
-	if (strcmp(p_fun, "") != 0) {
+	/*if (strcmp(p_fun, "") != 0) {
 		Debug.sprintf_safe(buffMed, buff_med_1, "[%s:%d] ", p_fun, line);
+	}*/
+	// Add function and line number & dt loop
+	int dt_loop = millis() - t_loopLast;
+	if (strcmp(p_fun, "") != 0) {
+		Debug.sprintf_safe(buffMed, buff_med_1, "[%s:%d:%d] ", p_fun, line, dt_loop);
 	}
 
 	// Store log
@@ -8169,7 +8175,7 @@ void CheckSampDT()
 
 		// Log if > 1 sec sinse last swap
 		if (millis() - t_swap_vt > 1000) {
-			Debug.sprintf_safe(buffLrg, buff_lrg, "Swapped VT for Pixy");
+			Debug.sprintf_safe(buffLrg, buff_lrg, "Replaced VT with Pixy");
 		}
 
 		// Swap
@@ -8185,7 +8191,7 @@ void CheckSampDT()
 
 		// Log if > 1 sec sinse last swap
 		if (millis() - t_swap_pixy > 1000) {
-			Debug.sprintf_safe(buffLrg, buff_lrg, "Swapped Pixy for VT");
+			Debug.sprintf_safe(buffLrg, buff_lrg, "Replaced Pixy with VT");
 		}
 
 		// Swap
@@ -10359,7 +10365,9 @@ void loop() {
 		if (cmd.testRun == 0) {
 
 			// Set testing flag
-			Debug.flag.do_systemTesting = true;
+			if (cmd.testCond != 0) {
+				Debug.flag.do_systemTesting = true;
+			}
 
 			// Get number of test pings to send
 			if (cmd.testRun == 0) {

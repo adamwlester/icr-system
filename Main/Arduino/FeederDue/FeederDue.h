@@ -222,6 +222,7 @@ int PQ_ReadInd = 0;
 
 // DEBUGGING GENERAL
 uint32_t dt_timeoutHandshake = 5000; // (ms)
+uint32_t t_loopLast = millis();
 uint32_t cnt_loopTot = 0;
 byte cnt_loopShort = 0;
 uint16_t cnt_errAD = 0;
