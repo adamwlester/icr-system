@@ -6790,12 +6790,6 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 	// Send
 	p_r2->hwSerial.write(p_r2->SQ_Queue[p_r2->SQ_ReadInd], SQ_MsgBytes);
 
-	// Update dt stuff
-	p_r2->dt_sent = p_r2->t_sent > 0 ? millis() - p_r2->t_sent : 0;
-	p_r2->t_sent = millis();
-	dt_rcvd = p_r4->t_rcvd > 0 ? millis() - p_r4->t_rcvd : 0;
-	dt_queue = millis() - p_r2->t_queuedArr[id_ind];
-
 	// Get buffers
 	tx_size = SERIAL_BUFFER_SIZE - 1 - p_r2->hwSerial.availableForWrite();
 	rx_size = p_r2->hwSerial.available();
@@ -6853,6 +6847,12 @@ bool SendPacket(R2_COM<USARTClass> *p_r2)
 		p_r2->packArr[id_ind] = pack;
 	else
 		p_r2->packConfArr[id_ind] = pack;
+
+	// Update dt stuff
+	p_r2->dt_sent = p_r2->t_sent > 0 ? millis() - p_r2->t_sent : 0;
+	p_r2->t_sent = millis();
+	dt_rcvd = p_r4->t_rcvd > 0 ? millis() - p_r4->t_rcvd : 0;
+	dt_queue = millis() - p_r2->t_queuedArr[id_ind];
 
 	// Update other struct info
 	p_r2->dat1[id_ind] = dat[0];
