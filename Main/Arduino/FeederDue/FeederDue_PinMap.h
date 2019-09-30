@@ -172,7 +172,8 @@ pin;
 
 #pragma region ============== SETUP PINS ===============
 
-void SetupPins() {
+void SetupPins()
+{
 
 	// SETUP OUTPUT PINS
 

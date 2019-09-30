@@ -96,7 +96,8 @@ public:
 		size_t idx_out = check_idx(idx);
 
 		// Set lenth to max of idx or len
-		if (idx_out == idx) {
+		if (idx_out == idx)
+		{
 			v_len = max(idx + 1, v_len);
 		}
 
@@ -130,7 +131,8 @@ public:
 
 		// Log error
 #if DO_VEC_DEBUG
-		if (idx_out != idx) {
+		if (idx_out != idx)
+		{
 
 			// Get log ind
 			int log_ind = min(VEC_CNT_ERR, VEC_MAX_ERR - 1);

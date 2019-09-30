@@ -15,8 +15,15 @@
 // DEBUG TO OPENLOG LOGGER
 #define DO_LOG 1 // 1
 
-// DEBUT TO TEENSY LOGGER
-#define DO_TEENSY_DEBUG 0 // 0
+// LOG METHOD CALLS TO TEENSY
+#define DO_METH_TEENSY_DEBUG 0 // 0
+// LOG METHOD CALLS TO LIST FOR EACH LOOP
+#define DO_METH_LIST_DEBUG 1 // 0
+// LOG METHOD START
+#define DO_START_METH_DEBUG 1 // 0
+// LOG METHOD END
+#define DO_END_METH_DEBUG 1 // 0
+
 
 // IMIDATE PRINT/LOG
 #define DO_FAST_PRINT 0 // 0
@@ -24,7 +31,6 @@
 
 // DEBUG SAFEVECTOR ERRORS TO CONSOLE
 #define DO_VEC_DEBUG 1 // 0
-
 
 //============= INCLUDE ================
 
@@ -45,7 +51,6 @@
 #define VECTKEY_MASK   (0x0000ffffUL)
 #define AIRCR          (*(uint32_t*)0xe000ed0cUL) // fixed arch-defined address
 #define REQUEST_EXTERNAL_RESET (AIRCR=(AIRCR&VECTKEY_MASK)|VECTKEY|SYSRESETREQ)
-
 
 #pragma region ============ DEBUG SETTINGS ============
 
@@ -142,18 +147,18 @@ const VEC<double> cal_speedSteps(n_calRuns, __LINE__, _cal_speedSteps);
 int cal_nMeasPerSteps = 10;
 
 // MAIN DEBUG FLAG
-#if DO_PRINT_DEBUG || DO_TEENSY_DEBUG
+#if DO_PRINT_DEBUG || DO_METH_TEENSY_DEBUG || DO_METH_LIST_DEBUG
 #define DO_DEBUG 1
 #else
 #define DO_DEBUG 0
 #endif
 
-// DEBUG VIA TEENSY
+// DEBUG METHOD CALLS AT START/END OF METHOD
 
 // Put at start of function
-#define DB_FUN_STR() SendTeensy(__FUNCTION__, __LINE__, freeMemory(), 'S');
+#define DB_FUN_START() LogMethRun(__FUNCTION__, __LINE__, freeMemory(), 'S');
 // Put at end of function
-#define DB_FUN_END() SendTeensy(__FUNCTION__, __LINE__, freeMemory(), 'E');
+#define DB_FUN_END(m_ind) LogMethRun(__FUNCTION__, __LINE__, freeMemory(), 'E', m_ind);
 
 #pragma endregion
 
@@ -219,6 +224,19 @@ const int PQ_Capacity = 30;
 char PQ_Queue[PQ_Capacity][buffMax] = { { 0 } };
 int PQ_StoreInd = 0;
 int PQ_ReadInd = 0;
+
+// METHOD LIST QUEUE
+#if DO_METH_LIST_DEBUG
+const int ML_Capacity = 50;
+char ML_Queue[ML_Capacity][buffMed] = { { 0 } };
+VEC<uint32_t> ML_tStr(ML_Capacity, __LINE__);
+VEC<uint32_t> ML_DT(ML_Capacity, __LINE__);
+VEC<int> ML_Cnt(ML_Capacity, __LINE__);
+//uint32_t ML_tStr[ML_Capacity] = {0};
+//uint32_t ML_DT[ML_Capacity] = { 0 };
+int ML_StoreInd = 0;
+int ML_StoreCnt = 0;
+#endif
 
 // DEBUGGING GENERAL
 uint32_t dt_timeoutHandshake = 5000; // (ms)
@@ -690,7 +708,7 @@ struct R4_COM
 };
 R4_COM<USARTClass> c2r(Serial2, COM::ID::c2r, '<', '>', _cs_id_list, _pack_range, 5);
 R4_COM<USARTClass> a2r(Serial3, COM::ID::a2r, '{', '}', _ard_id_list, _pack_range, 5);
-#if DO_TEENSY_DEBUG
+#if DO_METH_TEENSY_DEBUG || DO_METH_LIST_DEBUG
 R4_COM<UARTClass> t2r(Serial, COM::ID::t2r, '{', '}', _tnsy_id_list, _pack_range);
 #endif
 
