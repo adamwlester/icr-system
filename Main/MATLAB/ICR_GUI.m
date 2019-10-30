@@ -101,7 +101,7 @@ D.DB.ratLab = 'r0000'; %'r9999';
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.F.Run_Cheetah = true;
+D.DB.F.Run_Cheetah = false;
 D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
@@ -12966,6 +12966,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set flag
         was_ran = true;
         
+        % Reset rotation session number if no rotations performed
+        if D.PAR.sesCond == 'Rotation' && D.C.rot == 0
+            D.PAR.sesNum = D.PAR.sesNum-1;
+        end
+        
         % Get row ind
         if strcmp(D.SS_IO_2.(D.PAR.ratLab).Date{1}, '')
             % is first entry
@@ -13158,6 +13163,14 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % UPDATE SS_IO_1
+        
+        % Store 'Session_X' Number
+        if ~isundefined(D.PAR.sesCond) && ~isundefined(D.PAR.sesTask)
+            var_ind = ...
+                ismember(D.SS_IO_1.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
+            col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
+            D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
+        end
         
         % Update 'Session_Type'
         D.SS_IO_1.Session_Type(D.PAR.ratIndSS) = D.PAR.sesType;
