@@ -18,6 +18,9 @@
 // DEBUG SAFEVECTOR ERRORS TO CONSOLE
 #define DO_VEC_DEBUG 1 // 0
 
+// SKIP IR HANDSHAKE (SET FALSE IF IR COM IS BEING A BITCH)
+#define DO_SKIP_IR_SYNC 0 // 0
+
 //============== INCLUDE ===============
 
 // LOCAL

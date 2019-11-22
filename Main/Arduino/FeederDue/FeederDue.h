@@ -24,13 +24,15 @@
 // LOG METHOD END
 #define DO_END_METH_DEBUG 1 // 0
 
-
 // IMIDATE PRINT/LOG
 #define DO_FAST_PRINT 0 // 0
 #define DO_FAST_LOG 0 // 0
 
 // DEBUG SAFEVECTOR ERRORS TO CONSOLE
 #define DO_VEC_DEBUG 1 // 0
+
+// SKIP IR HANDSHAKE (SET FALSE IF IR COM IS BEING A BITCH)
+#define DO_SKIP_IR_SYNC 0 // 0
 
 //============= INCLUDE ================
 

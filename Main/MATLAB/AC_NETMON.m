@@ -1,4 +1,4 @@
-function[] = AC_NETMON% NOTE: packet contains [1,4] numiric data()
+ function[] = AC_NETMON% NOTE: packet contains [1,4] numiric data()
 
 
 %   val 1 = conection [0, 1], [no, yes]

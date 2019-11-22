@@ -973,6 +973,12 @@ bool CheckForHandshake()
 		// Set abort time
 		t_timeout = millis() + dt_timeoutHandshake;
 
+		// Send handshake message that can be used in place of IR pulse
+		if (DO_SKIP_IR_SYNC)
+		{
+			QueuePacket('h', 1, 0, 0, 0, true, false, false);
+		}
+
 	}
 
 	// Check for handshake confirmation from FeederDue

@@ -6402,6 +6402,7 @@ bool CheckForHandshake()
 	static uint16_t dt_blink_on = 10;
 	static uint16_t dt_blink_off = 490;
 	int dt_ir = 0;
+	bool is_ir_sync = false;
 
 	// CHECK FOR IR HANDSHAKE
 	if (!FC.is_IRHandshakeDone)
@@ -6426,19 +6427,28 @@ bool CheckForHandshake()
 		if (t_sync == 0)
 		{
 
-			// Copy ir dt
+			// Copy and check ir dt
 			dt_ir = v_dt_ir;
+			is_ir_sync = abs(dt_irHandshakePulse - dt_ir) <= 5;
 
 			// Check for setup ir pulse
-			if (abs(dt_irHandshakePulse - dt_ir) <= 5)
+			if (is_ir_sync ||
+				(DO_SKIP_IR_SYNC && a2r.idNew == 'h'))
 			{
 
 				// Set sync time
 				t_sync = v_t_irSyncLast;
 
 				// Log pulse time
-				Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE IR SYNC PULSE DETECTED: ACTUAL DT=%dms EXPECTED DT=75ms", dt_ir);
-				Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+				if (is_ir_sync)
+				{
+					Debug.sprintf_safe(buffLrg, buff_lrg, "HANDSHAKE IR SYNC PULSE DETECTED: ACTUAL DT=%dms EXPECTED DT=75ms", dt_ir);
+					Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
+				}
+				else
+				{
+					Debug.DB_Warning(__FUNCTION__, __LINE__, "SKIPPED IR HANDSHAKE");
+				}
 
 				// Log sync time
 				Debug.sprintf_safe(buffLrg, buff_lrg, "SET SYNC TIME: %dms", t_sync);

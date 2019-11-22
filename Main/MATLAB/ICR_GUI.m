@@ -122,7 +122,7 @@ D.DB.Rotation_Positions = [180,180,180,90,180,270,90,180,270]; % [90 180 270];
 % HARDCODED FLAGS
 D.DB.F.printLogStrore = false;
 D.DB.F.foragePathCompute = false;
-D.DB.F.autoSetTT = true;
+D.DB.F.autoSetTT = false;
 D.DB.nTurnsAutoSetTT = 20;
 
 % SYSTEM SET FLAGS
@@ -5099,14 +5099,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Convert table data to cell
             c_io = table2cell(io_table);
             
-            % Remove nexted cell or 2d data
+            % Remove nexted cell or 2d data including vars with empty {[]} entries
             cell_ind = cell2mat(cellfun(@(x) isa(x, 'cell'), ...
                 c_io(1,:), 'uni', false));
             nd_ind = any(cell2mat(cellfun(@(x) max(size(x))>1 && ~isa(x, 'char'), ...
                 c_io, 'uni', false)), 1);
+            empty_ind = any(cell2mat(cellfun(@(x) isempty(x), ...
+                c_io, 'uni', false)), 1);
             
             % Remove values
-            exc_ind = cell_ind | nd_ind;
+            exc_ind = cell_ind | nd_ind | empty_ind;
             c_io = c_io(:, ~exc_ind);
             
             % Replace [] with 'NA'
