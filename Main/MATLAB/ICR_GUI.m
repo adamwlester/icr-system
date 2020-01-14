@@ -95,7 +95,7 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0000'; %'r9999';
+D.DB.ratLab = 'r0723'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
@@ -107,12 +107,12 @@ D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Manual_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
 D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
-D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Reward_Delay = '0.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
 D.DB.Cue_Condition = 'All'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
@@ -5106,15 +5106,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 c_io, 'uni', false)), 1);
             empty_ind = any(cell2mat(cellfun(@(x) isempty(x), ...
                 c_io, 'uni', false)), 1);
+            exc_ind = cell_ind | nd_ind | empty_ind;
+            
+            % Keep Notes
+            exc_ind = exc_ind & ~ismember(io_table.Properties.VariableNames, 'Notes');
             
             % Remove values
-            exc_ind = cell_ind | nd_ind | empty_ind;
             c_io = c_io(:, ~exc_ind);
             
             % Replace [] with 'NA'
-            empty_ind = cell2mat(cellfun(@(x) isempty(x), ...
+            na_ind = cell2mat(cellfun(@(x) isempty(x), ...
                 c_io, 'uni', false));
-            c_io(empty_ind) = {'NA'};
+            c_io(na_ind) = {'NA'};
             
             % Get variable names
             var_list = io_table.Properties.VariableNames(~exc_ind);

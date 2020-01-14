@@ -10,8 +10,8 @@
 PixyI2C pixy(0x54); // You can set the I2C address through PixyI2C object
 
 // Set what to print
-bool printY = false;
-bool printCM = true;
+bool printY = true;
+bool printCM = false;
 bool printSpeed = false;
 
 // Declare vars
@@ -56,26 +56,16 @@ void setup()
 
 	// TURN ON POWER AND RELAYES
 
-	// Power
-	pinMode(pin.PWR_OFF, OUTPUT);
-	pinMode(pin.PWR_ON, OUTPUT);
-	pinMode(pin.PWR_Swtch_Grn, OUTPUT);
 	// Voltage Regulators
 	pinMode(pin.REG_24V_ENBLE, OUTPUT);
 	pinMode(pin.REG_12V2_ENBLE, OUTPUT);
 	pinMode(pin.REG_5V1_ENBLE, OUTPUT);
-	pinMode(pin.REG_5V2_ENBLE, OUTPUT);
-
-	// Power
-	digitalWrite(pin.PWR_OFF, LOW);
-	digitalWrite(pin.PWR_ON, HIGH);
-	digitalWrite(pin.PWR_Swtch_Grn, LOW);
+	
 	// Voltage Regulators
 	digitalWrite(pin.REG_24V_ENBLE, LOW);
 	digitalWrite(pin.REG_12V2_ENBLE, HIGH);
 	digitalWrite(pin.REG_5V1_ENBLE, HIGH);
-	digitalWrite(pin.REG_5V2_ENBLE, HIGH);
-
+	
 	// INIT PIXY STUFF
 	pixy.init();
 	Wire.begin();
