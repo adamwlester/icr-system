@@ -293,19 +293,19 @@ const uint16_t pixyMaxBlocks = 1;
 const int pixyOrd = 5;
 VEC<double> pixyCoeff(pixyOrd, __LINE__);
 const double _pixyPackCoeff[pixyOrd] = {
-	0.000000024551930,
-	-0.000014298999215,
-	0.003283287634146,
-	-0.584298073942136,
-	79.031445369696740,
+	0.000000015540370,
+	-0.000012238336108,
+	0.003550674880560,
+	-0.695456876361151,
+	90.475818467619391,
 };
 const VEC<double> pixyPackCoeff(pixyOrd, __LINE__, _pixyPackCoeff);
 const double _pixyCubeCoeff[pixyOrd] = {
-	0.000000024551930,
-	-0.000014298999215,
-	0.003283287634146,
-	-0.584298073942136,
-	79.031445369696740,
+	0.000000015540370,
+	-0.000012238336108,
+	0.003550674880560,
+	-0.695456876361151,
+	90.475818467619391,
 };
 const VEC<double> pixyCubeCoeff(pixyOrd, __LINE__, _pixyCubeCoeff);
 double pixyShift = 0;

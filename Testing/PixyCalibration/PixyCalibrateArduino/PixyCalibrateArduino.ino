@@ -10,19 +10,19 @@
 PixyI2C pixy(0x54); // You can set the I2C address through PixyI2C object
 
 // Set what to print
-bool printY = true;
-bool printCM = false;
+bool printY = false;
+bool printCM = true;
 bool printSpeed = false;
 
 // Declare vars
 
 // Coeff calculated using CalibrateCurveFit.m
 const double coeff[5] = {
-	0.000000024551930,
-	-0.000014298999215,
-	0.003283287634146,
-	-0.584298073942136,
-	79.031445369696740,
+	0.000000015540370,
+	-0.000012238336108,
+	0.003550674880560,
+	-0.695456876361152,
+	90.475818467619405,
 };
 
 int yNow = NULL;
