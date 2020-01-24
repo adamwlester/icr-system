@@ -289,7 +289,8 @@ uint32_t t_quit = 0;
 
 // PIXY
 const uint8_t pixyAddress = 0x54;
-const uint16_t pixyMaxBlocks = 1;
+const int dt_pixyReadTimeout = 10; // (ms)
+const uint16_t pixyMaxBlocks = 130;
 const int pixyOrd = 5;
 VEC<double> pixyCoeff(pixyOrd, __LINE__);
 const double _pixyPackCoeff[pixyOrd] = {

@@ -205,12 +205,20 @@ public:
 	const char *p_str_list_blockType[2] =
 	{ { "NORMAL_BLOCK" },{ "CC_BLOCK" } };
 	BLOCKTYPE blockType = NORMAL_BLOCK;
+	enum ERRORTYPE {
+		NONE,
+		CHECKSUM,
+		TIMEOUT
+	};
+	const char *p_str_list_errorType[3] =
+	{ { "NONE" },{ "CHECKSUM" },{ "TIMEOUT" } };
+	ERRORTYPE errorType = NONE;
 
 	// METHODS
 	PIXY();
 	void PixyBegin();
 	double PixyUpdate(bool is_hardware_test = false);
-	uint16_t PixyGetBlocks();
+	void PixyGetBlocks();
 	bool PixyCheckStart();
 	uint16_t PixyGetWord();
 	uint8_t PixyGetByte();
@@ -1411,8 +1419,8 @@ void DEBUG::DB_Pixy(const char *p_fun, int line, char *p_msg)
 	}
 
 	// Format data string
-	Debug.sprintf_safe(buffLrg, buff_lrg, "block_type=%s word_new=%X word_last=%X checksum=%d blocks=%d",
-		Pixy.p_str_list_blockType[Pixy.blockType], Pixy.wordNew, Pixy.wordLast, Pixy.checksum, Pixy.cnt_blocks);
+	Debug.sprintf_safe(buffLrg, buff_lrg, "%s: block_type=%s word_new=%X word_last=%X checksum=%d blocks=%d",
+		p_msg, Pixy.p_str_list_blockType[Pixy.blockType], Pixy.wordNew, Pixy.wordLast, Pixy.checksum, Pixy.cnt_blocks);
 
 	// Add to print queue
 	if (do_print)
@@ -1710,12 +1718,6 @@ void DEBUG::Queue(char *p_msg, uint32_t ts, char *p_type, const char *p_fun, int
 		Debug.sprintf_safe(buffMed, buff_med_4, "%s ", p_type);
 	}
 
-	// TEMP
-	// Add function and line number
-	/*if (strcmp(p_fun, "") != 0)
-{
-		Debug.sprintf_safe(buffMed, buff_med_5, "[%s:%d] ", p_fun, line);
-	}*/
 	// Add function and line number & dt loop
 	int dt_loop = millis() - t_loopLast;
 	if (strcmp(p_fun, "") != 0)
@@ -2101,7 +2103,7 @@ void DEBUG::sprintf_safe(uint16_t buff_cap, char *p_buff, char *p_fmt, ...)
 		strcat(p_buff, str_prfx_med);
 
 
-}
+	}
 
 	// Copy/concat buff to p_buff
 	strcat(p_buff, buff);
@@ -2232,7 +2234,6 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	double pixy_abs = 0;
 	uint32_t t_pixy_ts = 0;
 	double pixy_pos_y = 0;
-	uint16_t blocks = 0;
 
 	// Bail if robot not streaming yet
 	if (!is_hardware_test &&
@@ -2318,17 +2319,18 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	}
 
 	// Get new blocks
-	blocks = Pixy.PixyGetBlocks();
+	Pixy.PixyGetBlocks();
 
 	// Check for pixy error
-	if (blocks == UINT16_MAX - 1)
+	if (errorType != NONE)
 	{
 
 		// Incriment count
 		cnt_pixyReset++;
 
 		// Log error
-		Debug.sprintf_safe(buffLrg, buff_lrg, "PixyCom.GetBlocks() RETURNED ERROR: pixy_com_cnt=%d", cnt_pixyReset);
+		Debug.sprintf_safe(buffLrg, buff_lrg, "%s ERROR: cnt_reset=%d",
+			Pixy.p_str_list_errorType[Pixy.errorType], cnt_pixyReset);
 		Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
 		// Turn off 5V power
@@ -2346,7 +2348,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	}
 
 	// Bail if no new data
-	if (blocks == 0)
+	if (cnt_blocks == 0)
 	{
 
 		// Set next check with short dt
@@ -2405,7 +2407,7 @@ double PIXY::PixyUpdate(bool is_hardware_test)
 	return pixy_cum;
 }
 
-uint16_t PIXY::PixyGetBlocks()
+void PIXY::PixyGetBlocks()
 {
 	int m_ind = DB_FUN_START();
 
@@ -2427,6 +2429,7 @@ uint16_t PIXY::PixyGetBlocks()
 	uint16_t word_sync = 0;
 
 	// Reset variables
+	errorType = NONE;
 	checksum = 0xffff;
 	cnt_blocks = 0;
 
@@ -2438,7 +2441,7 @@ uint16_t PIXY::PixyGetBlocks()
 		if (!PixyCheckStart())
 		{
 			DB_FUN_END(m_ind);
-			return cnt_blocks;
+			return;
 		}
 	}
 
@@ -2523,9 +2526,9 @@ uint16_t PIXY::PixyGetBlocks()
 			Debug.sprintf_safe(buffLrg, buff_lrg, "CHECKSUM MISSMATCH: checksum=%d read_sum=%d", checksum, block.sum());
 			Debug.DB_Error(__FUNCTION__, __LINE__, buff_lrg);
 
-			// Return value indicating error
+			// Flag error
+			errorType = CHECKSUM;
 			DB_FUN_END(m_ind);
-			return UINT16_MAX - 1;
 		}
 
 		// Bail if max blocks reached
@@ -2555,7 +2558,6 @@ uint16_t PIXY::PixyGetBlocks()
 
 	// Return block count
 	DB_FUN_END(m_ind);
-	return cnt_blocks;
 }
 
 bool PIXY::PixyCheckStart()
@@ -2575,6 +2577,13 @@ bool PIXY::PixyCheckStart()
 
 		// Get next word
 		wordNew = PixyGetWord();
+
+		// Check for error
+		if (errorType != NONE)
+		{
+			pass = false;
+			break;
+		}
 
 		// Check if we have read two sync words
 		if ((wordNew == wordStr || wordNew == wordStrCC) &&
@@ -2613,12 +2622,8 @@ bool PIXY::PixyCheckStart()
 			break;
 		}
 
-		// Read next word
-		else {
-
-			// Save last word
-			wordLast = wordNew;
-		}
+		// Save last word
+		wordLast = wordNew;
 
 	}
 
@@ -2651,8 +2656,15 @@ uint16_t PIXY::PixyGetWord()
 	int m_ind = DB_FUN_START();
 
 	// Local vars
+	uint32_t t_timeout = millis() + dt_pixyReadTimeout;
 	uint16_t w1;
 	uint8_t w2;
+
+	// Bail if error flagged
+	if (errorType != NONE)
+	{
+		return 0;
+	}
 
 	// Request two bytes from Pixy
 	Wire.requestFrom((int)pixyAddress, 2);
@@ -2662,6 +2674,12 @@ uint16_t PIXY::PixyGetWord()
 	// Do something to the binary data ???
 	w1 <<= 8;
 	w1 |= w2;
+
+	// Check for timeout
+	if (millis() > t_timeout)
+	{
+		errorType = TIMEOUT;
+	}
 
 	// Return word
 	DB_FUN_END(m_ind);
@@ -5588,12 +5606,6 @@ void LOGGER::QueueLog(char *p_msg, uint32_t ts, char *p_type, const char *p_fun,
 	// Get sync correction
 	t_m = ts - t_sync;
 
-	// TEMP
-	// Add function and line number
-	/*if (strcmp(p_fun, "") != 0)
-{
-		Debug.sprintf_safe(buffMed, buff_med_1, "[%s:%d] ", p_fun, line);
-	}*/
 	// Add function and line number & dt loop
 	int dt_loop = millis() - t_loopLast;
 	if (strcmp(p_fun, "") != 0)
@@ -6120,7 +6132,7 @@ void LOGGER::StreamLogs()
 	{
 		Debug.sprintf_safe(buffMed, buff_med, "%d|", Debug.warn_line[i]);
 		Debug.strcat_safe(buffLrg, strlen(buff_lrg_3), buff_lrg_3, strlen(buff_med), buff_med);
-}
+	}
 	Debug.sprintf_safe(buffLrg, buff_lrg, "TOTAL WARNINGS: %d %s", Debug.cnt_warn, Debug.cnt_warn > 0 ? buff_lrg_3 : "");
 	Debug.DB_General(__FUNCTION__, __LINE__, buff_lrg);
 	// Send
