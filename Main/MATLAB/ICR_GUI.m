@@ -5452,7 +5452,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'EdgeColor', 'None', ...
                 'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
             for i = 1:length(bar_h)
-                bar_h(i).CData = cond_col(i,:);
+                bar_h(i).FaceColor = cond_col(i,:);
             end
             
             % Copy objects to other plot
@@ -5517,17 +5517,22 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             ylabel(D.UI.plotTabAxAll(z_r, 3), 'Rewards per minute');
             D.UI.plotTabAxAll(z_r, 3).Title.String = 'Rewards Performance';
             
+            % Specify bar inds for each cond
+            cond_ind = [{1},{2:6},{7:8}];
+            bar_h = gobjects(1,3);
+            errbar_h = gobjects(1,3);
+            
             % Plot sessions
             x = x_tick;
             y = cellfun(@(x) sum(x), ind_mat);
-            bar_h = bar(x, y', ...
-                'FaceColor', 'Flat', ...
-                'EdgeColor', [0,0,0], ...
-                'Parent', D.UI.plotTabAxAll(z_r, 1));
-            % Set colors
-            bar_h.CData(1,:) = cond_col(1,:);
-            bar_h.CData(2:6,:) = repmat(cond_col(2,:), 5, 1);
-            bar_h.CData(7:8,:) = repmat(cond_col(3,:), 2, 1);
+            for i = 1:length(bar_h)
+                bar_h(i) = bar(x(cond_ind{i}), y(cond_ind{i})', ...
+                    'FaceColor', cond_col(i,:), ...
+                    'EdgeColor', [0,0,0], ...
+                    'Parent', D.UI.plotTabAxAll(z_r, 1));
+            end
+            % Make manual training bar narrower
+            set(bar_h(1), 'BarWidth', get(bar_h(1), 'BarWidth')/2)
             % Add count text
             txt = arrayfun(@(x) sprintf('%d', x), y, 'uni', false);
             text(x, y, txt, ...
@@ -5539,29 +5544,38 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Plot lap performance
             x = x_tick;
             y = cellfun(@(x) mean(laps(x)./run_time(x)), ind_mat);
-            bar_h = copyobj(bar_h, D.UI.plotTabAxAll(z_r, 2));
-            set(bar_h, 'YData', y);
-            % Plot error
             ye = cellfun(@(x) std(laps(x)./run_time(x)), ind_mat);
-            errbar_h = errorbar(x, y', ye', ...
-                'Color', [0,0,0], ...
-                'LineStyle', 'None', ...
-                'LineWidth', 1, ...
-                'Parent', D.UI.plotTabAxAll(z_r, 2));
+            for i = 1:length(bar_h)
+                bar_h(i) = copyobj(bar_h(i), D.UI.plotTabAxAll(z_r, 2));
+                set(bar_h(i), 'YData', y(cond_ind{i}));
+                % Plot error
+                errbar_h(i) = errorbar(x(cond_ind{i}), y(cond_ind{i})', ye(cond_ind{i})', ...
+                    'Color', [0,0,0], ...
+                    'LineStyle', 'None', ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.plotTabAxAll(z_r, 2));
+            end
             D.UI.plotTabAxAll(z_r, 2).YLim(1) = 0;
             
             % Plot reward performance
             x = x_tick;
             y = cellfun(@(x) mean(rew(x)./run_time(x)), ind_mat);
-            bar_h = copyobj(bar_h, D.UI.plotTabAxAll(z_r, 3));
-            set(bar_h, 'YData', y);
-            % Plot error
             ye = cellfun(@(x) std(rew(x)./run_time(x)), ind_mat);
-            errbar_h = copyobj(errbar_h, D.UI.plotTabAxAll(z_r, 3));
-            set(errbar_h, ...
-                'YData', y, ...
-                'YNegativeDelta', ye, ...
-                'YPositiveDelta', ye);
+            for i = 1:length(bar_h)
+                bar_h(i) = copyobj(bar_h(i), D.UI.plotTabAxAll(z_r, 3));
+                set(bar_h(i), 'YData', y(cond_ind{i}));
+                % Plot error
+                errbar_h(i) = errorbar(x(cond_ind{i}), y(cond_ind{i})', ye(cond_ind{i})', ...
+                    'Color', [0,0,0], ...
+                    'LineStyle', 'None', ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.plotTabAxAll(z_r, 3));
+                errbar_h(i) = copyobj(errbar_h(i), D.UI.plotTabAxAll(z_r, 3));
+                set(errbar_h(i), ...
+                    'YData', y(cond_ind{i}), ...
+                    'YNegativeDelta', ye(cond_ind{i}), ...
+                    'YPositiveDelta', ye(cond_ind{i}));
+            end
             D.UI.plotTabAxAll(z_r, 3).YLim(1) = 0;
             
         end
