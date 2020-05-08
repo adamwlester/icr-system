@@ -106,8 +106,8 @@ D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'Table_Update' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Condition = 'Manual_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -946,16 +946,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     NLX_Start();
                     Log_Debug('FINISHED: "NLX_Start()"');
                     
-                    % Run Table tab setup code
-                    Log_Debug('RUNNING: "Table_Tab_Setup()"...');
-                    Table_Tab_Setup();
+                    % Run Table Setup code
+                    Log_Debug('RUNNING: "Table_Setup()"...');
+                    Table_Setup();
                     D.F.table_tab_setup = true;
-                    Log_Debug('FINISHED: "Table_Tab_Setup()"');
-                    
-                    % Run plot tab setup code
-                    Log_Debug('RUNNING: "Plot_Tab_Setup()"...');
-                    Plot_Tab_Setup();
-                    Log_Debug('FINISHED: "Plot_Tab_Setup()"');
+                    Log_Debug('FINISHED: "Table_Setup()"');
                     
                     % Run TT Track Setup code
                     Log_Debug('RUNNING: "TT_Track_Setup()"...');
@@ -2474,6 +2469,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             uitabgroup(FIGH, ...
             'Units', 'Normalized', ...
             'SelectionChangedFcn', {@Tab_GrpChange}, ...
+            'UserData', 'TT TRACK', ...
             'Position',[0,0,1,1]);
         
         % Set figure stuff
@@ -4538,8 +4534,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% -----------------------------TABLE TAB SETUP-------------------------
-    function[] = Table_Tab_Setup()
+% -----------------------------TABLE SETUP-------------------------
+    function[] = Table_Setup()
         
         %% SETUP TABLE UI
         
@@ -4615,7 +4611,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblTabSubGrp = ...
             uitabgroup(D.UI.tabTBL, ...
             'Units', 'Normalized', ...
-            'UserData', 'TABLE', ...
+            'UserData', 'TT TRACK', ...
             'Position',D.UI.tab_grp_pos);
         
         % Table Template
@@ -4932,7 +4928,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String', 'Update', ...
             'Callback', {@Togg_UpdateFed}, ...
             'Visible', 'on');
-        
+       
         % Enable button
         Button_State(D.UI.toggUpdateFed, 'Enable');
         
@@ -4969,29 +4965,29 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get list of included rats
-        D.UI.ratTabList = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
+        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
         
         % Put current rat at start of list
-        D.UI.ratTabList = [D.PAR.ratLab; D.UI.ratTabList(~ismember(D.UI.ratTabList, D.PAR.ratLab))];
+        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
         
         % Make a tab for current rat only unless unless doing 'Table_Update'
         if D.PAR.sesType ~= 'Table_Update'
-            D.UI.ratTabList = D.UI.ratTabList(1);
+            rat_list = rat_list(1);
         end
         
         % Initialize tab objects
-        D.UI.tbleSSIO2tab = gobjects(length(D.UI.ratTabList),1);
+        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
         
         % Add SS_IO_2 tab for each rat
-        for z_r = 1:length(D.UI.ratTabList)
+        for z_r = 1:length(rat_list)
             
             % Add SS_IO_2 tab
             D.UI.tbleSSIO2tab(z_r) = uitab(D.UI.tblTabSubGrp, ...
-                'Title', D.UI.ratTabList{z_r}(2:end), ...
+                'Title', rat_list{z_r}(2:end), ...
                 'BackgroundColor', [1, 1, 1]);
             
             % Format SS_IO_2 tables
-            D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.UI.ratTabList{z_r}), D.UI.tbleSSIO2tab(z_r));
+            D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(rat_list{z_r}), D.UI.tbleSSIO2tab(z_r));
             
         end
         
@@ -5248,321 +5244,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 6*cell2mat(cellfun(@(x) max(size(x)), ...
                 ui_table.Data(:,ind), 'uni', false))]);
             ui_table.ColumnWidth(ind) = {wdth};
-            
-        end
-        
-    end
-
-% -----------------------------TABLE TAB SETUP-------------------------
-    function[] = Plot_Tab_Setup()
-        
-        % Add TABLE tab
-        D.UI.tabPlt = uitab(D.UI.tabgp, ...
-            'Title', 'PLOT', ...
-            'BackgroundColor', [1, 1, 1]);
-        
-        % Create tab group
-        D.UI.pltTabSubGrp = ...
-            uitabgroup(D.UI.tabPlt, ...
-            'Units', 'Normalized', ...
-            'UserData', 'PLOT', ...
-            'Position',[0,0,1,1]);
-        
-        % Initialize tab and axes objects
-        D.UI.plotTabTabs = gobjects(length(D.UI.ratTabList),1);
-        D.UI.plotTabAxSes = gobjects(length(D.UI.ratTabList),2,2);
-        D.UI.plotTabAxAll = gobjects(length(D.UI.ratTabList),3);
-        
-        % Axes position
-        ax_wd = [0.625, 0.2];
-        ax_ht = [0.3, 0.175];
-        ax_lft = [0.05, ax_wd(1)+0.15];
-        ax_btm_ses = [0.15, 0.6];
-        ax_btm_all = [0.15, 0.4375, 0.725];
-        
-        % Specify markers for ses type
-        cue_mrk_list = {'s', 'd', 'o'};
-        
-        % Specify colors
-        cond_col = [0.9,0.9,0.9; 0.6,0.6,0.6; 0.3,0.3,0.3];
-        var1_col = [1,0.5,0]*0.75;
-        var2_col = [0,0,1]*0.75;
-        
-        % Add SS_IO_2 tab for each rat
-        tab_list = D.UI.ratTabList;
-        for z_r = 1:length(tab_list)
-            
-            %% SETUP RAT
-            rat_lab = tab_list{z_r};
-            
-            % Get sessions
-            nses = size(D.SS_IO_2.(rat_lab),1);
-            
-            % Bail if no data
-            if nses<=1
-                continue;
-            end
-            
-            % Get rat data
-            laps = ([D.SS_IO_2.(rat_lab).Laps_Standard{:}])';
-            rew = ([D.SS_IO_2.(rat_lab).Rewards_Standard{:}])';
-            ses_con = D.SS_IO_2.(rat_lab).Session_Condition;
-            cue_con = D.SS_IO_2.(rat_lab).Cue_Condition;
-            rot_dir = D.SS_IO_2.(rat_lab).Rotation_Direction;
-            rew_del = D.SS_IO_2.(rat_lab).Reward_Delay;
-            weight = round(100* D.SS_IO_3.(rat_lab).Weight_Proportion);
-            mash = D.SS_IO_3.(rat_lab).Fed_Mash;
-            run_time = D.SS_IO_2.(rat_lab).Total_Time;
-            
-            % Set rotation days with no rotation to behavior training
-            is_rot = cellfun(@(x) sum(x)>0, D.SS_IO_2.(rat_lab).Laps_40_Deg);
-            exc_ind = ses_con == 'Rotation' & ~is_rot;
-            ses_con(exc_ind) = 'Behavior_Training';
-            
-            % Exclude SS_IO_3 days that rats did not run
-            inc_ind = ismember(D.SS_IO_3.(rat_lab).Date, D.SS_IO_2.(rat_lab).Date);
-            weight = weight(inc_ind);
-            mash = mash(inc_ind);
-            
-            % Add rat specific tab
-            D.UI.plotTabTabs(z_r) = uitab(D.UI.pltTabSubGrp, ...
-                'Title', tab_list{z_r}(2:end), ...
-                'BackgroundColor', [1, 1, 1]);
-            
-            %% PLOT SESSION LEVEL
-            
-            % Initialize session axes
-            D.UI.plotTabAxSes(z_r, 1, 2) = axes( ...
-                'Position', [ax_lft(1), ax_btm_ses(2), ax_wd(1), ax_ht(1)], ...
-                'Parent', D.UI.plotTabTabs(z_r), ...
-                'Units', 'Normalized');
-            hold on;
-            D.UI.plotTabAxSes(z_r, 2, 2) = axes(...
-                'Position', [ax_lft(1), ax_btm_ses(1), ax_wd(1), ax_ht(1)], ...
-                'Parent', D.UI.plotTabTabs(z_r), ...
-                'Units', 'Normalized');
-            hold on;
-            % Initialize image axes
-            D.UI.plotTabAxSes(z_r, 1, 1) = copyobj(D.UI.plotTabAxSes(z_r, 1, 2), D.UI.plotTabTabs(z_r));
-            hold on;
-            D.UI.plotTabAxSes(z_r, 2, 1) = copyobj(D.UI.plotTabAxSes(z_r, 2, 2), D.UI.plotTabTabs(z_r));
-            hold on;
-            
-            % Set all axes
-            set(D.UI.plotTabAxSes(z_r, :, :), ...
-                'Color', 'None', ...
-                'XLim', [0,nses+1]);
-            uistack(D.UI.plotTabAxSes(z_r, :, 1), 'bottom');
-            
-            % Plot ses cond as image
-            c_dat = ones(1,nses);
-            c_dat(ses_con == 'Behavior_Training' | ses_con == 'Implant_Training') = 2;
-            c_dat(ses_con == 'Rotation') = 3;
-            img_h = image(c_dat, 'Parent', D.UI.plotTabAxSes(z_r, 1, 1));
-            % Copy
-            copyobj(img_h, D.UI.plotTabAxSes(z_r, 2, 1));
-            % Change settings
-            set(D.UI.plotTabAxSes(z_r, :, 1), ...
-                'YLim', [0.5,1], ...
-                'XTick', [], ...
-                'YTick', [], ...
-                'XTickLabels', [], ...
-                'YTickLabels', [])
-            colormap(D.UI.plotTabAxSes(z_r, 1, 1), cond_col);
-            colormap(D.UI.plotTabAxSes(z_r, 2, 1), cond_col);
-            
-            % Plot laps and rewards
-            x = 1:nses;
-            y = [laps, rew];
-            bar_h = bar(x, y, 1, ...
-                'EdgeColor', 'None', ...
-                'LineWidth', 1.5, ...
-                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
-            bar_h(1).FaceColor = var1_col;
-            bar_h(2).FaceColor = var2_col;
-            D.UI.plotTabAxSes(z_r, 1, 2).Title.String = 'Laps & Rewards';
-            D.UI.plotTabAxSes(z_r, 1, 2).XLabel.String = 'Session';
-            D.UI.plotTabAxSes(z_r, 1, 2).YLabel.String = 'Laps/Rewards';
-            D.UI.plotTabAxSes(z_r, 1, 2).YLim(1) = 0;
-            
-            % Get cue stuff
-            cue_conds = categories(D.SS_IO_2.(rat_lab).Cue_Condition(1));
-            cue_ind = arrayfun(@(x) find(ismember(cue_conds, x)), cue_con);
-            cue_arr = cue_conds(cue_ind);
-            cue_arr(ismember(cue_arr,'None') & ismember(ses_con, 'Manual_Training')) = {'All'};
-            
-            % Plot symbol for each cue
-            D.UI.plotTabAxSes(z_r, 1, 2);
-            gs_h = gobjects(length(cue_conds), 1);
-            for i = 1:length(cue_conds)
-                ind = ismember(cue_arr, cue_conds(i));
-                x = find(ind);
-                if isempty(x); x = 0; end
-                y = zeros(length(x), 1);
-                gs_h(i) = plot(x, y, ...
-                    'LineStyle', 'None', ...
-                    'Marker', cue_mrk_list{i}, ...
-                    'MarkerSize', 12, ...
-                    'MarkerFaceColor', [1,1,1], ...
-                    'MarkerEdgeColor', [0,0,0], ...
-                    'LineWidth', 1, ...
-                    'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
-            end
-            % Plot delay
-            x = 1:nses;
-            y = zeros(1,nses);
-            rew_del = cellstr(char(rew_del));
-            rew_del = cellfun(@(x) x(1), rew_del, 'uni', false);
-            txt_h = text(x, y, cellstr(char(rew_del)), ...
-                'FontSize', 8, ...
-                'HorizontalAlignment', 'Center', ...
-                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
-            
-            % Plot weight and mash
-            ylim1 = [75,100];
-            ylim2 = [0, max([max(mash), 3])];
-            x = 1:nses;
-            mash_scl = diff(ylim1)*((mash-min(mash))/(max(mash)-min(mash)))+ylim1(1);
-            y = [weight, mash_scl];
-            bar_h = bar(x, y, 1, ...
-                'EdgeColor', 'None', ...
-                'LineWidth', 1.5, ...
-                'Parent', D.UI.plotTabAxSes(z_r, 2, 2));
-            bar_h(1).FaceColor = var1_col;
-            bar_h(2).FaceColor = var2_col;
-            % Add two y axis
-            yyaxis(D.UI.plotTabAxSes(z_r, 2, 2), 'right');
-            set(D.UI.plotTabAxSes(z_r, 2, 2).YAxis(1), ...
-                'Color', var1_col, ...
-                'Limits', ylim1);
-            set(D.UI.plotTabAxSes(z_r, 2, 2).YAxis(2), ...
-                'Color', var2_col, ...
-                'Limits', ylim2);
-            D.UI.plotTabAxSes(z_r, 2, 2).YAxis(2).Color = bar_h(2).FaceColor;
-            D.UI.plotTabAxSes(z_r, 2, 2).Title.String = 'Weight & Feeding';
-            D.UI.plotTabAxSes(z_r, 2, 2).XLabel.String = 'Session';
-            D.UI.plotTabAxSes(z_r, 2, 2).YAxis(1).Label.String = 'Weight (%)';
-            D.UI.plotTabAxSes(z_r, 2, 2).YAxis(2).Label.String = 'Mash (Scoop)';
-            
-            % Make fake plot for session condition legend entries
-            x = [0,1];
-            y = -1*[1,1,1;1,1,1];
-            bar_h = bar(x, y, ...
-                'FaceColor', 'Flat', ...
-                'EdgeColor', 'None', ...
-                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
-            for i = 1:length(bar_h)
-                bar_h(i).CData = cond_col(i,:);
-            end
-            
-            % Copy objects to other plot
-            copyobj(flip(gs_h), D.UI.plotTabAxSes(z_r, 2, 2));
-            copyobj(flip(txt_h), D.UI.plotTabAxSes(z_r, 2, 2));
-            copyobj(flip(bar_h), D.UI.plotTabAxSes(z_r, 2, 2));
-            
-            % Add main legends
-            labs = {'Laps', 'Rewards', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
-            legend(D.UI.plotTabAxSes(z_r, 1, 2), labs, 'Location','northwest');
-            labs = {'Weight %', 'Mash', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
-            legend(D.UI.plotTabAxSes(z_r, 2, 2), labs, 'Location','northwest');
-            
-            %% PLOT AVERAGES
-            
-            % Get index for each condition combo
-            ind_mat = [...
-                {ses_con == 'Manual_Training'}, ...
-                {cue_con == 'All' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
-                {cue_con == 'Half' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
-                {ismember(rew_del, '1') & cue_con == 'None' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
-                {ismember(rew_del, '2') & cue_con == 'None' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
-                {ismember(rew_del, '3') & cue_con == 'None' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
-                {ses_con == 'Rotation' & rot_dir == 'CCW'}, ...
-                {ses_con == 'Rotation' & rot_dir == 'CW'}
-                ];
-            
-            % Initialize summary (all) axes
-            D.UI.plotTabAxAll(z_r, 1) = axes( ...
-                'Position', [ax_lft(2), ax_btm_all(3), ax_wd(2), ax_ht(2)], ...
-                'Parent', D.UI.plotTabTabs(z_r), ...
-                'Units', 'Normalized');
-            hold on;
-            D.UI.plotTabAxAll(z_r, 2) = axes(...
-                'Position', [ax_lft(2), ax_btm_all(2), ax_wd(2), ax_ht(2)], ...
-                'Parent', D.UI.plotTabTabs(z_r), ...
-                'Units', 'Normalized');
-            hold on;
-            D.UI.plotTabAxAll(z_r, 3) = axes(...
-                'Position', [ax_lft(2), ax_btm_all(1), ax_wd(2), ax_ht(2)], ...
-                'Parent', D.UI.plotTabTabs(z_r), ...
-                'Units', 'Normalized');
-            hold on;
-            
-            % Set all axes
-            x_tick = [1, 1.85, 2.15, 2.7, 3, 3.3, 3.85, 4.15];
-            x_lim = [x_tick(1)-0.5, x_tick(end)+0.5];
-            x_tick_lab = {'Manual', 'Cue All', 'Cue Half', 'Cue None (1s)', 'Cue None (2s)', 'Cue None (3s)', 'Rotation CCW', 'Rotation CW'};
-            set(D.UI.plotTabAxAll(z_r, :), ...
-                'XTickLabelRotation', 45, ...
-                'XTick', x_tick, ...
-                'XTickLabel', x_tick_lab, ...
-                'Color', 'None', ...
-                'XLim', x_lim);
-            uistack(D.UI.plotTabAxAll(z_r, :, 1), 'bottom');
-            
-            % Add legend and titles
-            ylabel(D.UI.plotTabAxAll(z_r, 1), 'Sessions');
-            D.UI.plotTabAxAll(z_r, 1).Title.String = 'Total Sessions';
-            ylabel(D.UI.plotTabAxAll(z_r, 2), 'Laps per minute');
-            D.UI.plotTabAxAll(z_r, 2).Title.String = 'Laps Performance';
-            ylabel(D.UI.plotTabAxAll(z_r, 3), 'Rewards per minute');
-            D.UI.plotTabAxAll(z_r, 3).Title.String = 'Rewards Performance';
-            
-            % Plot sessions
-            x = x_tick;
-            y = cellfun(@(x) sum(x), ind_mat);
-            bar_h = bar(x, y', ...
-                'FaceColor', 'Flat', ...
-                'EdgeColor', [0,0,0], ...
-                'Parent', D.UI.plotTabAxAll(z_r, 1));
-            % Set colors
-            bar_h.CData(1,:) = cond_col(1,:);
-            bar_h.CData(2:6,:) = repmat(cond_col(2,:), 5, 1);
-            bar_h.CData(7:8,:) = repmat(cond_col(3,:), 2, 1);
-            % Add count text
-            txt = arrayfun(@(x) sprintf('%d', x), y, 'uni', false);
-            text(x, y, txt, ...
-                'FontSize', 8, ...
-                'HorizontalAlignment', 'Center', ...
-                'VerticalAlignment', 'Bottom', ...
-                'Parent', D.UI.plotTabAxAll(z_r, 1));
-            
-            % Plot lap performance
-            x = x_tick;
-            y = cellfun(@(x) mean(laps(x)./run_time(x)), ind_mat);
-            bar_h = copyobj(bar_h, D.UI.plotTabAxAll(z_r, 2));
-            set(bar_h, 'YData', y);
-            % Plot error
-            ye = cellfun(@(x) std(laps(x)./run_time(x)), ind_mat);
-            errbar_h = errorbar(x, y', ye', ...
-                'Color', [0,0,0], ...
-                'LineStyle', 'None', ...
-                'LineWidth', 1, ...
-                'Parent', D.UI.plotTabAxAll(z_r, 2));
-            D.UI.plotTabAxAll(z_r, 2).YLim(1) = 0;
-            
-            % Plot reward performance
-            x = x_tick;
-            y = cellfun(@(x) mean(rew(x)./run_time(x)), ind_mat);
-            bar_h = copyobj(bar_h, D.UI.plotTabAxAll(z_r, 3));
-            set(bar_h, 'YData', y);
-            % Plot error
-            ye = cellfun(@(x) std(rew(x)./run_time(x)), ind_mat);
-            errbar_h = copyobj(errbar_h, D.UI.plotTabAxAll(z_r, 3));
-            set(errbar_h, ...
-                'YData', y, ...
-                'YNegativeDelta', ye, ...
-                'YPositiveDelta', ye);
-            D.UI.plotTabAxAll(z_r, 3).YLim(1) = 0;
             
         end
         
@@ -18027,7 +17708,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check if rat is out of room for track run
             dlg_h = dlgAWL(...
-                'Take out rat then press OK', ...
+                'Take out rat', ...
                 'RAT OUT', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
@@ -18097,27 +17778,25 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set flag to save at end of main loop
         D.F.do_save = true;
         
-        % TEMP SKIP Check if cheetah data should be saved
-        %         if D.F.cheetah_running
-        %
-        %             % Show dialogue
-        %             dlg_h = dlgAWL( ...
-        %                 'Save Cheetah Data?', ...
-        %                 'SAVE CHEETAH', ...
-        %                 'Yes', 'No', [], 'No', ...
-        %                 D.UI.dlgPos{4}, ...
-        %                 'question');
-        %             choice = Dlg_Wait(dlg_h);
-        %
-        %             % Handle response
-        %             if strcmp(choice, 'Yes')
-        %                 % Set flag
-        %                 D.F.do_nlx_save = true;
-        %             end
-        %
-        %         end
-        % Set flag
-        D.F.do_nlx_save = true;
+        % Check if cheetah data should be saved
+        if D.F.cheetah_running
+            
+            % Show dialogue
+            dlg_h = dlgAWL( ...
+                'Save Cheetah Data?', ...
+                'SAVE CHEETAH', ...
+                'Yes', 'No', [], 'No', ...
+                D.UI.dlgPos{4}, ...
+                'question');
+            choice = Dlg_Wait(dlg_h);
+            
+            % Handle response
+            if strcmp(choice, 'Yes')
+                % Set flag
+                D.F.do_nlx_save = true;
+            end
+            
+        end
         
         % Log/print
         Log_Debug(sprintf('Set to "%d"', get(D.UI.toggSave,'Value')));
