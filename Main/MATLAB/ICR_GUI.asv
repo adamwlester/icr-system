@@ -7599,6 +7599,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.sesNum = ...
             D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) + 1;
         
+        % Save new session number back to SS_IO_1
+        D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
+        
         % Get session total
         D.PAR.sesNumAll = D.SS_IO_1{D.PAR.ratIndSS, 'Session_Manual_Training'}(col_ind) + ...;
             D.SS_IO_1{D.PAR.ratIndSS, 'Session_Behavior_Training'}(col_ind) + ...
@@ -13301,53 +13304,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set flag
         was_ran = true;
         
-        % Set session type to training if no rot was performed
-        if D.PAR.sesCond == 'Rotation' && D.C.rot == 0
-            if D.F.rat_implanted
-                D.PAR.sesCond(:) = 'Implant_Training';
-            else
-                D.PAR.sesCond(:) = 'Behavior_Training';
-            end
-        end
-        
-        % Get date
-        date = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
-        
-        % UPDATE SS_IO_1
-        
-        % Store 'Session_X' Number
-        if ~isundefined(D.PAR.sesCond) && ~isundefined(D.PAR.sesTask)
-            var_ind = ...
-                ismember(D.SS_IO_1.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
-            col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
-            D.PAR.sesNum = D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) + 1;
-            D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
-        end
-        
-        % Update 'Session_Type'
-        D.SS_IO_1.Session_Type(D.PAR.ratIndSS) = D.PAR.sesType;
-        
-        % Update 'Human'
-        D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.sesHuman;
-        
-        % Update 'Session_Condition'
-        D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
-        
-        % Update 'Session_Task'
-        D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
-        
-        % Update 'Reward_Delay'
-        D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
-        
-        % Update 'Cue_Condition'
-        D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
-        
-        % Update 'Sound_Conditions'
-        D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
-        Log_Debug('FINISHED: Update "SS_IO_1"');
-        
-        % UPDATE SS_IO_2
-        
         % Get row ind
         if strcmp(D.SS_IO_2.(D.PAR.ratLab).Date{1}, '')
             % is first entry
@@ -13358,6 +13314,18 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_2.(D.PAR.ratLab) = ...
                 [D.SS_IO_2.(D.PAR.ratLab); D.SS_IO_2.(D.PAR.ratLab)(end,:)];
         end
+        
+        % Set session type to training if no rot was performed
+        if D.PAR.sesCond == 'Rotation' && D.C.rot == 0
+            if D.F.rat_implanted
+                D.PAR.sesCond = 'Implant_Training';
+            else
+                D.PAR.sesCond = 'Behavior_Training';
+            end
+        end
+        
+        % Get date
+        date = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
         
         % Store 'Include_Analysis'
         D.SS_IO_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
@@ -13424,6 +13392,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             var_ind = ...
                 ismember(D.SS_IO_2.(D.PAR.ratLab).Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
             col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
+            D.PAR.sesNum = D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) + 1;
             D.SS_IO_2.(D.PAR.ratLab){rowInd, var_ind}(col_ind) = D.PAR.sesNum;
         end
         
@@ -13535,6 +13504,38 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         else
             D.SS_IO_2.(D.PAR.ratLab).Laps_0_Deg{rowInd} = 0;
         end
+        
+        % UPDATE SS_IO_1
+        
+        % Store 'Session_X' Number
+        if ~isundefined(D.PAR.sesCond) && ~isundefined(D.PAR.sesTask)
+            var_ind = ...
+                ismember(D.SS_IO_1.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
+            col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
+            D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
+        end
+        
+        % Update 'Session_Type'
+        D.SS_IO_1.Session_Type(D.PAR.ratIndSS) = D.PAR.sesType;
+        
+        % Update 'Human'
+        D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.sesHuman;
+        
+        % Update 'Session_Condition'
+        D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
+        
+        % Update 'Session_Task'
+        D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
+        
+        % Update 'Reward_Delay'
+        D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
+        
+        % Update 'Cue_Condition'
+        D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
+        
+        % Update 'Sound_Conditions'
+        D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
+        Log_Debug('FINISHED: Update "SS_IO_1"');
         
         % Save out data
         SS_IO_2 = D.SS_IO_2; %#ok<NASGU>
