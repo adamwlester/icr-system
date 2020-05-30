@@ -95,25 +95,25 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0723'; %'r9999';
+D.DB.ratLab = 'r0741'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.F.Run_Cheetah = false;
+D.DB.F.Run_Cheetah = true;
 D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'Table_Update' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
-D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
-D.DB.Reward_Delay = '0.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
-D.DB.Cue_Condition = 'All'; % ['All' 'Half' 'None']
+D.DB.Feeder_Condition = 'C2'; % ['C1' 'C2']
+D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
 D.DB.Start_Quadrant = 'NW'; % ['NE' 'SE' 'SW' 'NW'];
@@ -1803,11 +1803,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % TRACK TASK VARS
         
-        % min/max reward duration
+        % min/max reward duration (ms)
         D.PAR.rewDurLim = [500, 2000];
-        % reward zone positions
+        % reward zone width (deg)
+        D.PAR.zoneWidth = 5;
+        % reward zone positions (deg)
         D.PAR.zoneLocs = 20:-5:-20;
-        % reward zone reward durations
+        % reward zone reward durations (ms)
         D.PAR.zoneRewDur = ...
             [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
         
@@ -2017,6 +2019,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.rew_start = 0;
         % track reward end
         D.T.rew_end = 0;
+        % track rew times total
+        D.T.rew_tot = 0;
         % track reward ts
         D.T.rew_nlx_ts = [0,0];
         % forage reward time
@@ -2272,6 +2276,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.Rat.linPosAll = gobjects(1,1); % rat
         D.UI.Rat.linVelAll = gobjects(1,1); % rat
         D.UI.Rob.linVelAll = gobjects(1,1); % rob
+        
+        % PLOT TAB
+        D.UI.barPltTabLap = gobjects(1,1);
+        D.UI.barPltTabRew = gobjects(1,1);
         
         % TT PLOT
         
@@ -5304,15 +5312,21 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get rat data
-            laps = ([D.SS_IO_2.(rat_lab).Laps_Standard{:}])';
-            rew = ([D.SS_IO_2.(rat_lab).Rewards_Standard{:}])';
+            laps_trial = [([D.SS_IO_2.(rat_lab).Laps_Standard{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Laps_40_Deg{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Laps_0_Deg{:}])'];
+            rew_trial = [([D.SS_IO_2.(rat_lab).Rewards_Standard{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Rewards_40_Deg{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Rewards_0_Deg{:}])'];
+            laps_ses = sum(laps_trial,2);
+            rew_ses = sum(rew_trial,2);
             ses_con = D.SS_IO_2.(rat_lab).Session_Condition;
             cue_con = D.SS_IO_2.(rat_lab).Cue_Condition;
             rot_dir = D.SS_IO_2.(rat_lab).Rotation_Direction;
             rew_del = D.SS_IO_2.(rat_lab).Reward_Delay;
             weight = round(100* D.SS_IO_3.(rat_lab).Weight_Proportion);
             mash = D.SS_IO_3.(rat_lab).Fed_Mash;
-            run_time = D.SS_IO_2.(rat_lab).Total_Time;
+            run_time = D.SS_IO_2.(rat_lab).Total_Time*60;
             
             % Set rotation days with no rotation to behavior training
             is_rot = cellfun(@(x) sum(x)>0, D.SS_IO_2.(rat_lab).Laps_40_Deg);
@@ -5371,15 +5385,33 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             colormap(D.UI.plotTabAxSes(z_r, 1, 1), cond_col);
             colormap(D.UI.plotTabAxSes(z_r, 2, 1), cond_col);
             
+            % Specify rot cond color
+            rot_col = [[1,1,1];flip(D.UI.rotCol,1)];
+            
             % Plot laps and rewards
-            x = 1:nses;
-            y = [laps, rew];
-            bar_h = bar(x, y, 1, ...
+            b_wd = 0.24;
+            % Laps
+            x = (1:nses)-b_wd/3;
+            y = laps_trial;
+            bar_h = bar(x, y, b_wd, 'stacked', ...
                 'EdgeColor', 'None', ...
-                'LineWidth', 1.5, ...
+                'LineWidth', 2, ...
                 'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
-            bar_h(1).FaceColor = var1_col;
-            bar_h(2).FaceColor = var2_col;
+            for i = 1:3
+                bar_h(i).FaceColor = rot_col(i,:);
+                bar_h(i).EdgeColor = var1_col;
+            end
+            % Rew
+            x = (1:nses)+b_wd/3;
+            y = rew_trial;
+            bar_h = bar(x+b_wd/2, y, b_wd, 'stacked', ...
+                'EdgeColor', 'None', ...
+                'LineWidth', 2, ...
+                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
+            for i = 1:3
+                bar_h(i).FaceColor = rot_col(i,:);
+                bar_h(i).EdgeColor = var2_col;
+            end
             D.UI.plotTabAxSes(z_r, 1, 2).Title.String = 'Laps & Rewards';
             D.UI.plotTabAxSes(z_r, 1, 2).XLabel.String = 'Session';
             D.UI.plotTabAxSes(z_r, 1, 2).YLabel.String = 'Laps/Rewards';
@@ -5425,11 +5457,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             mash_scl = diff(ylim1)*((mash-min(mash))/(max(mash)-min(mash)))+ylim1(1);
             y = [weight, mash_scl];
             bar_h = bar(x, y, 1, ...
-                'EdgeColor', 'None', ...
-                'LineWidth', 1.5, ...
+                'FaceColor', [1,1,1], ...
+                'LineWidth', 2, ...
                 'Parent', D.UI.plotTabAxSes(z_r, 2, 2));
-            bar_h(1).FaceColor = var1_col;
-            bar_h(2).FaceColor = var2_col;
+            bar_h(1).EdgeColor = var1_col;
+            bar_h(2).EdgeColor = var2_col;
             % Add two y axis
             yyaxis(D.UI.plotTabAxSes(z_r, 2, 2), 'right');
             set(D.UI.plotTabAxSes(z_r, 2, 2).YAxis(1), ...
@@ -5461,10 +5493,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             copyobj(flip(bar_h), D.UI.plotTabAxSes(z_r, 2, 2));
             
             % Add main legends
-            labs = {'Laps', 'Rewards', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
-            legend(D.UI.plotTabAxSes(z_r, 1, 2), labs, 'Location','northwest');
+            labs = {'Laps Stan', 'Laps 40', 'Laps 0', 'Rew Stan', 'Rew 40', 'Rew 0', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
+            legend(D.UI.plotTabAxSes(z_r, 1, 2), labs, ...
+                'FontSize', 8, ...
+                'Location','northwest', ...
+                'Box', 'Off');
             labs = {'Weight %', 'Mash', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
-            legend(D.UI.plotTabAxSes(z_r, 2, 2), labs, 'Location','northwest');
+            legend(D.UI.plotTabAxSes(z_r, 2, 2), labs, ...
+                'FontSize', 8, ...
+                'Location','northwest', ...
+                'Box', 'Off');
             
             %% PLOT AVERAGES
             
@@ -5508,13 +5546,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 'Color', 'None', ...
                 'XLim', x_lim);
             uistack(D.UI.plotTabAxAll(z_r, :, 1), 'bottom');
+            % Plot current performance in for DT Lap/Reward
+            x_tick_lab{1} = 'Today';
+            set(D.UI.plotTabAxAll(z_r, 2:end), ...
+                'XTickLabel', x_tick_lab);
             
             % Add legend and titles
             ylabel(D.UI.plotTabAxAll(z_r, 1), 'Sessions');
             D.UI.plotTabAxAll(z_r, 1).Title.String = 'Total Sessions';
-            ylabel(D.UI.plotTabAxAll(z_r, 2), 'Laps per minute');
+            ylabel(D.UI.plotTabAxAll(z_r, 2), 'DT Laps (sec)');
             D.UI.plotTabAxAll(z_r, 2).Title.String = 'Laps Performance';
-            ylabel(D.UI.plotTabAxAll(z_r, 3), 'Rewards per minute');
+            ylabel(D.UI.plotTabAxAll(z_r, 3), 'DT Rewards (sec)');
             D.UI.plotTabAxAll(z_r, 3).Title.String = 'Rewards Performance';
             
             % Specify bar inds for each cond
@@ -5543,8 +5585,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Plot lap performance
             x = x_tick;
-            y = cellfun(@(x) mean(laps(x)./run_time(x)), ind_mat);
-            ye = cellfun(@(x) std(laps(x)./run_time(x)), ind_mat);
+            y = cellfun(@(x) mean(run_time(x)./laps_ses(x)), ind_mat);
+            y(1) = 0;
+            ye = cellfun(@(x) std(run_time(x)./laps_ses(x)), ind_mat);
+            ye(1) = 0;
             for i = 1:length(bar_h)
                 bar_h(i) = copyobj(bar_h(i), D.UI.plotTabAxAll(z_r, 2));
                 set(bar_h(i), 'YData', y(cond_ind{i}));
@@ -5556,11 +5600,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'Parent', D.UI.plotTabAxAll(z_r, 2));
             end
             D.UI.plotTabAxAll(z_r, 2).YLim(1) = 0;
+            % Store handle for ongoing plotting
+            D.UI.barPltTabLap = bar_h(1);
             
             % Plot reward performance
             x = x_tick;
-            y = cellfun(@(x) mean(rew(x)./run_time(x)), ind_mat);
-            ye = cellfun(@(x) std(rew(x)./run_time(x)), ind_mat);
+            y = cellfun(@(x) mean(run_time(x)./rew_ses(x)), ind_mat);
+            y(1) = 0;
+            ye = cellfun(@(x) std(run_time(x)./rew_ses(x)), ind_mat);
+            ye(1) = 0;
             for i = 1:length(bar_h)
                 bar_h(i) = copyobj(bar_h(i), D.UI.plotTabAxAll(z_r, 3));
                 set(bar_h(i), 'YData', y(cond_ind{i}));
@@ -5577,6 +5625,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     'YPositiveDelta', ye(cond_ind{i}));
             end
             D.UI.plotTabAxAll(z_r, 3).YLim(1) = 0;
+            % Store handle for ongoing plotting
+            D.UI.barPltTabRew = bar_h(1);
             
         end
         
@@ -7686,37 +7736,37 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% COMPUTE BOUNDS
         
         % Specify reward feeder locations
-        % NOTE: Feeder index is based on the position of the feeder with
+        % NOTE: Feeder index is based on the position of the goal with
         % respect to the 0 deg point (East quadrant)in the arena
-        rewFeeds = [11, 15, 7; 29, 33, 25];
+        rewGoals = [11, 15, 7; 29, 33, 25];
         
         % Feeder paramiters
         % Boundary before and after rew feeder (deg)
         D.PAR.trigDist = rad2deg(D.PAR.feedDistRad - D.PAR.setPointRad);
         D.PAR.feedSet = [...
-            D.PAR.trigDist - 2.5, ...
-            D.PAR.trigDist + 2.5];
+            D.PAR.trigDist - D.PAR.zoneWidth/2, ...
+            D.PAR.trigDist + D.PAR.zoneWidth/2];
         
         % Get reward and unrewarded feeder based on rotation direction
         % corrected index
-        D.UI.rewFeed = rewFeeds(D.PAR.ratFeedCnd_Num, D.I.img_ind);
-        D.UI.oppFeed = rewFeeds([1, 2] ~=  D.PAR.ratFeedCnd_Num, D.I.img_ind);
+        D.UI.rewGoal = rewGoals(D.PAR.ratFeedCnd_Num, D.I.img_ind);
+        D.UI.oppGoal = rewGoals([1, 2] ~=  D.PAR.ratFeedCnd_Num, D.I.img_ind);
         
         % Calculate feeder locations
         
         % Calculate all feeder/strut locations
-        fdLocs = circshift((0:10:350)+5,[0,0]);
+        strutLocs = circshift((0:10:350)+5,[0,0]);
         
         % Calculate all feed locs
-        [fd_X,fd_Y] = pol2cart(deg2rad(fdLocs), ones(1,length(fdLocs)) * D.UI.arnRad);
+        [strut_X,strut_Y] = pol2cart(deg2rad(strutLocs), ones(1,length(strutLocs)) * D.UI.arnRad);
         % all feeders x
-        D.UI.fd_x = fd_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+        D.UI.strut_x = strut_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
         % all feeders y
-        D.UI.fd_y = fd_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+        D.UI.strut_y = strut_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
         
         % Save reward feeder/pos rad pos
-        D.UI.rewZoneRad(1) = deg2rad(fdLocs(D.UI.rewFeed(1)));
-        D.UI.rewZoneRad(2) = deg2rad(fdLocs(D.UI.rewFeed(2)));
+        D.UI.rewZoneRad(1) = deg2rad(strutLocs(D.UI.rewGoal(1)));
+        D.UI.rewZoneRad(2) = deg2rad(strutLocs(D.UI.rewGoal(2)));
         % with setpoint correction
         D.UI.rewRatHead(1:2) = ...
             D.UI.rewZoneRad + deg2rad(D.PAR.trigDist);
@@ -7747,8 +7797,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         bnd_wdth = 30;
         D.PAR.rotDistDeg = 110:bnd_space:290;
         D.UI.rotLocs = [...
-            fdLocs(D.UI.rewFeed(1)) + D.PAR.trigDist + D.PAR.rotDistDeg', ...
-            fdLocs(D.UI.rewFeed(2)) + D.PAR.trigDist + D.PAR.rotDistDeg'];
+            strutLocs(D.UI.rewGoal(1)) + D.PAR.trigDist + D.PAR.rotDistDeg', ...
+            strutLocs(D.UI.rewGoal(2)) + D.PAR.trigDist + D.PAR.rotDistDeg'];
         
         % Calculate 30 deg wide bounds for each rotation pos
         rot_bnds = arrayfun(@(x,y) cat(3, [x-bnd_space, x], [y-bnd_space, y]), ...
@@ -7808,7 +7858,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% SETUP ARENA FEATURES
         
         % Plot all feeders/struts
-        D.UI.fdAllH = line(D.UI.fd_x, D.UI.fd_y, ...
+        D.UI.fdAllH = line(D.UI.strut_x, D.UI.strut_y, ...
             'LineStyle', 'none', ...
             'Marker', 'o', ...
             'MarkerFaceColor', [0.5 0.5 0.5], ...
@@ -7823,7 +7873,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.txtFdPosH = gobjects(1,36);
         for z_fd = 1:36
             D.UI.txtFdPosH(z_fd) = text(...
-                D.UI.fd_x(z_fd), D.UI.fd_y(z_fd), ...
+                D.UI.strut_x(z_fd), D.UI.strut_y(z_fd), ...
                 sprintf('%0.1f\n%0.0f', fd_rad(z_fd), fd_cm(z_fd)), ...
                 'Color', [1, 1, 1], ...
                 'HorizontalAlignment', 'center', ...
@@ -8471,8 +8521,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Marker
             D.UI.mixFdNow(3,z_rot) = ...
-                line(D.UI.fd_x(D.UI.rewFeed(z_rot)), ...
-                D.UI.fd_y(D.UI.rewFeed(z_rot)), ...
+                line(D.UI.strut_x(D.UI.rewGoal(z_rot)), ...
+                D.UI.strut_y(D.UI.rewGoal(z_rot)), ...
                 'LineStyle', 'none', ...
                 'Marker', 'o', ...
                 'MarkerFaceColor', D.UI.rotCol(z_rot,:), ...
@@ -8484,7 +8534,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Plot opposite unrewarded feeders darker
-        line(D.UI.fd_x(D.UI.oppFeed), D.UI.fd_y(D.UI.oppFeed), ...
+        line(D.UI.strut_x(D.UI.oppGoal), D.UI.strut_y(D.UI.oppGoal), ...
             'LineStyle', 'none', ...
             'Marker', 'o', ...
             'MarkerFaceColor', [0.25 0.25 0.25], ...
@@ -11297,8 +11347,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % UPDATE REWARD INFO
             
             % Compute time info
-            rew_ellapsed = Sec_DT(now) - D.T.rew_last;
+            dt_rew = Sec_DT(now) - D.T.rew_last;
             D.T.rew_last = Sec_DT(now);
+            
+            % Get average
+            D.T.rew_tot = D.T.rew_tot + dt_rew;
+            dt_rew_avg = D.T.rew_tot / sum([D.C.rew{:}]);
+            
+            % Update plot tab bar
+            set(D.UI.barPltTabRew, 'YData', dt_rew_avg);
             
             % Get total rewards and misses
             rew_tot = sum([D.C.rew{:}]);
@@ -11309,7 +11366,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.UI.rewInfoList; ...
                 {sprintf('%d: T:%0.2f Z:%d M:%d', ...
                 rew_tot+miss_tot, ...
-                rew_ellapsed, ...
+                dt_rew, ...
                 -1*D.PAR.zoneLocs(max([D.I.zone_now,1])), ...
                 miss_tot) ...
                 }];
@@ -11659,7 +11716,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reset lap quad index
         D.I.lap_hunt_ind = 1;
         
-        %% UPDATE PLOT HISTORY AND PRINT LAP TIME INFO
+        %% UPDATE PLOT HISTORY PLOT TAB AND PRINT LAP TIME INFO
         
         % Save time
         dt_lap = Sec_DT(now) - D.T.lap_str;
@@ -11679,6 +11736,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             sprintf('%s(%1.1fs)', D.UI.popLapInfo.UserData, dt_lap_avg); ...
             D.UI.lapInfoList];
         Safe_Set(D.UI.popLapInfo, 'String', infstr);
+        
+        % Update plot tab bar
+        set(D.UI.barPltTabLap, 'YData', dt_lap_avg);
         
         % Update plot history
         VT_Plot_Hist()

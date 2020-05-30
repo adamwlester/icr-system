@@ -4459,9 +4459,9 @@ void REWARD::SetZoneBounds(float cmd_goal)
 	{
 		// Get zone width with overlap for center bins
 		int zone_bnd_start = zoneMin == zoneMax || i == zoneMin ?
-			rewZoneWdith / 2 : rewZoneWdith;
+			rewZoneWidth / 2 : rewZoneWidth;
 		int zone_bnd_end = zoneMin == zoneMax || i == zoneMax ?
-			rewZoneWdith / 2 : rewZoneWdith;
+			rewZoneWidth / 2 : rewZoneWidth;
 
 		// Compute zone bounds
 		dist_center_cm = -1 * zoneLocs[i] * ((140 * PI) / 360);
@@ -8761,7 +8761,7 @@ void CheckSampDT()
 	}
 
 	// Use Pixy for VT data
-	if (do_swap_vt && !do_swap_pixy)
+	if (!DO_SKIP_PIXY && do_swap_vt && !do_swap_pixy)
 	{
 
 		// Incriment count
@@ -8779,7 +8779,7 @@ void CheckSampDT()
 	}
 
 	// Use VT for Pixy data
-	if (do_swap_pixy && !do_swap_vt)
+	if (DO_SKIP_PIXY || (do_swap_pixy && !do_swap_vt))
 	{
 
 		// Incriment count

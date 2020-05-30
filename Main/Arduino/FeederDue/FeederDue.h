@@ -34,6 +34,9 @@
 // SKIP IR HANDSHAKE (SET FALSE IF IR COM IS BEING A BITCH)
 #define DO_SKIP_IR_SYNC 0 // 0
 
+// BYPASS PIXY AND USE ONLY OVERHEAD VT
+#define DO_SKIP_PIXY 1 // 0
+
 //============= INCLUDE ================
 
 // LOCAL
@@ -421,7 +424,7 @@ float moveToSpeedMin = 15; // (cm/sec)
 float moveToDecelDist = 40; // cm
 
 // REWARD
-const int rewZoneWdith = 5; // (deg)
+const int rewZoneWidth = 5; // (deg)
 double feedTrackPastDist = 0; // (cm) 
 const double feedHeadPastDist = 15; // (cm)
 const int dt_rewBlock = 30000; // (ms)
