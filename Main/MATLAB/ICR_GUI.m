@@ -95,19 +95,19 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0741'; %'r9999';
+D.DB.ratLab = 'r9999'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.F.Run_Cheetah = true;
+D.DB.F.Run_Cheetah = false;
 D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation' 'Dark_Control']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -1842,8 +1842,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.C.missed_rew = [0, 0];
         % bulldozing event count
         D.C.bulldozings = 0;
-        % counter for each reward zone
-        D.C.zone = zeros(2,length(D.PAR.zoneLocs));
+        % counter for each image cond and reward zone (Stan, 0, 40)
+        D.C.zone = zeros(3,length(D.PAR.zoneLocs));
         % track number of robot move cammands
         D.C.move = 0;
         % cheetah screen captures
@@ -2235,8 +2235,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.ptchRewZoneBndsH = gobjects(2, length(D.PAR.zoneLocs));
         % reward duration text
         D.UI.txtFdDurH = gobjects(2, length(D.PAR.zoneLocs));
-        % reward zone plot
-        D.UI.ptchRewZoneHistH = gobjects(2, length(D.PAR.zoneLocs));
+        % reward zone plot (Stan, 0, 40)
+        D.UI.ptchRewZoneHistH = gobjects(3, length(D.PAR.zoneLocs));
         D.UI.linZoneAvgH = gobjects(1,1);
         % reward reset patch
         D.UI.ptchRewSendH = gobjects(1,2);
@@ -2369,7 +2369,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Lines and Markers
         
         % color for rotation conditions
-        D.UI.rotCol = [0, 0, 1;0, 0.5, 0];
+        D.UI.rotCol = [0,0,1; 0,0.5,0];
+        D.UI.stanCol = [0.5,0.5,0.5];
         % color of marker for rat pos
         D.UI.ratPosAllCol = [0, 0, 0];
         D.UI.ratPosHistCol = [0.75, 0.75, 0.75];
@@ -3395,6 +3396,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         Safe_Set(D.UI.toggICR(2), 'Position', pos);
         Safe_Set(D.UI.toggICR, 'Callback', {@Togg_ICR})
         
+        % Dark Control buttons
+        D.UI.toggDark(1) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
+        D.UI.toggDark(2) = copyobj(D.UI.toggICR(2), D.UI.tabICR);
+        Safe_Set(D.UI.toggDark(1), ...
+            'String', 'Image On', ...
+            'Value', 1, ...
+            'UserData', 1);
+        Safe_Set(D.UI.toggDark(2), ...
+            'String', 'Image Off', ...
+            'Value', 0, ...
+            'UserData', 2);
+        Safe_Set(D.UI.toggDark, 'Visible', 'Off');
+        Safe_Set(D.UI.toggDark, 'Callback', {@Togg_Dark})
+        
         % Sleep 2 button
         ht = D.UI.fontSzTxtLrg(2);
         btm = btm - ht - 0.5*obj_gap;
@@ -4119,7 +4134,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'HorizontalAlignment', 'Left', ...
             'Position', pos, ...
             'BackgroundColor', D.UI.figBckCol, ...
-            'ForegroundColor', [0.5,0.5,0.5], ...
+            'ForegroundColor', D.UI.stanCol, ...
             'FontName','Courier New', ...
             'FontWeight','Bold', ...
             'Visible','off', ...
@@ -4455,6 +4470,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % ICR event command strings
         D.NLX.rot_evt{1} = '-PostEvent Post_Rotation_0_Deg 205 0';
         D.NLX.rot_evt{2} = '-PostEvent Post_Rotation_40_Deg 206 0';
+        
+        % Dark Control event command strings
+        D.NLX.dark_evt{1} = '-PostEvent Post_Image_On 214 0';
+        D.NLX.dark_evt{2} = '-PostEvent Post_Image_Off 214 0';
         
         % Sleep 1
         D.NLX.sleep_start_evt{1} = '-PostEvent Post_Sleep_1_Start 207 0';
@@ -5312,12 +5331,12 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             end
             
             % Get rat data
-            laps_trial = [([D.SS_IO_2.(rat_lab).Laps_Standard{:}])', ...
-                ([D.SS_IO_2.(rat_lab).Laps_40_Deg{:}])', ...
-                ([D.SS_IO_2.(rat_lab).Laps_0_Deg{:}])'];
-            rew_trial = [([D.SS_IO_2.(rat_lab).Rewards_Standard{:}])', ...
-                ([D.SS_IO_2.(rat_lab).Rewards_40_Deg{:}])', ...
-                ([D.SS_IO_2.(rat_lab).Rewards_0_Deg{:}])'];
+            laps_trial = [cellfun(@(x) sum(x), D.SS_IO_2.(rat_lab).Laps_Standard), ...
+                cellfun(@(x) sum(x), D.SS_IO_2.(rat_lab).Laps_40_Deg), ...
+                cellfun(@(x) sum(x), D.SS_IO_2.(rat_lab).Laps_0_Deg)];
+            rew_trial = [cellfun(@(x) sum(x), D.SS_IO_2.(rat_lab).Rewards_Standard), ...
+                cellfun(@(x) sum(x), D.SS_IO_2.(rat_lab).Rewards_40_Deg), ...
+                cellfun(@(x) sum(x), D.SS_IO_2.(rat_lab).Rewards_0_Deg)];
             laps_ses = sum(laps_trial,2);
             rew_ses = sum(rew_trial,2);
             ses_con = D.SS_IO_2.(rat_lab).Session_Condition;
@@ -8645,6 +8664,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
         end
         
+        % Dark Control buttons
+        if D.PAR.sesCond == 'Dark_Control'
+            
+            % Hide ICR buttons
+            Safe_Set(D.UI.toggICR, 'Visible', 'Off');
+            
+            % Show Dark Control
+            Safe_Set(D.UI.toggDark, 'Visible', 'On');
+        
+        end
+        
     end
 
 % --------------------------FORAGE TASK SETUP----------------------
@@ -11290,28 +11320,37 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 % Store reward zone with range [-20,20]
                 D.PAR.zone_hist(sum([D.C.rew{:}])) = -1*D.PAR.zoneLocs(D.I.zone_now);
                 
+                % Get img cond ind and col
+                if D.F.rotated
+                    hist_ind = D.I.rot+1;
+                    cond_col  = D.UI.rotCol(D.I.rot,:);
+                else
+                    hist_ind = 1;
+                    cond_col  = D.UI.stanCol;
+                end
+                
                 % Get zone dist data
-                D.C.zone(D.I.rot,D.I.zone_now) = D.C.zone(D.I.rot,D.I.zone_now)+1;
+                D.C.zone(hist_ind,D.I.zone_now) = D.C.zone(hist_ind,D.I.zone_now)+1;
                 x_zone = -1*D.PAR.zoneLocs;
-                y_zone = D.C.zone(D.I.rot,:) / sum(D.C.zone(D.I.rot,:));
+                y_zone = D.C.zone(hist_ind,:) / sum(D.C.zone(hist_ind,:));
                 y_zone = y_zone/max(y_zone);
                 
                 % Update zone all patch
                 x = x_zone;
                 y = y_zone;
-                D.UI.ptchRewZoneHistH(D.I.rot,:) = ...
+                D.UI.ptchRewZoneHistH(hist_ind,:) = ...
                     Plot_Zone_Hist(...
                     x, y, 2, ...
-                    D.UI.rotCol(D.I.rot,:), ...
+                    cond_col, ...
                     0.25, ...
                     D.UI.axZoneH(2), ...
-                    D.UI.ptchRewZoneHistH(D.I.rot,:));
+                    D.UI.ptchRewZoneHistH(hist_ind,:));
                 
                 % Display count
-                Safe_Set(D.UI.axZoneH(1), 'XTickLabel', D.C.zone(D.I.rot,:))
+                Safe_Set(D.UI.axZoneH(1), 'XTickLabel', D.C.zone(hist_ind,:))
                 
                 % Plot average zone pos
-                avg_trig = D.PAR.zoneLocs*D.C.zone(D.I.rot,:)' / sum(D.C.zone(D.I.rot,:));
+                avg_trig = D.PAR.zoneLocs*D.C.zone(hist_ind,:)' / sum(D.C.zone(hist_ind,:));
                 [xbnd, ybnd] =  ...
                     Get_Cart_Bnds(D.UI.rewZoneRad(D.I.rot) + deg2rad(avg_trig + D.PAR.trigDist));
                 x = xbnd;
@@ -11319,7 +11358,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 if ~isgraphics(D.UI.linZoneAvgH)
                     D.UI.linZoneAvgH = ...
                         line(x, y, ...
-                        'Color', D.UI.rotCol(D.I.rot,:), ...
+                        'Color', cond_col, ...
                         'LineStyle', '-', ...
                         'LineWidth', 1, ...
                         'Parent',D.UI.axH(3));
@@ -14535,6 +14574,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             
                         end
                         
+                        % Enable Dark Control buttons
+                        if D.PAR.sesCond == 'Dark_Control'
+                            Button_State(D.UI.toggDark, 'Enable');
+                        end
+                        
                         % Enable target select button
                         Button_State(D.UI.toggPickRewPos, 'Enable');
                         
@@ -15154,7 +15198,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % ----------------------PLOT REWARD ZONE HIST------------------------------
-    function [hand_arr] = Plot_Zone_Hist(x_arr, y_arr, offset, c, alph, ax, hand_arr)
+    function [hand_arr] = Plot_Zone_Hist(x_arr, y_arr, offset, col, alph, ax, hand_arr)
         % NOTE:
         %       Addapted from "createPatches.m"
         
@@ -15178,7 +15222,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Add or update patch
             if ~isgraphics(hand_arr(z_p))
-                hand_arr(z_p) = patch(x, y, c, ...
+                hand_arr(z_p) = patch(x, y, col, ...
                     'FaceAlpha', alph, ...
                     'Parent', ax);
             else
@@ -15811,19 +15855,32 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % --------------------------SEND DATA TO AC--------------------------------
-    function[] = Send_AC_Com()
+    function[pass] = Send_AC_Com()
         
         % Bail if not connected
         if ~D.F.ac_connected
-            return
+            pass = false;
+            % Bail if not tcpip object
+        elseif ~exist('TCPIP', 'var')
+            pass = false;
+        elseif ~isvalid(TCPIP)
+            pass = false;
+        else
+            pass = true;
         end
         
-        % Bail if not tcpip object
-        if ~exist('TCPIP', 'var')
+        % Bail
+        if ~pass
+            
+            % Log/print skipping
+            Log_Debug(sprintf('SKIPPED: m2ac: dat=|%d|%d|%d|', ...
+                D.AC.data(1),D.AC.data(2),D.AC.data(3)));
+            
+            % Bail
             return
-        elseif ~isvalid(TCPIP)
-            return
+            
         end
+        pass = true;
         
         % Send data
         fwrite(TCPIP,D.AC.data,'int8');
@@ -17689,6 +17746,32 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Update UI
         if FC.DoUpdateNow; Update_UI(0, 'force'); end
+    end
+
+% ------------------------DARK CONTROL BUTTON------------------------------
+    function Togg_Dark(hObject, ~, ~)
+        
+        % Get value
+        btn_ind = get(hObject, 'UserData');
+        
+        % Turn off other botton
+        Safe_Set(D.UI.toggDark([1,2]~=btn_ind), 'Value', 0);
+        Button_State(D.UI.toggDark, 'Update');
+        
+        % Send NLX event command
+        Send_NLX_Cmd(D.NLX.dark_evt{btn_ind});
+        
+        % Update D.AC.data(2) and send command to show/hide image
+        if btn_ind == 1
+            % Show image
+            D.AC.data(2) = D.I.img_ind(D.I.rot);
+        else
+            % Hide/close image
+            D.AC.data(2) = 0;
+        end
+        % Send AC command
+        Send_AC_Com();
+        
     end
 
 % ---------------------------UPDATE UI POS---------------------------------

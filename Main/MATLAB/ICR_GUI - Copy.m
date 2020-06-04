@@ -95,25 +95,25 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r0723'; %'r9999';
+D.DB.ratLab = 'r9999'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
 
 % NLX parameters
-D.DB.F.Run_Cheetah = false;
+D.DB.F.Run_Cheetah = true;
 D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
 D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Manual_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation']
+D.DB.Session_Condition = 'Dark_Control'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation' 'Dark_Control']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
-D.DB.Feeder_Condition = 'C1'; % ['C1' 'C2']
-D.DB.Reward_Delay = '0.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
-D.DB.Cue_Condition = 'All'; % ['All' 'Half' 'None']
+D.DB.Feeder_Condition = 'C2'; % ['C1' 'C2']
+D.DB.Reward_Delay = '3.0'; % ['0.0 ' '1.0 ' '2.0' '3.0']
+D.DB.Cue_Condition = 'None'; % ['All' 'Half' 'None']
 D.DB.Sound_Conditions = [1,1]; % [0 1]
 D.DB.Rotation_Direction = 'CCW'; % ['CCW' 'CW']
 D.DB.Start_Quadrant = 'NW'; % ['NE' 'SE' 'SW' 'NW'];
@@ -946,11 +946,16 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                     NLX_Start();
                     Log_Debug('FINISHED: "NLX_Start()"');
                     
-                    % Run Table Setup code
-                    Log_Debug('RUNNING: "Table_Setup()"...');
-                    Table_Setup();
+                    % Run Table tab setup code
+                    Log_Debug('RUNNING: "Table_Tab_Setup()"...');
+                    Table_Tab_Setup();
                     D.F.table_tab_setup = true;
-                    Log_Debug('FINISHED: "Table_Setup()"');
+                    Log_Debug('FINISHED: "Table_Tab_Setup()"');
+                    
+                    % Run plot tab setup code
+                    Log_Debug('RUNNING: "Plot_Tab_Setup()"...');
+                    Plot_Tab_Setup();
+                    Log_Debug('FINISHED: "Plot_Tab_Setup()"');
                     
                     % Run TT Track Setup code
                     Log_Debug('RUNNING: "TT_Track_Setup()"...');
@@ -1798,11 +1803,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % TRACK TASK VARS
         
-        % min/max reward duration
+        % min/max reward duration (ms)
         D.PAR.rewDurLim = [500, 2000];
-        % reward zone positions
+        % reward zone width (deg)
+        D.PAR.zoneWidth = 5;
+        % reward zone positions (deg)
         D.PAR.zoneLocs = 20:-5:-20;
-        % reward zone reward durations
+        % reward zone reward durations (ms)
         D.PAR.zoneRewDur = ...
             [500, 910, 1420, 1840, 2000, 1840, 1420, 910, 500];
         
@@ -2012,6 +2019,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.T.rew_start = 0;
         % track reward end
         D.T.rew_end = 0;
+        % track rew times total
+        D.T.rew_tot = 0;
         % track reward ts
         D.T.rew_nlx_ts = [0,0];
         % forage reward time
@@ -2268,6 +2277,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.Rat.linVelAll = gobjects(1,1); % rat
         D.UI.Rob.linVelAll = gobjects(1,1); % rob
         
+        % PLOT TAB
+        D.UI.barPltTabLap = gobjects(1,1);
+        D.UI.barPltTabRew = gobjects(1,1);
+        
         % TT PLOT
         
         % cell plot handles
@@ -2469,7 +2482,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             uitabgroup(FIGH, ...
             'Units', 'Normalized', ...
             'SelectionChangedFcn', {@Tab_GrpChange}, ...
-            'UserData', 'TT TRACK', ...
             'Position',[0,0,1,1]);
         
         % Set figure stuff
@@ -3382,6 +3394,20 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         pos = [lft+wd, btm, wd, ht];
         Safe_Set(D.UI.toggICR(2), 'Position', pos);
         Safe_Set(D.UI.toggICR, 'Callback', {@Togg_ICR})
+        
+        % Dark Control buttons
+        D.UI.toggDark(1) = copyobj(D.UI.toggICR(1), D.UI.tabICR);
+        D.UI.toggDark(2) = copyobj(D.UI.toggICR(2), D.UI.tabICR);
+        Safe_Set(D.UI.toggDark(1), ...
+            'String', 'Image On', ...
+            'Value', 1, ...
+            'UserData', 1);
+        Safe_Set(D.UI.toggDark(2), ...
+            'String', 'Image Off', ...
+            'Value', 0, ...
+            'UserData', 2);
+        Safe_Set(D.UI.toggDark, 'Visible', 'Off');
+        Safe_Set(D.UI.toggDark, 'Callback', {@Togg_Dark})
         
         % Sleep 2 button
         ht = D.UI.fontSzTxtLrg(2);
@@ -4444,6 +4470,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.NLX.rot_evt{1} = '-PostEvent Post_Rotation_0_Deg 205 0';
         D.NLX.rot_evt{2} = '-PostEvent Post_Rotation_40_Deg 206 0';
         
+        % Dark Control event command strings
+        D.NLX.dark_evt{1} = '-PostEvent Post_Image_On 214 0';
+        D.NLX.dark_evt{2} = '-PostEvent Post_Image_Off 214 0';
+        
         % Sleep 1
         D.NLX.sleep_start_evt{1} = '-PostEvent Post_Sleep_1_Start 207 0';
         D.NLX.sleep_end_evt{1} = '-PostEvent Post_Sleep_1_End 208 0';
@@ -4534,8 +4564,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
     end
 
-% -----------------------------TABLE SETUP-------------------------
-    function[] = Table_Setup()
+% -----------------------------TABLE TAB SETUP-------------------------
+    function[] = Table_Tab_Setup()
         
         %% SETUP TABLE UI
         
@@ -4611,7 +4641,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.tblTabSubGrp = ...
             uitabgroup(D.UI.tabTBL, ...
             'Units', 'Normalized', ...
-            'UserData', 'TT TRACK', ...
+            'UserData', 'TABLE', ...
             'Position',D.UI.tab_grp_pos);
         
         % Table Template
@@ -4928,7 +4958,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             'String', 'Update', ...
             'Callback', {@Togg_UpdateFed}, ...
             'Visible', 'on');
-       
+        
         % Enable button
         Button_State(D.UI.toggUpdateFed, 'Enable');
         
@@ -4965,29 +4995,29 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Get list of included rats
-        rat_list = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
+        D.UI.ratTabList = D.SS_IO_1.Properties.RowNames(D.SS_IO_1.Include_Run);
         
         % Put current rat at start of list
-        rat_list = [D.PAR.ratLab; rat_list(~ismember(rat_list, D.PAR.ratLab))];
+        D.UI.ratTabList = [D.PAR.ratLab; D.UI.ratTabList(~ismember(D.UI.ratTabList, D.PAR.ratLab))];
         
         % Make a tab for current rat only unless unless doing 'Table_Update'
         if D.PAR.sesType ~= 'Table_Update'
-            rat_list = rat_list(1);
+            D.UI.ratTabList = D.UI.ratTabList(1);
         end
         
         % Initialize tab objects
-        D.UI.tbleSSIO2tab = gobjects(length(rat_list),1);
+        D.UI.tbleSSIO2tab = gobjects(length(D.UI.ratTabList),1);
         
         % Add SS_IO_2 tab for each rat
-        for z_r = 1:length(rat_list)
+        for z_r = 1:length(D.UI.ratTabList)
             
             % Add SS_IO_2 tab
             D.UI.tbleSSIO2tab(z_r) = uitab(D.UI.tblTabSubGrp, ...
-                'Title', rat_list{z_r}(2:end), ...
+                'Title', D.UI.ratTabList{z_r}(2:end), ...
                 'BackgroundColor', [1, 1, 1]);
             
             % Format SS_IO_2 tables
-            D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(rat_list{z_r}), D.UI.tbleSSIO2tab(z_r));
+            D.UI.tblSSIO2 = FormatTable(D.SS_IO_2.(D.UI.ratTabList{z_r}), D.UI.tbleSSIO2tab(z_r));
             
         end
         
@@ -5244,6 +5274,377 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 6*cell2mat(cellfun(@(x) max(size(x)), ...
                 ui_table.Data(:,ind), 'uni', false))]);
             ui_table.ColumnWidth(ind) = {wdth};
+            
+        end
+        
+    end
+
+% -----------------------------TABLE TAB SETUP-------------------------
+    function[] = Plot_Tab_Setup()
+        
+        % Add TABLE tab
+        D.UI.tabPlt = uitab(D.UI.tabgp, ...
+            'Title', 'PLOT', ...
+            'BackgroundColor', [1, 1, 1]);
+        
+        % Create tab group
+        D.UI.pltTabSubGrp = ...
+            uitabgroup(D.UI.tabPlt, ...
+            'Units', 'Normalized', ...
+            'UserData', 'PLOT', ...
+            'Position',[0,0,1,1]);
+        
+        % Initialize tab and axes objects
+        D.UI.plotTabTabs = gobjects(length(D.UI.ratTabList),1);
+        D.UI.plotTabAxSes = gobjects(length(D.UI.ratTabList),2,2);
+        D.UI.plotTabAxAll = gobjects(length(D.UI.ratTabList),3);
+        
+        % Axes position
+        ax_wd = [0.625, 0.2];
+        ax_ht = [0.3, 0.175];
+        ax_lft = [0.05, ax_wd(1)+0.15];
+        ax_btm_ses = [0.15, 0.6];
+        ax_btm_all = [0.15, 0.4375, 0.725];
+        
+        % Specify markers for ses type
+        cue_mrk_list = {'s', 'd', 'o'};
+        
+        % Specify colors
+        cond_col = [0.9,0.9,0.9; 0.6,0.6,0.6; 0.3,0.3,0.3];
+        var1_col = [1,0.5,0]*0.75;
+        var2_col = [0,0,1]*0.75;
+        
+        % Add SS_IO_2 tab for each rat
+        tab_list = D.UI.ratTabList;
+        for z_r = 1:length(tab_list)
+            
+            %% SETUP RAT
+            rat_lab = tab_list{z_r};
+            
+            % Get sessions
+            nses = size(D.SS_IO_2.(rat_lab),1);
+            
+            % Bail if no data
+            if nses<=1
+                continue;
+            end
+            
+            % Get rat data
+            laps_trial = [([D.SS_IO_2.(rat_lab).Laps_Standard{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Laps_40_Deg{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Laps_0_Deg{:}])'];
+            rew_trial = [([D.SS_IO_2.(rat_lab).Rewards_Standard{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Rewards_40_Deg{:}])', ...
+                ([D.SS_IO_2.(rat_lab).Rewards_0_Deg{:}])'];
+            laps_ses = sum(laps_trial,2);
+            rew_ses = sum(rew_trial,2);
+            ses_con = D.SS_IO_2.(rat_lab).Session_Condition;
+            cue_con = D.SS_IO_2.(rat_lab).Cue_Condition;
+            rot_dir = D.SS_IO_2.(rat_lab).Rotation_Direction;
+            rew_del = D.SS_IO_2.(rat_lab).Reward_Delay;
+            weight = round(100* D.SS_IO_3.(rat_lab).Weight_Proportion);
+            mash = D.SS_IO_3.(rat_lab).Fed_Mash;
+            run_time = D.SS_IO_2.(rat_lab).Total_Time*60;
+            
+            % Set rotation days with no rotation to behavior training
+            is_rot = cellfun(@(x) sum(x)>0, D.SS_IO_2.(rat_lab).Laps_40_Deg);
+            exc_ind = ses_con == 'Rotation' & ~is_rot;
+            ses_con(exc_ind) = 'Behavior_Training';
+            
+            % Exclude SS_IO_3 days that rats did not run
+            inc_ind = ismember(D.SS_IO_3.(rat_lab).Date, D.SS_IO_2.(rat_lab).Date);
+            weight = weight(inc_ind);
+            mash = mash(inc_ind);
+            
+            % Add rat specific tab
+            D.UI.plotTabTabs(z_r) = uitab(D.UI.pltTabSubGrp, ...
+                'Title', tab_list{z_r}(2:end), ...
+                'BackgroundColor', [1, 1, 1]);
+            
+            %% PLOT SESSION LEVEL
+            
+            % Initialize session axes
+            D.UI.plotTabAxSes(z_r, 1, 2) = axes( ...
+                'Position', [ax_lft(1), ax_btm_ses(2), ax_wd(1), ax_ht(1)], ...
+                'Parent', D.UI.plotTabTabs(z_r), ...
+                'Units', 'Normalized');
+            hold on;
+            D.UI.plotTabAxSes(z_r, 2, 2) = axes(...
+                'Position', [ax_lft(1), ax_btm_ses(1), ax_wd(1), ax_ht(1)], ...
+                'Parent', D.UI.plotTabTabs(z_r), ...
+                'Units', 'Normalized');
+            hold on;
+            % Initialize image axes
+            D.UI.plotTabAxSes(z_r, 1, 1) = copyobj(D.UI.plotTabAxSes(z_r, 1, 2), D.UI.plotTabTabs(z_r));
+            hold on;
+            D.UI.plotTabAxSes(z_r, 2, 1) = copyobj(D.UI.plotTabAxSes(z_r, 2, 2), D.UI.plotTabTabs(z_r));
+            hold on;
+            
+            % Set all axes
+            set(D.UI.plotTabAxSes(z_r, :, :), ...
+                'Color', 'None', ...
+                'XLim', [0,nses+1]);
+            uistack(D.UI.plotTabAxSes(z_r, :, 1), 'bottom');
+            
+            % Plot ses cond as image
+            c_dat = ones(1,nses);
+            c_dat(ses_con == 'Behavior_Training' | ses_con == 'Implant_Training') = 2;
+            c_dat(ses_con == 'Rotation') = 3;
+            img_h = image(c_dat, 'Parent', D.UI.plotTabAxSes(z_r, 1, 1));
+            % Copy
+            copyobj(img_h, D.UI.plotTabAxSes(z_r, 2, 1));
+            % Change settings
+            set(D.UI.plotTabAxSes(z_r, :, 1), ...
+                'YLim', [0.5,1], ...
+                'XTick', [], ...
+                'YTick', [], ...
+                'XTickLabels', [], ...
+                'YTickLabels', [])
+            colormap(D.UI.plotTabAxSes(z_r, 1, 1), cond_col);
+            colormap(D.UI.plotTabAxSes(z_r, 2, 1), cond_col);
+            
+            % Specify rot cond color
+            rot_col = [[1,1,1];flip(D.UI.rotCol,1)];
+            
+            % Plot laps and rewards
+            b_wd = 0.24;
+            % Laps
+            x = (1:nses)-b_wd/3;
+            y = laps_trial;
+            bar_h = bar(x, y, b_wd, 'stacked', ...
+                'EdgeColor', 'None', ...
+                'LineWidth', 2, ...
+                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
+            for i = 1:3
+                bar_h(i).FaceColor = rot_col(i,:);
+                bar_h(i).EdgeColor = var1_col;
+            end
+            % Rew
+            x = (1:nses)+b_wd/3;
+            y = rew_trial;
+            bar_h = bar(x+b_wd/2, y, b_wd, 'stacked', ...
+                'EdgeColor', 'None', ...
+                'LineWidth', 2, ...
+                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
+            for i = 1:3
+                bar_h(i).FaceColor = rot_col(i,:);
+                bar_h(i).EdgeColor = var2_col;
+            end
+            D.UI.plotTabAxSes(z_r, 1, 2).Title.String = 'Laps & Rewards';
+            D.UI.plotTabAxSes(z_r, 1, 2).XLabel.String = 'Session';
+            D.UI.plotTabAxSes(z_r, 1, 2).YLabel.String = 'Laps/Rewards';
+            D.UI.plotTabAxSes(z_r, 1, 2).YLim(1) = 0;
+            
+            % Get cue stuff
+            cue_conds = categories(D.SS_IO_2.(rat_lab).Cue_Condition(1));
+            cue_ind = arrayfun(@(x) find(ismember(cue_conds, x)), cue_con);
+            cue_arr = cue_conds(cue_ind);
+            cue_arr(ismember(cue_arr,'None') & ismember(ses_con, 'Manual_Training')) = {'All'};
+            
+            % Plot symbol for each cue
+            D.UI.plotTabAxSes(z_r, 1, 2);
+            gs_h = gobjects(length(cue_conds), 1);
+            for i = 1:length(cue_conds)
+                ind = ismember(cue_arr, cue_conds(i));
+                x = find(ind);
+                if isempty(x); x = 0; end
+                y = zeros(length(x), 1);
+                gs_h(i) = plot(x, y, ...
+                    'LineStyle', 'None', ...
+                    'Marker', cue_mrk_list{i}, ...
+                    'MarkerSize', 12, ...
+                    'MarkerFaceColor', [1,1,1], ...
+                    'MarkerEdgeColor', [0,0,0], ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
+            end
+            % Plot delay
+            x = 1:nses;
+            y = zeros(1,nses);
+            rew_del = cellstr(char(rew_del));
+            rew_del = cellfun(@(x) x(1), rew_del, 'uni', false);
+            txt_h = text(x, y, cellstr(char(rew_del)), ...
+                'FontSize', 8, ...
+                'HorizontalAlignment', 'Center', ...
+                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
+            
+            % Plot weight and mash
+            ylim1 = [75,100];
+            ylim2 = [0, max([max(mash), 3])];
+            x = 1:nses;
+            mash_scl = diff(ylim1)*((mash-min(mash))/(max(mash)-min(mash)))+ylim1(1);
+            y = [weight, mash_scl];
+            bar_h = bar(x, y, 1, ...
+                'FaceColor', [1,1,1], ...
+                'LineWidth', 2, ...
+                'Parent', D.UI.plotTabAxSes(z_r, 2, 2));
+            bar_h(1).EdgeColor = var1_col;
+            bar_h(2).EdgeColor = var2_col;
+            % Add two y axis
+            yyaxis(D.UI.plotTabAxSes(z_r, 2, 2), 'right');
+            set(D.UI.plotTabAxSes(z_r, 2, 2).YAxis(1), ...
+                'Color', var1_col, ...
+                'Limits', ylim1);
+            set(D.UI.plotTabAxSes(z_r, 2, 2).YAxis(2), ...
+                'Color', var2_col, ...
+                'Limits', ylim2);
+            D.UI.plotTabAxSes(z_r, 2, 2).YAxis(2).Color = bar_h(2).FaceColor;
+            D.UI.plotTabAxSes(z_r, 2, 2).Title.String = 'Weight & Feeding';
+            D.UI.plotTabAxSes(z_r, 2, 2).XLabel.String = 'Session';
+            D.UI.plotTabAxSes(z_r, 2, 2).YAxis(1).Label.String = 'Weight (%)';
+            D.UI.plotTabAxSes(z_r, 2, 2).YAxis(2).Label.String = 'Mash (Scoop)';
+            
+            % Make fake plot for session condition legend entries
+            x = [0,1];
+            y = -1*[1,1,1;1,1,1];
+            bar_h = bar(x, y, ...
+                'FaceColor', 'Flat', ...
+                'EdgeColor', 'None', ...
+                'Parent', D.UI.plotTabAxSes(z_r, 1, 2));
+            for i = 1:length(bar_h)
+                bar_h(i).FaceColor = cond_col(i,:);
+            end
+            
+            % Copy objects to other plot
+            copyobj(flip(gs_h), D.UI.plotTabAxSes(z_r, 2, 2));
+            copyobj(flip(txt_h), D.UI.plotTabAxSes(z_r, 2, 2));
+            copyobj(flip(bar_h), D.UI.plotTabAxSes(z_r, 2, 2));
+            
+            % Add main legends
+            labs = {'Laps Stan', 'Laps 40', 'Laps 0', 'Rew Stan', 'Rew 40', 'Rew 0', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
+            legend(D.UI.plotTabAxSes(z_r, 1, 2), labs, ...
+                'FontSize', 8, ...
+                'Location','northwest', ...
+                'Box', 'Off');
+            labs = {'Weight %', 'Mash', 'All Cue', 'Half Cue', 'No Cue', 'Manual', 'Training', 'Rotation'};
+            legend(D.UI.plotTabAxSes(z_r, 2, 2), labs, ...
+                'FontSize', 8, ...
+                'Location','northwest', ...
+                'Box', 'Off');
+            
+            %% PLOT AVERAGES
+            
+            % Get index for each condition combo
+            ind_mat = [...
+                {ses_con == 'Manual_Training'}, ...
+                {cue_con == 'All' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
+                {cue_con == 'Half' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
+                {ismember(rew_del, '1') & cue_con == 'None' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
+                {ismember(rew_del, '2') & cue_con == 'None' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
+                {ismember(rew_del, '3') & cue_con == 'None' & (ses_con == 'Behavior_Training' | ses_con == 'Implant_Training')}, ...
+                {ses_con == 'Rotation' & rot_dir == 'CCW'}, ...
+                {ses_con == 'Rotation' & rot_dir == 'CW'}
+                ];
+            
+            % Initialize summary (all) axes
+            D.UI.plotTabAxAll(z_r, 1) = axes( ...
+                'Position', [ax_lft(2), ax_btm_all(3), ax_wd(2), ax_ht(2)], ...
+                'Parent', D.UI.plotTabTabs(z_r), ...
+                'Units', 'Normalized');
+            hold on;
+            D.UI.plotTabAxAll(z_r, 2) = axes(...
+                'Position', [ax_lft(2), ax_btm_all(2), ax_wd(2), ax_ht(2)], ...
+                'Parent', D.UI.plotTabTabs(z_r), ...
+                'Units', 'Normalized');
+            hold on;
+            D.UI.plotTabAxAll(z_r, 3) = axes(...
+                'Position', [ax_lft(2), ax_btm_all(1), ax_wd(2), ax_ht(2)], ...
+                'Parent', D.UI.plotTabTabs(z_r), ...
+                'Units', 'Normalized');
+            hold on;
+            
+            % Set all axes
+            x_tick = [1, 1.85, 2.15, 2.7, 3, 3.3, 3.85, 4.15];
+            x_lim = [x_tick(1)-0.5, x_tick(end)+0.5];
+            x_tick_lab = {'Manual', 'Cue All', 'Cue Half', 'Cue None (1s)', 'Cue None (2s)', 'Cue None (3s)', 'Rotation CCW', 'Rotation CW'};
+            set(D.UI.plotTabAxAll(z_r, :), ...
+                'XTickLabelRotation', 45, ...
+                'XTick', x_tick, ...
+                'XTickLabel', x_tick_lab, ...
+                'Color', 'None', ...
+                'XLim', x_lim);
+            uistack(D.UI.plotTabAxAll(z_r, :, 1), 'bottom');
+            % Plot current performance in for DT Lap/Reward
+            x_tick_lab{1} = 'Today';
+            set(D.UI.plotTabAxAll(z_r, 2:end), ...
+                'XTickLabel', x_tick_lab);
+            
+            % Add legend and titles
+            ylabel(D.UI.plotTabAxAll(z_r, 1), 'Sessions');
+            D.UI.plotTabAxAll(z_r, 1).Title.String = 'Total Sessions';
+            ylabel(D.UI.plotTabAxAll(z_r, 2), 'DT Laps (sec)');
+            D.UI.plotTabAxAll(z_r, 2).Title.String = 'Laps Performance';
+            ylabel(D.UI.plotTabAxAll(z_r, 3), 'DT Rewards (sec)');
+            D.UI.plotTabAxAll(z_r, 3).Title.String = 'Rewards Performance';
+            
+            % Specify bar inds for each cond
+            cond_ind = [{1},{2:6},{7:8}];
+            bar_h = gobjects(1,3);
+            errbar_h = gobjects(1,3);
+            
+            % Plot sessions
+            x = x_tick;
+            y = cellfun(@(x) sum(x), ind_mat);
+            for i = 1:length(bar_h)
+                bar_h(i) = bar(x(cond_ind{i}), y(cond_ind{i})', ...
+                    'FaceColor', cond_col(i,:), ...
+                    'EdgeColor', [0,0,0], ...
+                    'Parent', D.UI.plotTabAxAll(z_r, 1));
+            end
+            % Make manual training bar narrower
+            set(bar_h(1), 'BarWidth', get(bar_h(1), 'BarWidth')/2)
+            % Add count text
+            txt = arrayfun(@(x) sprintf('%d', x), y, 'uni', false);
+            text(x, y, txt, ...
+                'FontSize', 8, ...
+                'HorizontalAlignment', 'Center', ...
+                'VerticalAlignment', 'Bottom', ...
+                'Parent', D.UI.plotTabAxAll(z_r, 1));
+            
+            % Plot lap performance
+            x = x_tick;
+            y = cellfun(@(x) mean(run_time(x)./laps_ses(x)), ind_mat);
+            y(1) = 0;
+            ye = cellfun(@(x) std(run_time(x)./laps_ses(x)), ind_mat);
+            ye(1) = 0;
+            for i = 1:length(bar_h)
+                bar_h(i) = copyobj(bar_h(i), D.UI.plotTabAxAll(z_r, 2));
+                set(bar_h(i), 'YData', y(cond_ind{i}));
+                % Plot error
+                errbar_h(i) = errorbar(x(cond_ind{i}), y(cond_ind{i})', ye(cond_ind{i})', ...
+                    'Color', [0,0,0], ...
+                    'LineStyle', 'None', ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.plotTabAxAll(z_r, 2));
+            end
+            D.UI.plotTabAxAll(z_r, 2).YLim(1) = 0;
+            % Store handle for ongoing plotting
+            D.UI.barPltTabLap = bar_h(1);
+            
+            % Plot reward performance
+            x = x_tick;
+            y = cellfun(@(x) mean(run_time(x)./rew_ses(x)), ind_mat);
+            y(1) = 0;
+            ye = cellfun(@(x) std(run_time(x)./rew_ses(x)), ind_mat);
+            ye(1) = 0;
+            for i = 1:length(bar_h)
+                bar_h(i) = copyobj(bar_h(i), D.UI.plotTabAxAll(z_r, 3));
+                set(bar_h(i), 'YData', y(cond_ind{i}));
+                % Plot error
+                errbar_h(i) = errorbar(x(cond_ind{i}), y(cond_ind{i})', ye(cond_ind{i})', ...
+                    'Color', [0,0,0], ...
+                    'LineStyle', 'None', ...
+                    'LineWidth', 1, ...
+                    'Parent', D.UI.plotTabAxAll(z_r, 3));
+                errbar_h(i) = copyobj(errbar_h(i), D.UI.plotTabAxAll(z_r, 3));
+                set(errbar_h(i), ...
+                    'YData', y(cond_ind{i}), ...
+                    'YNegativeDelta', ye(cond_ind{i}), ...
+                    'YPositiveDelta', ye(cond_ind{i}));
+            end
+            D.UI.plotTabAxAll(z_r, 3).YLim(1) = 0;
+            % Store handle for ongoing plotting
+            D.UI.barPltTabRew = bar_h(1);
             
         end
         
@@ -7266,9 +7667,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.PAR.sesNum = ...
             D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) + 1;
         
-        % Save new session number back to SS_IO_1
-        D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
-        
         % Get session total
         D.PAR.sesNumAll = D.SS_IO_1{D.PAR.ratIndSS, 'Session_Manual_Training'}(col_ind) + ...;
             D.SS_IO_1{D.PAR.ratIndSS, 'Session_Behavior_Training'}(col_ind) + ...
@@ -7356,37 +7754,37 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% COMPUTE BOUNDS
         
         % Specify reward feeder locations
-        % NOTE: Feeder index is based on the position of the feeder with
+        % NOTE: Feeder index is based on the position of the goal with
         % respect to the 0 deg point (East quadrant)in the arena
-        rewFeeds = [11, 15, 7; 29, 33, 25];
+        rewGoals = [11, 15, 7; 29, 33, 25];
         
         % Feeder paramiters
         % Boundary before and after rew feeder (deg)
         D.PAR.trigDist = rad2deg(D.PAR.feedDistRad - D.PAR.setPointRad);
         D.PAR.feedSet = [...
-            D.PAR.trigDist - 2.5, ...
-            D.PAR.trigDist + 2.5];
+            D.PAR.trigDist - D.PAR.zoneWidth/2, ...
+            D.PAR.trigDist + D.PAR.zoneWidth/2];
         
         % Get reward and unrewarded feeder based on rotation direction
         % corrected index
-        D.UI.rewFeed = rewFeeds(D.PAR.ratFeedCnd_Num, D.I.img_ind);
-        D.UI.oppFeed = rewFeeds([1, 2] ~=  D.PAR.ratFeedCnd_Num, D.I.img_ind);
+        D.UI.rewGoal = rewGoals(D.PAR.ratFeedCnd_Num, D.I.img_ind);
+        D.UI.oppGoal = rewGoals([1, 2] ~=  D.PAR.ratFeedCnd_Num, D.I.img_ind);
         
         % Calculate feeder locations
         
         % Calculate all feeder/strut locations
-        fdLocs = circshift((0:10:350)+5,[0,0]);
+        strutLocs = circshift((0:10:350)+5,[0,0]);
         
         % Calculate all feed locs
-        [fd_X,fd_Y] = pol2cart(deg2rad(fdLocs), ones(1,length(fdLocs)) * D.UI.arnRad);
+        [strut_X,strut_Y] = pol2cart(deg2rad(strutLocs), ones(1,length(strutLocs)) * D.UI.arnRad);
         % all feeders x
-        D.UI.fd_x = fd_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
+        D.UI.strut_x = strut_X*D.UI.cm2pxl + D.UI.lowLeft(1) + D.UI.arnRad*D.UI.cm2pxl;
         % all feeders y
-        D.UI.fd_y = fd_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
+        D.UI.strut_y = strut_Y*D.UI.cm2pxl + D.UI.lowLeft(2) + D.UI.arnRad*D.UI.cm2pxl;
         
         % Save reward feeder/pos rad pos
-        D.UI.rewZoneRad(1) = deg2rad(fdLocs(D.UI.rewFeed(1)));
-        D.UI.rewZoneRad(2) = deg2rad(fdLocs(D.UI.rewFeed(2)));
+        D.UI.rewZoneRad(1) = deg2rad(strutLocs(D.UI.rewGoal(1)));
+        D.UI.rewZoneRad(2) = deg2rad(strutLocs(D.UI.rewGoal(2)));
         % with setpoint correction
         D.UI.rewRatHead(1:2) = ...
             D.UI.rewZoneRad + deg2rad(D.PAR.trigDist);
@@ -7417,8 +7815,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         bnd_wdth = 30;
         D.PAR.rotDistDeg = 110:bnd_space:290;
         D.UI.rotLocs = [...
-            fdLocs(D.UI.rewFeed(1)) + D.PAR.trigDist + D.PAR.rotDistDeg', ...
-            fdLocs(D.UI.rewFeed(2)) + D.PAR.trigDist + D.PAR.rotDistDeg'];
+            strutLocs(D.UI.rewGoal(1)) + D.PAR.trigDist + D.PAR.rotDistDeg', ...
+            strutLocs(D.UI.rewGoal(2)) + D.PAR.trigDist + D.PAR.rotDistDeg'];
         
         % Calculate 30 deg wide bounds for each rotation pos
         rot_bnds = arrayfun(@(x,y) cat(3, [x-bnd_space, x], [y-bnd_space, y]), ...
@@ -7478,7 +7876,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         %% SETUP ARENA FEATURES
         
         % Plot all feeders/struts
-        D.UI.fdAllH = line(D.UI.fd_x, D.UI.fd_y, ...
+        D.UI.fdAllH = line(D.UI.strut_x, D.UI.strut_y, ...
             'LineStyle', 'none', ...
             'Marker', 'o', ...
             'MarkerFaceColor', [0.5 0.5 0.5], ...
@@ -7493,7 +7891,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         D.UI.txtFdPosH = gobjects(1,36);
         for z_fd = 1:36
             D.UI.txtFdPosH(z_fd) = text(...
-                D.UI.fd_x(z_fd), D.UI.fd_y(z_fd), ...
+                D.UI.strut_x(z_fd), D.UI.strut_y(z_fd), ...
                 sprintf('%0.1f\n%0.0f', fd_rad(z_fd), fd_cm(z_fd)), ...
                 'Color', [1, 1, 1], ...
                 'HorizontalAlignment', 'center', ...
@@ -8141,8 +8539,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Marker
             D.UI.mixFdNow(3,z_rot) = ...
-                line(D.UI.fd_x(D.UI.rewFeed(z_rot)), ...
-                D.UI.fd_y(D.UI.rewFeed(z_rot)), ...
+                line(D.UI.strut_x(D.UI.rewGoal(z_rot)), ...
+                D.UI.strut_y(D.UI.rewGoal(z_rot)), ...
                 'LineStyle', 'none', ...
                 'Marker', 'o', ...
                 'MarkerFaceColor', D.UI.rotCol(z_rot,:), ...
@@ -8154,7 +8552,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         end
         
         % Plot opposite unrewarded feeders darker
-        line(D.UI.fd_x(D.UI.oppFeed), D.UI.fd_y(D.UI.oppFeed), ...
+        line(D.UI.strut_x(D.UI.oppGoal), D.UI.strut_y(D.UI.oppGoal), ...
             'LineStyle', 'none', ...
             'Marker', 'o', ...
             'MarkerFaceColor', [0.25 0.25 0.25], ...
@@ -8263,6 +8661,17 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % Set rot bound patch HitTest
             Safe_Set(D.UI.ptchRtBnds, 'HitTest', 'on')
             
+        end
+        
+        % Dark Control buttons
+        if D.PAR.sesCond == 'Dark_Control'
+            
+            % Hide ICR buttons
+            Safe_Set(D.UI.toggICR, 'Visible', 'Off');
+            
+            % Show Dark Control
+            Safe_Set(D.UI.toggDark, 'Visible', 'On');
+        
         end
         
     end
@@ -10967,8 +11376,15 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             % UPDATE REWARD INFO
             
             % Compute time info
-            rew_ellapsed = Sec_DT(now) - D.T.rew_last;
+            dt_rew = Sec_DT(now) - D.T.rew_last;
             D.T.rew_last = Sec_DT(now);
+            
+            % Get average
+            D.T.rew_tot = D.T.rew_tot + dt_rew;
+            dt_rew_avg = D.T.rew_tot / sum([D.C.rew{:}]);
+            
+            % Update plot tab bar
+            set(D.UI.barPltTabRew, 'YData', dt_rew_avg);
             
             % Get total rewards and misses
             rew_tot = sum([D.C.rew{:}]);
@@ -10979,7 +11395,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                 D.UI.rewInfoList; ...
                 {sprintf('%d: T:%0.2f Z:%d M:%d', ...
                 rew_tot+miss_tot, ...
-                rew_ellapsed, ...
+                dt_rew, ...
                 -1*D.PAR.zoneLocs(max([D.I.zone_now,1])), ...
                 miss_tot) ...
                 }];
@@ -11329,7 +11745,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reset lap quad index
         D.I.lap_hunt_ind = 1;
         
-        %% UPDATE PLOT HISTORY AND PRINT LAP TIME INFO
+        %% UPDATE PLOT HISTORY PLOT TAB AND PRINT LAP TIME INFO
         
         % Save time
         dt_lap = Sec_DT(now) - D.T.lap_str;
@@ -11349,6 +11765,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             sprintf('%s(%1.1fs)', D.UI.popLapInfo.UserData, dt_lap_avg); ...
             D.UI.lapInfoList];
         Safe_Set(D.UI.popLapInfo, 'String', infstr);
+        
+        % Update plot tab bar
+        set(D.UI.barPltTabLap, 'YData', dt_lap_avg);
         
         % Update plot history
         VT_Plot_Hist()
@@ -12971,10 +13390,52 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set flag
         was_ran = true;
         
-        % Reset rotation session number if no rotations performed
+        % Set session type to training if no rot was performed
         if D.PAR.sesCond == 'Rotation' && D.C.rot == 0
-            D.PAR.sesNum = D.PAR.sesNum-1;
+            if D.F.rat_implanted
+                D.PAR.sesCond(:) = 'Implant_Training';
+            else
+                D.PAR.sesCond(:) = 'Behavior_Training';
+            end
         end
+        
+        % Get date
+        date = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
+        
+        % UPDATE SS_IO_1
+        
+        % Store 'Session_X' Number
+        if ~isundefined(D.PAR.sesCond) && ~isundefined(D.PAR.sesTask)
+            var_ind = ...
+                ismember(D.SS_IO_1.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
+            col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
+            D.PAR.sesNum = D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) + 1;
+            D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
+        end
+        
+        % Update 'Session_Type'
+        D.SS_IO_1.Session_Type(D.PAR.ratIndSS) = D.PAR.sesType;
+        
+        % Update 'Human'
+        D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.sesHuman;
+        
+        % Update 'Session_Condition'
+        D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
+        
+        % Update 'Session_Task'
+        D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
+        
+        % Update 'Reward_Delay'
+        D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
+        
+        % Update 'Cue_Condition'
+        D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
+        
+        % Update 'Sound_Conditions'
+        D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
+        Log_Debug('FINISHED: Update "SS_IO_1"');
+        
+        % UPDATE SS_IO_2
         
         % Get row ind
         if strcmp(D.SS_IO_2.(D.PAR.ratLab).Date{1}, '')
@@ -12986,9 +13447,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             D.SS_IO_2.(D.PAR.ratLab) = ...
                 [D.SS_IO_2.(D.PAR.ratLab); D.SS_IO_2.(D.PAR.ratLab)(end,:)];
         end
-        
-        % Get date
-        date = datestr(TIMSTRLOCAL, 'yyyy-mm-dd_HH-MM-SS');
         
         % Store 'Include_Analysis'
         D.SS_IO_2.(D.PAR.ratLab).Include_Analysis(rowInd) = true;
@@ -13166,38 +13624,6 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         else
             D.SS_IO_2.(D.PAR.ratLab).Laps_0_Deg{rowInd} = 0;
         end
-        
-        % UPDATE SS_IO_1
-        
-        % Store 'Session_X' Number
-        if ~isundefined(D.PAR.sesCond) && ~isundefined(D.PAR.sesTask)
-            var_ind = ...
-                ismember(D.SS_IO_1.Properties.VariableNames, ['Session_',char(D.PAR.sesCond)]);
-            col_ind = ismember([{'Track'},{'Forage'}], D.PAR.sesTask);
-            D.SS_IO_1{D.PAR.ratIndSS, var_ind}(col_ind) = D.PAR.sesNum;
-        end
-        
-        % Update 'Session_Type'
-        D.SS_IO_1.Session_Type(D.PAR.ratIndSS) = D.PAR.sesType;
-        
-        % Update 'Human'
-        D.SS_IO_1.Human(D.PAR.ratIndSS) = D.PAR.sesHuman;
-        
-        % Update 'Session_Condition'
-        D.SS_IO_1.Session_Condition(D.PAR.ratIndSS) = D.PAR.sesCond;
-        
-        % Update 'Session_Task'
-        D.SS_IO_1.Session_Task(D.PAR.ratIndSS) = D.PAR.sesTask;
-        
-        % Update 'Reward_Delay'
-        D.SS_IO_1.Reward_Delay(D.PAR.ratIndSS) = char(D.PAR.sesRewDel);
-        
-        % Update 'Cue_Condition'
-        D.SS_IO_1.Cue_Condition(D.PAR.ratIndSS) = char(D.PAR.sesCue);
-        
-        % Update 'Sound_Conditions'
-        D.SS_IO_1.Sound_Conditions(D.PAR.ratIndSS,:) = D.F.sound;
-        Log_Debug('FINISHED: Update "SS_IO_1"');
         
         % Save out data
         SS_IO_2 = D.SS_IO_2; %#ok<NASGU>
@@ -14136,6 +14562,11 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             Button_State(D.UI.toggICR(1), 'Disable', D.UI.rotCol(1,:));
                             Button_State(D.UI.toggICR(2), 'Enable', D.UI.rotCol(2,:));
                             
+                        end
+                        
+                        % Enable Dark Control buttons
+                        if D.PAR.sesCond == 'Dark_Control'
+                            Button_State(D.UI.toggDark, 'Enable');
                         end
                         
                         % Enable target select button
@@ -15414,19 +15845,32 @@ fprintf('\n################# REACHED END OF RUN #################\n');
     end
 
 % --------------------------SEND DATA TO AC--------------------------------
-    function[] = Send_AC_Com()
+    function[pass] = Send_AC_Com()
         
         % Bail if not connected
         if ~D.F.ac_connected
-            return
+            pass = false;
+            % Bail if not tcpip object
+        elseif ~exist('TCPIP', 'var')
+            pass = false;
+        elseif ~isvalid(TCPIP)
+            pass = false;
+        else
+            pass = true;
         end
         
-        % Bail if not tcpip object
-        if ~exist('TCPIP', 'var')
+        % Bail
+        if ~pass
+            
+            % Log/print skipping
+            Log_Debug(sprintf('SKIPPED: m2ac: dat=|%d|%d|%d|', ...
+                D.AC.data(1),D.AC.data(2),D.AC.data(3)));
+            
+            % Bail
             return
-        elseif ~isvalid(TCPIP)
-            return
+            
         end
+        pass = true;
         
         % Send data
         fwrite(TCPIP,D.AC.data,'int8');
@@ -17294,6 +17738,32 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if FC.DoUpdateNow; Update_UI(0, 'force'); end
     end
 
+% ------------------------DARK CONTROL BUTTON------------------------------
+    function Togg_Dark(hObject, ~, ~)
+        
+        % Get value
+        btn_ind = get(hObject, 'UserData');
+        
+        % Turn off other botton
+        Safe_Set(D.UI.toggDark([1,2]~=btn_ind), 'Value', 0);
+        Button_State(D.UI.toggDark, 'Update');
+        
+        % Send NLX event command
+        Send_NLX_Cmd(D.NLX.dark_evt{btn_ind});
+        
+        % Update D.AC.data(2) and send command to show/hide image
+        if btn_ind == 1
+            % Show image
+            D.AC.data(2) = D.I.img_ind(D.I.rot);
+        else
+            % Hide/close image
+            D.AC.data(2) = 0;
+        end
+        % Send AC command
+        Send_AC_Com();
+        
+    end
+
 % ---------------------------UPDATE UI POS---------------------------------
     function SizeChanged_GetPosUI(~, ~, ~)
         
@@ -17708,7 +18178,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
             
             % Check if rat is out of room for track run
             dlg_h = dlgAWL(...
-                'Take out rat', ...
+                'Take out rat then press OK', ...
                 'RAT OUT', ...
                 'OK', [], [], 'OK', ...
                 D.UI.dlgPos{4}, ...
@@ -17778,25 +18248,27 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set flag to save at end of main loop
         D.F.do_save = true;
         
-        % Check if cheetah data should be saved
-        if D.F.cheetah_running
-            
-            % Show dialogue
-            dlg_h = dlgAWL( ...
-                'Save Cheetah Data?', ...
-                'SAVE CHEETAH', ...
-                'Yes', 'No', [], 'No', ...
-                D.UI.dlgPos{4}, ...
-                'question');
-            choice = Dlg_Wait(dlg_h);
-            
-            % Handle response
-            if strcmp(choice, 'Yes')
-                % Set flag
-                D.F.do_nlx_save = true;
-            end
-            
-        end
+        % TEMP SKIP Check if cheetah data should be saved
+        %         if D.F.cheetah_running
+        %
+        %             % Show dialogue
+        %             dlg_h = dlgAWL( ...
+        %                 'Save Cheetah Data?', ...
+        %                 'SAVE CHEETAH', ...
+        %                 'Yes', 'No', [], 'No', ...
+        %                 D.UI.dlgPos{4}, ...
+        %                 'question');
+        %             choice = Dlg_Wait(dlg_h);
+        %
+        %             % Handle response
+        %             if strcmp(choice, 'Yes')
+        %                 % Set flag
+        %                 D.F.do_nlx_save = true;
+        %             end
+        %
+        %         end
+        % Set flag
+        D.F.do_nlx_save = true;
         
         % Log/print
         Log_Debug(sprintf('Set to "%d"', get(D.UI.toggSave,'Value')));

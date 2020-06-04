@@ -113,7 +113,7 @@ feeder_version_cats = {'Static_Feeder', 'Mobile_Feeder'};
 age_group_cats = {'Young', 'Old'};
 human_cats = {'AWL', 'CB', 'Other'};
 session_type_cats = {'ICR_Session', 'TT_Turn', 'Table_Update'};
-session_condition_cats = {'Manual_Training', 'Behavior_Training', 'Implant_Training', 'Rotation'};
+session_condition_cats = {'Manual_Training', 'Behavior_Training', 'Implant_Training', 'Rotation', 'Dark_Control'};
 session_task_cats = {'Track', 'Forage'};
 feeder_condition_cats = {'C1', 'C2'};
 rotation_direction_cats = {'CCW', 'CW'};
@@ -203,6 +203,8 @@ T.Session_Behavior_Training = repmat([0, 0],length(PAR.ratList),1);
 T.Session_Implant_Training = repmat([0, 0],length(PAR.ratList),1);
 
 T.Session_Rotation = zeros(length(PAR.ratList),1);
+
+T.Session_Dark_Control = zeros(length(PAR.ratList),1);
 
 T.Finished_Manual_Training = false(length(PAR.ratList),1);
 
@@ -502,6 +504,8 @@ T.Session_Behavior_Training = nan(1,2);
 T.Session_Implant_Training =  nan(1,2);
 
 T.Session_Rotation = nan;
+
+T.Session_Dark_Control = nan;
 
 T.Feeder_Condition = categorical({'<undefined>'}, ...
     feeder_condition_cats);

@@ -34,24 +34,28 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 % Raw_Data_File = {''};
 % var_before = 'Recording_File';
 % SS_IO_2 = AddNewVar(SS_IO_2, Raw_Data_File, var_before);
-feeder_version_cats = {'Static_Feeder', 'Mobile_Feeder'};
-Feeder_Version = categorical({'Static_Feeder'}, ...
-    feeder_version_cats);
-var_before = 'Implanted';
-SS_IO_2 = AddNewVar(SS_IO_2, Feeder_Version, var_before);
+%
+% EXAMPLE 4
+% feeder_version_cats = {'Static_Feeder', 'Mobile_Feeder'};
+% Feeder_Version = categorical({'Static_Feeder'}, ...
+%     feeder_version_cats);
+% var_before = 'Implanted';
+% SS_IO_2 = AddNewVar(SS_IO_2, Feeder_Version, var_before);
+
+var_before = 'Session_Rotation';
+Session_Dark_Control = 0;
+SS_IO_1 = AddNewVar(SS_IO_1, Session_Dark_Control, var_before);
+Session_Dark_Control = NaN;
+SS_IO_2 = AddNewVar(SS_IO_2, Session_Dark_Control, var_before);
 
 % --------------------------- CHANGE VAR ENTRY ----------------------------
 
-% % Specify inputs
+% EXAMPLE 1
 % var_change = 'Sleep_Time';
 % new_val = nan(1,2);
 % preserve_val = false;
 % description = [];
 % units = [];
-% 
-% 
-% 
-% % Make changes
 % SS_IO_2 = ChangeVarEntries(SS_IO_2, var_change, new_val, preserve_val);
 
 % ------------------------ MOVE DELETE VAR ENTRY --------------------------
