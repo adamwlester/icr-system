@@ -95,7 +95,7 @@ end
 % AUTOLOAD PARAMETERS
 
 % Rat
-D.DB.ratLab = 'r9999'; %'r9999';
+D.DB.ratLab = 'r0752'; %'r9999';
 
 % Implant status
 D.DB.Implanted = false;
@@ -106,7 +106,7 @@ D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Type = 'Table_Update' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
 D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation' 'Dark_Control']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
@@ -5026,7 +5026,8 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         if ~isempty(D.UI.tblSSIO3.RowName)
             D.UI.tblSSIO3.Data = [D.UI.tblSSIO3.Data(1,:); D.UI.tblSSIO3.Data];
         end
-        D.UI.tblSSIO3.RowName = [{datestr(TIMSTRLOCAL, 'yyyy-mm-dd')}; D.UI.tblSSIO3.RowName];
+        % Label current day as 'Today' in UI table
+        D.UI.tblSSIO3.RowName = [{'Today'}; D.UI.tblSSIO3.RowName];
         
         % Clear non health feilds
         var_ind = ~contains(D.UI.tblSSIO3.ColumnName,'Health');
@@ -13363,11 +13364,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Store health info
         var_ind = find(contains(D.UI.tblSSIO3.ColumnName,'Health'));
         for z_v = 1:length(var_ind)
+            % Get session index for table "SS_IO_3"
             ss_ind = ...
                 ismember(D.SS_IO_3.(D.PAR.ratLab).Properties.VariableNames, ...
                 D.UI.tblSSIO3.ColumnName{var_ind(z_v)});
+            % Grab entry from first row of "D.UI.tblSSIO3"
             D.SS_IO_3.(D.PAR.ratLab){end, ss_ind}(:) = ...
-                D.UI.tblSSIO3.Data{end, var_ind(z_v)};
+                D.UI.tblSSIO3.Data{1, var_ind(z_v)};
         end
         
         % Store 'Notes'
@@ -13463,6 +13466,9 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         
         % Store 'Implanted'
         D.SS_IO_2.(D.PAR.ratLab).Implanted(rowInd) = D.F.rat_implanted;
+        
+        % Store 'Feeder_Version'
+        D.SS_IO_2.(D.PAR.ratLab).Feeder_Version(rowInd) = D.SS_IO_1.Feeder_Version(D.PAR.ratIndSS);
         
         % Store 'Date'
         D.SS_IO_2.(D.PAR.ratLab).Date{rowInd} = date;
@@ -16850,6 +16856,10 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Set human
         D.PAR.sesHuman = ...
             D.SS_IO_1.Human(D.PAR.ratIndSS);
+        % Set to 'Other' if undefined
+        if isundefined(D.PAR.sesHuman)
+            D.PAR.sesHuman(:) = 'Other';
+        end
         Safe_Set(D.UI.popHuman, 'Value', ...
             find(ismember(D.UI.popHuman.String, D.PAR.sesHuman)));
         Pop_Human();
