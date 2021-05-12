@@ -1,4 +1,7 @@
 function[] = TT_IO_Setup()
+%% =============================== NOTES ==================================
+% After running this script open TT_IO_1 and fill in any NaN fields with
+% appropriate prameters (e.g., Implant_Coordinates etc)
 
 %% =========================== SET PARAMETERS =============================
 topDir = 'C:\Users\lester\MeDocuments\Research\BarnesLab\Study_ICR\ICR_Code\ICR_Running\Main\MATLAB';
@@ -7,18 +10,18 @@ ioDir = fullfile(ioDir{:},'ICR_Running\IOfiles\SessionData');
 
 % Rat numbers (must be preceded by an 'r')
 PAR.ratList = [...
-    {'r9999'}; ...
+    {'r0753'}; ...
     ];
 
 %% =========================== SETUP VARS =================================
 
 % Define categories
-human_cats = {'AWL', 'CB', 'Other'};
+human_cats = {'AWL', 'ZP', 'CF', 'Other'};
 bundle_cats = {'HIPP', 'MEC'};
 tetrode_cats = ...
     {'TT01','TT02','TT03','TT04','TT05','TT06', ...
     'TT07','TT08','TT09','TT10','TT11','TT12', ...
-    'TT13','TT14','TT15','TT16','R1','R2',};
+    'TT13','TT14','TT15','TT16','R1','R2',}; % R1=RR, R2=RF
 turn_cats = [{'N'},{'NNE'},{'NE'},{'ENE'},{'E'},{'ESE'},{'SE'},{'SSE'},{'S'},...
     {'SSW'},{'SW'},{'WSW'},{'W'},{'WNW'},{'NW'},{'NNW'}];
 reference_tt_cats = {'R01_1','R01_2','R02_1','R02_2','CE01','CE02'};

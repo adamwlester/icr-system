@@ -106,8 +106,8 @@ D.DB.F.Run_SS3D = false;
 D.DB.F.Rec_Raw = false;
 
 % Session Type, Condition and Task
-D.DB.Session_Type = 'Table_Update' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
-D.DB.Session_Condition = 'Rotation'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation' 'Dark_Control']
+D.DB.Session_Type = 'ICR_Session' ; % ['ICR_Session' 'TT_Turn' 'Table_Update']
+D.DB.Session_Condition = 'Behavior_Training'; % ['Manual_Training' 'Behavior_Training' 'Implant_Training' 'Rotation' 'Dark_Control']
 D.DB.Session_Task = 'Track'; % ['Track' 'Forage']
 
 % Other
@@ -1195,9 +1195,13 @@ fprintf('\n################# REACHED END OF RUN #################\n');
                             % Show start button
                             if strcmp(get(D.UI.btnStart, 'Enable'), 'off')
                                 
-                                % Enable button
+                                % Set START button color to red
+                                Safe_Set(D.UI.btnStart, ...
+                                    'BackgroundColor', D.UI.attentionCol);
+                                
+                                % Enable button and set to red
                                 set(D.UI.btnStart, 'Visible', 'on');
-                                Button_State(D.UI.btnStart, 'Enable');
+                                Button_State(D.UI.btnStart, 'Enable', D.UI.attentionCol);
                                 [xbnd, ybnd] =  Get_Cart_Bnds(mean(D.PAR.strQuadBnds));
                                 
                                 % Set position
@@ -8951,7 +8955,7 @@ fprintf('\n################# REACHED END OF RUN #################\n');
         % Reinitialize
         D.T.strqd_inbnd_t1 = 0;
         
-        % Disable start button
+        % Disable/hide start button
         set(D.UI.btnStart, 'Visible', 'off')
         
         % Enable task done button
